@@ -1,5 +1,5 @@
 /*
- * $Id: audio_utils.c,v 1.1 2006/04/30 08:38:05 stuart_hc Exp $
+ * $Id: audio_utils.c,v 1.2 2006/06/12 14:18:52 stuart_hc Exp $
  *
  * Write uncompressed audio in WAV format, and update WAV header.
  *
@@ -47,7 +47,7 @@ extern void writeWavHeader(FILE *fp, int bits_per_sample)
 	uint32_t	_numCh = 2;
 	uint32_t	_bitsPerSample = bits_per_sample;
 	uint16_t	_bytesPerFrame = (_bitsPerSample+7)/8 * _numCh;
-	uint32_t	avgBPS = rate * _bitsPerSample / 8;
+	uint32_t	avgBPS = rate * _bytesPerFrame;
 
 	// RIFF and fmt chunk
 	storeUInt32_LE(&riff_fmt[4], 0);					// size 0 - updated on file close
