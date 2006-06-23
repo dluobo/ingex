@@ -1,5 +1,5 @@
 /*
- * $Id: mxf_essence.h,v 1.1 2006/04/30 08:38:05 stuart_hc Exp $
+ * $Id: mxf_essence.h,v 1.2 2006/06/23 14:46:23 philipn Exp $
  *
  * Functions to support extraction of raw essence data out of MXF files.
  *
@@ -29,21 +29,20 @@
 #include <inttypes.h>
 
 
-typedef enum _mxfe_EssenceType
+typedef enum
 {
     MXFE_DV = 0,
-    MXFE_WAVPCM,
-    MXFE_AVIDMJPEG,
-    MXFE_UNKNOWN // leave as last entry
+    MXFE_PCM,
+    MXFE_AVIDMJPEG
 } mxfe_EssenceType;
 
-// returns the essence type supported by this library or MXFE_UNKNOWN
+/* returns the essence 'type' supported by this library */
 int mxfe_get_essence_type(FILE* f, mxfe_EssenceType* type);
 
-// returns the file offset and length  
+/* returns the file 'offset' and 'len'gth and positions the file at the start of the essence */  
 int mxfe_get_essence_element_info(FILE* f, uint64_t* offset, uint64_t* len);
 
-// returns a file suffix that can be used for the essence data
+/* returns a file 'suffix' that can be used for the essence data */
 int mxfe_get_essence_suffix(mxfe_EssenceType type, const char** suffix);
 
 
