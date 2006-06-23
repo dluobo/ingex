@@ -1,15 +1,22 @@
+# SAMBA_DIR is the path to the Samba sources
+ifndef SAMBA_DIR
+  $(error Please set the SAMBA_DIR environment variable to the location of your Samba source directory)
+endif
+
+
 CC		= gcc
 CFLAGS		= -g -O2 -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE
 CPPFLAGS	= 
 LDFLAGS		= 
 LDSHFLAGS	= -shared
-SAMBA_SOURCE	= ../../release-3-0-13/source
+SAMBA_SOURCE	= $(SAMBA_DIR)/source
 SHLIBEXT	= so
 OBJEXT		= o 
 FLAGS		=  $(CFLAGS) -Iinclude -I$(SAMBA_SOURCE)/include -I$(SAMBA_SOURCE)/ubiqx -I$(SAMBA_SOURCE)/smbwrapper  -I. $(CPPFLAGS) -I$(SAMBA_SOURCE)
 
 
 
+.PHONY: default
 default: mxf_harmony.so test
 
 
