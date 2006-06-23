@@ -1,5 +1,5 @@
 /*
- * $Id: test.c,v 1.1 2006/04/30 08:38:05 stuart_hc Exp $
+ * $Id: test.c,v 1.2 2006/06/23 14:44:55 philipn Exp $
  *
  * Utility to test the essence extraction code.
  *
@@ -64,18 +64,15 @@ int main(int argv, const char* argc[])
         {
             printf("MXF essence type = '%s'\n", suffix);
             
-            if (type != MXFE_UNKNOWN)
+            uint64_t offset;
+            uint64_t len;
+            if (!mxfe_get_essence_element_info(f, &offset, &len))
             {
-                uint64_t offset;
-                uint64_t len;
-                if (!mxfe_get_essence_element_info(f, &offset, &len))
-                {
-                    fprintf(stderr, "Failed to get essence element offset and len\n");
-                }
-                else
-                {
-                    printf("Essence element offset = %lld and length = %lld\n", offset, len);
-                }
+                fprintf(stderr, "Failed to get essence element offset and len\n");
+            }
+            else
+            {
+                printf("Essence element offset = %lld and length = %lld\n", offset, len);
             }
         }
     }
