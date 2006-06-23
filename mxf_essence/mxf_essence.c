@@ -1,5 +1,5 @@
 /*
- * $Id: mxf_essence.c,v 1.1 2006/04/30 08:38:05 stuart_hc Exp $
+ * $Id: mxf_essence.c,v 1.2 2006/06/23 14:45:44 philipn Exp $
  *
  * Functions to support extraction of raw essence data out of MXF files.
  *
@@ -30,7 +30,7 @@
 #include <mxf_essence.h>
 
 
-// keep this in sync with mxfe_EssenceType
+/* keep this in sync with mxfe_EssenceType */
 static const struct 
 {
     mxfe_EssenceType type;
@@ -38,161 +38,183 @@ static const struct
 } essenceTypeSuffixes[] = 
 {
     {MXFE_DV, "dv"},
-    {MXFE_WAVPCM, "wavpcm"},
-    {MXFE_AVIDMJPEG, "mjpeg"},
-    {MXFE_UNKNOWN, "unknown"}
+    {MXFE_PCM, "pcm"},
+    {MXFE_AVIDMJPEG, "mjpeg"}
 };
 
 typedef struct 
 {
-	uint8_t _key[16];
+    uint8_t octet0;
+    uint8_t octet1;
+    uint8_t octet2;
+    uint8_t octet3;
+    uint8_t octet4;
+    uint8_t octet5;
+    uint8_t octet6;
+    uint8_t octet7;
+    uint8_t octet8;
+    uint8_t octet9;
+    uint8_t octet10;
+    uint8_t octet11;
+    uint8_t octet12;
+    uint8_t octet13;
+    uint8_t octet14;
+    uint8_t octet15;
+    uint8_t octet16;
 } Key;
+ 
+typedef Key UL;
+
+
+static const Key g_ClosedCompleteHeaderPP_key = 
+    {0x06, 0x0e, 0x2b, 0x34, 0x02, 0x05, 0x01, 0x01, 0x0d, 0x01, 0x02, 0x01, 0x01, 0x02, 0x04, 0x00};
+
+    
+/* octet7 is the registry version (should be 0x02, but is sometimes set to 0x01) */
+static const UL g_Base_OPAtom_ul = 
+    {0x06, 0x0e, 0x2b, 0x34, 0x04, 0x01, 0x01, 0xFF, 0x0d, 0x01, 0x02, 0x01, 0x10, 0xFF, 0x00, 0x00};
+
+    
+/* octect14 should be either 0x02 (BWF Clip Wrapped) or 0x04 (AES3 Clip Wrapped) */ 
+static const UL g_Base_AES3BWFEssenceContainer_ul = 
+    {0x06, 0x0e, 0x2b, 0x34, 0x04, 0x01, 0x01, 0x01, 0x0d, 0x01, 0x03, 0x01, 0x02, 0x06, 0xFF, 0x00};
+
+/* private Avid label */
+static const UL g_AvidMJPEGEssenceContainer_ul = 
+    {0x06, 0x0e, 0x2b, 0x34, 0x04, 0x01, 0x01, 0x01, 0x0e, 0x04, 0x03, 0x01, 0x02, 0x01, 0x00, 0x00};
+
+/* octet14 indicates the DV type and octet15 value 0x02 indicates clip wrapping mode */ 
+static const UL g_Base_DVEssenceContainer_ul = 
+    {0x06, 0x0e, 0x2b, 0x34, 0x04, 0x01, 0x01, 0x01, 0x0d, 0x01, 0x03, 0x01, 0x02, 0x02, 0xFF, 0xFF};
+
+    
+static const Key g_Base_GCEssenceElement_key = 
+    {0x06, 0x0e, 0x2b, 0x34, 0x01, 0x02, 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+
     
 
-static const Key g_ppPrefixKey =
-{{0x06, 0x0e, 0x2b, 0x34, 0x02, 0x05, 0x01, 0x01, 0x0d, 0x01, 0x02, 0x01, 0x01}};
+static int is_cc_header_partition(const Key* key)
+{
+    return memcmp(&g_ClosedCompleteHeaderPP_key, key, sizeof(Key)) == 0;
+}
 
 
-// closed and complete mxf header
-static const Key g_headerPPKey =
-{{0x06, 0x0e, 0x2b, 0x34, 0x02, 0x05, 0x01, 0x01, 0x0d, 0x01, 0x02, 0x01, 0x01, 0x02, 0x04, 0x00}};
-
-// closed and complete body partition
-static const Key g_bodyPPKey =
-{{0x06, 0x0e, 0x2b, 0x34, 0x02, 0x05, 0x01, 0x01, 0x0d, 0x01, 0x02, 0x01, 0x01, 0x03, 0x04, 0x00}};
-
-static const Key g_klvFillKey =
-{{0x06, 0x0e, 0x2b, 0x34, 0x01, 0x01, 0x01, 0x01, 0x03, 0x01, 0x02, 0x10, 0x01, 0x00, 0x00, 0x00}};
+static int is_op_atom(const UL* label)
+{
+    return memcmp(&g_Base_OPAtom_ul, label, 7) == 0 &&
+        (label->octet7 == 0x02 || label->octet7 == 0x01 /* invalid value */) &&
+        memcmp(&g_Base_OPAtom_ul.octet8, &label->octet8, 5) == 0;
+}
 
 
-static const Key g_opAtomLabelMask = 
-{{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00, 0xff, 0xff}};
+static int is_pcm_essence(const UL* label)
+{
+    return memcmp(&g_Base_AES3BWFEssenceContainer_ul, label, 14) == 0 &&
+        (label->octet14 == 0x02 || label->octet14 == 0x04);
+}
 
-static const Key g_opAtomLabel = 
-{{0x06, 0x0e, 0x2b, 0x34, 0x04, 0x01, 0x01, 0x01, 0x0d, 0x01, 0x02, 0x01, 0x10, 0x00, 0x00, 0x00}};
+static int is_dv_essence(const UL* label)
+{
+    return memcmp(&g_Base_DVEssenceContainer_ul, label, 14) == 0 && 
+        label->octet15 == 0x02;
+}
 
-static const Key g_essenceContainerAAFLabel = 
-{{0x80, 0x9b, 0x00, 0x60, 0x08, 0x14, 0x3e, 0x6f, 0x43, 0x13, 0xb5, 0x71, 0xd8, 0xba, 0x11, 0xd2}};
+static int is_avidmjpeg_essence(const UL* label)
+{
+    return memcmp(&g_AvidMJPEGEssenceContainer_ul, label, 16) == 0;
+}
 
-static const Key g_essElementPrefixKey =
-{{0x06, 0x0e, 0x2b, 0x34, 0x01, 0x02, 0x01, 0x01}};
 
-
-static const Key g_BWFClipWrappedECLabel = 
-{{0x06, 0x0e, 0x2b, 0x34, 0x04, 0x01, 0x01, 0x01, 0x0d, 0x01, 0x03, 0x01, 0x02, 0x06, 0x02, 0x00}};
-
-static const Key g_DV50ClipWrappedECLabel = 
-{{0x06, 0x0e, 0x2b, 0x34, 0x04, 0x01, 0x01, 0x01, 0x0d, 0x01, 0x03, 0x01, 0x02, 0x02, 0x51, 0x02}};
-
-static const Key g_AVIDMJPEGECLabel = 
-{{0x06, 0x0e, 0x2b, 0x34, 0x04, 0x01, 0x01, 0x01, 0x0e, 0x04, 0x03, 0x01, 0x02, 0x01, 0x00, 0x00}};
-
+static int is_gc_essence_element(const Key* key)
+{
+    return memcmp(&g_Base_GCEssenceElement_key, key, 7) == 0;
+}
 
 
 
-static int read_uint32_be(FILE* fp, uint32_t* value)
+static int read_uint32(FILE* file, uint32_t* value)
 {
     unsigned char buffer[4];
-    if (fread(buffer, 1, 4, fp) != 4)
+    if (fread(buffer, 1, 4, file) != 4)
     {
         return 0;
     }
     
-    *value = (buffer[0]<<24) + (buffer[1]<<16) + (buffer[2]<<8) + (buffer[3]);
+    *value = (buffer[0]<<24) | (buffer[1]<<16) | (buffer[2]<<8) | (buffer[3]);
     
     return 1;
 }
 
-static int compare_key(const Key* keyA, const Key* keyB, size_t cmpLen)
+static void print_key(Key *key)
 {
-    return memcmp(keyA->_key, keyB->_key, cmpLen) == 0;
-}
-
-static int compare_key_masked(const Key* keyA, const Key* keyB, const Key* mask)
-{
-    int i = 0;
+    int i;
+    printf("K = ");
     for (i = 0; i < 16; i++)
     {
-        if ((keyA->_key[i] & mask->_key[i]) != (keyB->_key[i] & mask->_key[i]))
-        {
-            return 0;
-        }
+        printf("%02x ", ((uint8_t*)key)[i]);
     }
-    return 1;
+    printf("\n");
 }
 
-static void print_key(Key *p_key)
+static int read_k(FILE *file, Key *key)
 {
-	int i;
-	printf("K=");
-	for (i = 0; i < 16; i++)
-		printf("%02x ", p_key->_key[i]);
-	printf("\n");
-}
-
-static int readKL(FILE *fp, Key *p_key, uint8_t* p_llen, uint64_t *p_len)
-{
-	int i;
-
-	if (fread(p_key->_key, 16, 1, fp) != 1) 
+    if (fread((uint8_t*)key, 16, 1, file) != 1) 
     {
-		if (feof(fp))
-			return 0;
-
-		perror("fread");
-		fprintf(stderr, "Could not read Key\n");
-		return 0;
-	}
-
-	// Read BER integer (ISO/IEC 8825-1).
-	int c;
-	uint64_t length = 0;
-	if ((c = fgetc(fp)) == EOF) {
-		perror("fgetc");
-		fprintf(stderr, "Could not read Length\n");
-				return 0;
-	}
-
-    *p_llen = 1;
-	if (c < 128) {			// high-bit set on first byte?
-		length = c;
-	}
-	else {				// else stores number of bytes in BER integer
-		int bytes_to_read = c & 0x7f;
-		for (i = 0; i < bytes_to_read; i++) {
-			if ((c = fgetc(fp)) == EOF) {
-				perror("fgetc");
-				fprintf(stderr, "Could not read Length\n");
-				return 0;
-			}
-			length = length << 8;
-			length = length | c;
-		}
-        *p_llen += bytes_to_read;
-	}
-	*p_len = length;
-
-	return 1;
-}
-
-static int read_label(FILE* fp, Key* label)
-{
-	if (fread(label->_key, 16, 1, fp) != 1) 
-    {
-		if (feof(fp))
-			return 0;
-
-		perror("fread");
-		fprintf(stderr, "Could not read Label\n");
-		return 0;
-	}
+        return 0;
+    }
     
     return 1;
 }
 
-static int read_batch_header(FILE* fp, uint32_t* len, uint32_t* eleLen)
+static int read_kl(FILE *file, Key *key, uint8_t* llen, uint64_t *len)
 {
-    if (!read_uint32_be(fp, len) || !read_uint32_be(fp, eleLen))
+    int i;
+    int c;
+    uint64_t length = 0;
+    uint64_t lenLength = 0;
+
+    if (!read_k(file, key))
+    {
+        return 0;
+    }
+    
+    if ((c = fgetc(file)) == EOF) 
+    {
+        return 0;
+    }
+
+    if (c < 0x80)
+    {
+        length = c;
+        lenLength = 1;
+    }
+    else 
+    {
+        lenLength = (c & 0x7f) + 1;
+        for (i = 0; i < lenLength - 1; i++) 
+        {
+            if ((c = fgetc(file)) == EOF) 
+            {
+                return 0;
+            }
+            length = length << 8;
+            length = length | c;
+        }
+    }
+    
+    *len = length;
+    *llen = lenLength;
+    return 1;
+}
+
+static int read_label(FILE* file, UL* label)
+{
+    return read_k(file, label);
+}
+
+static int read_batch_header(FILE* file, uint32_t* len, uint32_t* eleLen)
+{
+    if (!read_uint32(file, len) || !read_uint32(file, eleLen))
     {
         return 0;
     }
@@ -204,185 +226,124 @@ static int read_batch_header(FILE* fp, uint32_t* len, uint32_t* eleLen)
 
 
 
-int mxfe_get_essence_type(FILE* f, mxfe_EssenceType* type)
+int mxfe_get_essence_type(FILE* file, mxfe_EssenceType* type)
 {
-    if (fseek(f, 0, SEEK_SET) != 0)
+    Key key;
+    uint8_t llen;
+    uint64_t len;
+    UL opLabel;
+    int isAAFKLV = 0;
+    uint32_t batchLen;
+    uint32_t batchEleLen;
+    uint32_t i;
+    UL ecLabel;
+
+    
+    /* make sure we are at the start of the file */    
+    if (fseek(file, 0, SEEK_SET) != 0)
     {
         perror("fseek");
         fprintf(stderr, "Failed to seek to start of file\n");
         return 0;
     }
-    
-    // locate header partition
-    Key partPackKey;
-    uint8_t partPackLLen;
-    uint64_t partPackLen;    
-    if (!readKL(f, &partPackKey, &partPackLLen, &partPackLen) || 
-        !compare_key(&partPackKey, &g_headerPPKey, 16))
-    {
-        return 0;
-    }
-    uint64_t fpos;
-    if ((fpos = ftell(f)) < 0)
-    {
-        perror("ftell");
-        fprintf(stderr, "Failed to tell file position\n");
-        return 0;
-    }
 
-    // skip uninteresting partition pack metadata    
-    if (fseek(f, 64, SEEK_CUR) != 0)
+    /* check closed and complete header partition key */
+    if (!read_kl(file, &key, &llen, &len) || !is_cc_header_partition(&key))
+    {
+        return 0;
+    }
+    
+    /* skip uninteresting partition pack metadata */    
+    if (fseek(file, 64, SEEK_CUR) != 0)
     {
         perror("fseek");
         fprintf(stderr, "Failed to skip partition elements before OP label\n");
         return 0;
     }
     
-    // check UL for operational pattern Atom
-    Key opLabel;
-    if (!read_label(f, &opLabel))
+    /* check UL for operational pattern Atom */
+    if (!read_label(file, &opLabel) || !is_op_atom(&opLabel))
     {
-        return MXFE_UNKNOWN;
-    }
-    if (!compare_key_masked(&opLabel, &g_opAtomLabel, &g_opAtomLabelMask))
-    {
-        printf("Operational pattern is not Atom\n");
-        *type = MXFE_UNKNOWN;
-        return 1;
+        return 0;
     }
 
-    // check essence container labels
-    int isAAFKLV = 0;
-    uint32_t batchLen;
-    uint32_t batchEleLen;
-    if (!read_batch_header(f, &batchLen, &batchEleLen))
+    
+    /* check essence container labels */
+    
+    if (!read_batch_header(file, &batchLen, &batchEleLen))
     {
         fprintf(stderr, "Failed to read essence container labels batch header\n");
         return 0;
     }
-    if (batchEleLen != 16)
+    if (batchLen != 1 || batchEleLen != 16)
     {
-        fprintf(stderr, "Unexpected batch of labels element length (%d)\n", batchEleLen);
+        fprintf(stderr, "Expecting single essence container label\n");
         return 0;
     }
-    Key label;
-    uint32_t i;
-    for (i = 0; i < batchLen; i++)
+    if (!read_label(file, &ecLabel))
     {
-        if (!read_label(f, &label))
-        {
-            fprintf(stderr, "Failed to read essence container label\n");
-            return 0;
-        }
-        if (compare_key(&label, &g_essenceContainerAAFLabel, 16))
-        {
-            isAAFKLV = 1;
-            break;
-        }
-        else if (compare_key(&label, &g_BWFClipWrappedECLabel, 16))
-        {
-            *type = MXFE_WAVPCM;
-            return 1;
-        }
-        else if (compare_key(&label, &g_DV50ClipWrappedECLabel, 16))
-        {
-            *type =  MXFE_DV;
-            return 1;
-        }
-        else if (compare_key(&label, &g_AVIDMJPEGECLabel, 16))
-        {
-            *type =  MXFE_AVIDMJPEG;
-            return 1;
-        }
+        fprintf(stderr, "Failed to read essence container label\n");
+        return 0;
     }
     
-    if (isAAFKLV)
+    if (is_pcm_essence(&ecLabel))
     {
-        // TODO: the AAF SDK does not yet do the right thing so we 
-        // need to check the header for clues about the essence data type
-        *type = MXFE_UNKNOWN;
+        *type = MXFE_PCM;
         return 1;
     }
-    
-    *type = MXFE_UNKNOWN;
-    return 1;
+    else if (is_dv_essence(&ecLabel))
+    {
+        *type =  MXFE_DV;
+        return 1;
+    }
+    else if (is_avidmjpeg_essence(&ecLabel))
+    {
+        *type =  MXFE_AVIDMJPEG;
+        return 1;
+    }
+
+    /* unknown essence type */
+    return 0;
 }
 
-int mxfe_get_essence_element_info(FILE* f, uint64_t* offset, uint64_t* len)
+int mxfe_get_essence_element_info(FILE* file, uint64_t* offset, uint64_t* len)
 {
-    if (fseek(f, 0, SEEK_SET) != 0)
+    Key key;
+    uint8_t tllen;
+    uint64_t tlen;
+    int64_t toffset;
+
+    /* make sure we are at the start of the file */    
+    if (fseek(file, 0, SEEK_SET) != 0)
     {
         perror("fseek");
         fprintf(stderr, "Failed to seek to start of file\n");
         return 0;
     }
-    
-    Key key;
-    uint8_t tllen;
-    uint64_t tlen;
-    int foundBodyPartition = 0;
-    while (1)
-    {
-        if (!readKL(f, &key, &tllen, &tlen))
-        {
-            fprintf(stderr, "Failed to read KL\n");
-            return 0;
-        }
-        if (compare_key(&key, &g_bodyPPKey, 16))
-        {
-            foundBodyPartition = 1;
-            break;
-        }
-        else
-        {
-            if (fseek(f, tlen, SEEK_CUR) != 0)
-            {
-                perror("fseek");
-                fprintf(stderr, "Failed to skip value\n");
-                return 0;
-            }
-        }
-    }
-    if (!foundBodyPartition)
-    {
-        fprintf(stderr, "No closed and complete body partition found\n");
-        return 0;
-    }
 
-    // find the essence element key
-    if (fseek(f, tlen, SEEK_CUR) != 0)
-    {
-        perror("fseek");
-        fprintf(stderr, "Failed to skip body partition pack\n");
-        return 0;
-    }
+    /* position file at the essence data */    
     while (1)
     {
-        if (!readKL(f, &key, &tllen, &tlen))
+        if (!read_kl(file, &key, &tllen, &tlen))
         {
             fprintf(stderr, "Failed to read KL\n");
             return 0;
         }
-        else if (compare_key(&key, &g_essElementPrefixKey, 8))
+        
+        if (is_gc_essence_element(&key))
         {
-            if ((*offset = ftell(f)) < 0)
+            if ((toffset = ftell(file)) < 0)
             {
                 perror("ftell");
                 fprintf(stderr, "Failed to tell file position\n");
                 return 0;
             }
-            *len = tlen;
-            return 1;
+            break;
         }
-        
-        else if (compare_key(&key, &g_ppPrefixKey, 13))
-        {
-            fprintf(stderr, "Unexpected end of body partition\n");
-            return 0;
-        }
+        /* skip value */
         else
         {
-            if (fseek(f, tlen, SEEK_CUR) != 0)
+            if (fseek(file, tlen, SEEK_CUR) != 0)
             {
                 perror("fseek");
                 fprintf(stderr, "Failed to skip value\n");
@@ -390,9 +351,11 @@ int mxfe_get_essence_element_info(FILE* f, uint64_t* offset, uint64_t* len)
             }
         }
     }
+
     
-    fprintf(stderr, "Failed to get essence data information\n");
-    return 0;
+    *len = tlen;
+    *offset = (uint64_t)toffset;
+    return 1;
 }
 
 int mxfe_get_essence_suffix(mxfe_EssenceType type, const char** suffix)
