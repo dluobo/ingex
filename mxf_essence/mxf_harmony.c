@@ -1,5 +1,5 @@
 /*
- * $Id: mxf_harmony.c,v 1.1 2006/04/30 08:38:05 stuart_hc Exp $
+ * $Id: mxf_harmony.c,v 1.2 2006/06/23 14:47:02 philipn Exp $
  *
  * Samba VFS module that exports the raw essence data within MXF files as virtual files.
  *
@@ -22,7 +22,7 @@
  */
  
  
-// TODO: Opaque or Transparent VFS?
+/* TODO: Opaque or Transparent VFS? */
 
 
 #include "includes.h"
@@ -75,14 +75,14 @@ static int mxfh_add_virtual_file(vfs_handle_struct* handle,
     mxfh_private_data* pd = NULL;
     SMB_VFS_HANDLE_GET_DATA(handle, pd, mxfh_private_data, );
     
-    // first in list
+    /* first in list */
     if (pd->virtualFiles == NULL)
     {
         pd->virtualFiles = newVirtualFile;
         newVirtualFile->prev = NULL;
         newVirtualFile->next = NULL;
     }
-    // append to end of list
+    /* append to end of list */
     else
     {
         mxfh_virtual_mxf_file* last = pd->virtualFiles;
@@ -120,7 +120,7 @@ static void mxfh_remove_virtual_file(vfs_handle_struct* handle, int fd)
     {
         if (vf->fd == fd)
         {
-            // remove from list
+            /* remove from list */
             if (vf->prev != NULL)
             {
                 vf->prev->next = vf->next;
@@ -129,7 +129,7 @@ static void mxfh_remove_virtual_file(vfs_handle_struct* handle, int fd)
             {
                 vf->next->prev = vf->prev;
             }
-            // reassign list root if vf is the root
+            /* reassign list root if vf is the root */
             if (vf == pd->virtualFiles)
             {
                 pd->virtualFiles = vf->next;
@@ -193,8 +193,8 @@ static void mxfh_free_private_data(void **p_data)
     *p_data = NULL;
 }
 
-// a files is deemed to be a virtual file if it has a suffix
-// MXF_SUFFIX (.mxf) followed by VIRTUAL_MXF_SUFFIX (._v_.)
+/* a file is a virtual file if it has a suffix MXF_SUFFIX (.mxf) followed by 
+   VIRTUAL_MXF_SUFFIX (._v_.) */
 static BOOL is_virtual_mxf_file(const char* path, pstring* realPath)
 {
     BOOL isVirtual = False;
@@ -275,7 +275,7 @@ static SMB_STRUCT_DIRENT *mxfh_readdir(vfs_handle_struct *handle, connection_str
     SMB_STRUCT_DIRENT* d = NULL;
     if (dirInfo->prevDirent != NULL)
     {
-        // return the previous entry which was delayed for an associated virtual entry
+        /* return the previous entry which was delayed for an associated virtual entry */
         d = dirInfo->prevDirent;
         fstrcpy(d->d_name, dirInfo->prevDirentName);
         dirInfo->prevDirent = NULL;
@@ -287,7 +287,7 @@ static SMB_STRUCT_DIRENT *mxfh_readdir(vfs_handle_struct *handle, connection_str
         if (d != NULL)
         {
             size_t len = strlen(d->d_name);
-            // only check files that end inf MXF_SUFFIX
+            /* only check files that end with MXF_SUFFIX */
             if (len >= MXF_SUFFIX_LEN && strcmp(&d->d_name[len - MXF_SUFFIX_LEN], MXF_SUFFIX) == 0)
             {
                 pstring fpath;
@@ -299,15 +299,12 @@ static SMB_STRUCT_DIRENT *mxfh_readdir(vfs_handle_struct *handle, connection_str
                 {
                     mxfe_EssenceType type;
                     const char* suffix = NULL;
-                    if (mxfe_get_essence_type(f, &type) && 
-                        type != MXFE_UNKNOWN &&
+                    if (mxfe_get_essence_type(f, &type) &&
                         mxfe_get_essence_suffix(type, &suffix))
                     {
-                        // save this dir entry for the next readdir
+                        /* save this virtual dir entry for the next readdir */
                         dirInfo->prevDirent = d;
                         fstrcpy(dirInfo->prevDirentName, d->d_name);
-                        
-                        // the dir entry becomes the virtual file
                         fstrcat(d->d_name, VIRTUAL_MXF_SUFFIX);
                         fstrcat(d->d_name, suffix);
                     }
@@ -326,7 +323,7 @@ static SMB_STRUCT_DIRENT *mxfh_readdir(vfs_handle_struct *handle, connection_str
 
 static void mxfh_seekdir(vfs_handle_struct *handle, connection_struct *conn, DIR *dirp, long offset)
 {
-    ((mxfh_dirinfo*)dirp)->prevDirent = NULL; // no more previous
+    ((mxfh_dirinfo*)dirp)->prevDirent = NULL; /* no more previous */
     
     return SMB_VFS_NEXT_SEEKDIR(handle, conn, ((mxfh_dirinfo*)dirp)->dirstream, offset);
 }
@@ -338,7 +335,7 @@ static long mxfh_telldir(vfs_handle_struct *handle, connection_struct *conn, DIR
 
 static void mxfh_rewinddir(vfs_handle_struct *handle, connection_struct *conn, DIR *dirp)
 {
-    ((mxfh_dirinfo*)dirp)->prevDirent = NULL; // no more previous
+    ((mxfh_dirinfo*)dirp)->prevDirent = NULL; /* no more previous */
     
     return SMB_VFS_NEXT_REWINDDIR(handle, conn, ((mxfh_dirinfo*)dirp)->dirstream);
 }
@@ -363,7 +360,7 @@ static int mxfh_open(vfs_handle_struct *handle, connection_struct *conn, const c
             return -1;
         }
         
-        // get the offset and length of the essence data
+        /* get the offset and length of the essence data */
         FILE* f;
         if ((f = fopen(realPath, "rb")) != NULL)
         {
@@ -387,7 +384,7 @@ static int mxfh_open(vfs_handle_struct *handle, connection_struct *conn, const c
             return -1;
         }
 
-        // add virtual file entry if all succeeds        
+        /* add virtual file entry if all succeeds */        
         int fd = SMB_VFS_NEXT_OPEN(handle, conn, realPath, flags, mode);
         if (fd >= 0)
         {
@@ -422,30 +419,30 @@ static ssize_t mxfh_read(vfs_handle_struct *handle, files_struct *fsp, int fd, v
     mxfh_virtual_mxf_file* vf = mxfh_get_virtual_file(handle, fd);
     if (vf != NULL)
     {
-        // if file position is beyond essence data then return EOF
+        /* if file position is beyond essence data then return EOF */
         if (fsp->pos >= vf->offset + vf->length)
         {
             return 0;
         }
         
-        // if file position is below essence data offset then move it to the offset
-        // this situation occurs in the first read 
+        /* if file position is below essence data offset then move it to the offset */
+        /* this situation occurs in the first read */ 
         if (fsp->pos < vf->offset)
         {
             SMB_OFF_T offset = SMB_VFS_NEXT_LSEEK(handle, fsp, fd, vf->offset, SEEK_SET);
             if (offset != vf->offset)
             {
                 DEBUG(0, ("mxfh_read: Failed to position stream at start of essence data\n"));
-                errno = EIO; // TODO: is this the correct error?
+                errno = EIO;
                 return -1;
             }
         }
-        // read
+
         SMB_OFF_T origPos = fsp->pos;
         ssize_t numRead = SMB_VFS_NEXT_READ(handle, fsp, fd, data, n);
         
-        // if we have read past the essence data then adjust the returned numRead
-        // and position the file at the end of the essence data
+        /* if we have read past the essence data then adjust the returned numRead
+           and position the file at the end of the essence data */
         if (fsp->pos > vf->offset + vf->length)
         {
             numRead = vf->offset + vf->length - origPos;
@@ -453,7 +450,7 @@ static ssize_t mxfh_read(vfs_handle_struct *handle, files_struct *fsp, int fd, v
             if (offset != vf->offset + vf->length)
             {
                 DEBUG(0, ("mxfh_read: Failed to position stream at end of essence data\n"));
-                errno = EIO; // TODO: is this the correct error?
+                errno = EIO;
                 return -1;
             }
         }
@@ -470,15 +467,16 @@ static ssize_t mxfh_pread(vfs_handle_struct *handle, files_struct *fsp, int fd, 
     mxfh_virtual_mxf_file* vf = mxfh_get_virtual_file(handle, fd);
     if (vf != NULL)
     {
-        // if file position is beyond essence data then return EOF
+        /* if file position is beyond essence data then return EOF */
         if (offset >= vf->length)
         {
             return 0;
         }
         
-        // if we have read past the essence data then adjust the returned numRead
-        // and position the file at the end of the essence data
         ssize_t numRead = SMB_VFS_NEXT_PREAD(handle, fsp, fd, data, n, offset + vf->offset);
+        
+        /* if we have read past the essence data then adjust the returned numRead
+           and position the file at the end of the essence data */
         if (offset + numRead > vf->length)
         {
             numRead = vf->length - offset;
@@ -486,7 +484,7 @@ static ssize_t mxfh_pread(vfs_handle_struct *handle, files_struct *fsp, int fd, 
             if (offset != vf->offset + vf->length)
             {
                 DEBUG(0, ("mxfh_read: Failed to position stream at end of essence data\n"));
-                errno = EIO; // TODO: is this the correct error?
+                errno = EIO;
                 return -1;
             }
         }
@@ -502,7 +500,7 @@ static ssize_t mxfh_write(vfs_handle_struct *handle, files_struct *fsp, int fd, 
 {
     if (mxfh_get_virtual_file(handle, fd) != NULL)
     {
-        // write not supported for virtual files
+        /* write not supported for virtual files */
         errno = ENOTSUP;
         return -1;
     }
@@ -516,7 +514,7 @@ static ssize_t mxfh_pwrite(vfs_handle_struct *handle, files_struct *fsp, int fd,
 {
     if (mxfh_get_virtual_file(handle, fd) != NULL)
     {
-        // write not supported for virtual files
+        /* write not supported for virtual files */
         errno = ENOTSUP;
         return -1;
     }
@@ -537,8 +535,8 @@ static SMB_OFF_T mxfh_lseek(vfs_handle_struct *handle, files_struct *fsp, int fi
         }
         else if (whence == SEEK_END)
         {
-            // END is end of the essence data and not end of the file
-            // using a SEEK_SET
+            /* END is end of the essence data and not end of the file
+               using a SEEK_SET */
             return SMB_VFS_NEXT_LSEEK(handle, fsp, filedes, offset + vf->offset + vf->length, SEEK_SET);
         }
         else
@@ -558,7 +556,7 @@ static int mxfh_rename(vfs_handle_struct *handle, connection_struct *conn, const
     pstring newRealPath;
     if (is_virtual_mxf_file(oldpath, &oldRealPath) || is_virtual_mxf_file(newpath, &newRealPath))
     {
-        // renaming virtual files (oldpath or newpath)
+        /* renaming virtual files (oldpath or newpath) */
         errno = ENOTSUP;
         return -1;
     }
@@ -573,7 +571,7 @@ static int mxfh_fsync(vfs_handle_struct *handle, files_struct *fsp, int fd)
     mxfh_virtual_mxf_file* vf = mxfh_get_virtual_file(handle, fd);
     if (vf != NULL)
     {
-        // fsync virtual files not supported
+        /* fsync virtual files not supported */
         errno = ENOTSUP;
         return -1;
     }
@@ -594,7 +592,7 @@ static int mxfh_stat(vfs_handle_struct *handle, connection_struct *conn, const c
             return statResult;
         }
         
-        // set file size equal to length of essence data and set to read only
+        /* set file size equal to length of essence data and set to read only */
         FILE* f;
         if ((f = fopen(realPath, "rb")) != NULL)
         {
@@ -606,7 +604,8 @@ static int mxfh_stat(vfs_handle_struct *handle, connection_struct *conn, const c
                 return statResult;
             }
             sbuf->st_size = len;
-            sbuf->st_mode &= 077444; // read only
+            sbuf->st_blocks = len / 512;
+            sbuf->st_mode &= 077444; /* read only */
             fclose(f);
         }
         else
@@ -631,9 +630,10 @@ static int mxfh_fstat(vfs_handle_struct *handle, files_struct *fsp, int fd, SMB_
             return statResult;
         }
         
-        // set file size equal to length of essence data and set to read only
+        /* set file size equal to length of essence data and set to read only */
         sbuf->st_size = vf->length;
-        sbuf->st_mode &= 077444; // read only
+        sbuf->st_blocks = vf->length / 512;
+        sbuf->st_mode &= 077444; /* read only */
         return statResult;
     }
     else
@@ -653,7 +653,7 @@ static int mxfh_lstat(vfs_handle_struct *handle, connection_struct *conn, const 
             return statResult;
         }
         
-        // set file size equal to length of essence data and set to read only
+        /* set file size equal to length of essence data and set to read only */
         FILE* f;
         if ((f = fopen(realPath, "rb")) != NULL)
         {
@@ -665,7 +665,8 @@ static int mxfh_lstat(vfs_handle_struct *handle, connection_struct *conn, const 
                 return statResult;
             }
             sbuf->st_size = len;
-            sbuf->st_mode &= 077444; // read only
+            sbuf->st_blocks = len / 512;
+            sbuf->st_mode &= 077444; /* read only */
             fclose(f);
         }
         else
@@ -684,7 +685,7 @@ static int mxfh_unlink(vfs_handle_struct *handle, connection_struct *conn, const
     pstring realPath;
     if (is_virtual_mxf_file(path, &realPath))
     {
-        // unlinking virtual files not supported
+        /* unlinking virtual files not supported */
         errno = ENOTSUP;
         return -1;
     }
@@ -699,7 +700,7 @@ static int mxfh_chmod(vfs_handle_struct *handle, connection_struct *conn, const 
     pstring realPath;
     if (is_virtual_mxf_file(path, &realPath))
     {
-        // chmod virtual files not supported
+        /* chmod virtual files not supported */
         errno = ENOTSUP;
         return -1;
     }
@@ -714,7 +715,7 @@ static int mxfh_fchmod(vfs_handle_struct *handle, files_struct *fsp, int fd, mod
     mxfh_virtual_mxf_file* vf = mxfh_get_virtual_file(handle, fd);
     if (vf != NULL)
     {
-        // chmod virtual files not supported
+        /* chmod virtual files not supported */
         errno = ENOTSUP;
         return -1;
     }
@@ -729,7 +730,7 @@ static int mxfh_chown(vfs_handle_struct *handle, connection_struct *conn, const 
     pstring realPath;
     if (is_virtual_mxf_file(path, &realPath))
     {
-        // chown virtual files not supported
+        /* chown virtual files not supported */
         errno = ENOTSUP;
         return -1;
     }
@@ -744,7 +745,7 @@ static int mxfh_fchown(vfs_handle_struct *handle, files_struct *fsp, int fd, uid
     mxfh_virtual_mxf_file* vf = mxfh_get_virtual_file(handle, fd);
     if (vf != NULL)
     {
-        // chown virtual files not supported
+        /* chown virtual files not supported */
         errno = ENOTSUP;
         return -1;
     }
@@ -785,7 +786,7 @@ static int mxfh_ftruncate(vfs_handle_struct *handle, files_struct *fsp, int fd, 
     mxfh_virtual_mxf_file* vf = mxfh_get_virtual_file(handle, fd);
     if (vf != NULL)
     {
-        // ftruncate virtual files not supported
+        /* ftruncate virtual files not supported */
         errno = ENOTSUP;
         return -1;
     }
@@ -795,7 +796,7 @@ static int mxfh_ftruncate(vfs_handle_struct *handle, files_struct *fsp, int fd, 
     }
 }
 
-// TODO: check lock bounds?
+/* TODO: check lock bounds? */
 static BOOL mxfh_lock(vfs_handle_struct *handle, files_struct *fsp, int fd, int op, SMB_OFF_T offset, SMB_OFF_T count, int type)
 {
     mxfh_virtual_mxf_file* vf = mxfh_get_virtual_file(handle, fd);
@@ -880,7 +881,7 @@ static char *mxfh_realpath(vfs_handle_struct *handle, connection_struct *conn, c
     }
 }
 
-// TODO: remove this?
+/* TODO: remove this? */
 static size_t mxfh_fget_nt_acl(vfs_handle_struct *handle, files_struct *fsp, int fd, uint32 security_info, struct security_descriptor_info **ppdesc)
 {
     return SMB_VFS_NEXT_FGET_NT_ACL(handle, fsp, fd, security_info, ppdesc);
@@ -904,7 +905,7 @@ static BOOL mxfh_fset_nt_acl(vfs_handle_struct *handle, files_struct *fsp, int f
     mxfh_virtual_mxf_file* vf = mxfh_get_virtual_file(handle, fd);
     if (vf != NULL)
     {
-        // fset_nt_acl virtual files not supported
+        /* fset_nt_acl virtual files not supported */
         errno = ENOTSUP;
         return -1;
     }
@@ -947,7 +948,7 @@ static int mxfh_fchmod_acl(vfs_handle_struct *handle, files_struct *fsp, int fd,
     mxfh_virtual_mxf_file* vf = mxfh_get_virtual_file(handle, fd);
     if (vf != NULL)
     {
-        // fchmod_acl virtual files not supported
+        /* fchmod_acl virtual files not supported */
         errno = ENOTSUP;
         return -1;
     }
@@ -970,7 +971,7 @@ static SMB_ACL_T mxfh_sys_acl_get_file(vfs_handle_struct *handle, connection_str
     }
 }
 
-// TODO: remove this?
+/* TODO: remove this? */
 static SMB_ACL_T mxfh_sys_acl_get_fd(vfs_handle_struct *handle, files_struct *fsp, int fd)
 {
     return SMB_VFS_NEXT_SYS_ACL_GET_FD(handle, fsp, fd);
@@ -995,7 +996,7 @@ static int mxfh_sys_acl_set_fd(vfs_handle_struct *handle, files_struct *fsp, int
     mxfh_virtual_mxf_file* vf = mxfh_get_virtual_file(handle, fd);
     if (vf != NULL)
     {
-        // sys_acl_set_fd virtual files not supported
+        /* sys_acl_set_fd virtual files not supported */
         errno = ENOTSUP;
         return -1;
     }
@@ -1225,12 +1226,12 @@ NTSTATUS init_module(void)
     {
         vfs_mxfh_debug_level = DBGC_VFS;
         DEBUG(0, ("%s: Couldn't register custom debugging class!\n",
-            "media_harmony::init_module"));
+            "mxf_harmony::init_module"));
     } 
     else 
     {
         DEBUG(10, ("%s: Debug class number of '%s': %d\n", 
-            "media_harmony::init_module", MXFH_MODULE_NAME, vfs_mxfh_debug_level));
+            "mxf_harmony::init_module", MXFH_MODULE_NAME, vfs_mxfh_debug_level));
     }
 
     return ret;
