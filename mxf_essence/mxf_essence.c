@@ -1,5 +1,5 @@
 /*
- * $Id: mxf_essence.c,v 1.2 2006/06/23 14:45:44 philipn Exp $
+ * $Id: mxf_essence.c,v 1.3 2006/06/26 11:21:48 philipn Exp $
  *
  * Functions to support extraction of raw essence data out of MXF files.
  *
@@ -60,7 +60,6 @@ typedef struct
     uint8_t octet13;
     uint8_t octet14;
     uint8_t octet15;
-    uint8_t octet16;
 } Key;
  
 typedef Key UL;
