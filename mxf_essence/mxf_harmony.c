@@ -1,5 +1,5 @@
 /*
- * $Id: mxf_harmony.c,v 1.2 2006/06/23 14:47:02 philipn Exp $
+ * $Id: mxf_harmony.c,v 1.3 2006/09/01 11:01:36 philipn Exp $
  *
  * Samba VFS module that exports the raw essence data within MXF files as virtual files.
  *
@@ -605,7 +605,7 @@ static int mxfh_stat(vfs_handle_struct *handle, connection_struct *conn, const c
             }
             sbuf->st_size = len;
             sbuf->st_blocks = len / 512;
-            sbuf->st_mode &= 077444; /* read only */
+            sbuf->st_mode &= 0777444; /* read only */
             fclose(f);
         }
         else
@@ -633,7 +633,7 @@ static int mxfh_fstat(vfs_handle_struct *handle, files_struct *fsp, int fd, SMB_
         /* set file size equal to length of essence data and set to read only */
         sbuf->st_size = vf->length;
         sbuf->st_blocks = vf->length / 512;
-        sbuf->st_mode &= 077444; /* read only */
+        sbuf->st_mode &= 0777444; /* read only */
         return statResult;
     }
     else
@@ -666,7 +666,7 @@ static int mxfh_lstat(vfs_handle_struct *handle, connection_struct *conn, const 
             }
             sbuf->st_size = len;
             sbuf->st_blocks = len / 512;
-            sbuf->st_mode &= 077444; /* read only */
+            sbuf->st_mode &= 0777444; /* read only */
             fclose(f);
         }
         else
