@@ -1,0 +1,124 @@
+/*
+ * $Id: Recorder.idl,v 1.1 2006/10/03 12:58:26 john_f Exp $
+ *
+ * Interface for Recorder.
+ *
+ * Copyright (C) 2006  John Fletcher <john_f@users.sourceforge.net>
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+ * 02110-1301, USA.
+ */
+
+// Copyright (c) 2006. British Broadcasting Corporation. All Rights Reserved.
+
+#ifndef Recorder_idl
+#define Recorder_idl
+
+#pragma prefix "bbc.co.uk"
+
+#include "defs.idl"
+#include "Timecode.idl"
+#include "Package.idl"
+#include "PackageObserver.idl"
+#include "Track.idl"
+
+module ProdAuto
+{
+
+	// Status of a recorder input.
+	struct TrackStatus
+	{
+		boolean rec; ///< True if currently recording.
+		boolean signal_present; ///< True if signal present at input.
+		MxfTimecode timecode; ///< Current %Timecode relevant to this input.
+	};
+	typedef sequence<TrackStatus> TrackStatusList;
+
+
+
+	/// Interface for an audio/video recorder with a single input or
+	/// with multiple inputs controlled as a group.
+	interface Recorder
+	{
+		enum ReturnCode { SUCCESS, PARTIAL_SUCCESS, FAILURE };
+
+		/// Get a description of the essence format(s) which are produced.
+		/// There could be many aspects to this such as whether recorder is file or
+		/// tape based, what the inputs are (SD, HD, no. of audio channels), what
+		/// encodings are done and whether any composites of the inputs are produced
+		/// such as quad-split.
+		string RecordingFormat();
+
+		/// Details of the tracks
+		readonly attribute TrackList Tracks;
+
+		/// Status of inputs
+		readonly attribute TrackStatusList TracksStatus;
+
+		//ReturnCode SetSources(in SourceList sources);
+
+
+		/// Maximum pre-roll available before StartRecord received
+		readonly attribute MxfDuration MaxPreRoll;
+		/// Maximum post-roll available after StopRecord received
+		readonly attribute MxfDuration MaxPostRoll;
+
+		/// Start recording.
+		/// @param start_timecode Timecode to select first frame in recording after pre-roll period.
+		/// If timecode has invalid flag set, the meaning is "now".
+		/// @param pre_roll Duration to be included at start of recording prior to start_timecode.
+		/// @param tag A label to be used when grouping recordings - e.g. the programme name.
+		/// @param rec_enable Enable for required recording tracks. Sequence should
+		/// have one element for each track.
+		/// @return Indication of success or failure.
+		ReturnCode Start(
+			in MxfTimecode start_timecode,
+			in MxfDuration pre_roll,
+			in string tag,
+			in BooleanList rec_enable
+		);
+
+		/// Stop recording.
+		/// @param stop_timecode Timecode to select the first frame of the post-roll period
+		/// of the recording.
+		/// If timecode has invalid flag set, the meaning is "now".
+		/// @param post_roll Duration to be included at end of recording.
+		/// @return Indication of success or failure.
+		ReturnCode Stop(
+			in MxfTimecode stop_timecode,
+			in MxfDuration post_roll
+		);
+
+		/// Stop recording after a specific total duration (including pre- and post-roll periods).
+		ReturnCode StopAfter(
+			in MxfDuration record_duration
+		);
+
+		/// Attach an observer which will receive notification
+		/// of completed recordings.
+		/// @return true if successful, false if not.
+		boolean Attach(in PackageObserver obs);
+
+		/// Detach an observer so it no longer receives notification
+		/// of completed recordings.
+		/// @return true if successful, false if not.
+		boolean Detach(in PackageObserver obs);
+	};
+
+};
+
+
+#endif  // #ifndef Recorder_idl
+
