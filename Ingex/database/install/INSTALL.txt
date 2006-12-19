@@ -1,0 +1,185 @@
+PostgreSQL database installation
+--------------------------------
+0) Remove any existing postgres rpms
+root> rpm -e postgresql
+or
+root> yast2 ...
+
+1) download the latest (version >= 8.1) postgres source code release from 
+http://www.postgres.org. 
+NOTE: versions < 8.1 are not suitable because of blocking issues with foreign key 
+constraint checking
+
+1.1) Ensure the readline-devel package installed
+
+2) compile and install postgres 
+> ./configure
+> make 
+root> sudo make install
+
+
+3) create a "postgres" user account using yast2
+root> /sbin/yast2
+
+
+4) create the postgres data directory
+root> mkdir /usr/local/pgsql/data
+
+
+5) change ownership of data directory to user "postgres"
+root> chown postgres /usr/local/pgsql/data
+
+
+6) login as user postgres and initialise the database
+postgres> /usr/local/pgsql/bin/initdb -D /usr/local/pgsql/data
+
+
+7) edit the client authentication file "/usr/local/pgsql/data/pg_hba.conf"
+Add the following entry:
+
+host    prodautodb         ingex    192.168.0.0/16        trust
+
+Note: we "trust" until the web application is able to handle the password prompt
+when calling "pg_dump".
+
+
+8) edit the postgres config file "/usr/local/pgsql/data/postgresql.conf" 
+Change the connection setting:
+
+listen_addresses = '*'
+
+
+9) Install CVS-maintained postgres startup script "postgresql" in "/etc/init.d"
+root> cp postgresql /etc/init.d
+root> chmod a+x /etc/init.d/postgresql
+
+
+10) add postgresql to run-level 3 and 5 using yast2 and start the service
+root> /sbin/yast2
+or
+root> chkconfig -a postgresql
+
+
+
+"prodautodb" database installation
+----------------------------------
+
+1) create "ingex" user in database
+> ./create_ingex_user.sh
+
+
+2) create "prodautodb" database
+> ./create_prodautodb.sh
+
+
+3) create test data (?default data?)
+> ./add_test_values.sh
+
+
+
+
+UnixODBC installation for C++ client apps
+-------------------------------------
+
+1) Install software packages using yast2
+
+* unixODBC
+* unixODBC-devel
+* psqlODBC (uses libpq.so which is supplied by postgresql-libs rpm)
+           (force installation using rpm -ivh --nodeps)
+
+
+2) Create and edit "/etc/unixODBC/odbcinst.ini":
+
+[PostgreSQL]
+Description     = PostgreSQL driver for Linux & Win32
+Driver          = /usr/lib/unixODBC/libodbcpsql.so
+Setup           = /usr/lib/unixODBC/libodbcpsqlS.so
+FileUsage       = 1
+
+
+3) Create and edit "/etc/unixODBC/odbc.ini":
+
+[ProdAutoDB]
+Description         = Production automation database
+Driver              = PostgreSQL
+Trace               = Yes
+TraceFile           = sql.log
+Database            = prodautodb
+Servername          = *******
+UserName            = ingex
+Password            =
+Port                = 5432
+Protocol            = 6.4
+ReadOnly            = No
+RowVersioning       = No
+ShowSystemTables    = No
+ShowOidColumn       = No
+FakeOidIndex        = No
+ConnSettings        =
+
+Fill the server name in ******* (eg. localhost).
+
+
+4) test ODBC connection
+
+isql prodautodb ingex ingex
+> select * from fileformat;
+> quit
+
+
+NOTE:
+Check the psqlODBC version if the test fails. SuSE 10.1 only supplies a 
+64-bit version of psqlODBC (in /usr/lib64) on 64-bit machines and therefore you
+need to replace "/usr/lib/unixODBC/libodbcpsql.so" with "/usr/lib64/unixODBC/libodbcpsql.so" and
+"/usr/lib/unixODBC/libodbcpsqlS.so" with "/usr/lib64/unixODBC/libodbcpsqlS.so".
+
+
+libODBC++ installation for C++ client apps
+------------------------------------------
+
+1) Download the library from http://libodbcxx.sourceforge.net/
+
+
+2) Regenerate the configuration files. If you don't then you will be missing
+the ".so" suffix in the the dynamic libraries filenames
+> ./autogen.sh
+
+
+3) Compile and install
+>./configure --with-odbc --enable-static 
+> make 
+root> make install
+
+NOTE: the compilation fails for gcc version 4 in file "tests/oracle.cpp:183".
+Do one of the following: 
+a) fix the problem at line 183 in test/oracle.cpp:
+  change
+     ns << ODBCXX_CHAR_TYPE("This is row number ") << i; should be:
+  to 
+     ns << ODBCXX_STRING_CONST("This is row number ") << i;
+b) or configure with the option "--without-tests".
+
+NOTE: the compilation fails for 64-bit line 308 in src/preparedstatement.cpp
+and line 534 in src/resultset.cpp. Replace the int cast with long.
+
+
+
+pgAdminIII installation on Windows 
+----------------------------------
+
+1) download from http://www.pgadmin.org/
+
+2) following instructions and install
+
+3) Run and add prodautodb server:
+Address = <ip address of database host machine>
+Maintenance DB = prodautodb (type it in)
+Username = ingex
+Password = ********
+
+
+
+
+
+
