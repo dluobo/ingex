@@ -1,0 +1,6 @@
+project(encodeLib) {
+  staticname = encode
+  sharedname = 
+  includes += /usr/local/include/ffmpeg
+}
+
