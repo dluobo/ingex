@@ -6,5 +6,6 @@ project(RecorderClient): taoserver, naming, messaging, valuetype {
   libs += common2 idl
   libpaths += ../common
   libpaths += ../IDL
+  after += common2Lib
 }
 
