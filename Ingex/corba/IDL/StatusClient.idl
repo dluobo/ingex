@@ -1,0 +1,57 @@
+/*
+ * $Id: StatusClient.idl,v 1.1 2006/12/20 12:28:23 john_f Exp $
+ *
+ * An interface which can receive status messages.
+ *
+ * Copyright (C) 2006  British Broadcasting Corporation.
+ * All Rights Reserved.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+ * 02110-1301, USA.
+ */
+
+#ifndef StatusClient_idl
+#define StatusClient_idl
+
+#pragma prefix "bbc.co.uk"
+
+
+module ProdAuto {
+
+    struct StatusItem
+    {
+        string name;
+        string value;
+    };
+
+/// This is the interface that receives status data from a DataSource.
+    interface StatusClient
+    {
+        /// Here is some status data.
+        /// The status string is a name=value pair.
+        /// Could extend in future to a sequence of strings to allow
+        /// multiple status items in one message.
+        void ProcessStatus(in StatusItem status);
+
+        /// I am no longer going to send status data to you.
+        void HandleStatusOust();
+
+        /// Are you still working?
+        void Ping();
+    };
+};
+
+
+#endif //#ifndef StatusClient_idl

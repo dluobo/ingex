@@ -1,0 +1,9 @@
+project(common2Lib) {
+  staticname = common2
+  sharedname = 
+  includes += $(ACE_ROOT) $(TAO_ROOT) $(TAO_ROOT)/orbsvcs
+  includes += ../../common
+  includes += ../IDL/Generated
+  after += idlLib
+}
+

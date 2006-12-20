@@ -1,0 +1,37 @@
+
+project(Recorder): taoserver, naming, messaging, valuetype {
+  exename = Recorder
+  includes += ../IDL
+  includes += ../IDL/Generated
+  includes += ../common
+  includes += ../../common
+  includes += ../../capture
+  includes += ../../database/src
+  includes += ../../mxfwriter
+  includes += /usr/local/include/ffmpeg
+  specific(vc71) {
+    includes += $(LIBODBCPP)/include
+  }
+  libs += avformat avcodec avutil z
+  libs += mp3lame
+  libs += uuid
+  libs += odbc++
+  libs += common2
+  libs += encode
+  libs += MXF
+  libs += writeavidmxf
+  libs += mxfwriter
+  libs += prodautodb
+  libs += idl
+  libpaths += ../common
+  libpaths += ../../common
+  libpaths += ../../mxfwriter
+  libpaths += ../../database/src
+  libpaths += ../../../libMXF/examples/writeavidmxf
+  libpaths += ../../../libMXF/lib
+  libpaths += ../IDL
+  libpaths += /usr/local/lib
+
+}
+
+

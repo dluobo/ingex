@@ -1,0 +1,22 @@
+project(idlLib): taoidldefaults {
+  staticname = idl
+  sharedname = 
+  includes += $(ACE_ROOT) $(TAO_ROOT) $(TAO_ROOT)/orbsvcs
+  includes += ./Generated
+
+  IDL_Files {
+    idlflags += -in -GI -Ge 2 -o ./Generated
+    gendir = ./Generated
+
+    defs.idl
+    Recorder.idl
+    Timecode.idl
+    Track.idl
+    Source.idl
+    DataSource.idl
+    StatusClient.idl
+    Subject.idl
+    Observer.idl
+  }
+}
+
