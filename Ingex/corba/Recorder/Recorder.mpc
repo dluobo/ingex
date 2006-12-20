@@ -31,7 +31,7 @@ project(Recorder): taoserver, naming, messaging, valuetype {
   libpaths += ../../../libMXF/lib
   libpaths += ../IDL
   libpaths += /usr/local/lib
-
+  after += common2Lib
 }
 
 
