@@ -2,12 +2,9 @@
 project(RecorderClient): taoserver, naming, messaging, valuetype {
   exename = RecorderClient
   includes += ../common
-  includes += ../IDL
   includes += ../IDL/Generated
-  libs += corba
-  libs += idl
+  libs += common2 idl
   libpaths += ../common
   libpaths += ../IDL
-
 }
 
