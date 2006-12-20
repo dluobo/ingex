@@ -1,0 +1,13 @@
+
+project(RecorderClient): taoserver, naming, messaging, valuetype {
+  exename = RecorderClient
+  includes += ../common
+  includes += ../IDL
+  includes += ../IDL/Generated
+  libs += corba
+  libs += idl
+  libpaths += ../common
+  libpaths += ../IDL
+
+}
+
