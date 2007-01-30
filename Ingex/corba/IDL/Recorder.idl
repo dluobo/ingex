@@ -1,5 +1,5 @@
 /*
- * $Id: Recorder.idl,v 1.2 2006/12/20 12:28:23 john_f Exp $
+ * $Id: Recorder.idl,v 1.3 2007/01/30 12:21:05 john_f Exp $
  *
  * Interface for Recorder.
  *
@@ -80,13 +80,14 @@ module ProdAuto
         /// Start recording.
         /// @param start_timecode Timecode to select first frame in recording after pre-roll period.
         /// If timecode has invalid flag set, the meaning is "now".
+        /// The returned value is the actual first frame in the recording (i.e. including pre-roll).
         /// @param pre_roll Duration to be included at start of recording prior to start_timecode.
         /// @param rec_enable Enable for required recording tracks. Sequence should
         /// have one element for each track.
         /// @param tag A label to be used when grouping recordings - e.g. the programme name.
         /// @return Indication of success or failure.
         ReturnCode Start(
-            in MxfTimecode start_timecode,
+            inout MxfTimecode start_timecode,
             in MxfDuration pre_roll,
             in BooleanList rec_enable,
             in string tag
@@ -95,12 +96,17 @@ module ProdAuto
         /// Stop recording.
         /// @param stop_timecode Timecode to select the first frame of the post-roll period
         /// of the recording.
+        /// The returned value is the actual "out time" of the recording, i.e. the frame after
+        /// the last frame present in the recording.
         /// If timecode has invalid flag set, the meaning is "now".
         /// @param post_roll Duration to be included at end of recording.
+        /// @param files One filename per track.  Where multiple tracks are recorded in
+        /// one file, the filename is repeated for each track.
         /// @return Indication of success or failure.
         ReturnCode Stop(
-            in MxfTimecode stop_timecode,
-            in MxfDuration post_roll
+            inout MxfTimecode stop_timecode,
+            in MxfDuration post_roll,
+            out StringList files
         );
 
         /// Instruct the recorder to re-read its configuration data.
