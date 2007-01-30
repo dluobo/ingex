@@ -1,5 +1,5 @@
 /*
- * $Id: IngexShm.h,v 1.1 2006/12/20 12:28:26 john_f Exp $
+ * $Id: IngexShm.h,v 1.2 2007/01/30 12:26:32 john_f Exp $
  *
  * Interface for reading audio/video data from shared memory.
  *
@@ -25,6 +25,7 @@
 #ifndef IngexShm_h
 #define IngexShm_h
 
+//#include <ace/Log_Msg.h>
 #include "integer_types.h"
 
 #include "nexus_control.h"
@@ -65,6 +66,10 @@ public:
             PTHREAD_MUTEX_UNLOCK(&mpControl->card[card_i].m_lastframe)
 #endif
         }
+		if (frame < 0)
+		{
+			frame = 0;
+		}
         return frame;
     }
 
@@ -76,6 +81,7 @@ public:
 
     int32_t Timecode(int card, int frame)
     {
+		//ACE_DEBUG((LM_DEBUG, ACE_TEXT("Timecode(%d, %d)\n"), card, frame));
         uint8_t * p_tc = mRing[card] + mpControl->elementsize * (frame % mpControl->ringlen)
             + mpControl->tc_offset - (mTcMode == LTC ? 4 : 0);
         return * (int32_t *) p_tc;
