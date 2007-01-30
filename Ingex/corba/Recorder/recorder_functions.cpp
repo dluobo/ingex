@@ -1,5 +1,5 @@
 /*
- * $Id: recorder_functions.cpp,v 1.1 2006/12/20 12:28:27 john_f Exp $
+ * $Id: recorder_functions.cpp,v 1.2 2007/01/30 12:29:23 john_f Exp $
  *
  * Functions which execute in recording threads.
  *
@@ -30,7 +30,7 @@
 #include "AudioMixer.h"
 #include "audio_utils.h"
 #include "quad_split_I420.h"
-#include "dv50_encoder.h"
+#include "dv_encoder.h"
 
 // prodautodb lib
 #include "Database.h"
@@ -49,9 +49,6 @@
 /// Mutex to ensure only one thread at a time can call avcodec open/close
 static ACE_Thread_Mutex avcodec_mutex;
 
-// Tmp bodges for debug output
-#define logFF printf
-#define logTF printf
 
 /**
 Thread function to record a single source as uncompressed
@@ -59,22 +56,19 @@ audio/video and as DVD compatible MPEG-2.
 */
 ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
 {
-    IngexRecorder *p = ((ThreadInvokeArg *)p_arg)->p_rec;
+    IngexRecorder * p = ((ThreadInvokeArg *)p_arg)->p_rec;
     int cardnum = ((ThreadInvokeArg *)p_arg)->invoke_card;
     RecordOptions *p_opt = &(p->record_opt[cardnum]);
 
     int start_tc = p_opt->start_tc;
     int start_frame = p_opt->start_frame;
 
-
-    logTF("Starting start_record_thread(cardnum=%d, start_tc=%d start_frame=%d)\n",
-                cardnum, start_tc, start_frame);
+    ACE_DEBUG((LM_DEBUG,
+        ACE_TEXT("Starting start_record_thread(cardnum=%d, start_tc=%d start_frame=%d)\n"),
+        cardnum, start_tc, start_frame));
 
     // This makes the record start at the target timecode
     int last_saved = start_frame - 1;
-
-    //int tc;
-    //int last_tc = -1;
 
 
     int uyvy_video_size = IngexShm::Instance()->sizeVideo422();
@@ -87,9 +81,9 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
 
     // Mask for MXF track enables
     uint32_t mxf_mask = 0;
-    if(enable_video)    mxf_mask |= 0x00000001;
-    if(enable_audio12)  mxf_mask |= 0x00000006;
-    if(enable_audio12)  mxf_mask |= 0x00000018;
+    if (enable_video)    mxf_mask |= 0x00000001;
+    if (enable_audio12)  mxf_mask |= 0x00000006;
+    if (enable_audio12)  mxf_mask |= 0x00000018;
 
     // Settings pointer
     RecorderSettings * settings = RecorderSettings::Instance();
@@ -98,7 +92,6 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     bool raw = settings->raw;
     bool mxf = settings->mxf;
     int mxf_resolution = settings->mxf_resolution;
-    bool mxf_dv50 = (mxf && mxf_resolution == DV50_MATERIAL_RESOLUTION);
     bool enable_dvd = false;
     bool browse_audio = (cardnum == 0 && settings->browse_audio);
 
@@ -127,43 +120,44 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     {
         std::ostringstream fname;
         fname << raw_dir << p_opt->file_ident << ".uyvy";
+        const char * f = fname.str().c_str();
 
-        if(NULL == (fp_video = fopen(fname.str().c_str(), "wb")))
+        if (NULL == (fp_video = fopen(f, "wb")))
         {
             enable_video = false;
-            logTF("Could not open %s\n", fname.str().c_str());
+            ACE_DEBUG((LM_ERROR, ACE_TEXT("Could not open %C\n"), f));
         }
     }
     if (raw && enable_audio12)
     {
         std::ostringstream fname;
         fname << raw_dir << p_opt->file_ident << "_12.wav";
+        const char * f = fname.str().c_str();
 
-        if(NULL == (fp_audio12 = fopen(fname.str().c_str(), "wb")))
+        if (NULL == (fp_audio12 = fopen(f, "wb")))
         {
             enable_audio12 = false;
-            logTF("Could not open %s\n", fname.str().c_str());
+            ACE_DEBUG((LM_ERROR, ACE_TEXT("Could not open %C\n"), f));
         }
         else
         {
             writeWavHeader(fp_audio12, raw_audio_bits);
-            //logTF("did audio12 header\n");
         }
     }
     if (raw && enable_audio34)
     {
         std::ostringstream fname;
         fname << raw_dir << p_opt->file_ident << "_34.wav";
+        const char * f = fname.str().c_str();
 
-        if(NULL == (fp_audio34 = fopen(fname.str().c_str(), "wb")))
+        if (NULL == (fp_audio34 = fopen(f, "wb")))
         {
             enable_audio34 = false;
-            logTF("Could not open %s\n", fname.str().c_str());
+            ACE_DEBUG((LM_ERROR, ACE_TEXT("Could not open %s\n"), f));
         }
         else
         {
             writeWavHeader(fp_audio34, raw_audio_bits);
-            //logTF("did audio34 header\n");
         }
     }
 
@@ -172,32 +166,46 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     {
         std::ostringstream fname;
         fname << browse_dir << p_opt->file_ident << ".wav";
+        const char * f = fname.str().c_str();
 
-        if(NULL == (fp_audio_browse = fopen(fname.str().c_str(), "wb")))
+        if (NULL == (fp_audio_browse = fopen(f, "wb")))
         {
             browse_audio = false;
-            logTF("Could not open %s\n", fname.str().c_str());
+            ACE_DEBUG((LM_ERROR, ACE_TEXT("Could not open %s\n"), f));
         }
         else
         {
             writeWavHeader(fp_audio_browse, browse_audio_bits);
-            //logTF("Opened %s\n", fname);
         }
     }
     
-    // Init the dv50 encoder
-    dv50_encoder_t * dv50_encoder = 0;
-    const int dv50_compressed_size = 288000;
-    if(mxf_dv50)
+    // DV encoder
+    dv_encoder_t * dv_encoder = 0;
+
+    if (mxf && (mxf_resolution == DV50_MATERIAL_RESOLUTION
+        || mxf_resolution == DV25_MATERIAL_RESOLUTION))
     {
         // Prevent "insufficient thread locking around avcodec_open/close()"
         ACE_Guard<ACE_Thread_Mutex> guard(avcodec_mutex);
 
-        dv50_encoder = dv50_encoder_init();
-        if(!dv50_encoder)
+        dv_encoder_resolution res;
+        switch (mxf_resolution)
         {
-            logTF("card %d: dv50 encoder init failed.\n", cardnum);
-            mxf_dv50 = false;
+        case DV25_MATERIAL_RESOLUTION:
+            res = DV_ENCODER_RESOLUTION_DV25;
+            break;
+        case DV50_MATERIAL_RESOLUTION:
+            res = DV_ENCODER_RESOLUTION_DV50;
+            break;
+        default:
+            break;
+        }
+
+        dv_encoder = dv_encoder_init(res);
+        if (!dv_encoder)
+        {
+            ACE_DEBUG((LM_ERROR, ACE_TEXT("card %d: DV encoder init failed.\n"), cardnum));
+            mxf = false;
         }
     }
 
@@ -215,12 +223,12 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     
     if (mxf && (0 == ric || 0 == ss))
     {
-	ACE_DEBUG((LM_ERROR, ACE_TEXT("MXF metadata unavailable.\n")));
+        ACE_DEBUG((LM_ERROR, ACE_TEXT("MXF metadata unavailable.\n")));
         mxf = false;
     }
 
     std::auto_ptr<prodauto::MXFWriter> writer;
-    if(mxf)
+    if (mxf)
     {
         std::vector<prodauto::UserComment> user_comments;
         user_comments.push_back(
@@ -247,7 +255,8 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                                             failures_path.str().c_str(),
                                             p_opt->file_ident,
                                             user_comments,
-                                            "");
+                                            p_opt->project
+                                            );
             writer.reset(p);
         }
         catch (const prodauto::DBException & dbe)
@@ -255,6 +264,29 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             ACE_DEBUG((LM_ERROR, ACE_TEXT("Database exception: %C\n"),
                 dbe.getMessage().c_str()));
             mxf = false;
+        }
+		ACE_DEBUG((LM_DEBUG, ACE_TEXT("Project name: %C\n"), p_opt->project.c_str()));
+
+        // Temp: Incomplete filename for each track.
+        // Need to get correct filenames from the MXFWriter.
+        //for (unsigned int i = 0; i < 5; ++i)
+        //{
+        //   p_opt->file_name[i] = mxf_dir + p_opt->file_ident;
+        //}
+
+        // Get filenames for each track.
+        for (unsigned int i = 0; i < 5; ++i)
+        {
+            unsigned int track = i + 1;
+            if (writer->trackIsPresent(track))
+            {
+                p_opt->file_name[i] = mxf_dir + writer->getFilename(track);
+                ACE_DEBUG((LM_DEBUG, ACE_TEXT("File name: %C\n"), p_opt->file_name[i].c_str()));
+            }
+            else
+            {
+                ACE_DEBUG((LM_DEBUG, ACE_TEXT("Track %d not present\n"), track));
+            }
         }
     }
 
@@ -271,7 +303,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         ACE_Guard<ACE_Thread_Mutex> guard(avcodec_mutex);
         if (0 == (dvd = dvd_encoder_init(mpeg2_filename.str().c_str(), mpeg2_bitrate)))
         {
-            logTF("card %d: dvd_encoder_init() failed\n", cardnum);
+            ACE_DEBUG((LM_ERROR, ACE_TEXT("card %d: dvd_encoder_init() failed\n"), cardnum));
             enable_dvd = false;         // give up on dvd
         }
     }
@@ -301,29 +333,29 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         {
             // Caught up to latest available frame
             // sleep for half a frame worth
-	    //ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C sleeping (a)\n"), SOURCE_NAME[cardnum]));
+            //ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C sleeping (a)\n"), SOURCE_NAME[cardnum]));
             ACE_OS::sleep(ACE_Time_Value(0, 20 * 1000));    // 0.020 seconds
             continue;
         }
 
         int diff = lastframe - last_saved;
-	int allowed_backlog = IngexShm::Instance()->RingLength() - 3;
+        int allowed_backlog = IngexShm::Instance()->RingLength() - 3;
         if (diff > allowed_backlog / 10)
         {
-	    ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C frames waiting = %d\n"),
-	        SOURCE_NAME[cardnum], diff));
-	}
+            ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C frames waiting = %d\n"),
+                SOURCE_NAME[cardnum], diff));
+        }
         if (diff > allowed_backlog)
         {
-	    int drop = diff - allowed_backlog;
-	    diff -= drop;
-	    last_saved += drop;
-            p_opt->IncFramesDropped(drop);
-	    ACE_DEBUG((LM_ERROR, ACE_TEXT("%C dropped frames worth %d (last_frame=%d)\n"),
-	        SOURCE_NAME[cardnum], drop, lastframe));
+            int drop = diff - allowed_backlog;
+            diff -= drop;
+            last_saved += drop;
+                p_opt->IncFramesDropped(drop);
+            ACE_DEBUG((LM_ERROR, ACE_TEXT("%C dropped frames worth %d (last_frame=%d)\n"),
+                SOURCE_NAME[cardnum], drop, lastframe));
         }
 
-	framecount_t last_tc = IngexShm::Instance()->Timecode(cardnum, last_saved);
+        framecount_t last_tc = IngexShm::Instance()->Timecode(cardnum, last_saved);
 
         // Save all frames which have not been saved
         for (int fi = diff - 1; fi >= 0; fi--)
@@ -343,15 +375,15 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             // Timecode value
             framecount_t tc_i = IngexShm::Instance()->Timecode(cardnum, lastframe - fi);
 
-	    // Check for timecode irregularities
-	    if (tc_i != last_tc + 1)
-	    {
-	        ACE_DEBUG((LM_ERROR, ACE_TEXT("%C Timecode discontinuity: %d frames missing at frame=%d tc=%d\n"),
-		    SOURCE_NAME[cardnum],
-		    tc_i - last_tc - 1,
-		    lastframe - fi,
-		    tc_i));
-	    }
+            // Check for timecode irregularities
+            if (tc_i != last_tc + 1)
+            {
+                ACE_DEBUG((LM_ERROR, ACE_TEXT("%C Timecode discontinuity: %d frames missing at frame=%d tc=%d\n"),
+                SOURCE_NAME[cardnum],
+                tc_i - last_tc - 1,
+                lastframe - fi,
+                tc_i));
+            }
 
             // Mix audio for browse version
             int16_t mixed_audio[1920*2];    // for stereo pair output
@@ -369,7 +401,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             // encode to dvd
             if (enable_dvd && dvd_encoder_encode(dvd, (uint8_t *)p_yuv_video, mixed_audio, tc_i) != 0)
             {
-                logTF("dvd_encoder_encode failed\n");
+                ACE_DEBUG((LM_ERROR, ACE_TEXT("dvd_encoder_encode failed\n")));
                 enable_dvd = false;
             }
 
@@ -395,25 +427,33 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             int16_t a0[audio_samples_per_frame];
             int16_t a1[audio_samples_per_frame];
 
-            uint8_t * p_dv50_video;
+            uint8_t * p_dv_video;
             int frame_number = 0; // Should be set to correct frame
-            if(mxf_dv50)
+            int size = 0;
+            if (mxf && mxf_resolution == DV25_MATERIAL_RESOLUTION)
             {
-                dv50_encoder_encode(dv50_encoder, (uint8_t *)p_uyvy_video, &p_dv50_video, dv50_compressed_size, frame_number);
+                size = dv_encoder_encode(dv_encoder, (uint8_t *)p_yuv_video, &p_dv_video, frame_number);
             }
-            if(mxf && enable_video)
+            if (mxf && mxf_resolution == DV50_MATERIAL_RESOLUTION)
+            {
+                size = dv_encoder_encode(dv_encoder, (uint8_t *)p_uyvy_video, &p_dv_video, frame_number);
+            }
+            if (mxf && enable_video)
             {
                 try
                 {
-                    if(mxf_dv50)
+                    switch (mxf_resolution)
                     {
-                        // write dv50 video data to input track 1
-                        writer->writeSample(1, 1, p_dv50_video, dv50_compressed_size);
-                    }
-                    else
-                    {
+                    case DV25_MATERIAL_RESOLUTION:
+                        writer->writeSample(1, 1, p_dv_video, size);
+                        break;
+                    case DV50_MATERIAL_RESOLUTION:
+                        writer->writeSample(1, 1, p_dv_video, size);
+                        break;
+                    default:
                         // write uncompressed video data to input track 1
                         writer->writeSample(1, 1, (uint8_t *)p_uyvy_video, uyvy_video_size);
+                        break;
                     }
                 }
                 catch (prodauto::MXFWriterException)
@@ -422,7 +462,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                 }
             }
 
-            if(mxf && enable_audio12)
+            if (mxf && enable_audio12)
             {
                 // de-interleave audio channels 1/2 and convert to 16-bit
                 deinterleave_32to16(p_audio12, a0, a1, audio_samples_per_frame);
@@ -441,7 +481,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                 }
             }
 
-            if(mxf && enable_audio34)
+            if (mxf && enable_audio34)
             {
                 // de-interleave audio channels 3/4 and convert to 16-bit
                 deinterleave_32to16(p_audio34, a0, a1, audio_samples_per_frame);
@@ -463,7 +503,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             // Completed this frame
             p_opt->IncFramesWritten();
 
-	    last_tc = tc_i;
+            last_tc = tc_i;
 
             //int tc_diff = tc - last_tc;
             //char tcstr[32];
@@ -476,8 +516,8 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             framecount_t total = written + dropped;
             if (target > 0 && total >= target)
             {
-                logTF("  card %d duration %d reached (total=%d written=%d dropped=%d)\n",
-                            cardnum, target, total, written, dropped);
+                ACE_DEBUG((LM_DEBUG, ACE_TEXT("  card %d duration %d reached (total=%d written=%d dropped=%d)\n"),
+                            cardnum, target, total, written, dropped));
                 finished_record = true;
                 break;
             }
@@ -489,8 +529,6 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         }
 
         last_saved = lastframe;
-
-        //ACE_OS::sleep(ACE_Time_Value(0, 20 * 1000));        // 0.020 seconds
     }
 
     // update and close files
@@ -518,30 +556,30 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
 
         if (dvd_encoder_close(dvd) != 0)
         {
-            logTF("card %d: dvd_encoder_close() failed\n", cardnum);
+            ACE_DEBUG((LM_ERROR, ACE_TEXT("card %d: dvd_encoder_close() failed\n"), cardnum));
         }
     }
 
-    // shutdown dv50 encoder
-    if (mxf_dv50)
+    // shutdown dv encoder
+    if (dv_encoder)
     {
         ACE_Guard<ACE_Thread_Mutex> guard(avcodec_mutex);
 
-        if (dv50_encoder_close(dv50_encoder) != 0)
+        if (dv_encoder_close(dv_encoder) != 0)
         {
-            logTF("card %d: dv50_encoder_close() failed\n", cardnum);
+            ACE_DEBUG((LM_ERROR, ACE_TEXT("card %d: dv_encoder_close() failed\n"), cardnum));
         }
     }
 
-    if(mxf)
+    if (mxf)
     {
         // complete the writing and save packages to database
-        logTF("Record thread %d completing MXF save\n", cardnum);
+        ACE_DEBUG((LM_DEBUG, ACE_TEXT("Record thread %d completing MXF save\n"), cardnum));
         writer->completeAndSaveToDatabase();
     }
 
 
-    logTF("Record thread %d exiting\n", cardnum);
+    ACE_DEBUG((LM_DEBUG, ACE_TEXT("Record thread %d exiting\n"), cardnum));
     return 0;
 }
 
@@ -550,9 +588,9 @@ Thread function to record quad-split as DVD-compatible MPEG-2 file.
 */
 ACE_THR_FUNC_RETURN start_quad_thread(void * p_arg)
 {
-    IngexRecorder *p = ((ThreadInvokeArg *)p_arg)->p_rec;
+    IngexRecorder * p = ((ThreadInvokeArg *)p_arg)->p_rec;
     int cardnum = ((ThreadInvokeArg *)p_arg)->invoke_card; // will be QUAD_SOURCE
-    RecordOptions *p_opt = &(p->record_opt[cardnum]);
+    RecordOptions * p_opt = &(p->record_opt[cardnum]);
 
 
     int start_tc = p_opt->start_tc;
@@ -561,15 +599,16 @@ ACE_THR_FUNC_RETURN start_quad_thread(void * p_arg)
     int quad2_offset = p_opt->quad2_frame_offset;
     int quad3_offset = p_opt->quad3_frame_offset;
 
-    logTF("Starting start_quad_thread(start_tc=%d start_frame=%d)\n"
-          "     quad1_frame_offset=%d quad2_frame_offset=%d quad3_frame_offset=%d\n", 
+    ACE_DEBUG((LM_DEBUG, ACE_TEXT("Starting start_quad_thread(start_tc=%d start_frame=%d)\n"
+          "     quad1_frame_offset=%d quad2_frame_offset=%d quad3_frame_offset=%d\n"), 
             start_tc, start_frame,
-            quad1_offset, quad2_offset, quad3_offset);
+            quad1_offset, quad2_offset, quad3_offset));
 
     // TODO: If main not present quad currently segv's
     if (! p->record_opt[0].enabled)
     {
-        logTF("start_quad_thread: main not enabled - recording quad split not supported (returning)\n");
+        ACE_DEBUG((LM_ERROR,
+            ACE_TEXT("start_quad_thread: main not enabled - recording quad split not supported (returning)\n")));
         return NULL;
     }
 
@@ -600,7 +639,7 @@ ACE_THR_FUNC_RETURN start_quad_thread(void * p_arg)
 
         if ((dvd = dvd_encoder_init(quad_filename.c_str(), mpeg2_bitrate)) == 0)
         {
-            logTF("card %d: dvd_encoder_init() failed\n", cardnum);
+            ACE_DEBUG((LM_ERROR, ACE_TEXT("card %d: dvd_encoder_init() failed\n"), cardnum));
             quad_mpeg2 = false;         // give up on dvd
         }
     }
@@ -660,8 +699,8 @@ ACE_THR_FUNC_RETURN start_quad_thread(void * p_arg)
         int diff = lastframe[0] - last_saved;
         if (diff >= IngexShm::Instance()->RingLength())
         {
-            logTF("dropped frames worth %d (last_saved=%d lastframe0=%d)\n",
-                        diff, last_saved, lastframe[0]);
+            ACE_DEBUG((LM_ERROR, ACE_TEXT("dropped frames worth %d (last_saved=%d lastframe0=%d)\n"),
+                        diff, last_saved, lastframe[0]));
             last_saved = lastframe[0] - 1;
             diff = 1;
         }
@@ -711,7 +750,6 @@ ACE_THR_FUNC_RETURN start_quad_thread(void * p_arg)
                 in.Ubuff = in.cbuff + 720*576;
                 in.Vbuff = in.cbuff + 720*576 *5/4;
 
-		//std::cout << "0" << std::flush;
                 quarter_frame_I420(&in, &out,
                                 0,      // x offset
                                 0,      // y offset
@@ -728,7 +766,6 @@ ACE_THR_FUNC_RETURN start_quad_thread(void * p_arg)
                 in.Ubuff = in.cbuff + 720*576;
                 in.Vbuff = in.cbuff + 720*576 *5/4;
 
-		//std::cout << "1" << std::flush;
                 quarter_frame_I420(&in, &out,
                                 720/2, 0,
                                 1, 1, 1);
@@ -742,7 +779,6 @@ ACE_THR_FUNC_RETURN start_quad_thread(void * p_arg)
                 in.Ubuff = in.cbuff + 720*576;
                 in.Vbuff = in.cbuff + 720*576 *5/4;
 
-		//std::cout << "2" << std::flush;
                 quarter_frame_I420(&in, &out,
                                     0, 576/2,
                                     1, 1, 1);
@@ -756,7 +792,6 @@ ACE_THR_FUNC_RETURN start_quad_thread(void * p_arg)
                 in.Ubuff = in.cbuff + 720*576;
                 in.Vbuff = in.cbuff + 720*576 *5/4;
 
-		//std::cout << "3" << std::flush;
                 quarter_frame_I420(&in, &out,
                                     720/2, 576/2,
                                     1, 1, 1);
@@ -780,13 +815,13 @@ ACE_THR_FUNC_RETURN start_quad_thread(void * p_arg)
 
             // encode to mpeg2
             if (quad_mpeg2)
-	    {
-	        if (0 != dvd_encoder_encode(dvd, p_quadvideo, mixed, tc_burn))
-		{
-		    logTF("dvd_encoder_encode failed\n");
-		    quad_mpeg2 = false;
-		}
-	    }
+            {
+                if (0 != dvd_encoder_encode(dvd, p_quadvideo, mixed, tc_burn))
+                {
+                    ACE_DEBUG((LM_ERROR, ACE_TEXT("dvd_encoder_encode failed\n")));
+                    quad_mpeg2 = false;
+                }
+            }
 
             p_opt->IncFramesWritten();
 
@@ -798,8 +833,8 @@ ACE_THR_FUNC_RETURN start_quad_thread(void * p_arg)
             framecount_t duration = p_opt->TargetDuration();
             if (duration > 0 && p_opt->FramesWritten() >= duration)
             {
-                logTF("  quad   duration %d reached (frames_written=%d)\n",
-                            duration, p_opt->FramesWritten());
+                ACE_DEBUG((LM_DEBUG, ACE_TEXT("  quad   duration %d reached (frames_written=%d)\n"),
+                            duration, p_opt->FramesWritten()));
                 finished_record = true;
                 break;
             }
@@ -810,12 +845,12 @@ ACE_THR_FUNC_RETURN start_quad_thread(void * p_arg)
         }
 
         if (finished_record)
+        {
             break;
+        }
 
         last_tc = tc;
         last_saved = lastframe[0];
-
-        ACE_OS::sleep(ACE_Time_Value(0, 20 * 1000));        // 0.020 seconds = 50 times a sec
     }
 
     // shutdown dvd encoder
@@ -825,11 +860,11 @@ ACE_THR_FUNC_RETURN start_quad_thread(void * p_arg)
 
         if (dvd_encoder_close(dvd) != 0)
         {
-            logTF("quad  : dvd_encoder_close() failed\n");
+            ACE_DEBUG((LM_ERROR, ACE_TEXT("quad  : dvd_encoder_close() failed\n")));
         }
     }
 
-    logTF("Quad record thread exiting\n");
+    ACE_DEBUG((LM_DEBUG, ACE_TEXT("Quad record thread exiting\n")));
     return 0;
 }
 
@@ -839,9 +874,9 @@ then perform completion tasks.
 */
 ACE_THR_FUNC_RETURN manage_record_thread(void *p_arg)
 {
-    IngexRecorder *p = (IngexRecorder *)p_arg;
+    IngexRecorder * p = (IngexRecorder *)p_arg;
 
-    logTF("manage_record_thread:\n");
+    ACE_DEBUG((LM_DEBUG, ACE_TEXT("manage_record_thread:\n")));
 
     // Wait for all threads to finish
     for (int card_i = 0; card_i < MAX_RECORD; card_i++)
@@ -862,10 +897,8 @@ ACE_THR_FUNC_RETURN manage_record_thread(void *p_arg)
         //int err = pthread_join( p->record_opt[card_i].thread_id, NULL);
         if(err)
         {
-            logTF("Failed to join record thread: %s\n", strerror(err));
+            ACE_DEBUG((LM_ERROR, ACE_TEXT("Failed to join record thread: %s\n"), strerror(err)));
         }
-
-        //logTF("Thread %d finished\n", card_i);
     }
 
 #if 0

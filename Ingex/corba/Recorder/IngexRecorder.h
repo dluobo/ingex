@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorder.h,v 1.1 2006/12/20 12:28:24 john_f Exp $
+ * $Id: IngexRecorder.h,v 1.2 2007/01/30 12:25:17 john_f Exp $
  *
  * Class to manage an individual recording.
  *
@@ -79,7 +79,7 @@ public:
     ~IngexRecorder();
 
     bool PrepareStart(
-                framecount_t start_timecode,
+                framecount_t & start_timecode,
                 framecount_t pre_roll,
                 bool enable[],
                 bool track_enable[],
@@ -88,7 +88,7 @@ public:
 
     bool Start(void);
 
-    bool Stop(framecount_t stop_timecode, framecount_t post_roll);
+    bool Stop(framecount_t & stop_timecode, framecount_t post_roll);
 
     void SetCompletionCallback(void(*p_fn)(IngexRecorder *)) { mpCompletionCallback = p_fn; }
 

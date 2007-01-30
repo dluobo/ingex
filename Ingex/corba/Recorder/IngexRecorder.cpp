@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorder.cpp,v 1.1 2006/12/20 12:28:24 john_f Exp $
+ * $Id: IngexRecorder.cpp,v 1.2 2007/01/30 12:25:17 john_f Exp $
  *
  * Class to manage an individual recording.
  *
@@ -33,6 +33,7 @@
 #include <ace/OS_NS_sys_shm.h>
 #include <ace/Log_Msg.h>
 #include <ace/OS_NS_time.h>
+#include <ace/OS_NS_string.h>
 
 #include "IngexRecorder.h"
 #include "RecorderSettings.h"
@@ -83,7 +84,7 @@ IngexRecorder::~IngexRecorder()
 Prepare for a recording.  Search for target timecode and set some of the RecordOptions
 */
 bool IngexRecorder::PrepareStart(
-                framecount_t start_timecode,
+                framecount_t & start_timecode,
                 framecount_t pre_roll,
                 bool card_enable[],
                 bool trk_enable[],
@@ -171,7 +172,7 @@ bool IngexRecorder::PrepareStart(
 #else
         // Simpler strategy
         target_tc = min_tc;
-	//target_tc = tc[1]; // just for testing
+        //target_tc = tc[1]; // just for testing
 #endif
 
     }
@@ -181,12 +182,20 @@ bool IngexRecorder::PrepareStart(
     }
 
     // Include pre-roll
+    if (target_tc < pre_roll)
+    {
+        target_tc += 24 * 60 * 60 * 25;
+    }
     target_tc -= pre_roll;
+
     // NB. Should be keeping target_tc and pre-roll separate in case of discontinuous timecode.
-    // i.e. ind target_tc and then step back by pre-roll.
+    // i.e. find target_tc and then step back by pre-roll.
 
     // For setting stop duration.  Once again, not the ideal way to do it.
     mStartTimecode = target_tc;
+
+    // Passing back the actual start_timecode.
+    start_timecode = target_tc;
 
     // local vars
     bool found_all_target = true;
@@ -222,7 +231,12 @@ bool IngexRecorder::PrepareStart(
         {
             // read timecode value
             //int tc = *(int*)(ring[card_i] + elementsize * ((lastframe-i) % ringlen) + tc_offset);
-            int tc = IngexShm::Instance()->Timecode(card_i, lastframe - i);
+			int frame = lastframe - i;
+			if (frame < 0)
+			{
+				frame += IngexShm::Instance()->RingLength();
+            }
+            int tc = IngexShm::Instance()->Timecode(card_i, frame);
             if (first_tc_seen == -1)
             {
                 first_tc_seen = tc;
@@ -305,16 +319,18 @@ bool IngexRecorder::PrepareStart(
         FileUtils::CreatePath(settings->browse_dir);
     }
 
+    // Set further RecordOptions members.
     for (int i = 0; i < MAX_RECORD; i++)
     {
         RecordOptions & opt = record_opt[i];
-        if(opt.enabled)
+        if (opt.enabled)
         {
             std::ostringstream ident;
             ident << date << "_" << tcode << "_" << SOURCE_NAME[i];
             opt.file_ident = ident.str();
 
-            opt.description = tag;
+            opt.project = tag;
+            opt.description = "Ingex recording";
         }
     }
 
@@ -364,7 +380,8 @@ bool IngexRecorder::Start()
     return true;
 }
 
-bool IngexRecorder::Stop( framecount_t stop_timecode, framecount_t post_roll )
+
+bool IngexRecorder::Stop( framecount_t & stop_timecode, framecount_t post_roll )
 {
     ACE_DEBUG((LM_DEBUG, ACE_TEXT("IngexRecorder::Stop(%d, %d)\n"), stop_timecode, post_roll));
 
@@ -375,39 +392,38 @@ bool IngexRecorder::Stop( framecount_t stop_timecode, framecount_t post_roll )
     //post_roll = 0;  //tmp test
 
     framecount_t capture_length = 0;
-    if(stop_timecode < 0)
+    if (stop_timecode < 0)
     {
         // Stop timecode is "now".
         // Find longest current recorded duration and add post_roll.
 
         for (int i = 0; i < MAX_RECORD; ++i)
         {
-	    framecount_t frames_written = record_opt[i].FramesWritten();
-	    framecount_t frames_dropped = record_opt[i].FramesDropped();
-	    framecount_t frames_total;
+            framecount_t frames_total = 0;
+            framecount_t frames_written = record_opt[i].FramesWritten();
+            framecount_t frames_dropped = record_opt[i].FramesDropped();
             if (record_opt[i].enabled)
             {
                 frames_total = frames_written + frames_dropped;
             }
-	    else
-	    {
-	        frames_total = 0;
-	    }
-	    ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C frames total = %d (written = %d, dropped = %d)\n"),
-		SOURCE_NAME[i], frames_total, frames_written, frames_dropped));
+            ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C frames total = %d (written = %d, dropped = %d)\n"),
+                SOURCE_NAME[i], frames_total, frames_written, frames_dropped));
 
-	    if (capture_length < frames_total)
-	    {
-	        capture_length = frames_total;
-	    }
+            if (capture_length < frames_total)
+            {
+                capture_length = frames_total;
+            }
         }
-	capture_length += post_roll;
+        capture_length += post_roll;
     }
     else
     {
         // Calculate capture length.
         capture_length = stop_timecode - mStartTimecode + post_roll;
     }
+
+    // Return the expected "out time" of the recording
+    stop_timecode = mStartTimecode + capture_length;
 
     // guard against crazy capture lengths
     if (capture_length <= 0)
@@ -424,9 +440,9 @@ bool IngexRecorder::Stop( framecount_t stop_timecode, framecount_t post_roll )
     {
         if (record_opt[i].enabled)
         {
-	    record_opt[i].TargetDuration(capture_length);
-	    ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C: Target duration set to %d\n"),
-	        SOURCE_NAME[i], capture_length));
+        record_opt[i].TargetDuration(capture_length);
+        ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C: Target duration set to %d\n"),
+            SOURCE_NAME[i], capture_length));
         }
 
     }

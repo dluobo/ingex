@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderApp.cpp,v 1.1 2006/12/20 12:28:26 john_f Exp $
+ * $Id: RecorderApp.cpp,v 1.2 2007/01/30 12:27:46 john_f Exp $
  *
  * Encapsulation of the recorder application.
  *
@@ -30,7 +30,7 @@
 // Static member
 RecorderApp * RecorderApp::mInstance = 0;
 
-bool RecorderApp::Init(int argc, ACE_TCHAR * argv[])
+bool RecorderApp::Init(int argc, char * argv[])
 {
 // Set verbosity of debug messages
     Logfile::DebugLevel(2);  // need level 3 for LM_DEBUG messages
@@ -44,20 +44,27 @@ bool RecorderApp::Init(int argc, ACE_TCHAR * argv[])
 // initialise ORB
     CorbaUtil::Instance()->InitOrb(argc, argv);
 
-// Now that InitOrb has consumed its arguments, check for recorder name
-// on command line.
+// Now that InitOrb has consumed its arguments, check for
+// command line arguments.
     std::string recorder_name;
-    if(argc > 1)
+    std::string db_user;
+    std::string db_pw;
+    if (argc > 1)
     {
-        recorder_name = ACE_TEXT_ALWAYS_CHAR(argv[1]);
+        recorder_name = argv[1];
     }
-    else
+    if (argc > 2)
     {
-        recorder_name = "Ingex Lot";
+        db_user = argv[2];
+    }
+    if (argc > 3)
+    {
+        db_pw = argv[3];
     }
 
+
 // and initialise recorder with name
-    bool ok = mpServant->Init(recorder_name.c_str());
+    bool ok = mpServant->Init(recorder_name, db_user, db_pw);
 
 // apply timeout for CORBA operations
     const int timeoutsecs = 8;

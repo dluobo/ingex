@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorderImpl.cpp,v 1.1 2006/12/20 12:28:24 john_f Exp $
+ * $Id: IngexRecorderImpl.cpp,v 1.2 2007/01/30 12:25:17 john_f Exp $
  *
  * Servant class for Recorder.
  *
@@ -55,14 +55,14 @@ IngexRecorderImpl::IngexRecorderImpl (void)
 }
 
 // Initialise the recorder
-bool IngexRecorderImpl::Init(const char * name)
+bool IngexRecorderImpl::Init(std::string name, std::string db_user, std::string db_pw)
 {
     mName = name;
 
     // Database
     try
     {
-        prodauto::Database::initialise("prodautodb","ingex","ingex",4,12);
+        prodauto::Database::initialise("prodautodb", db_user, db_pw, 4, 12);
     }
     catch (...)
     {
@@ -263,7 +263,7 @@ char * IngexRecorderImpl::RecordingFormat (
 }
 
 ::ProdAuto::Recorder::ReturnCode IngexRecorderImpl::Start (
-    const ::ProdAuto::MxfTimecode & start_timecode,
+    ::ProdAuto::MxfTimecode & start_timecode,
     const ::ProdAuto::MxfDuration & pre_roll,
     const ::ProdAuto::BooleanList & rec_enable,
     const char * tag
@@ -300,13 +300,23 @@ char * IngexRecorderImpl::RecordingFormat (
     }
 
     bool track_enable[MAX_CARDS * 5];
-    for(unsigned int card_i = 0; card_i < IngexShm::Instance()->Cards(); ++card_i)
+    for (unsigned int card_i = 0; card_i < IngexShm::Instance()->Cards(); ++card_i)
     {
-        for(int j = 0; j < 5; ++j)
+        for (int j = 0; j < 5; ++j)
         {
             CORBA::ULong track_i = card_i * 5 + j;
+
+            // Copy track enable into local bool array.
             track_enable[track_i] = rec_enable[track_i];
-            if(rec_enable[track_i])
+
+            // If no source connected, disable track.
+            if (!mTracks[track_i].has_source)
+            {
+                track_enable[track_i] = false;
+            }
+
+            // Set card enable.
+            if (rec_enable[track_i])
             {
                 // If one track enabled, set card enable.
                 card_enable[card_i] = true;
@@ -324,10 +334,10 @@ char * IngexRecorderImpl::RecordingFormat (
     mpIngexRecorder->SetCompletionCallback(&recording_completed);
 
     // Determine start timecode or crash-record
-    unsigned long start;
+    framecount_t start;
     bool crash;
-    if(start_timecode.undefined)
-    //if(1)  // tmp force "start now"
+    if (start_timecode.undefined)
+    //if (1)  // tmp force "start now"
     {
         start = 0;
         crash = true;
@@ -346,6 +356,11 @@ char * IngexRecorderImpl::RecordingFormat (
         track_enable,
         crash,
         tag);
+
+    // Set return value for actual start timecode
+    start_timecode.undefined = false;
+    start_timecode.edit_rate = EDIT_RATE;
+    start_timecode.samples = start;
 
     // Start
     if(ok)
@@ -379,8 +394,9 @@ char * IngexRecorderImpl::RecordingFormat (
 }
 
 ::ProdAuto::Recorder::ReturnCode IngexRecorderImpl::Stop (
-    const ::ProdAuto::MxfTimecode & mxf_stop_timecode,
-    const ::ProdAuto::MxfDuration & mxf_post_roll
+    ::ProdAuto::MxfTimecode & mxf_stop_timecode,
+    const ::ProdAuto::MxfDuration & mxf_post_roll,
+    ::ProdAuto::StringList_out files
   )
   throw (
     ::CORBA::SystemException
@@ -396,11 +412,30 @@ char * IngexRecorderImpl::RecordingFormat (
     //ACE_DEBUG((LM_DEBUG, ACE_TEXT("IngexRecorderImpl::Stop(%d, %d)\n"),
     //    stop_timecode, post_roll));
 
+    // Create out parameter
+    files = new ::ProdAuto::StringList;
+    files->length(IngexShm::Instance()->Cards() * 5);
 
     // Tell recorder when to stop.
-    if(mpIngexRecorder)
+    if (mpIngexRecorder)
     {
         mpIngexRecorder->Stop(stop_timecode, post_roll);
+
+        // Return the expected "out time"
+        mxf_stop_timecode.undefined = false;
+        mxf_stop_timecode.edit_rate = EDIT_RATE;
+        mxf_stop_timecode.samples = stop_timecode;
+
+        // Return the filenames
+        for (unsigned int card_i = 0; card_i < IngexShm::Instance()->Cards(); ++card_i)
+        {
+            RecordOptions & opt = mpIngexRecorder->record_opt[card_i];
+            for (int j = 0; j < 5; ++j)
+            {
+                CORBA::ULong track_i = card_i * 5 + j;
+                files->operator[](track_i) = CORBA::string_dup(opt.file_name[j].c_str());
+            }
+        }
     }
     mpIngexRecorder = 0;  // It will be deleted when it signals completion
 
@@ -547,22 +582,22 @@ void IngexRecorderImpl::UpdateSources()
                     stc = sc->getTrackConfig(ritc->sourceTrackID);
                 }
 
-		ProdAuto::Track & track = mTracks[(CORBA::ULong)i * 5 + j];
-		ProdAuto::Source & source = track.src;
+		        ProdAuto::Track & track = mTracks[(CORBA::ULong)i * 5 + j];
+		        ProdAuto::Source & source = track.src;
 
                 if (sc && stc)
                 {
-		    track.has_source = 1;
-		    source.package_name = CORBA::string_dup(sc->name.c_str());
-		    source.track_name = CORBA::string_dup(stc->name.c_str());
+		            track.has_source = 1;
+		            source.package_name = CORBA::string_dup(sc->name.c_str());
+		            source.track_name = CORBA::string_dup(stc->name.c_str());
                 }
-		else
-		{
-		    // No connection to this input
-		    track.has_source = 0;
-		    source.package_name = CORBA::string_dup("zz No Connection");
-		    source.track_name = CORBA::string_dup("");
-		}
+		        else
+		        {
+		            // No connection to this input
+		            track.has_source = 0;
+		            source.package_name = CORBA::string_dup("zz No Connection");
+		            source.track_name = CORBA::string_dup("");
+		        }
             }
         }
     }

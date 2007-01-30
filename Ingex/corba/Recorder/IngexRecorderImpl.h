@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorderImpl.h,v 1.1 2006/12/20 12:28:24 john_f Exp $
+ * $Id: IngexRecorderImpl.h,v 1.2 2007/01/30 12:25:17 john_f Exp $
  *
  * Servant class for Recorder.
  *
@@ -51,7 +51,7 @@ public:
   void Destroy();
 
   // Initialisation
-  bool Init(const char * name);
+  bool Init(std::string name, std::string db_user, std::string db_pw);
 
   // Identity
   const char * Name() const { return mName.c_str(); }
@@ -107,7 +107,7 @@ public:
   
   virtual
   ::ProdAuto::Recorder::ReturnCode Start (
-      const ::ProdAuto::MxfTimecode & start_timecode,
+      ::ProdAuto::MxfTimecode & start_timecode,
       const ::ProdAuto::MxfDuration & pre_roll,
       const ::ProdAuto::BooleanList & rec_enable,
       const char * tag
@@ -118,8 +118,9 @@ public:
   
   virtual
   ::ProdAuto::Recorder::ReturnCode Stop (
-      const ::ProdAuto::MxfTimecode & stop_timecode,
-      const ::ProdAuto::MxfDuration & post_roll
+      ::ProdAuto::MxfTimecode & stop_timecode,
+      const ::ProdAuto::MxfDuration & post_roll,
+      ::ProdAuto::StringList_out files
     )
     throw (
       ::CORBA::SystemException
