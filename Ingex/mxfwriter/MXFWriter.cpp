@@ -1,5 +1,5 @@
 /*
- * $Id: MXFWriter.cpp,v 1.1 2006/12/20 14:51:07 john_f Exp $
+ * $Id: MXFWriter.cpp,v 1.2 2007/01/30 14:09:48 john_f Exp $
  *
  * Writes essence data to MXF files
  *
@@ -283,6 +283,7 @@ MXFWriter::MXFWriter(RecorderInputConfig* inputConfig, SourceSession* sourceSess
             filename = createFilename(filenamePrefix, sourceTrack->dataDef == PICTURE_DATA_DEFINITION, 
                 sourceTrack->id, trackConfig->index);
             _filenames.insert(pair<UMID, string>(filePackage->uid, filename));
+            _filenames2.insert(pair<uint32_t, string>(trackConfig->index, filename));
             fileDesc->fileLocation = createCompleteFilename(creatingFilePath, filename);
             fileDesc->fileFormat = MXF_FILE_FORMAT_TYPE;
             if (sourceTrack->dataDef == PICTURE_DATA_DEFINITION)
@@ -384,6 +385,11 @@ MXFWriter::MXFWriter(RecorderInputConfig* inputConfig, SourceSession* sourceSess
             
             // record map input track ID to material package track ID
             trackWriter->inputToMPTrackMap.insert(pair<uint32_t, uint32_t>(trackConfig->index, materialTrack->id));
+            
+            
+            // set the status to not (yet) successfull
+            _filePackageToInputTrackMap.insert(pair<UMID, uint32_t>(filePackage->uid, trackConfig->index));
+            _status.insert(pair<uint32_t, bool>(trackConfig->index, false));
         }
     }
     
@@ -525,6 +531,16 @@ MXFWriter::MXFWriter(RecorderInputConfig* inputConfig, SourceSession* sourceSess
                         }
                         break;
                         
+                        case DV25_MATERIAL_RESOLUTION:
+                        {
+                            EssenceInfo essenceInfo;
+                            CHECK_SUCCESS(create_file_source_package(packageDefinitions, &umid, 
+                                filePackage->name.c_str(), 
+                                &timestamp, fileDesc->fileLocation.c_str(), 
+                                DVBased25, &essenceInfo, &mxfFilePackage));
+                        }
+                        break;
+                        
                         case DV50_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
@@ -624,6 +640,11 @@ MXFWriter::~MXFWriter()
     {
         delete *iter2;
     }
+}
+
+bool MXFWriter::trackIsPresent(uint32_t trackID)
+{
+    return _trackWriters.find(trackID) != _trackWriters.end();
 }
 
 void MXFWriter::writeSample(uint32_t trackID, uint32_t numSamples, uint8_t* data, uint32_t size)
@@ -931,7 +952,7 @@ void MXFWriter::completeAndSaveToDatabase()
             }
 
             
-            // save the packages to the database and schedule proxy generation
+            // save the packages to the database
             try
             {
                 auto_ptr<Transaction> transaction(database->getTransaction());
@@ -947,6 +968,21 @@ void MXFWriter::completeAndSaveToDatabase()
                 database->savePackage(outputPackage->materialPackage, transaction.get());
         
                 transaction->commitTransaction();
+
+                // record the successes
+                for (iter2 = outputPackage->filePackages.begin(); iter2 != outputPackage->filePackages.end(); iter2++)
+                {
+                    SourcePackage* filePackage = *iter2;
+                    
+                    // set the status to successfull
+                    map<UMID, uint32_t>::iterator iter3 = _filePackageToInputTrackMap.find(filePackage->uid);
+                    if (iter3 == _filePackageToInputTrackMap.end())
+                    {
+                        PA_LOGTHROW(MXFWriterException, ("Bug: could not map file package UMID to input track"));
+                    }
+                    _status.erase((*iter3).second);
+                    _status.insert(pair<uint32_t, bool>((*iter3).second, true));
+                }
             }
             catch (...)
             {
@@ -1000,4 +1036,40 @@ OutputPackage* MXFWriter::getOutputPackage(SourceSession* sourceSession, string 
     
     return 0;
 }
+
+bool MXFWriter::wasSuccessfull(uint32_t trackID)
+{
+    map<uint32_t, bool>::iterator iter = _status.find(trackID);
+    if (iter == _status.end())
+    {
+        PA_LOGTHROW(MXFWriterException, ("Invalid recorder input track id %u", trackID));
+    }
+    return (*iter).second;
+}
+
+string MXFWriter::getFilename(uint32_t trackID)
+{
+    map<uint32_t, string>::iterator iter = _filenames2.find(trackID);
+    if (iter == _filenames2.end())
+    {
+        PA_LOGTHROW(MXFWriterException, ("Invalid recorder input track id %u", trackID));
+    }
+    return (*iter).second;
+}
+
+string MXFWriter::getCreatingFilename(string filename)
+{
+    return createCompleteFilename(_creatingFilePath, filename);
+}
+
+string MXFWriter::getDestinationFilename(string filename)
+{
+    return createCompleteFilename(_destinationFilePath, filename);
+}
+
+string MXFWriter::getFailuresFilename(string filename)
+{
+    return createCompleteFilename(_failuresFilePath, filename);
+}
+    
 

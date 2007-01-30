@@ -1,5 +1,5 @@
 /*
- * $Id: MXFWriter.h,v 1.1 2006/12/19 16:48:20 john_f Exp $
+ * $Id: MXFWriter.h,v 1.2 2007/01/30 14:09:48 john_f Exp $
  *
  * Writes essence data to MXF files
  *
@@ -77,6 +77,10 @@ public:
         std::vector<UserComment> userComments, std::string avidProjectName);
     ~MXFWriter();
     
+    // returns true if the track is present    
+    bool trackIsPresent(uint32_t trackID);
+
+    
     void writeSample(uint32_t trackID, uint32_t numSamples, uint8_t* data, uint32_t size);
 
     // use these 3 functions if you need to write raw data and only at the end
@@ -88,6 +92,18 @@ public:
     void endSampleData(uint32_t trackID, uint32_t numSamples);    
 
     void completeAndSaveToDatabase();
+
+    
+    // returns true if the file corresponding to the track was successfully completed
+    bool wasSuccessfull(uint32_t trackID);
+    
+    // returns the filename associated with the track
+    std::string getFilename(uint32_t trackID);
+    
+    // adds the creating/destination/failures file path to the filename
+    std::string getCreatingFilename(std::string filename);
+    std::string getDestinationFilename(std::string filename);
+    std::string getFailuresFilename(std::string filename);
     
 private:
     OutputPackage* getOutputPackage(SourceSession* sourceSession, std::string sourceName); 
@@ -103,6 +119,10 @@ private:
     std::string _filenamePrefix;
     
     std::map<UMID, std::string> _filenames;
+    std::map<uint32_t, std::string> _filenames2;
+    
+    std::map<UMID, uint32_t> _filePackageToInputTrackMap;
+    std::map<uint32_t, bool> _status;
 };
 
 

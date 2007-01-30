@@ -1,5 +1,5 @@
 /*
- * $Id: test_mxfwriter.cpp,v 1.1 2006/12/20 14:51:07 john_f Exp $
+ * $Id: test_mxfwriter.cpp,v 1.2 2007/01/30 14:09:48 john_f Exp $
  *
  * Tests the MXF writer
  *
@@ -187,6 +187,16 @@ void* start_record_routine(void* data)
 
         // complete the writing and save packages to database
         writer->completeAndSaveToDatabase();
+        
+        printf("Files created successfully:");
+        for (i = 0; i < 20; i++)
+        {
+            if (writer->trackIsPresent(i) && writer->wasSuccessfull(i))
+            {
+                printf("  %s", writer->getFilename(i).c_str());
+            }
+        }
+        printf("\n");
     }
     catch (const ProdAutoException& ex)
     {
