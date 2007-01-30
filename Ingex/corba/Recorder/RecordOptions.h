@@ -1,5 +1,5 @@
 /*
- * $Id: RecordOptions.h,v 1.1 2006/12/20 12:28:26 john_f Exp $
+ * $Id: RecordOptions.h,v 1.2 2007/01/30 12:30:50 john_f Exp $
  *
  * Class for card-specific (i.e. thread-specific) recording data.
  *
@@ -53,6 +53,8 @@ public:
 
     std::string file_ident;
     std::string description;
+    std::string project; ///< Avid project name.
+    std::string file_name[5]; // one per track
 
     framecount_t FramesWritten()
     {
