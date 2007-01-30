@@ -1,5 +1,5 @@
 /*
- * $Id: DateTime.cpp,v 1.1 2006/12/20 12:28:28 john_f Exp $
+ * $Id: DateTime.cpp,v 1.2 2007/01/30 12:16:50 john_f Exp $
  *
  * Date/time to text functions.
  *
@@ -25,14 +25,16 @@
 #include "DateTime.h"
 
 #include <ace/OS_NS_time.h>
+#include <ace/OS_NS_sys_time.h>
 #include <ace/OS_NS_stdio.h>
+#include <ace/Time_Value.h>
 
 /*
 Returns a pointer to a null-terminated string in format YYYYMMDD.
 The caller has responsibility for deallocating the memory
 by invoking delete [] on the returned pointer.
 */
-const char * DateTime::DateNoSeparators()
+char * DateTime::DateNoSeparators()
 {
     time_t my_time = ACE_OS::time();
     tm my_tm;
@@ -53,7 +55,7 @@ Returns a pointer to a null-terminated string in format YYYYMMDDHHMM.
 The caller has responsibility for deallocating the memory
 by invoking delete [] on the returned pointer.
 */
-const char * DateTime::DateTimeNoSeparators()
+char * DateTime::DateTimeNoSeparators()
 {
     time_t my_time = ACE_OS::time();
     tm my_tm;
@@ -69,6 +71,29 @@ const char * DateTime::DateTimeNoSeparators()
         );
 
     return p;
+}
+
+/*
+Returns a pointer to a null-terminated string in format HH:MM:SS:FF
+The caller has responsibility for deallocating the memory
+by invoking delete [] on the returned pointer.
+*/
+char * DateTime::Timecode()
+{
+    ACE_Time_Value t = ACE_OS::gettimeofday();
+    time_t t_secs = t.sec();
+	suseconds_t t_us = t.usec();
+    tm my_tm;
+    tm * ptm = ACE_OS::localtime_r(&t_secs, &my_tm);
+
+    char * p = new char[13];
+    ACE_OS::sprintf(p,"%02d:%02d:%02d:%02d",
+		ptm->tm_hour,
+		ptm->tm_min,
+		ptm->tm_sec,
+		t_us / 40000 );
+
+	return p;
 }
 
 void DateTime::GetDate(int & year, int & month, int & day)

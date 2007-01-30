@@ -1,5 +1,5 @@
 /*
- * $Id: DateTime.h,v 1.1 2006/12/20 12:28:29 john_f Exp $
+ * $Id: DateTime.h,v 1.2 2007/01/30 12:16:50 john_f Exp $
  *
  * Date/time to text functions.
  *
@@ -28,8 +28,9 @@
 class DateTime
 {
 public:
-    static const char * DateNoSeparators();
-    static const char * DateTimeNoSeparators();
+    static char * DateNoSeparators();
+    static char * DateTimeNoSeparators();
+    static char * Timecode();
     static void GetDate(int & year, int & month, int & day);
 };
 
