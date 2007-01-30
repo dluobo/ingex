@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.c,v 1.1 2006/12/19 16:48:20 john_f Exp $
+ * $Id: dvs_sdi.c,v 1.2 2007/01/30 12:06:37 john_f Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -48,8 +48,16 @@
 #define SV_CHECK(x) {int res = x; if (res != SV_OK) { fprintf(stderr, "sv call failed=%d  %s line %d\n", res, __FILE__, __LINE__); sv_errorprint(sv,res); cleanup_exit(1, sv); } }
 
 #include <sys/shm.h>
-#include "../nexus_control.h"
-#include "../utils.h"
+#include "nexus_control.h"
+#include "utils.h"
+
+typedef enum {
+	FormatUYVY,			// 4:2:2 buffer suitable for uncompressed capture
+	FormatYUV422,		// 4:2:2 buffer suitable for JPEG encoding
+	FormatDV50,			// 4:2:2 buffer suitable for DV50 encoding (picture shift down 1 line)
+	FormatMPEG,			// 4:2:0 buffer suitable for MPEG encoding
+	FormatDV25			// 4:2:0 buffer suitable for DV25 encoding (picture shift down 1 line)
+} CaptureFormat;
 
 // Globals
 pthread_t		sdi_thread[4];
@@ -59,7 +67,8 @@ NexusControl	*p_control = NULL;
 uint8_t			*ring[4] = {0};
 int				control_id, ring_id[4];
 int				element_size = 0, audio_offset = 0, audio_size = 0;
-
+CaptureFormat	video_format = FormatDV50;
+CaptureFormat	video_secondary_format = FormatMPEG;
 static int verbose = 1;
 static int verbose_card = 0;	// which card to show when verbose is on
 
@@ -85,12 +94,12 @@ static void cleanup_shared_mem(void)
 
 static void cleanup_exit(int res, sv_handle *sv)
 {
-    printf("cleaning up\n");
+	printf("cleaning up\n");
 	// attempt to avoid lockup when stopping playback
 	if (sv != NULL)
 	{
 		// sv_fifo_wait does nothing for record, only useful for playback
-    	//sv_fifo_wait(sv, poutput);
+		//sv_fifo_wait(sv, poutput);
 		sv_close(sv);
 	}
 
@@ -100,7 +109,7 @@ static void cleanup_exit(int res, sv_handle *sv)
 	usleep(100 * 1000);		// 0.1 seconds
 
 	printf("done - exiting\n");
-    exit(res);
+	exit(res);
 }
 
 static void catch_sigusr1(int sig_number)
@@ -110,7 +119,7 @@ static void catch_sigusr1(int sig_number)
 
 static void catch_sigint(int sig_number)
 {
-    printf("\nReceived signal %d - ", sig_number);
+	printf("\nReceived signal %d - ", sig_number);
 	cleanup_exit(0, NULL);
 }
 
@@ -119,17 +128,30 @@ static void uyvy_to_yuv422(int width, int height, uint8_t *input, uint8_t *outpu
 {
 	__m64 chroma_mask = _mm_set_pi8(255, 0, 255, 0, 255, 0, 255, 0);
 	__m64 luma_mask = _mm_set_pi8(0, 255, 0, 255, 0, 255, 0, 255);
+	uint8_t *orig_input = input;
 	uint8_t *y_comp = output;
 	uint8_t *u_comp = output + width * height;
 	uint8_t *v_comp = u_comp + (int)((width * height)/2);	// 4:2:2
 	int i, j;
 
+	// When preparing video for PAL DV50 encoding, the video must be shifted
+	// down by one line to change the field order to be bottom-field-first
+	int start_line = 0;
+	if (video_format == FormatDV50) {
+		memset(y_comp, 0x10, width);		// write one line of black Y
+		y_comp += width;
+		memset(u_comp, 0x80, width/2);		// write one line of black U,V
+		u_comp += width/2;
+		memset(v_comp, 0x80, width/2);		// write one line of black U,V
+		v_comp += width/2;
+		start_line = 1;
+	}
+
 	/* Do the y component */
-	 uint8_t *tmp = input;
-	for (j = 0; j < height; ++j)
+	for (j = start_line; j < height; j++)
 	{
 		// Consume 16 bytes of UYVY data per iteration (8 pixels worth)
-		for (i = 0; i < width*2;  i += 16)
+		for (i = 0; i < width*2; i += 16)
 		{
 			//__m64 m1 = _mm_and_si64 (*(__m64 *)input, luma_mask);
 			//__m64 m2 = _mm_and_si64 (*(__m64 *)(input+8), luma_mask);
@@ -158,11 +180,11 @@ static void uyvy_to_yuv422(int width, int height, uint8_t *input, uint8_t *outpu
 		}
 	}
 	/* Do the chroma components */
-	input = tmp;
-	for (j = 0; j < height; ++j)
+	input = orig_input;
+	for (j = start_line; j < height; j++)
 	{
 		/* Process every line for yuv 4:2:2 */
-		for (i = 0; i < width*2;  i += 16)
+		for (i = 0; i < width*2; i += 16)
 		{
 			__m64 m1 = _mm_unpacklo_pi8 (*(__m64 *)input, *(__m64 *)(input+8));
 			__m64 m2 = _mm_unpackhi_pi8 (*(__m64 *)input, *(__m64 *)(input+8));
@@ -184,17 +206,30 @@ static void uyvy_to_yuv420(int width, int height, uint8_t *input, uint8_t *outpu
 {
 	__m64 chroma_mask = _mm_set_pi8(255, 0, 255, 0, 255, 0, 255, 0);
 	__m64 luma_mask = _mm_set_pi8(0, 255, 0, 255, 0, 255, 0, 255);
+	uint8_t *orig_input = input;
 	uint8_t *y_comp = output;
 	uint8_t *u_comp = output + width * height;
 	uint8_t *v_comp = u_comp + (int)((width * height)/4);	// 4:2:0
 	int i, j;
 
+	// When preparing video for PAL DV25 encoding, the video must be shifted
+	// down by one line to change the field order to be bottom-field-first
+	int start_line = 0;
+	if (video_secondary_format == FormatDV25) {
+		memset(y_comp, 0x10, width);		// write one line of black Y
+		y_comp += width;
+		memset(u_comp, 0x80, width/2);		// write one line of black U,V
+		u_comp += width/2;
+		memset(v_comp, 0x80, width/2);		// write one line of black U,V
+		v_comp += width/2;
+		start_line = 1;
+	}
+
 	/* Do the y component */
-	 uint8_t *tmp = input;
-	for (j = 0; j < height; ++j)
+	for (j = start_line; j < height; j++)
 	{
 		// Consume 16 bytes of UYVY data per iteration (8 pixels worth)
-		for (i = 0; i < width*2;  i += 16)
+		for (i = 0; i < width*2; i += 16)
 		{
 			//__m64 m1 = _mm_and_si64 (*(__m64 *)input, luma_mask);
 			//__m64 m2 = _mm_and_si64 (*(__m64 *)(input+8), luma_mask);
@@ -223,8 +258,8 @@ static void uyvy_to_yuv420(int width, int height, uint8_t *input, uint8_t *outpu
 		}
 	}
 	/* Do the chroma components */
-	input = tmp;
-	for (j = 0; j < height; ++j)
+	input = orig_input;
+	for (j = start_line; j < height; j++)
 	{
 		/* Skip every odd line to subsample to yuv 4:2:0 */
 		if (j %2)
@@ -232,7 +267,7 @@ static void uyvy_to_yuv420(int width, int height, uint8_t *input, uint8_t *outpu
 			input += width*2;
 			continue;
 		}
-		for (i = 0; i < width*2;  i += 16)
+		for (i = 0; i < width*2; i += 16)
 		{
 			__m64 m1 = _mm_unpacklo_pi8 (*(__m64 *)input, *(__m64 *)(input+8));
 			__m64 m2 = _mm_unpackhi_pi8 (*(__m64 *)input, *(__m64 *)(input+8));
@@ -256,6 +291,10 @@ static void uyvy_to_yuv420(int width, int height, uint8_t *input, uint8_t *outpu
 static void uyvy_to_yuv420(int width, int height, uint8_t *input, uint8_t *output)
 {
 	int i;
+
+	// TODO:
+	// support video_secondary_format == FormatDV25
+	// by shifting picture down one line
 
 	// Copy Y plane as is
 	for (i = 0; i < width*height; i++)
@@ -547,35 +586,29 @@ static void * sdi_monitor(void *arg)
 
 	int last_res = -1;
 	while (1)
-    {
+	{
 		int res;
 
+		// write_picture() returns the result of sv_fifo_getbuffer()
 		if ((res = write_picture(card, sv, poutput)) != SV_OK)
 		{
 			// Display error only when things change
 			if (res != last_res) {
 				logTF("card %ld: failed to capture video: (%d) %s\n", card, res,
 					res == SV_ERROR_INPUT_VIDEO_NOSIGNAL ? "INPUT_VIDEO_NOSIGNAL" : sv_geterrortext(res));
-
-				// reset FIFO if error indicates FIFO problem
-				// TODO: do we need to restart? or can we just try again
-				if (res == SV_ERROR_FIFO_PUTBUFFER)
-				{
-					logTF("SV_ERROR_FIFO_PUTBUFFER: restarting fifo\n");
-					SV_CHECK( sv_fifo_reset(sv, poutput) );
-					SV_CHECK( sv_fifo_start(sv, poutput) );
-				}
 			}
 			last_res = res;
-			continue;	// loop again
+			// try again after waiting one field
+			usleep(20 * 1000);
+			continue;
 		}
 
-		// This point reached only if res is SV_OK
+		// res will be SV_OK to reach this point
 		if (res != last_res) {
 			logTF("card %ld: Video signal OK\n", card);
 		}
 		last_res = res;
-    }
+	}
 
 	return NULL;
 }
@@ -583,11 +616,21 @@ static void * sdi_monitor(void *arg)
 
 static void usage_exit(void)
 {
-	fprintf(stderr, "Usage: nexus_sdi [-v] [-q] [-h] [-c max_cards]\n");
+	fprintf(stderr, "Usage: dvs_sdi [options]\n");
 	fprintf(stderr, "\n");
-	fprintf(stderr, "E.g.   nexus_sdi -c 2\n");
+	fprintf(stderr, "E.g.   dvs_sdi -c 2\n");
 	fprintf(stderr, "\n");
-	fprintf(stderr, "    -q           Quiet operation\n");
+	fprintf(stderr, "    -f <video format>  uncompressed video format to store in ring buffer:\n");
+	fprintf(stderr, "                       DV50   - Planar YUV 4:2:2 with field order line shift (default)\n");
+	fprintf(stderr, "                       YUV422 - Planar YUV 4:2:2 16bpp\n");
+	fprintf(stderr, "                       UYVY   - UYVY 4:2:2 16bpp\n");
+	fprintf(stderr, "    -s <secondary fmt> uncompressed video format for the secondary video buffer:\n");
+	fprintf(stderr, "                       MPEG   - secondary buffer is planar YUV 4:2:0 (default)\n");
+	fprintf(stderr, "                       DV25   - secondary buffer is planar YUV 4:2:0 with field order line shift\n");
+	fprintf(stderr, "    -c <max cards>     maximum number of cards to use for capture\n");
+	fprintf(stderr, "    -q                 quiet operation (fewer messages)\n");
+	fprintf(stderr, "    -d <card>          card number to print verbose debug messages for\n");
+	fprintf(stderr, "    -h                 usage\n");
 	fprintf(stderr, "\n");
 	exit(1);
 }
@@ -619,6 +662,9 @@ int main (int argc, char ** argv)
 		}
 		else if (strcmp(argv[n], "-c") == 0)
 		{
+			if (argc <= n+1)
+				usage_exit();
+
 			if (sscanf(argv[n+1], "%d", &max_cards) != 1 ||
 				max_cards > 4 || max_cards <= 0)
 			{
@@ -629,11 +675,54 @@ int main (int argc, char ** argv)
 		}
 		else if (strcmp(argv[n], "-d") == 0)
 		{
+			if (argc <= n+1)
+				usage_exit();
+
 			if (sscanf(argv[n+1], "%d", &verbose_card) != 1 ||
 				verbose_card > 3 || verbose_card < 0)
 			{
 				fprintf(stderr, "-d requires card number {0,1,2,3}\n");
 				return 1;
+			}
+			n++;
+		}
+		else if (strcmp(argv[n], "-f") == 0)
+		{
+			if (argc <= n+1)
+				usage_exit();
+
+			if (strcmp(argv[n+1], "UYVY") == 0) {
+				printf("Capturing video as UYVY (4:2:2)\n");
+				video_format = FormatUYVY;
+			}
+			else if (strcmp(argv[n+1], "YUV422") == 0) {
+				printf("Capturing video as planar YUV 4:2:2\n");
+				video_format = FormatYUV422;
+			}
+			else if (strcmp(argv[n+1], "DV50") == 0) {
+				printf("Capturing video as YUV 4:2:2 planar with picture shifted down by one line\n");
+				video_format = FormatDV50;
+			}
+			else {
+				usage_exit();
+			}
+			n++;
+		}
+		else if (strcmp(argv[n], "-s") == 0)
+		{
+			if (argc <= n+1)
+				usage_exit();
+
+			if (strcmp(argv[n+1], "MPEG") == 0) {
+				printf("Secondary video buffer is formatted as YUV 4:2:0 planar\n");
+				video_secondary_format = FormatMPEG;
+			}
+			else if (strcmp(argv[n+1], "DV25") == 0) {
+				printf("Secondary video buffer is formatted as YUV 4:2:0 planar with picture shifted down by one line\n");
+				video_secondary_format = FormatDV25;
+			}
+			else {
+				usage_exit();
 			}
 			n++;
 		}
@@ -723,16 +812,12 @@ int main (int argc, char ** argv)
 		logTF("card %d: starting capture thread\n", card);
 
 		if ((err = pthread_create(&sdi_thread[card], NULL, sdi_monitor, (void *)card)) != 0)
-        {
-            logTF("Failed to create sdi_monitor thread: %s\n", strerror(err));
-            return 1;
-        }
+		{
+			logTF("Failed to create sdi_monitor thread: %s\n", strerror(err));
+			return 1;
+		}
 	}
 
-	// SDI monitor threads never terminate.
-	// Loop forever monitoring status of threads for logging purposes
-	while (1)
-	{
-		usleep( 2 * 1000 * 1000);
-	}
+	// SDI monitor threads never terminate so a waiting in a join will wait forever
+	pthread_join(sdi_thread[0], NULL);
 }

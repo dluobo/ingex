@@ -1,5 +1,5 @@
 /*
- * $Id: utils.c,v 1.1 2006/12/19 16:48:20 john_f Exp $
+ * $Id: utils.c,v 1.2 2007/01/30 12:06:37 john_f Exp $
  *
  * Logging and debugging utility functions.
  *
@@ -25,6 +25,7 @@
 #include <stdarg.h>
 #include <string.h>
 #include <time.h>
+#include <sys/time.h>
 #include "utils.h"
 
 // Utility functions
@@ -32,9 +33,9 @@
 
 static FILE *pLogFile = NULL;
 static char log_filename[FILENAME_MAX] = "recorder.log";
-static bool log_overwrite = true;
+static int log_overwrite = 1;
 
-extern bool openLogFileWithDate(const char *logfile)
+extern int openLogFileWithDate(const char *logfile)
 {
 	time_t now = time(NULL);
 	struct tm l;
@@ -51,7 +52,8 @@ extern bool openLogFileWithDate(const char *logfile)
 
 	return pLogFile != NULL;
 }
-extern bool openLogFile(const char *logfile)
+
+extern int openLogFile(const char *logfile)
 {
 	if (logfile != NULL) {
 		strcpy(log_filename, logfile);
@@ -91,51 +93,88 @@ extern void logF(const char *fmt, ...)
 	va_start(ap, fmt);
 
 	vprintf(fmt, ap);
+
+	int logfile_open = 1;
 	if (! pLogFile)
-		openLogFile(NULL);
-	vfprintf(pLogFile, fmt, ap);
+		logfile_open = openLogFile(NULL);
+
+	if (logfile_open)
+		vfprintf(pLogFile, fmt, ap);
 
 	va_end(ap);
 }
 
-// logging with time stamp and flushing
+// logging with time stamp and flushing to stdout and file
 extern void logTF(const char *fmt, ...)
 {
 	va_list		ap;
 
 	va_start(ap, fmt);
 
+	struct timeval tv;
 	time_t now = time(NULL);
+	gettimeofday(&tv, NULL);
 	struct tm l;
 	localtime_r(&now, &l);
 
-	printf("%02d:%02d:%02d ", l.tm_hour, l.tm_min, l.tm_sec);
+	printf("%02d:%02d:%02d.%06ld ", l.tm_hour, l.tm_min, l.tm_sec, tv.tv_usec);
 	fflush(stdout);
 	vprintf(fmt, ap);
 
+	int logfile_open = 1;
 	if (! pLogFile)
-		openLogFile(NULL);
-	fprintf(pLogFile, "%02d:%02d:%02d ", l.tm_hour, l.tm_min, l.tm_sec);
-	vfprintf(pLogFile, fmt, ap);
-	fflush(pLogFile);
+		logfile_open = openLogFile(NULL);
+
+	if (logfile_open) {
+		fprintf(pLogFile, "%02d:%02d:%02d.%06ld ", l.tm_hour, l.tm_min, l.tm_sec, tv.tv_usec);
+		vfprintf(pLogFile, fmt, ap);
+		fflush(pLogFile);
+	}
 
 	va_end(ap);
 }
 
-// printf style logging with stream flush
+// logging with time stamp and flushing to file only
 extern void logFF(const char *fmt, ...)
 {
 	va_list		ap;
 
 	va_start(ap, fmt);
 
-	vprintf(fmt, ap);
-	fflush(stdout);
+	struct timeval tv;
+	time_t now = time(NULL);
+	gettimeofday(&tv, NULL);
+	struct tm l;
+	localtime_r(&now, &l);
 
+	int logfile_open = 1;
 	if (! pLogFile)
-		openLogFile(NULL);
-	vfprintf(pLogFile, fmt, ap);
-	fflush(pLogFile);
+		logfile_open = openLogFile(NULL);
+
+	if (logfile_open) {
+		fprintf(pLogFile, "%02d:%02d:%02d.%06ld ", l.tm_hour, l.tm_min, l.tm_sec, tv.tv_usec);
+		vfprintf(pLogFile, fmt, ap);
+		fflush(pLogFile);
+	}
+
+	va_end(ap);
+}
+
+// logging flushing to file only
+extern void logFFi(const char *fmt, ...)
+{
+	va_list		ap;
+
+	va_start(ap, fmt);
+
+	int logfile_open = 1;
+	if (! pLogFile)
+		logfile_open = openLogFile(NULL);
+
+	if (logfile_open) {
+		vfprintf(pLogFile, fmt, ap);
+		fflush(pLogFile);
+	}
 
 	va_end(ap);
 }
@@ -147,11 +186,14 @@ extern void logerrF(const char *fmt, ...)
 
 	va_start(ap, fmt);
 
-	if (! pLogFile)
-		openLogFile(NULL);
-
 	vfprintf(stderr, fmt, ap);
-	vfprintf(pLogFile, fmt, ap);
+
+	int logfile_open = 1;
+	if (! pLogFile)
+		logfile_open = openLogFile(NULL);
+
+	if (logfile_open)
+		vfprintf(pLogFile, fmt, ap);
 
 	va_end(ap);
 }
@@ -165,6 +207,44 @@ extern char *framesToStr(int tc, char *s)
 
 	sprintf(s, "%02d:%02d:%02d:%02d", hours, minutes, seconds, frames);
 	return s;
+}
+
+// Table to quickly convert DVS style timecodes to integer timecodes
+static int dvs_to_int[128] = {
+ 0,  1,  2,  3,  4,  5,  6,  7,  8,  9,  0,  0,  0,  0,  0,  0, 
+10, 11, 12, 13, 14, 15, 16, 17, 18, 19,  0,  0,  0,  0,  0,  0, 
+20, 21, 22, 23, 24, 25, 26, 27, 28, 29,  0,  0,  0,  0,  0,  0, 
+30, 31, 32, 33, 34, 35, 36, 37, 38, 39,  0,  0,  0,  0,  0,  0, 
+40, 41, 42, 43, 44, 45, 46, 47, 48, 49,  0,  0,  0,  0,  0,  0, 
+50, 51, 52, 53, 54, 55, 56, 57, 58, 59,  0,  0,  0,  0,  0,  0,
+60, 61, 62, 63, 64, 65, 66, 67, 68, 69,  0,  0,  0,  0,  0,  0,
+70, 71, 72, 73, 74, 75, 76, 77, 78, 79,  0,  0,  0,  0,  0,  0
+};
+
+extern int dvs_tc_to_int(int tc)
+{
+	// E.g. 0x09595924
+	// E.g. 0x10000000
+	int hours = dvs_to_int[(tc & 0x7f000000) >> 24];
+	int mins  = dvs_to_int[(tc & 0x007f0000) >> 16];
+	int secs  = dvs_to_int[(tc & 0x00007f00) >> 8];
+	int frames= dvs_to_int[(tc & 0x0000007f)];
+
+	int tc_as_total =	hours * (25*60*60) +
+						mins * (25*60) +
+						secs * (25) +
+						frames;
+
+	return tc_as_total;
+}
+
+extern int tc_to_int(unsigned hh, unsigned mm, unsigned ss, unsigned ff)
+{
+	int tc_as_total =	hh * (25*60*60) +
+						mm * (25*60) +
+						ss * (25) +
+						ff;
+	return tc_as_total;
 }
 
 // Input must be one line of UYVY video (720 pixels, 720*2 bytes)
@@ -189,7 +269,8 @@ extern unsigned VBIbit(const unsigned char *line, int bit)
 extern unsigned readVBIbits(const unsigned char *line, int bit, int width)
 {
 	unsigned value = 0;
-	for (int i=0; i < width; i++) {
+	int i;
+	for (i=0; i < width; i++) {
 		value |= (VBIbit(line, bit + i) << i);
 	}
 	return value;
@@ -199,7 +280,8 @@ extern int readVITC(const unsigned char *line,
 					unsigned *hh, unsigned *mm, unsigned *ss, unsigned *ff)
 {
 	unsigned CRC = 0;
-	for (int i = 0; i < 10; i++)
+	int i;
+	for (i = 0; i < 10; i++)
 		CRC ^= readVBIbits(line, i*8, 8);
 	CRC = (((CRC & 3) ^ 1) << 6) | (CRC >> 2);
 	//unsigned film_CRC = CRC ^ 0xFF;

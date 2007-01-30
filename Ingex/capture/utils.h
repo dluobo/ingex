@@ -1,5 +1,5 @@
 /*
- * $Id: utils.h,v 1.1 2006/12/19 16:48:20 john_f Exp $
+ * $Id: utils.h,v 1.2 2007/01/30 12:06:37 john_f Exp $
  *
  * Logging and debugging utility functions.
  *
@@ -24,17 +24,26 @@
 #ifndef UTILS_H
 #define UTILS_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // Utilities
-extern bool openLogFileWithDate(const char *logfile);
-extern bool openLogFile(const char *logfile);
+extern int openLogFileWithDate(const char *logfile);
+extern int openLogFile(const char *logfile);
 extern void logF(const char *fmt, ...) __attribute__ ((format (printf, 1, 2)));
 extern void logTF(const char *fmt, ...) __attribute__ ((format (printf, 1, 2)));
 extern void logerrF(const char *fmt, ...) __attribute__ ((format (printf, 1, 2)));
 extern void logFF(const char *fmt, ...) __attribute__ ((format (printf, 1, 2)));
+extern void logFFi(const char *fmt, ...) __attribute__ ((format (printf, 1, 2)));
 
 extern char *framesToStr(int tc, char *s);
+extern int dvs_tc_to_int(int tc);
+extern int tc_to_int(unsigned hh, unsigned mm, unsigned ss, unsigned ff);
 extern int readVITC(const unsigned char *line, unsigned *hh, unsigned *mm, unsigned *ss, unsigned *ff);
 
-
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* UTILS_H */
