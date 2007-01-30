@@ -9,8 +9,13 @@ $ACE_ROOT/bin/mwc.pl -type gnuace
 make
 
 cd $workspace/ingex/Ingex/corba
-$ACE_ROOT/bin/mwc.pl
+$ACE_ROOT/bin/mwc.pl -type gnuace
 make Recorder-target
 make RecorderClient-target
 
+cd $workspace/ingex/Ingex/capture
+make testgen
+
+export DVSSDK=<location of DVS SDK>
+make dvs_sdi
 
