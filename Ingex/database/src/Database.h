@@ -1,5 +1,5 @@
 /*
- * $Id: Database.h,v 1.1 2006/12/19 16:44:52 john_f Exp $
+ * $Id: Database.h,v 1.2 2007/01/30 12:46:20 john_f Exp $
  *
  * Provides access to the data in the database
  *
@@ -34,6 +34,7 @@
 #include "Connection.h"
 #include "Transaction.h"
 #include "Recorder.h"
+#include "RouterConfig.h"
 #include "Package.h"
 #include "Track.h"
 #include "SourceClip.h"
@@ -85,6 +86,8 @@ public:
     void saveSourceConfig(SourceConfig* config, Transaction* transaction = 0);
     void deleteSourceConfig(SourceConfig* config, Transaction* transaction = 0);
     
+    std::vector<RouterConfig*> loadAllRouterConfigs();
+    RouterConfig* loadRouterConfig(std::string name);
     
     
     // Multi-camera clip definitions

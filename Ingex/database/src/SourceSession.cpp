@@ -1,5 +1,5 @@
 /*
- * $Id: SourceSession.cpp,v 1.1 2006/12/20 14:37:03 john_f Exp $
+ * $Id: SourceSession.cpp,v 1.2 2007/01/30 12:46:20 john_f Exp $
  *
  * A set of Packages representing live recording / tape sources during a time period
  *
@@ -34,7 +34,6 @@ using namespace std;
 using namespace prodauto;
 
 
-
 SourceSession* SourceSession::create(Recorder* recorder, Date date)
 {
     if (!recorder->hasConfig())
@@ -43,15 +42,8 @@ SourceSession* SourceSession::create(Recorder* recorder, Date date)
             "configuration selected"));
     }
     
-    Database* database = Database::getInstance();
-    auto_ptr<SourceSession> sourceSession(new SourceSession(date));
-    SourcePackage* sourcePackage;
-    Track* track;
-    SourceClip* sourceClip;
-    TapeEssenceDescriptor* tapeEssDesc;
-    LiveEssenceDescriptor* liveEssDesc;
-    map<SourceConfig*, SourcePackage*> processedSourceConfigs;
-
+    vector<SourceConfig*> sourceConfigs;
+    map<SourceConfig*, SourceConfig*> processedSourceConfigs;
     
     try
     {
@@ -80,64 +72,151 @@ SourceSession* SourceSession::create(Recorder* recorder, Date date)
                     PA_LOGTHROW(DBException, ("Recorder track config references non-existing source track config"));
                 }
                 
-                // create new source package if source config not already processed
+                // add connected source config to list
                 if (processedSourceConfigs.find(sourceConfig) == processedSourceConfigs.end())
                 {
-                    // create new source package
-                    
-                    sourcePackage = new SourcePackage();
-                    sourceSession->sourcePackages.push_back(sourcePackage);
-                    processedSourceConfigs.insert(pair<SourceConfig*, SourcePackage*>(sourceConfig, sourcePackage));
-
-                    sourcePackage->uid = generateUMID();
-                    sourcePackage->name = getSourcePackageName(sourceConfig->name, date);
-                    sourcePackage->creationDate = generateTimestampNow();
-                    if (sourceConfig->type == TAPE_SOURCE_CONFIG_TYPE)
-                    {
-                        tapeEssDesc = new TapeEssenceDescriptor();
-                        sourcePackage->descriptor = tapeEssDesc;
-                        tapeEssDesc->spoolNumber = sourceConfig->spoolNumber;
-                    }
-                    else // LIVE_SOURCE_CONFIG_TYPE
-                    {
-                        liveEssDesc = new LiveEssenceDescriptor();
-                        sourcePackage->descriptor = liveEssDesc;
-                        liveEssDesc->recordingLocation = sourceConfig->recordingLocation;
-                    }
-                    
-                    
-                    // create source package tracks
-                    
-                    vector<SourceTrackConfig*>::const_iterator iter3;
-                    for (iter3 = sourceConfig->trackConfigs.begin(); iter3 != sourceConfig->trackConfigs.end(); iter3++)
-                    {
-                        SourceTrackConfig* sourceTrackConfig = *iter3;
-                
-                        track = new Track();
-                        sourcePackage->tracks.push_back(track);
-                        
-                        track->id = sourceTrackConfig->id;
-                        track->number = sourceTrackConfig->number;
-                        track->name = sourceTrackConfig->name;
-                        track->dataDef = sourceTrackConfig->dataDef;
-                        track->editRate = sourceTrackConfig->editRate;
-                        sourceClip = new SourceClip();
-                        track->sourceClip = sourceClip;
-                        
-                        sourceClip->sourcePackageUID = g_nullUMID;
-                        sourceClip->sourceTrackID = 0;
-                        sourceClip->length = sourceTrackConfig->length;
-                        sourceClip->position = 0;
-                    }
+                    processedSourceConfigs.insert(pair<SourceConfig*, SourceConfig*>(sourceConfig, sourceConfig));
+                    sourceConfigs.push_back(sourceConfig);
                 }
             }
         }
+        
+        // create source session with list of source configs
+        return create(sourceConfigs, date);
+    }
+    catch (DBException& ex)
+    {
+        PA_LOGTHROW(DBException, ("Failed to create source session:\n%s", ex.getMessage().c_str()));
+    }
+    
+    return 0;
+}
 
-        // save source packages to the database
+SourceSession* SourceSession::create(RouterConfig* routerConfig, Date date)
+{
+    vector<SourceConfig*> sourceConfigs;
+    map<SourceConfig*, SourceConfig*> processedSourceConfigs;
+    
+    try
+    {
+        vector<RouterInputConfig*>::const_iterator iter1;
+        for (iter1 = routerConfig->inputConfigs.begin(); iter1 != routerConfig->inputConfigs.end(); iter1++)
+        {
+            RouterInputConfig* inputConfig = *iter1;
+            
+            if (!inputConfig->isConnectedToSource())
+            {
+                // router input is not connected to a source
+                continue;
+            }
+
+            SourceConfig* sourceConfig = inputConfig->sourceConfig;
+            
+            // check that the router input config is connected to a source config track
+            if (sourceConfig->getTrackConfig(inputConfig->sourceTrackID) == 0)
+            {
+                PA_LOGTHROW(DBException, ("Router input config references non-existing source track config"));
+            }
+            
+            // add connected source config to list
+            if (processedSourceConfigs.find(sourceConfig) == processedSourceConfigs.end())
+            {
+                processedSourceConfigs.insert(pair<SourceConfig*, SourceConfig*>(sourceConfig, sourceConfig));
+                sourceConfigs.push_back(sourceConfig);
+            }
+        }
+        
+        // create source session with list of source configs
+        return create(sourceConfigs, date);
+    }
+    catch (DBException& ex)
+    {
+        PA_LOGTHROW(DBException, ("Failed to create source session:\n%s", ex.getMessage().c_str()));
+    }
+    
+    return 0;
+}
+
+SourceSession* SourceSession::create(vector<SourceConfig*>& sourceConfigs, Date date)
+{
+    Database* database = Database::getInstance();
+    auto_ptr<SourceSession> sourceSession(new SourceSession(date));
+    SourcePackage* sourcePackage;
+    Track* track;
+    SourceClip* sourceClip;
+    TapeEssenceDescriptor* tapeEssDesc;
+    LiveEssenceDescriptor* liveEssDesc;
+    vector<SourcePackage*> newSourcePackages;
+
+    
+    try
+    {
+        vector<SourceConfig*>::const_iterator iter1;
+        for (iter1 = sourceConfigs.begin(); iter1 != sourceConfigs.end(); iter1++)
+        {
+            SourceConfig* sourceConfig = *iter1;
+            
+            // load source package if it already exists, else create source package
+            if ((sourcePackage = database->loadSourcePackage(
+                getSourcePackageName(sourceConfig->name, date))) != 0)
+            {
+                sourceSession->sourcePackages.push_back(sourcePackage);
+            }
+            else
+            {
+                sourcePackage = new SourcePackage();
+                sourceSession->sourcePackages.push_back(sourcePackage);
+                newSourcePackages.push_back(sourcePackage);
+    
+                sourcePackage->uid = generateUMID();
+                sourcePackage->name = getSourcePackageName(sourceConfig->name, date);
+                sourcePackage->creationDate = generateTimestampNow();
+                if (sourceConfig->type == TAPE_SOURCE_CONFIG_TYPE)
+                {
+                    tapeEssDesc = new TapeEssenceDescriptor();
+                    sourcePackage->descriptor = tapeEssDesc;
+                    tapeEssDesc->spoolNumber = sourceConfig->spoolNumber;
+                }
+                else // LIVE_SOURCE_CONFIG_TYPE
+                {
+                    liveEssDesc = new LiveEssenceDescriptor();
+                    sourcePackage->descriptor = liveEssDesc;
+                    liveEssDesc->recordingLocation = sourceConfig->recordingLocation;
+                }
+                
+                
+                // create source package tracks
+                
+                vector<SourceTrackConfig*>::const_iterator iter2;
+                for (iter2 = sourceConfig->trackConfigs.begin(); iter2 != sourceConfig->trackConfigs.end(); iter2++)
+                {
+                    SourceTrackConfig* sourceTrackConfig = *iter2;
+            
+                    track = new Track();
+                    sourcePackage->tracks.push_back(track);
+                    
+                    track->id = sourceTrackConfig->id;
+                    track->number = sourceTrackConfig->number;
+                    track->name = sourceTrackConfig->name;
+                    track->dataDef = sourceTrackConfig->dataDef;
+                    track->editRate = sourceTrackConfig->editRate;
+                    sourceClip = new SourceClip();
+                    track->sourceClip = sourceClip;
+                    
+                    sourceClip->sourcePackageUID = g_nullUMID;
+                    sourceClip->sourceTrackID = 0;
+                    sourceClip->length = sourceTrackConfig->length;
+                    sourceClip->position = 0;
+                }
+                
+            }
+        }
+
+        // save new source packages to the database
         
         auto_ptr<Transaction> transaction(database->getTransaction());
         vector<SourcePackage*>::const_iterator iter;
-        for (iter = sourceSession->sourcePackages.begin(); iter != sourceSession->sourcePackages.end(); iter++)
+        for (iter = newSourcePackages.begin(); iter != newSourcePackages.end(); iter++)
         {
             database->savePackage(*iter, transaction.get());
         }

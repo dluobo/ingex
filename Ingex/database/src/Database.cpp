@@ -1,5 +1,5 @@
 /*
- * $Id: Database.cpp,v 1.1 2006/12/20 14:37:02 john_f Exp $
+ * $Id: Database.cpp,v 1.2 2007/01/30 12:46:20 john_f Exp $
  *
  * Provides access to the data in the database
  *
@@ -1316,6 +1316,155 @@ void Database::deleteSourceConfig(SourceConfig* config, Transaction* transaction
     }
     END_UPDATE_BLOCK("Failed to delete source config")
 }
+
+
+#define SQL_GET_ALL_ROUTER_CONFIGS \
+" \
+    SELECT \
+        ror_identifier, \
+        ror_name \
+    FROM RouterConfig \
+"
+
+vector<RouterConfig*> Database::loadAllRouterConfigs()
+{
+    auto_ptr<Connection> connection(getConnection());
+    VectorGuard<RouterConfig> allRouterConfigs;
+    
+    START_QUERY_BLOCK
+    {
+        auto_ptr<odbc::Statement> statement(connection->createStatement());
+        
+        odbc::ResultSet* result = statement->executeQuery(SQL_GET_ALL_ROUTER_CONFIGS);
+        while (result->next())
+        {
+            RouterConfig* routerConfig = loadRouterConfig(result->getString(2));
+            if (routerConfig)
+            {
+                allRouterConfigs.get().push_back(routerConfig);
+            }
+        }
+    }
+    END_QUERY_BLOCK("Failed to load all router configs")
+    
+    return allRouterConfigs.release();
+}
+
+#define SQL_GET_ROUTER_CONFIG \
+" \
+    SELECT \
+        ror_identifier, \
+        ror_name \
+    FROM RouterConfig \
+    WHERE \
+        ror_name = ? \
+"
+
+#define SQL_GET_ROUTER_INPUT_CONFIG \
+" \
+    SELECT \
+        rti_identifier, \
+        rti_index, \
+        rti_name, \
+        rti_source_id, \
+        rti_source_track_id \
+    FROM RouterInputConfig \
+    WHERE \
+        rti_router_conf_id = ? \
+"
+
+#define SQL_GET_ROUTER_OUTPUT_CONFIG \
+" \
+    SELECT \
+        rto_identifier, \
+        rto_index, \
+        rto_name \
+    FROM RouterOutputConfig \
+    WHERE \
+        rto_router_conf_id = ? \
+"
+
+
+RouterConfig* Database::loadRouterConfig(string name)
+{
+    auto_ptr<RouterConfig> routerConfig(new RouterConfig());
+    auto_ptr<Connection> connection(getConnection());
+    RouterInputConfig* routerInputConfig;
+    RouterOutputConfig* routerOutputConfig;
+    long sourceConfigID;
+    
+    START_QUERY_BLOCK
+    {
+        // load router config
+
+        auto_ptr<odbc::PreparedStatement> prepStatement(connection->prepareStatement(SQL_GET_ROUTER_CONFIG));
+        prepStatement->setString(1, name);
+        
+        odbc::ResultSet* result = prepStatement->executeQuery();
+        if (!result->next())
+        {
+            PA_LOGTHROW(DBException, ("Router config with name '%s' does not exist", name.c_str()));
+        }
+        
+        routerConfig->wasLoaded(result->getInt(1));
+        routerConfig->name = result->getString(2);
+        
+        
+        // load input configurations
+
+        prepStatement = auto_ptr<odbc::PreparedStatement>(connection->prepareStatement(SQL_GET_ROUTER_INPUT_CONFIG));
+        prepStatement->setInt(1, routerConfig->getDatabaseID());
+        
+        result = prepStatement->executeQuery();
+        while (result->next())
+        {
+            routerInputConfig = new RouterInputConfig();
+            routerConfig->inputConfigs.push_back(routerInputConfig);
+            routerInputConfig->wasLoaded(result->getInt(1));
+            routerInputConfig->index = result->getInt(2);
+            routerInputConfig->name = result->getString(3);
+            sourceConfigID = result->getInt(4);
+            if (!result->wasNull() && sourceConfigID != 0)
+            {
+                routerInputConfig->sourceTrackID = result->getInt(5);
+                
+                routerInputConfig->sourceConfig = 
+                    routerConfig->getSourceConfig(sourceConfigID, routerInputConfig->sourceTrackID);
+                    
+                if (routerInputConfig->sourceConfig == 0)
+                {
+                    // load source config
+                    routerInputConfig->sourceConfig = loadSourceConfig(sourceConfigID);
+                    routerConfig->sourceConfigs.push_back(routerInputConfig->sourceConfig);
+                    if (routerInputConfig->sourceConfig->getTrackConfig(routerInputConfig->sourceTrackID) == 0)
+                    {
+                        PA_LOGTHROW(DBException, ("Reference to non-existing track in router input config"));
+                    }
+                }
+            }
+        }
+
+        
+        // load output configurations
+
+        prepStatement = auto_ptr<odbc::PreparedStatement>(connection->prepareStatement(SQL_GET_ROUTER_OUTPUT_CONFIG));
+        prepStatement->setInt(1, routerConfig->getDatabaseID());
+        
+        result = prepStatement->executeQuery();
+        while (result->next())
+        {
+            routerOutputConfig = new RouterOutputConfig();
+            routerConfig->outputConfigs.push_back(routerOutputConfig);
+            routerOutputConfig->wasLoaded(result->getInt(1));
+            routerOutputConfig->index = result->getInt(2);
+            routerOutputConfig->name = result->getString(3);
+        }        
+    }
+    END_QUERY_BLOCK("Failed to load router config")
+    
+    return routerConfig.release();
+}
+
 
 
 

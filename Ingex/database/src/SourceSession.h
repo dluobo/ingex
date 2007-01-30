@@ -1,5 +1,5 @@
 /*
- * $Id: SourceSession.h,v 1.1 2006/12/19 16:44:53 john_f Exp $
+ * $Id: SourceSession.h,v 1.2 2007/01/30 12:46:20 john_f Exp $
  *
  * A set of Packages representing live recording / tape sources during a time period
  *
@@ -29,6 +29,7 @@
 
 
 #include "Recorder.h"
+#include "RouterConfig.h"
 #include "Package.h"
 #include "DataTypes.h"
 
@@ -42,8 +43,22 @@ class SourceSession
 public:
     ~SourceSession();
 
+    /* create source session for list of source configs. Note: will load
+    source packages if they already exist in the database */
+    static SourceSession* create(std::vector<SourceConfig*>& sourceConfigs, Date date);
+    
+    /* create source session for all sources connected to recorder Note: will load
+    source packages if they already exist in the database */
     static SourceSession* create(Recorder* recorder, Date date);
+
+    /* create source session for all sources connected to recorder Note: will load
+    source packages if they already exist in the database */
+    static SourceSession* create(RouterConfig* routerConfig, Date date);
+
+    
+    /* load source session for all sources connected to recorder */
     static SourceSession* load(Recorder* recorder, Date date);
+
     
     static bool isInstancePackage(SourceConfig* sourceConfig, SourcePackage* sourcePackage);
     
