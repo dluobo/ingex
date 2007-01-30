@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderManager.cpp,v 1.1 2006/12/20 12:28:30 john_f Exp $
+ * $Id: RecorderManager.cpp,v 1.2 2007/01/30 12:18:31 john_f Exp $
  *
  * Wrapper for ProdAuto::Recorder.
  *
@@ -121,7 +121,7 @@ void RecorderManager::Start()
 
         try
         {
-            mRecorder->Start(start_tc, pre_roll, rec_enable, "test");
+            mRecorder->Start(start_tc, pre_roll, rec_enable, "IngexTestProject");
             ACE_DEBUG((LM_DEBUG, ACE_TEXT("Recorder started.\n")));
         }
         catch(const CORBA::Exception & e)
@@ -146,9 +146,11 @@ void RecorderManager::Stop()
         post_roll.samples = 5;
         post_roll.undefined = false;
 
+        ::ProdAuto::StringList_var files;
+
         try
         {
-            mRecorder->Stop(stop_tc, post_roll);
+            mRecorder->Stop(stop_tc, post_roll, files.out());
             ACE_DEBUG((LM_DEBUG, ACE_TEXT("Recorder stopped.\n")));
         }
         catch(const CORBA::Exception & e)
