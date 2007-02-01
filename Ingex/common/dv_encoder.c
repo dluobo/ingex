@@ -1,5 +1,5 @@
 /*
- * $Id: dv_encoder.c,v 1.1 2007/01/30 12:12:04 john_f Exp $
+ * $Id: dv_encoder.c,v 1.2 2007/02/01 16:28:25 john_f Exp $
  *
  * Encode uncompressed video to DV using libavcodec
  *
@@ -22,6 +22,7 @@
  * 02110-1301, USA.
  */
 
+#include <stdio.h>
 #include <string.h>
 #include <avcodec.h>
 #include <avformat.h>
@@ -39,7 +40,7 @@ typedef struct
 } internal_dv_encoder_t;
 
 // Hardcode to 16:9 by using 0xCA instead of 0xC8 at offset 0x1C7
-static const uint8_t header_metadata[] = {
+static const uint8_t header_metadata_dv50[] = {
 0x1F,0x07,0x00,0xBF,0xF9,0x79,0x79,0x79,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
 0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
 0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
@@ -125,8 +126,6 @@ extern dv_encoder_t * dv_encoder_init (enum dv_encoder_resolution res)
         return 0;
     }
 
-    dv->compressedBuffer = av_mallocz(720 * 576 * 2);
-
     /* Set parameters */
     switch (res)
     {
@@ -144,6 +143,8 @@ extern dv_encoder_t * dv_encoder_init (enum dv_encoder_resolution res)
         return 0;
         break;
     }
+
+    dv->compressedBuffer = av_mallocz(dv->compressed_size);
 
     avcodec_set_dimensions(dv->enc, 720, 576);      // hard-coded for PAL
 
@@ -173,7 +174,7 @@ extern int dv_encoder_encode (dv_encoder_t *in_dv, uint8_t *p_video, uint8_t * *
         return -1;
     }
 
-    /* set internal video pointers */
+    /* set pointers in rawFrame to point to planes in p_video */
     avpicture_fill((AVPicture*)dv->rawFrame, p_video, dv->enc->pix_fmt,
                         dv->enc->width, dv->enc->height);
 
@@ -185,8 +186,12 @@ extern int dv_encoder_encode (dv_encoder_t *in_dv, uint8_t *p_video, uint8_t * *
         return -1;
     }
 
-    /* write header metadata (necessary to get Apple FCP to use as DV */
-    memcpy(dv->compressedBuffer, header_metadata, sizeof(header_metadata));
+    /* overwrite header metadata (necessary to get Apple FCP to use as DV */
+    if (dv->enc->pix_fmt == PIX_FMT_YUV422P)
+    {
+        memcpy(dv->compressedBuffer, header_metadata_dv50,
+            sizeof(header_metadata_dv50));
+    }
 
 
     /* set pointer to encoded video */
