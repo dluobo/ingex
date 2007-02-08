@@ -1,5 +1,5 @@
 /*
- * $Id: Database.cpp,v 1.2 2007/01/30 12:46:20 john_f Exp $
+ * $Id: Database.cpp,v 1.3 2007/02/08 10:39:45 philipn Exp $
  *
  * Provides access to the data in the database
  *
@@ -2374,6 +2374,22 @@ void Database::deleteTake(Take* take, Transaction* transaction)
         pkg_identifier = ? \
 "
 
+// bypassing ODBC Timestamp processing because for pkg_creation_date because
+// it fails to return the fraction
+#define SQL_GET_PACKAGE_WITH_UMID \
+" \
+    SELECT \
+        pkg_identifier, \
+        pkg_uid, \
+        pkg_name, \
+        pkg_creation_date::varchar, \
+        pkg_avid_project_name, \
+        pkg_descriptor_id \
+    FROM Package \
+    WHERE \
+        pkg_uid = ? \
+"
+
 #define SQL_GET_PACKAGE_USER_COMMENTS \
 " \
     SELECT \
@@ -2480,6 +2496,38 @@ Package* Database::loadPackage(long databaseID)
         if (!result->next())
         {
             PA_LOGTHROW(DBException, ("Package %ld does not exist in database", databaseID));
+        }
+        
+        loadPackage(connection.get(), result, &package);
+    }
+    END_QUERY_BLOCK("Failed to load package")
+
+    return package;
+}
+
+Package* Database::loadPackage(UMID packageUID, bool assumeExists)
+{
+    Package* package = 0;
+    auto_ptr<Connection> connection(getConnection());
+    
+    START_QUERY_BLOCK
+    {
+        // load the package
+        
+        auto_ptr<odbc::PreparedStatement> prepStatement(connection->prepareStatement(SQL_GET_PACKAGE_WITH_UMID));
+        prepStatement->setString(1, getUMIDString(packageUID));
+        
+        odbc::ResultSet* result = prepStatement->executeQuery();
+        if (!result->next())
+        {
+            if (assumeExists)
+            {
+                PA_LOGTHROW(DBException, ("Package '%s' does not exist in database", getUMIDString(packageUID).c_str()));
+            }
+            else
+            {
+                return 0;
+            }
         }
         
         loadPackage(connection.get(), result, &package);

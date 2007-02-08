@@ -1,5 +1,5 @@
 /*
- * $Id: Database.h,v 1.2 2007/01/30 12:46:20 john_f Exp $
+ * $Id: Database.h,v 1.3 2007/02/08 10:39:45 philipn Exp $
  *
  * Provides access to the data in the database
  *
@@ -127,6 +127,9 @@ public:
     SourcePackage* loadSourcePackage(std::string name);
     
     Package* loadPackage(long databaseID);
+    // assumeExists == true means an exception will be thrown if it doesn't exist, 
+    // assumeExists == false will return 0 if the package doesn't exist
+    Package* loadPackage(UMID packageUID, bool assumeExists = true);
     void savePackage(Package* package, Transaction* transaction = 0);
     void deletePackage(Package* package, Transaction* transaction = 0);
 
