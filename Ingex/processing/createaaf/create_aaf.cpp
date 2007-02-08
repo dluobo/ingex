@@ -1,5 +1,5 @@
 /*
- * $Id: create_aaf.cpp,v 1.1 2007/02/08 10:42:58 philipn Exp $
+ * $Id: create_aaf.cpp,v 1.2 2007/02/08 11:02:38 philipn Exp $
  *
  * Creates AAF files with clips extracted from the database
  *
@@ -41,8 +41,8 @@ using namespace prodauto;
 
 
 static const char* g_dns = "prodautodb";
-static const char* g_databaseUserName = "bamzooki";
-static const char* g_databasePassword = "bamzooki";
+static const char* g_databaseUserName = "";
+static const char* g_databasePassword = "";
 
 static const char* g_filenamePrefix = "pilot";
 
