@@ -1,5 +1,5 @@
 #
-# $Id: prodautodb.pm,v 1.1 2007/02/01 09:02:48 philipn Exp $
+# $Id: prodautodb.pm,v 1.2 2007/02/08 10:54:50 philipn Exp $
 #
 # 
 #
@@ -83,6 +83,7 @@ BEGIN
         &delete_material_for_proxy
         &have_proxy
         &save_proxy
+        &load_video_resolutions
     );
 
     @EXPORT_OK = qw(
@@ -1850,8 +1851,7 @@ sub load_package_chain
                 {
                     my $refPackage = load_referenced_package($dbh, 
                         $sourceClip->{"SOURCE_PACKAGE_UID"}, $sourceClip->{"SOURCE_TRACK_ID"})
-                        or $localError = "Failed to load referenced package with uid = "
-                            ."$sourceClip->{'SOURCE_PACKAGE_UID'}: $errstr" and die;
+                        or next;
 
                     $refPackages->{ $refPackage->{"UID"} } = $refPackage;
                         
@@ -2502,6 +2502,39 @@ sub save_proxy
     
     return $nextPxId;
 }
+
+
+####################################
+#
+# Proxy
+#
+####################################
+
+sub load_video_resolutions
+{
+    my ($dbh) = @_;
+    
+    my $vresIds;
+    eval
+    {
+        my $sth = $dbh->prepare("
+            SELECT vrn_identifier AS id, 
+                vrn_name AS name
+            FROM VideoResolution
+            ");
+        $sth->execute;
+        
+        $vresIds = $sth->fetchall_arrayref({});
+    };
+    if ($@)
+    {
+        $errstr = (defined $dbh->errstr) ? $dbh->errstr : "unknown error";
+        return undef;
+    }
+    
+    return $vresIds;    
+}
+
 
 
 1;

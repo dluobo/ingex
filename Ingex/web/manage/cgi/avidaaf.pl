@@ -1,7 +1,7 @@
 #!/usr/bin/perl -wT
 
 #
-# $Id: avidaaf.pl,v 1.1 2007/02/01 09:02:47 philipn Exp $
+# $Id: avidaaf.pl,v 1.2 2007/02/08 10:54:50 philipn Exp $
 #
 # 
 #
@@ -30,12 +30,25 @@ use File::Temp qw(mktemp);
 
 use lib ".";
 use config;
+use prodautodb;
 use htmlutil;
 
 
 
+my $dbh = prodautodb::connect(
+        $ingexConfig{"db_host"},
+        $ingexConfig{"db_name"},
+        $ingexConfig{"db_user"},
+        $ingexConfig{"db_password"}) 
+    or return_error_page("failed to connect to database");
+
+my $vresIds = prodautodb::load_video_resolutions($dbh) or 
+    return_error_page("failed to load video resolutions from the database: $prodautodb::errstr");
+
+    
 my $errorMessage;
 
+    
 if (defined param("Cancel1") || defined param("Cancel2"))
 {
     redirect_to_page("index.pl");
@@ -46,8 +59,9 @@ elsif (defined param("Send1") || defined param("Send2"))
     my $toTimeStr;
     my $fromDateStr;
     my $toDateStr;
+    my $vres;
         
-    if (defined param("Send1") && !($errorMessage = validate_params("Send1")))
+    if (defined param("Send1") && !($errorMessage = validate_params($vresIds, "Send1")))
     {
         my $fromDate = time;
         my $toDate = $fromDate;
@@ -106,13 +120,15 @@ elsif (defined param("Send1") || defined param("Send2"))
         ($sec,$min,$hour,$mday,$mon,$year) = localtime($toDate);
         $toDateStr = sprintf("%04d-%02d-%02d", $year + 1900, $mon + 1, $mday);    
     }
-    elsif (defined param("Send2") && !($errorMessage = validate_params("Send2")))
+    elsif (defined param("Send2") && !($errorMessage = validate_params($vresIds, "Send2")))
     {
         ($fromDateStr) = param("fromdate") =~ /(\d{4}-\d{1,2}-\d{1,2})/;
         ($fromTimeStr) = param("fromtime") =~ /(\d{1,2}:\d{1,2}:\d{1,2})/;
         ($toDateStr) = param("todate") =~ /(\d{4}-\d{1,2}-\d{1,2})/;
         ($toTimeStr) = param("totime") =~ /(\d{1,2}:\d{1,2}:\d{1,2})/;
     }
+    
+    ($vres) = param("vres") =~ /(\d+)/;
     
     if (!$errorMessage)
     {
@@ -142,6 +158,7 @@ elsif (defined param("Send1") || defined param("Send2"))
         system(join(" ",
                 "create_aaf", 
                 "-p $prefix", # AAF filename prefix
+                "-r $vres", # video resolution
                 "-o", # group only
                 "-m", # include multi-camera clips
                 "-f $fromDateStr" . "L" . "$fromTimeStr", # from timestamp 
@@ -177,7 +194,7 @@ elsif (defined param("Send1") || defined param("Send2"))
 
 
 
-my $page = construct_page(get_page_content($errorMessage)) 
+my $page = construct_page(get_page_content($vresIds, $errorMessage)) 
     or return_error_page("failed to fill in content for Avid AAF export page");
        
 print header;
@@ -204,13 +221,27 @@ sub validate_time
 
 sub validate_params
 {
-    my ($sendCmd) = @_;
+    my ($vresIds, $sendCmd) = @_;
     
     return "Error: missing send-to destination" if (!param("sendto")); 
     return "Error: unknown send-to destination" if (!defined get_avid_aaf_export_dir(param("sendto"))); 
     return "Error: export directory does not exist" 
         unless (-e get_avid_aaf_export_dir(param("sendto")));
-    
+
+    return "Error: missing video resolution" if (!param("vres")); 
+    return "Error: invalid video resolution" if (param("daypop") !~ /\d+/); 
+    my $vresId;
+    my $found = 0;
+    foreach my $vresId (@{$vresIds})
+    {
+        if ($vresId->{"ID"} eq param("vres"))
+        {
+            $found = 1;
+            last;
+        }
+    }
+    return "Error: unknown video resolution" if (!$found); 
+        
     if ($sendCmd eq "Send1")
     {
         return "Error: missing day preset" if (!param("daypop")); 
@@ -283,7 +314,7 @@ sub get_no_material_content
 
 sub get_page_content
 {
-    my ($errorMessage) = @_;
+    my ($vresIds, $errorMessage) = @_;
     
     my @pageContent;
     
@@ -331,6 +362,27 @@ sub get_page_content
                 -default => $defaultSendTo,
                 -values => \@sendToValues,
                 -labels => \%sendToLabels,
+            }),
+        ),
+    );
+
+    my @vresValues;
+    my %vresLabels;
+    foreach my $vresId (@{$vresIds})
+    {
+        my $label = $vresId->{"NAME"};
+        my $value = $vresId->{"ID"};
+        push(@vresValues, $value);
+        $vresLabels{$value} = $label;
+    }
+    push(@pageContent,
+        p(
+            "Video resolution:",
+            popup_menu({
+                -name => "vres", 
+                -default => 3,
+                -values => \@vresValues,
+                -labels => \%vresLabels,
             }),
         ),
     );
@@ -436,4 +488,9 @@ sub get_page_content
     return join("",@pageContent);
 }
 
+
+END
+{
+    prodautodb::disconnect($dbh) if ($dbh);
+}
 
