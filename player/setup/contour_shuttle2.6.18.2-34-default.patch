@@ -1,0 +1,65 @@
+diff -Naur input_old/input/hid-core.c input_new/input/hid-core.c
+--- input_old/input/hid-core.c	2007-09-04 10:01:31.000000000 +0100
++++ input_new/input/hid-core.c	2007-09-04 09:57:02.000000000 +0100
+@@ -1602,6 +1602,10 @@
+ 
+ #define USB_VENDOR_ID_YEALINK		0x6993
+ #define USB_DEVICE_ID_YEALINK_P1K_P4K_B2K	0xb001
++
++#define USB_VENDOR_CONTOUR			0x0b33
++#define USB_DEVICE_ID_CONTOUR_SHUTTLE_PRO	0x0010
++#define USB_DEVICE_ID_CONTOUR_SHUTTLE_PRO_V2	0x0030
+ /*
+  * Alphabetically sorted blacklist by quirk type.
+  */
+@@ -1624,6 +1628,8 @@
+ 	{ USB_VENDOR_ID_CODEMERCS, USB_DEVICE_ID_CODEMERCS_IOW24, HID_QUIRK_IGNORE },
+ 	{ USB_VENDOR_ID_CODEMERCS, USB_DEVICE_ID_CODEMERCS_IOW48, HID_QUIRK_IGNORE },
+ 	{ USB_VENDOR_ID_CODEMERCS, USB_DEVICE_ID_CODEMERCS_IOW28, HID_QUIRK_IGNORE },
++	{ USB_VENDOR_CONTOUR, USB_DEVICE_ID_CONTOUR_SHUTTLE_PRO, HID_QUIRK_CONTOUR_SHUTTLE_PRO },
++	{ USB_VENDOR_CONTOUR, USB_DEVICE_ID_CONTOUR_SHUTTLE_PRO_V2, HID_QUIRK_CONTOUR_SHUTTLE_PRO },
+ 	{ USB_VENDOR_ID_CYPRESS, USB_DEVICE_ID_CYPRESS_HIDCOM, HID_QUIRK_IGNORE },
+ 	{ USB_VENDOR_ID_CYPRESS, USB_DEVICE_ID_CYPRESS_ULTRAMOUSE, HID_QUIRK_IGNORE },
+ 	{ USB_VENDOR_ID_DELORME, USB_DEVICE_ID_DELORME_EARTHMATE, HID_QUIRK_IGNORE },
+diff -Naur input_old/input/hid.h input_new/input/hid.h
+--- input_old/input/hid.h	2007-09-04 10:01:31.000000000 +0100
++++ input_new/input/hid.h	2007-09-04 09:57:07.000000000 +0100
+@@ -2,7 +2,7 @@
+ #define __HID_H
+ 
+ /*
+- * $Id: contour_shuttle2.6.18.2-34-default.patch,v 1.1 2007/09/11 14:08:14 stuart_hc Exp $
++ * $Id: contour_shuttle2.6.18.2-34-default.patch,v 1.1 2007/09/11 14:08:14 stuart_hc Exp $
+  *
+  *  Copyright (c) 1999 Andreas Gal
+  *  Copyright (c) 2000-2001 Vojtech Pavlik
+@@ -262,6 +262,7 @@
+ #define HID_QUIRK_INVERT_HWHEEL			0x00004000
+ #define HID_QUIRK_IGNORE_MOUSE          0x00008000
+ #define HID_QUIRK_POWERBOOK_ISO_KEYBOARD	0x00010000
++#define HID_QUIRK_CONTOUR_SHUTTLE_PRO		0x01000000
+ 
+ /*
+  * This is the global environment of the parser. This information is
+diff -Naur input_old/input/hid-input.c input_new/input/hid-input.c
+--- input_old/input/hid-input.c	2007-09-04 10:01:31.000000000 +0100
++++ input_new/input/hid-input.c	2007-09-04 09:57:12.000000000 +0100
+@@ -1,5 +1,5 @@
+ /*
+- * $Id: contour_shuttle2.6.18.2-34-default.patch,v 1.1 2007/09/11 14:08:14 stuart_hc Exp $
++ * $Id: contour_shuttle2.6.18.2-34-default.patch,v 1.1 2007/09/11 14:08:14 stuart_hc Exp $
+  *
+  *  Copyright (c) 2000-2001 Vojtech Pavlik
+  *
+@@ -663,6 +663,11 @@
+ 	if (!usage->type)
+ 		return;
+ 
++	if ((hid->quirks & HID_QUIRK_CONTOUR_SHUTTLE_PRO) && (usage->code == REL_DIAL)) {
++		input_event(input, usage->type, usage->code, value + 1);
++		return;
++	}
++
+ 	if (((hid->quirks & HID_QUIRK_2WHEEL_MOUSE_HACK_5) && (usage->hid == 0x00090005))
+ 		|| ((hid->quirks & HID_QUIRK_2WHEEL_MOUSE_HACK_7) && (usage->hid == 0x00090007))) {
+ 		if (value) hid->quirks |=  HID_QUIRK_2WHEEL_MOUSE_HACK_ON;

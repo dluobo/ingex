@@ -1,0 +1,161 @@
+#ifndef __CORBA_INGEX_PLAYER_IDL__
+#define __CORBA_INGEX_PLAYER_IDL__
+
+#pragma prefix "bbc.co.uk"
+
+
+module corba
+{
+module prodauto
+{
+	
+    typedef long long Position;
+    typedef long long Length;
+	
+	enum TimecodeType 
+	{
+		UNKNOWN_TIMECODE_TYPE,
+		CONTROL_TIMECODE_TYPE,
+		SOURCE_TIMECODE_TYPE
+	};
+	
+	enum TimecodeSubType 
+	{
+		NO_TIMECODE_SUBTYPE,
+		VITC_SOURCE_TIMECODE_SUBTYPE,
+		LTC_SOURCE_TIMECODE_SUBTYPE
+	};
+	
+    struct Timecode
+    {
+        unsigned short hour;
+        unsigned short min;
+        unsigned short sec;
+        unsigned short frame;
+    };
+	
+	struct TimecodeInfo
+	{
+		short streamId;
+		Timecode tc;
+		TimecodeType tcType;
+		TimecodeSubType tcSubType;
+	};
+	
+	struct FrameInfo
+	{
+		sequence<TimecodeInfo> timecodes;
+		long long position; /// position in the media source
+		
+		long long frameCount; /// count of frames read and accepted
+		boolean rateControl; /// true if the frame is the next one and the playing speed is normal
+		
+		boolean mark; /// user mark
+	};
+	
+	struct MediaPlayerStateEvent
+	{
+		boolean lockedChanged;
+		boolean locked; /// 1 == controls are locked
+		
+		boolean playChanged;
+		boolean play; /// 0 == pause, 1 == play
+		
+		boolean stopChanged;
+		boolean stop; /// 1 == stopped
+		
+		boolean speedFactorChanged;
+		boolean speedFactor; /// 1 == normal, > 0 means playing forwards, < 0 backwards
+	
+		boolean lastMarkSetChanged;
+		long long lastMarkSet;
+	
+		boolean lastMarkRemovedChanged;
+		long long lastMarkRemoved;
+	
+		boolean allMarksCleared;
+		
+		FrameInfo displayedFrameInfo;
+	};
+	
+	enum WhenceType
+	{
+		WHENCE_SEEK_SET,
+		WHENCE_SEEK_CUR,
+		WHENCE_SEEK_END
+	};
+	
+	
+	typedef sequence<string> StringList;
+	typedef sequence<boolean> BooleanList;
+	
+	
+	interface IngexPlayerListener
+	{
+		void frameDisplayedEvent(in FrameInfo info);
+		void frameDroppedEvent(in FrameInfo lastFrameInfo);
+		void stateChangeEvent(in MediaPlayerStateEvent event);
+		void playerClose();
+	};
+
+	interface IngexPlayer
+	{
+		boolean registerListener(in IngexPlayerListener listener);
+		boolean unregisterListener(in IngexPlayerListener listener);
+		
+		
+		/// start the player
+		
+		boolean start(in StringList filenames, out BooleanList opened);
+		
+		
+		/// stop the player and free resources
+		
+		boolean stop();
+		
+	
+		/// toggle locking out player control functions below, eg. to prevent accidents during playback
+		
+		boolean toggleLock();
+		
+		
+		/// audio/video stream control    
+		
+		boolean play();
+		boolean pause();
+		boolean togglePlayPause();
+		boolean seek(in long long offset, in WhenceType whence);
+		boolean playSpeed(in long speedFactor); /// -1 <= speedFactor >=1
+		boolean step(in boolean forward);
+		
+		
+		/// mark-in and mark-out controls
+		
+		boolean mark();
+		boolean clearMark();
+		boolean clearAllMarks();
+		boolean seekNextMark();
+		boolean seekPrevMark();
+	
+		
+		/// on screen timecode display
+		
+		boolean toggleOSD();
+		boolean nextOSDTimecode();
+	 
+		
+		/// video switch control
+		
+		boolean switchNextVideo();
+		boolean switchPrevVideo();
+		boolean switchVideo(in long index);
+	};
+	
+	
+};
+};
+
+#endif
+
+
+

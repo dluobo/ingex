@@ -1,0 +1,83 @@
+// SdiRecorder.idl
+
+// Copyright (c) 2005. British Broadcasting Corporation. All Rights Reserved.
+
+#ifndef SdiRecorder_idl
+#define SdiRecorder_idl
+
+#pragma prefix "bbc.co.uk"
+
+const unsigned short SDI_RECORDER_CHANNELS = 3;
+
+module ProdAuto {
+
+	typedef string Timecode;
+	typedef long DurationInFrames;
+	typedef boolean BoolArray[SDI_RECORDER_CHANNELS];
+	typedef string StringArray[SDI_RECORDER_CHANNELS];
+	//typedef DurationInFrames DurationArray[SDI_RECORDER_CHANNELS];
+
+/**
+	Interface for a video (and audio) recorder.
+	The recorder could be file-based or tape-based.
+*/
+	interface SdiRecorder
+	{
+		enum ReturnCode { OK, FAILED };
+		//enum StatusCode { READY, RECORDING, PROBLEM };
+		typedef string Format;
+
+		/// Get the recording format, e.g. raw dv file, tape, etc.
+		Format RecordingFormat();
+
+
+		/// Get pre-roll duration.
+		DurationInFrames GetPreRoll();
+		/// Set pre-roll duration.
+		ReturnCode SetPreRoll(in DurationInFrames dur);
+		/// Get post-roll duration.
+		DurationInFrames GetPostRoll();
+		/// Set post-roll duration.
+		ReturnCode SetPostRoll(in DurationInFrames dur);
+
+		/// Start recording.
+		/// @param start_timecode The supplied value should be the start of
+		/// the "take" and the returned value will be the actual start of
+		/// the file - expected to be earlier by the amount of the pre-roll.
+		/// @param directory The directory, relative to recorder root, in
+		/// which the files should go, e.g. "bamzooki/prog03/seq017/take01".
+		/// @param rec_enable Enable for required recording channels.
+		/// @param tape_number Tape indentifier for corresponding tape recording
+		/// which is used when wrapping as MXF.
+		/// @param description Descriptive text.
+		ReturnCode StartRecording(
+			inout Timecode start_timecode,
+			in string directory,
+			in BoolArray rec_enable,
+			in StringArray tape_number,
+			in string description
+		);
+
+		/// Stop recording.
+		/// @param stop_timecode Supplied value should be marked out-point of the take.
+		/// and the returned value should be the actual out-point of the recording
+		/// (i.e. frame after final frame) - expected to be later by the amount
+		/// of the post-roll.
+		/// @param pathname Pathname or URL of each recorded file.
+		/// @param dur Duration of recorded files,
+		/// including post-roll after the StopRecording command.
+		/// @return Indication of success or failure.
+		ReturnCode StopRecording(
+			inout Timecode stop_timecode,
+			out StringArray pathname,
+			out DurationInFrames dur
+		);
+
+		/// Get status of the recorder
+		//StatusCode Status();
+	};
+};
+
+
+#endif  // #ifndef SdiRecorder_idl
+

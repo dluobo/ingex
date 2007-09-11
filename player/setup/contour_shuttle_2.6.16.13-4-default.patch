@@ -1,0 +1,50 @@
+diff -Naur linux-2.6.16.13-4/drivers/usb/input/hid-core.c new-linux-2.6.16.13-4/drivers/usb/input/hid-core.c
+--- linux-2.6.16.13-4/drivers/usb/input/hid-core.c	2007-04-18 09:57:37.000000000 +0100
++++ new-linux-2.6.16.13-4/drivers/usb/input/hid-core.c	2007-04-18 10:11:53.000000000 +0100
+@@ -1467,6 +1467,11 @@
+ #define USB_VENDOR_ID_CREATIVELABS	0x062a
+ #define USB_DEVICE_ID_CREATIVELABS_SILVERCREST	0x0201
+ 
++#define USB_VENDOR_CONTOUR			0x0b33
++#define USB_DEVICE_ID_CONTOUR_SHUTTLE_PRO	0x0010
++#define USB_DEVICE_ID_CONTOUR_SHUTTLE_PRO_V2	0x0030
++
++
+ /*
+  * Alphabetically sorted blacklist by quirk type.
+  */
+@@ -1489,6 +1494,8 @@
+ 	{ USB_VENDOR_ID_CODEMERCS, USB_DEVICE_ID_CODEMERCS_IOW24, HID_QUIRK_IGNORE },
+ 	{ USB_VENDOR_ID_CODEMERCS, USB_DEVICE_ID_CODEMERCS_IOW48, HID_QUIRK_IGNORE },
+ 	{ USB_VENDOR_ID_CODEMERCS, USB_DEVICE_ID_CODEMERCS_IOW28, HID_QUIRK_IGNORE },
++	{ USB_VENDOR_CONTOUR, USB_DEVICE_ID_CONTOUR_SHUTTLE_PRO, HID_QUIRK_CONTOUR_SHUTTLE_PRO },
++	{ USB_VENDOR_CONTOUR, USB_DEVICE_ID_CONTOUR_SHUTTLE_PRO_V2, HID_QUIRK_CONTOUR_SHUTTLE_PRO },
+ 	{ USB_VENDOR_ID_CYPRESS, USB_DEVICE_ID_CYPRESS_HIDCOM, HID_QUIRK_IGNORE },
+ 	{ USB_VENDOR_ID_CYPRESS, USB_DEVICE_ID_CYPRESS_ULTRAMOUSE, HID_QUIRK_IGNORE },
+ 	{ USB_VENDOR_ID_DELORME, USB_DEVICE_ID_DELORME_EARTHMATE, HID_QUIRK_IGNORE },
+diff -Naur linux-2.6.16.13-4/drivers/usb/input/hid.h new-linux-2.6.16.13-4/drivers/usb/input/hid.h
+--- linux-2.6.16.13-4/drivers/usb/input/hid.h	2007-04-18 09:57:37.000000000 +0100
++++ new-linux-2.6.16.13-4/drivers/usb/input/hid.h	2007-04-18 10:10:06.000000000 +0100
+@@ -249,6 +249,7 @@
+ #define HID_QUIRK_CYMOTION			0x00000800
+ #define HID_QUIRK_POWERBOOK_HAS_FN		0x00001000
+ #define HID_QUIRK_POWERBOOK_FN_ON		0x00002000
++#define HID_QUIRK_CONTOUR_SHUTTLE_PRO		0x01000000
+ 
+ /*
+  * This is the global environment of the parser. This information is
+diff -Naur linux-2.6.16.13-4/drivers/usb/input/hid-input.c new-linux-2.6.16.13-4/drivers/usb/input/hid-input.c
+--- linux-2.6.16.13-4/drivers/usb/input/hid-input.c	2007-04-18 09:57:37.000000000 +0100
++++ new-linux-2.6.16.13-4/drivers/usb/input/hid-input.c	2007-04-18 10:13:22.000000000 +0100
+@@ -640,6 +640,11 @@
+ 	if (!usage->type)
+ 		return;
+ 
++	if ((hid->quirks & HID_QUIRK_CONTOUR_SHUTTLE_PRO) && (usage->code == REL_DIAL)) {
++		input_event(input, usage->type, usage->code, value + 1);
++		return;
++	}
++
+ 	if (((hid->quirks & HID_QUIRK_2WHEEL_MOUSE_HACK_5) && (usage->hid == 0x00090005))
+ 		|| ((hid->quirks & HID_QUIRK_2WHEEL_MOUSE_HACK_7) && (usage->hid == 0x00090007))) {
+ 		if (value) hid->quirks |=  HID_QUIRK_2WHEEL_MOUSE_HACK_ON;

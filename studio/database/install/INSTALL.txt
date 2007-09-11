@@ -1,0 +1,241 @@
+PostgreSQL database installation
+--------------------------------
+
+Follow these installation steps if the postgres version supplied by SuSE is >= 8.1
+
+1) install postgres RPMs using YaST
+* postgresql
+* postgresql-contrib
+* postgresql-devel
+* postgresql-libs
+* postgresql-server
+
+2) start the postgres service, which should create an initial database for you in "/home/postgres/data"
+root> /etc/init.d/postgresql start
+
+
+
+Manual PostgreSQL database installation
+---------------------------------------
+
+Follow these installation steps if the postgres version supplied by SuSE is < 8.1
+
+
+0) Remove any existing postgres rpms
+root> rpm -e postgresql
+or
+root> yast2 ...
+
+1) download the latest (version >= 8.1) postgres source code release from 
+http://www.postgres.org. 
+NOTE: versions < 8.1 are not suitable because of blocking issues with foreign key 
+constraint checking
+
+1.1) Ensure the readline-devel package installed
+
+2) compile and install postgres 
+> ./configure
+> make 
+root> sudo make install
+
+
+3) create a "postgres" user account using yast2
+root> /sbin/yast2
+
+
+4) create the postgres data directory
+root> mkdir /usr/local/pgsql/data
+
+
+5) change ownership of data directory to user "postgres"
+root> chown postgres /usr/local/pgsql/data
+
+
+6) login as user postgres and initialise the database
+postgres> /usr/local/pgsql/bin/initdb -D /usr/local/pgsql/data
+
+
+7) Install CVS-maintained postgres startup script "postgresql" in "/etc/init.d"
+root> cp postgresql /etc/init.d
+root> chmod a+x /etc/init.d/postgresql
+
+
+8) add postgresql to run-level 3 and 5 using yast2 and start the service
+root> /sbin/yast2
+or
+root> chkconfig -a postgresql
+
+
+
+Postgres post-install
+---------------------
+
+1) edit the client authentication file in the database data/ directory
+(either "/home/postgres/data/pg_hba.conf" or "/usr/local/pgsql/data/pg_hba.conf")
+
+Add the following entries _before_ the other entries:
+
+local   all         all                          trust
+host    all         all    192.168.0.0/16        trust
+
+
+
+2) edit the postgres config file 
+(either "/home/postgres/data/postgresql.conf" or "/usr/local/pgsql/data/postgresql.conf")
+
+Change the connection setting:
+
+listen_addresses = '*'
+
+
+3) restart the postgres server
+
+
+
+"prodautodb" database installation
+----------------------------------
+
+1) create "bamzooki" user in database
+> ./create_bamzooki_user.sh
+
+
+2) create "prodautodb" database
+> ./create_prodautodb.sh
+
+
+3) create test data (?default data?)
+> ./add_test_values.sh
+
+
+
+
+UnixODBC installation for C++ client apps
+-------------------------------------
+
+1) Install software packages using yast2
+
+* unixODBC
+* unixODBC-devel
+* psqlODBC (uses libpq.so which is supplied by postgresql-libs rpm)
+           (force installation using rpm -ivh --nodeps)
+
+
+2) Create and edit "/etc/unixODBC/odbcinst.ini":
+
+[PostgreSQL]
+Description     = PostgreSQL driver for Linux & Win32
+Driver          = /usr/lib/unixODBC/libodbcpsql.so
+Setup           = /usr/lib/unixODBC/libodbcpsqlS.so
+FileUsage       = 1
+
+
+3) Create and edit "/etc/unixODBC/odbc.ini":
+
+[ProdAutoDB]
+Description         = Production automation database
+Driver              = PostgreSQL
+Trace               = Yes
+TraceFile           = sql.log
+Database            = prodautodb
+Servername          = *******
+UserName            = bamzooki
+Password            =
+Port                = 5432
+Protocol            = 6.4
+ReadOnly            = No
+RowVersioning       = No
+ShowSystemTables    = No
+ShowOidColumn       = No
+FakeOidIndex        = No
+ConnSettings        =
+
+Fill the server name in ******* (eg. localhost).
+
+
+4) test ODBC connection
+
+isql prodautodb bamzooki bamzooki
+> select * from fileformat;
+> quit
+
+
+NOTE:
+Check the psqlODBC version if the test fails. SuSE 10.1 only supplies a 
+64-bit version of psqlODBC (in /usr/lib64) on 64-bit machines and therefore you
+need to replace "/usr/lib/unixODBC/libodbcpsql.so" with "/usr/lib64/unixODBC/libodbcpsql.so" and
+"/usr/lib/unixODBC/libodbcpsqlS.so" with "/usr/lib64/unixODBC/libodbcpsqlS.so".
+
+
+libODBC++ installation for C++ client apps
+------------------------------------------
+
+1) Download the library from http://libodbcxx.sourceforge.net/
+
+
+2) Regenerate the configuration files. If you don't then you will be missing
+the ".so" suffix in the the dynamic libraries filenames
+> ./autogen.sh
+
+
+3) Compile and install (see NOTES below)
+>./configure --with-odbc --enable-static 
+> make 
+root> make install
+
+* NOTE: the compilation fails for gcc version 4 in file "tests/oracle.cpp:183".
+Do one of the following: 
+a) fix the problem at line 183 in test/oracle.cpp:
+  change
+     ns << ODBCXX_CHAR_TYPE("This is row number ") << i; should be:
+  to 
+     ns << ODBCXX_STRING_CONST("This is row number ") << i;
+b) or configure with the option "--without-tests".
+
+* NOTE: the compilation fails for 64-bit line 308 in src/preparedstatement.cpp
+and line 534 in src/resultset.cpp. Replace the int cast with long.
+
+* NOTE: on SuSE 10.2 the test program causes a segmentation fault when trying to connect to the database. The stack trace was as follows:
+#0  0xb7c92575 in SQLGetDiagFieldA () from /usr/lib/libodbc.so.1
+#1  0xb7c92cde in SQLGetDiagRec () from /usr/lib/libodbc.so.1
+#2  0xb7f9609f in odbc::DriverMessage::fetchMessage (handleType=134964864, h=0x80b6680, idx=<value optimized out>) at errorhandler.cpp:94
+#3  0xb7f96615 in odbc::ErrorHandler::_checkErrorODBC3 (this=0x80b7a00, handleType=2, handle=0x80b6680, ret=<value optimized out>,
+    what=@0xbff5c264) at errorhandler.cpp:273
+#4  0xb7f73c98 in odbc::Connection::_connect (this=0x80b7a00, dsn=@0xbff5c378, user=@0xbff5c37c, password=@0xbff5c380)
+    at ../include/odbc++/errorhandler.h:93
+#5  0xb7f706b7 in odbc::DriverManager::getConnection (dsn=@0xbff5c378, user=@0xbff5c37c, password=@0xbff5c380) at drivermanager.cpp:259
+#6  0x08075e89 in Database (this=0x80b6068, dsn=@0xbff5c378, username=@0xbff5c37c, password=@0xbff5c380, initialConnections=1,
+    maxConnections=3) at Database.cpp:182
+#7  0x0807640e in prodauto::Database::initialise (dsn=@0xbff5c3f0, username=@0xbff5c3ec, password=@0xbff5c3e8, initialConnections=1,
+    maxConnections=3) at Database.cpp:144
+#8  0x08051e35 in main (argc=1, argv=0xbff5c4b4) at test.cpp:1019
+
+The database driver is trying to report the following warning (found by adding a printf to line 222 of errorhandler.cpp),
+	[unixODBC][Driver Manager]Driver does not support the requested version
+but is seg faults before managing to collect all error and warning messages.
+
+The solution is to configure libodbc++ for ODBC version 2.5 (592 == 0x0250) instead of the default version 3.51:
+>./configure --with-odbc --enable-static --with-odbc-version=592
+
+The postgres ODBC driver listed at http://www.unixodbc.org/ does state that it supports version 2.5. This suggests that version 2.5 is the correct version to use and newer versions on older SuSE installations just happened to work in our limited application.
+
+
+
+
+pgAdminIII installation on Windows 
+----------------------------------
+
+1) download from http://www.pgadmin.org/
+
+2) following instructions and install
+
+3) Run and add prodautodb server:
+Address = <ip address of database host machine>
+Maintenance DB = prodautodb (type it in)
+Username = bamzooki
+Password = ********
+
+
+
+
+
+

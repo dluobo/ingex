@@ -1,0 +1,1 @@
+~/project/ap/ACE_wrappers/MPC/mwc.pl -type make -include /home/philipn/project/ap/ACE_wrappers/TAO/MPC/config/ -include /home/philipn/project/ap/ACE_wrappers/bin/MakeProjectCreator/config/ CorbaIngexPlayer.mwc

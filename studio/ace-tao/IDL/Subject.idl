@@ -1,0 +1,32 @@
+// Subject.idl
+
+// Copyright (c) 2005. British Broadcasting Corporation. All Rights Reserved.
+
+#ifndef Subject_idl
+#define Subject_idl
+
+#pragma prefix "bbc.co.uk"
+
+module ProdAuto {
+
+// forward declaration
+	interface Observer;
+
+/**
+	Observer pattern subject
+*/
+	interface Subject
+	{
+		enum ReturnCode { OK, FAILED };
+
+		ReturnCode Attach(in Observer obs);
+		ReturnCode Detach(in Observer obs);
+		void Notify(in string file);
+	};
+};
+
+// definition of forward-declared interface
+#include "Observer.idl"
+
+#endif  // #ifndef Subject_idl
+

@@ -1,0 +1,22 @@
+/* XPM */
+static char *small_exclamation[]={
+"16 16 3 1",
+". c None",
+"# c #000000",
+"a c #ffff00",
+".......##.......",
+"......#aa#......",
+"......#aa#......",
+".....#aaaa#.....",
+".....#a##a#.....",
+"....#aa##aa#....",
+"....#aa##aa#....",
+"...#aaa##aaa#...",
+"...#aaa##aaa#...",
+"..#aaaa##aaaa#..",
+"..#aaaa##aaaa#..",
+".#aaaaaaaaaaaa#.",
+".#aaaaa##aaaaa#.",
+"#aaaaaa##aaaaaa#",
+"#aaaaaaaaaaaaaa#",
+".##############."};

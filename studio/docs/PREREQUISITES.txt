@@ -1,0 +1,34 @@
+Steps needed prior to building recorder
+=======================================
+
+Build ACE and TAO
+- see acetao_linux.html
+
+
+Install from YAST:
+  e2fsprogs-devel (to provide uuid)
+
+
+Set up database - see database/install/INSTALL.txt
+
+
+Install lame
+  wget http://kent.dl.sourceforge.net/sourceforge/lame/lame-3.97.tar.gz
+  tar xf lame-3.97.tar.gz
+  cd lame-3.97
+  ./configure
+  make
+  sudo make install
+
+
+Build ffmpeg
+
+tsocks svn checkout svn://svn.mplayerhq.hu/ffmpeg/trunk ffmpeg
+
+./configure --enable-mp3lame --enable-pthreads --enable-shared
+
+NB. additional install
+  cp -p ./libavcodec/mpegaudio.h /usr/local/include/ffmpeg/
+
+
+

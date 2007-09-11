@@ -1,0 +1,8 @@
+project(prodautodbLib) {
+  staticname = prodautodb
+  sharedname = 
+  specific(vc71) {
+    includes += $(LIBODBCPP)/include
+  }
+}
+

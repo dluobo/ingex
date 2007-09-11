@@ -1,0 +1,30 @@
+// Package.idl
+
+// Copyright (c) 2006. British Broadcasting Corporation. All Rights Reserved.
+
+#ifndef Package_idl
+#define Package_idl
+
+#pragma prefix "bbc.co.uk"
+
+#include "defs.idl"
+#include "EssenceDescriptor.idl"
+#include "Track.idl"
+
+module ProdAuto
+{
+	/**
+	Metadata concerning a piece of "essence", either file or tape.
+	We aim for some correspondence with the AAF/MXF data model.
+	*/
+	struct Package
+	{
+		UMID package_id;
+		string name;
+		EssenceDescriptor descriptor;
+		TrackList tracks;
+	};
+	typedef sequence<Package> PackageList;
+};
+
+#endif //#ifndef Package_idl

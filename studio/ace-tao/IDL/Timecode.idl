@@ -1,0 +1,74 @@
+/*
+ * $Id: Timecode.idl,v 1.1 2007/09/11 14:08:22 stuart_hc Exp $
+ *
+ * Timecode structure definitions.
+ *
+ * Copyright (C) 2006  British Broadcasting Corporation.
+ * All Rights Reserved.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+ * 02110-1301, USA.
+ */
+
+#ifndef Timecode_idl
+#define Timecode_idl
+
+#pragma prefix "bbc.co.uk"
+
+#include "defs.idl"
+
+module ProdAuto
+{
+    enum EnumeratedFrameRate { TC25, TC30, TC30DF };
+
+    struct SmpteTimecode
+    {
+        EnumeratedFrameRate frame_rate;
+        unsigned short hours;
+        unsigned short minutes;
+        unsigned short seconds;
+        unsigned short frames;
+
+        boolean undefined; ///< True for an invalid or unavailable timecode
+    };
+
+    /**
+    This is a duration defined in terms of a number of samples.
+    The samples would typically be video frames.
+    */
+    struct MxfDuration
+    {
+        Rational edit_rate;
+        long samples;
+
+        boolean undefined; ///< True for an invalid or unavailable duration
+    };
+
+    /**
+    This is the instant which occurs at the given number of samples after a
+    reference instant.
+    The reference instant is typically SMPTE timecode 00:00:00:00.
+    */
+    struct MxfTimecode
+    {
+        Rational edit_rate;
+        long samples;
+
+        boolean undefined; ///< True for an invalid or unavailable timecode.
+    };
+};
+
+#endif //#ifndef Timecode_idl
+

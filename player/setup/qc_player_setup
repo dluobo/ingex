@@ -1,0 +1,52 @@
+#! /bin/sh
+# $Id: qc_player_setup,v 1.1 2007/09/11 14:08:14 stuart_hc Exp $
+# Original author: Stuart Cunningham
+# Adapted by: Philip de Nier
+#
+# /etc/init.d/dvs_setup
+#
+### BEGIN INIT INFO
+# Provides:          contour_setup
+# Required-Start:    $syslog $time
+# Required-Stop:
+# Default-Start:     3 5
+# Default-Stop:
+# Description:       Setup for the BBC I and A Quality Control Player
+### END INIT INFO
+
+. /etc/rc.status
+
+rc_reset
+
+# See how we were called.
+case "$1" in
+    start)
+        echo -n "Starting quality control player setup"
+		
+        # Make tape drives read/write by all users
+        chmod a+rw /dev/st[0-9]* /dev/nst[0-9]* 2> /dev/null
+
+        # Load patched USBHID kernel module if present
+        if test -f /lib/modules/`uname -r`/contour/usbhid.ko; then
+			if ! /sbin/modprobe --remove usbhid; then
+				echo "\nFailed to remove the usbhid module"
+				exit 1
+			fi
+			
+			if ! insmod /lib/modules/`uname -r`/contour/usbhid.ko; then
+				echo "\nFailed to install the patched usbhid module for the Contour Shuttle Pro"
+				/sbin/modprobe usbhid
+				exit 1
+			fi
+		fi
+		
+        rc_status -v
+        ;;
+    status)
+        rc_status -v
+        ;;
+    *)
+        echo "Usage: $0 start"
+        exit 1
+esac
+rc_exit

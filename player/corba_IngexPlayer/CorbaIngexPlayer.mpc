@@ -1,0 +1,92 @@
+project(CorbaIngexPlayerLib): naming, messaging, valuetype {
+  libout = ./
+  staticname = CorbaIngexPlayer
+  sharedname =
+  
+  includes += .
+  includes += ./IDL
+  includes += ./IDL/Generated
+  includes += ../ingex_player
+  includes += ../IngexPlayer
+  includes += /usr/local/include/ffmpeg
+  
+  Source_Files {
+	CorbaUtil.cpp
+  	corba_IngexPlayerImpl.cpp
+  	corba_IngexPlayerListenerImpl.cpp
+	CorbaIngexPlayer.cpp
+	CorbaIngexPlayerListener.cpp
+  }
+}
+
+project(CorbaIngexPlayerServer): taoserver, naming, messaging, valuetype {
+  exename = CorbaIngexPlayerServer
+
+  after += CorbaIngexPlayerLib
+
+  
+  includes += .
+  includes += ./IDL
+  includes += ./IDL/Generated
+  includes += ../ingex_player
+  includes += ../IngexPlayer
+  includes += /usr/local/include/ffmpeg
+  includes += $(DVS_SDK_INSTALL)/development/header
+  
+
+  libpaths += ../IngexPlayer
+  libpaths += ./IDL
+  libpaths += /usr/local/lib
+  libpaths += $(DVS_SDK_INSTALL)/linux/lib
+  libpaths += /usr/X11R6/lib 
+  
+  libs += uuid
+  libs += X11 Xv pthread freetype fontconfig
+  libs += mp3lame
+  libs += avformat avcodec avutil z
+  libs += MXF
+  libs += MXFReader
+  libs += dvsoem
+  libs += idl
+  libs += IngexPlayer
+  libs += CorbaIngexPlayer
+  
+  Source_Files {
+  	corba_IngexPlayerMain.cpp
+  	corba_IngexPlayerApp.cpp
+  }
+}
+
+
+
+project(test_CorbaIngexPlayer): naming, messaging, valuetype {
+  exename = test_CorbaIngexPlayer
+  
+  after += CorbaIngexPlayerLib
+
+  includes += .
+  includes += ./IDL
+  includes += ./IDL/Generated
+  includes += ../ingex_player
+  includes += ../IngexPlayer
+  includes += /usr/local/include/ffmpeg
+  
+  libpaths += ../IngexPlayer
+  libpaths += ./IDL
+  libpaths += /usr/local/lib
+  
+  libs += uuid
+  libs += mp3lame
+  libs += avformat avcodec avutil z
+  libs += MXF
+  libs += MXFReader
+  libs += idl
+  libs += IngexPlayer
+  libs += CorbaIngexPlayer
+  
+  Source_Files {
+  	test_CorbaIngexPlayer.cpp
+  }
+}
+
+

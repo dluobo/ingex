@@ -1,0 +1,136 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html>
+
+<head>
+<title>Ingex Player</title>
+<meta HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=iso-8859-1"/>
+
+<script type="text/javascript"><!--
+	
+	function send_control(controlType)
+	{
+        var request = new XMLHttpRequest();
+        request.open("GET", "/player/control/" + controlType, true);
+        request.send(null);
+	}
+
+	function handle_keydown(event)
+	{
+		switch (event.keyCode)
+		{
+			case 250:
+				send_control("play");
+				break;
+			case 19:
+				send_control("pause");
+				break;
+			case 12:
+				send_control("stop");
+				break;
+			case 124:
+				send_control("play-speed?speed=10&unit=FRAME_PLAY_UNIT");
+				break;
+			case 125:
+				send_control("play-speed?speed=-10&unit=FRAME_PLAY_UNIT");
+				break;
+			case 126:
+				send_control("home");
+				break;
+			case 127:
+				send_control("end");
+				break;
+		}
+	}
+
+	
+	var statusInterval = 1000;
+	var stateRequest = null;
+	
+	
+	function handleStateContent(event)
+	{
+		try
+		{
+			if (stateRequest.readyState == 4)
+			{
+				if (stateRequest.status != 200)
+				{
+					throw "failed to get player state";
+				}
+				
+				var result = event.target.responseXML;
+				var timecodeXEles = result.getElementsByTagName("timecode");
+				
+				if (timecodeXEles.length > 0)
+				{
+					var timecodeXEle = timecodeXEles[0];
+					
+					var timecodeDivEle = document.getElementById("timecode");
+					if (timecodeDivEle != null)
+					{
+						var newEle = document.createElement("div");
+						var timecodeText = document.createTextNode(timecodeXEle.firstChild.nodeValue);
+						
+						newEle.setAttribute("id", "timecode");
+						newEle.appendChild(timecodeText);
+						
+						timecodeDivEle.parentNode.replaceChild(newEle, timecodeDivEle);
+					}
+				}
+				
+				setTimeout("get_state()", statusInterval)
+			}
+		} 
+		catch (err)
+		{
+			// ignore the error
+			
+			setTimeout("get_state()", statusInterval)
+		}
+	}
+	
+	function get_state()
+	{
+		try
+		{
+			stateRequest = new XMLHttpRequest();
+			stateRequest.open("GET", "/player/state", false);
+			stateRequest.onload = handleStateContent;
+			stateRequest.send(null);
+		}
+		catch (err)
+		{
+			// ignore the error
+		}
+	}
+
+-->
+</script>
+
+</head>
+
+<body onload="get_state()" onkeydown="handle_keydown(event)">
+
+<h1>Ingex Player</h1>
+
+<div style="font-size: 24pt;"><div id="timecode">??:??:??:?? </div></div>
+
+<table>
+<tr>
+<td><img id="homesym" alt="Home" src="/resources/home.png" onclick="send_control('home')"/></td>
+<td><img id="frsym" alt="FastRewind" src="/resources/fastrewind.png" onclick="send_control('play-speed?speed=-10&unit=FRAME_PLAY_UNIT')"/></td>
+<td><img id="playsym" alt="Play" src="/resources/play.png" onclick="send_control('play')"/></td>
+<td><img id="pausesym" alt="Pause" src="/resources/pause.png" onclick="send_control('pause')"/></td>
+<td><img id="stopsym" alt="Stop" src="/resources/stop.png" onclick="send_control('stop')"/></td>
+<td><img id="ffsym" alt="FastForward" src="/resources/fastforward.png" onclick="send_control('play-speed?speed=10&unit=FRAME_PLAY_UNIT')"/></td>
+<td><img id="endsym" alt="End" src="/resources/end.png" onclick="send_control('end')"/></td>
+</tr>
+</table>
+
+</body>
+
+
+</html>
+
+

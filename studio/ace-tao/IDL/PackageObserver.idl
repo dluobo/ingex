@@ -1,0 +1,22 @@
+
+// PackageObserver.idl
+
+// Copyright (c) 2006. British Broadcasting Corporation. All Rights Reserved.
+
+#ifndef PackageObserver_idl
+#define PackageObserver_idl
+
+#pragma prefix "bbc.co.uk"
+
+#include "Package.idl"
+
+module ProdAuto
+{
+
+	interface PackageObserver
+	{
+		void Observe(in PackageList packages);
+	};
+};
+
+#endif //#ifndef PackageObserver_idl

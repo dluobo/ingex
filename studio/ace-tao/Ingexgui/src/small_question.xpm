@@ -1,0 +1,22 @@
+/* XPM */
+static char *small_question[]={
+"16 16 3 1",
+". c None",
+"# c #000000",
+"a c #ffff00",
+".......##.......",
+"......#aa#......",
+"......#aa#......",
+".....#aaaa#.....",
+".....#aaaa#.....",
+"....#aa##aa#....",
+"....#a#aa#a#....",
+"...#aaaaa#aa#...",
+"...#aaaaa#aa#...",
+"..#aaaaa#aaaa#..",
+"..#aaaa#aaaaa#..",
+".#aaaaa#aaaaaa#.",
+".#aaaaaaaaaaaa#.",
+"#aaaaaa#aaaaaaa#",
+"#aaaaaaaaaaaaaa#",
+".##############."};

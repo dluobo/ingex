@@ -1,0 +1,22 @@
+/* XPM */
+static char *small_partial_enabled[]={
+"16 16 3 1",
+"a c None",
+". c #000000",
+"# c #ffc0c0",
+"................",
+".#############..",
+".###.....####.a.",
+".###......##.aa.",
+".###..##..#.aaa.",
+".###..###..aaaa.",
+".###..###.aaaaa.",
+".###..##.aaaaaa.",
+".###....aaaaaaa.",
+".###...aaaaaaaa.",
+".###..aaaaaaaaa.",
+".###.aaaaaaaaaa.",
+".##.aaaaaaaaaaa.",
+".#.aaaaaaaaaaaa.",
+"..aaaaaaaaaaaaa.",
+"................"};

@@ -1,0 +1,27 @@
+
+project(routerlogger): taoserver, naming, messaging, valuetype {
+  exename = routerlogger
+  includes += ../Corba
+  includes += ../IDL/Generated
+  includes += ../IDL
+  includes += ../common
+  includes += ../../database/src
+  specific(vc71) {
+    includes += $(LIBODBCPP)/include
+  }
+
+  libs += common2
+  libs += idl
+  libs += prodautodb
+  libs += odbc++
+
+  libpaths += ../common
+  libpaths += ../IDL
+  libpaths += ../../database/src
+  specific(vc71) {
+    Debug::libpaths += $(LIBODBCPP)/win32/debug-dll
+    Release::libpaths += $(LIBODBCPP)/win32/prod-dll
+  }
+}
+
+

@@ -1,0 +1,23 @@
+// SourceClip.idl
+
+// Copyright (c) 2006. British Broadcasting Corporation. All Rights Reserved.
+
+#ifndef SourceClip_idl
+#define SourceClip_idl
+
+#pragma prefix "bbc.co.uk"
+
+#include "defs.idl"
+#include "Source.idl"
+
+module ProdAuto
+{
+	struct SourceClip
+	{
+		Source src;
+		//long length;
+		//long position;
+	};
+};
+
+#endif //#ifndef SourceClip_idl

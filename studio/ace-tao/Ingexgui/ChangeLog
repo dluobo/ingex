@@ -1,0 +1,3 @@
+2006-10-13 Matthew Marks <>
+	Works on Linux - not tested on Windows.  Single recorder.  Record enable only while stopped.  CORBA clients only (polls for status and guesses start/end timecodes).  No saving of status.  No knowledge of router recorders. 
+

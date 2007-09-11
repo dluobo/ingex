@@ -1,0 +1,46 @@
+// EssenceDescriptor.idl
+
+// Copyright (c) 2006. British Broadcasting Corporation. All Rights Reserved.
+
+#ifndef EssenceDescriptor_idl
+#define EssenceDescriptor_idl
+
+#pragma prefix "bbc.co.uk"
+
+module ProdAuto
+{
+	struct LiveEssenceDescriptor
+	{
+		string location;
+		string date;
+	};
+
+	struct FileEssenceDescriptor
+	{
+		string format;
+		string url;
+	};
+
+	struct TapeEssenceDescriptor
+	{
+		string spool;
+	};
+
+
+	enum EssenceDescriptorType { LIVE, TAKE, FILE, TAPE };
+
+	// NB. The EssenceDescriptor for a "take" is empty
+	union EssenceDescriptor switch(EssenceDescriptorType)
+	{
+	case LIVE:
+		LiveEssenceDescriptor live_essence_descriptor;
+
+	case FILE:
+		FileEssenceDescriptor file_essence_descriptor;
+
+	case TAPE:
+		TapeEssenceDescriptor tape_essence_descriptor;
+	};
+};
+
+#endif //#ifndef EssenceDescriptor_idl

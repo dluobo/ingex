@@ -1,0 +1,254 @@
+<?xml version = '1.0'?>
+<kdevelop>
+  <general>
+    <author>BBC Research</author>
+    <email>info@rd.bbc.co.uk</email>
+    <version>0.1</version>
+    <projectmanagement>KDevKDEAutoProject</projectmanagement>
+    <primarylanguage>C++</primarylanguage>
+    <keywords>
+      <keyword>C++</keyword>
+      <keyword>Code</keyword>
+      <keyword>wxWidgets</keyword>
+    </keywords>
+    <versioncontrol>kdevcvsservice</versioncontrol>
+    <ignoreparts/>
+    <projectdirectory>.</projectdirectory>
+    <absoluteprojectpath>false</absoluteprojectpath>
+    <description/>
+    <projectname>ingexgui</projectname>
+    <defaultencoding/>
+  </general>
+  <kdevautoproject>
+    <general>
+      <activetarget>src/ingexgui</activetarget>
+      <useconfiguration>debug</useconfiguration>
+    </general>
+    <run>
+      <mainprogram>/home/matthew/cvs_workspace/ingex/Ingex/corba/Ingexgui/debug/src/ingexgui</mainprogram>
+      <directoryradio>executable</directoryradio>
+      <customdirectory>/</customdirectory>
+      <programargs>-ORBDefaultInitRef corbaloc:iiop:132.185.129.118:8888</programargs>
+      <terminal>false</terminal>
+      <autocompile>true</autocompile>
+      <envvars/>
+      <globaldebugarguments>-ORBDefaultInitRef corbaloc:iiop:132.185.129.118:8888</globaldebugarguments>
+      <globalcwd>/home/matthew/cvs_workspace/ingex/Ingex/corba/Ingexgui/debug</globalcwd>
+      <useglobalprogram>true</useglobalprogram>
+      <autoinstall>false</autoinstall>
+      <autokdesu>false</autokdesu>
+    </run>
+    <configurations>
+      <optimized>
+        <builddir>optimized</builddir>
+        <ccompiler>kdevgccoptions</ccompiler>
+        <cxxcompiler>kdevgppoptions</cxxcompiler>
+        <f77compiler>kdevg77options</f77compiler>
+        <cxxflags>-O2 -g0</cxxflags>
+      </optimized>
+      <debug>
+        <configargs>--enable-debug=full</configargs>
+        <builddir>debug</builddir>
+        <ccompiler>kdevgccoptions</ccompiler>
+        <cxxcompiler>kdevgppoptions</cxxcompiler>
+        <f77compiler>kdevg77options</f77compiler>
+        <cxxflags>-O0 -g3 `wx-config --cxxflags`</cxxflags>
+        <envvars/>
+        <topsourcedir/>
+        <cppflags/>
+        <ldflags>-lTAO -lACE -lTAO_CosNaming -lTAO_PortableServer -lTAO_AnyTypeCode -lTAO_Valuetype -lTAO_Messaging -lTAO_PI -lTAO_CodecFactory -L/usr/X11R6/lib `pwd`/../../../../IngexPlayer/IngexPlayer/libIngexPlayer.a -lX11 -lXv -lpthread -lfreetype -lfontconfig -luuid -ld3mxfinfo -lMXFReader -lMXF -lavformat -lavcodec -lavutil -lmp3lame -lx264 -la52 -lfaac -lfaad /home/matthew/packages/sdk3.0.1.4/linux-x86/lib/libdvsoem.a</ldflags>
+        <ccompilerbinary/>
+        <cxxcompilerbinary/>
+        <f77compilerbinary/>
+        <cflags/>
+        <f77flags/>
+      </debug>
+    </configurations>
+    <make>
+      <envvars>
+        <envvar value="1" name="WANT_AUTOCONF_2_5" />
+        <envvar value="1" name="WANT_AUTOMAKE_1_6" />
+      </envvars>
+      <abortonerror>true</abortonerror>
+      <runmultiplejobs>false</runmultiplejobs>
+      <numberofjobs>1</numberofjobs>
+      <dontact>false</dontact>
+      <makebin/>
+      <prio>0</prio>
+    </make>
+  </kdevautoproject>
+  <kdevfileview>
+    <groups>
+      <group pattern="*.cpp;*.cxx;*.h" name="Sources" />
+      <group pattern="*.rc" name="Resource file" />
+      <group pattern="*.png" name="Icons" />
+      <group pattern="*" name="Others" />
+      <hidenonprojectfiles>false</hidenonprojectfiles>
+      <hidenonlocation>false</hidenonlocation>
+    </groups>
+    <tree>
+      <showvcsfields>false</showvcsfields>
+      <hidenonprojectfiles>false</hidenonprojectfiles>
+      <hidepatterns>*.o,*.lo,CVS</hidepatterns>
+    </tree>
+  </kdevfileview>
+  <kdevdoctreeview>
+    <ignoretocs>
+      <toc>ada</toc>
+      <toc>ada_bugs_gcc</toc>
+      <toc>bash</toc>
+      <toc>bash_bugs</toc>
+      <toc>clanlib</toc>
+      <toc>w3c-dom-level2-html</toc>
+      <toc>fortran_bugs_gcc</toc>
+      <toc>gnome1</toc>
+      <toc>gnustep</toc>
+      <toc>gtk</toc>
+      <toc>gtk_bugs</toc>
+      <toc>haskell</toc>
+      <toc>haskell_bugs_ghc</toc>
+      <toc>java_bugs_gcc</toc>
+      <toc>java_bugs_sun</toc>
+      <toc>kde2book</toc>
+      <toc>opengl</toc>
+      <toc>pascal_bugs_fp</toc>
+      <toc>php</toc>
+      <toc>php_bugs</toc>
+      <toc>perl</toc>
+      <toc>perl_bugs</toc>
+      <toc>python</toc>
+      <toc>python_bugs</toc>
+      <toc>qt-kdev3</toc>
+      <toc>ruby</toc>
+      <toc>ruby_bugs</toc>
+      <toc>sdl</toc>
+      <toc>stl</toc>
+      <toc>w3c-svg</toc>
+      <toc>sw</toc>
+      <toc>w3c-uaag10</toc>
+    </ignoretocs>
+    <ignoreqt_xml>
+      <toc>Guide to the Qt Translation Tools</toc>
+      <toc>Qt Assistant Manual</toc>
+      <toc>Qt Designer Manual</toc>
+      <toc>Qt Reference Documentation</toc>
+      <toc>qmake User Guide</toc>
+    </ignoreqt_xml>
+    <ignoredoxygen>
+      <toc>KDE Libraries (Doxygen)</toc>
+    </ignoredoxygen>
+  </kdevdoctreeview>
+  <kdevdebugger>
+    <general>
+      <dbgshell>libtool</dbgshell>
+      <programargs>-ORBDefaultInitRef corbaloc:iiop:132.185.129.118:8888 </programargs>
+      <gdbpath>/usr/bin/gdb</gdbpath>
+      <configGdbScript/>
+      <runShellScript/>
+      <runGdbScript/>
+      <breakonloadinglibs>true</breakonloadinglibs>
+      <separatetty>false</separatetty>
+      <floatingtoolbar>false</floatingtoolbar>
+    </general>
+    <display>
+      <staticmembers>false</staticmembers>
+      <demanglenames>true</demanglenames>
+      <outputradix>10</outputradix>
+    </display>
+  </kdevdebugger>
+  <kdevfilecreate>
+    <filetypes/>
+    <useglobaltypes>
+      <type ext="rc" />
+      <type ext="cpp" />
+      <type ext="h" />
+    </useglobaltypes>
+  </kdevfilecreate>
+  <kdevdocumentation>
+    <projectdoc>
+      <docsystem>Doxygen Documentation Collection</docsystem>
+      <docurl>ingexgui.tag</docurl>
+    </projectdoc>
+  </kdevdocumentation>
+  <substmap>
+    <APPNAME>Ingexgui</APPNAME>
+    <APPNAMELC>ingexgui</APPNAMELC>
+    <APPNAMESC>Ingexgui</APPNAMESC>
+    <APPNAMEUC>INGEXGUI</APPNAMEUC>
+    <AUTHOR>BBC Research</AUTHOR>
+    <EMAIL>info@rd.bbc.co.uk</EMAIL>
+    <LICENSE>GPL</LICENSE>
+    <LICENSEFILE>COPYING</LICENSEFILE>
+    <VERSION>0.1</VERSION>
+    <YEAR>2006</YEAR>
+    <dest>/home/matthew/cvs_workspace/ingex/Ingex/Corba/ingexgui</dest>
+  </substmap>
+  <kdevcppsupport>
+    <references/>
+    <codecompletion>
+      <includeGlobalFunctions>true</includeGlobalFunctions>
+      <includeTypes>true</includeTypes>
+      <includeEnums>true</includeEnums>
+      <includeTypedefs>false</includeTypedefs>
+      <automaticCodeCompletion>true</automaticCodeCompletion>
+      <automaticArgumentsHint>true</automaticArgumentsHint>
+      <automaticHeaderCompletion>true</automaticHeaderCompletion>
+      <codeCompletionDelay>250</codeCompletionDelay>
+      <argumentsHintDelay>400</argumentsHintDelay>
+      <headerCompletionDelay>250</headerCompletionDelay>
+      <showOnlyAccessibleItems>false</showOnlyAccessibleItems>
+      <completionBoxItemOrder>0</completionBoxItemOrder>
+      <howEvaluationContextMenu>true</howEvaluationContextMenu>
+      <showCommentWithArgumentHint>true</showCommentWithArgumentHint>
+      <statusBarTypeEvaluation>false</statusBarTypeEvaluation>
+      <namespaceAliases>std=_GLIBCXX_STD;__gnu_cxx=std</namespaceAliases>
+      <processPrimaryTypes>true</processPrimaryTypes>
+      <processFunctionArguments>false</processFunctionArguments>
+      <preProcessAllHeaders>false</preProcessAllHeaders>
+      <parseMissingHeaders>false</parseMissingHeaders>
+      <resolveIncludePaths>true</resolveIncludePaths>
+      <alwaysParseInBackground>true</alwaysParseInBackground>
+      <usePermanentCaching>true</usePermanentCaching>
+      <alwaysIncludeNamespaces>false</alwaysIncludeNamespaces>
+      <includePaths>.;</includePaths>
+      <parseMissingHeadersExperimental>false</parseMissingHeadersExperimental>
+      <resolveIncludePathsUsingMakeExperimental>false</resolveIncludePathsUsingMakeExperimental>
+    </codecompletion>
+    <qt>
+      <used>false</used>
+      <version>3</version>
+      <root>/usr/lib/qt3</root>
+      <includestyle>3</includestyle>
+      <designerintegration>EmbeddedKDevDesigner</designerintegration>
+      <qmake>/usr/lib/qt3/bin/qmake</qmake>
+      <designer>/usr/lib/qt3/bin/designer</designer>
+      <designerpluginpaths/>
+    </qt>
+    <creategettersetter>
+      <prefixGet/>
+      <prefixSet>set</prefixSet>
+      <prefixVariable>m_,_</prefixVariable>
+      <parameterName>theValue</parameterName>
+      <inlineGet>true</inlineGet>
+      <inlineSet>true</inlineSet>
+    </creategettersetter>
+    <splitheadersource>
+      <enabled>false</enabled>
+      <synchronize>true</synchronize>
+      <orientation>Vertical</orientation>
+    </splitheadersource>
+  </kdevcppsupport>
+  <cppsupportpart>
+    <filetemplates>
+      <interfacesuffix>.h</interfacesuffix>
+      <implementationsuffix>.cpp</implementationsuffix>
+    </filetemplates>
+  </cppsupportpart>
+  <kdevcvsservice>
+    <recursivewhenupdate>true</recursivewhenupdate>
+    <prunedirswhenupdate>true</prunedirswhenupdate>
+    <createdirswhenupdate>true</createdirswhenupdate>
+    <recursivewhencommitremove>true</recursivewhencommitremove>
+    <revertoptions>-C</revertoptions>
+  </kdevcvsservice>
+</kdevelop>

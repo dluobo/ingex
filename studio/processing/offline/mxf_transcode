@@ -1,0 +1,74 @@
+#! /bin/sh
+# $Id: mxf_transcode,v 1.1 2007/09/11 14:08:45 stuart_hc Exp $
+# Author: stuartc@rd.bbc.co.uk
+#
+# /etc/init.d/mxf_transcode
+#
+### BEGIN INIT INFO
+# Provides:          mxf_transcode
+# Required-Start:    $network $remote_fs $time $named $syslog
+# Required-Stop:
+# Default-Start:     3 5
+# Default-Stop:
+# Description:       Start the MXF transcoder which converts DV50 to 20:1 mxf files
+### END INIT INFO
+
+. /etc/rc.status
+
+# Edit the following two lines for path and command line options
+TRANSCODE_BIN=/usr/local/bin/transcode_avid_mxf
+TRANSCODE_ARGS=--loop --source-dir /video1/online --create-dir /video1/tmp --dest-dir /video1/offline --fail-dir /video1/tmp 
+
+test -x $TRANSCODE_BIN || exit 5
+
+# Shell functions sourced from /etc/rc.status:
+#      rc_check         check and set local and overall rc status
+#      rc_status        check and set local and overall rc status
+#      rc_status -v     ditto but be verbose in local rc status
+#      rc_status -v -r  ditto and clear the local rc status
+#      rc_failed        set local and overall rc status to failed
+#      rc_reset         clear local rc status (overall remains)
+#      rc_exit          exit appropriate to overall rc status
+
+# First reset status of this service
+rc_reset
+
+case "$1" in
+    start)
+        echo -n "Starting MXF transcoder"
+        startproc $TRANSCODE_BIN $TRANSCODE_ARGS
+
+        # Remember status and be verbose
+        rc_status -v
+        ;;
+    stop)
+        echo -n "Stopping MXF transcoder"
+        ## Stop daemon with killproc(8) and if this fails
+        ## set echo the echo return value.
+        killproc $TRANSCODE_BIN
+        rc_status -v
+        ;;
+    restart)
+        ## Stop the service and regardless of whether it was
+        ## running or not, start it again.
+        $0 stop
+        $0 start
+
+        # Remember status and be quiet
+        rc_status
+        ;;
+    status)
+        echo "Checking for MXF transcoder service "
+        ## Check status with checkproc(8), if process is running
+        ## checkproc will return with exit status 0.
+
+        checkproc $TRANSCODE_BIN
+
+        rc_status -v
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|status|restart}"
+        exit 1
+        ;;
+esac
+rc_exit

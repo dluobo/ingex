@@ -1,0 +1,15 @@
+project(libidl): taoidldefaults {
+  staticname = idl
+  sharedname = 
+  includes += $(ACE_ROOT) $(TAO_ROOT) $(TAO_ROOT)/orbsvcs
+  includes += ./Generated
+
+  IDL_Files {
+    idlflags += -in -GI -Ge 2 -o ./Generated
+    gendir = ./Generated
+
+    IngexPlayer.idl
+  }
+}
+
+
