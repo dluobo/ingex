@@ -1,5 +1,5 @@
 /*
- * $Id: Recorder.h,v 1.1 2007/09/11 14:08:39 stuart_hc Exp $
+ * $Id: Recorder.h,v 1.2 2007/10/26 16:23:41 john_f Exp $
  *
  * Recorder and configuration
  *
@@ -37,9 +37,6 @@
 // TODO: check odbc limits for varchar on Windows
 #define MAX_PARAMETER_LENGTH        250
 
-
-#define LTC_PARAMETER_VALUE         1
-#define VITC_PARAMETER_VALUE        2
 
 
 // TODO: aspect ratio

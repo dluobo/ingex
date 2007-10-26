@@ -1,5 +1,5 @@
 /*
- * $Id: DatabaseEnums.h,v 1.1 2007/09/11 14:08:38 stuart_hc Exp $
+ * $Id: DatabaseEnums.h,v 1.2 2007/10/26 16:23:41 john_f Exp $
  *
  * Defines enumerated data values matching those in the database
  *
@@ -60,6 +60,9 @@
 #define NOT_GOOD_TAKE_RESULT                3
 
 #define RECORDER_PARAM_TYPE_ANY             1
+
+#define LTC_PARAMETER_VALUE                 1
+#define VITC_PARAMETER_VALUE                2
 
 #define PROXY_STATUS_INCOMPLETE             1
 #define PROXY_STATUS_COMPLETE               2
