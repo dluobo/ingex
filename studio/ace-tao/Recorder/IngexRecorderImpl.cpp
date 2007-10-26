@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorderImpl.cpp,v 1.1 2007/09/11 14:08:30 stuart_hc Exp $
+ * $Id: IngexRecorderImpl.cpp,v 1.2 2007/10/26 15:52:26 john_f Exp $
  *
  * Servant class for Recorder.
  *
@@ -34,6 +34,8 @@
 #include "RecorderSettings.h"
 #include "IngexRecorderImpl.h"
 #include "FileUtils.h"
+#include "Timecode.h"
+#include "DateTime.h"
 
 IngexRecorderImpl * IngexRecorderImpl::mInstance = 0;
 
@@ -42,11 +44,16 @@ void recording_completed(IngexRecorder * rec)
 {
 #if 0
     // Test - keep recording in chunks
+    const framecount_t chunk_size = 60 * 25; // 1 min
     framecount_t restart = rec->OutTime();
     bool ok = rec->PrepareStart(restart, 0, false);
     if (ok)
     {
-        rec->TargetDuration(60 * 25); // 1 min
+        // make new out time a round figure
+        framecount_t out = restart + chunk_size;
+        out = (out / chunk_size) * chunk_size;
+        // set duration for this chunk
+        rec->TargetDuration(out - restart);
         rec->Start();
     }
 #else
@@ -208,7 +215,9 @@ char * IngexRecorderImpl::RecordingFormat (
     ::CORBA::SystemException
   )
 {
-    ACE_DEBUG((LM_INFO, ACE_TEXT("IngexRecorderImpl::Start()\n")));
+    Timecode start_tc(start_timecode.undefined ? 0 : start_timecode.samples);
+    ACE_DEBUG((LM_INFO, ACE_TEXT("IngexRecorderImpl::Start(), tc %C, time %C\n"),
+        start_tc.Text(), DateTime::Timecode().c_str()));
     //ACE_DEBUG((LM_DEBUG, ACE_TEXT("project \"%C\", description \"%C\"\n"), project, description));
 
     // Enforce start-stop-start sequence
@@ -229,14 +238,14 @@ char * IngexRecorderImpl::RecordingFormat (
     // in PrepareStart().
 
     // Translate enables to per-track and per-card.
-    bool card_enable[MAX_CARDS];
-    for (unsigned int card_i = 0; card_i < MAX_CARDS; ++card_i)
+    bool card_enable[MAX_CHANNELS];
+    for (unsigned int card_i = 0; card_i < MAX_CHANNELS; ++card_i)
     {
         // Start with card enables false.
         card_enable[card_i] = false;
     }
 
-    bool track_enable[MAX_CARDS * 5];
+    bool track_enable[MAX_CHANNELS * 5];
     for (unsigned int card_i = 0; card_i < IngexShm::Instance()->Cards(); ++card_i)
     {
         for (int j = 0; j < 5; ++j)
