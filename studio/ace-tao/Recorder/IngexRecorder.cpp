@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorder.cpp,v 1.1 2007/09/11 14:08:30 stuart_hc Exp $
+ * $Id: IngexRecorder.cpp,v 1.2 2007/10/26 15:50:08 john_f Exp $
  *
  * Class to manage an individual recording.
  *
@@ -127,34 +127,84 @@ void IngexRecorder::Setup(
 
     // Create any needed paths.
     // NB. Paths need to be same as those used in recorder_fucntions.cpp
-    if (settings->raw)
+    for (std::vector<EncodeParams>::const_iterator it = settings->encodings.begin();
+        it != settings->encodings.end(); ++it)
     {
-        FileUtils::CreatePath(settings->raw_dir);
-    }
-    if (settings->mxf)
-    {
-        std::ostringstream creating_path;
-        creating_path << settings->mxf_dir << settings->mxf_subdir_creating;
-        FileUtils::CreatePath(creating_path.str());
-        std::ostringstream failures_path;
-        failures_path << settings->mxf_dir << settings->mxf_subdir_failures;
-        FileUtils::CreatePath(failures_path.str());
-    }
-    if (settings->quad_mpeg2 || settings->browse_audio)
-    {
-        FileUtils::CreatePath(settings->browse_dir);
+        FileUtils::CreatePath(it->dir);
+        if (it->wrapping == Wrapping::MXF)
+        {
+            std::ostringstream creating_path;
+            creating_path << it->dir << '/' << settings->mxf_subdir_creating;
+            FileUtils::CreatePath(creating_path.str());
+            std::ostringstream failures_path;
+            failures_path << it->dir << '/' << settings->mxf_subdir_failures;
+            FileUtils::CreatePath(failures_path.str());
+        }
     }
 
+
+    //if (settings->quad_mpeg2 || settings->browse_audio)
+    //{
+    //    FileUtils::CreatePath(settings->browse_dir);
+    //}
+
     // Set up encoding threads
+    int encoding_i = 0;
+    for (std::vector<EncodeParams>::const_iterator it = settings->encodings.begin();
+        it != settings->encodings.end(); ++it, ++encoding_i)
+    {
+        if (it->source == Input::NORMAL)
+        {
+            for (unsigned int i = 0; i < n_cards; i++)
+            {
+                if (card_enable[i])
+                {
+                    ThreadParam tp;
+                    tp.p_rec = this;
+
+                    tp.p_opt = new RecordOptions;
+                    tp.p_opt->card_num = i;
+                    tp.p_opt->index = encoding_i;
+                    
+                    tp.p_opt->resolution = it->resolution;
+                    tp.p_opt->wrapping = it->wrapping;
+                    tp.p_opt->bitc = it->bitc;
+                    tp.p_opt->dir = it->dir;
+
+                    mThreadParams.push_back(tp);
+                }
+            }
+        }
+        else if (it->source == Input::QUAD)
+        {
+            ThreadParam tp;
+            tp.p_rec = this;
+
+            tp.p_opt = new RecordOptions;
+            tp.p_opt->card_num = first_enabled_card;
+            tp.p_opt->index = 0;
+            tp.p_opt->quad = true;
+            tp.p_opt->resolution = it->resolution;
+            tp.p_opt->wrapping = it->wrapping;
+            tp.p_opt->bitc = it->bitc;
+            tp.p_opt->dir = it->dir;
+
+            mThreadParams.push_back(tp);
+        }
+    }
+#if 0                
     for (unsigned int i = 0; i < n_cards; i++)
     {
         if (card_enable[i])
         {
             // For testing multiple encodings, set this to 2.
-            const unsigned int encoding_n = 1;
-            const int second_res = MOV_MATERIAL_RESOLUTION;
-
-            for (unsigned int encoding_i = 0; encoding_i < encoding_n; ++encoding_i)
+            //const unsigned int encoding_n = 1;
+            //const int second_res = MOV_MATERIAL_RESOLUTION;
+            
+            int encoding_i = 0;
+            for (std::vector<EncodeParams>::const_iterator it = settings->encodings.begin();
+                it != settings->encodings.end(); ++it, ++encoding_i)
+            //for (unsigned int encoding_i = 0; encoding_i < encoding_n; ++encoding_i)
             {
                 ThreadParam tp;
                 tp.p_rec = this;
@@ -163,15 +213,9 @@ void IngexRecorder::Setup(
                 tp.p_opt->card_num = i;
                 tp.p_opt->index = encoding_i;
                 
-                int res = settings->mxf_resolution;
-                // testing
-                if (encoding_i > 0)
-                {
-                    res = second_res;
-                }
-
-                tp.p_opt->resolution = res;
-                tp.p_opt->wrapping = ( settings->mxf ? Wrapping::MXF : Wrapping::NONE );
+                tp.p_opt->resolution = it->resolution;
+                tp.p_opt->wrapping = it->wrapping;
+                tp.p_opt->dir = it->dir;
 
                 mThreadParams.push_back(tp);
             }
@@ -181,7 +225,7 @@ void IngexRecorder::Setup(
     // Set RecordOptions for quad-split.
     //const int quad_res = settings->mxf_resolution;
     const int quad_res = MOV_MATERIAL_RESOLUTION;
-    if (settings->quad_mpeg2)
+    if (settings->quad)
     {
         ThreadParam tp;
         tp.p_rec = this;
@@ -195,6 +239,7 @@ void IngexRecorder::Setup(
 
         mThreadParams.push_back(tp);
     }
+#endif
 
     // Set further RecordOptions members.
     // Maybe these should be IngexRecorder members
@@ -224,7 +269,7 @@ bool IngexRecorder::PrepareStart(
     // If crash record, search across all cards for the minimum current (lastframe) timecode
     if (crash_record)
     {
-        int tc[MAX_CARDS];
+        int tc[MAX_CHANNELS];
 
         ACE_DEBUG((LM_DEBUG, ACE_TEXT("Crash record:\n")));
         for (unsigned int card_i = 0; card_i < n_cards; card_i++)
@@ -520,18 +565,6 @@ bool IngexRecorder::Stop( framecount_t & stop_timecode, framecount_t post_roll )
     }
 
     // Now stop record by signalling the duration in frames
-#if 0
-    for (int i = 0; i < MAX_RECORD; ++i)
-    {
-        if (record_opt[i].enabled)
-        {
-            record_opt[i].TargetDuration(capture_length);
-            ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C: Target duration set to %d\n"),
-                SOURCE_NAME[i], capture_length));
-        }
-
-    }
-#endif
     TargetDuration(capture_length);
     ACE_DEBUG((LM_DEBUG, ACE_TEXT("Target duration set to %d\n"), capture_length));
 
@@ -576,7 +609,7 @@ bool IngexRecorder::WriteMetadataFile(const char * meta_name)
     //fprintf(fp_meta, "a_tape=");
     //for (int i = 0; i < mCards; i++)
     //{
-    //  fprintf(fp_meta, "%s%s", record_opt[i].tapename.c_str(), i == MAX_CARDS - 1 ? "\n" : ",");
+    //  fprintf(fp_meta, "%s%s", record_opt[i].tapename.c_str(), i == MAX_CHANNELS - 1 ? "\n" : ",");
     //}
     fprintf(fp_meta, "enabled=");
     for (int i = 0; i < MAX_RECORD; i++)

@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorder.h,v 1.1 2007/09/11 14:08:30 stuart_hc Exp $
+ * $Id: IngexRecorder.h,v 1.2 2007/10/26 15:50:10 john_f Exp $
  *
  * Class to manage an individual recording.
  *
@@ -32,10 +32,13 @@
 #include <ace/Thread_Mutex.h>
 #include <ace/Guard_T.h>
 
-#include "IngexShm.h"  // Wrapper for shared memory API. Within this, MAX_CARDS is #defined
+// Wrapper for shared memory API.
+// Via this, MAX_CHANNELS is #defined
+#include "IngexShm.h"  
 
-// Assuming here that MAX_CARDS == 4
-const char * const SOURCE_NAME[] = { "card0", "card1", "card2", "card3" };
+// Assuming here that MAX_CHANNELS == 8
+const char * const SOURCE_NAME[] = {
+    "input0", "input1", "input2", "input3", "input4", "input5", "input6", "input7" };
 const char * const QUAD_NAME = "quad";
 
 
@@ -154,18 +157,18 @@ private:
 
 // Per-card data
 // Enables
-    bool mCardEnable[MAX_CARDS];
-    bool mTrackEnable[MAX_CARDS * 5];
+    bool mCardEnable[MAX_CHANNELS];
+    bool mTrackEnable[MAX_CHANNELS * 5];
 
 public:
 // MXF filenames
-    std::string mFileNames[MAX_CARDS * 5];
+    std::string mFileNames[MAX_CHANNELS * 5];
 
     bool mRecordingOK;
 
     //RecordOptions   record_opt[MAX_RECORD];
 private:
-    int mStartFrame[MAX_CARDS];
+    int mStartFrame[MAX_CHANNELS];
 
 // Per-thread data
     std::vector<ThreadParam> mThreadParams;
