@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderSettings.h,v 1.1 2007/09/11 14:08:33 stuart_hc Exp $
+ * $Id: RecorderSettings.h,v 1.2 2007/10/26 15:44:20 john_f Exp $
  *
  * Recorder Configuration.
  *
@@ -26,12 +26,40 @@
 #define RecorderSettings_h
 
 #include <string>
+#include <vector>
 
 #include "Database.h"
+
+namespace Wrapping
+{
+    enum EnumType { NONE, MXF };
+}
+
+// NB. Coding enum type not used at present
+namespace Coding
+{
+    enum EnumType { UNCOMPRESSED, DV25, DV50, MJPEG21, MJPEG31, MJPEG101, MJPEG101M, MJPEG151S, MJPEG201, MPEG2 };
+}
+
+namespace Input
+{
+    enum EnumType { NORMAL, QUAD };
+}
+
+struct EncodeParams
+{
+    int resolution;
+    Wrapping::EnumType wrapping;
+    Input::EnumType source;
+    bool bitc;
+    std::string dir;
+};
 
 
 /**
 Holds configuration parameters for the Recorder.
+This class translates from the less elegant database representation (encode1_resolution etc.)
+to a more elegant vector of encodings to be performed.
 */
 class RecorderSettings
 {
@@ -42,28 +70,25 @@ public:
     bool Update(const std::string & name);
 
     // Record Parameters
-    bool raw;
-    bool mxf;
-    bool quad_mpeg2;
+    prodauto::Rational image_aspect;
+    int timecode_mode;
+    std::string copy_command;
+
+    std::vector<EncodeParams> encodings;
+
     bool browse_audio;
 
-    prodauto::Rational image_aspect;
-    int mxf_resolution;
     int mpeg2_bitrate;
     int raw_audio_bits;
     int mxf_audio_bits;
     int browse_audio_bits;
 
-    std::string raw_dir;
-    std::string mxf_dir;
     std::string mxf_subdir_creating;
     std::string mxf_subdir_failures;
-    std::string browse_dir;
-    std::string copy_command;
 
-    int timecode_mode;
 
 private:
+    RecorderSettings();
     static RecorderSettings * mInstance;
 };
 

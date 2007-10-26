@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderSettings.cpp,v 1.1 2007/09/11 14:08:33 stuart_hc Exp $
+ * $Id: RecorderSettings.cpp,v 1.2 2007/10/26 15:44:20 john_f Exp $
  *
  * Recorder Configuration.
  *
@@ -29,27 +29,32 @@
 // These are the default values that will be used if
 // config cannot be read from the database.
 
-const bool MXF = false; // Can't do MXF without database.
-const bool RAW = true;
-const bool QUAD_MPEG2 = false;
-const bool BROWSE_AUDIO = true;
+const prodauto::Rational    IMAGE_ASPECT    = { 4, 3 };
+const int                   TIMECODE_MODE   = LTC_PARAMETER_VALUE;
+const char * const          COPY_COMMAND    = "";
 
-const prodauto::Rational IMAGE_ASPECT = { 4, 3 };
-const int MXF_RESOLUTION = DV50_MATERIAL_RESOLUTION;
+const int           ENCODE1_RESOLUTION  = DV50_MATERIAL_RESOLUTION;
+const int           ENCODE1_WRAPPING    = UNSPECIFIED_FILE_FORMAT_TYPE;
+const char * const  ENCODE1_DIR         = "/video";
+
+const int           ENCODE2_RESOLUTION  = 0;
+const int           ENCODE2_WRAPPING    = UNSPECIFIED_FILE_FORMAT_TYPE;
+const char * const  ENCODE2_DIR         = "/video";
+
+const int           QUAD_RESOLUTION  = 0;
+const int           QUAD_WRAPPING    = UNSPECIFIED_FILE_FORMAT_TYPE;
+const char * const  QUAD_DIR         = "/video";
+
+const bool BROWSE_AUDIO = false;
+
 const int MPEG2_BITRATE = 5000;
 const int RAW_AUDIO_BITS = 32;
 const int MXF_AUDIO_BITS = 16;
 const int BROWSE_AUDIO_BITS = 16;
 
-static const char * RAW_DIR = "/video/raw/";
-static const char * MXF_DIR = "/video/mxf/";
-static const char * MXF_SUBDIR_CREATING = "Creating/";
-static const char * MXF_SUBDIR_FAILURES = "Failures/";
-static const char * BROWSE_DIR = "/video/browse/";
+const char * const MXF_SUBDIR_CREATING = "Creating/";
+const char * const MXF_SUBDIR_FAILURES = "Failures/";
 
-static const char * COPY_COMMAND = "";
-
-const int TIMECODE_MODE = LTC_PARAMETER_VALUE;
 
 
 // static instance pointer
@@ -65,6 +70,20 @@ RecorderSettings * RecorderSettings::Instance()
     return mInstance; // address of sole instance
 }
 
+// Constructor
+RecorderSettings::RecorderSettings() :
+    image_aspect(IMAGE_ASPECT),
+    timecode_mode(TIMECODE_MODE),
+    copy_command(COPY_COMMAND),
+    browse_audio(BROWSE_AUDIO),
+    mpeg2_bitrate(MPEG2_BITRATE),
+    raw_audio_bits(RAW_AUDIO_BITS),
+    mxf_audio_bits(MXF_AUDIO_BITS),
+    browse_audio_bits(BROWSE_AUDIO_BITS),
+    mxf_subdir_creating(MXF_SUBDIR_CREATING),
+    mxf_subdir_failures(MXF_SUBDIR_FAILURES)
+{
+}
 
 /**
 Update the configuration parameters, for example from a database.
@@ -89,49 +108,115 @@ bool RecorderSettings::Update(const std::string & name)
         rc = rec->getConfig();
     }
 
+    int encode1_resolution;
+    int encode1_wrapping;
+    std::string encode1_dir;
+    int encode2_resolution;
+    int encode2_wrapping;
+    std::string encode2_dir;
+    int quad_resolution;
+    int quad_wrapping;
+    std::string quad_dir;
+
     if (rc)
     {
+        image_aspect = rc->getRationalParam("IMAGE_ASPECT", IMAGE_ASPECT);
+        timecode_mode = rc->getIntParam("TIMECODE_MODE", TIMECODE_MODE);
+        copy_command = rc->getStringParam("COPY_COMMAND", COPY_COMMAND);
+
+        encode1_resolution = rc->getIntParam("ENCODE1_RESOLUTION", ENCODE1_RESOLUTION);
+        encode1_wrapping = rc->getIntParam("ENCODE1_WRAPPING", ENCODE1_WRAPPING);
+        encode1_dir = rc->getStringParam("ENCODE1_DIR", ENCODE1_DIR);
+
+        encode2_resolution = rc->getIntParam("ENCODE2_RESOLUTION", ENCODE2_RESOLUTION);
+        encode2_wrapping = rc->getIntParam("ENCODE2_WRAPPING", ENCODE2_WRAPPING);
+        encode2_dir = rc->getStringParam("ENCODE2_DIR", ENCODE2_DIR);
+
+        quad_resolution = rc->getIntParam("QUAD_RESOLUTION", QUAD_RESOLUTION);
+        quad_wrapping = rc->getIntParam("QUAD_WRAPPING", QUAD_WRAPPING);
+        quad_dir = rc->getStringParam("QUAD_DIR", QUAD_DIR);
+
+#if 0
         mxf = rc->getBoolParam("MXF", MXF);
         raw = rc->getBoolParam("RAW", RAW);
-        quad_mpeg2 = rc->getBoolParam("QUAD_MPEG2", QUAD_MPEG2);
+        quad = rc->getBoolParam("QUAD", QUAD);
         browse_audio = rc->getBoolParam("BROWSE_AUDIO", BROWSE_AUDIO);
 
-        image_aspect = rc->getRationalParam("IMAGE_ASPECT", IMAGE_ASPECT);
-        mxf_resolution = rc->getIntParam("MXF_RESOLUTION", MXF_RESOLUTION);
         mpeg2_bitrate = rc->getIntParam("MPEG2_BITRATE", MPEG2_BITRATE);
         raw_audio_bits = rc->getIntParam("RAW_AUDIO_BITS", RAW_AUDIO_BITS);
         mxf_audio_bits = rc->getIntParam("MXF_AUDIO_BITS", MXF_AUDIO_BITS);
 
         raw_dir = rc->getStringParam("RAW_DIR", RAW_DIR);
-        mxf_dir = rc->getStringParam("MXF_DIR", MXF_DIR);
         mxf_subdir_creating = rc->getStringParam("MXF_SUBDIR_CREATING", MXF_SUBDIR_CREATING);
         mxf_subdir_failures = rc->getStringParam("MXF_SUBDIR_FAILURES", MXF_SUBDIR_FAILURES);
         browse_dir = rc->getStringParam("BROWSE_DIR", BROWSE_DIR);
-        copy_command = rc->getStringParam("COPY_COMMAND", COPY_COMMAND);
-
-        timecode_mode = rc->getIntParam("TIMECODE_MODE", TIMECODE_MODE);
+#endif
     }
     else
     {
+        image_aspect = IMAGE_ASPECT;
+        timecode_mode = TIMECODE_MODE;
+        copy_command = COPY_COMMAND;
+
+        encode1_resolution = ENCODE1_RESOLUTION;
+        encode1_wrapping = ENCODE1_WRAPPING;
+        encode1_dir = ENCODE1_DIR;
+
+        encode2_resolution = ENCODE2_RESOLUTION;
+        encode2_wrapping = ENCODE2_WRAPPING;
+        encode2_dir = ENCODE2_DIR;
+
+        quad_resolution = QUAD_RESOLUTION;
+        quad_wrapping = QUAD_WRAPPING;
+        quad_dir = QUAD_DIR;
+
+#if 0
         mxf = MXF;
         raw = RAW;
-        quad_mpeg2 = QUAD_MPEG2;
+        quad = QUAD;
         browse_audio = BROWSE_AUDIO;
 
-        image_aspect = IMAGE_ASPECT;
-        mxf_resolution = MXF_RESOLUTION;
         mpeg2_bitrate = MPEG2_BITRATE;
         raw_audio_bits = RAW_AUDIO_BITS;
         mxf_audio_bits = MXF_AUDIO_BITS;
 
         raw_dir = RAW_DIR;
-        mxf_dir = MXF_DIR;
         mxf_subdir_creating = MXF_SUBDIR_CREATING;
         mxf_subdir_failures = MXF_SUBDIR_FAILURES;
         browse_dir = BROWSE_DIR;
-        copy_command = COPY_COMMAND;
+#endif
+    }
 
-        timecode_mode = TIMECODE_MODE;
+    encodings.clear();
+    if (encode1_resolution)
+    {
+        EncodeParams ep;
+        ep.resolution = encode1_resolution;
+        ep.wrapping = (encode1_wrapping == MXF_FILE_FORMAT_TYPE ? Wrapping::MXF : Wrapping::NONE);
+        ep.source = Input::NORMAL;
+        ep.dir = encode1_dir;
+        ep.bitc = false;
+        encodings.push_back(ep);
+    }
+    if (encode2_resolution)
+    {
+        EncodeParams ep;
+        ep.resolution = encode2_resolution;
+        ep.wrapping = (encode2_wrapping == MXF_FILE_FORMAT_TYPE ? Wrapping::MXF : Wrapping::NONE);
+        ep.source = Input::NORMAL;
+        ep.dir = encode2_dir;
+        ep.bitc = false;
+        encodings.push_back(ep);
+    }
+    if (quad_resolution)
+    {
+        EncodeParams ep;
+        ep.resolution = quad_resolution;
+        ep.wrapping = (quad_wrapping == MXF_FILE_FORMAT_TYPE ? Wrapping::MXF : Wrapping::NONE);
+        ep.source = Input::QUAD;
+        ep.dir = quad_dir;
+        ep.bitc = true;
+        encodings.push_back(ep);
     }
 
     delete rec;
