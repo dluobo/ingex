@@ -1,5 +1,5 @@
 /*
- * $Id: IngexShm.cpp,v 1.1 2007/09/11 14:08:30 stuart_hc Exp $
+ * $Id: IngexShm.cpp,v 1.2 2007/10/26 16:00:41 john_f Exp $
  *
  * Interface for reading audio/video data from shared memory.
  *
@@ -51,11 +51,11 @@ int IngexShm::Init()
 // but with the settings below the code will still compile.
 #ifdef WIN32
     const key_t control_shm_key = "control";
-    const key_t card_shm_key[MAX_CARDS] = { "card0", "card1", "card2", "card3" };
+    const key_t card_shm_key[MAX_CHANNELS] = { "card0", "card1", "card2", "card3" };
     const int shm_flags = 0;
 #else
     const key_t control_shm_key = 9;
-    const key_t card_shm_key[MAX_CARDS] = { 10, 11, 12, 13 };
+    const key_t card_shm_key[MAX_CHANNELS] = { 10, 11, 12, 13, 14, 15, 16, 17 };
     const int shm_flags = SHM_RDONLY;
 #endif
 

@@ -1,5 +1,5 @@
 /*
- * $Id: IngexShm.h,v 1.1 2007/09/11 14:08:30 stuart_hc Exp $
+ * $Id: IngexShm.h,v 1.2 2007/10/26 16:01:22 john_f Exp $
  *
  * Interface for reading audio/video data from shared memory.
  *
@@ -83,7 +83,7 @@ public:
     {
 		//ACE_DEBUG((LM_DEBUG, ACE_TEXT("Timecode(%d, %d)\n"), card, frame));
         uint8_t * p_tc = mRing[card] + mpControl->elementsize * (frame % mpControl->ringlen)
-            + mpControl->tc_offset - (mTcMode == LTC ? 4 : 0);
+            + (mTcMode == LTC ? mpControl->ltc_offset : mpControl->tc_offset);
         return * (int32_t *) p_tc;
     }
     int32_t CurrentTimecode(unsigned int card)
@@ -101,14 +101,14 @@ public:
     {
         return mRing[card] + mpControl->elementsize * (frame % mpControl->ringlen);
     }
-    int sizeVideo422() { return 720*576*2; }
+    int sizeVideo422() { return mpControl->width*mpControl->height*2; }
 
     uint8_t * pVideo420(unsigned int card, unsigned int frame)
     {
         return mRing[card] + mpControl->elementsize * (frame % mpControl->ringlen)
-            + mpControl->audio12_offset + mpControl->audio_size;
+            + mpControl->sec_video_offset;
     }
-    unsigned int sizeVideo420() { return 720*576*3/2; }
+    unsigned int sizeVideo420() { return  mpControl->width*mpControl->height*3/2; }
 
     int32_t * pAudio12(unsigned int card, unsigned int frame)
     {
@@ -134,7 +134,7 @@ protected:
 
 private:
     unsigned int mCards;
-    uint8_t * mRing[MAX_CARDS];
+    uint8_t * mRing[MAX_CHANNELS];
     NexusControl * mpControl;
     TcEnum mTcMode;
 // static instance pointer
