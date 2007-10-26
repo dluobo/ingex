@@ -1,7 +1,7 @@
 # AAFSDKINSTALL is path to installed AAF SDK includes and libs (i.e. after an SDK make install)
 ifneq "$(MAKECMDGOALS)" "clean"
 	ifndef AAFSDKINSTALL
-		$(error Please set the AAFSDKINSTALL environment variable to the location of your installed AAFSDK files)
+$(error Please set the AAFSDKINSTALL environment variable to the location of your installed AAFSDK files)
 	endif
 endif	
 
