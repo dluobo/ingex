@@ -1,7 +1,7 @@
 #!/usr/bin/perl -W
 
 #
-# $Id: media_transfer.pl,v 1.1 2007/09/11 14:08:44 stuart_hc Exp $
+# $Id: media_transfer.pl,v 1.2 2007/10/26 16:29:43 john_f Exp $
 #
 # 
 #
@@ -38,6 +38,7 @@ my $successDirectory = "/video/mxf/";
 my $destIncomingDirectory = "/bigmo/video/incoming"; 
 my $destLiveDirectory = "/bigmo/video/";
 
+my $useDateSubdirectory = 0;
 
 
 # get options
@@ -51,9 +52,11 @@ sub print_usage
         . "    -s <dir>     Success directory (default = '$successDirectory')\n"
         . "    -i <dir>     Destination incoming directory (default = '$destIncomingDirectory')\n"
         . "    -l <dir>     Destination live directory (default = '$destLiveDirectory')\n"
+        . "    -d           Place file in live subdirectory with name equal to the date string in the filename\n"
         . "\n\n"
         . "The files are rsync-ed from the success directory to the destination\n"
-        . "incoming directory, and then from there moved to the live directory.\n"
+        . "incoming directory, and then from there moved to the live directory \n"
+        . "(or subdirectory when option -d is used).\n"
         . "Files that have been rsync-ed and which are older than the given time\n"
         . "period, will be deleted.\n";
 
@@ -69,10 +72,11 @@ $keepSuccessPeriod = $opts{"p"} if ($opts{"p"});
 $successDirectory = $opts{"s"} if ($opts{"s"});
 $destIncomingDirectory = $opts{"i"} if ($opts{"i"});
 $destLiveDirectory = $opts{"l"} if ($opts{"l"});
+$useDateSubdirectory = 1 if ($opts{"d"});
 
 
 
-# check that settings
+# check the settings
 
 die "invalid time period, $keepSuccessPeriod\n" if ($keepSuccessPeriod !~ /\d+/ || $keepSuccessPeriod < 0); 
 die "success directory, '$successDirectory', does not exist\n" unless (-e $successDirectory);
@@ -130,8 +134,23 @@ closedir(SUCCESS);
 
 foreach my $essenceFile (sort { $a->{"mtime"} <=> $b->{"mtime"} } @essenceFiles)
 {
-    my $fileInDestLive = $destLiveDirectory . "/" . $essenceFile->{"fname"};
     my $fileInDestIncoming = $destIncomingDirectory . "/" . $essenceFile->{"fname"};
+    my $fileInDestLive;
+    my $fileInDestLiveSubDirectory = undef;
+    if ($useDateSubdirectory && $essenceFile->{"fname"} =~ /\d{8}[^\/]*$/)
+    {
+        $fileInDestLiveSubDirectory = $destLiveDirectory 
+            . "/"
+            . ($essenceFile->{"fname"} =~ /(\d{8})[^\/]*$/)[0];
+        $fileInDestLive = $fileInDestLiveSubDirectory 
+            . "/"
+            . $essenceFile->{"fname"};
+    }
+    else
+    {
+        $fileInDestLive = $destLiveDirectory . "/" . $essenceFile->{"fname"};
+    }
+
     
     if (-e $fileInDestLive) # file exists in the live directory
     {
@@ -223,6 +242,19 @@ foreach my $essenceFile (sort { $a->{"mtime"} <=> $b->{"mtime"} } @essenceFiles)
         }
         else
         {
+            # make live subdirectory if it doesn't yet exist
+            if ($fileInDestLiveSubDirectory)
+            {
+                if (-e $fileInDestLiveSubDirectory && !(-d $fileInDestLiveSubDirectory))
+                {
+                    # it is not a directory
+                    print "Existing file conflicts with live subdirectory $fileInDestLiveSubDirectory\n";
+                    exit(1);
+                }
+                
+                mkdir $fileInDestLiveSubDirectory, 0777;
+            }
+            
             # move the file from the incoming directory to the live directory
             print "moving file '$fileInDestIncoming' to '$fileInDestLive'\n"; 
             if (!rename($fileInDestIncoming, $fileInDestLive))
