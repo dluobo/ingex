@@ -12,6 +12,10 @@ extern "C"
 #include "media_sink.h"
 
 
+/* minimum number of DVS fifo buffers (must be > 4) */
+#define MIN_NUM_DVS_FIFO_BUFFERS        8
+
+
 typedef enum
 {
     VITC_AS_SDI_VITC = 1,   /* allow 0 to be used in int type to indicate value is null */

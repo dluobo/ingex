@@ -211,9 +211,9 @@ static uint8_t *rec_ring_timecode(SharedMemSource *source, int track, int lastFr
 {
     int card = source->card;
 
-    int offset = pctl->tc_offset;                    // VITC
+    int offset = pctl->tc_offset;         // VITC
     if (track == 1)
-        offset = pctl->tc_offset - sizeof(int);        // LTC
+        offset = pctl->ltc_offset;        // LTC
 
     return ring[card] + pctl->elementsize * (lastFrame % pctl->ringlen) + offset;
 }
@@ -406,9 +406,9 @@ int shared_mem_open(const char *card_name, MediaSource** source)
     
     /* check card number is within range */
     cardNum = atol(card_name);
-    if (cardNum < 0 || cardNum >= MAX_CARDS)
+    if (cardNum < 0 || cardNum >= MAX_CHANNELS)
     {
-        ml_log_error("Card %s is out of range of maximum %d supported cards\n", card_name, MAX_CARDS);
+        ml_log_error("Card %s is out of range of maximum %d supported cards\n", card_name, MAX_CHANNELS);
         return 0;
     }
 

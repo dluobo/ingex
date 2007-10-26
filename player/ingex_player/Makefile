@@ -4,9 +4,9 @@ PLAYER_INSTALL_PREFIX ?= /usr/local
 ifneq "$(MAKECMDGOALS)" "clean"
 
 DVS_PATH := $(shell for f in /usr/local /usr; do test -e $$f/include/dvs_fifo.h && echo $$f && break; done)
-ifneq "$(DVS_INCLUDE_PATH)" ""
-	ifndef DVS_SDK_INSTALL
-$(warning no DVS available - set the DVS_SDK_INSTALL environment variable to the location of your installed DVS SDK files)
+ifeq "$(DVS_PATH)" ""
+	ifndef DVSSDK
+$(warning no DVS available - set the DVSSDK environment variable to the location of your installed DVS SDK files)
 	endif
 endif
 
@@ -59,9 +59,10 @@ ifdef DVS_PATH
 	LIBS += -ldvsoem
 	CFLAGS += -DHAVE_DVS
 else 
-	ifdef DVS_SDK_INSTALL
-		INCLUDEDIRS += -I$(DVS_SDK_INSTALL)/development/header
-		LIBDIRS += -L$(DVS_SDK_INSTALL)/linux/lib
+	ifdef DVSSDK
+		INCLUDEDIRS += -I$(DVSSDK)/development/header
+		#LIBDIRS += -L$(DVSSDK)/linux/lib
+		LIBDIRS += -L$(DVSSDK)/linux-x86/lib
 		LIBS += -ldvsoem
 		CFLAGS += -DHAVE_DVS
 	endif

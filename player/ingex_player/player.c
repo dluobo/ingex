@@ -700,7 +700,7 @@ static void usage(const char* cmd)
     fprintf(stderr, "  --log-buf <name>         Log source and sink buffer state to file\n");
 #if defined(HAVE_DVS)    
     fprintf(stderr, "  --dvs                    SDI ouput using the DVS card\n");
-    fprintf(stderr, "  --dvs-buf <size>         Size of the DVS buffer (default is 12; must be >= 4; 0 means maximim)\n");
+    fprintf(stderr, "  --dvs-buf <size>         Size of the DVS buffer (default is 12; must be >= %d; 0 means maximim)\n", MIN_NUM_DVS_FIFO_BUFFERS);
     fprintf(stderr, "  --dual                   Dual sink with both DVS card output and X server display output\n");
     fprintf(stderr, "  --disable-sdi-osd        Disable the OSD on the SDI output\n");
     fprintf(stderr, "  --ltc-as-vitc            Outputs the source LTC to the SDI output VITC\n");
@@ -945,7 +945,7 @@ int main(int argc, const char **argv)
                 return 1;
             }
             if (sscanf(argv[cmdlnIndex + 1], "%d\n", &dvsBufferSize) != 1 ||
-                (dvsBufferSize != 0 && dvsBufferSize < 4))
+                (dvsBufferSize != 0 && dvsBufferSize < MIN_NUM_DVS_FIFO_BUFFERS))
             {
                 usage(argv[0]);
                 fprintf(stderr, "Invalid argument for %s\n", argv[cmdlnIndex]);

@@ -39,7 +39,7 @@ public:
         bool initiallyLocked, bool useWorkerThreads, bool applyQuadSplitFilter,
         int srcBufferSize, bool disableSDIOSD, bool disableX11OSD, Rational& sourceAspectRatio, 
         Rational& pixelAspectRatio, Rational& monitorAspectRatio, float scale,
-        bool disablePCAudio, int audioDevice);
+        bool disablePCAudio, int audioDevice, int numAudioLevelMonitors, float audioLineupLevel);
     LocalIngexPlayer(PlayerOutputType outputType);
     
     virtual ~LocalIngexPlayer();
@@ -134,6 +134,8 @@ private:
     float _prevScale;
     bool _disablePCAudio;
     int _audioDevice;
+    int _numAudioLevelMonitors;
+    float _audioLineupLevel;
 
     pthread_rwlock_t _playStateRWLock;
     LocalIngexPlayerState* _playState;

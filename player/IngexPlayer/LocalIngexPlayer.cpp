@@ -20,6 +20,7 @@
 #include <dv_stream_connect.h>
 #include <mjpeg_stream_connect.h>
 #include <audio_sink.h>
+#include <audio_level_sink.h>
 #include <version.h>
 #include <utils.h>
 #include <logging.h>
@@ -351,14 +352,15 @@ LocalIngexPlayer::LocalIngexPlayer(PlayerOutputType outputType, bool videoSwitch
     int numFFMPEGThreads, bool initiallyLocked, bool useWorkerThreads, bool applyQuadSplitFilter,
     int srcBufferSize, bool disableSDIOSD, bool disableX11OSD, Rational& sourceAspectRatio, 
     Rational& pixelAspectRatio, Rational& monitorAspectRatio, float scale, bool disablePCAudio,
-    int audioDevice)
+    int audioDevice, int numAudioLevelMonitors, float audioLineupLevel)
 : _nextOutputType(outputType), _outputType(X11_OUTPUT), _actualOutputType(X11_OUTPUT), _videoSwitch(videoSwitch), _numFFMPEGThreads(numFFMPEGThreads),
 _initiallyLocked(initiallyLocked), _useWorkerThreads(useWorkerThreads), 
 _applyQuadSplitFilter(applyQuadSplitFilter), _srcBufferSize(srcBufferSize), 
 _disableSDIOSD(disableSDIOSD), _disableX11OSD(disableX11OSD), _x11WindowName("Ingex Player"), 
 _sourceAspectRatio(sourceAspectRatio), _pixelAspectRatio(pixelAspectRatio),
 _monitorAspectRatio(monitorAspectRatio), _scale(scale), _prevScale(scale),
-_disablePCAudio(disablePCAudio), _audioDevice(audioDevice)
+_disablePCAudio(disablePCAudio), _audioDevice(audioDevice), 
+_numAudioLevelMonitors(numAudioLevelMonitors), _audioLineupLevel(audioLineupLevel) 
 {
     initialise();
 }
@@ -367,7 +369,8 @@ LocalIngexPlayer::LocalIngexPlayer(PlayerOutputType outputType)
 : _nextOutputType(outputType), _outputType(X11_OUTPUT), _actualOutputType(X11_OUTPUT), _videoSwitch(true), _numFFMPEGThreads(4),
 _initiallyLocked(false), _useWorkerThreads(true), 
 _applyQuadSplitFilter(true), _srcBufferSize(0), _disableSDIOSD(false), _disableX11OSD(false), 
-_x11WindowName("Ingex Player"), _scale(1.0), _prevScale(1.0), _disablePCAudio(false), _audioDevice(0)
+_x11WindowName("Ingex Player"), _scale(1.0), _prevScale(1.0), _disablePCAudio(false), _audioDevice(0), 
+_numAudioLevelMonitors(2), _audioLineupLevel(-18.0)
 {
     _sourceAspectRatio.num = 0;
     _sourceAspectRatio.den = 0;
@@ -784,6 +787,18 @@ bool LocalIngexPlayer::start(vector<string> mxfFilenames, vector<bool>& opended)
                 CHK_OTHROW(qvs_create_video_switch(newPlayState->mediaSink, 1, _applyQuadSplitFilter, &videoSwitch));
                 newPlayState->mediaSink = vsw_get_media_sink(videoSwitch);
             }
+            
+            
+            // create audio level monitors
+            
+            if (_numAudioLevelMonitors > 0)
+            {
+                AudioLevelSink* audioLevelSink;
+                CHK_OTHROW(als_create_audio_level_sink(newPlayState->mediaSink, _numAudioLevelMonitors, 
+                    _audioLineupLevel, &audioLevelSink));
+                newPlayState->mediaSink = als_get_media_sink(audioLevelSink);
+            }
+
         }
     
         
