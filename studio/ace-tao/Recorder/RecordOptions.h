@@ -1,5 +1,5 @@
 /*
- * $Id: RecordOptions.h,v 1.1 2007/09/11 14:08:31 stuart_hc Exp $
+ * $Id: RecordOptions.h,v 1.2 2007/10/26 16:07:21 john_f Exp $
  *
  * Class for card-specific (i.e. thread-specific) recording data.
  *
@@ -32,16 +32,7 @@
 
 #include "integer_types.h"
 #include "recorder_types.h" // for framecount_t
-
-namespace Wrapping
-{
-    enum EnumType { NONE, MXF };
-}
-
-namespace Coding
-{
-    enum EnumType { UNCOMPRESSED, DV25, DV50, MJPEG21, MJPEG31, MJPEG101, MJPEG101M, MJPEG151S, MJPEG201, MPEG2 };
-}
+#include "RecorderSettings.h" // for Wrapping::EnumType
 
 // Description of a particular encoding, to be performed in a thread.
 class RecordOptions
@@ -53,9 +44,10 @@ public:
     int index; ///< To distinguish multiple encodings on the same input/card.
     bool quad; ///< True for encoding from multiple inputs/cards.
 
-    Wrapping::EnumType wrapping;
     Coding::EnumType coding;
     int resolution; // using this rather than coding
+    Wrapping::EnumType wrapping;
+    std::string dir;
     bool bitc; ///< True for burnt-in timecode
 
     std::string file_ident;
