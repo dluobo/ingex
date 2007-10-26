@@ -35,7 +35,7 @@ static char *framesToStr(int tc, char *s)
 extern int main(int argc, char *argv[])
 {
 	int				shm_id, control_id;
-	uint8_t			*ring[4];
+	uint8_t			*ring[MAX_CHANNELS];
 	NexusControl	*pctl = NULL;
 	int				tc_loc = 0;			// 0 for VITC, -4 for LTC
 
@@ -99,8 +99,8 @@ extern int main(int argc, char *argv[])
 			printf("  attached to card[%d]\n", i);
 	}
 
-	int tc[4];
-	int last_saved[4] = {-1, -1, -1, -1};
+	int tc[MAX_CHANNELS];
+	int last_saved[MAX_CHANNELS] = {-1, -1, -1, -1, -1, -1, -1, -1};
 	int first_display = 1;
 
 	while (1)
