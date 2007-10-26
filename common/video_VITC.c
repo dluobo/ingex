@@ -1,5 +1,5 @@
 /*
- * $Id: video_VITC.c,v 1.1 2007/09/11 14:08:01 stuart_hc Exp $
+ * $Id: video_VITC.c,v 1.2 2007/10/26 15:04:12 john_f Exp $
  *
  * Logging and debugging utility functions.
  *
@@ -55,10 +55,10 @@ extern int dvs_tc_to_int(int tc)
 {
 	// E.g. 0x09595924
 	// E.g. 0x10000000
-	int hours = dvs_to_int[(tc & 0x7f000000) >> 24];
+	int hours = dvs_to_int[(tc & 0x3f000000) >> 24];
 	int mins  = dvs_to_int[(tc & 0x007f0000) >> 16];
 	int secs  = dvs_to_int[(tc & 0x00007f00) >> 8];
-	int frames= dvs_to_int[(tc & 0x0000007f)];
+	int frames= dvs_to_int[(tc & 0x0000003f)];
 
 	int tc_as_total =	hours * (25*60*60) +
 						mins * (25*60) +
