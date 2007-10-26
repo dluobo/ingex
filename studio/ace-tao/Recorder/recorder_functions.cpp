@@ -1,5 +1,5 @@
 /*
- * $Id: recorder_functions.cpp,v 1.1 2007/09/11 14:08:31 stuart_hc Exp $
+ * $Id: recorder_functions.cpp,v 1.2 2007/10/26 16:02:48 john_f Exp $
  *
  * Functions which execute in recording threads.
  *
@@ -123,7 +123,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
 
     // burnt-in timecode settings
     bool bitc = p_opt->bitc;
-    bitc = true; //tmp test
+
     unsigned int tc_xoffset;
     unsigned int tc_yoffset;
     if (quad_video)
@@ -242,9 +242,9 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     }
 
     // Directories
-    const std::string & raw_dir = settings->raw_dir;
-    const std::string & browse_dir = settings->browse_dir;
-    const std::string & mxf_dir = settings->mxf_dir;
+    //const std::string & raw_dir = settings->raw_dir;
+    //const std::string & browse_dir = settings->browse_dir;
+    //const std::string & mxf_dir = settings->mxf_dir;
     const std::string & mxf_subdir_creating = settings->mxf_subdir_creating;
     const std::string & mxf_subdir_failures = settings->mxf_subdir_failures;
 
@@ -265,7 +265,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     if (raw && enable_video)
     {
         std::ostringstream fname;
-        fname << raw_dir << p_opt->file_ident;
+        fname << p_opt->dir << p_opt->file_ident;
         switch (resolution)
         {
         case DV25_MATERIAL_RESOLUTION:
@@ -292,7 +292,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     if (raw && enable_audio12)
     {
         std::ostringstream fname;
-        fname << raw_dir << p_opt->file_ident << "_12.wav";
+        fname << p_opt->dir << p_opt->file_ident << "_12.wav";
         const char * f = fname.str().c_str();
 
         if (NULL == (fp_audio12 = fopen(f, "wb")))
@@ -308,7 +308,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     if (raw && enable_audio34)
     {
         std::ostringstream fname;
-        fname << raw_dir << p_opt->file_ident << "_34.wav";
+        fname << p_opt->dir << p_opt->file_ident << "_34.wav";
         const char * f = fname.str().c_str();
 
         if (NULL == (fp_audio34 = fopen(f, "wb")))
@@ -326,7 +326,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     if (browse_audio)
     {
         std::ostringstream fname;
-        fname << browse_dir << p_opt->file_ident << ".wav";
+        fname << p_opt->dir << p_opt->file_ident << ".wav";
         const char * f = fname.str().c_str();
 
         if (NULL == (fp_audio_browse = fopen(f, "wb")))
@@ -363,7 +363,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
 
     // Initialisation for browse av files
     std::ostringstream browse_filename;
-    browse_filename << browse_dir << p_opt->file_ident;
+    browse_filename << p_opt->dir << p_opt->file_ident;
 
     // ffmpeg av encoder
     ffmpeg_encoder_av_t * enc_av = 0;
@@ -412,9 +412,9 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         std::ostringstream destination_path;
         std::ostringstream creating_path;
         std::ostringstream failures_path;
-        destination_path << mxf_dir;
-        creating_path << mxf_dir << mxf_subdir_creating;
-        failures_path << mxf_dir << mxf_subdir_failures;
+        destination_path << p_opt->dir;
+        creating_path << p_opt->dir << '/' << mxf_subdir_creating;
+        failures_path << p_opt->dir << '/' << mxf_subdir_failures;
 
         try
         {
@@ -457,8 +457,8 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                 unsigned int track = i + 1;
                 if (writer->trackIsPresent(track))
                 {
-                    //opt.file_name[i] = mxf_dir + writer->getFilename(track);
-                    std::string fname = mxf_dir + writer->getFilename(track);
+                    //std::string fname = p_opt->dir + '/' + writer->getFilename(track);
+                    std::string fname = writer->getDestinationFilename(writer->getFilename(track));
                     p_rec->mFileNames[card_i * 5 + i] = fname;
                     ACE_DEBUG((LM_DEBUG, ACE_TEXT("File name: %C\n"), fname.c_str()));
                 }
