@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.1 2007/09/11 14:08:00 stuart_hc Exp $
+# $Id: Makefile,v 1.2 2007/10/26 15:07:40 john_f Exp $
 #
 # Makefile for building common functions
 #
@@ -22,7 +22,7 @@
 #
 
 CC=gcc
-OPT=-DNDEBUG -O3 -mmmx -msse2
+OPT=-DNDEBUG -O0 -mmmx -msse2
 INCLUDES=
 CFLAGS=-Wall -W -g -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE $(OPT) $(INCLUDES)
 
@@ -38,26 +38,32 @@ LIBCOMMON=libcommon.a
 PROGS=unittests
 
 .PHONY: all
-all: YUVlib $(LIBCOMMON) $(PROGS)
+all: YUVlib $(LIBCOMMON) $(PROGS) tools
 
 $(LIBCOMMON): $(OBJECTS)
 	ar rcv $(LIBCOMMON) $(OBJECTS)
 
 unittests: unittests.c $(LIBCOMMON)
-	gcc -Wall -W -g unittests.c -o unittests $(LIBCOMMON)
+	gcc -Wall -W -g unittests.c -o unittests $(LIBCOMMON) -lm
 
 .PHONY: check
-check:
+check: all
 	./unittests
 
 .PHONY: valgrind-check
-valgrind-check:
+valgrind-check: all
 	valgrind ./unittests
 
 .PHONY: clean
 clean:
+	cd YUVlib && $(MAKE) $@
+	cd tools && $(MAKE) $@
 	rm -f $(LIBCOMMON) $(OBJECTS) $(PROGS)
 	
 .PHONY: YUVlib
 YUVlib:
-	@cd YUVlib && $(MAKE)
+	cd YUVlib && $(MAKE)
+
+.PHONY: tools
+tools:
+	cd tools && $(MAKE)
