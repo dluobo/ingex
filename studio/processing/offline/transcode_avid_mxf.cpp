@@ -1,5 +1,5 @@
 /*
- * $Id: transcode_avid_mxf.cpp,v 1.1 2007/09/11 14:08:45 stuart_hc Exp $
+ * $Id: transcode_avid_mxf.cpp,v 1.2 2007/10/26 16:44:50 john_f Exp $
  *
  * Transcodes Avid MXF files
  *
@@ -28,6 +28,7 @@
 #include <string.h>
 #include <limits.h>
 #include <assert.h>
+#include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -36,8 +37,8 @@ extern "C"
 {
 // TODO: fix compile warning
 // /usr/local/include/ffmpeg/avcodec.h:3048:5: warning: "EINVAL" is not defined
-#include <avcodec.h>
-#include <avformat.h>
+#include <ffmpeg/avcodec.h>
+#include <ffmpeg/avformat.h>
 
 #include <mxf/mxf.h>
 #include <mxf/mxf_avid.h>
@@ -101,6 +102,9 @@ static const prodauto::Interval failedDeleteTime = {0, 0, 30, 0, 0, 0, 0};
 
 // Handle to MJPEG compress object
 static mjpeg_compress_t *p_mjpeg_compressor = NULL;
+
+
+
 
 // helper class to initialise and free the mjpeg library
 class MJPEGCompressHolder
@@ -266,6 +270,7 @@ public:
             return false;
         }
         
+        _initialised = true;
         return true;
     }
     
@@ -821,6 +826,93 @@ static string get_output_prefix(string filename)
     }
 }
 
+static string strip_path(string filename)
+{
+    size_t sepIndex;
+    if ((sepIndex = filename.rfind("/")) != string::npos)
+    {
+        return filename.substr(sepIndex + 1);
+    }
+    return filename;
+}
+
+static string join_path(string path1, string path2)
+{
+    string result;
+    
+    result = path1;
+    if (path1.size() > 0 && path1.at(path1.size() - 1) != '/' && 
+        (path2.size() == 0 || path2.at(0) != '/'))
+    {
+        result.append("/");
+    }
+    result.append(path2);
+    
+    return result;
+}
+
+static string join_path(string path1, string path2, string path3)
+{
+    string result;
+    
+    result = join_path(path1, path2);
+    result = join_path(result, path3);
+
+    return result;
+}
+
+static bool check_file_exists(string filename)
+{
+    FILE* file;
+    if ((file = fopen(filename.c_str(), "rb")) == NULL)
+    {
+        return false;
+    }
+    else
+    {
+        fclose(file);
+        return true;
+    }
+}
+
+static bool check_directory_exists(string directory)
+{
+    struct stat statBuf;
+    
+    if (stat(directory.c_str(), &statBuf) == 0 && S_ISDIR(statBuf.st_mode))
+    {
+        return true;
+    }
+    return false;
+}
+
+// a date is assumed to be a sequence of 8 digits in the filename
+static string parse_date_from_filename(string filename)
+{
+    unsigned int startIndex = 0;
+    unsigned int count = 0;
+    while (startIndex + count < filename.size())
+    {
+        if (filename[startIndex + count] >= '0' && filename[startIndex + count] <= '9')
+        {
+            count++;
+            if (count >= 8)
+            {
+                return filename.substr(startIndex, 8);
+            }
+        }
+        else
+        {
+            startIndex += count + 1;
+            count = 0;
+        }
+    }
+    
+    return "";
+}
+
+
+
 static void usage(const char* cmd)
 {
     fprintf(stderr, "Usage: %s <<options>>\n", cmd);
@@ -1211,6 +1303,7 @@ int main(int argc, const char* argv[])
                 // try find the input files
                 
                 outputPrefix = "";
+                string actualDestinationDirectory;
                 bool haveAllInputFiles = true;
                 vector<string> inputFiles;
                 for (iter2 = sourceMaterial.packages.begin(); quit == false && iter2 != sourceMaterial.packages.end(); iter2++)
@@ -1231,42 +1324,54 @@ int main(int argc, const char* argv[])
                     }
                     prodauto::FileEssenceDescriptor* fileDescriptor = dynamic_cast<prodauto::FileEssenceDescriptor*>(sourcePackage->descriptor);
                     
-                    FILE* file;
-                    string filePath = sourceDirectory;
-                    if (filePath.size() > 0)
-                    {
-                        filePath.append("/");
-                    }
-                    string filename;
-                    size_t slash = fileDescriptor->fileLocation.rfind("/");
-                    if (slash == string::npos)
-                    {
-                        filename = fileDescriptor->fileLocation;
-                    }
-                    else
-                    {
-                        filename = fileDescriptor->fileLocation.substr(slash + 1, fileDescriptor->fileLocation.size() - (slash + 1));
-                    }
-                    filePath.append(filename);
+                    
+                    // the file could be in the sourceDirectory or in a sub-directory of the sourceDirectory
+                    // with name equal to the date string in the filename
+                    
+                    string filename = strip_path(fileDescriptor->fileLocation);
+                    string filePath = join_path(sourceDirectory, filename);
+                    string dateSubdir = parse_date_from_filename(filename);
      
-                    if ((file = fopen(filePath.c_str(), "r")) == NULL)
+                    bool fileExistsInSourceDir = 
+                        check_file_exists(join_path(sourceDirectory, filename));
+                    bool fileExistsInSourceSubDir = !dateSubdir.empty() &&
+                        check_file_exists(join_path(sourceDirectory, dateSubdir, filename));
+                        
+                    if (!fileExistsInSourceDir && !fileExistsInSourceSubDir)
                     {
                         haveAllInputFiles = false;
                         break;
                     }
                     else
                     {
-                        // get output prefix
+                        // construct the source filepath
+                        string filePath;
+                        if (fileExistsInSourceDir)
+                        {
+                            filePath = join_path(sourceDirectory, filename);
+                        }
+                        else // fileExistsInSourceSubDir
+                        {
+                            filePath = join_path(sourceDirectory, dateSubdir, filename);
+                        }
+                        
+                        // get output prefix and actual destination directory from the first file in the group
                         if (outputPrefix.size() == 0 && inputFiles.size() == 0)
                         {
                             outputPrefix = get_output_prefix(filename);
+                            if (fileExistsInSourceDir)
+                            {
+                                actualDestinationDirectory = destinationDirectory;
+                            }
+                            else // fileExistsInSourceSubDir
+                            {
+                                actualDestinationDirectory = join_path(destinationDirectory, dateSubdir);
+                            }
                         }
                         
                         // found it
                         inputFiles.push_back(filePath);
                         sourceMaterial.packageToFilepathMap.insert(pair<prodauto::UMID, string>(package->uid, filePath));
-                        fclose(file);
-                        
                     }
                 }
         
@@ -1279,6 +1384,18 @@ int main(int argc, const char* argv[])
     
                 
                 CHECK_USER_QUIT(quit, break);
+                
+                
+                // create the destination directory if it doesn't exist
+                if (actualDestinationDirectory.compare(destinationDirectory) != 0 &&
+                    !check_directory_exists(actualDestinationDirectory))
+                {
+                    if (mkdir(actualDestinationDirectory.c_str(), 0777) != 0)
+                    {
+                        prodauto::Logging::info("  Failed to create destination directory %s\n", actualDestinationDirectory.c_str());
+                        throw "Failed to create destination directory";
+                    }
+                }
                 
                 // perform transcode
                 
@@ -1293,7 +1410,7 @@ int main(int argc, const char* argv[])
                     prodauto::Logging::info("  Performing transcode\n");
                     if (transcode_avid_mxf(&dv50Codec, inputFiles, sourceMaterial, 
                         outputPrefix.c_str(), 
-                        creatingDirectory.c_str(), destinationDirectory.c_str(), failureDirectory.c_str(),
+                        creatingDirectory.c_str(), actualDestinationDirectory.c_str(), failureDirectory.c_str(),
                         numFFMPEGThreads, outputVideoResolutionID))
                     {
                         // update with success status      
