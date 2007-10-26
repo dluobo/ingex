@@ -10,7 +10,7 @@ Follow these installation steps if the postgres version supplied by SuSE is >= 8
 * postgresql-libs
 * postgresql-server
 
-2) start the postgres service, which should create an initial database for you in "/home/postgres/data"
+2) start the postgres service, which should create an initial database for you in "/var/lib/pgsql/data"
 root> /etc/init.d/postgresql start
 
 
@@ -72,10 +72,12 @@ Postgres post-install
 
 1) edit the client authentication file in the database data/ directory
 (either "/home/postgres/data/pg_hba.conf" or "/usr/local/pgsql/data/pg_hba.conf")
+(with Yast-installed postgresql, directory will be /var/lib/pgsql/data/)
 
 Add the following entries _before_ the other entries:
 
 local   all         all                          trust
+host    all         all    127.0.0.1/32          trust
 host    all         all    192.168.0.0/16        trust
 
 
@@ -103,8 +105,11 @@ listen_addresses = '*'
 > ./create_prodautodb.sh
 
 
-3) create test data (?default data?)
-> ./add_test_values.sh
+3) create recorder parameters
+psql -v ON_ERROR_STOP=yes -U bamzooki -d prodautodb -f default_params.sql
+
+4) configure sources and recorder(s)
+(use web interface to do this)
 
 
 

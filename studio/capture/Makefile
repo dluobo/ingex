@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.1 2007/09/11 14:08:35 stuart_hc Exp $
+# $Id: Makefile,v 1.2 2007/10/26 16:19:13 john_f Exp $
 #
 # Makefile for building ingex server and utilities.
 #
@@ -28,13 +28,17 @@ OPT=-O3 -mmmx -msse2
 FLAGS=$(CFLAGS) $(INCLUDES) $(OPT)
 
 # Detect DVS sdk directory in descending order of preference
+ifeq "$(CPU_ARCH)" "x86_64"
+  ARCH1 := "_x86_64"
+  ARCH2 := "-x86_64"
+else
+  ARCH1 := ""
+  ARCH2 := "-x86"
+endif
+
 ifndef DVSSDK
   CPU_ARCH := $(shell uname -m)
-  ifeq "$(CPU_ARCH)" "x86_64"
-    TMP_DVSSDK := $(shell for f in $$HOME/sdk2.7p48_x86_64 $$HOME/sdk2.7p39g_x86_64; do test -d $$f/linux && echo $$f && break; done)
-  else
-    TMP_DVSSDK := $(shell for f in $$HOME/sdk2.7p48 $$HOME/sdk2.7p39g; do test -d $$f/linux && echo $$f && break; done)
-  endif
+  TMP_DVSSDK := $(shell for f in $$HOME/sdk2.7p57$(ARCH1)/linux $$HOME/sdk2.7p53$(ARCH1)/linux $$HOME/sdk3.0.0.1/linux$(ARCH2) $$HOME/sdk2.7p48$(ARCH1)/linux $$HOME/sdk2.7p39g$(ARCH1)/linux; do test -d $$f && dirname $$f && break; done)
   ifneq "$(TMP_DVSSDK)" ""
     DVSSDK = $(TMP_DVSSDK)
   else
@@ -42,18 +46,20 @@ ifndef DVSSDK
   endif
 endif
 
+
 HARDWARE_INCLUDE=-I$(DVSSDK)/development/header
-HARDWARE_LIB=-L$(DVSSDK)/linux/lib -ldvsoem
+#HARDWARE_LIB=-L$(DVSSDK)/linux/lib -ldvsoem
+HARDWARE_LIB=-L$(DVSSDK)/linux-x86/lib -ldvsoem
 
 SDI_PROGS=dvs_sdi testgen
-PROGS=$(SDI_PROGS) nexus_save nexus_xv
+PROGS=$(SDI_PROGS) nexus_save nexus_xv nexus_stats
 
 .PHONY: sdi all
 sdi: $(SDI_PROGS)
 all: $(PROGS)
 
-dvs_sdi: dvs_sdi.c nexus_control.h utils.o
-	g++ $(FLAGS) $(HARDWARE_INCLUDE) dvs_sdi.c utils.o $(HARDWARE_LIB) $(LIBS) -lpthread -o dvs_sdi
+dvs_sdi: dvs_sdi.c nexus_control.h
+	g++ $(FLAGS) $(HARDWARE_INCLUDE) dvs_sdi.c $(HARDWARE_LIB) $(LIBS) -lpthread -o dvs_sdi
 
 testgen: testgen.c nexus_control.h
 	g++ $(FLAGS) testgen.c $(LIBS) -lpthread -o testgen
@@ -61,8 +67,8 @@ testgen: testgen.c nexus_control.h
 nexus_stats: nexus_stats.c nexus_control.h
 	g++ $(FLAGS) nexus_stats.c $(LIBS) -lpthread -o nexus_stats
 
-nexus_save: nexus_save.c nexus_control.h dvd_encoder.h AudioMixer.h audio_utils.h librecord.a
-	g++ $(FLAGS) nexus_save.c -o nexus_save -L. -lrecord -lavformat -lavutil -lavcodec -lmp3lame -lz -lm -lpthread
+nexus_save: nexus_save.c nexus_control.h
+	g++ $(FLAGS) nexus_save.c -o nexus_save
 
 nexus_xv: nexus_xv.c nexus_control.h
 	g++ $(FLAGS) nexus_xv.c -o nexus_xv -L/usr/X11R6/lib -lXv

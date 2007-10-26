@@ -1,25 +1,27 @@
 cd $workspace/ingex/libMXF/lib
-make
+./make_install.sh
 
-cd $workspace/ingex/Ingex/mxfwriter
+cd $workspace/ingex/studio/mxfwriter
 make   (also makes database/src)
 
-cd $workspace/ingex/Ingex/common
+cd $workspace/ingex/studio/common
 $ACE_ROOT/bin/mwc.pl -type gnuace
 make
 
-cd $workspace/ingex/Ingex/processing/offline
+cd $workspace/ingex/studio/processing/offline
 $ACE_ROOT/bin/mwc.pl -type gnuace
 make
 
-cd $workspace/ingex/Ingex/corba
+cd $workspace/ingex/studio/corba
 $ACE_ROOT/bin/mwc.pl -type gnuace
 make Recorder-target
 make RecorderClient-target
 
-cd $workspace/ingex/Ingex/capture
-make testgen
-
 export DVSSDK=<location of DVS SDK>
+cd $workspace/ingex/common
+make
+
+cd $workspace/ingex/studio/capture
+make testgen
 make dvs_sdi
 
