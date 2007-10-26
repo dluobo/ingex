@@ -4,6 +4,7 @@
 
 #include "video_test_signals.h"
 #include "video_conversion_10bits.h"
+#include "psnr.h"
 
 static void usage_exit(void)
 {
@@ -52,6 +53,7 @@ int main(int argc, char *argv[])
 {
 	int width = 720;
 	int height = 576;
+	int result = 0;
 	size_t frame_size = width * height * 2;
 	size_t frame_size_10bit = frame_size * 4 / 3;
 	char *output_name = "test.uyvy";
@@ -67,7 +69,9 @@ int main(int argc, char *argv[])
 	}
 
 	uint8_t *frame = (uint8_t*)malloc(frame_size);
+	uint8_t *frame2 = (uint8_t*)malloc(frame_size);
 	uint8_t *frame10bit = (uint8_t*)malloc(frame_size_10bit);
+	uint8_t *frame10bit2 = (uint8_t*)malloc(frame_size_10bit);
 
 	// Test creation of "NO VIDEO" uyvy caption frame
 	uyvy_no_video_frame(width, height, frame);
@@ -76,12 +80,30 @@ int main(int argc, char *argv[])
 	// Test 10bit conversions
 	read_sample(input_name, frame_size_10bit, frame10bit);
 
-	ConvertFrame10to8(frame, frame10bit,
-						width, width*4/3, width, height*2 - 1);
+	ConvertFrame10to8(frame, frame10bit, width*2, width*2*4/3, width, height);
+	DitherFrame(frame2, frame10bit, width*2, width*2*4/3, width, height);
+	double y, u, v;
+	psnr_uyvy(frame, frame2, width, height, &y, &u, &v);
+	printf("frame(10to8) frame2(Dither 10to8) PSNR: y=%.2f u=%.2f v=%.2f\n", y,u,v);
+
 	write_sample(output_name, frame_size, frame);
 
-	free(frame);
-	free(frame10bit);
+	ConvertFrame8to10(frame10bit2, frame, width*2*4/3, width*2, width, height);
+	ConvertFrame10to8(frame2, frame10bit2, width*2, width*2*4/3, width, height);
 
-	return 0;
+	write_sample("frame2.uyvy", frame_size, frame2);
+
+	if ( memcmp(frame, frame2, frame_size) != 0 ) {
+		double y, u, v;
+		psnr_uyvy(frame, frame2, width, height, &y, &u, &v);
+		printf("frame frame2 mismatch PSNR: y=%.2f u=%.2f v=%.2f\n", y,u,v);
+		result = 1;
+	}
+
+	free(frame);
+	free(frame2);
+	free(frame10bit);
+	free(frame10bit2);
+
+	return result;
 }
