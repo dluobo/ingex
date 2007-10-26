@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.c,v 1.2 2007/10/26 13:51:17 john_f Exp $
+ * $Id: dvs_sdi.c,v 1.3 2007/10/26 14:43:06 john_f Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -48,7 +48,7 @@
 #include "dvs_fifo.h"
 
 #include "nexus_control.h"
-#include "utils.h"
+#include "logF.h"
 #include "video_conversion.h"
 #include "video_test_signals.h"
 #include "avsync_analysis.h"
