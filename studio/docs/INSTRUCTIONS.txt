@@ -1,0 +1,125 @@
+General
+-------
+
+Install SUSE 10.2 32-bit version with default user "ingex"
+
+
+Install from YAST:
+  kernel sources
+  unixODBC
+  unixODBC-devel
+  psqlODBC
+  e2fsprogs-devel
+  libjpeg-devel
+  (gkrellm)
+
+Install from RPM
+  codecs-for-ffmpeg-671-1.i586.rpm
+  ffmpeg-h264-aac-10666-1.i586.rpm
+  libodbc++-0.2.4pre3-1.i586.rpm
+
+
+DVS
+---
+
+First need to configure kernel:
+
+root> cd /usr/src/linux
+root> make oldconfig
+root> make scripts/mod/  (trailing slash important)
+
+get SDK e.g. sdk2.7p64 and untar
+
+ingex> cd linux/driver
+ingex> sudo ./mkdev
+ingex> ./driver_create
+ingex> sudo ./driver_load
+
+
+ACE/TAO
+-------
+
+Build according to instructions in separate document
+
+
+Database access
+---------------
+
+(see database/install/INSTALL.txt)
+
+Create and edit:
+  /etc/unixODBC/odbcinst.ini
+  /etc/unixODBC/odbc.ini
+
+
+Database on machine and web config
+----------------------------------
+
+(see database/install/INSTALL.txt)
+
+Install from YAST:
+  postgresql
+  postgresql-contrib
+  postgresql-devel
+  postgresql-libs
+  postgresql-server
+  apache2
+  perl-DBI
+  perl-DBD-Pg
+
+Install from CPAN
+  CGI
+  Text::Template
+
+For web server see web/manage/README.txt
+
+
+AAF creation (via web server)
+-----------------------------
+
+Get AAFSDK e.g. CVS from SourceForge
+set AAFSDKINSTALL environment variable
+
+cd ingex/studio/processing/createaaf
+make
+cp createaaf /srv/ingex/createaaf/
+
+cd $AAFSDKINSTALL/bin/debug
+cp libcom-api.so /srv/ingex/createaaf/
+
+
+Player
+------
+
+You need the following external libraries:
+* ffmpeg (part of the ingex rpms)
+* portaudio (YaST)
+* (optional) DVS (part of ingex rpms)
+
+You need to build and install (make; sudo make install, which installs the 
+libraries in /usr/local/lib) the following Ingex libraries:
+* MXF - in ingex/libMXF/lib
+* MXFReader - in ingex/libMXF/examples/reader
+* d3mxfinfo - in ingex/libMXF/examples/archive/info
+
+cd ingex/player/ingex_player
+make
+sudo make install
+
+
+Samba shares
+------------
+
+1. Install samba and samba-client using Yast (it also installed another two packages as dependencies).
+
+2. In Yast, Network Services-> Samba Server
+a) enable at boot up
+b) Add /video as an exported filesystem,  Name video; comment "The Video files"
+c) Click 'Edit' to add options to the newly created /video export
+d) in the options page, click 'Add'; enter 'guest ok' as a new option; click OK and enable that option on the box that appears next.
+
+3. Check samba export is working: in a shell, type smbstatus
+
+
+
+
