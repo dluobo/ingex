@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.2 2007/10/26 15:07:40 john_f Exp $
+# $Id: Makefile,v 1.3 2007/12/06 14:51:50 john_f Exp $
 #
 # Makefile for building common functions
 #
@@ -22,7 +22,7 @@
 #
 
 CC=gcc
-OPT=-DNDEBUG -O0 -mmmx -msse2
+OPT=-DNDEBUG -O3 -mmmx -msse2
 INCLUDES=
 CFLAGS=-Wall -W -g -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE $(OPT) $(INCLUDES)
 
