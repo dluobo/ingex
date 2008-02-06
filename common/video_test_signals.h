@@ -1,5 +1,5 @@
 /*
- * $Id: video_test_signals.h,v 1.1 2007/09/11 14:08:01 stuart_hc Exp $
+ * $Id: video_test_signals.h,v 1.2 2008/02/06 16:58:51 john_f Exp $
  *
  * Video test frames
  *
@@ -34,8 +34,13 @@ extern "C"
 
 void uyvy_black_frame(int width, int height, uint8_t *output);
 void uyvy_color_bars(int width, int height, uint8_t *output);
+void uyvy_random_frame(int width, int height, uint8_t *output);
 
 void uyvy_no_video_frame(int width, int height, uint8_t *output);
+
+
+void yuv420p_black_frame(int width, int height, uint8_t *output);
+
 
 #ifdef __cplusplus
 }

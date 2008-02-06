@@ -1,5 +1,5 @@
 /*
- * $Id: Package.h,v 1.1 2007/09/11 14:08:39 stuart_hc Exp $
+ * $Id: Package.h,v 1.2 2008/02/06 16:59:07 john_f Exp $
  *
  * A MXF/AAF Package
  *
@@ -52,6 +52,23 @@ typedef enum
 } PackageType;
 
 
+class ProjectName : public DatabaseObject
+{
+public:
+    ProjectName();
+    ProjectName(std::string name_);
+    ProjectName(const ProjectName& projectName);
+    ~ProjectName();
+
+    ProjectName& operator=(const std::string& nm);
+    ProjectName& operator=(const ProjectName& nm);
+    
+    bool operator==(const ProjectName& pn) const;
+    bool operator<(const ProjectName& pn) const;
+    
+    std::string name;
+};
+
 class UserComment : public DatabaseObject
 {
 public:
@@ -88,7 +105,7 @@ public:
     UMID uid;
     std::string name;
     Timestamp creationDate;
-    std::string avidProjectName;
+    ProjectName projectName;
     std::vector<Track*> tracks;
     
 private:

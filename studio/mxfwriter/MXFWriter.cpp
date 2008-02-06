@@ -1,5 +1,5 @@
 /*
- * $Id: MXFWriter.cpp,v 1.1 2007/09/11 14:08:44 stuart_hc Exp $
+ * $Id: MXFWriter.cpp,v 1.2 2008/02/06 16:59:11 john_f Exp $
  *
  * Writes essence data to MXF files
  *
@@ -117,6 +117,23 @@ static void moveFile(string from, string to)
     }
 }
 
+static string createClipName(string sourceName, int64_t startPosition)
+{
+    if (startPosition < 0)
+    {
+        return sourceName + ".-1";
+    }
+    
+    char buf[48];
+    sprintf(buf, ".%02d%02d%02d%02d", 
+        (int)(startPosition / (60 * 60 * 25)),
+        (int)((startPosition % (60 * 60 * 25)) / (60 * 25)),
+        (int)(((startPosition % (60 * 60 * 25)) % (60 * 25)) / 25),
+        (int)(((startPosition % (60 * 60 * 25)) % (60 * 25)) % 25));
+    
+    return sourceName + buf;
+}
+
 
 OutputPackage::OutputPackage()
 : sourcePackage(0), materialPackage(0)
@@ -213,7 +230,7 @@ MXFWriter::MXFWriter(MaterialPackage* materialPackage,
     string creatingFilePath, string destinationFilePath, string failuresFilePath, 
     string filenamePrefix,
     vector<UserComment> userComments,
-    string avidProjectName)
+    ProjectName projectName)
 : _isComplete(false), _creatingFilePath(creatingFilePath), _destinationFilePath(destinationFilePath),
   _failuresFilePath(failuresFilePath), _filenamePrefix(filenamePrefix)
 {
@@ -537,6 +554,56 @@ MXFWriter::MXFWriter(MaterialPackage* materialPackage,
                         }
                         break;
                         
+                        case DNX36p_MATERIAL_RESOLUTION:
+                        {
+                            EssenceInfo essenceInfo;
+                            CHECK_SUCCESS(create_file_source_package(packageDefinitions, &umid, 
+                                filePackage->name.c_str(), 
+                                &timestamp, fileDesc->fileLocation.c_str(), 
+                                DNxHD1080p36, &essenceInfo, &mxfFilePackage));
+                        }
+                        break;
+                        
+                        case DNX120p_MATERIAL_RESOLUTION:
+                        {
+                            EssenceInfo essenceInfo;
+                            CHECK_SUCCESS(create_file_source_package(packageDefinitions, &umid, 
+                                filePackage->name.c_str(), 
+                                &timestamp, fileDesc->fileLocation.c_str(), 
+                                DNxHD1080p120, &essenceInfo, &mxfFilePackage));
+                        }
+                        break;
+                        
+                        case DNX185p_MATERIAL_RESOLUTION:
+                        {
+                            EssenceInfo essenceInfo;
+                            CHECK_SUCCESS(create_file_source_package(packageDefinitions, &umid, 
+                                filePackage->name.c_str(), 
+                                &timestamp, fileDesc->fileLocation.c_str(), 
+                                DNxHD1080p185, &essenceInfo, &mxfFilePackage));
+                        }
+                        break;
+                        
+                        case DNX120i_MATERIAL_RESOLUTION:
+                        {
+                            EssenceInfo essenceInfo;
+                            CHECK_SUCCESS(create_file_source_package(packageDefinitions, &umid, 
+                                filePackage->name.c_str(), 
+                                &timestamp, fileDesc->fileLocation.c_str(), 
+                                DNxHD1080i120, &essenceInfo, &mxfFilePackage));
+                        }
+                        break;
+                        
+                        case DNX185i_MATERIAL_RESOLUTION:
+                        {
+                            EssenceInfo essenceInfo;
+                            CHECK_SUCCESS(create_file_source_package(packageDefinitions, &umid, 
+                                filePackage->name.c_str(), 
+                                &timestamp, fileDesc->fileLocation.c_str(), 
+                                DNxHD1080i185, &essenceInfo, &mxfFilePackage));
+                        }
+                        break;
+                        
                         default:
                             PA_LOGTHROW(MXFWriterException, ("Unsupported resolution %d", resolutionID));
                             break;
@@ -568,8 +635,9 @@ MXFWriter::MXFWriter(MaterialPackage* materialPackage,
             // TODO: don't hard code PAL_25i and drop frame flag
             mxfRational mxfAspectRatio;
             convertRational(imageAspectRatio, mxfAspectRatio); 
-            if (!create_clip_writer(avidProjectName.size() > 0 ? avidProjectName.c_str() : 0, 
-                PAL_25i, mxfAspectRatio, 0 , 1, 
+            mxfRational mxfProjectEditRate = {25, 1};
+            if (!create_clip_writer(projectName.name.empty() ? 0 : projectName.name.c_str(), 
+                PAL_25i, mxfAspectRatio, mxfProjectEditRate, 0 , 1, 
                 packageDefinitions, &outputPackage->clipWriter))
             {
                 PA_LOGTHROW(MXFWriterException, ("Failed to create clip writer"));
@@ -611,7 +679,7 @@ MXFWriter::MXFWriter(RecorderConfig* recorderConfig, uint32_t inputConfigIndex,
     string creatingFilePath, string destinationFilePath, string failuresFilePath, 
     string filenamePrefix,
     vector<UserComment> userComments,
-    string avidProjectName)
+    ProjectName projectName)
 : _isComplete(false), _creatingFilePath(creatingFilePath), _destinationFilePath(destinationFilePath),
   _failuresFilePath(failuresFilePath), _filenamePrefix(filenamePrefix)
 {
@@ -668,9 +736,9 @@ MXFWriter::MXFWriter(RecorderConfig* recorderConfig, uint32_t inputConfigIndex,
                 outputPackage->materialPackage = new MaterialPackage();
                 trackCounts.insert(pair<MaterialPackage*, TrackCount>(outputPackage->materialPackage, startTrackCount));
                 outputPackage->materialPackage->uid = generateUMID();
-                outputPackage->materialPackage->name = outputPackage->sourcePackage->name;
+                outputPackage->materialPackage->name = createClipName(outputPackage->sourcePackage->name, startPosition);
                 outputPackage->materialPackage->creationDate = now;
-                outputPackage->materialPackage->avidProjectName = avidProjectName;
+                outputPackage->materialPackage->projectName = projectName;
             }
             trackWriter->outputPackage = outputPackage;
             
@@ -687,7 +755,7 @@ MXFWriter::MXFWriter(RecorderConfig* recorderConfig, uint32_t inputConfigIndex,
             outputPackage->filePackages.push_back(filePackage);
             filePackage->uid = generateUMID();
             filePackage->creationDate = now;
-            filePackage->avidProjectName = avidProjectName;
+            filePackage->projectName = projectName;
             filePackage->sourceConfigName = trackConfig->sourceConfig->name;
             FileEssenceDescriptor* fileDesc = new FileEssenceDescriptor();
             filePackage->descriptor = fileDesc;
@@ -1058,6 +1126,56 @@ MXFWriter::MXFWriter(RecorderConfig* recorderConfig, uint32_t inputConfigIndex,
                         }
                         break;
                         
+                        case DNX36p_MATERIAL_RESOLUTION:
+                        {
+                            EssenceInfo essenceInfo;
+                            CHECK_SUCCESS(create_file_source_package(packageDefinitions, &umid, 
+                                filePackage->name.c_str(), 
+                                &timestamp, fileDesc->fileLocation.c_str(), 
+                                DNxHD1080p36, &essenceInfo, &mxfFilePackage));
+                        }
+                        break;
+                        
+                        case DNX120p_MATERIAL_RESOLUTION:
+                        {
+                            EssenceInfo essenceInfo;
+                            CHECK_SUCCESS(create_file_source_package(packageDefinitions, &umid, 
+                                filePackage->name.c_str(), 
+                                &timestamp, fileDesc->fileLocation.c_str(), 
+                                DNxHD1080p120, &essenceInfo, &mxfFilePackage));
+                        }
+                        break;
+                        
+                        case DNX185p_MATERIAL_RESOLUTION:
+                        {
+                            EssenceInfo essenceInfo;
+                            CHECK_SUCCESS(create_file_source_package(packageDefinitions, &umid, 
+                                filePackage->name.c_str(), 
+                                &timestamp, fileDesc->fileLocation.c_str(), 
+                                DNxHD1080p185, &essenceInfo, &mxfFilePackage));
+                        }
+                        break;
+                        
+                        case DNX120i_MATERIAL_RESOLUTION:
+                        {
+                            EssenceInfo essenceInfo;
+                            CHECK_SUCCESS(create_file_source_package(packageDefinitions, &umid, 
+                                filePackage->name.c_str(), 
+                                &timestamp, fileDesc->fileLocation.c_str(), 
+                                DNxHD1080i120, &essenceInfo, &mxfFilePackage));
+                        }
+                        break;
+                        
+                        case DNX185i_MATERIAL_RESOLUTION:
+                        {
+                            EssenceInfo essenceInfo;
+                            CHECK_SUCCESS(create_file_source_package(packageDefinitions, &umid, 
+                                filePackage->name.c_str(), 
+                                &timestamp, fileDesc->fileLocation.c_str(), 
+                                DNxHD1080i185, &essenceInfo, &mxfFilePackage));
+                        }
+                        break;
+                        
                         default:
                             PA_LOGTHROW(MXFWriterException, ("Unsupported resolution %d", resolutionID));
                             break;
@@ -1089,8 +1207,9 @@ MXFWriter::MXFWriter(RecorderConfig* recorderConfig, uint32_t inputConfigIndex,
             // TODO: don't hard code PAL_25i and drop frame flag
             mxfRational mxfAspectRatio;
             convertRational(imageAspectRatio, mxfAspectRatio); 
-            if (!create_clip_writer(avidProjectName.size() > 0 ? avidProjectName.c_str() : 0, 
-                PAL_25i, mxfAspectRatio, 0 , 1, 
+            mxfRational mxfProjectEditRate = {25, 1};
+            if (!create_clip_writer(projectName.name.empty() ? 0 : projectName.name.c_str(), 
+                PAL_25i, mxfAspectRatio, mxfProjectEditRate, 0 , 1, 
                 packageDefinitions, &outputPackage->clipWriter))
             {
                 PA_LOGTHROW(MXFWriterException, ("Failed to create clip writer"));

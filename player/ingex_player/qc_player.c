@@ -106,6 +106,12 @@ typedef struct
     int markVTRErrors;
     const char* ltoCacheDirectory;
     int enableTermKeyboard;
+    const char* deleteScriptName;
+    const char* deleteScriptOptions;
+    const char* sessionScriptName;
+    const char* sessionScriptOptions;
+    int writeAllMarks;
+    int clipMarkType;
 } Options;
 
 static const Options g_defaultOptions = 
@@ -129,7 +135,13 @@ static const Options g_defaultOptions =
     1,
     1,
     0,
-    0
+    0,
+    0,
+    0,
+    0,
+    0,
+    1,
+    M0_MARK_TYPE
 };
 
 typedef struct
@@ -357,6 +369,7 @@ static int parse_config_marks(const char* val, MarkConfigs* markConfigs)
     } colourInfos[] = 
     {
         {"white", WHITE_COLOUR},
+        {"light-white", LIGHT_WHITE_COLOUR},
         {"yellow", YELLOW_COLOUR},
         {"cyan", CYAN_COLOUR},
         {"green", GREEN_COLOUR},
@@ -465,7 +478,7 @@ static int create_sink(QCPlayer* player, Options* options, const char* x11Window
             if (player->mediaSink == NULL)
             {
                 if (!xvsk_open(options->reviewDuration, options->disableX11OSD, &options->pixelAspectRatio, 
-                    &options->monitorAspectRatio, options->scale, &player->x11XVDisplaySink))
+                    &options->monitorAspectRatio, options->scale, 1, &player->x11XVDisplaySink))
                 {
                     ml_log_error("Failed to open x11 xv display sink\n");
                     fprintf(stderr, "Failed to open x11 xv display sink\n");
@@ -494,7 +507,7 @@ static int create_sink(QCPlayer* player, Options* options, const char* x11Window
             if (player->mediaSink == NULL)
             {
                 if (!xsk_open(options->reviewDuration, options->disableX11OSD, &options->pixelAspectRatio, 
-                    &options->monitorAspectRatio, options->scale, &player->x11DisplaySink))
+                    &options->monitorAspectRatio, options->scale, 1, &player->x11DisplaySink))
                 {
                     ml_log_error("Failed to open x11 display sink\n");
                     fprintf(stderr, "Failed to open x11 display sink\n");
@@ -540,7 +553,7 @@ static int create_sink(QCPlayer* player, Options* options, const char* x11Window
             {
                 if (!dusk_open(options->reviewDuration, options->sdiVITCSource, options->extraSDIVITCSource, 
                     options->dvsBufferSize, options->xOutputType == XV_DISPLAY_OUTPUT, options->disableSDIOSD, options->disableX11OSD, 
-                    &options->pixelAspectRatio, &options->monitorAspectRatio, options->scale, 0, &player->dualSink))
+                    &options->pixelAspectRatio, &options->monitorAspectRatio, options->scale, 1, 0, &player->dualSink))
                 {
                     ml_log_error("Failed to open dual X11 and DVS sink\n");
                     fprintf(stderr, "Failed to open dual X11 and DVS sink\n");
@@ -650,7 +663,7 @@ static int play_balls(QCPlayer* player, Options* options)
         0, 
         0, 
         0, 
-        0, 
+        1, 
         0, 
         &g_invalidTimecode, 
         &g_invalidTimecode,
@@ -663,6 +676,7 @@ static int play_balls(QCPlayer* player, Options* options)
 
     osd_set_mark_display(msk_get_osd(player->mediaSink), &player->markConfigs);
     
+    ply_enable_clip_marks(player->mediaPlayer, options->clipMarkType);
 
     
     /* reconnect the X11 display keyboard input */
@@ -746,23 +760,11 @@ static int play_d3_mxf_file(QCPlayer* player, int argc, const char** argv, Optio
     strcat_separator(filename);
     strcat(filename, name);
     
-    if (sessionName == NULL || sessionName[0] == '\0')
+    /* open mxf file */ 
+    if (!mxfs_open(filename, 0, options->markPSEFails, options->markVTRErrors, &mxfSource))
     {
-        /* open mxf file and enable restoring marks from the mxf file */ 
-        if (!mxfs_open(filename, 0, options->markPSEFails, options->markVTRErrors, &mxfSource))
-        {
-            ml_log_error("Failed to open MXF file source '%s'\n", filename);
-            goto fail;
-        }
-    }
-    else
-    {
-        /* open mxf file and diable restoring marks from the mxf file - marks will be read from the selected session file */ 
-        if (!mxfs_open(filename, 0, 0, 0, &mxfSource))
-        {
-            ml_log_error("Failed to open MXF file source '%s'\n", filename);
-            goto fail;
-        }
+        ml_log_error("Failed to open MXF file source '%s'\n", filename);
+        goto fail;
     }
     mediaSource = mxfs_get_media_source(mxfSource);
     if (!mls_assign_source(multipleSource, &mediaSource))
@@ -791,7 +793,7 @@ static int play_d3_mxf_file(QCPlayer* player, int argc, const char** argv, Optio
     strcat_separator(filename);
     strcat(filename, name);
     
-    if (!qcs_open(filename, argc, argv, name, &player->qcSession))
+    if (!qcs_open(filename, player->mediaSource, argc, argv, name, &player->qcSession))
     {
         fprintf(stderr, "Failed to open QC session with prefix '%s'\n", filename);
         goto fail;
@@ -832,6 +834,8 @@ static int play_d3_mxf_file(QCPlayer* player, int argc, const char** argv, Optio
     }
 
     osd_set_mark_display(msk_get_osd(player->mediaSink), &player->markConfigs);
+
+    ply_enable_clip_marks(player->mediaPlayer, options->clipMarkType);
     
 
     /* restore the marks from the selected session file */
@@ -964,7 +968,11 @@ static int reset_player(QCPlayer* player, Options* options)
     
     if (player->mediaPlayer != NULL)
     {
-        numMarks = ply_get_marks(player->mediaPlayer, &marks);
+        /* get marks for writing to qc session below */
+        if (player->qcSession != NULL)
+        {
+            numMarks = ply_get_marks(player->mediaPlayer, &marks);
+        }
         ply_close_player(&player->mediaPlayer);
     }
     
@@ -972,11 +980,12 @@ static int reset_player(QCPlayer* player, Options* options)
     {
         if (numMarks > 0)
         {
-            qcs_write_marks(player->qcSession, &player->markConfigs, marks, numMarks);
+            qcs_write_marks(player->qcSession, options->writeAllMarks, options->clipMarkType, 
+                &player->markConfigs, marks, numMarks);
             SAFE_FREE(&marks);
             numMarks = 0;
         }
-        qcs_close(&player->qcSession);
+        qcs_close(&player->qcSession, options->sessionScriptName, options->sessionScriptOptions);
     }
     
     result = msk_reset_or_close(player->mediaSink);
@@ -1106,9 +1115,6 @@ fail:
 
 static void cleanup_exit(int res)
 {
-    Mark* marks = NULL;
-    int numMarks = 0;
-    
     /* reset signal handlers */
     if (signal(SIGINT, SIG_IGN) == SIG_ERR)
     {
@@ -1153,7 +1159,6 @@ static void cleanup_exit(int res)
     
     if (g_player.mediaPlayer != NULL)
     {
-        numMarks = ply_get_marks(g_player.mediaPlayer, &marks);
         ply_close_player(&g_player.mediaPlayer);
     }
 
@@ -1172,13 +1177,7 @@ static void cleanup_exit(int res)
     
     if (g_player.qcSession != NULL)
     {
-        if (numMarks > 0)
-        {
-            qcs_write_marks(g_player.qcSession, &g_player.markConfigs, marks, numMarks);
-            SAFE_FREE(&marks);
-            numMarks = 0;
-        }
-        qcs_close(&g_player.qcSession);
+        qcs_close(&g_player.qcSession, NULL, NULL);
     }
 
     qla_free_qc_lto_access(&g_player.qcLTOAccess);
@@ -1253,6 +1252,10 @@ static void usage(const char* cmd)
     fprintf(stderr, "  -h, --help               Display this usage message plus keyboard and shuttle input help\n");
     fprintf(stderr, "  -v, --version            Display the player version\n");
     fprintf(stderr, "* --tape-cache <dir>       The LTO tape cache directory\n");
+    fprintf(stderr, "  --delete-script <name>   The <name> script is called to delete an LTO tape cache directory (delete the directory is the default)\n");
+    fprintf(stderr, "  --delete-script-opt <options>   Options string to pass to the delete script before the cache directory name\n");
+    fprintf(stderr, "  --session-script <name>   The <name> script is called when a session is completed\n");
+    fprintf(stderr, "  --session-script-opt <options>   Options string, in addition to --lto and --session, to pass to the session script\n");
     fprintf(stderr, "  --log-level <level>      Output log level; 0=debug, 1=info, 2=warning, 3=error (default %d)\n", DEBUG_LOG_LEVEL);
     fprintf(stderr, "  --log-remove <days>      Remove log files older than given days (default is %d). 0 means don't remove any.\n", LOG_CLEAN_PERIOD);
     fprintf(stderr, "  --log-buf <name>         Log source and sink buffer state to file\n");
@@ -1286,6 +1289,7 @@ static void usage(const char* cmd)
     fprintf(stderr, "                                  name is a string with maximum length 31 and\n");
     fprintf(stderr, "                                  colour is one of white|yellow|cyan|green|magenta|red|blue|orange\n");
     fprintf(stderr, "  --enable-term-keyb       Enable terminal window keyboard input.\n");
+    fprintf(stderr, "  --clip-mark <type>       Clip mark type (default 0x%04x).\n", g_defaultOptions.clipMarkType);
     fprintf(stderr, "\n");
 }
 
@@ -1309,7 +1313,6 @@ int main(int argc, const char **argv)
     options = g_defaultOptions;
     
     memset(&g_player, 0, sizeof(g_player));
-
     
     while (cmdlnIndex < argc)
     {
@@ -1622,10 +1625,71 @@ int main(int argc, const char **argv)
             options.ltoCacheDirectory = argv[cmdlnIndex + 1];
             cmdlnIndex += 2;
         }
+        else if (strcmp(argv[cmdlnIndex], "--delete-script") == 0)
+        {
+            if (cmdlnIndex + 1 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            options.deleteScriptName = argv[cmdlnIndex + 1];
+            cmdlnIndex += 2;
+        }
+        else if (strcmp(argv[cmdlnIndex], "--delete-script-opt") == 0)
+        {
+            if (cmdlnIndex + 1 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            options.deleteScriptOptions = argv[cmdlnIndex + 1];
+            cmdlnIndex += 2;
+        }
+        else if (strcmp(argv[cmdlnIndex], "--session-script") == 0)
+        {
+            if (cmdlnIndex + 1 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            options.sessionScriptName = argv[cmdlnIndex + 1];
+            cmdlnIndex += 2;
+        }
+        else if (strcmp(argv[cmdlnIndex], "--session-script-opt") == 0)
+        {
+            if (cmdlnIndex + 1 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            options.sessionScriptOptions = argv[cmdlnIndex + 1];
+            cmdlnIndex += 2;
+        }
         else if (strcmp(argv[cmdlnIndex], "--enable-term-keyb") == 0)
         {
             options.enableTermKeyboard = 1;
             cmdlnIndex += 1;
+        }
+        else if (strcmp(argv[cmdlnIndex], "--clip-mark") == 0)
+        {
+            if (cmdlnIndex + 1 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            if (sscanf(argv[cmdlnIndex + 1], "%d", &options.clipMarkType) != 1 || 
+                options.clipMarkType < 0)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Invalid argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            cmdlnIndex += 2;
         }
         else
         {
@@ -1660,7 +1724,7 @@ int main(int argc, const char **argv)
         memcpy(&g_player.markConfigs.configs, configs, sizeof(configs));
         g_player.markConfigs.numConfigs = sizeof(configs) / sizeof(MarkConfig);
     }
-    
+
     
     /* set signal handlers to clean up cleanly */
     if (signal(SIGINT, catch_sigint) == SIG_ERR)
@@ -1782,7 +1846,8 @@ int main(int argc, const char **argv)
 
     /* create QC Tape access */
     
-    if (!qla_create_qc_lto_access(options.ltoCacheDirectory, g_player.qcLTOExtract, &g_player.qcLTOAccess))
+    if (!qla_create_qc_lto_access(options.ltoCacheDirectory, g_player.qcLTOExtract, 
+        options.deleteScriptName, options.deleteScriptOptions, &g_player.qcLTOAccess))
     {
         ml_log_error("Failed to create QC LTO Access\n");
         goto fail;

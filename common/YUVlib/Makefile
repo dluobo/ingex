@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.1 2007/09/11 14:08:02 stuart_hc Exp $
+# $Id: Makefile,v 1.2 2008/02/06 16:58:54 john_f Exp $
 #
 # Makefile for building YUVlib
 #
@@ -36,7 +36,7 @@ LIBYUVLIB=libYUVlib.a
 all: $(LIBYUVLIB)($(OBJECTS))
 
 clean:
-	rm -f *.o
+	rm -f *.o *.a
 
 $(LIBYUVLIB)(%.o): %.o
 	ar rcv $(LIBYUVLIB) $<

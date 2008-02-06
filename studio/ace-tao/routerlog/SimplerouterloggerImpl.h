@@ -1,6 +1,26 @@
-// SimplerouterloggerImpl.h
-
-// Copyright (c) 2006. British Broadcasting Corporation. All Rights Reserved.
+/*
+ * $Id: SimplerouterloggerImpl.h,v 1.2 2008/02/06 16:59:00 john_f Exp $
+ *
+ * Servant class for RouterRecorder.
+ *
+ * Copyright (C) 2006  British Broadcasting Corporation.
+ * All Rights Reserved.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+ * 02110-1301, USA.
+ */
 
 #ifndef SimplerouterloggerImpl_h
 #define SimplerouterloggerImpl_h
@@ -16,6 +36,7 @@
 
 class SourceReader;
 class Router;
+class CutsDatabase;
 
 class  SimplerouterloggerImpl
   : public Observer, public RecorderImpl
@@ -31,7 +52,7 @@ public:
 
 
   // Initialisation
-  bool Init(const std::string & rport, const std::string & tcport, unsigned int dest);
+  bool Init(const std::string & rport, const std::string & tcport, unsigned int dest, const std::string & db_file);
 
   void Destination(unsigned int dest) { mDestination = dest; }
 
@@ -52,9 +73,11 @@ public:
   ::ProdAuto::Recorder::ReturnCode Start (
       ::ProdAuto::MxfTimecode & start_timecode,
       const ::ProdAuto::MxfDuration & pre_roll,
-      //const ::ProdAuto::BooleanList & rec_enable,
       const ::CORBA::BooleanSeq & rec_enable,
-	  const char * tag
+      const char * project,
+      const char * description,
+      const ::CORBA::StringSeq & tapes,
+      ::CORBA::Boolean test_only
     )
     throw (
       ::CORBA::SystemException
@@ -111,8 +134,12 @@ private:
     Router * mpRouter;
     TimecodeReader * mpTcReader;
 	SourceReader * mpSrcReader;
+    CutsDatabase * mpCutsDatabase;
 
     unsigned int mDestination;
+
+    std::string mLastSrc;
+    std::string mLastTc;
 };
 
 

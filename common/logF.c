@@ -1,5 +1,5 @@
 /*
- * $Id: logF.c,v 1.1 2007/09/11 14:08:01 stuart_hc Exp $
+ * $Id: logF.c,v 1.2 2008/02/06 16:58:50 john_f Exp $
  *
  * Logging and debugging utility functions.
  *
@@ -53,6 +53,42 @@ extern int openLogFileWithDate(const char *logfile)
 	return pLogFile != NULL;
 }
 
+extern int reopenLogFileWithDate(const char *logfile)
+{
+    if (! pLogFile)
+        return openLogFileWithDate(logfile);
+    
+	time_t now = time(NULL);
+	struct tm l;
+	localtime_r(&now, &l);
+    char new_log_filename[FILENAME_MAX];
+
+	sprintf(new_log_filename, "%s_%02d%02d%02d_%02d%02d%02d.log",
+					logfile,
+					l.tm_year % 100, l.tm_mon + 1, l.tm_mday,
+					l.tm_hour, l.tm_min, l.tm_sec);
+
+    // Check the new log filename if different
+    if (strcmp(log_filename, new_log_filename) == 0)
+        return 1;
+
+    // test the new file can be opened because freopen modifies original when it fails
+    FILE* test_file;
+    if ((test_file = fopen(logfile, log_overwrite ? "w" : "a")) == NULL)
+        return 0;
+    fclose(test_file);
+
+	// Re-open the log file once for lifetime of program
+    if (freopen(new_log_filename, log_overwrite ? "w" : "a", pLogFile) == NULL) {
+        // try reopening the original file
+        freopen(log_filename, "a", pLogFile);
+        return 0;
+    }
+    
+    strcpy(log_filename, new_log_filename);
+    return 1;
+}
+
 extern int openLogFile(const char *logfile)
 {
 	if (logfile != NULL) {
@@ -84,6 +120,34 @@ extern int openLogFile(const char *logfile)
 	return pLogFile != NULL;
 }
 
+extern int reopenLogFile(const char *logfile)
+{
+    if (! pLogFile)
+        return openLogFile(logfile);
+    
+	if (logfile == NULL)
+        return 0;
+    
+    if (strcmp(log_filename, logfile) == 0)
+        return 1;
+    
+    // test the new file can be opened because freopen modifies original when it fails
+    FILE* test_file;
+    if ((test_file = fopen(logfile, log_overwrite ? "w" : "a")) == NULL)
+        return 0;
+    fclose(test_file);
+
+	// Re-open the log file once for lifetime of program
+    if (freopen(logfile, log_overwrite ? "w" : "a", pLogFile) == NULL) {
+        // try reopening the original file
+        freopen(log_filename, "a", pLogFile);
+        return 0;
+    }
+    
+    strcpy(log_filename, logfile);
+    return 1;
+}
+
 // printf style logging to stdout and logfile
 
 extern void logF(const char *fmt, ...)
@@ -113,7 +177,7 @@ extern void vlogTF(const char *fmt, va_list ap)
 	struct tm l;
 	localtime_r(&now, &l);
 
-	printf("%02d:%02d:%02d.%06ld ", l.tm_hour, l.tm_min, l.tm_sec, tv.tv_usec);
+	printf("%02d %02d:%02d:%02d.%06ld ", l.tm_mday, l.tm_hour, l.tm_min, l.tm_sec, tv.tv_usec);
 	vprintf(fmt, ap);
 	fflush(stdout);
 
@@ -122,7 +186,7 @@ extern void vlogTF(const char *fmt, va_list ap)
 		logfile_open = openLogFile(NULL);
 
 	if (logfile_open) {
-		fprintf(pLogFile, "%02d:%02d:%02d.%06ld ", l.tm_hour, l.tm_min, l.tm_sec, tv.tv_usec);
+		fprintf(pLogFile, "%02d %02d:%02d:%02d.%06ld ", l.tm_mday, l.tm_hour, l.tm_min, l.tm_sec, tv.tv_usec);
 		vfprintf(pLogFile, fmt, ap);
 		fflush(pLogFile);
 	}
@@ -141,7 +205,7 @@ extern void logTF(const char *fmt, ...)
 	struct tm l;
 	localtime_r(&now, &l);
 
-	printf("%02d:%02d:%02d.%06ld ", l.tm_hour, l.tm_min, l.tm_sec, tv.tv_usec);
+	printf("%02d %02d:%02d:%02d.%06ld ", l.tm_mday, l.tm_hour, l.tm_min, l.tm_sec, tv.tv_usec);
 	vprintf(fmt, ap);
 	fflush(stdout);
 
@@ -150,7 +214,7 @@ extern void logTF(const char *fmt, ...)
 		logfile_open = openLogFile(NULL);
 
 	if (logfile_open) {
-		fprintf(pLogFile, "%02d:%02d:%02d.%06ld ", l.tm_hour, l.tm_min, l.tm_sec, tv.tv_usec);
+		fprintf(pLogFile, "%02d %02d:%02d:%02d.%06ld ", l.tm_mday, l.tm_hour, l.tm_min, l.tm_sec, tv.tv_usec);
 		vfprintf(pLogFile, fmt, ap);
 		fflush(pLogFile);
 	}
@@ -176,7 +240,7 @@ extern void logFF(const char *fmt, ...)
 		logfile_open = openLogFile(NULL);
 
 	if (logfile_open) {
-		fprintf(pLogFile, "%02d:%02d:%02d.%06ld ", l.tm_hour, l.tm_min, l.tm_sec, tv.tv_usec);
+		fprintf(pLogFile, "%02d %02d:%02d:%02d.%06ld ", l.tm_mday, l.tm_hour, l.tm_min, l.tm_sec, tv.tv_usec);
 		vfprintf(pLogFile, fmt, ap);
 		fflush(pLogFile);
 	}

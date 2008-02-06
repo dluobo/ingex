@@ -98,6 +98,7 @@ typedef struct
 {
     int64_t position;
     int type;
+    int64_t pairedPosition;
 } Mark;
 
 /* note: source and sink ownership is not transferred to player */
@@ -112,6 +113,7 @@ void ply_close_player(MediaPlayer** player);
 int ply_get_marks(MediaPlayer* player, Mark** marks);
 MediaSink* ply_get_media_sink(MediaPlayer* player);
 void ply_set_menu_handler(MediaPlayer* player, MenuHandler* handler);
+void ply_enable_clip_marks(MediaPlayer* player, int markType);
 
 
 

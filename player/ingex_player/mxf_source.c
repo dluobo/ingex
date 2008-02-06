@@ -10,6 +10,7 @@
 
 #include <mxf_reader.h>
 #include <d3_mxf_info_lib.h>
+#include <mxf/mxf_page_file.h>
 
 
 struct _MXFReaderListenerData
@@ -600,6 +601,7 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
     int haveD3LTC = 0;
     int64_t duration = -1;
     char progNo[16];
+    int sourceId;
     
     assert(MAX_SOURCE_INFO_VALUE_LEN <= 128);
     assert(sizeof(uint8_t) == sizeof(unsigned char));
@@ -609,10 +611,21 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
     mxf_log = mxf_log_connect;
     
     
-    if (!mxf_disk_file_open_read(filename, &mxfFile))
+    if (strstr(filename, "%d") != NULL)
     {
-        ml_log_error("Failed to open MXF file '%s'\n", filename);
-        return 0;
+        if (!mxf_page_file_open_read(filename, &mxfFile))
+        {
+            ml_log_error("Failed to open MXF page file '%s'\n", filename);
+            return 0;
+        }
+    }
+    else
+    {
+        if (!mxf_disk_file_open_read(filename, &mxfFile))
+        {
+            ml_log_error("Failed to open MXF disk file '%s'\n", filename);
+            return 0;
+        }
     }
     
     /* TODO: test non-seekable files */
@@ -688,11 +701,16 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
     
     CALLOC_OFAIL(newSource->streamData, StreamData, newSource->numStreams);
 
+    sourceId = msc_create_id();
+    
     for (i = 0; i < newSource->numTracks; i++)
     {
         MXFTrack* track = get_mxf_track(newSource->mxfReader, i);
         
         CHK_OFAIL(initialise_stream_info(&newSource->streamData[i].streamInfo));
+        
+        newSource->streamData[i].streamInfo.sourceId = sourceId;
+        
         CHK_OFAIL(add_known_source_info(&newSource->streamData[i].streamInfo, SRC_INFO_FILE_NAME, 
             convert_filename(filename, stringBuf)));
         if (newSource->isD3MXF)
@@ -724,15 +742,22 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
                     d3MXFInfo.d3InfaxData.epTitle));
                 CHK_OFAIL(add_known_source_info(&newSource->streamData[i].streamInfo, SRC_INFO_D3MXF_TX_DATE, 
                     convert_date(&d3MXFInfo.d3InfaxData.txDate, stringBuf)));
+                progNo[0] = '\0';
                 if (strlen(d3MXFInfo.d3InfaxData.magPrefix) > 0)
                 {
-                    strcpy(progNo, d3MXFInfo.d3InfaxData.magPrefix);
+                    strcat(progNo, d3MXFInfo.d3InfaxData.magPrefix);
                     strcat(progNo, ":");
-                    strcat(progNo, d3MXFInfo.d3InfaxData.progNo);
                 }
-                else
+                strcat(progNo, d3MXFInfo.d3InfaxData.progNo);
+                if (strlen(d3MXFInfo.d3InfaxData.prodCode) > 0)
                 {
-                    strcpy(progNo, d3MXFInfo.d3InfaxData.progNo);
+                    strcat(progNo, "/");
+                    if (strlen(d3MXFInfo.d3InfaxData.prodCode) == 1 && 
+                        d3MXFInfo.d3InfaxData.prodCode[0] >= '0' && d3MXFInfo.d3InfaxData.prodCode[0] <= '9')
+                    {
+                        strcat(progNo, "0");
+                    }
+                    strcat(progNo, d3MXFInfo.d3InfaxData.prodCode);
                 }
                 CHK_OFAIL(add_known_source_info(&newSource->streamData[i].streamInfo, SRC_INFO_D3MXF_PROGRAMME_NUMBER, 
                     progNo));
@@ -792,6 +817,10 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
                 newSource->streamData[i].streamInfo.format = AVID_MJPEG_FORMAT;
                 newSource->streamData[i].streamInfo.singleField = 1;
             }
+            else if (mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(DNxHD1080i120ClipWrapped)))
+            {
+                newSource->streamData[i].streamInfo.format = AVID_DNxHD_FORMAT;
+            }
             else
             {
                 newSource->streamData[i].streamInfo.format = UNKNOWN_FORMAT;
@@ -814,6 +843,7 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
     newSource->streamData[newSource->numTracks].streamInfo.format = TIMECODE_FORMAT;
     newSource->streamData[newSource->numTracks].streamInfo.timecodeType = CONTROL_TIMECODE_TYPE;
     newSource->streamData[newSource->numTracks].streamInfo.timecodeSubType = NO_TIMECODE_SUBTYPE;
+    newSource->streamData[newSource->numTracks].streamInfo.sourceId = sourceId;
     
     /* source timecodes */
     for (i = 0; i < numSourceTimecodes; i++)
@@ -823,6 +853,7 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
         newSource->streamData[newSource->numTracks + 1 + i].streamInfo.type = TIMECODE_STREAM_TYPE;
         newSource->streamData[newSource->numTracks + 1 + i].streamInfo.format = TIMECODE_FORMAT;
         newSource->streamData[newSource->numTracks + 1 + i].streamInfo.timecodeType = SOURCE_TIMECODE_TYPE;
+        newSource->streamData[newSource->numTracks + 1 + i].streamInfo.sourceId = sourceId;
         if (newSource->isD3MXF)
         {
             /* we are only interested in the VITC and LTC source timecodes */

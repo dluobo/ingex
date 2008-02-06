@@ -19,12 +19,18 @@
 
 #include <string>
 
-const char * const USAGE = "Usage: Routerlogger.exe [-r <router port>] [-t <timecode port>] [-n <name>] [-d <dest>] <CORBA options>\n"
+const char * const USAGE = "Usage: Routerlogger.exe [-r <router port>] [-t <timecode port>] [-n <name>] [-d <dest>] [-b <db file>] <CORBA options>\n"
     "    example CORBA options: -ORBDefaultInitRef corbaloc:iiop:192.168.1.1:8888\n";
 
 
 // Static member
 routerloggerApp * routerloggerApp::mInstance = 0;
+
+// Constructor
+routerloggerApp::routerloggerApp()
+: mpServant(0)
+{
+}
 
 bool routerloggerApp::Init(int argc, char * argv[])
 {
@@ -40,14 +46,15 @@ bool routerloggerApp::Init(int argc, char * argv[])
     }
 
 	// get command line args
-    static const ACE_TCHAR options[] = ACE_TEXT (":t:r:n:d:h");
+    static const ACE_TCHAR options[] = ACE_TEXT (":t:r:n:d:b:h");
 	ACE_Get_Opt cmd_opts (argc, argv, options);
 
 
     std::string routerlogger_name = "RouterLog"; // default name
     std::string router_port; // default blank, router will be discovered
     std::string tc_port;
-    unsigned int dest = 0; // default destination to watch
+    unsigned int dest = 1; // default destination to watch
+    std::string db_file = "C:\\TEMP\\RouterLogs\\database.txt";
 
 	int option;
 	while ((option = cmd_opts ()) != EOF)
@@ -81,6 +88,11 @@ bool routerloggerApp::Init(int argc, char * argv[])
         case 'd':
             // Router destination to record
             dest = ACE_OS::atoi( cmd_opts.opt_arg() );
+            break;
+
+        case 'b':
+            // cuts databse filename
+            db_file = ACE_TEXT_ALWAYS_CHAR( cmd_opts.opt_arg() );
             break;
 	
 		case 'h':
@@ -119,7 +131,7 @@ bool routerloggerApp::Init(int argc, char * argv[])
 
 // and initialise
     mpServant->Name(routerlogger_name);
-	bool ok = mpServant->Init(router_port, tc_port, dest);
+	bool ok = mpServant->Init(router_port, tc_port, dest, db_file);
 
 // incarnate servant object
 	mRef = mpServant->_this();
@@ -132,7 +144,7 @@ bool routerloggerApp::Init(int argc, char * argv[])
 	mName.length(3);
 	mName[0].id = CORBA::string_dup("ProductionAutomation");
 	mName[1].id = CORBA::string_dup("RecordingDevices");
-	mName[2].id = CORBA::string_dup(std::string(routerlogger_name).c_str());
+	mName[2].id = CORBA::string_dup(routerlogger_name.c_str());
 
 
 // Try to advertise in naming services
@@ -181,6 +193,9 @@ void routerloggerApp::Clean()
 // Deactivate the CORBA object and
 // relinquish our reference to the servant.
 // The POA will delete it at an appropriate time.
-	mpServant->Destroy();
+    if (mpServant)
+    {
+	    mpServant->Destroy();
+    }
 }
 

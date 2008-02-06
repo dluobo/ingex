@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_xv.c,v 1.1 2007/10/26 16:54:19 john_f Exp $
+ * $Id: nexus_xv.c,v 1.2 2008/02/06 16:59:01 john_f Exp $
  *
  * Utility to display current video frame on X11 display.
  *
@@ -261,7 +261,7 @@ static void usage_exit(void)
 {
     fprintf(stderr, "Usage: nexus_xv [options]\n");
     fprintf(stderr, "\n");
-    fprintf(stderr, "    -c card    view video on given card [default 0]\n");
+    fprintf(stderr, "    -c channel view video on given channel [default 0]\n");
     fprintf(stderr, "    -uyvy      switch to UYVY view (4:2:2)\n");
 	exit(1);
 }
@@ -271,7 +271,7 @@ extern int main(int argc, char *argv[])
 	int				shm_id, control_id;
 	uint8_t			*ring[MAX_CHANNELS];
 	NexusControl	*pctl = NULL;
-	int				cardnum = 0, yuv_mode = 1;
+	int				channelnum = 0, yuv_mode = 1;
 
 	int n;
 	for (n = 1; n < argc; n++)
@@ -283,10 +283,10 @@ extern int main(int argc, char *argv[])
 		else if (strcmp(argv[n], "-c") == 0)
 		{
 			if (n+1 >= argc ||
-				sscanf(argv[n+1], "%d", &cardnum) != 1 ||
-				cardnum > 3 || cardnum < 0)
+				sscanf(argv[n+1], "%d", &channelnum) != 1 ||
+				channelnum > 7 || channelnum < 0)
 			{
-				fprintf(stderr, "-c requires integer card number {0,1,2,3}\n");
+				fprintf(stderr, "-c requires integer channel number {0...7}\n");
 				return 1;
 			}
 			n++;
@@ -321,19 +321,19 @@ extern int main(int argc, char *argv[])
 		printf("connected to pctl\n");
 
 	if (verbose)
-		printf("  cards=%d elementsize=%d ringlen=%d\n",
-				pctl->cards,
+		printf("  channels=%d elementsize=%d ringlen=%d\n",
+				pctl->channels,
 				pctl->elementsize,
 				pctl->ringlen);
 
-	if (cardnum+1 > pctl->cards)
+	if (channelnum+1 > pctl->channels)
 	{
-		printf("  cardnum not available\n");
+		printf("  channelnum not available\n");
 		return 1;
 	}
 
 	int i;
-	for (i = 0; i < pctl->cards; i++)
+	for (i = 0; i < pctl->channels; i++)
 	{
 		while (1)
 		{
@@ -344,7 +344,7 @@ extern int main(int argc, char *argv[])
 		}
 		ring[i] = (uint8_t*)shmat(shm_id, NULL, SHM_RDONLY);
 		if (verbose)
-			printf("  attached to card[%d]\n", i);
+			printf("  attached to channel[%d]\n", i);
 	}
 
 	int						xvport;
@@ -383,7 +383,7 @@ extern int main(int argc, char *argv[])
 					0, 0, width, height,
 					0, 0, InputOutput, 0,
 					CWBackingStore | CWBackPixel | CWEventMask, &x_attr);
-		snprintf(title_string, sizeof(title_string)-1, "Nexus Monitor Input %d", cardnum);
+		snprintf(title_string, sizeof(title_string)-1, "Nexus Monitor Input %d", channelnum);
 		XStoreName(display, window, title_string);
 		XSelectInput(display, window, StructureNotifyMask);
 		XMapWindow(display, window);
@@ -415,7 +415,7 @@ extern int main(int argc, char *argv[])
 
 
 	NexusBufCtl *pc;
-	pc = &pctl->card[cardnum];
+	pc = &pctl->channel[channelnum];
 	int tc, ltc;
 	int last_saved = -1;
  	int frame_size = width*height*2;
@@ -434,15 +434,15 @@ extern int main(int argc, char *argv[])
 			continue;
 		}
 
-		tc = *(int*)(ring[cardnum] + pctl->elementsize *
+		tc = *(int*)(ring[channelnum] + pctl->elementsize *
 									(pc->lastframe % pctl->ringlen)
-							+ pctl->tc_offset);
-		ltc = *(int*)(ring[cardnum] + pctl->elementsize *
+							+ pctl->vitc_offset);
+		ltc = *(int*)(ring[channelnum] + pctl->elementsize *
 									(pc->lastframe % pctl->ringlen)
 							+ pctl->ltc_offset);
 
 		memcpy(yuv_image->data,
-					ring[cardnum] + video_offset +
+					ring[channelnum] + video_offset +
 									pctl->elementsize *
 									(pc->lastframe % pctl->ringlen),
 					frame_size);
@@ -455,7 +455,7 @@ extern int main(int argc, char *argv[])
 
 		if (verbose) {
 			printf("\rcam%d lastframe=%d  tc=%10d  %s   ltc=%11d  %s ",
-					cardnum, pc->lastframe,
+					channelnum, pc->lastframe,
 					tc, framesToStr(tc, tcstr), ltc, framesToStr(ltc, ltcstr));
 			fflush(stdout);
 		}

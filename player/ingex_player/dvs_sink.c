@@ -10,6 +10,7 @@
 #include "dvs_sink.h"
 #include "on_screen_display.h"
 #include "video_conversion.h"
+#include "YUV_frame.h"
 #include "utils.h"
 #include "logging.h"
 #include "macros.h"
@@ -443,8 +444,15 @@ static void* get_dvs_state_info_thread(void* arg)
                     {
                         sv_info status_info;
                         sv_status(sink->sv, &status_info);
-                        SV_CHK_ORET(sv_sync(sink->sv, status_info.sync));
-                        ml_log_warn("DVS card frame drop - resetting sync to avoid av sync problem\n");
+                        int res;
+                        if ((res = sv_sync(sink->sv, status_info.sync)) != SV_OK)
+                        {
+                            ml_log_warn("Failed to reset DVS card after frame drop: %s\n", sv_geterrortext(res));
+                        }
+                        else
+                        {
+                            ml_log_warn("DVS card frame drop - resetting sync to avoid av sync problem\n");
+                        }
                     }
 
                     /* refill the fifo to the minimum level */
@@ -469,7 +477,7 @@ static void* get_dvs_state_info_thread(void* arg)
                 }
 
                 
-#if 0
+#if 1
                 if (sink->numBuffersFilled < MIN_REPEAT_FIFO_BUFFERS - 1)
                 {
                     printf("*********WARNING: fifo nearing empty\n");
@@ -644,9 +652,10 @@ static int dvs_accept_stream(void* data, const StreamInfo* streamInfo)
 {
     DVSSink* sink = (DVSSink*)data;
     
-    /* video, 25 fps, UYVY */
+    /* video, 25 fps, UYVY/YUV422 */
     if (streamInfo->type == PICTURE_STREAM_TYPE &&
-        streamInfo->format == UYVY_FORMAT &&
+        (streamInfo->format == UYVY_FORMAT || 
+            streamInfo->format == YUV422_FORMAT) &&
         memcmp(&streamInfo->frameRate, &g_palFrameRate, sizeof(Rational)) == 0 &&
         (sink->fitVideo ||
             ((unsigned int)streamInfo->width == sink->rasterWidth &&
@@ -705,8 +714,15 @@ static int dvs_register_stream(void* data, int streamId, const StreamInfo* strea
         
         if (sink->osd != NULL && !sink->osdInitialised)
         {
+            /* TODO: clean this up */
+            /* set the format to UYVY because YUV422 inputs will be converted */
+            formats format = streamInfo->format;
+            ((StreamInfo*)streamInfo)->format = UYVY_FORMAT;            
+            
             CHK_ORET(osd_initialise(sink->osd, streamInfo, &sink->aspectRatio));
             sink->osdInitialised = 1;
+
+            ((StreamInfo*)streamInfo)->format = format;            
         }
 
         dvsStream = &sink->videoStream;
@@ -714,7 +730,8 @@ static int dvs_register_stream(void* data, int streamId, const StreamInfo* strea
         dvsStream->streamId = streamId;
         dvsStream->streamInfo = *streamInfo;
         dvsStream->dataSize = streamInfo->width * streamInfo->height * 2;
-        if ((unsigned int)streamInfo->width == sink->rasterWidth &&
+        if (streamInfo->format == UYVY_FORMAT &&
+            (unsigned int)streamInfo->width == sink->rasterWidth &&
             ((unsigned int)streamInfo->height == sink->rasterHeight || 
                     (streamInfo->height == 576 && sink->rasterHeight == 592)))
         {
@@ -738,7 +755,13 @@ static int dvs_register_stream(void* data, int streamId, const StreamInfo* strea
             CALLOC_ORET(dvsStream->data[1], unsigned char, dvsStream->dataSize);
 
             dvsStream->ownData = 1;
-            dvsStream->requireFit = 1;
+            
+            if ((unsigned int)streamInfo->width != sink->rasterWidth ||
+                ((unsigned int)streamInfo->height != sink->rasterHeight && 
+                    !(streamInfo->height == 576 && sink->rasterHeight == 592)))
+            {
+                dvsStream->requireFit = 1;
+            }
         }
     }
     else if (streamInfo->type == SOUND_STREAM_TYPE)
@@ -884,8 +907,18 @@ static int dvs_complete_frame(void* data, const FrameInfo* frameInfo)
     /* if video is not present than set to black */
     if (!sink->videoStream.isPresent)
     {
-	fill_black(UYVY_FORMAT, sink->width, sink->height, sink->videoStream.data[sink->currentFifoBuffer]);
+        fill_black(UYVY_FORMAT, sink->width, sink->height, sink->videoStream.data[sink->currentFifoBuffer]);
     }
+    /* else convert yuv422 input video */
+    else if (sink->videoStream.streamInfo.format == YUV422_FORMAT)
+    {
+        yuv422_to_uyvy_2(sink->width, sink->height, 0, sink->videoStream.data[sink->currentFifoBuffer], 
+            fifoBuffer->buffer);
+        
+        /* TODO: avoid this memcpy */
+        memcpy(sink->videoStream.data[sink->currentFifoBuffer], fifoBuffer->buffer, sink->width * sink->height * 2);        
+    }
+    
     
     /* reverse fields if reverse play */    
     if (sink->videoStream.isPresent && frameInfo->reversePlay)
@@ -1141,6 +1174,22 @@ static void dvs_close(void* data)
     join_thread(&sink->dvsStateInfoThreadId, NULL, NULL);
     
     
+    /* display a blank frame before we leave */
+    if (sink->sv != NULL && sink->svfifo != NULL)
+    {
+        memset(sink->fifoBuffer[0].buffer, 0, sink->fifoBuffer[0].bufferSize);
+        fill_black(UYVY_FORMAT, sink->rasterWidth, sink->rasterHeight, sink->fifoBuffer[0].buffer);
+        sink->fifoBuffer[0].vitcCount = 0;
+        sink->fifoBuffer[0].ltcCount = 0;
+        memset(&sink->fifoBuffer[0].vitcTimecode, 0, sizeof(sink->fifoBuffer[0].vitcTimecode));
+        memset(&sink->fifoBuffer[0].extraVITCTimecode, 0, sizeof(sink->fifoBuffer[0].extraVITCTimecode));
+        
+        PTHREAD_MUTEX_LOCK(&sink->frameInfosMutex);
+        display_on_sv_fifo(sink, &sink->fifoBuffer[0]);
+        PTHREAD_MUTEX_UNLOCK(&sink->frameInfosMutex);
+    }
+    
+    
     if (sink->videoStream.ownData)
     {
         SAFE_FREE(&sink->videoStream.data[0]);
@@ -1213,7 +1262,7 @@ int dvs_card_is_available()
 
         res = sv_openex(&sv, 
                         card_str,
-                        SV_OPENPROGRAM_DEMOPROGRAM,
+                        SV_OPENPROGRAM_APPLICATION,
                         SV_OPENTYPE_OUTPUT,
                         0,
                         0);
@@ -1290,7 +1339,7 @@ int dvs_open(SDIVITCSource sdiVITCSource, int extraSDIVITCSource, int numBuffers
 
         int res = sv_openex(&newSink->sv,
                             card_str,
-                            SV_OPENPROGRAM_DEMOPROGRAM,
+                            SV_OPENPROGRAM_APPLICATION,
                             SV_OPENTYPE_OUTPUT,
                             0,
                             0);
@@ -1360,7 +1409,6 @@ int dvs_open(SDIVITCSource sdiVITCSource, int extraSDIVITCSource, int numBuffers
                             numBuffers) );           // nFrames (0 means use maximum)
 
 
-
     sv_fifo_info fifo_info;
     SV_CHK_OFAIL(sv_fifo_status(sv, newSink->svfifo, &fifo_info));
     newSink->numBuffers = fifo_info.nbuffers;
@@ -1408,6 +1456,7 @@ void dvs_close_card(DVSSink* sink)
     {
         // NOTE: not calling sv_fifo_free because it was found to block when frames are still present in the fifo 
         // (is this caused by sv_fifo_status calls in the separate dvs state info thread?)
+
         sv_close(sink->sv);
     }
 }

@@ -1,5 +1,5 @@
 /*
- * $Id: video_test_signals.c,v 1.1 2007/09/11 14:08:01 stuart_hc Exp $
+ * $Id: video_test_signals.c,v 1.2 2008/02/06 16:58:51 john_f Exp $
  *
  * Video test frames
  *
@@ -23,6 +23,7 @@
  
 #include <inttypes.h>
 #include <string.h>
+#include <stdlib.h>
 
 #include "video_test_signals.h"
 
@@ -78,6 +79,37 @@ static void create_colour_bars(unsigned char *video_buffer, int width, int heigh
 	}
 }
 
+// Random number between 16 and 235 inclusive (range of 220)
+static int rand_y(void)
+{
+	return rand() % 220 + 16;
+}
+
+// Random number between 0 and 255 inclusive
+static int rand_uv(void)
+{
+	return rand() % 256;
+}
+
+// Generate a random video frame, adhering to 16-235 legal range
+// Useful for stress-testing video encoders
+void uyvy_random_frame(int width, int height, unsigned char *video_buffer)
+{
+	int				i,j;
+
+	for (j = 0; j < height; j++)
+	{
+		for (i = 0; i < width; i+=2)
+		{
+			// UYVY packing
+			video_buffer[j*width*2 + i*2 + 0] = rand_uv();
+			video_buffer[j*width*2 + i*2 + 1] = rand_y();
+			video_buffer[j*width*2 + i*2 + 2] = rand_uv();
+			video_buffer[j*width*2 + i*2 + 3] = rand_y();
+		}
+	}
+}
+
 
 void uyvy_color_bars(int width, int height, uint8_t *output)
 {
@@ -120,3 +152,26 @@ void uyvy_no_video_frame(int width, int height, uint8_t *output)
 		}
 	}
 }	
+
+void yuv420p_black_frame(int width, int height, uint8_t *output)
+{
+    int ySize = width * height;
+    int uSize = width * height / 4;
+
+    uint8_t* y = output;
+    uint8_t* u = output + ySize;
+    uint8_t* v = output + ySize + uSize;
+    
+    int i;
+    for (i = 0; i < ySize; i++)
+    {
+        (*y++) = 0x10;
+        if (i < uSize)
+        {
+            (*u++) = 0x80;
+            (*v++) = 0x80;
+        }
+    }
+}
+
+

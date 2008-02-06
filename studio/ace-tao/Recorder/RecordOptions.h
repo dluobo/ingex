@@ -1,7 +1,7 @@
 /*
- * $Id: RecordOptions.h,v 1.2 2007/10/26 16:07:21 john_f Exp $
+ * $Id: RecordOptions.h,v 1.3 2008/02/06 16:58:59 john_f Exp $
  *
- * Class for card-specific (i.e. thread-specific) recording data.
+ * Class for channel-specific (i.e. thread-specific) recording data.
  *
  * Copyright (C) 2006  British Broadcasting Corporation.
  * All Rights Reserved.
@@ -30,6 +30,8 @@
 #include <ace/Thread_Mutex.h>
 #include <ace/Guard_T.h>
 
+#include "Package.h" // for prodauto::ProjectName
+
 #include "integer_types.h"
 #include "recorder_types.h" // for framecount_t
 #include "RecorderSettings.h" // for Wrapping::EnumType
@@ -40,9 +42,9 @@ class RecordOptions
 public:
     RecordOptions();
 
-    int card_num;
-    int index; ///< To distinguish multiple encodings on the same input/card.
-    bool quad; ///< True for encoding from multiple inputs/cards.
+    int channel_num;
+    int index; ///< To distinguish multiple encodings on the same input/channel.
+    bool quad; ///< True for encoding from multiple inputs/channels.
 
     Coding::EnumType coding;
     int resolution; // using this rather than coding
@@ -52,7 +54,7 @@ public:
 
     std::string file_ident;
     std::string description;
-    std::string project; ///< Avid project name.
+    prodauto::ProjectName project; ///< Avid project name.
 
     framecount_t FramesWritten()
     {

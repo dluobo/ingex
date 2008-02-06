@@ -15,7 +15,7 @@ int YUV_frame_from_buffer(YUV_frame* frame, void* buffer,
     frame->Y.h = h;
     switch (format)
     {
-    case YV12: case IF09: case YVU9: case IYUV: case Y42B: case I420:
+    case YV12: case IF09: case YVU9: case IYUV: case Y42B: case I420: case YUV422:
         frame->Y.pixelStride = 1;
         break;
     case UYVY: case YUY2: case YVYU: case HDYC:
@@ -58,6 +58,12 @@ int YUV_frame_from_buffer(YUV_frame* frame, void* buffer,
         frame->U.w = w / 2;
         frame->U.lineStride = frame->Y.lineStride / 2;
         break;
+    case YUV422:
+        if (w % 2 != 0)
+            return 0;
+        frame->U.w = w / 2;
+        frame->U.lineStride = frame->Y.lineStride / 2;
+        break;
     default:
         return 0;
     }
@@ -79,7 +85,7 @@ int YUV_frame_from_buffer(YUV_frame* frame, void* buffer,
         frame->U.buff = frame->Y.buff + 3;
         frame->V.buff = frame->Y.buff + 1;
         break;
-    case IYUV: case IF09: case YVU9: case Y42B: case I420:
+    case IYUV: case IF09: case YVU9: case Y42B: case I420: case YUV422:
         frame->Y.buff = buffer;
         frame->U.buff = frame->Y.buff + (frame->Y.lineStride * frame->Y.h);
         frame->V.buff = frame->U.buff + (frame->U.lineStride * frame->U.h);
@@ -103,7 +109,7 @@ int alloc_YUV_frame(YUV_frame* frame,
 
     switch (format)
     {
-    case UYVY: case YUY2: case YVYU: case HDYC: case Y42B:
+    case UYVY: case YUY2: case YVYU: case HDYC: case Y42B: case YUV422:
         size = (w * h) * 2;
         break;
     case YV12: case IYUV: case I420:
@@ -176,4 +182,24 @@ extern void YUV_709(float R, float G, float B, BYTE* Y, BYTE* U, BYTE* V)
     *Y =  16+((219.0*( (0.2126*R)+(0.7152*G)+(0.0722*B)))+0.5);
     *U = 128+((112.0*(-(0.2126*R)-(0.7152*G)+(0.9278*B))/0.9278)+0.5);
     *V = 128+((112.0*( (0.7874*R)-(0.7152*G)-(0.0722*B))/0.7874)+0.5);
+}
+
+void extract_field(component* in_frame, component* out_field, int field_no)
+{
+    *out_field = *in_frame;
+    if (field_no == 0)
+        out_field->h = (out_field->h + 1) / 2;
+    else
+    {
+        out_field->h = out_field->h / 2;
+        out_field->buff += out_field->lineStride;
+    }
+    out_field->lineStride = out_field->lineStride * 2;
+}
+
+void extract_YUV_field(YUV_frame* in_frame, YUV_frame* out_field, int field_no)
+{
+    extract_field(&in_frame->Y, &out_field->Y, field_no);
+    extract_field(&in_frame->U, &out_field->U, field_no);
+    extract_field(&in_frame->V, &out_field->V, field_no);
 }

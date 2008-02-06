@@ -1,5 +1,5 @@
 /*
- * $Id: Recorder.cpp,v 1.1 2007/09/11 14:08:39 stuart_hc Exp $
+ * $Id: Recorder.cpp,v 1.2 2008/02/06 16:59:07 john_f Exp $
  *
  * Recorder and configuration
  *
@@ -194,7 +194,8 @@ int RecorderConfig::getIntParam(string name, int defaultValue)
     int value;
     if (sscanf((*iter).second.value.c_str(), "%d", &value) != 1)
     {
-        Logging::warning("Getting invalid int parameter value '%s'", 
+        Logging::warning("Getting invalid int parameter name '%s', value '%s'\n", 
+            name.c_str(),
             (*iter).second.value.c_str());
         return defaultValue;
     }
@@ -220,8 +221,10 @@ bool RecorderConfig::getBoolParam(string name, bool defaultValue)
         return false;
     }
     
-    Logging::warning("Getting invalid boolean parameter value '%s'; "
-        "should be either 'true' or 'false'", (*iter).second.value.c_str());
+    Logging::warning("Getting invalid boolean parameter name '%s', value '%s'"
+        "; should be either 'true' or 'false'\n",
+        name.c_str(),
+        (*iter).second.value.c_str());
     return defaultValue;
 }
 
@@ -238,8 +241,10 @@ Rational RecorderConfig::getRationalParam(string name, Rational defaultValue)
     long denom;
     if (sscanf((*iter).second.value.c_str(), " %ld / %ld ", &num, &denom) != 2)
     {
-        Logging::warning("Getting invalid rational parameter value '%s'; "
-            "should be '<numerator>/<denominator>'", (*iter).second.value.c_str());
+        Logging::warning("Getting invalid rational parameter name '%s', value '%s'"
+            "; should be '<numerator>/<denominator>'\n",
+            name.c_str(),
+            (*iter).second.value.c_str());
         return defaultValue;
     }
     

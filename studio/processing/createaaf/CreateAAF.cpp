@@ -1,5 +1,5 @@
 /*
- * $Id: CreateAAF.cpp,v 1.1 2007/09/11 14:08:44 stuart_hc Exp $
+ * $Id: CreateAAF.cpp,v 1.2 2008/02/06 16:59:12 john_f Exp $
  *
  * AAF file for defining clips, multi-camera clips, etc
  *
@@ -167,6 +167,7 @@ static wchar_t* getSlotName(bool isPicture, bool isTimecode, int count)
     return wSlotName;
 }
 
+
 // auto-deletes wide string
 class WStringReturn
 {
@@ -190,6 +191,33 @@ static WStringReturn convertName(string name)
     
     return wName;
 }
+
+static WStringReturn createExtendedClipName(string name, int64_t startPosition)
+{
+    WStringReturn wName(convertName(name));
+
+    size_t size = wcslen(wName) + 33;
+    wchar_t* result = new wchar_t[size];
+    
+    if (startPosition < 0)
+    {
+        swprintf(result, size, L"%ls.0", (wchar_t*)wName);
+    }
+    else
+    {
+        swprintf(result, size, L"%ls.%02d%02d%02d%02d",
+            (wchar_t*)wName,
+            (int)(startPosition / (60 * 60 * 25)),
+            (int)((startPosition % (60 * 60 * 25)) / (60 * 25)),
+            (int)(((startPosition % (60 * 60 * 25)) % (60 * 25)) / 25),
+            (int)(((startPosition % (60 * 60 * 25)) % (60 * 25)) % 25));
+    }
+    
+    result[size - 1] = L'\0';
+    
+    return result;
+}
+
 
 
 
@@ -338,7 +366,8 @@ void AAFFile::addClip(MaterialPackage* materialPackage, PackageSet& packages)
     }
 }
 
-void AAFFile::addMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPackages, PackageSet& packages)
+void AAFFile::addMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPackages, PackageSet& packages,
+    vector<CutInfo> sequence)
 {
     try
     {
@@ -400,7 +429,7 @@ void AAFFile::addMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPackag
         {
             // create composition mob collecting together all mob slots from all master mobs
             // and create a multi-camera clip composition mob
-            createMCClip(mcClipDef, activeMaterialPackages, packages);
+            createMCClip(mcClipDef, activeMaterialPackages, packages, sequence);
         }
         
     }
@@ -598,15 +627,19 @@ bool AAFFile::getSource(Track* track, PackageSet& packages, SourcePackage** file
 
 
 // TODO: handle case where master mobs have different start timecodes
-void AAFFile::createMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPackages, PackageSet& packages)
+void AAFFile::createMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPackages, PackageSet& packages,
+    vector<CutInfo> sequence)
 {
     IAAFSmartPointer<IEnumAAFMobSlots> pEnumMobSlots;
     IAAFSmartPointer<IAAFMob> pCollectionMob;
     IAAFSmartPointer<IAAFMob> pMCMob;
+    IAAFSmartPointer<IAAFMob> pSeqMob;
     IAAFSmartPointer<IAAFMob> pMob;
     IAAFSmartPointer<IAAFMob2> pMob2;
     IAAFSmartPointer<IAAFMobSlot> pMobSlot;
+    IAAFSmartPointer<IAAFMobSlot> pSequenceMobSlot;
     IAAFSmartPointer<IAAFTimelineMobSlot> pTimelineMobSlot;
+    IAAFSmartPointer<IAAFTimelineMobSlot> pCollectionTimelineMobSlot;
     IAAFSmartPointer<IAAFDataDef> pDataDef;
     IAAFSmartPointer<IAAFSourceClip> pSourceClip;
     IAAFSmartPointer<IAAFSequence> pSequence;
@@ -626,7 +659,15 @@ void AAFFile::createMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPac
     aafLength_t length; 
     aafSlotID_t collectionSlotID = 1;
     aafSlotID_t mcSlotID = 1;
+    bool includeSequence = !sequence.empty();
+    aafSlotID_t seqSlotID = 1;
+    int seqPictureSlotCount = 0;
+    int seqSoundSlotCount = 0;
+    Rational editRateForName = {25, 1}; // TODO: don't hard code
+    int64_t startPosition = 0;
 
+    // get the start time which we will use to set the multi-camera name and sequence name
+    startPosition = getStartTime(*materialPackages.begin(), packages, editRateForName);
     
     // create collection composition mob (Avid application code 5)
     AAF_CHECK(pCDCompositionMob->CreateInstance(IID_IAAFCompositionMob, (IUnknown **)&pCollectionCompositionMob));
@@ -640,8 +681,19 @@ void AAFFile::createMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPac
     AAF_CHECK(pClipCompositionMob->QueryInterface(IID_IAAFMob2, (void **)&pMob2));
     AAF_CHECK(pMob2->SetUsageCode(kAAFUsage_LowerLevel));
     setAppCode(pMCMob, 4);
-    AAF_CHECK(pMCMob->SetName(convertName(mcClipDef->name)));
+    AAF_CHECK(pMCMob->SetName(createExtendedClipName(mcClipDef->name, startPosition)));
     AAF_CHECK(pHeader->AddMob(pMCMob));
+    
+    if (includeSequence)
+    {
+        // create multi-camera sequence composition mob
+        AAF_CHECK(pCDCompositionMob->CreateInstance(IID_IAAFCompositionMob, (IUnknown **)&pSequenceCompositionMob));
+        AAF_CHECK(pSequenceCompositionMob->QueryInterface(IID_IAAFMob, (void **)&pSeqMob));
+        AAF_CHECK(pSequenceCompositionMob->QueryInterface(IID_IAAFMob2, (void **)&pMob2));
+        AAF_CHECK(pMob2->SetUsageCode(kAAFUsage_TopLevel));
+        AAF_CHECK(pSeqMob->SetName(createExtendedClipName(mcClipDef->name + "_dc_sequence", startPosition)));
+        AAF_CHECK(pHeader->AddMob(pSeqMob));
+    }
     
     
     // get the maximum track length
@@ -842,7 +894,7 @@ void AAFFile::createMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPac
                             AAF_CHECK(pCollectionMob->AppendNewTimelineSlot(
                                 editRate, pSegment, collectionSlotID, 
                                 getSlotName(isPicture == kAAFTrue, false, trackNumber),
-                                0, &pTimelineMobSlot));
+                                0, &pCollectionTimelineMobSlot));
                             collectionSlotID++;
                             
 
@@ -862,7 +914,7 @@ void AAFFile::createMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPac
 
 
                             // create SourceClip referencing the collection MobSlot
-                            AAF_CHECK(pTimelineMobSlot->QueryInterface(IID_IAAFMobSlot, (void **)&pMobSlot));
+                            AAF_CHECK(pCollectionTimelineMobSlot->QueryInterface(IID_IAAFMobSlot, (void **)&pMobSlot));
                             AAF_CHECK(pCollectionMob->GetMobID(&sourceRef.sourceID));
                             AAF_CHECK(pMobSlot->GetSlotID(&sourceRef.sourceSlotID));
                             sourceRef.startTime = 0;
@@ -935,6 +987,338 @@ void AAFFile::createMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPac
                                 }
                                 mcSlotID++;
 
+                            }
+                            
+                            
+                            // add slot or selection to multi-camera sequence composition Mob
+                            
+                            if (includeSequence)
+                            {
+                                if (sequence.size() > 1)
+                                {
+                                    if (trackDef->selectorDefs.size() > 1 &&
+                                        AAFRESULT_SUCCEEDED(pSeqMob->LookupSlot(trackDef->index, &pSequenceMobSlot)))
+                                    {
+                                        // sequence is present, and therefore we add a selector
+                                        
+                                        size_t i;
+                                        aafLength_t sourceClipLength;
+                                        aafLength_t totalSourceClipLength = 0;
+                                        CutInfo current;
+                                        CutInfo next; 
+                                        for (i = 0; i < sequence.size(); i++)
+                                        {
+                                            if (totalSourceClipLength >= length)
+                                            {
+                                                // end of sequence
+                                                break;
+                                            }
+                                            
+                                            current = sequence[i];
+                                            if (isPicture != kAAFTrue)
+                                            {
+                                                // convert position to audio samples
+                                                // TODO: don't hard code 25 fps edit rate
+                                                double factor = editRate.numerator / (double)(25 * editRate.denominator);
+                                                current.position = (aafLength_t)(current.position * factor + 0.5);
+                                            }
+                                            if (i != sequence.size() - 1)
+                                            {
+                                                // calculate length of segment using next cut in sequence
+                                                
+                                                next = sequence[i + 1];
+                                                if (isPicture != kAAFTrue)
+                                                {
+                                                    // convert position to audio samples
+                                                    // TODO: don't hard code 25 fps edit rate
+                                                    double factor = editRate.numerator / (double)(25 * editRate.denominator);
+                                                    next.position = (aafLength_t)(next.position * factor + 0.5);
+                                                }
+                                                
+                                                // calculate length of segment
+                                                if (next.position > length)
+                                                {
+                                                    // next cut is beyond the end of the sequence so the clip
+                                                    // extends to the end
+                                                    sourceClipLength = length - totalSourceClipLength;
+                                                }
+                                                else
+                                                {
+                                                    // clip ends at the next cut
+                                                    sourceClipLength = next.position - current.position;
+                                                }
+                                            }
+                                            else
+                                            {
+                                                // calculate length of segment using length of total clip
+                                                
+                                                if (current.position > length)
+                                                {
+                                                    // cut is beyond end of sequence
+                                                    // NOTE: we shouldn't be here because the first cut should be
+                                                    // at position 0 and the previous clip will have extended
+                                                    // right to the end
+                                                    sourceClipLength = length - totalSourceClipLength;
+                                                }
+                                                else
+                                                {
+                                                    // clip ends at the start of the next cut
+                                                    sourceClipLength = length - current.position;
+                                                }
+                                            }
+                                            
+                                            totalSourceClipLength += sourceClipLength;
+
+                                            
+                                            // create SourceClip referencing the collection MobSlot
+                                            AAF_CHECK(pCollectionTimelineMobSlot->QueryInterface(IID_IAAFMobSlot, (void **)&pMobSlot));
+                                            AAF_CHECK(pCollectionMob->GetMobID(&sourceRef.sourceID));
+                                            AAF_CHECK(pMobSlot->GetSlotID(&sourceRef.sourceSlotID));
+                                            sourceRef.startTime = current.position;
+                                            AAF_CHECK(pCDSourceClip->CreateInstance(IID_IAAFSourceClip, (IUnknown **)&pSourceClip));
+                                            AAF_CHECK(pSourceClip->Initialize(pDataDef, sourceClipLength, sourceRef));
+                                            
+                                            // get the selector
+                                            AAF_CHECK(pSequenceMobSlot->GetSegment(&pSegment));
+                                            AAF_CHECK(pSegment->QueryInterface(IID_IAAFSequence, (void **)&pSequence));
+                                            AAF_CHECK(pSequence->GetComponentAt(i, &pComponent));
+                                            AAF_CHECK(pComponent->QueryInterface(IID_IAAFSelector, (void **)&pSelector));
+                                            
+                                            if (selectorDef->sourceConfig->name.compare(sequence[i].source) == 0)
+                                            {
+                                                // set selected segment
+                                                AAF_CHECK(pSourceClip->QueryInterface(IID_IAAFSegment, (void **)&pSegment));
+                                                AAF_CHECK(pSelector->SetSelectedSegment(pSegment));
+                                            }
+                                            else
+                                            {
+                                                // append alternate segment
+                                                AAF_CHECK(pSourceClip->QueryInterface(IID_IAAFComponent, (void **)&pSegment));
+                                                AAF_CHECK(pSelector->AppendAlternateSegment(pSegment));
+                                            }
+                                        }
+                                    }
+                                    else
+                                    {
+                                        // sequence not present or only 1 selector is present
+                                        
+                                        if (isPicture == kAAFTrue)
+                                        {
+                                            seqPictureSlotCount++;
+                                            trackNumber = seqPictureSlotCount;
+                                        }
+                                        else
+                                        {
+                                            seqSoundSlotCount++;
+                                            trackNumber = seqSoundSlotCount;
+                                        }
+
+                                        // create Sequence
+                                        AAF_CHECK(pCDSequence->CreateInstance(IID_IAAFSequence, (IUnknown **)&pSequence));
+                                        AAF_CHECK(pSequence->Initialize(pDataDef));
+                                        
+                                        // create TimelineMobSlot with Sequence 
+                                        // Note: the slot name follows the generated trackNumber, which could be
+                                        // different from the trackDef->number
+                                        AAF_CHECK(pSequence->QueryInterface(IID_IAAFSegment, (void **)&pSegment));
+                                        AAF_CHECK(pSeqMob->AppendNewTimelineSlot(
+                                            editRate, pSegment, seqSlotID, 
+                                            getSlotName(isPicture == kAAFTrue, false, trackNumber),
+                                            0, &pTimelineMobSlot));
+                                        if (trackDef->number != 0)
+                                        {
+                                            AAF_CHECK(pTimelineMobSlot->QueryInterface(IID_IAAFMobSlot, (void **)&pMobSlot));
+                                            AAF_CHECK(pMobSlot->SetPhysicalNum(trackDef->number));
+                                        }
+                                        seqSlotID++;
+
+                                        // add Selectors or SourceClip to Sequence
+                                        size_t i;
+                                        aafLength_t sourceClipLength;
+                                        aafLength_t totalSourceClipLength = 0;
+                                        CutInfo current;
+                                        CutInfo next; 
+                                        for (i = 0; i < sequence.size(); i++)
+                                        {
+                                            if (totalSourceClipLength >= length)
+                                            {
+                                                // end of sequence
+                                                break;
+                                            }
+                                            
+                                            current = sequence[i];
+                                            if (isPicture != kAAFTrue)
+                                            {
+                                                // convert position to audio samples
+                                                // TODO: don't hard code 25 fps edit rate
+                                                double factor = editRate.numerator / (double)(25 * editRate.denominator);
+                                                current.position = (aafLength_t)(current.position * factor + 0.5);
+                                            }
+                                            if (i != sequence.size() - 1)
+                                            {
+                                                // calculate length of segment using next cut in sequence
+                                                
+                                                next = sequence[i + 1];
+                                                if (isPicture != kAAFTrue)
+                                                {
+                                                    // convert position to audio samples
+                                                    // TODO: don't hard code 25 fps edit rate
+                                                    double factor = editRate.numerator / (double)(25 * editRate.denominator);
+                                                    next.position = (aafLength_t)(next.position * factor + 0.5);
+                                                }
+                                                
+                                                // calculate length of segment
+                                                if (next.position > length)
+                                                {
+                                                    // next cut is beyond the end of the sequence so the clip
+                                                    // extends to the end
+                                                    sourceClipLength = length - totalSourceClipLength;
+                                                }
+                                                else
+                                                {
+                                                    // clip ends at the next cut
+                                                    sourceClipLength = next.position - current.position;
+                                                }
+                                            }
+                                            else
+                                            {
+                                                // calculate length of segment using length of total clip
+                                                
+                                                if (current.position > length)
+                                                {
+                                                    // cut is beyond end of sequence
+                                                    // NOTE: we shouldn't be here because the first cut should be
+                                                    // at position 0 and the previous clip will have extended
+                                                    // right to the end
+                                                    sourceClipLength = length - totalSourceClipLength;
+                                                }
+                                                else
+                                                {
+                                                    // clip ends at the start of the next cut
+                                                    sourceClipLength = length - current.position;
+                                                }
+                                            }
+                                            totalSourceClipLength += sourceClipLength;
+                                            
+                                            
+                                            // create SourceClip referencing the collection MobSlot
+                                            AAF_CHECK(pCollectionTimelineMobSlot->QueryInterface(IID_IAAFMobSlot, (void **)&pMobSlot));
+                                            AAF_CHECK(pCollectionMob->GetMobID(&sourceRef.sourceID));
+                                            AAF_CHECK(pMobSlot->GetSlotID(&sourceRef.sourceSlotID));
+                                            sourceRef.startTime = current.position;
+                                            AAF_CHECK(pCDSourceClip->CreateInstance(IID_IAAFSourceClip, (IUnknown **)&pSourceClip));
+                                            AAF_CHECK(pSourceClip->Initialize(pDataDef, sourceClipLength, sourceRef));
+                                            
+                                            if (trackDef->selectorDefs.size() > 1)
+                                            {
+                                                // create selector
+                                                AAF_CHECK(pCDSelector->CreateInstance(IID_IAAFSelector, (IUnknown **)&pSelector));
+                                                AAF_CHECK(pSelector->QueryInterface(IID_IAAFComponent, (void **)&pComponent));
+                                                AAF_CHECK(pComponent->SetDataDef(pDataDef));
+                                                AAF_CHECK(pComponent->SetLength(sourceClipLength));
+                                            
+                                                if (selectorDef->sourceConfig->name.compare(sequence[i].source) == 0)
+                                                {
+                                                    // set selected segment
+                                                    AAF_CHECK(pSourceClip->QueryInterface(IID_IAAFSegment, (void **)&pSegment));
+                                                    AAF_CHECK(pSelector->SetSelectedSegment(pSegment));
+                                                }
+                                                else
+                                                {
+                                                    // append alternate segment
+                                                    AAF_CHECK(pSourceClip->QueryInterface(IID_IAAFComponent, (void **)&pSegment));
+                                                    AAF_CHECK(pSelector->AppendAlternateSegment(pSegment));
+                                                }
+                                            }
+                                            else
+                                            {
+                                                // source clip is appended to sequence
+                                                AAF_CHECK(pSourceClip->QueryInterface(IID_IAAFComponent, (void **)&pComponent));
+                                            }
+                            
+                                            AAF_CHECK(pSequence->AppendComponent(pComponent));
+                                        }
+                                    }
+                                }
+                                
+                                // single cut, which should be at position 0, so sequence contains one clip
+                                else
+                                {
+                                    // create SourceClip referencing the collection MobSlot
+                                    AAF_CHECK(pCollectionTimelineMobSlot->QueryInterface(IID_IAAFMobSlot, (void **)&pMobSlot));
+                                    AAF_CHECK(pCollectionMob->GetMobID(&sourceRef.sourceID));
+                                    AAF_CHECK(pMobSlot->GetSlotID(&sourceRef.sourceSlotID));
+                                    sourceRef.startTime = 0;
+                                    AAF_CHECK(pCDSourceClip->CreateInstance(IID_IAAFSourceClip, (IUnknown **)&pSourceClip));
+                                    AAF_CHECK(pSourceClip->Initialize(pDataDef, length, sourceRef));
+                                    
+                                    if (AAFRESULT_SUCCEEDED(pSeqMob->LookupSlot(trackDef->index, &pMobSlot)))
+                                    {
+                                        // get the selector
+                                        AAF_CHECK(pMobSlot->GetSegment(&pSegment));
+                                        AAF_CHECK(pSegment->QueryInterface(IID_IAAFSequence, (void **)&pSequence));
+                                        AAF_CHECK(pSequence->GetComponentAt(0, &pComponent));
+                                        AAF_CHECK(pComponent->QueryInterface(IID_IAAFSelector, (void **)&pSelector));
+                                        
+                                        // append alternate segment
+                                        AAF_CHECK(pSourceClip->QueryInterface(IID_IAAFComponent, (void **)&pSegment));
+                                        AAF_CHECK(pSelector->AppendAlternateSegment(pSegment));
+                                    }
+                                    else
+                                    {
+                                        if (isPicture == kAAFTrue)
+                                        {
+                                            seqPictureSlotCount++;
+                                            trackNumber = seqPictureSlotCount;
+                                        }
+                                        else
+                                        {
+                                            seqSoundSlotCount++;
+                                            trackNumber = seqSoundSlotCount;
+                                        }
+                                    
+                                        if (trackDef->selectorDefs.size() == 1)
+                                        {
+                                            // create Sequence containing SourceClip
+                                            AAF_CHECK(pSourceClip->QueryInterface(IID_IAAFComponent, (void **)&pComponent));
+                                            AAF_CHECK(pCDSequence->CreateInstance(IID_IAAFSequence, (IUnknown **)&pSequence));
+                                            AAF_CHECK(pSequence->Initialize(pDataDef));
+                                            AAF_CHECK(pSequence->AppendComponent(pComponent));
+                                        }
+                                        else
+                                        {
+                                            // create selector
+                                            AAF_CHECK(pCDSelector->CreateInstance(IID_IAAFSelector, (IUnknown **)&pSelector));
+                                        
+                                            // set selected segment
+                                            AAF_CHECK(pSourceClip->QueryInterface(IID_IAAFSegment, (void **)&pSegment));
+                                            AAF_CHECK(pSelector->SetSelectedSegment(pSegment));
+                            
+                                            // create Sequence containing Selector
+                                            AAF_CHECK(pSelector->QueryInterface(IID_IAAFComponent, (void **)&pComponent));
+                                            AAF_CHECK(pComponent->SetDataDef(pDataDef));
+                                            AAF_CHECK(pComponent->SetLength(length));
+                                            AAF_CHECK(pCDSequence->CreateInstance(IID_IAAFSequence, (IUnknown **)&pSequence));
+                                            AAF_CHECK(pSequence->Initialize(pDataDef));
+                                            AAF_CHECK(pSequence->AppendComponent(pComponent));
+                                        }
+                                        
+                                        // create TimelineMobSlot with Sequence 
+                                        // Note: the slot name follows the generated trackNumber, which could be
+                                        // different from the trackDef->number
+                                        AAF_CHECK(pSequence->QueryInterface(IID_IAAFSegment, (void **)&pSegment));
+                                        AAF_CHECK(pSeqMob->AppendNewTimelineSlot(
+                                            editRate, pSegment, seqSlotID, 
+                                            getSlotName(isPicture == kAAFTrue, false, trackNumber),
+                                            0, &pTimelineMobSlot));
+                                        if (trackDef->number != 0)
+                                        {
+                                            AAF_CHECK(pTimelineMobSlot->QueryInterface(IID_IAAFMobSlot, (void **)&pMobSlot));
+                                            AAF_CHECK(pMobSlot->SetPhysicalNum(trackDef->number));
+                                        }
+                                        seqSlotID++;
+                                    }
+                                }
                             }
                         }
                     }

@@ -6,7 +6,9 @@ ifneq "$(MAKECMDGOALS)" "clean"
 DVS_PATH := $(shell for f in /usr/local /usr; do test -e $$f/include/dvs_fifo.h && echo $$f && break; done)
 ifeq "$(DVS_PATH)" ""
 	ifndef DVSSDK
-$(warning no DVS available - set the DVSSDK environment variable to the location of your installed DVS SDK files)
+		ifndef DVS_SDK_INSTALL
+$(warning no DVS available - set the DVSSDK or DVS_SDK_INSTALL environment variable to the location of your installed DVS SDK version 2 or version 3 respectively)
+		endif
 	endif
 endif
 
@@ -31,7 +33,14 @@ ifndef DISABLE_SHARED_MEM_SOURCE
 	ifeq "$(TEST_SHM_PATH)" ""
 $(warning: shared memory source disabled)
 	endif
-endif	
+endif
+
+ifndef DISABLE_UDP_SOURCE
+	TEST_UDP_PATH := $(shell for f in ../../common/multicast_video.h; do test -e $$f && echo $$f && break; done)
+	ifeq "$(TEST_UDP_PATH)" ""
+$(warning: udp source disabled)
+	endif
+endif
 
 PORTAUDIO_INCLUDE_PATH := $(shell for f in /usr/local/include /usr/include; do test -e $$f/portaudio.h && echo $$f && break; done)
 ifneq "$(PORTAUDIO_INCLUDE_PATH)" ""
@@ -40,6 +49,12 @@ else
 $(warning: no PortAudio library found - No PC audio playback available)
 endif
 
+SDL_INCLUDE_PATH := $(shell for f in /usr/local/include /usr/include; do test -e $$f/SDL/SDL.h && echo $$f && break; done)
+ifneq "$(SDL_INCLUDE_PATH)" ""
+HAVE_SDL = 1
+else
+$(warning: no SDL library found - SDL sink not available)
+endif
 
 
 
@@ -60,25 +75,40 @@ ifdef DVS_PATH
 	CFLAGS += -DHAVE_DVS
 else 
 	ifdef DVSSDK
+		# DVS SDK version 3		
 		INCLUDEDIRS += -I$(DVSSDK)/development/header
-		#LIBDIRS += -L$(DVSSDK)/linux/lib
 		LIBDIRS += -L$(DVSSDK)/linux-x86/lib
 		LIBS += -ldvsoem
 		CFLAGS += -DHAVE_DVS
+	else
+		ifdef DVS_SDK_INSTALL
+			# DVS SDK version 2		
+			INCLUDEDIRS += -I$(DVS_SDK_INSTALL)/development/header
+			LIBDIRS += -L$(DVS_SDK_INSTALL)/linux/lib
+			LIBS += -ldvsoem
+			CFLAGS += -DHAVE_DVS
+		endif
 	endif
 endif
 
 ifdef FFMPEG_INCLUDE_PATH
-# Use the following alternative link line for ffmpeg rpm installed ffmpeg
-FFMPEG_RPM := $(shell rpm -q ffmpeg-h264-aac > /dev/null && echo YES)
-ifeq "$(FFMPEG_RPM)" "YES"
-LIBS += -lavformat -lavcodec -lavutil -lz -lmp3lame -lx264 -la52 -lfaac -lfaad -lm
+
+	CFLAGS += -DHAVE_FFMPEG
+	
+	# Use the following alternative link line for ffmpeg rpm installed ffmpeg
+	FFMPEG_RPM := $(shell rpm -q ffmpeg-h264-aac > /dev/null && echo YES)
+	FFMPEG_DNXHD_RPM := $(shell rpm -q ffmpeg-DNxHD-h264-aac > /dev/null && echo YES)
+	ifeq "$(FFMPEG_RPM)" "YES"
+		LIBS += -lavformat -lavcodec -lavutil -lz -lmp3lame -lx264 -la52 -lfaac -lfaad -lm
+	else ifeq "$(FFMPEG_DNXHD_RPM)" "YES"
+		LIBS += -lavformat -lavcodec -lavutil -lz -lmp3lame -lx264 -la52 -lfaac -lfaad -lm
+		CFLAGS += -DHAVE_DNXHD
+	else
+		LIBS += -lavformat -lavcodec -lavutil -lm
+	endif
+	
 else
-LIBS += -lavformat -lavcodec -lavutil -lm
-endif
-CFLAGS += -DHAVE_FFMPEG
-else
-CFLAGS += -Werror
+	CFLAGS += -Werror
 endif
 
 ifdef SHTTPD_PATH
@@ -99,10 +129,24 @@ ifndef TEST_SHM_PATH
 	CFLAGS += -DDISABLE_SHARED_MEM_SOURCE
 endif
 
+ifndef TEST_UDP_PATH
+	CFLAGS += -DDISABLE_UDP_SOURCE
+else
+	INCLUDEDIRS += -I../../common
+	LIBDIRS += -L../../common -L../../common/YUVlib
+	LIBS += -lcommon -lYUVlib
+endif
+
 ifdef HAVE_PORTAUDIO
 	CFLAGS += -DHAVE_PORTAUDIO -I$(PORTAUDIO_INCLUDE_PATH)
 	LIBS += -lportaudio 
 endif
+
+ifdef HAVE_SDL
+	CFLAGS += -DHAVE_SDL
+	LIBS += -lSDL
+endif
+
 
 CC = gcc -g $(CFLAGS) $(OPT)
 AR = ar cr
@@ -112,14 +156,16 @@ SOURCES = multiple_sources.c dvs_sink.c connection_matrix.c stream_connect.c uti
 	media_player.c term_keyboard_input.c mxf_source.c on_screen_display.c \
 	shuttle_input.c emulate_key.c media_control.c shuttle_input_connect.c media_source.c \
 	raw_file_source.c media_sink.c x11_xv_display_sink.c raw_file_sink.c console_monitor.c \
-	YUV_frame.c YUV_text_overlay.c YUV_quarter_frame.c \
+	YUV_frame.c YUV_text_overlay.c YUV_small_pic.c \
 	video_switch_sink.c qc_session.c dv_stream_connect.c logging.c buffered_media_sink.c media_sink_frame.c \
 	dual_sink.c null_sink.c version.c frame_info.c buffered_media_source.c osd_symbols.c \
 	x11_display_sink.c keyboard_input.c keyboard_input_connect.c x11_common.c \
 	video_conversion.c system_timecode_source.c half_split_sink.c audio_level_sink.c \
 	http_access.c http_access_resources.c qc_lto_access.c bouncing_ball_source.c \
 	frame_sequence_sink.c qc_lto_extract.c mpegi_stream_connect.c mjpeg_stream_connect.c shared_mem_source.c \
-	audio_sink.c blank_source.c progress_bar_input.c progress_bar_input_connect.c
+	udp_source.c audio_sink.c blank_source.c progress_bar_input.c progress_bar_input_connect.c \
+	clapper_source.c sdl_sink.c clip_source.c video_switch_database.c source_event.c \
+	dnxhd_stream_connect.c
 OBJECTS = $(patsubst %.c,.objs/%.o,$(SOURCES))
 DEPENDENCIES = $(patsubst %.c,.deps/%.d,$(SOURCES))
 

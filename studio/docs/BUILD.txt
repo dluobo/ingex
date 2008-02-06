@@ -4,6 +4,9 @@ cd $workspace/ingex/libMXF/lib
 cd $workspace/ingex/studio/mxfwriter
 make   (also makes database/src)
 
+export ACE_ROOT=.../ACE_wrappers (where you've downloaded and built ACE/TAO)
+export TAO_ROOT=$ACE_ROOT/TAO
+
 cd $workspace/ingex/studio/common
 $ACE_ROOT/bin/mwc.pl -type gnuace
 make
@@ -12,7 +15,7 @@ cd $workspace/ingex/studio/processing/offline
 $ACE_ROOT/bin/mwc.pl -type gnuace
 make
 
-cd $workspace/ingex/studio/corba
+cd $workspace/ingex/studio/ace-tao
 $ACE_ROOT/bin/mwc.pl -type gnuace
 make Recorder-target
 make RecorderClient-target

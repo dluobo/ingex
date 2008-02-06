@@ -20,7 +20,7 @@ typedef struct X11XVDisplaySink X11XVDisplaySink;
 int xvsk_check_is_available();
 
 int xvsk_open(int reviewDuration, int disableOSD, const Rational* pixelAspectRatio, 
-    const Rational* monitorAspectRatio, float scale, X11XVDisplaySink** sink);
+    const Rational* monitorAspectRatio, float scale, int swScale, X11XVDisplaySink** sink);
 void xvsk_set_media_control(X11XVDisplaySink* sink, ConnectMapping mapping, MediaControl* control);
 void xvsk_unset_media_control(X11XVDisplaySink* sink);
 MediaSink* xvsk_get_media_sink(X11XVDisplaySink* sink);

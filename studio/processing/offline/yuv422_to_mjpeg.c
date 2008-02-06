@@ -10,6 +10,7 @@
 #include <string.h>
 #include <sys/times.h>
 #include "mjpeg_compress.h"
+#include "../../../common/video_conversion.h"
 
 static void usage_exit(void)
 {
@@ -23,6 +24,7 @@ static void usage_exit(void)
     fprintf(stderr, "                          111 - 4:1m\n");
     fprintf(stderr, "                           (default)\n");
     fprintf(stderr, "    -b benchmark-num     read first frame and compress it num times\n");
+    fprintf(stderr, "    -u                   input video is UYVY (not YUV planar)\n");
 	exit(1);
 }
 
@@ -35,6 +37,7 @@ extern int main(int argc, char *argv[])
 	int					resId = 82;			// 20:1 is default
 	int					benchmark = 0;		// off by default
 	int					frame_limit = 0;	// off by default
+	int					input_is_uyvy = 0;	// flag to treat input as UYVY
 
 
 	// process command-line args
@@ -63,6 +66,10 @@ extern int main(int argc, char *argv[])
 			frame_limit = 1;
 			n++;
 		}
+		else if (strcmp(argv[n], "-u") == 0)
+		{
+			input_is_uyvy = 1;
+		}
 		else
 		{
 			if (!input_name)
@@ -84,6 +91,10 @@ extern int main(int argc, char *argv[])
 	unsigned frame_size = width*height*2;
 
 	uint8_t *frame = (uint8_t*)malloc(frame_size);
+	uint8_t *tmp_frame = NULL;
+	if (input_is_uyvy) {
+		tmp_frame = (uint8_t*)malloc(frame_size);
+	}
 
 	if ((input_fp = fopen(input_name, "rb")) == NULL) {
 		fprintf(stderr, "Could not open %s\n", input_name);
@@ -101,12 +112,24 @@ extern int main(int argc, char *argv[])
 	int total_bytes = 0;
 	int frame_num = 0;
 	while (1) {
+		uint8_t *orig_frame = NULL;
+		if (input_is_uyvy) {
+			orig_frame = frame;
+			frame = tmp_frame;
+		}
+
 		// Read a frame from input
 		if (fread(frame, 1, frame_size, input_fp) < frame_size) {
 			if (feof(input_fp))		// exhausted input
 				break;
 			fprintf(stderr, "fread failed to read frame from %s\n", input_name);
 			return 1;
+		}
+
+		// convert video if in UYVY format
+		if (input_is_uyvy) {
+			uyvy_to_yuv422(width, height, 0, tmp_frame, orig_frame);
+			frame = orig_frame;
 		}
 
 		// Compress frame to JPEG

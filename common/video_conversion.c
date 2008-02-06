@@ -1,5 +1,5 @@
 /*
- * $Id: video_conversion.c,v 1.1 2007/09/11 14:08:01 stuart_hc Exp $
+ * $Id: video_conversion.c,v 1.2 2008/02/06 16:58:51 john_f Exp $
  *
  * MMX optimised video format conversion functions
  *
@@ -235,7 +235,7 @@ void uyvy_to_yuv420(int width, int height, int shift_picture_down, uint8_t *inpu
 #endif		// __MMX__
 
 #ifdef __MMX__
-void yuv422_to_uyvy_mmx(int width, int height, int shift_picture_up, uint8_t *input, uint8_t *output)
+void yuv422_to_uyvy(int width, int height, int shift_picture_up, uint8_t *input, uint8_t *output)
 {
 	int i, j, start_line;
 	uint8_t *y, *u, *v;
@@ -285,6 +285,7 @@ void yuv422_to_uyvy_mmx(int width, int height, int shift_picture_up, uint8_t *in
 			output += 32;
 		}
 	}
+	_mm_empty();        // Clear aliased fp register state
 
 	if (shift_picture_up) {
 		// Fill bottom line with one line of black UYVY

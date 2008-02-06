@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder.c,v 1.1 2007/09/11 14:08:36 stuart_hc Exp $
+ * $Id: ffmpeg_encoder.c,v 1.2 2008/02/06 16:59:02 john_f Exp $
  *
  * Encode uncompressed video to DV using libavcodec
  *
@@ -50,6 +50,28 @@ const uint16_t imx4050_intra_matrix[] = {
   17, 19, 17, 20, 26, 28, 35, 36,
   19, 19, 19, 20, 22, 29, 32, 35,
   16, 17, 19, 22, 25, 31, 28, 45 
+};
+
+const uint16_t jpeg2to1_intra_matrix[] = {
+  1,  1,  1,  1,  1,  1,  1,  1,
+  1,  1,  1,  1,  1,  1,  1,  1,
+  1,  1,  1,  1,  1,  1,  1,  1,
+  1,  1,  1,  1,  1,  2,  1,  1,
+  1,  1,  1,  1,  1,  1,  1,  1,
+  1,  3,  2,  2,  3,  1,  1,  1,
+  1,  1,  1,  1,  5,  3,  3,  5,
+  1,  1,  1,  6,  4,  5,  5,  5
+};
+
+const uint16_t jpeg2to1_chroma_intra_matrix[] = {
+  1,  1,  1,  1,  1,  1,  1,  1,
+  1,  1,  1,  1,  1,  2,  1,  5,
+  5,  2,  2,  2,  1,  2,  2,  2,
+  5,  5,  5,  5,  5,  5,  5,  5,
+  5,  5,  5,  2,  5,  5,  5,  5,
+  5,  5,  5,  5,  5,  5,  5,  5,
+  5,  5,  5,  5,  5,  5,  5,  5,
+  5,  5,  5,  5,  5,  5,  5,  5,
 };
 
 
@@ -116,16 +138,25 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init (ffmpeg_encoder_resolution_t res)
         codec_id = CODEC_ID_MPEG2VIDEO;
         imx = 1;
         break;
+    case FF_ENCODER_RESOLUTION_DNX36p:
+    case FF_ENCODER_RESOLUTION_DNX120p:
+    case FF_ENCODER_RESOLUTION_DNX185p:
+    case FF_ENCODER_RESOLUTION_DNX120i:
+    case FF_ENCODER_RESOLUTION_DNX185i:
+        codec_id = CODEC_ID_DNXHD;
+        break;
+    case FF_ENCODER_RESOLUTION_DMIH264:
+        codec_id = CODEC_ID_H264;
+        break;
+    case FF_ENCODER_RESOLUTION_JPEG:
+        codec_id = CODEC_ID_MJPEG;
+        break;
     default:
         codec_id = 0;
     }
 
     encoder->codec = avcodec_find_encoder(codec_id);
-    if (encoder->codec)
-    {
-        //fprintf(stderr, "Found encoder\n");
-    }
-    else
+    if (! encoder->codec)
     {
         fprintf(stderr, "Could not find encoder\n");
         cleanup(encoder);
@@ -146,7 +177,11 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init (ffmpeg_encoder_resolution_t res)
     switch (res)
     {
     case FF_ENCODER_RESOLUTION_DV25:
+    case FF_ENCODER_RESOLUTION_DMIH264:
         encoder->codec_context->pix_fmt = PIX_FMT_YUV420P;
+        break;
+    case FF_ENCODER_RESOLUTION_JPEG:
+        encoder->codec_context->pix_fmt = PIX_FMT_YUVJ422P;
         break;
     default:
         encoder->codec_context->pix_fmt = PIX_FMT_YUV422P;
@@ -154,7 +189,10 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init (ffmpeg_encoder_resolution_t res)
     }
     encoder->codec_context->time_base.num = 1;
     encoder->codec_context->time_base.den = 25;
+    encoder->codec_context->codec_type = CODEC_TYPE_VIDEO;
 
+    int width = 720;
+    int height = 576;
     int bit_rate = 0;
     int buffer_size = 0;
     int encoded_frame_size = 0;
@@ -162,6 +200,12 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init (ffmpeg_encoder_resolution_t res)
     int top_field_first = 1;
     switch (res)
     {
+    case FF_ENCODER_RESOLUTION_JPEG:
+        encoder->codec_context->bit_rate = 65 * 1000000;
+        encoded_frame_size = 800000;        // guess
+        encoder->codec_context->intra_matrix = av_mallocz(sizeof(uint16_t) * 64);
+        memcpy(encoder->codec_context->intra_matrix, jpeg2to1_intra_matrix, sizeof(uint16_t) * 64);
+        break;
     case FF_ENCODER_RESOLUTION_DV25:
         encoded_frame_size = 144000;
         top_field_first = 0;
@@ -188,8 +232,49 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init (ffmpeg_encoder_resolution_t res)
         encoded_frame_size = bit_rate / 200;
         intra_matrix = imx4050_intra_matrix;
         break;
+    case FF_ENCODER_RESOLUTION_DNX36p:
+        width = 1920;
+        height = 1080;
+        encoder->codec_context->bit_rate = 36 * 1000000;
+        encoder->codec_context->qmax = 1024;
+        encoded_frame_size = 188416;        // from VC-3 spec
+        break;
+    case FF_ENCODER_RESOLUTION_DNX120p:
+    case FF_ENCODER_RESOLUTION_DNX120i:
+        width = 1920;
+        height = 1080;
+        encoder->codec_context->bit_rate = 120 * 1000000;
+        encoder->codec_context->qmax = 1024;
+        if (res == FF_ENCODER_RESOLUTION_DNX120i)
+            encoder->codec_context->flags |= CODEC_FLAG_INTERLACED_DCT;
+        encoded_frame_size = 606208;        // from VC-3 spec
+        break;
+    case FF_ENCODER_RESOLUTION_DNX185p:
+    case FF_ENCODER_RESOLUTION_DNX185i:
+        width = 1920;
+        height = 1080;
+        encoder->codec_context->bit_rate = 185 * 1000000;
+        encoder->codec_context->qmax = 1024;
+        if (res == FF_ENCODER_RESOLUTION_DNX185i)
+            encoder->codec_context->flags |= CODEC_FLAG_INTERLACED_DCT;
+        encoded_frame_size = 917504;        // from VC-3 spec
+        break;
+    case FF_ENCODER_RESOLUTION_DMIH264:
+        encoded_frame_size = 200000;			// guess at maximum encoded size
+        encoder->codec_context->bit_rate = 15 * 1000000;	// a guess
+        encoder->codec_context->gop_size = 1;	// I-frame only
+        break;
     default:
         break;
+    }
+
+    // TODO - set number of threads from command-line or config file
+    // since it needs to be tuned according to hardware and codecs running
+    if (width > 720) {
+        // turn on threading for HD codecs
+        int num_threads = 4;
+        avcodec_thread_init(encoder->codec_context, num_threads);
+        encoder->codec_context->thread_count= num_threads;
     }
 
     if (imx)
@@ -241,7 +326,7 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init (ffmpeg_encoder_resolution_t res)
     }
 
 
-    avcodec_set_dimensions(encoder->codec_context, 720, 576 + encoder->padtop);      // hard-coded for PAL
+    avcodec_set_dimensions(encoder->codec_context, width, height + encoder->padtop);
 
     /* prepare codec */
     if (avcodec_open(encoder->codec_context, encoder->codec) < 0)
@@ -263,7 +348,7 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init (ffmpeg_encoder_resolution_t res)
     if (encoder->padtop)
     {
         encoder->tmpFrame = av_mallocz(sizeof(AVPicture));
-        encoder->inputBuffer = av_mallocz(720 * (576 + encoder->padtop) * 2);
+        encoder->inputBuffer = av_mallocz(width * (height + encoder->padtop) * 2);
         encoder->padColour[0] = 16;
         encoder->padColour[1] = 128;
         encoder->padColour[2] = 128;

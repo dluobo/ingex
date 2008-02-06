@@ -18,7 +18,7 @@ LIBOBJECTS -= test_mxfwriter.o
 
 
 .PHONY: all
-all: libmxfwriter.a test_mxfwriter
+all: libmxfwriter.a test_mxfwriter test_ffmpeg_encoder
 
 
 .PHONY: libMXF.a
@@ -34,6 +34,11 @@ libprodautodb.a:
 	@cd $(DATABASELIB_DIR) && $(MAKE) $@
 
 
+../common/ffmpeg_encoder.o: ../common/ffmpeg_encoder.c ../common/ffmpeg_encoder.h
+	(cd ../common && gcc -Wall -W -g -c ffmpeg_encoder.c)
+
+test_ffmpeg_encoder: test_ffmpeg_encoder.c ../common/ffmpeg_encoder.o
+	gcc -Wall -W -g test_ffmpeg_encoder.c ../common/ffmpeg_encoder.o -lavformat -lavcodec -lavutil -lz -lmp3lame -lx264 -la52 -lfaac -lfaad -lm -lpthread -o test_ffmpeg_encoder
 	
 libmxfwriter.a: $(LIBOBJECTS)
 	$(AR) $@ $(LIBOBJECTS)

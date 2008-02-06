@@ -1,5 +1,5 @@
 /*
- * $Id: IngexShm.h,v 1.2 2007/10/26 16:01:22 john_f Exp $
+ * $Id: IngexShm.h,v 1.3 2008/02/06 16:58:59 john_f Exp $
  *
  * Interface for reading audio/video data from shared memory.
  *
@@ -25,6 +25,7 @@
 #ifndef IngexShm_h
 #define IngexShm_h
 
+#include <string>
 //#include <ace/Log_Msg.h>
 #include "integer_types.h"
 
@@ -51,19 +52,19 @@ public:
 
     ~IngexShm(void);
     int Init();
-    unsigned int Cards() { return mCards; }
+    unsigned int Channels() { return mChannels; }
     int RingLength() { if (mpControl) return mpControl->ringlen; else return 0; }
-    int LastFrame(unsigned int card_i)
+    int LastFrame(unsigned int channel_i)
     {
         int frame = 0;
-        if(card_i < mCards)
+        if(channel_i < mChannels)
         {
 #ifndef _MSC_VER
-            PTHREAD_MUTEX_LOCK(&mpControl->card[card_i].m_lastframe)
+            PTHREAD_MUTEX_LOCK(&mpControl->channel[channel_i].m_lastframe)
 #endif
-            frame = mpControl->card[card_i].lastframe;
+            frame = mpControl->channel[channel_i].lastframe;
 #ifndef _MSC_VER
-            PTHREAD_MUTEX_UNLOCK(&mpControl->card[card_i].m_lastframe)
+            PTHREAD_MUTEX_UNLOCK(&mpControl->channel[channel_i].m_lastframe)
 #endif
         }
 		if (frame < 0)
@@ -73,55 +74,87 @@ public:
         return frame;
     }
 
+    std::string SourceName(unsigned int channel_i);
+    void SourceName(unsigned int channel_i, const std::string & name);
+
     enum TcEnum { LTC, VITC };
 
     void TcMode(TcEnum mode) { mTcMode = mode; }
 
-    // In funtions below, you could check (card < mCards) first.
+    // In funtions below, you could check (channel < mChannels) first.
 
-    int32_t Timecode(unsigned int card, unsigned int frame)
+    int32_t Timecode(unsigned int channel, unsigned int frame)
     {
-		//ACE_DEBUG((LM_DEBUG, ACE_TEXT("Timecode(%d, %d)\n"), card, frame));
-        uint8_t * p_tc = mRing[card] + mpControl->elementsize * (frame % mpControl->ringlen)
-            + (mTcMode == LTC ? mpControl->ltc_offset : mpControl->tc_offset);
+		//ACE_DEBUG((LM_DEBUG, ACE_TEXT("Timecode(%d, %d)\n"), channel, frame));
+        uint8_t * p_tc = mRing[channel] + mpControl->elementsize * (frame % mpControl->ringlen)
+            + (mTcMode == LTC ? mpControl->ltc_offset : mpControl->vitc_offset);
         return * (int32_t *) p_tc;
     }
-    int32_t CurrentTimecode(unsigned int card)
+    int32_t CurrentTimecode(unsigned int channel)
     {
-        return Timecode(card, LastFrame(card));
+        return Timecode(channel, LastFrame(channel));
     }
 
-    bool SignalPresent(unsigned int card)
+    bool SignalPresent(unsigned int channel)
     {
-        // Extend this when SHM carries status info
-        return true;
+        uint8_t * p_ok = mRing[channel]
+            + mpControl->elementsize * (LastFrame(channel) % mpControl->ringlen)
+            + mpControl->signal_ok_offset;
+        return * (int32_t *) p_ok;
     }
 
-    uint8_t * pVideo422(int card, int frame)
-    {
-        return mRing[card] + mpControl->elementsize * (frame % mpControl->ringlen);
-    }
-    int sizeVideo422() { return mpControl->width*mpControl->height*2; }
+    unsigned int Width() { return mpControl->width; }
+    unsigned int Height() { return mpControl->height; }
 
-    uint8_t * pVideo420(unsigned int card, unsigned int frame)
+    uint8_t * pVideo422(int channel, int frame)
     {
-        return mRing[card] + mpControl->elementsize * (frame % mpControl->ringlen)
+        return mRing[channel] + mpControl->elementsize * (frame % mpControl->ringlen);
+    }
+    //int sizeVideo422() { return mpControl->width*mpControl->height*2; }
+
+    uint8_t * pVideo420(unsigned int channel, unsigned int frame)
+    {
+        return mRing[channel] + mpControl->elementsize * (frame % mpControl->ringlen)
             + mpControl->sec_video_offset;
     }
-    unsigned int sizeVideo420() { return  mpControl->width*mpControl->height*3/2; }
+    //unsigned int sizeVideo420() { return  mpControl->width*mpControl->height*3/2; }
 
-    int32_t * pAudio12(unsigned int card, unsigned int frame)
+    int32_t * pAudio12(unsigned int channel, unsigned int frame)
     {
         return (int32_t *)
-            (mRing[card] + mpControl->elementsize * (frame % mpControl->ringlen)
+            (mRing[channel] + mpControl->elementsize * (frame % mpControl->ringlen)
             + mpControl->audio12_offset);
     }
 
-    int32_t * pAudio34(unsigned int card, unsigned int frame)
+    int32_t * pAudio34(unsigned int channel, unsigned int frame)
     {
         return  (int32_t *)
-            (mRing[card] + mpControl->elementsize * (frame % mpControl->ringlen)
+            (mRing[channel] + mpControl->elementsize * (frame % mpControl->ringlen)
             + mpControl->audio34_offset);
+    }
+
+    CaptureFormat PrimaryCaptureFormat()
+    {
+        if (mpControl)
+        {
+            return mpControl->pri_video_format;
+        }
+        else
+        {
+            return FormatNone;
+        }
+    }
+
+    CaptureFormat SecondaryCaptureFormat()
+    {
+        if (mpControl)
+        {
+            return mpControl->sec_video_format;
+        }
+        else
+        {
+            return FormatNone;
+        }
     }
 
 
@@ -133,7 +166,7 @@ protected:
     IngexShm & operator= (const IngexShm &);
 
 private:
-    unsigned int mCards;
+    unsigned int mChannels;
     uint8_t * mRing[MAX_CHANNELS];
     NexusControl * mpControl;
     TcEnum mTcMode;

@@ -17,6 +17,7 @@
 #include "multiple_sources.h"
 #include "raw_file_source.h"
 #include "shared_mem_source.h"
+#include "udp_source.h"
 #include "buffered_media_source.h"
 #include "mxf_source.h"
 #include "system_timecode_source.h"
@@ -32,11 +33,14 @@
 #include "half_split_sink.h"
 #include "frame_sequence_sink.h"
 #include "audio_level_sink.h"
+#include "sdl_sink.h"
 #include "qc_session.h"
 #include "http_access.h"
 #include "bouncing_ball_source.h"
 #include "audio_sink.h"
 #include "blank_source.h"
+#include "clapper_source.h"
+#include "clip_source.h"
 #include "version.h"
 #include "utils.h"
 #include "logging.h"
@@ -53,6 +57,7 @@ typedef enum
     X11_XV_DISPLAY_OUTPUT,
     X11_DISPLAY_OUTPUT,
     DUAL_OUTPUT,
+    SDL_OUTPUT,
     RAW_STREAM_OUTPUT,
     NULL_OUTPUT,
 } OutputType;
@@ -62,18 +67,26 @@ typedef enum
     UNKNOWN_INPUT = 0,
     RAW_INPUT,
     SHM_INPUT,
+    UDP_INPUT,
     MXF_INPUT,
     BBALLS_INPUT,
-    BLANK_INPUT
+    BLANK_INPUT,
+    CLAPPER_INPUT
 } InputType;
 
 typedef struct
 {
-    const char* filename;
     InputType type;
+    
+    /* file input */
+    const char* filename;
+    
+    /* shared memory input */
+    const char* shmSourceName;
     
     /* raw files */
     StreamInfo streamInfo;
+    StreamInfo streamInfo2; /* TODO: generalise inputs with multuple streams */
     
     /* bouncing balls */
     int numBalls;
@@ -95,6 +108,9 @@ typedef struct
     X11XVDisplaySink* x11XVDisplaySink;
     DualSink* dualSink;
     DVSSink* dvsSink;
+    SDLSink* sdlSink;
+    
+    VideoSwitchDatabase* videoSwitchDatabase;
     
     X11WindowListener x11WindowListener;
 
@@ -110,6 +126,8 @@ typedef struct
     TermKeyboardInput* termKeyboardInput;
     KeyboardConnect* termKeyboardConnect;
 	pthread_t termKeyboardThreadId;
+    
+    int writeAllMarks;
 } Player;
 
 typedef struct
@@ -390,9 +408,14 @@ static void cleanup_exit(int res)
         g_player.termKeyboardInput = NULL;
     }
     
-        if (g_player.mediaPlayer != NULL)
+    if (g_player.mediaPlayer != NULL)
     {
-        numMarks = ply_get_marks(g_player.mediaPlayer, &marks);
+        /* get marks for writing to qc session below */
+        if (g_player.qcSession != NULL)
+        {
+            numMarks = ply_get_marks(g_player.mediaPlayer, &marks);
+        }
+        
         ply_close_player(&g_player.mediaPlayer);
     }
 
@@ -409,11 +432,11 @@ static void cleanup_exit(int res)
     {
         if (numMarks > 0)
         {
-            qcs_write_marks(g_player.qcSession, &g_player.markConfigs, marks, numMarks);
+            qcs_write_marks(g_player.qcSession, g_player.writeAllMarks, 0, &g_player.markConfigs, marks, numMarks);
             SAFE_FREE(&marks);
             numMarks = 0;
         }
-        qcs_close(&g_player.qcSession);
+        qcs_close(&g_player.qcSession, NULL, NULL);
     }
 
     if (g_player.consoleMonitor != NULL)
@@ -422,6 +445,8 @@ static void cleanup_exit(int res)
     }
     
     hac_free_http_access(&g_player.httpAccess);
+    
+    vsd_close(&g_player.videoSwitchDatabase);
 
     ml_log_file_close();
     
@@ -519,6 +544,7 @@ static int parse_config_marks(const char* val, MarkConfigs* markConfigs)
     } colourInfos[] = 
     {
         {"white", WHITE_COLOUR},
+        {"light-white", LIGHT_WHITE_COLOUR},
         {"yellow", YELLOW_COLOUR},
         {"cyan", CYAN_COLOUR},
         {"green", GREEN_COLOUR},
@@ -611,73 +637,104 @@ static int parse_config_marks(const char* val, MarkConfigs* markConfigs)
     return 1;
 }
 
-int complete_source_info(InputInfo* info)
+static int parse_length(const char* text, int64_t* value)
 {
-    if (info->streamInfo.type == UNKNOWN_STREAM_TYPE)
+    if (strstr(text, ":") != NULL)
     {
-        info->streamInfo.type = PICTURE_STREAM_TYPE;
+        int hour, min, sec, frame;
+        if (sscanf(text, "%d:%d:%d:%d", &hour, &min, &sec, &frame) != 4)
+        {
+            return 0;
+        }
+        
+        *value = hour * 60 * 60 * 25 + min * 60 * 25 + sec * 25 + frame;
+        return 1;
+    }
+    else
+    {
+        int64_t tmp;
+        if (sscanf(text, "%"PRId64, &tmp) != 1)
+        {
+            return 0;
+        }
+        
+        *value = tmp;
+        return 1;
+    }
+}
+
+static int complete_source_info(StreamInfo* streamInfo)
+{
+    if (streamInfo->type == UNKNOWN_STREAM_TYPE)
+    {
+        streamInfo->type = PICTURE_STREAM_TYPE;
     }
     
-    if (info->streamInfo.type == PICTURE_STREAM_TYPE)
+    if (streamInfo->type == PICTURE_STREAM_TYPE)
     {
-        if (info->streamInfo.format == UNKNOWN_FORMAT)
+        if (streamInfo->format == UNKNOWN_FORMAT)
         {
-            info->streamInfo.format = UYVY_FORMAT;
+            streamInfo->format = UYVY_FORMAT;
         }
         
-        if (info->streamInfo.width < 1 || info->streamInfo.height < 1)
+        if (streamInfo->width < 1 || streamInfo->height < 1)
         {
-            info->streamInfo.width = 720;
-            info->streamInfo.height = 576;
+            streamInfo->width = 720;
+            streamInfo->height = 576;
         }
         
-        if (info->streamInfo.frameRate.num < 1 || info->streamInfo.frameRate.num < 1)
+        if (streamInfo->frameRate.num < 1 || streamInfo->frameRate.num < 1)
         {
-            info->streamInfo.frameRate = g_palFrameRate;
+            streamInfo->frameRate = g_palFrameRate;
         }
         
-        if (info->streamInfo.aspectRatio.num < 1 || info->streamInfo.aspectRatio.num < 1)
+        if (streamInfo->aspectRatio.num < 1 || streamInfo->aspectRatio.num < 1)
         {
-            info->streamInfo.aspectRatio.num = 4;
-            info->streamInfo.aspectRatio.den = 3;
+            streamInfo->aspectRatio.num = 4;
+            streamInfo->aspectRatio.den = 3;
         }
     }
-    else if (info->streamInfo.type == SOUND_STREAM_TYPE)
+    else if (streamInfo->type == SOUND_STREAM_TYPE)
     {
+        if (streamInfo->format == UNKNOWN_FORMAT)
+        {
+            streamInfo->format = PCM_FORMAT;
+        }
+        
         /* TODO: frame rate should be determined by other inputs is possible */
-        if (info->streamInfo.frameRate.num < 1 ||
-            info->streamInfo.frameRate.den < 1)
+        if (streamInfo->frameRate.num < 1 ||
+            streamInfo->frameRate.den < 1)
         {
-            info->streamInfo.frameRate = g_palFrameRate;
+            streamInfo->frameRate = g_palFrameRate;
         }
         
-        if (info->streamInfo.samplingRate.num < 1 ||
-            info->streamInfo.samplingRate.den < 1)
+        if (streamInfo->samplingRate.num < 1 ||
+            streamInfo->samplingRate.den < 1)
         {
-            info->streamInfo.samplingRate.num = 48000;
-            info->streamInfo.samplingRate.den = 1;
+            streamInfo->samplingRate.num = 48000;
+            streamInfo->samplingRate.den = 1;
         }
         
-        if (info->streamInfo.numChannels < 1)
+        if (streamInfo->numChannels < 1)
         {
-            info->streamInfo.numChannels = 1;
+            streamInfo->numChannels = 1;
         }
         
-        if (info->streamInfo.bitsPerSample < 1)
+        if (streamInfo->bitsPerSample < 1)
         {
-            info->streamInfo.bitsPerSample = 16;
+            streamInfo->bitsPerSample = 16;
         }
     }
-    else if (info->streamInfo.type == TIMECODE_STREAM_TYPE)
+    else if (streamInfo->type == TIMECODE_STREAM_TYPE)
     {
-        if (info->streamInfo.timecodeType == UNKNOWN_TIMECODE_TYPE)
+        if (streamInfo->timecodeType == UNKNOWN_TIMECODE_TYPE)
         {
-            info->streamInfo.timecodeType = SYSTEM_TIMECODE_TYPE;
+            streamInfo->timecodeType = SYSTEM_TIMECODE_TYPE;
         }
 
-        if (info->streamInfo.frameRate.num < 1 || info->streamInfo.frameRate.num < 1)
+        if (streamInfo->frameRate.num < 1 || streamInfo->frameRate.num < 1)
         {
-            info->streamInfo.frameRate = g_palFrameRate;
+            streamInfo->frameRate = g_palFrameRate;
         }
     }
     else
@@ -687,6 +744,42 @@ int complete_source_info(InputInfo* info)
     
     return 1;
 }
+
+static int parse_timecode_selection(const char* arg, int* tcIndex, int* tcType, int* tcSubType)
+{
+    if (strncmp(arg, "ALL.", strlen("ALL.")) == 0 &&
+        sscanf(arg + strlen("ALL."), "%d", tcIndex) == 1)
+    {
+        *tcType = -1;
+        *tcSubType = -1;
+        return 1;
+    }
+    else if (strncmp(arg, "CTC.", strlen("CTC.")) == 0 &&
+        sscanf(arg + strlen("CTC."), "%d", tcIndex) == 1)
+    {
+        *tcType = CONTROL_TIMECODE_TYPE;
+        *tcSubType = NO_TIMECODE_SUBTYPE;
+        return 1;
+    }
+    else if (strncmp(arg, "VITC.", strlen("VITC.")) == 0 &&
+        sscanf(arg + strlen("VITC."), "%d", tcIndex) == 1)
+    {
+        *tcType = SOURCE_TIMECODE_TYPE;
+        *tcSubType = VITC_SOURCE_TIMECODE_SUBTYPE;
+        return 1;
+    }
+    else if (strncmp(arg, "LTC.", strlen("LTC.")) == 0 &&
+        sscanf(arg + strlen("LTC."), "%d", tcIndex) == 1)
+    {
+        *tcType = SOURCE_TIMECODE_TYPE;
+        *tcSubType = LTC_SOURCE_TIMECODE_SUBTYPE;
+        return 1;
+    }
+    
+    return 0;
+}
+
+
 
 static void usage(const char* cmd)
 {
@@ -712,6 +805,9 @@ static void usage(const char* cmd)
 #endif    
     fprintf(stderr, "  --xv                     X11 Xv extension display output (YUV colourspace)\n");
     fprintf(stderr, "  --x11                    X11 display output (RGB colourspace)\n");
+#if defined(HAVE_SDL)    
+    fprintf(stderr, "  --sdl                    Simple DirectMedia Layer output\n");
+#endif    
     fprintf(stderr, "  --disable-x11-osd        Disable the OSD on the X11 or X11 Xv output\n");
     fprintf(stderr, "  --raw-out <template>     Raw stream output files. Template must contain '%%d'\n");
     fprintf(stderr, "  --null-out               Accepts streams and does nothing\n");
@@ -719,7 +815,19 @@ static void usage(const char* cmd)
     fprintf(stderr, "  --sltc <timecode>        Start at specified LTC timecode (hh:mm:ss:ff)\n");
     fprintf(stderr, "  --video-switch           Use video switcher to switch between multiple video streams\n");
     fprintf(stderr, "  --quad-split             Add a quad split view to the video switch (--video-switch is also set)\n");
-    fprintf(stderr, "  --no-quad-filter         Don't apply horizontal and vertical filtering in quad-split\n");
+    fprintf(stderr, "  --nona-split             Add a nona (9) split view to the video switch (--video-switch is also set)\n");
+    fprintf(stderr, "  --no-split-filter        Don't apply horizontal and vertical filtering to video switch splits\n");
+    fprintf(stderr, "  --split-select           Always show the video split and highlight the current selected video stream\n");
+    fprintf(stderr, "  --vswitch-db <name>      Video switch database filename\n");
+    fprintf(stderr, "  --vswitch-tc <type>.<index> Use the timecode with <index> (starting from 0) stream with specified timecode <type> (default is the first timecode stream)\n");
+    fprintf(stderr, "                           Options are:\n");
+    fprintf(stderr, "                               ALL: all timecodes types\n");
+    fprintf(stderr, "                               CTS: control timecode\n");
+    fprintf(stderr, "                               VITC: vertical interval timecode\n");
+    fprintf(stderr, "                               LTC: linear timecode\n");
+    fprintf(stderr, "                           Examples:\n");
+    fprintf(stderr, "                               ALL.3: show the 4th timecode stream\n");
+    fprintf(stderr, "                               VITC.1: show the 2nd VITC timecode stream\n");
     fprintf(stderr, "  --lock                   Start with lock on\n");
     fprintf(stderr, "  --fthreads <num>         Number if FFMPEG threads to use when decoding (default = 4)\n");
     fprintf(stderr, "  --wthreads               Use worker threads for decoding essence\n");
@@ -734,6 +842,7 @@ static void usage(const char* cmd)
     fprintf(stderr, "  --monitor-aspect <W:H>   Pixel aspect ratio is calculated using the screen resolution and this monitor aspect ratio\n");
     fprintf(stderr, "  --source-aspect <W:H>    Force the video aspect ratio (currently only works for the X11 Xv extension output)\n");
     fprintf(stderr, "  --scale <float>          Scale the video (currently only works for the X11 Xv extension output)\n");
+    fprintf(stderr, "  --sw-scale <factor>      Scale down the video in software, eg. to avoid Xv resolution limits. <factor> can be 2 or 3\n");
     fprintf(stderr, "  --loop                   Seek back to start when the last frame is reached\n");
     fprintf(stderr, "  --review-dur <sec>       Review duration in seconds (default 20 seconds)\n");
     fprintf(stderr, "  --half-split             A video switch with a half split view\n");
@@ -770,6 +879,8 @@ static void usage(const char* cmd)
     fprintf(stderr, "                           Only works when --src-buf is used\n");
     fprintf(stderr, "                           Note: only takes bytes passed to the sink into account and this can\n");
     fprintf(stderr, "                               be less than the number of bytes read from disk\n");
+    fprintf(stderr, "  --clip-start <frame>     Set the start of the clip (hh:mm:ss:ff or frame count)\n");
+    fprintf(stderr, "  --clip-duration <dur>    Set the clip duration (hh:mm:ss:ff or frame count)\n");
     fprintf(stderr, "\n");
     fprintf(stderr, "Inputs:\n");
     fprintf(stderr, "  -m, --mxf  <file>        MXF file input\n");
@@ -781,11 +892,15 @@ static void usage(const char* cmd)
     fprintf(stderr, "  --raw-in  <file>         Raw file input\n");
     fprintf(stderr, "  --balls <num>            Bouncing balls\n");
     fprintf(stderr, "  --blank                  Blank video source\n");
+    fprintf(stderr, "  --clapper                Clapper source\n");
 #if !defined(DISABLE_SHARED_MEM_SOURCE)
-    fprintf(stderr, "  --shm-in <id>            Shared memory source. <id> is '(card number)p|s'. Eg. '0p'\n");
-    fprintf(stderr, "                               card = the SDI input card number (typically 1..4)\n");
+    fprintf(stderr, "  --shm-in <id>            Shared memory source. <id> is '(channel number)p|s'. Eg. '0p'\n");
+    fprintf(stderr, "                               channel = the SDI input channel number (typically 0..7)\n");
     fprintf(stderr, "                               p = select the primary input format\n");
     fprintf(stderr, "                               s = select the secondary input format\n");
+#endif
+#if !defined(DISABLE_UDP_SOURCE)
+    fprintf(stderr, "  --udp-in <address>       UDP network/multicast source (e.g. 239.255.1.1:2000)\n");
 #endif
     fprintf(stderr, "  --disable-audio          Disable audio from the next input\n");
     fprintf(stderr, "\n");
@@ -804,8 +919,14 @@ int main(int argc, const char **argv)
     Timecode startVITCTimecode = g_invalidTimecode;
     Timecode startLTCTimecode = g_invalidTimecode;
     int addVideoSwitch = 0;
-    int addQuadSplitToVideoSwitch = 0;
+    VideoSwitchSplit videoSwitchSplit = NO_SPLIT_VIDEO_SWITCH; 
+    int applySplitFilter = 1;
+    int splitSelect = 0;
     VideoSwitchSink* videoSwitch = NULL;
+    const char* videoSwitchDatabaseFilename = NULL;
+    int vswitchTimecodeType = -1;
+    int vswitchTimecodeSubType = -1;
+    int vswitchTimecodeIndex = 0;
     const char* qcSessionFilename = NULL;
     const char* logFilename = NULL;
     int lock = 0;
@@ -819,7 +940,6 @@ int main(int argc, const char **argv)
     struct timeval endTime;
     time_t timeDiffSec;
     int timeDiffUSec;
-    int applyQuadSplitFilter = 1;
     int srcBufferSize = 0;
     MultipleMediaSources* multipleSource = NULL;
     BufferedMediaSource* bufferedSource = NULL;
@@ -834,6 +954,7 @@ int main(int argc, const char **argv)
     Rational monitorAspectRatio = {0, 0};
     Rational sourceAspectRatio = {0, 0};
     float scale = 0.0;
+    int swScale = 1;
     SDIVITCSource sdiVITCSource = VITC_AS_SDI_VITC;
     int loop = 0;
     int extraSDIVITCSource = 0; 
@@ -866,6 +987,9 @@ int main(int argc, const char **argv)
     int startTimecodeIndex = -1;
     int disableConsoleMonitor = 0;
     float srcRateLimit = -1.0;
+    int64_t clipStart = -1;
+    int64_t clipDuration = -1;
+    ClipSource* clipSource = NULL;
     
     
     memset(inputs, 0, sizeof(inputs));
@@ -1020,6 +1144,13 @@ int main(int argc, const char **argv)
 #endif            
             cmdlnIndex += 1;
         }
+#if defined(HAVE_SDL)        
+        else if (strcmp(argv[cmdlnIndex], "--sdl") == 0)
+        {
+            outputType = SDL_OUTPUT;
+            cmdlnIndex += 1;
+        }
+#endif        
         else if (strcmp(argv[cmdlnIndex], "--disable-x11-osd") == 0)
         {
             disableX11OSD = 1;
@@ -1094,13 +1225,52 @@ int main(int argc, const char **argv)
         else if (strcmp(argv[cmdlnIndex], "--quad-split") == 0)
         {
             addVideoSwitch = 1;
-            addQuadSplitToVideoSwitch = 1;
+            videoSwitchSplit = QUAD_SPLIT_VIDEO_SWITCH;
             cmdlnIndex += 1;
         }
-        else if (strcmp(argv[cmdlnIndex], "--no-quad-filterr") == 0)
+        else if (strcmp(argv[cmdlnIndex], "--nona-split") == 0)
         {
-            applyQuadSplitFilter = 0;
+            addVideoSwitch = 1;
+            videoSwitchSplit = NONA_SPLIT_VIDEO_SWITCH;
             cmdlnIndex += 1;
+        }
+        else if (strcmp(argv[cmdlnIndex], "--no-split-filter") == 0)
+        {
+            applySplitFilter = 0;
+            cmdlnIndex += 1;
+        }
+        else if (strcmp(argv[cmdlnIndex], "--split-select") == 0)
+        {
+            splitSelect = 1;
+            cmdlnIndex += 1;
+        }
+        else if (strcmp(argv[cmdlnIndex], "--vswitch-db") == 0)
+        {
+            if (cmdlnIndex + 1 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            videoSwitchDatabaseFilename = argv[cmdlnIndex + 1];
+            cmdlnIndex += 2;
+        }
+        else if (strcmp(argv[cmdlnIndex], "--vswitch-tc") == 0)
+        {
+            if (cmdlnIndex + 1 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            if (!parse_timecode_selection(argv[cmdlnIndex + 1], 
+                &vswitchTimecodeIndex, &vswitchTimecodeType, &vswitchTimecodeSubType))
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Invalid argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            cmdlnIndex += 2;
         }
         else if (strcmp(argv[cmdlnIndex], "--qc-session") == 0)
         {
@@ -1248,6 +1418,23 @@ int main(int argc, const char **argv)
             }
             cmdlnIndex += 2;
         }
+        else if (strcmp(argv[cmdlnIndex], "--sw-scale") == 0)
+        {
+            if (cmdlnIndex + 1 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            if (sscanf(argv[cmdlnIndex + 1], "%d", &swScale) != 1 || 
+                    (swScale != 2 && swScale != 3))
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Invalid argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            cmdlnIndex += 2;
+        }
         else if (strcmp(argv[cmdlnIndex], "--loop") == 0)
         {
             loop = 1;
@@ -1387,31 +1574,8 @@ int main(int argc, const char **argv)
                 fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
                 return 1;
             }
-            if (strncmp(argv[cmdlnIndex + 1], "ALL.", strlen("ALL.")) == 0 &&
-                sscanf(argv[cmdlnIndex + 1] + strlen("ALL."), "%d", &startTimecodeIndex) == 1)
-            {
-                startTimecodeType = -1;
-                startTimecodeSubType = -1;
-            }
-            else if (strncmp(argv[cmdlnIndex + 1], "CTC.", strlen("CTC.")) == 0 &&
-                sscanf(argv[cmdlnIndex + 1] + strlen("CTC."), "%d", &startTimecodeIndex) == 1)
-            {
-                startTimecodeType = CONTROL_TIMECODE_TYPE;
-                startTimecodeSubType = NO_TIMECODE_SUBTYPE;
-            }
-            else if (strncmp(argv[cmdlnIndex + 1], "VITC.", strlen("VITC.")) == 0 &&
-                sscanf(argv[cmdlnIndex + 1] + strlen("VITC."), "%d", &startTimecodeIndex) == 1)
-            {
-                startTimecodeType = SOURCE_TIMECODE_TYPE;
-                startTimecodeSubType = VITC_SOURCE_TIMECODE_SUBTYPE;
-            }
-            else if (strncmp(argv[cmdlnIndex + 1], "LTC.", strlen("LTC.")) == 0 &&
-                sscanf(argv[cmdlnIndex + 1] + strlen("LTC."), "%d", &startTimecodeIndex) == 1)
-            {
-                startTimecodeType = SOURCE_TIMECODE_TYPE;
-                startTimecodeSubType = LTC_SOURCE_TIMECODE_SUBTYPE;
-            }
-            else
+            if (!parse_timecode_selection(argv[cmdlnIndex + 1], 
+                &startTimecodeIndex, &startTimecodeType, &startTimecodeSubType))
             {
                 usage(argv[0]);
                 fprintf(stderr, "Invalid argument for %s\n", argv[cmdlnIndex]);
@@ -1433,6 +1597,38 @@ int main(int argc, const char **argv)
                 return 1;
             }
             if (sscanf(argv[cmdlnIndex + 1], "%f", &srcRateLimit) != 1 || srcRateLimit <= 0.0)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Invalid argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            cmdlnIndex += 2;
+        }
+        else if (strcmp(argv[cmdlnIndex], "--clip-start") == 0)
+        {
+            if (cmdlnIndex + 1 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            if (!parse_length(argv[cmdlnIndex + 1], &clipStart))
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Invalid argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            cmdlnIndex += 2;
+        }
+        else if (strcmp(argv[cmdlnIndex], "--clip-duration") == 0)
+        {
+            if (cmdlnIndex + 1 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            if (!parse_length(argv[cmdlnIndex + 1], &clipDuration))
             {
                 usage(argv[0]);
                 fprintf(stderr, "Invalid argument for %s\n", argv[cmdlnIndex]);
@@ -1525,12 +1721,28 @@ int main(int argc, const char **argv)
                 return 1;
             }
             inputs[numInputs].type = SHM_INPUT;
+            inputs[numInputs].shmSourceName = argv[cmdlnIndex + 1];
+
+            numInputs++;
+            cmdlnIndex += 2;
+        }
+#endif
+#if !defined(DISABLE_UDP_SOURCE)        
+        else if (strcmp(argv[cmdlnIndex], "--udp-in") == 0)
+        {
+            if (cmdlnIndex + 1 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            inputs[numInputs].type = UDP_INPUT;
             inputs[numInputs].filename = argv[cmdlnIndex + 1];
 
             numInputs++;
             cmdlnIndex += 2;
         }
-#endif        
+#endif
         else if (strcmp(argv[cmdlnIndex], "--src-format") == 0)
         {
             if (cmdlnIndex + 1 >= argc)
@@ -1622,7 +1834,7 @@ int main(int argc, const char **argv)
             }
             inputs[numInputs].type = RAW_INPUT;
             inputs[numInputs].filename = argv[cmdlnIndex + 1];
-            if (!complete_source_info(&inputs[numInputs]))
+            if (!complete_source_info(&inputs[numInputs].streamInfo))
             {
                 usage(argv[0]);
                 fprintf(stderr, "Unknown source input format for raw input\n");
@@ -1648,7 +1860,7 @@ int main(int argc, const char **argv)
             }
             inputs[numInputs].type = BBALLS_INPUT;
             inputs[numInputs].streamInfo.type = PICTURE_STREAM_TYPE;
-            if (!complete_source_info(&inputs[numInputs]))
+            if (!complete_source_info(&inputs[numInputs].streamInfo))
             {
                 usage(argv[0]);
                 fprintf(stderr, "Unknown source input format for balls\n");
@@ -1661,6 +1873,26 @@ int main(int argc, const char **argv)
         {
             inputs[numInputs].type = BLANK_INPUT;
             inputs[numInputs].streamInfo.type = PICTURE_STREAM_TYPE;
+            numInputs++;
+            cmdlnIndex++;
+        }
+        else if (strcmp(argv[cmdlnIndex], "--clapper") == 0)
+        {
+            inputs[numInputs].type = CLAPPER_INPUT;
+            inputs[numInputs].streamInfo.type = PICTURE_STREAM_TYPE;
+            if (!complete_source_info(&inputs[numInputs].streamInfo))
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Unknown video source input format for clapper\n");
+                return 1;
+            }
+            inputs[numInputs].streamInfo2.type = SOUND_STREAM_TYPE;
+            if (!complete_source_info(&inputs[numInputs].streamInfo2))
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Unknown audio source input format for clapper\n");
+                return 1;
+            }
             numInputs++;
             cmdlnIndex++;
         }
@@ -1688,13 +1920,6 @@ int main(int argc, const char **argv)
         usage(argv[0]);
         fprintf(stderr, "No inputs\n");
         return 1;
-    }
-    
-    /* if restoring marks then don't mark PSE failures and VTR errors */
-    if (restoreMarksFilename != NULL)
-    {
-        markPSEFails = 0;
-        markVTRErrors = 0;
     }
     
 
@@ -1728,6 +1953,12 @@ int main(int argc, const char **argv)
         g_player.connectMapping = DEFAULT_MAPPING;
     }
     g_player.markConfigs = markConfigs;
+
+    
+    /* set writeAllMarks in player struct to allow marks to be written when closing */
+    
+    g_player.writeAllMarks = 1;
+
     
     
     /* set signal handlers to clean up cleanly */
@@ -1752,19 +1983,6 @@ int main(int argc, const char **argv)
         return 1;
     }
 
-
-    /* open the qc session */
-    
-    if (qcSessionFilename != NULL)
-    {
-        if (!qcs_open(qcSessionFilename, argc, argv, NULL, &g_player.qcSession))
-        {
-            fprintf(stderr, "Failed to open QC session\n");
-            goto fail;
-        }
-        qcs_flush(g_player.qcSession);
-    }
-    
 
     
     /* open the shuttle input */
@@ -1810,13 +2028,21 @@ int main(int argc, const char **argv)
                 break;
 
             case SHM_INPUT:
-                if (!shared_mem_open(inputs[i].filename, &mediaSource))
+                if (!shared_mem_open(inputs[i].shmSourceName, &mediaSource))
                 {
                     ml_log_error("Failed to open shared memory source\n");
                     goto fail;
                 }
                 break;
-                
+
+            case UDP_INPUT:
+                if (!udp_open(inputs[i].filename, &mediaSource))
+                {
+                    ml_log_error("Failed to open udp network source\n");
+                    goto fail;
+                }
+                break;
+
             case RAW_INPUT:
                 if (!rfs_open(inputs[i].filename, &inputs[i].streamInfo, &mediaSource))
                 {
@@ -1837,6 +2063,14 @@ int main(int argc, const char **argv)
                 if (!bks_create(&inputs[i].streamInfo, 2160000, &mediaSource))
                 {
                     ml_log_error("Failed to create blank source\n");
+                    goto fail;
+                }
+                break;
+                
+           case CLAPPER_INPUT:    
+                if (!clp_create(&inputs[i].streamInfo, &inputs[i].streamInfo2, 2160000, &mediaSource))
+                {
+                    ml_log_error("Failed to create clapper source\n");
                     goto fail;
                 }
                 break;
@@ -1900,7 +2134,33 @@ int main(int argc, const char **argv)
         g_player.mediaSource = bmsrc_get_source(bufferedSource);
     }
     
+    
+    /* open clip source */
+    
+    if (clipStart >= 0 || clipDuration >= 0)
+    {
+        if (!cps_create(g_player.mediaSource, clipStart, clipDuration, &clipSource))
+        {
+            ml_log_error("Failed to create clip media source\n");
+            goto fail;
+        }
+        g_player.mediaSource = cps_get_media_source(clipSource);
+    }
 
+
+    /* open the qc session */
+    
+    if (qcSessionFilename != NULL)
+    {
+        if (!qcs_open(qcSessionFilename, g_player.mediaSource, argc, argv, NULL, &g_player.qcSession))
+        {
+            fprintf(stderr, "Failed to open QC session\n");
+            goto fail;
+        }
+        qcs_flush(g_player.qcSession);
+    }
+
+    
     /* auto-detect whether X11 Xv is available as output type */
     
     if (outputType == X11_AUTO_DISPLAY_OUTPUT)
@@ -1940,7 +2200,7 @@ int main(int argc, const char **argv)
             g_player.x11WindowListener.close_request = x11_window_close_request;
             
             if (!xvsk_open(reviewDuration, disableX11OSD, &pixelAspectRatio, &monitorAspectRatio,
-                scale, &g_player.x11XVDisplaySink))
+                scale, swScale, &g_player.x11XVDisplaySink))
             {
                 ml_log_error("Failed to open x11 xv display sink\n");
                 goto fail;
@@ -1962,7 +2222,7 @@ int main(int argc, const char **argv)
             g_player.x11WindowListener.close_request = x11_window_close_request;
             
             if (!xsk_open(reviewDuration, disableX11OSD, &pixelAspectRatio, &monitorAspectRatio,
-                scale, &g_player.x11DisplaySink))
+                scale, swScale, &g_player.x11DisplaySink))
             {
                 ml_log_error("Failed to open x11 display sink\n");
                 goto fail;
@@ -1994,7 +2254,7 @@ int main(int argc, const char **argv)
             
             if (!dusk_open(reviewDuration, sdiVITCSource, extraSDIVITCSource, dvsBufferSize, 
                 xOutputType == X11_XV_DISPLAY_OUTPUT, disableSDIOSD, disableX11OSD, &pixelAspectRatio, &monitorAspectRatio,
-                scale, fitVideo, &g_player.dualSink))
+                scale, swScale, fitVideo, &g_player.dualSink))
             {
                 ml_log_error("Failed to open dual X11 and DVS sink\n");
                 goto fail;
@@ -2002,6 +2262,19 @@ int main(int argc, const char **argv)
             dusk_set_x11_window_name(g_player.dualSink, "Ingex Player");
             dusk_register_window_listener(g_player.dualSink, &g_player.x11WindowListener);
             g_player.mediaSink = dusk_get_media_sink(g_player.dualSink);
+            break;
+            
+        case SDL_OUTPUT:
+            g_player.x11WindowListener.data = &g_player;
+            g_player.x11WindowListener.close_request = x11_window_close_request;
+            
+            if (!sdls_open(&g_player.sdlSink))
+            {
+                ml_log_error("Failed to open SDL sink\n");
+                goto fail;
+            }
+            sdls_register_window_listener(g_player.sdlSink, &g_player.x11WindowListener);
+            g_player.mediaSink = sdls_get_media_sink(g_player.sdlSink);
             break;
             
         case RAW_STREAM_OUTPUT:
@@ -2060,8 +2333,17 @@ int main(int argc, const char **argv)
     
     if (addVideoSwitch)
     {
-        if (!qvs_create_video_switch(g_player.mediaSink, addQuadSplitToVideoSwitch, 
-            applyQuadSplitFilter, &videoSwitch))
+        if (videoSwitchDatabaseFilename != NULL)
+        {
+            if (!vsd_open_append(videoSwitchDatabaseFilename, &g_player.videoSwitchDatabase))
+            {
+                ml_log_error("Failed to create video switch database\n");
+                goto fail;
+            }
+        }
+        if (!qvs_create_video_switch(g_player.mediaSink, videoSwitchSplit, applySplitFilter, splitSelect, 
+            g_player.videoSwitchDatabase, vswitchTimecodeIndex, vswitchTimecodeType, vswitchTimecodeSubType,
+            &videoSwitch))
         {
             ml_log_error("Failed to create video switch\n");
             goto fail;
@@ -2202,6 +2484,14 @@ int main(int argc, const char **argv)
         goto fail;
     }
 
+
+    /* set the timecode type to start with */
+
+    if (startTimecodeIndex >= 0)
+    {
+        mc_set_osd_timecode(ply_get_media_control(g_player.mediaPlayer), startTimecodeIndex, startTimecodeType, startTimecodeSubType);
+    }
+
     
     /* qc or not control stuff */
     
@@ -2241,16 +2531,9 @@ int main(int argc, const char **argv)
             osd_set_mark_display(msk_get_osd(g_player.mediaSink), &g_player.markConfigs);
         }
     }
-    
-    
-    /* set the timecode type to start with */
-    
-    if (startTimecodeIndex >= 0)
-    {
-        mc_set_osd_timecode(ply_get_media_control(g_player.mediaPlayer), startTimecodeIndex, startTimecodeType, startTimecodeSubType);
-    }
-    
-    
+
+
+
     /* start playing... */
     
     gettimeofday(&startTime, NULL);

@@ -350,6 +350,26 @@ static void dusk_osd_set_audio_stream_level(void* data, int streamId, double lev
     osd_set_audio_stream_level(msk_get_osd(dualSink->dvsSink), streamId, level);
 }
 
+static void dusk_osd_set_audio_level_visibility(void* data, int visible)
+{
+    DualSink* dualSink = (DualSink*)data;
+
+    CHK_ORETV(check_dvs_is_open(dualSink));
+    
+    osd_set_audio_level_visibility(msk_get_osd(dualSink->x11Sink), visible);
+    osd_set_audio_level_visibility(msk_get_osd(dualSink->dvsSink), visible);
+}
+
+static void dusk_osd_toggle_audio_level_visibility(void* data)
+{
+    DualSink* dualSink = (DualSink*)data;
+
+    CHK_ORETV(check_dvs_is_open(dualSink));
+    
+    osd_toggle_audio_level_visibility(msk_get_osd(dualSink->x11Sink));
+    osd_toggle_audio_level_visibility(msk_get_osd(dualSink->dvsSink));
+}
+
 static void dusk_osd_show_field_symbol(void* data, int enable)
 {
     DualSink* dualSink = (DualSink*)data;
@@ -420,6 +440,27 @@ static float dusk_osd_get_position_in_progress_bar(void* data, int x, int y)
 
     /* this function only makes sense for the X11 sink */ 
     return osd_get_position_in_progress_bar(msk_get_osd(dualSink->x11Sink), x, y);
+}
+
+static void dusk_osd_highlight_progress_bar_pointer(void* data, int on)
+{
+    DualSink* dualSink = (DualSink*)data;
+
+    CHK_ORETV(check_dvs_is_open(dualSink));
+
+    osd_highlight_progress_bar_pointer(msk_get_osd(dualSink->x11Sink), on);
+    osd_highlight_progress_bar_pointer(msk_get_osd(dualSink->dvsSink), on);
+}
+
+static void dusk_osd_set_label(void* data, int xPos, int yPos, int imageWidth, int imageHeight, 
+    int fontSize, Colour colour, int box, const char* label)
+{
+    DualSink* dualSink = (DualSink*)data;
+
+    CHK_ORETV(check_dvs_is_open(dualSink));
+
+    osd_set_label(msk_get_osd(dualSink->x11Sink), xPos, yPos, imageWidth, imageHeight, fontSize, colour, box, label);
+    osd_set_label(msk_get_osd(dualSink->dvsSink), xPos, yPos, imageWidth, imageHeight, fontSize, colour, box, label);
 }
 
 
@@ -690,7 +731,7 @@ fail:
 
 int dusk_open(int reviewDuration, SDIVITCSource sdiVITCSource, int extraSDIVITCSource, int numBuffers, 
     int useXV, int disableSDIOSD, int disableX11OSD, const Rational* pixelAspectRatio, 
-    const Rational* monitorAspectRatio, float scale, int fitVideo, DualSink** dualSink)
+    const Rational* monitorAspectRatio, float scale, int swScale, int fitVideo, DualSink** dualSink)
 {
     DualSink* newDualSink = NULL;
     
@@ -708,14 +749,14 @@ int dusk_open(int reviewDuration, SDIVITCSource sdiVITCSource, int extraSDIVITCS
     {
         /* open buffered X11 XV display sink */    
         CHK_OFAIL(xvsk_open(reviewDuration, disableX11OSD, pixelAspectRatio, monitorAspectRatio, 
-            scale, &newDualSink->x11XVDisplaySink));
+            scale, swScale, &newDualSink->x11XVDisplaySink));
         newDualSink->x11Sink = xvsk_get_media_sink(newDualSink->x11XVDisplaySink);
     }
     else
     {
         /* open buffered X11 display sink */    
         CHK_OFAIL(xsk_open(reviewDuration, disableX11OSD, pixelAspectRatio, monitorAspectRatio, 
-            scale, &newDualSink->x11DisplaySink));
+            scale, swScale, &newDualSink->x11DisplaySink));
         newDualSink->x11Sink = xsk_get_media_sink(newDualSink->x11DisplaySink);
     }
 
@@ -765,12 +806,16 @@ int dusk_open(int reviewDuration, SDIVITCSource sdiVITCSource, int extraSDIVITCS
     newDualSink->dualOSD.reset_audio_stream_levels = dusk_osd_reset_audio_stream_levels;
     newDualSink->dualOSD.register_audio_stream = dusk_osd_register_audio_stream;
     newDualSink->dualOSD.set_audio_stream_level = dusk_osd_set_audio_stream_level;
+    newDualSink->dualOSD.set_audio_level_visibility = dusk_osd_set_audio_level_visibility;
+    newDualSink->dualOSD.toggle_audio_level_visibility = dusk_osd_toggle_audio_level_visibility;
     newDualSink->dualOSD.show_field_symbol = dusk_osd_show_field_symbol;
     newDualSink->dualOSD.set_mark_display = dusk_osd_set_mark_display;
     newDualSink->dualOSD.create_marks_model = dusk_osd_create_marks_model;
     newDualSink->dualOSD.set_marks_model = dusk_osd_set_marks_model;
     newDualSink->dualOSD.set_progress_bar_visibility = dusk_osd_set_progress_bar_visibility;
     newDualSink->dualOSD.get_position_in_progress_bar = dusk_osd_get_position_in_progress_bar;
+    newDualSink->dualOSD.highlight_progress_bar_pointer = dusk_osd_highlight_progress_bar_pointer;
+    newDualSink->dualOSD.set_label = dusk_osd_set_label;
 
     newDualSink->x11Info.streamId = -1;
     

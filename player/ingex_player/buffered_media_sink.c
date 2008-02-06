@@ -553,6 +553,22 @@ static void bms_osd_set_audio_stream_level(void* data, int streamId, double leve
     osd_set_audio_stream_level(osds_get_osd(bufSink->osdState), streamId, level);
 }
 
+static void bms_osd_set_audio_level_visibility(void* data, int visible)
+{
+    BufferedMediaSink* bufSink = (BufferedMediaSink*)data;
+
+    /* bypass the buffer and get directly from sink */
+    return osd_set_audio_level_visibility(msk_get_osd(bufSink->targetSink), visible);
+}
+
+static void bms_osd_toggle_audio_level_visibility(void* data)
+{
+    BufferedMediaSink* bufSink = (BufferedMediaSink*)data;
+
+    /* bypass the buffer and get directly from sink */
+    return osd_toggle_audio_level_visibility(msk_get_osd(bufSink->targetSink));
+}
+
 static void bms_osd_show_field_symbol(void* data, int enable)
 {
     BufferedMediaSink* bufSink = (BufferedMediaSink*)data;
@@ -605,6 +621,22 @@ static float bms_osd_get_position_in_progress_bar(void* data, int x, int y)
 
     /* bypass the buffer and remove directly from sink */
     return osd_get_position_in_progress_bar(msk_get_osd(bufSink->targetSink), x, y);
+}
+
+static void bms_osd_highlight_progress_bar_pointer(void* data, int on)
+{
+    BufferedMediaSink* bufSink = (BufferedMediaSink*)data;
+
+    /* bypass the buffer and remove directly from sink */
+    osd_highlight_progress_bar_pointer(msk_get_osd(bufSink->targetSink), on);
+}
+
+static void bms_osd_set_label(void* data, int xPos, int yPos, int imageWidth, int imageHeight, 
+    int fontSize, Colour colour, int box, const char* label)
+{
+    BufferedMediaSink* bufSink = (BufferedMediaSink*)data;
+
+    osd_set_label(osds_get_osd(bufSink->osdState), xPos, yPos, imageWidth, imageHeight, fontSize, colour, box, label);
 }
 
 
@@ -673,13 +705,17 @@ int bms_create(MediaSink** targetSink, int size, int dropFrameWhenFull, Buffered
     newBufSink->bufOSD.reset_audio_stream_levels = bms_osd_reset_audio_stream_levels;
     newBufSink->bufOSD.register_audio_stream = bms_osd_register_audio_stream;
     newBufSink->bufOSD.set_audio_stream_level = bms_osd_set_audio_stream_level;
+    newBufSink->bufOSD.set_audio_level_visibility = bms_osd_set_audio_level_visibility;
+    newBufSink->bufOSD.toggle_audio_level_visibility = bms_osd_toggle_audio_level_visibility;
     newBufSink->bufOSD.show_field_symbol = bms_osd_show_field_symbol;
     newBufSink->bufOSD.set_mark_display = bms_osd_set_mark_display;
     newBufSink->bufOSD.create_marks_model = bms_osd_create_marks_model;
     newBufSink->bufOSD.free_marks_model = bms_osd_free_marks_model;
     newBufSink->bufOSD.set_marks_model = bms_osd_set_marks_model;
     newBufSink->bufOSD.set_progress_bar_visibility = bms_osd_set_progress_bar_visibility;
+    newBufSink->bufOSD.highlight_progress_bar_pointer = bms_osd_highlight_progress_bar_pointer;
     newBufSink->bufOSD.get_position_in_progress_bar = bms_osd_get_position_in_progress_bar;
+    newBufSink->bufOSD.set_label = bms_osd_set_label;
 
     
     CHK_OFAIL(init_mutex(&newBufSink->stateMutex));

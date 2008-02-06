@@ -69,26 +69,19 @@
 #define PROGRESS_BAR_REGION_Y_MARGIN        40
 
 
-/* Rec 601 colours for colours defined in Colour */
-struct YUVColours
-{
-    unsigned char Y;
-    unsigned char U;
-    unsigned char V;
-} g_rec601YUVColours[] = 
-{
-    {235, 128, 128},    /* WHITE_COLOUR */
-    {210, 16, 146},     /* YELLOW_COLOUR */
-    {169, 166, 16},     /* CYAN_COLOUR */
-    {144, 53, 34},      /* GREEN_COLOUR */
-    {106, 200, 221},    /* MAGENTA_COLOUR */
-    {81, 90, 240},      /* RED_COLOUR */
-    {40, 240, 110},     /* BLUE_COLOUR */
-    {16, 128, 128},     /* BLACK_COLOUR */
-    {165, 43, 180},     /* ORANGE_COLOUR */
-};
+#define PLAY_STATE_TICKER_USER          0x0001
+#define PROGRESS_POINTER_TICKER_USER    0x0002
+
 
 typedef struct DefaultOnScreenDisplay DefaultOnScreenDisplay;
+
+typedef struct
+{
+    int active;
+    int present;
+    OSDLabel label;
+    overlay labelOverlay;
+} DefaultOSDLabel;
 
 typedef struct
 {
@@ -148,6 +141,7 @@ struct DefaultOnScreenDisplay
     overlay* sourceInfoOverlay;
     
     /* audio level */
+    int hideAudioLevels;
     overlay audioLevelOverlay;
     int haveAudioOverlay;
     overlay audioLevelM0Overlay;
@@ -167,6 +161,8 @@ struct DefaultOnScreenDisplay
     overlay progressBarMarkOverlay;
     int marksUpdateMask;
     pthread_mutex_t setMarksModelMutex;
+    int highlightProgressPointer;
+    long highlightProgressPointerTickStart;
 
     /* dropped frame indicator */
     overlay droppedFrameOverlay;
@@ -176,82 +172,64 @@ struct DefaultOnScreenDisplay
     int menuUpdateMask;
     pthread_mutex_t setMenuModelMutex;
     
-    /* timer */
-    pthread_mutex_t timerMutex;
-    long timerStarted;
-    long timerStartTime;
-    long timerDuration;
-	pthread_t timerThreadId;
-
-    int stopped; /* set when the timer thread is stopped */
+    /* labels */
+    DefaultOSDLabel cachedLabels[MAX_OSD_LABELS];
+    
+    /* ticker */
+	pthread_t tickerThreadId;
+    long halfSecTickCount;
+    int tickerUser;
+    int stopTicker;
+    long playStateTick;
 };
 
 
-
-static void stop_timer(DefaultOnScreenDisplay* osdd)
+static void set_ticker_user(DefaultOnScreenDisplay* osdd, int user, int enable)
 {
-    PTHREAD_MUTEX_LOCK(&osdd->timerMutex)
-    osdd->timerStarted = 0;
-    PTHREAD_MUTEX_UNLOCK(&osdd->timerMutex)
+    if (enable)
+    {
+        osdd->tickerUser |= user;
+    }
+    else
+    {
+        osdd->tickerUser &= ~user;
+    }
 }
 
-static void start_timer(DefaultOnScreenDisplay* osdd, long duration)
-{
-    struct timeval now;
-    
-    gettimeofday(&now, NULL);
-    
-    PTHREAD_MUTEX_LOCK(&osdd->timerMutex)
-    osdd->timerStarted = 1;
-    osdd->timerStartTime = now.tv_sec * SEC_IN_USEC + now.tv_usec;
-    osdd->timerDuration = duration;
-    PTHREAD_MUTEX_UNLOCK(&osdd->timerMutex)
-}
-
-static void timer_stopped(DefaultOnScreenDisplay* osdd)
-{
-    stop_timer(osdd);
-}
-
-static void* timer_thread(void* arg)
+static void* ticker_thread(void* arg)
 {
     DefaultOnScreenDisplay* osdd = (DefaultOnScreenDisplay*)arg;
     struct timeval now;
-    long timerStartTime;
-    long timerDuration;
-    long timerStarted;
-    long diff;
+    struct timeval next;
+    long diffMSec;
     
-    while (!osdd->stopped)
+    gettimeofday(&next, NULL);
+    next.tv_sec += (next.tv_usec + 500 * 1000) / (1000 * 1000);
+    next.tv_usec = (next.tv_usec + 500 * 1000) % (1000 * 1000);
+    
+    while (!osdd->stopTicker)
     {
-        PTHREAD_MUTEX_LOCK(&osdd->timerMutex)
-        timerStartTime = osdd->timerStartTime;
-        timerDuration = osdd->timerDuration;
-        timerStarted = osdd->timerStarted;
-        PTHREAD_MUTEX_UNLOCK(&osdd->timerMutex)
-        
-        if (!timerStarted)
-        {
-            /* don't hog the CPU */
-            usleep(500);
-            continue;
-        }
-        
         gettimeofday(&now, NULL);
-        diff = timerStartTime + timerDuration - (now.tv_sec * SEC_IN_USEC + now.tv_usec);
-        if (diff > 0)
+
+        diffMSec = (next.tv_sec - now.tv_sec) * 1000L + (next.tv_usec - now.tv_usec) / 1000;
+        if (diffMSec <= 0 || diffMSec > 1000)
         {
-            /* just sleep for SEC_IN_USEC / 20 seconds to that a thread join doesn't take too long */
-            diff = (diff > SEC_IN_USEC / 20) ? (SEC_IN_USEC / 20) : diff;
-            usleep(diff);
+            if (osdd->tickerUser)
+            {
+                osdl_refresh_required(osdd->listener);
+            }
+
+            osdd->halfSecTickCount++;
+            
+            gettimeofday(&next, NULL);
+            next.tv_sec += (next.tv_usec + 500 * 1000) / (1000 * 1000);
+            next.tv_usec = (next.tv_usec + 500 * 1000) % (1000 * 1000);
         }
-        else
-        {
-            timer_stopped(osdd);
-        }
+        
+        usleep(100 * 1000);
     }
     
-    pthread_exit((void *) 0);
+    pthread_exit((void *) NULL);
 }
 
 
@@ -293,12 +271,120 @@ static int init_yuv_frame(DefaultOnScreenDisplay* osdd, YUV_frame* yuvFrame, uns
     {
         CHK_ORET(YUV_frame_from_buffer(yuvFrame, image, width, height, UYVY) == 1);
     }
-    else /* YUV420 */
+    else if (osdd->videoFormat == YUV422_FORMAT)
+    {
+        CHK_ORET(YUV_frame_from_buffer(yuvFrame, image, width, height, YUV422) == 1);
+    }
+    else /* YUV420_FORMAT */
     {
         CHK_ORET(YUV_frame_from_buffer(yuvFrame, image, width, height, I420) == 1);
     }
     
     return 1;
+}
+
+static void complete_labels(DefaultOnScreenDisplay* osdd)
+{
+    int i, j;
+    int labelIsInCache[MAX_OSD_LABELS];
+    int remainingLabels = osdd->state->numLabels;
+    int cacheLabelsAvailable = MAX_OSD_LABELS;
+    
+    memset(labelIsInCache, 0, sizeof(labelIsInCache));
+    
+
+    /* reset cache labels and get number of cached labels available (!present) */
+    for (j = 0; j < MAX_OSD_LABELS; j++)
+    {
+        osdd->cachedLabels[j].active = 0;
+        if (osdd->cachedLabels[j].present)
+        {
+            cacheLabelsAvailable--;
+        }
+    }
+
+    /* find all labels already in the cache */    
+    for (i = 0; i < osdd->state->numLabels; i++)
+    {
+        for (j = 0; j < MAX_OSD_LABELS; j++)
+        {
+            if (osdd->cachedLabels[j].present &&
+                osdd->cachedLabels[j].label.xPos == osdd->state->labels[i].xPos &&
+                osdd->cachedLabels[j].label.yPos == osdd->state->labels[i].yPos &&
+                osdd->cachedLabels[j].label.imageWidth == osdd->state->labels[i].imageWidth &&
+                osdd->cachedLabels[j].label.imageHeight == osdd->state->labels[i].imageHeight &&
+                osdd->cachedLabels[j].label.fontSize == osdd->state->labels[i].fontSize &&
+                strcmp(osdd->cachedLabels[j].label.text, osdd->state->labels[i].text) == 0)
+            {
+                /* label is already in the cache */
+                osdd->cachedLabels[j].label.colour = osdd->state->labels[i].colour;
+                osdd->cachedLabels[j].label.box = osdd->state->labels[i].box;
+                osdd->cachedLabels[j].active = 1;
+                labelIsInCache[i] = 1;
+                remainingLabels--;
+                break;
+            }
+        }
+    }
+    
+    /* create labels that are not already present in the cache */
+    for (i = 0; i < osdd->state->numLabels; i++)
+    {
+        if (labelIsInCache[i])
+        {
+            continue;
+        }
+        
+        for (j = 0; j < MAX_OSD_LABELS; j++)
+        {
+            if (osdd->cachedLabels[j].active)
+            {
+                continue;
+            }
+            
+            if (remainingLabels > cacheLabelsAvailable &&
+                osdd->cachedLabels[j].present)
+            {
+                /* clear the cached label which will be replaced with a new one */
+                free_overlay(&osdd->cachedLabels[j].labelOverlay);
+                osdd->cachedLabels[j].present = 0;
+            }
+            
+            if (!osdd->cachedLabels[j].present)
+            {
+                /* create new label */
+                osdd->cachedLabels[j].label.xPos = osdd->state->labels[i].xPos;
+                osdd->cachedLabels[j].label.yPos = osdd->state->labels[i].yPos;
+                osdd->cachedLabels[j].label.imageWidth = osdd->state->labels[i].imageWidth;
+                osdd->cachedLabels[j].label.imageHeight = osdd->state->labels[i].imageHeight;
+                osdd->cachedLabels[j].label.fontSize = osdd->state->labels[i].fontSize;
+                osdd->cachedLabels[j].label.colour = osdd->state->labels[i].colour;
+                osdd->cachedLabels[j].label.box = osdd->state->labels[i].box;
+                strncpy(osdd->cachedLabels[j].label.text, osdd->state->labels[i].text, sizeof(osdd->cachedLabels[j].label.text) - 1);
+                osdd->cachedLabels[j].label.text[sizeof(osdd->cachedLabels[j].label.text) - 1] = '\0';
+             
+                if (text_to_overlay(&osdd->p_info, &osdd->cachedLabels[j].labelOverlay, 
+                    osdd->cachedLabels[j].label.text, 
+                    osdd->imageWidth - 20, 0,
+                    0, 0,
+                    0,
+                    0,
+                    0,
+                    "Ariel", 
+                    osdd->cachedLabels[j].label.fontSize * osdd->imageHeight / osdd->state->labels[i].imageHeight, 
+                    osdd->aspectRatio.num, osdd->aspectRatio.den) < 0)
+                {
+                    ml_log_error("Failed to create text overlay for label\n");
+                    return;
+                }
+                
+                osdd->cachedLabels[j].present = 1;
+                osdd->cachedLabels[j].active = 1;
+                remainingLabels--;
+                break;
+            }
+        }
+    }
 }
 
 static int initialise_audio_level_overlay(DefaultOnScreenDisplay* osdd, int width, int height)
@@ -309,6 +395,11 @@ static int initialise_audio_level_overlay(DefaultOnScreenDisplay* osdd, int widt
     osdd->audioLevelOverlay.h = height * AUDIO_LEVEL_RELATIVE_HEIGHT;
 
     if (osdd->videoFormat == UYVY_FORMAT)
+    {
+        osdd->audioLevelOverlay.ssx = 2;
+        osdd->audioLevelOverlay.ssy = 1;
+    }
+    else if (osdd->videoFormat == YUV422_FORMAT)
     {
         osdd->audioLevelOverlay.ssx = 2;
         osdd->audioLevelOverlay.ssy = 1;
@@ -503,7 +594,7 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
     
     
     
-    /* start timer if required */
+    /* start/stop ticker use if required */
     
     if (osdd->state->isPlaying)
     {
@@ -511,9 +602,25 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
             osdd->state->playForwards != osdd->prevState.playForwards ||
             osdd->state->playSpeed != osdd->prevState.playSpeed)
         {
-            /* any state other than pause will disappear after 2 secs */
-            start_timer(osdd, 2 * SEC_IN_USEC);
+            osdd->playStateTick = osdd->halfSecTickCount + 4;
+            set_ticker_user(osdd, PLAY_STATE_TICKER_USER, 1);
         }
+    }
+    else
+    {
+        if (osdd->playStateTick > osdd->halfSecTickCount)
+        {
+            set_ticker_user(osdd, PLAY_STATE_TICKER_USER, 0);
+        }
+    }
+    
+    if (osdd->highlightProgressPointer)
+    {
+        set_ticker_user(osdd, PROGRESS_POINTER_TICKER_USER, 1);
+    }
+    else
+    {
+        set_ticker_user(osdd, PROGRESS_POINTER_TICKER_USER, 0);
     }
 
     
@@ -528,13 +635,13 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
     }
     else
     {
-        txtY = g_rec601YUVColours[WHITE_COLOUR].Y;
-        txtU = g_rec601YUVColours[WHITE_COLOUR].U;
-        txtV = g_rec601YUVColours[WHITE_COLOUR].V;
+        txtY = g_rec601YUVColours[LIGHT_WHITE_COLOUR].Y;
+        txtU = g_rec601YUVColours[LIGHT_WHITE_COLOUR].U;
+        txtV = g_rec601YUVColours[LIGHT_WHITE_COLOUR].V;
         box = 80;
     }
     
-    if (osdd->timerStarted || !osdd->state->isPlaying)
+    if (osdd->playStateTick > osdd->halfSecTickCount || !osdd->state->isPlaying)
     {
         /* if player is paused, then this overrides any other state */
         if (!osdd->state->isPlaying)
@@ -637,9 +744,9 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
     }
     else
     {
-        txtY = g_rec601YUVColours[WHITE_COLOUR].Y;
-        txtU = g_rec601YUVColours[WHITE_COLOUR].U;
-        txtV = g_rec601YUVColours[WHITE_COLOUR].V;
+        txtY = g_rec601YUVColours[LIGHT_WHITE_COLOUR].Y;
+        txtU = g_rec601YUVColours[LIGHT_WHITE_COLOUR].U;
+        txtV = g_rec601YUVColours[LIGHT_WHITE_COLOUR].V;
         box = 80;
     }
     
@@ -797,9 +904,9 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
     
     if (!osdd->hideProgressBar)
     {
-        txtY = g_rec601YUVColours[WHITE_COLOUR].Y;
-        txtU = g_rec601YUVColours[WHITE_COLOUR].U;
-        txtV = g_rec601YUVColours[WHITE_COLOUR].V;
+        txtY = g_rec601YUVColours[LIGHT_WHITE_COLOUR].Y;
+        txtU = g_rec601YUVColours[LIGHT_WHITE_COLOUR].U;
+        txtV = g_rec601YUVColours[LIGHT_WHITE_COLOUR].V;
         box = 80;
             
         xPos = (width - osdd->progressBarOverlay.w) / 2;
@@ -826,8 +933,14 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
             CHK_ORET(add_overlay(&osdd->progressBarMarkOverlay, &yuvFrame, xPos, yPos, txtY, txtU, txtV, box) == 0);
         }
         
-        
-        if (frameInfo->position == 0 ||
+        if (osdd->highlightProgressPointer &&
+            ((osdd->halfSecTickCount - osdd->highlightProgressPointerTickStart) / 3) % 2 == 0)
+        {
+            txtY = g_rec601YUVColours[LIGHT_WHITE_COLOUR].Y;
+            txtU = g_rec601YUVColours[LIGHT_WHITE_COLOUR].U;
+            txtV = g_rec601YUVColours[LIGHT_WHITE_COLOUR].V;
+        }
+        else if (frameInfo->position == 0 ||
             (frameInfo->sourceLength > 0 && frameInfo->position >= frameInfo->sourceLength - 1))
         {
             /* at start or end */
@@ -870,9 +983,9 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
         else
         {
             /* white */
-            txtY = g_rec601YUVColours[WHITE_COLOUR].Y;
-            txtU = g_rec601YUVColours[WHITE_COLOUR].U;
-            txtV = g_rec601YUVColours[WHITE_COLOUR].V;
+            txtY = g_rec601YUVColours[LIGHT_WHITE_COLOUR].Y;
+            txtU = g_rec601YUVColours[LIGHT_WHITE_COLOUR].U;
+            txtV = g_rec601YUVColours[LIGHT_WHITE_COLOUR].V;
             box = 100;
         }
     
@@ -900,18 +1013,18 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
     
     /* audio level */
     
-    if (osdd->state->numAudioLevels > 0)
+    if (!osdd->hideAudioLevels && osdd->state->numAudioLevels > 0)
     {
         /* white */
-        txtY = g_rec601YUVColours[WHITE_COLOUR].Y;
-        txtU = g_rec601YUVColours[WHITE_COLOUR].U;
-        txtV = g_rec601YUVColours[WHITE_COLOUR].V;
+        txtY = g_rec601YUVColours[LIGHT_WHITE_COLOUR].Y;
+        txtU = g_rec601YUVColours[LIGHT_WHITE_COLOUR].U;
+        txtV = g_rec601YUVColours[LIGHT_WHITE_COLOUR].V;
         box = 100;
     
         fill_audio_level_overlay(osdd);
         if (osdd->haveAudioOverlay)
         {
-            xPos = 10;
+            xPos = 50;
             yPos = (height - osdd->audioLevelOverlay.h) / 2;
             CHK_ORET(add_overlay(&osdd->audioLevelOverlay, &yuvFrame, xPos, yPos, txtY, txtU, txtV, box) == 0);
         }
@@ -919,7 +1032,7 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
         box = 0;
 
         /* 0 dBFS */
-        xPos = 10 + osdd->audioLevelOverlay.w;
+        xPos = 50 + osdd->audioLevelOverlay.w;
         yPos = (height - osdd->audioLevelOverlay.h) / 2 + AUDIO_LEVEL_MARGIN;
         CHK_ORET(add_overlay(&osdd->audioLevelM0Overlay, &yuvFrame, xPos, yPos, txtY, txtU, txtV, box) == 0);
 
@@ -950,9 +1063,9 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
     if (osdd->state->showFieldSymbol)
     {
         /* white */
-        txtY = g_rec601YUVColours[WHITE_COLOUR].Y;
-        txtU = g_rec601YUVColours[WHITE_COLOUR].U;
-        txtV = g_rec601YUVColours[WHITE_COLOUR].V;
+        txtY = g_rec601YUVColours[LIGHT_WHITE_COLOUR].Y;
+        txtU = g_rec601YUVColours[LIGHT_WHITE_COLOUR].U;
+        txtV = g_rec601YUVColours[LIGHT_WHITE_COLOUR].V;
         box = 100;
     
         /* position on an odd line (second field) */
@@ -962,6 +1075,37 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
     }
     
 
+    /* labels */
+    
+    for (i = 0; i < MAX_OSD_LABELS; i++)
+    {
+        if (!osdd->cachedLabels[i].active || !osdd->cachedLabels[i].present)
+        {
+            continue;
+        }
+
+        txtY = g_rec601YUVColours[osdd->cachedLabels[i].label.colour].Y;
+        txtU = g_rec601YUVColours[osdd->cachedLabels[i].label.colour].U;
+        txtV = g_rec601YUVColours[osdd->cachedLabels[i].label.colour].V;
+        box = osdd->cachedLabels[i].label.box;
+        
+        xPos = osdd->cachedLabels[i].label.xPos * osdd->imageWidth / osdd->cachedLabels[i].label.imageWidth - 
+            osdd->cachedLabels[i].labelOverlay.w / 2;
+        yPos = osdd->cachedLabels[i].label.yPos * osdd->imageHeight / osdd->cachedLabels[i].label.imageHeight - 
+            osdd->cachedLabels[i].labelOverlay.h / 2;
+        
+        /* check overlay is within frame bounds */
+        if (xPos < 0 || 
+            yPos < 0 ||
+            xPos + osdd->cachedLabels[i].labelOverlay.w >= osdd->imageWidth ||
+            yPos + osdd->cachedLabels[i].labelOverlay.h >= osdd->imageHeight)
+        {
+            continue;
+        }
+        
+        CHK_ORET(add_overlay(&osdd->cachedLabels[i].labelOverlay, &yuvFrame, xPos, yPos, txtY, txtU, txtV, box) == 0);
+    }
+    
     return 1;
 }
 
@@ -1002,13 +1146,14 @@ static int source_info_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* fra
 
     
     /* white */
-    txtY = g_rec601YUVColours[WHITE_COLOUR].Y;
-    txtU = g_rec601YUVColours[WHITE_COLOUR].U;
-    txtV = g_rec601YUVColours[WHITE_COLOUR].V;
+    txtY = g_rec601YUVColours[LIGHT_WHITE_COLOUR].Y;
+    txtU = g_rec601YUVColours[LIGHT_WHITE_COLOUR].U;
+    txtV = g_rec601YUVColours[LIGHT_WHITE_COLOUR].V;
     box = 80;
 
-    xPos = (width < 20) ? 0 : 20;
-    yPos = height < 20 ? 0 : 20;
+    xPos = (width - osdd->sourceInfoOverlay->w) / 2;
+    xPos = (xPos < 0) ? 0 : xPos;
+    yPos = (height < 20) ? 0 : 20;
     
     CHK_ORET(add_overlay(osdd->sourceInfoOverlay, &yuvFrame, xPos, yPos,
         txtY, txtU, txtV, box) == YUV_OK);
@@ -1085,9 +1230,9 @@ static int add_menu_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* frameI
         }
     }
 
-    txtY = g_rec601YUVColours[WHITE_COLOUR].Y;
-    txtU = g_rec601YUVColours[WHITE_COLOUR].U;
-    txtV = g_rec601YUVColours[WHITE_COLOUR].V;
+    txtY = g_rec601YUVColours[LIGHT_WHITE_COLOUR].Y;
+    txtU = g_rec601YUVColours[LIGHT_WHITE_COLOUR].U;
+    txtV = g_rec601YUVColours[LIGHT_WHITE_COLOUR].V;
     box = 100;
 
     xPos = MENU_OUTER_MARGIN;
@@ -1125,9 +1270,9 @@ static int add_menu_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* frameI
         }
     }
 
-    txtY = g_rec601YUVColours[WHITE_COLOUR].Y;
-    txtU = g_rec601YUVColours[WHITE_COLOUR].U;
-    txtV = g_rec601YUVColours[WHITE_COLOUR].V;
+    txtY = g_rec601YUVColours[LIGHT_WHITE_COLOUR].Y;
+    txtU = g_rec601YUVColours[LIGHT_WHITE_COLOUR].U;
+    txtV = g_rec601YUVColours[LIGHT_WHITE_COLOUR].V;
     box = 100;
 
     CHK_OFAIL(add_overlay(&menuInt->statusOverlay, &yuvFrame, xPos, yPos,
@@ -1166,9 +1311,9 @@ static int add_menu_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* frameI
             }
         }
     
-        txtY = g_rec601YUVColours[WHITE_COLOUR].Y;
-        txtU = g_rec601YUVColours[WHITE_COLOUR].U;
-        txtV = g_rec601YUVColours[WHITE_COLOUR].V;
+        txtY = g_rec601YUVColours[LIGHT_WHITE_COLOUR].Y;
+        txtU = g_rec601YUVColours[LIGHT_WHITE_COLOUR].U;
+        txtV = g_rec601YUVColours[LIGHT_WHITE_COLOUR].V;
         box = 100;
     
         CHK_OFAIL(add_overlay(&menuInt->commentOverlay, &yuvFrame, xPos, yPos,
@@ -1295,9 +1440,9 @@ static int add_menu_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* frameI
             }
             else
             {
-                txtY = g_rec601YUVColours[WHITE_COLOUR].Y;
-                txtU = g_rec601YUVColours[WHITE_COLOUR].U;
-                txtV = g_rec601YUVColours[WHITE_COLOUR].V;
+                txtY = g_rec601YUVColours[LIGHT_WHITE_COLOUR].Y;
+                txtU = g_rec601YUVColours[LIGHT_WHITE_COLOUR].U;
+                txtV = g_rec601YUVColours[LIGHT_WHITE_COLOUR].V;
             }
             if (menuItemIndex == osdd->menu->currentItemIndex)
             {
@@ -1353,9 +1498,9 @@ static int add_menu_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* frameI
     
     if (yPos + menuInt->bottomMarginOverlay.h < height)
     {
-        txtY = g_rec601YUVColours[WHITE_COLOUR].Y;
-        txtU = g_rec601YUVColours[WHITE_COLOUR].U;
-        txtV = g_rec601YUVColours[WHITE_COLOUR].V;
+        txtY = g_rec601YUVColours[LIGHT_WHITE_COLOUR].Y;
+        txtU = g_rec601YUVColours[LIGHT_WHITE_COLOUR].U;
+        txtV = g_rec601YUVColours[LIGHT_WHITE_COLOUR].V;
         box = 100;
     
         xPos = MENU_OUTER_MARGIN;
@@ -1405,6 +1550,11 @@ static int osdd_initialise(void* data, const StreamInfo* streamInfo, const Ratio
     unsigned char* bufPtr;
     float fontScale = streamInfo->height / 576.0;
     
+    if (fontScale > 1.5)
+    {
+        fontScale = 1.5;
+    }
+    
     if (streamInfo->width < 20)
     {
         /* ridiculous width */
@@ -1412,7 +1562,9 @@ static int osdd_initialise(void* data, const StreamInfo* streamInfo, const Ratio
         return 0;
     }
     
-    if (streamInfo->format != UYVY_FORMAT && streamInfo->format != YUV420_FORMAT)
+    if (streamInfo->format != UYVY_FORMAT &&
+        streamInfo->format != YUV422_FORMAT &&
+        streamInfo->format != YUV420_FORMAT)
     {
         ml_log_error("Picture format not (yet) supported for OSD\n");
         return 0;
@@ -1459,6 +1611,11 @@ static int osdd_initialise(void* data, const StreamInfo* streamInfo, const Ratio
     osdd->markOverlay.w = MARK_OVERLAY_WIDTH;
     osdd->markOverlay.h = MARK_OVERLAY_HEIGHT;
     if (osdd->videoFormat == UYVY_FORMAT)
+    {
+        osdd->markOverlay.ssx = 2;
+        osdd->markOverlay.ssy = 1;
+    }
+    else if (osdd->videoFormat == YUV422_FORMAT)
     {
         osdd->markOverlay.ssx = 2;
         osdd->markOverlay.ssy = 1;
@@ -1544,6 +1701,13 @@ static int osdd_initialise(void* data, const StreamInfo* streamInfo, const Ratio
     osdd->progressBarMarkOverlay.w = osdd->progressBarOverlay.w - 2 * PROGRESS_BAR_ENDS_WIDTH + PROGRESS_BAR_MARK_WIDTH;
     osdd->progressBarMarkOverlay.h = PROGRESS_BAR_MARK_HEIGHT;
     if (osdd->videoFormat == UYVY_FORMAT)
+    {
+        osdd->progressBarOverlay.ssx = 2;
+        osdd->progressBarOverlay.ssy = 1;
+        osdd->progressBarMarkOverlay.ssx = 2;
+        osdd->progressBarMarkOverlay.ssy = 1;
+    }
+    else if (osdd->videoFormat == YUV422_FORMAT)
     {
         osdd->progressBarOverlay.ssx = 2;
         osdd->progressBarOverlay.ssy = 1;
@@ -1751,6 +1915,20 @@ static void osdd_set_audio_stream_level(void* data, int streamId, double level)
     osd_set_audio_stream_level(osds_get_osd(osdd->state), streamId, level);
 }
 
+static void osdd_set_audio_level_visibility(void* data, int visible)
+{
+    DefaultOnScreenDisplay* osdd = (DefaultOnScreenDisplay*)data;
+    
+    osdd->hideAudioLevels = !visible;
+}
+
+static void osdd_toggle_audio_level_visibility(void* data)
+{
+    DefaultOnScreenDisplay* osdd = (DefaultOnScreenDisplay*)data;
+    
+    osdd->hideAudioLevels = !osdd->hideAudioLevels;
+}
+
 static void osdd_show_field_symbol(void* data, int enable)
 {
     DefaultOnScreenDisplay* osdd = (DefaultOnScreenDisplay*)data;
@@ -1867,6 +2045,32 @@ static float osdd_get_position_in_progress_bar(void* data, int x, int y)
     return position;
 }
 
+static void osdd_highlight_progress_bar_pointer(void* data, int on)
+{
+    DefaultOnScreenDisplay* osdd = (DefaultOnScreenDisplay*)data;
+    
+    if (osdd->highlightProgressPointer != on)
+    {
+        if (on)
+        {
+            osdd->highlightProgressPointerTickStart = osdd->halfSecTickCount;
+        }
+        else
+        {
+            osdd->highlightProgressPointerTickStart = 0;
+        }
+    }
+    osdd->highlightProgressPointer = on;
+}
+
+static void osdd_set_label(void* data, int xPos, int yPos, int imageWidth, int imageHeight, 
+    int fontSize, Colour colour, int box, const char* label)
+{
+    DefaultOnScreenDisplay* osdd = (DefaultOnScreenDisplay*)data;
+    
+    osd_set_label(osds_get_osd(osdd->state), xPos, yPos, imageWidth, imageHeight, fontSize, colour, box, label);
+}
+
 static int osdd_add_to_image(void* data, const FrameInfo* frameInfo, unsigned char* image, 
     int width, int height)
 {
@@ -1881,6 +2085,9 @@ static int osdd_add_to_image(void* data, const FrameInfo* frameInfo, unsigned ch
     
     /* complete the state with the current frame info */
     osds_complete(osdd->state, frameInfo);
+    
+    /* complete the labels */
+    complete_labels(osdd);
 
     /* complete the state screen selection */
     if (!osdd->state->screenSet && osdd->state->nextScreen)
@@ -1935,9 +2142,8 @@ static int osdd_reset(void* data)
 {
     DefaultOnScreenDisplay* osdd = (DefaultOnScreenDisplay*)data;
     
-    osdd->stopped = 1;
-    stop_timer(osdd);
-    join_thread(&osdd->timerThreadId, NULL, NULL);
+    osdd->stopTicker = 1;
+    join_thread(&osdd->tickerThreadId, NULL, NULL);
 
     if (osdd->sourceInfoOverlay != NULL)
     {
@@ -1956,15 +2162,13 @@ static int osdd_reset(void* data)
     osds_sink_reset(osdd->state);
     osdd->prevState = *osdd->state;
     
-    osdd->timerStarted = 0;
-    osdd->timerStartTime = 0;
-    osdd->timerDuration = 0;
+    osdd->playStateTick = -1;
     
     
     osdd->lastAvailableSourceLength = 0;
 
-    osdd->stopped = 0;
-    CHK_ORET(create_joinable_thread(&osdd->timerThreadId, timer_thread, osdd));
+    osdd->stopTicker = 0;
+    CHK_ORET(create_joinable_thread(&osdd->tickerThreadId, ticker_thread, osdd));
  
     return 1;    
 }
@@ -1972,15 +2176,15 @@ static int osdd_reset(void* data)
 static void osdd_free(void* data)
 {
     DefaultOnScreenDisplay* osdd = (DefaultOnScreenDisplay*)data;
+    int i;
     
     if (osdd == NULL)
     {
         return;
     }
 
-    osdd->stopped = 1;
-    stop_timer(osdd);
-    join_thread(&osdd->timerThreadId, NULL, NULL);
+    osdd->stopTicker = 1;
+    join_thread(&osdd->tickerThreadId, NULL, NULL);
 
     free_timecode(&osdd->timecodeTextData);
     free_char_set(&osdd->timecodeTypeData);
@@ -2006,11 +2210,18 @@ static void osdd_free(void* data)
     free_overlay(&osdd->progressBarOverlay);
     free_overlay(&osdd->progressBarMarkOverlay);
     
+    for (i = 0; i < MAX_OSD_LABELS; i++)
+    {
+        if (osdd->cachedLabels[i].present)
+        {
+            free_overlay(&osdd->cachedLabels[i].labelOverlay);
+        }
+    }
+    
     osds_free(&osdd->state);
     
     destroy_mutex(&osdd->setMenuModelMutex);
     destroy_mutex(&osdd->setMarksModelMutex);
-    destroy_mutex(&osdd->timerMutex);
     
     SAFE_FREE(&osdd);
 }
@@ -2180,6 +2391,22 @@ void osd_set_audio_stream_level(OnScreenDisplay* osd, int streamId, double level
     }
 }
 
+void osd_set_audio_level_visibility(OnScreenDisplay* osd, int visible)
+{
+    if (osd && osd->set_audio_level_visibility)
+    {
+        osd->set_audio_level_visibility(osd->data, visible);
+    }
+}
+
+void osd_toggle_audio_level_visibility(OnScreenDisplay* osd)
+{
+    if (osd && osd->toggle_audio_level_visibility)
+    {
+        osd->toggle_audio_level_visibility(osd->data);
+    }
+}
+
 void osd_show_field_symbol(OnScreenDisplay* osd, int enable)
 {
     if (osd && osd->show_field_symbol)
@@ -2238,6 +2465,23 @@ float osd_get_position_in_progress_bar(OnScreenDisplay* osd, int x, int y)
     return -1.0;
 }
 
+void osd_highlight_progress_bar_pointer(OnScreenDisplay* osd, int on)
+{
+    if (osd && osd->highlight_progress_bar_pointer)
+    {
+        osd->highlight_progress_bar_pointer(osd->data, on);
+    }
+}
+
+void osd_set_label(OnScreenDisplay* osd, int xPos, int yPos, int imageWidth, int imageHeight, 
+    int fontSize, Colour colour, int box, const char* label)
+{
+    if (osd && osd->set_label)
+    {
+        osd->set_label(osd->data, xPos, yPos, imageWidth, imageHeight, fontSize, colour, box, label);
+    }
+}
+
 int osd_add_to_image(OnScreenDisplay* osd, const FrameInfo* frameInfo, unsigned char* image, 
     int width, int height)
 {
@@ -2274,6 +2518,7 @@ int osdd_create(OnScreenDisplay** osd)
     CALLOC_ORET(newOSDD, DefaultOnScreenDisplay, 1);
     
     newOSDD->maxAudioLevels = -1;
+    newOSDD->playStateTick = -1;
     
     newOSDD->osd.data = newOSDD;  /* set this first so that free in fail below works */  
     newOSDD->osd.initialise = osdd_initialise;
@@ -2293,6 +2538,8 @@ int osdd_create(OnScreenDisplay** osd)
     newOSDD->osd.reset_audio_stream_levels = osdd_reset_audio_stream_levels;
     newOSDD->osd.register_audio_stream = osdd_register_audio_stream;
     newOSDD->osd.set_audio_stream_level = osdd_set_audio_stream_level;
+    newOSDD->osd.set_audio_level_visibility = osdd_set_audio_level_visibility;
+    newOSDD->osd.toggle_audio_level_visibility = osdd_toggle_audio_level_visibility;
     newOSDD->osd.show_field_symbol = osdd_show_field_symbol;
     newOSDD->osd.set_mark_display = osdd_set_mark_display;
     newOSDD->osd.create_marks_model = osdd_create_marks_model;
@@ -2300,6 +2547,8 @@ int osdd_create(OnScreenDisplay** osd)
     newOSDD->osd.set_marks_model = osdd_set_marks_model;
     newOSDD->osd.set_progress_bar_visibility = osdd_set_progress_bar_visibility;
     newOSDD->osd.get_position_in_progress_bar = osdd_get_position_in_progress_bar;
+    newOSDD->osd.highlight_progress_bar_pointer = osdd_highlight_progress_bar_pointer;
+    newOSDD->osd.set_label = osdd_set_label;
     newOSDD->osd.add_to_image = osdd_add_to_image;
     newOSDD->osd.reset = osdd_reset;
     newOSDD->osd.free = osdd_free;
@@ -2309,9 +2558,8 @@ int osdd_create(OnScreenDisplay** osd)
     
     CHK_OFAIL(init_mutex(&newOSDD->setMenuModelMutex));
     CHK_OFAIL(init_mutex(&newOSDD->setMarksModelMutex));
-    CHK_OFAIL(init_mutex(&newOSDD->timerMutex));
     
-    CHK_OFAIL(create_joinable_thread(&newOSDD->timerThreadId, timer_thread, newOSDD)); 
+    CHK_OFAIL(create_joinable_thread(&newOSDD->tickerThreadId, ticker_thread, newOSDD)); 
 
     
     *osd = &newOSDD->osd;
@@ -2902,12 +3150,51 @@ static void osds_set_mark_display(void* data, const MarkConfigs* markConfigs)
     state->markConfigs = *markConfigs;
 }
 
+static void osds_set_label(void* data, int xPos, int yPos, int imageWidth, int imageHeight, 
+    int fontSize, Colour colour, int box, const char* label)
+{
+    OnScreenDisplayState* state = (OnScreenDisplayState*)data;
+    
+    /* clear labels if the previous call was to complete the state */
+    if (state->clearLabels)
+    {
+        state->numLabels = 0;
+        state->clearLabels = 0;
+    }
+
+    /* check max labels not exceeded */    
+    if (state->numLabels + 1 > MAX_OSD_LABELS)
+    {
+        return;
+    }
+    
+    /* ignore empty label */
+    if (label == NULL || strlen(label) == 0)
+    {
+        return;
+    }
+    
+    /* add label */
+    state->labels[state->numLabels].xPos = xPos;
+    state->labels[state->numLabels].yPos = yPos;
+    state->labels[state->numLabels].imageWidth = imageWidth;
+    state->labels[state->numLabels].imageHeight = imageHeight;
+    state->labels[state->numLabels].fontSize = fontSize;
+    state->labels[state->numLabels].colour = colour;
+    state->labels[state->numLabels].box = box;
+    strncpy(state->labels[state->numLabels].text, label, sizeof(state->labels[state->numLabels].text) - 1);
+    state->labels[state->numLabels].text[sizeof(state->labels[state->numLabels].text) - 1] = '\0';
+    
+    state->numLabels++;
+}
+
 static int osds_set_state(void* data, const OnScreenDisplayState* newState)
 {
     OnScreenDisplayState* state = (OnScreenDisplayState*)data;
     int stateChanged;
     OnScreenDisplay originalOSD;
     OSDScreen screen;
+    int originalClearLabels = state->clearLabels;
     
     /* adopt new state screen only if it was set */
     screen = (newState->screenSet) ? newState->screen : state->screen;
@@ -2923,6 +3210,17 @@ static int osds_set_state(void* data, const OnScreenDisplayState* newState)
     *state = *newState;
     state->screen = screen;
     state->osd = originalOSD;
+    
+    if (state->numLabels > 0)
+    {
+        /* new labels were copied */
+        state->clearLabels = 0;
+    }
+    else
+    {
+        /* clearLabel use is local to the state and should not be transferred */
+        state->clearLabels = originalClearLabels;
+    }
     
     return stateChanged;
 }
@@ -2954,6 +3252,7 @@ int osds_create(OnScreenDisplayState** state)
     newState->osd.set_audio_stream_level = osds_set_audio_stream_level;
     newState->osd.show_field_symbol = osds_show_field_symbol;
     newState->osd.set_mark_display = osds_set_mark_display;
+    newState->osd.set_label = osds_set_label;
     
     osds_sink_reset(newState);
     
@@ -2981,6 +3280,13 @@ void osds_complete(OnScreenDisplayState* state, const FrameInfo* frameInfo)
     int i;
     int index;
     int typedIndex;
+    
+    /* clear labels if there were labels in the previous call to complete but not in this frame */
+    if (state->clearLabels)
+    {
+        state->numLabels = 0;
+        state->clearLabels = 0;
+    }
     
     /* complete the OSD state given the frame information */
     
@@ -3047,6 +3353,7 @@ void osds_complete(OnScreenDisplayState* state, const FrameInfo* frameInfo)
     
     state->setTimecode = 0;
     state->nextTimecode = 0;
+    state->clearLabels = 1;
 }
 
 void osds_reset(OnScreenDisplayState* state)
@@ -3081,6 +3388,7 @@ void osds_sink_reset(OnScreenDisplayState* state)
 {
     osds_reset(state);
     state->numAudioLevels = 0;
+    state->numLabels = 0;
     /* TODO: reset mark configs? */
 }
 

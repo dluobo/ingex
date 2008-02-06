@@ -18,6 +18,7 @@
 struct QCSession
 {
     char* sessionName;
+    char* ltoDir;
     FILE* sessionFile;
     MediaPlayerListener playerListener;
     FrameInfo lastFrameInfo;
@@ -32,6 +33,36 @@ typedef char LogLine[QC_LOG_LINE_ELEMENTS][64];
 static const char* g_qcSessionPreSuf = "_qcsession_";
 
 
+static const char* strip_path(const char* filePath)
+{
+    const char* name = strrchr(filePath, '/');
+    if (name == NULL)
+    {
+        return filePath;
+    }
+    
+    return name + 1;
+}
+
+static void safe_fprintf(FILE* file, const char* str, char* buffer, int bufferSize)
+{
+    strncpy(buffer, str, bufferSize);
+    buffer[bufferSize - 1] = '\0';
+    
+    char* bufferPtr = buffer;
+    while (*bufferPtr != '\0')
+    {
+        if (!isprint(*bufferPtr) ||
+            *bufferPtr == ',' || 
+            *bufferPtr == '\n' || *bufferPtr == '\r')
+        {
+            *bufferPtr = ' ';
+        }
+        bufferPtr++;
+    }
+    
+    fprintf(file, "%s", buffer);
+}
 
 static char* get_mark_name(const MarkConfigs* markConfigs, int typeBit, char name[32])
 {
@@ -200,6 +231,55 @@ static void write_log_line(QCSession* qcSession, LogLine logLine, const FrameInf
     fprintf(qcSession->sessionFile, "\n");
 }
 
+static int parse_mark_type(const char* data)
+{
+    /* hex value starts after '0x' and ends at space or ',' */
+    int startHex = 0;
+    int type = 0;
+    while (*data != '\0')
+    {
+        if (*data == ',')
+        {
+            break;
+        }
+        else if (startHex)
+        {
+            if (*data >= '0' && *data <= '9')
+            {
+                type <<= 4;
+                type |= *data - '0';
+            }
+            else if (*data >= 'a' && *data <= 'f')
+            {
+                type <<= 4;
+                type |= 0x0a + *data - 'a';
+            }
+            else if (*data >= 'A' && *data <= 'F')
+            {
+                type <<= 4;
+                type |= 0x0a + *data - 'A';
+            }
+            else if (*data == ' ')
+            {
+                break;
+            }
+            else
+            {
+                /* parse error */
+                startHex = 0;
+                break;
+            }
+        }
+        else if (*data == 'X' || *data == 'x')
+        {
+            startHex = 1;
+        }
+        data++;
+    }
+ 
+    return type;
+}
+
 static void qcs_frame_displayed_event(void* data, const FrameInfo* frameInfo)
 {
     QCSession* qcSession = (QCSession*)data;
@@ -324,14 +404,17 @@ static void qcs_player_closed(void* data)
 }
 
 
-int qcs_open(const char* mxfFilename, int argc, const char** argv, const char* name, QCSession** qcSession)
+int qcs_open(const char* mxfFilename, MediaSource* source, int argc, const char** argv, 
+    const char* name, QCSession** qcSession)
 {
     QCSession* newQCSession;
     char timestampStr[MAX_TIMESTAMP_STRING_SIZE];
-    int i;
+    int i, j;
     LogLine logLine;
     char filename[FILENAME_MAX];
     char* lastSep;
+    const StreamInfo* streamInfo;
+    char metadataBuffer[64];
 
 
     CALLOC_ORET(newQCSession, QCSession, 1);
@@ -342,12 +425,19 @@ int qcs_open(const char* mxfFilename, int argc, const char** argv, const char* n
     {
         CALLOC_OFAIL(newQCSession->sessionName, char, strlen(filename) + 1);
         strcpy(newQCSession->sessionName, filename);
+
+        CALLOC_OFAIL(newQCSession->ltoDir, char, strlen("./") + 1);
+        strcpy(newQCSession->ltoDir, "./");
     }
     else
     {
         CALLOC_OFAIL(newQCSession->sessionName, char, strlen(lastSep + 1) + 1);
         strcpy(newQCSession->sessionName, lastSep + 1);
+
+        CALLOC_OFAIL(newQCSession->ltoDir, char, strlen(filename) - strlen(lastSep + 1) + 1);
+        strncpy(newQCSession->ltoDir, filename, strlen(filename) - strlen(lastSep + 1));
     }
+    
     if ((newQCSession->sessionFile = fopen(filename, "wb")) == NULL)
     {
         ml_log_error("Failed to open QC session '%s' for writing\n", filename);;
@@ -379,12 +469,47 @@ int qcs_open(const char* mxfFilename, int argc, const char** argv, const char* n
         }
     }
     write_comment_end(newQCSession);
+    
+    
+    /* write metadata */
+    
+    write_comment(newQCSession, "");
+    write_comment(newQCSession, "");
+    write_comment(newQCSession, "");
+    write_comment(newQCSession, "Metadata");
+    write_comment(newQCSession, "");
+    init_log_line(logLine);
+    write_log_line_element(logLine, 0, "#");
+    write_log_line_element(logLine, 1, "Name");
+    write_log_line_element(logLine, 2, "Value");
+    write_log_line(newQCSession, logLine, NULL);
+    write_comment(newQCSession, "");
+
+    CHK_OFAIL(msc_get_stream_info(source, 0, &streamInfo));
+    for (i = 0; i < streamInfo->numSourceInfoValues; i++)
+    {
+        fprintf(newQCSession->sessionFile, ", ");
+        safe_fprintf(newQCSession->sessionFile, streamInfo->sourceInfoValues[i].name, 
+            metadataBuffer, sizeof(metadataBuffer));
+        fprintf(newQCSession->sessionFile, ", ");
+        safe_fprintf(newQCSession->sessionFile, streamInfo->sourceInfoValues[i].value, 
+            metadataBuffer, sizeof(metadataBuffer));
+        for (j = 0; j < QC_LOG_LINE_ELEMENTS - 3; j++)
+        {
+            fprintf(newQCSession->sessionFile, ", ");
+        }
+        fprintf(newQCSession->sessionFile, "\n");
+    }
+    write_comment(newQCSession, "");
+    
+
+    
+    /* write state header */
+    
     write_comment(newQCSession, "");
     write_comment(newQCSession, "");
     write_comment(newQCSession, "Player state");
     write_comment(newQCSession, "");
-
-    /* write state header */
     init_log_line(logLine);
     write_log_line_element(logLine, 0, "#");
     write_log_line_element(logLine, 1, "First/Last frame displayed");
@@ -402,7 +527,7 @@ int qcs_open(const char* mxfFilename, int argc, const char** argv, const char* n
     return 1;
     
 fail:
-    qcs_close(&newQCSession);
+    qcs_close(&newQCSession, NULL, NULL);
     return 0;
 }
 
@@ -411,7 +536,8 @@ int qcs_connect_to_player(QCSession* qcSession, MediaPlayer* player)
     return ply_register_player_listener(player, &qcSession->playerListener);
 }
 
-void qcs_write_marks(QCSession* qcSession, const MarkConfigs* markConfigs, Mark* marks, int numMarks)
+void qcs_write_marks(QCSession* qcSession, int includeAll, int clipMarkType, 
+    const MarkConfigs* markConfigs, Mark* marks, int numMarks)
 {
     int i;
     int j;
@@ -419,6 +545,7 @@ void qcs_write_marks(QCSession* qcSession, const MarkConfigs* markConfigs, Mark*
     int64_t controlTCPos;
     int mask;
     char markName[32];
+    int markType;
     
     write_comment(qcSession, "");
     write_comment(qcSession, "");
@@ -429,32 +556,89 @@ void qcs_write_marks(QCSession* qcSession, const MarkConfigs* markConfigs, Mark*
     write_log_line_element(logLine, 0, "#");
     write_log_line_element(logLine, 1, "Position");
     write_log_line_element(logLine, 2, "Control TC");
-    write_log_line_element(logLine, 3, "Type");
-    write_log_line_element(logLine, 4, "Description");
+    write_log_line_element(logLine, 3, "Clip Duration");
+    write_log_line_element(logLine, 4, "Clip Type");
+    write_log_line_element(logLine, 5, "Type");
+    write_log_line_element(logLine, 6, "Description");
     write_log_line(qcSession, logLine, NULL);
 
     write_comment(qcSession, "");
     
     for (i = 0; i < numMarks; i++)
     {
-        /*fprintf(qcSession->sessionFile, "");*/
+        if (includeAll)
+        {
+            markType = marks[i].type;
+        }
+        else
+        {
+            /* filter out D3 errors and PSE failures */
+            markType = marks[i].type & ~(D3_PSE_FAILURE_MARK_TYPE | D3_VTR_ERROR_MARK_TYPE);
+            if (markType == 0)
+            {
+                continue;
+            }
+        }
         
+        /* filter out dangling clip marks */
+        if ((markType & clipMarkType) != 0)
+        {
+            if (marks[i].pairedPosition < 0)
+            {
+                ml_log_warn("Incomplete clip mark when writing marks to session file\n");
+                
+                markType &= ~clipMarkType;
+                if (markType == 0)
+                {
+                    continue;
+                }
+            }
+        }
+
+        /* Position */        
         fprintf(qcSession->sessionFile, ", %"PRId64"", marks[i].position);
 
+        /* CTC */        
         controlTCPos = marks[i].position + qcSession->controlTCStartPos;
         fprintf(qcSession->sessionFile, ", %02"PRId64":%02"PRId64":%02"PRId64":%02"PRId64"",
             controlTCPos / (25 * 60 * 60),
             (controlTCPos % (25 * 60 * 60)) / (25 * 60),
             ((controlTCPos % (25 * 60 * 60)) % (25 * 60)) / 25,
             ((controlTCPos % (25 * 60 * 60)) % (25 * 60)) % 25);
-            
-        fprintf(qcSession->sessionFile, ", 0x%08x", marks[i].type);
         
+        
+        /* Clip Duration, Clip Mark Type */        
+        if (marks[i].pairedPosition >= 0)
+        {
+            int64_t duration;
+            if (marks[i].position <= marks[i].pairedPosition)
+            {
+                duration = marks[i].pairedPosition - marks[i].position + 1;
+            }
+            else
+            {
+                duration = marks[i].position - marks[i].pairedPosition + 1;
+                duration *= -1; /* negative duration indicates that this mark is at the end of the clip */
+            }
+            fprintf(qcSession->sessionFile, ", %"PRId64"", duration);
+    
+            fprintf(qcSession->sessionFile, ", 0x%08x", clipMarkType);
+        }
+        else
+        {
+            fprintf(qcSession->sessionFile, ", ");
+            fprintf(qcSession->sessionFile, ", ");
+        }
+        
+        /* Mark Type */        
+        fprintf(qcSession->sessionFile, ", 0x%08x", markType);
+        
+        /* Mark Description */        
         fprintf(qcSession->sessionFile, ", ");
         mask = 0x00000001;
         for (j = 1; j <= 32; j++)
         {
-            if (marks[i].type & mask)
+            if (markType & mask)
             {
                 get_mark_name(markConfigs, j, markName);
                 fprintf(qcSession->sessionFile, "'%s' ", markName);
@@ -462,6 +646,7 @@ void qcs_write_marks(QCSession* qcSession, const MarkConfigs* markConfigs, Mark*
             mask <<= 1;
         }
 
+        /* remaining columns */
         for (j = 0; j < QC_LOG_LINE_ELEMENTS - 5; j++)
         {
             fprintf(qcSession->sessionFile, ", ");
@@ -475,14 +660,33 @@ void qcs_flush(QCSession* qcSession)
     fflush(qcSession->sessionFile);
 }
 
-void qcs_close(QCSession** qcSession)
+void qcs_close(QCSession** qcSession, const char* sessionScriptName, const char* sessionScriptOptions)
 {
     char timestampStr[MAX_TIMESTAMP_STRING_SIZE];
+    char scriptCmd[FILENAME_MAX];
     
     if (*qcSession == NULL)
     {
         return;
     }
+
+    /* prepare the session script call */
+    if (sessionScriptName != NULL)
+    {
+        strcpy(scriptCmd, sessionScriptName);
+        strcat(scriptCmd, " --session \"");
+        strcat(scriptCmd, strip_path((*qcSession)->sessionName));
+        strcat(scriptCmd, "\"");
+        strcat(scriptCmd, " --lto \"");
+        strcat(scriptCmd, (*qcSession)->ltoDir);
+        strcat(scriptCmd, "\"");
+        if (sessionScriptOptions != NULL)
+        {
+            strcat(scriptCmd, " ");
+            strcat(scriptCmd, sessionScriptOptions);
+        }
+    }
+
     
     write_comment((*qcSession), "");
     get_timestamp_string(timestampStr);
@@ -496,8 +700,23 @@ void qcs_close(QCSession** qcSession)
     }
     
     SAFE_FREE(&(*qcSession)->sessionName);
+    SAFE_FREE(&(*qcSession)->ltoDir);
     
     SAFE_FREE(qcSession);
+    
+    
+    /* call the session script */
+    if (sessionScriptName != NULL)
+    {
+        if (system(scriptCmd) == 0)
+        {
+            ml_log_info("Session script success: %s\n", scriptCmd); 
+        }
+        else
+        {
+            ml_log_error("Session script failed: %s\n", scriptCmd); 
+        }
+    }
 }
 
 
@@ -508,12 +727,15 @@ int qcs_set_marks(MediaControl* control, const char* filename)
     char buffer[128];
     int done = 0;
     int64_t position;
+    int64_t duration;
     int type;
-    char* first;
-    char* second;
-    char* third;
+    int clipMarkType;
+    char* positionStr;
+    char* ctcStr;
+    char* clipDurationStr;
+    char* clipMarkTypeStr;
+    char* markTypeStr;
     int64_t count = 0;
-    int startHex;
     
     /* open QC session file */
     if ((qcSessionFile = fopen(filename, "rb")) == NULL)
@@ -553,7 +775,7 @@ int qcs_set_marks(MediaControl* control, const char* filename)
                 }
                 break;
 
-            /* parse marks, where position is column 2 and type is in column 4 */
+            /* parse marks */
             case 1:
                 /* read the next line */
                 if (fgets(buffer, 128, qcSessionFile) == NULL)
@@ -565,83 +787,82 @@ int qcs_set_marks(MediaControl* control, const char* filename)
                 
                 if (buffer[0] != '#')
                 {
-                    first = NULL;
-                    second = NULL;
-                    third = NULL;
+                    positionStr = NULL;
+                    ctcStr = NULL;
+                    clipDurationStr = NULL;
+                    clipMarkTypeStr = NULL;
+                    markTypeStr = NULL;
                     
-                    first = strchr(buffer, ',');
-                    if (first)
+                    positionStr = strchr(buffer, ',');
+                    if (positionStr)
                     {
-                        second = strchr(first + 1, ',');
+                        ctcStr = strchr(positionStr + 1, ',');
                     }
-                    if (second)
+                    if (ctcStr)
                     {
-                        third = strchr(second + 1, ',');
+                        clipDurationStr = strchr(ctcStr + 1, ',');
+                    }
+                    if (clipDurationStr)
+                    {
+                        clipMarkTypeStr = strchr(clipDurationStr + 1, ',');
+                    }
+                    if (clipMarkTypeStr)
+                    {
+                        markTypeStr = strchr(clipMarkTypeStr + 1, ',');
                     }
                     
-                    if (first && third)
+                    if (positionStr && clipDurationStr && clipMarkTypeStr && markTypeStr)
                     {
-                        if (sscanf(first + 1, "%"PRId64"", &position) != 1)
+                        if (sscanf(positionStr + 1, "%"PRId64"", &position) != 1)
                         {
-                            ml_log_warn("Failed to parse mark in QC session\n");
+                            ml_log_warn("Failed to parse mark position in QC session\n");
                         }
                         else
                         {
-                            /* hex value starts after '0x' and ends at space or ',' */
-                            third++;
-                            startHex = 0;
-                            type = 0;
-                            while (*third != '\0')
+                            type = parse_mark_type(markTypeStr + 1);
+                            if (type != 0)
                             {
-                                if (*third == ',')
+                                /* filter out D3 errors and PSE failures which will be extracted from the MXF file */
+                                type &= ~(D3_PSE_FAILURE_MARK_TYPE | D3_VTR_ERROR_MARK_TYPE);
+                                if (type != 0)
                                 {
-                                    break;
+                                    mc_mark_position(control, position, type, 0);
+                                    count++;
                                 }
-                                else if (startHex)
+                                
+                                /* mark the clip end position */
+                                /* negative durations indicate this is the end mark and will be ignored because 
+                                the previous clip mark has already being read */
+                                if (sscanf(clipDurationStr + 1, "%"PRId64"", &duration) == 1 &&
+                                    duration > 1)
                                 {
-                                    if (*third >= '0' && *third <= '9')
+                                    clipMarkType = parse_mark_type(clipMarkTypeStr + 1);
+                                    if (clipMarkType != 0)
                                     {
-                                        type <<= 4;
-                                        type |= *third - '0';
-                                    }
-                                    else if (*third >= 'a' && *third <= 'f')
-                                    {
-                                        type <<= 4;
-                                        type |= 0x0a + *third - 'a';
-                                    }
-                                    else if (*third >= 'A' && *third <= 'F')
-                                    {
-                                        type <<= 4;
-                                        type |= 0x0a + *third - 'A';
-                                    }
-                                    else if (*third == ' ')
-                                    {
-                                        break;
+                                        /* filter out D3 errors and PSE failures which will be extracted from the MXF file */
+                                        clipMarkType &= ~(D3_PSE_FAILURE_MARK_TYPE | D3_VTR_ERROR_MARK_TYPE);
+                                        if (clipMarkType != 0)
+                                        {
+                                            /* mark the end of the clip */
+                                            mc_mark_position(control, position + duration - 1, clipMarkType, 0);
+                                        }
                                     }
                                     else
                                     {
-                                        /* parse error */
-                                        startHex = 0;
-                                        break;
+                                        ml_log_warn("Failed to parse paired mark type in QC session\n");
                                     }
                                 }
-                                else if (*third == 'X' || *third == 'x')
-                                {
-                                    startHex = 1;
-                                }
-                                third++;
-                            }
-
-                            if (startHex)
-                            {
-                                mc_mark_position(control, position, type, 0);
-                                count++;
+                                /* else the mark is not paired or is the clip end mark */
                             }
                             else
                             {
-                                ml_log_warn("Failed to parse mark in QC session\n");
+                                ml_log_warn("Failed to parse mark type in QC session %s\n", markTypeStr);
                             }
                         }
+                    }
+                    else
+                    {
+                        ml_log_warn("Failed to read mark line\n");
                     }
                 }
                 
@@ -697,6 +918,50 @@ const char* qcs_get_session_name(QCSession* qcSession)
     return qcSession->sessionName;
 }
 
+int qcs_extract_timestamp(const char* sessionFilename, int* year, int* month, int* day, int* hour, int* min, int* sec)
+{
+    /* the session filename has the format <mxf filename> + g_qcSessionPreSuf + YYYYMMDD_HHMMSS.txt */
+    
+    const char* timestampStr = strstr(sessionFilename, g_qcSessionPreSuf);
+    if (timestampStr == NULL)
+    {
+        return 0;
+    }
+    timestampStr += strlen(g_qcSessionPreSuf);
+    if (strlen(timestampStr) != strlen("00000000_000000.txt"))
+    {
+        return 0;
+    }
+
+    char buffer[5];
+    memset(buffer, 0, sizeof(buffer));
+
+    memcpy(buffer, timestampStr, 4);
+    buffer[4] = '\0';
+    *year = atoi(buffer);
+    
+    memcpy(buffer, &timestampStr[4], 2);
+    buffer[2] = '\0';
+    *month = atoi(buffer);
+    
+    memcpy(buffer, &timestampStr[6], 2);
+    buffer[2] = '\0';
+    *day = atoi(buffer);
+
+    memcpy(buffer, &timestampStr[9], 2);
+    buffer[2] = '\0';
+    *hour = atoi(buffer);
+    
+    memcpy(buffer, &timestampStr[11], 2);
+    buffer[2] = '\0';
+    *min = atoi(buffer);
+    
+    memcpy(buffer, &timestampStr[13], 2);
+    buffer[2] = '\0';
+    *sec = atoi(buffer);
+    
+    return 1;
+}
 
 
 

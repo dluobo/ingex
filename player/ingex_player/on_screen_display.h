@@ -12,10 +12,23 @@ extern "C"
 
 
 
-/* On screen display menu */
-
 #define LAST_MENU_ITEM_INDEX        (-1)
 #define CURRENT_MENU_ITEM_INDEX     (-2)
+
+#define MAX_OSD_LABELS              32
+
+
+typedef struct
+{
+    int xPos; /* center x position */
+    int yPos; /* center y position */
+    int imageWidth; /* xpos is relative to this image width */
+    int imageHeight;  /* ypos is relative to this image height */
+    int fontSize;
+    Colour colour;
+    int box; /* 0 means text box is transparent, 100 means it is opaque */
+    char text[64];
+} OSDLabel;
 
 typedef enum
 {
@@ -126,6 +139,8 @@ typedef struct
     void (*reset_audio_stream_levels)(void* data);
     int (*register_audio_stream)(void* data, int streamId);
     void (*set_audio_stream_level)(void* data, int streamId, double level);
+    void (*set_audio_level_visibility)(void* data, int visible);
+    void (*toggle_audio_level_visibility)(void* data);
 
     void (*show_field_symbol)(void* data, int enable);
     
@@ -136,6 +151,10 @@ typedef struct
     
     void (*set_progress_bar_visibility)(void* data, int visible);
     float (*get_position_in_progress_bar)(void* data, int x, int y);
+    void (*highlight_progress_bar_pointer)(void* data, int on);
+    
+    void (*set_label)(void* data, int xPos, int yPos, int imageWidth, int imageHeight, 
+        int fontSize, Colour colour, int box, const char* label); 
     
     int (*add_to_image)(void* data, const FrameInfo* frameInfo, unsigned char* image, 
         int width, int height);
@@ -171,6 +190,8 @@ void osd_set_audio_lineup_level(OnScreenDisplay* osd, float level);
 void osd_reset_audio_stream_levels(OnScreenDisplay* osd);
 int osd_register_audio_stream(OnScreenDisplay* osd, int streamId);
 void osd_set_audio_stream_level(OnScreenDisplay* osd, int streamId, double level);
+void osd_set_audio_level_visibility(OnScreenDisplay* osd, int visible);
+void osd_toggle_audio_level_visibility(OnScreenDisplay* osd);
 void osd_show_field_symbol(OnScreenDisplay* osd, int enable);
 void osd_set_mark_display(OnScreenDisplay* osd, const MarkConfigs* markConfigs);
 int osd_create_marks_model(OnScreenDisplay* osd, OSDMarksModel** model); 
@@ -178,6 +199,9 @@ void osd_free_marks_model(OnScreenDisplay* osd, OSDMarksModel** model);
 void osd_set_marks_model(OnScreenDisplay* osd, int updateMask, OSDMarksModel* model); 
 void osd_set_progress_bar_visibility(OnScreenDisplay* osd, int visible);
 float osd_get_position_in_progress_bar(OnScreenDisplay* osd, int x, int y);
+void osd_highlight_progress_bar_pointer(OnScreenDisplay* osd, int on);
+void osd_set_label(OnScreenDisplay* osd, int xPos, int yPos, int imageWidth, int imageHeight, 
+    int fontSize, Colour colour, int box, const char* label); 
 int osd_add_to_image(OnScreenDisplay* osd, const FrameInfo* frameInfo, unsigned char* image, 
     int width, int height);
 int osd_reset(OnScreenDisplay* osd);
@@ -258,6 +282,9 @@ struct OnScreenDisplayState
     double minimumAudioLevel;
     float audioLineupLevel;
     MarkConfigs markConfigs;
+    OSDLabel labels[MAX_OSD_LABELS];
+    int numLabels;
+    int clearLabels;
 };
 
 int osds_create(OnScreenDisplayState** state);

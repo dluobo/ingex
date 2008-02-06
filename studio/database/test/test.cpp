@@ -1,5 +1,5 @@
 /*
- * $Id: test.cpp,v 1.1 2007/09/11 14:08:43 stuart_hc Exp $
+ * $Id: test.cpp,v 1.2 2008/02/06 16:59:09 john_f Exp $
  *
  * Tests the database library
  *
@@ -66,9 +66,14 @@ public:
 #define MAX_CONNECTIONS     3
 
 
+static const char* g_testProjectName = "xxxxTestProjectzzzz";
+
+
+
 #if defined(TEST_THREADING)
 
 #define NUM_THREADS         3
+
 
 static void* thread_routine(void* data)
 {
@@ -140,6 +145,12 @@ static void test_threading()
 #endif
 
 
+static ProjectName create_project_name(string name)
+{
+    Database* database = Database::getInstance();
+    
+    return database->loadOrCreateProjectName(name);
+}
 
 static SourceConfig* create_source_config()
 {
@@ -669,6 +680,7 @@ static SourcePackage* create_source_package(UMID uid, Timestamp now,
     sourcePackage->uid = uid;
     sourcePackage->name = "Test package";
     sourcePackage->creationDate = now;
+    sourcePackage->projectName = g_testProjectName;
     FileEssenceDescriptor* fDesc = new FileEssenceDescriptor();
     sourcePackage->descriptor = fDesc;
     fDesc->fileLocation = "file:///media";
@@ -712,6 +724,7 @@ static MaterialPackage* create_material_package(UMID uid, Timestamp now)
     materialPackage->uid = uid;
     materialPackage->name = "Test material package";
     materialPackage->creationDate = now;
+    materialPackage->projectName = g_testProjectName;
     
     track = new Track();
     materialPackage->tracks.push_back(track);
@@ -980,9 +993,13 @@ int main(int argc, const char* argv[])
     printf("Testing...\n");
     
     string testName;
+    ProjectName projectName;
     try
     {
-
+        vector<ProjectName> allProjectNames = Database::getInstance()->loadProjectNames();
+        
+        projectName = create_project_name(g_testProjectName);
+        
 #if defined(TEST_THREADING)
         testName = "test_threading";
         test_threading();
@@ -1011,21 +1028,26 @@ int main(int argc, const char* argv[])
         
         testName = "test_transcode"; 
         test_transcode();
+
+        Database::getInstance()->deleteProjectName(&projectName);
     }
     catch (DBException& ex)
     {
         fprintf(stderr, "%s FAILED: %s\n", testName.c_str(), ex.getMessage().c_str());
+        Database::getInstance()->deleteProjectName(&projectName);
         Database::close();
         return 1;
     }
     catch (const char*& ex)
     {
         fprintf(stderr, "%s FAILED: %s\n", testName.c_str(), ex);
+        Database::getInstance()->deleteProjectName(&projectName);
         Database::close();
         return 1;
     }
     catch (...)
     {
+        Database::getInstance()->deleteProjectName(&projectName);
         Database::close();
         fprintf(stderr, "%s FAILED: unknown exception thrown\n", testName.c_str());
         return 1;

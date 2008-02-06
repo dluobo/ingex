@@ -7,6 +7,7 @@
 #include "dv_stream_connect.h"
 #include "mpegi_stream_connect.h"
 #include "mjpeg_stream_connect.h"
+#include "dnxhd_stream_connect.h"
 #include "logging.h"
 #include "macros.h"
 
@@ -142,6 +143,10 @@ int stm_create_connection_matrix(MediaSource* source, MediaSink* sink, int numFF
         {
             newMatrix->numStreams++;
         }
+        else if (dnxhd_connect_accept(sink, streamInfo))
+        {
+            newMatrix->numStreams++;
+        }
         else
         {
             ml_log_info("Failed to find stream connector for stream %d (%s, %s)\n", 
@@ -237,6 +242,24 @@ int stm_create_connection_matrix(MediaSource* source, MediaSink* sink, int numFF
                 else
                 {
                     ml_log_info("Failed to MJPEG connect stream %d (%s, %s)\n", 
+                        i, get_stream_type_string(streamInfo->type), get_stream_format_string(streamInfo->format));
+                    CHK_OFAIL(msc_disable_stream(source, i));
+                }
+
+                streamIndex++;
+            }
+            else if (dnxhd_connect_accept(sink, streamInfo))
+            {
+                if (create_dnxhd_connect(sink, i, i, streamInfo, numFFMPEGThreads, useWorkerThreads,
+                        &newMatrix->entries[streamIndex].connect))
+                {
+                    newMatrix->entries[streamIndex].sourceStreamId = i;
+                    newMatrix->entries[streamIndex].sinkStreamId = i;
+                }
+                /* failure is possible (eg. max streams exceeded) and so we ignore the stream */
+                else
+                {
+                    ml_log_info("Failed to DNxHD connect stream %d (%s, %s)\n", 
                         i, get_stream_type_string(streamInfo->type), get_stream_format_string(streamInfo->format));
                     CHK_OFAIL(msc_disable_stream(source, i));
                 }

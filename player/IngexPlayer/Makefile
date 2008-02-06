@@ -52,16 +52,19 @@ endif
 
 ifdef FFMPEG_INCLUDE_PATH
 # Use the following alternative link line for ffmpeg rpm installed ffmpeg
-FFMPEG_RPM := $(shell rpm -q ffmpeg-h264-aac > /dev/null && echo YES)
+FFMPEG_RPM := $(shell rpm -q ffmpeg-h264-aac > /dev/null && echo YES || rpm -q ffmpeg-DNxHD-h264-aac > /dev/null && echo YES)
+FFMPEG_DNXHD := $(shell rpm -q ffmpeg-DNxHD-h264-aac > /dev/null && echo YES)
 ifeq "$(FFMPEG_RPM)" "YES"
-LIBS += -lavformat -lavcodec -lavutil -lz -lmp3lame -lx264 -la52 -lfaac -lfaad -lm
-else
-INCLUDEDIRS += -I/usr/local/include/ffmpeg/
-LIBS += -lavformat -lavcodec -lavutil -lm
+	LIBS += -lavformat -lavcodec -lavutil -lz -lmp3lame -lx264 -la52 -lfaac -lfaad -lm
+	ifeq  "$(FFMPEG_DNXHD)" "YES"
+		CFLAGS += -DHAVE_DNXHD
 endif
-CFLAGS += -DHAVE_FFMPEG
 else
-CFLAGS += -Werror
+	LIBS += -lavformat -lavcodec -lavutil -lm
+endif
+	CFLAGS += -DHAVE_FFMPEG
+else
+	CFLAGS += -Werror
 endif
 
 ifdef HAVE_PORTAUDIO

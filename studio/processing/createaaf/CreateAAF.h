@@ -1,5 +1,5 @@
 /*
- * $Id: CreateAAF.h,v 1.1 2007/09/11 14:08:44 stuart_hc Exp $
+ * $Id: CreateAAF.h,v 1.2 2008/02/06 16:59:12 john_f Exp $
  *
  * AAF file for defining clips, multi-camera clips, etc
  *
@@ -29,6 +29,7 @@
 #include <Package.h>
 #include <MCClipDef.h>
 #include <SourceConfig.h>
+#include "CutsDatabase.h"
 
 
 namespace prodauto
@@ -52,8 +53,9 @@ public:
     // add a single clip corresponding to the material package
     void addClip(MaterialPackage* materialPackage, PackageSet& packages);
 
-    // add a multi-camera clip
-    void addMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPackages, PackageSet& packages);
+    // add a multi-camera clip and cut sequence
+    void addMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPackages, PackageSet& packages,
+        std::vector<CutInfo> sequence);
     
     
 private:
@@ -65,7 +67,8 @@ private:
     bool getSource(Track* track, PackageSet& packages, SourcePackage** fileSourcePackage, 
         SourcePackage** sourcePackage, Track** sourceTrack);
 
-    void createMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPackages, PackageSet& packages);
+    void createMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPackages, PackageSet& packages,
+        std::vector<CutInfo> sequence);
     
     void mapUserComments(Package* package, IAAFMob* mob);
     void mapMasterMob(MaterialPackage* materialPackage);
@@ -78,6 +81,7 @@ private:
     IAAFSmartPointer<IAAFDictionary> pDictionary;
     IAAFSmartPointer<IAAFCompositionMob> pCollectionCompositionMob;
     IAAFSmartPointer<IAAFCompositionMob> pClipCompositionMob;
+    IAAFSmartPointer<IAAFCompositionMob> pSequenceCompositionMob;
     IAAFSmartPointer<IAAFSourceMob> pTapeSourceMob;
     IAAFSmartPointer<IAAFClassDef> pCDMob;
     IAAFSmartPointer<IAAFClassDef> pCDCompositionMob;

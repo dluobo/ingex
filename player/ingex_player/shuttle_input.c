@@ -7,6 +7,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <errno.h>
 #include <assert.h>
 
 #include <linux/input.h>
@@ -65,6 +66,10 @@
 
 /* some number > max number of events we expect (all keys + jog + shuttle + sync = 17) before a sync event */
 #define EVENT_BUFFER_SIZE       32 
+
+/* wait 4 seconds before trying to reopen the shuttle device */
+#define DEVICE_REOPEN_WAIT      (4000 * 1000)
+
 
 
 typedef struct
@@ -313,25 +318,23 @@ static int handle_event(ShuttleInput* shuttle, struct input_event* inEvents, int
     return haveOutEvent;
 }
 
-
-
-
-int shj_open_shuttle(ShuttleInput** shuttle)
+static int open_shuttle_device(ShuttleInput* shuttle)
 {
-    ShuttleInput* newShuttle;
     int i;
     int fd;
     struct input_id deviceInfo;
     size_t j;
-    int foundIt;
     char eventDevName[256];
     int grab = 1;
 
-    CALLOC_ORET(newShuttle, ShuttleInput, 1);
-    
+    /* close shuttle if open */
+    if (shuttle->fd >= 0)
+    {
+        close(shuttle->fd);
+        shuttle->fd = -1;
+    }
     
     /* go through the event devices and check whether it is a supported shuttle */
-    foundIt = 0;
     for (i = 0; i < EVENT_DEV_INDEX_MAX; i++)
     {
         sprintf(eventDevName, g_eventDeviceTemplate, i);
@@ -348,41 +351,44 @@ int shj_open_shuttle(ShuttleInput** shuttle)
                         g_supportedShuttles[j].product == deviceInfo.product)
                     {
                         /* try grab the device for exclusive access */
-                        if (ioctl(fd, EVIOCGRAB, &grab) != 0)
+                        if (ioctl(fd, EVIOCGRAB, &grab) == 0)
                         {
-                            ml_log_warn("Failed to grab jog-shuttle device for exclusive access\n");
+                            shuttle->prevJogValue = MAX_JOG_VALUE + 1;
+                            shuttle->fd = fd;
+                            shuttle->shuttleData = &g_supportedShuttles[j];
+                            return 1;
                         }
-                        newShuttle->prevJogValue = MAX_JOG_VALUE + 1;
-                        newShuttle->fd = fd;
-                        newShuttle->shuttleData = &g_supportedShuttles[j];
-                        foundIt = 1;
+                        
+                        /* failed to grab device */
                         break;
                     }
                 }
             }
             
-            if (!foundIt)
-            {
-                close(fd);
-            }
-            else
-            {
-                break;
-            }
+            close(fd);
         }
     }
     
-    if (foundIt)
+    return 0;
+}
+
+
+int shj_open_shuttle(ShuttleInput** shuttle)
+{
+    ShuttleInput* newShuttle;
+
+    CALLOC_ORET(newShuttle, ShuttleInput, 1);
+    newShuttle->fd = -1;
+    
+    if (!open_shuttle_device(newShuttle))
     {
-        CHK_OFAIL(init_mutex(&newShuttle->listenerMutex));
-        
-        *shuttle = newShuttle;
+        ml_log_warn("Failed to open jog-shuttle device for exclusive access - will try again later\n");
     }
-    else
-    {
-        SAFE_FREE(&newShuttle);
-    }
-    return foundIt;
+    
+    CHK_OFAIL(init_mutex(&newShuttle->listenerMutex));
+    
+    *shuttle = newShuttle;
+    return 1;
     
 fail:
     shj_close_shuttle(&newShuttle);
@@ -445,6 +451,7 @@ void shj_start_shuttle(ShuttleInput* shuttle)
     int processOffset;
     int processNumEvents;
     int selectCount;
+    int waitTime;
 
     
     numEvents = 0;
@@ -452,6 +459,22 @@ void shj_start_shuttle(ShuttleInput* shuttle)
     selectCount = 0;
     while (!shuttle->stopped)
     {
+        if (shuttle->fd < 0)
+        {
+            /* try open device */
+            if (!open_shuttle_device(shuttle))
+            {
+                /* failed - wait before trying again */
+                waitTime = DEVICE_REOPEN_WAIT;
+                while (!shuttle->stopped && waitTime > 0)
+                {
+                    usleep(100 * 1000);
+                    waitTime -= 100 * 1000;
+                }
+                continue;
+            }
+        }
+        
         FD_ZERO(&rfds);
         FD_SET(shuttle->fd, &rfds);
         /* TODO: is there a way to find out how many sec between sync events? */
@@ -471,7 +494,27 @@ void shj_start_shuttle(ShuttleInput* shuttle)
         {
             /* select error */
             selectCount = 0;
-            continue;
+            if (errno == EINTR)
+            {
+                /* signal interrupt - try select again */
+                continue;
+            }
+            else
+            {
+                /* something is wrong. */
+                /* Close the device and try open again after waiting */
+                
+                close(shuttle->fd);
+                shuttle->fd = -1;
+                
+                waitTime = DEVICE_REOPEN_WAIT;
+                while (!shuttle->stopped && waitTime > 0)
+                {
+                    usleep(100 * 1000);
+                    waitTime -= 100 * 1000;
+                }
+                continue;
+            }
         }
         else if (retval)
         {
@@ -526,6 +569,22 @@ void shj_start_shuttle(ShuttleInput* shuttle)
                         processNumEvents = get_num_events(&inEvent[processOffset], numEvents);
                     }
                 }
+            }
+            else
+            {
+                /* num read zero indicates end-of-file, ie. the shuttle device was unplugged */
+                /* close the device and try open again after waiting */
+                
+                close(shuttle->fd);
+                shuttle->fd = -1;
+                
+                waitTime = DEVICE_REOPEN_WAIT;
+                while (!shuttle->stopped && waitTime > 0)
+                {
+                    usleep(100 * 1000);
+                    waitTime -= 100 * 1000;
+                }
+                continue;
             }
         }
         else if (selectCount > 80) /* > 4 seconds */

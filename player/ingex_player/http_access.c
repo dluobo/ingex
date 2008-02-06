@@ -149,6 +149,8 @@ static void http_player_control(struct shttpd_arg* arg)
     int queryOk;
     int queryValueCount;
     int pause = 0;
+    float factor;
+    int64_t duration;
     
 
 	requestURI = shttpd_get_env(arg, "REQUEST_URI");
@@ -267,6 +269,27 @@ static void http_player_control(struct shttpd_arg* arg)
             mc_play_speed(access->control, speed, unit);
         }
     }
+    else if (strcmp("/player/control/play-speed-factor", requestURI) == 0)
+    {
+        queryOk = 1;
+        queryValueCount = 0;
+        factor = 0.0;
+        
+        if (get_query_value(arg, "factor", queryValue, sizeof(queryValue)))
+        {
+            queryValueCount++;
+            factor = (float)(atof(queryValue));
+            if (factor == 0.0)
+            {
+                queryOk = 0;
+            }
+        }
+        
+        if (queryOk && queryValueCount == 1)
+        {
+            mc_play_speed_factor(access->control, factor);
+        }
+    }
     else if (strcmp("/player/control/step", requestURI) == 0)
     {
         queryOk = 1;
@@ -347,6 +370,26 @@ static void http_player_control(struct shttpd_arg* arg)
     else if (strcmp("/player/control/next-osd-timecode", requestURI) == 0)
     {
         mc_next_osd_timecode(access->control);
+    }
+    else if (strcmp("/player/control/review", requestURI) == 0)
+    {
+        queryOk = 1;
+        queryValueCount = 0;
+        
+        if (get_query_value(arg, "duration", queryValue, sizeof(queryValue)))
+        {
+            queryValueCount++;
+            duration = atol(queryValue);
+            if (duration <= 0)
+            {
+                queryOk = 0;
+            }
+        }
+        
+        if (queryOk && queryValueCount == 1)
+        {
+            mc_review(access->control, duration);
+        }
     }
     
     shttpd_printf(arg, "HTTP/1.1 200 OK\r\n\r\n");

@@ -1,5 +1,5 @@
 /*
- * $Id: create_aaf.cpp,v 1.1 2007/09/11 14:08:44 stuart_hc Exp $
+ * $Id: create_aaf.cpp,v 1.2 2008/02/06 16:59:12 john_f Exp $
  *
  * Creates AAF files with clips extracted from the database
  *
@@ -33,6 +33,7 @@
 
 #include "CreateAAF.h"
 #include "CreateAAFException.h"
+#include "CutsDatabase.h"
 #include <Database.h>
 #include <MCClipDef.h>
 #include <Utilities.h>
@@ -48,6 +49,8 @@ static const char* g_databaseUserName = "bamzooki";
 static const char* g_databasePassword = "bamzooki";
 
 static const char* g_filenamePrefix = "pilot";
+
+static const char* g_resultsPrefix = "RESULTS:";
 
 
 // utility class to clean-up Package pointers
@@ -87,6 +90,24 @@ static void parseDateAndTimecode(string dateAndTimecodeStr, Date* date, int64_t*
         data[4] * 60 * 25 + 
         data[5] * 25 + 
         data[6];
+}
+
+static void parseTimestamp(string timestampStr, Timestamp* ts)
+{
+    int data[6];
+    
+    if (sscanf(timestampStr.c_str(), "%u-%u-%uT%u:%u:%u", &data[0], &data[1],
+        &data[2], &data[3], &data[4], &data[5]) != 6)
+    {
+        throw "Invalid timestamp string";
+    }
+    
+    ts->year = data[0];
+    ts->month = data[1];
+    ts->day = data[2];
+    ts->hour = data[3];
+    ts->min = data[4];
+    ts->sec = data[5];
 }
 
 static void parseTag(string tag, string& tagName, string& tagValue)
@@ -231,9 +252,67 @@ static string addFilename(vector<string>& filenames, string filename)
     return filename;
 }
 
+static vector<CutInfo> getSequence(CutsDatabase* database, MCClipDef* mcClipDef, Timestamp creationTs, 
+    int64_t startTimecode)
+{
+    set<string> sources;
+    string defaultSource;
+    uint32_t defaultSourceNumber = 0xffffffff;
+    
+    // the sources in multi-camera sequence is taken from the track that has more than 1 selector
+    
+    map<uint32_t, MCTrackDef*>::const_iterator iter1;
+    for (iter1 = mcClipDef->trackDefs.begin(); iter1 != mcClipDef->trackDefs.end(); iter1++)
+    {
+        MCTrackDef* trackDef = (*iter1).second;
+        
+        if (trackDef->selectorDefs.size() > 1)
+        {
+            map<uint32_t, MCSelectorDef*>::const_iterator iter2;
+            for (iter2 = trackDef->selectorDefs.begin(); iter2 != trackDef->selectorDefs.end(); iter2++)
+            {
+                MCSelectorDef* selectorDef = (*iter2).second;
+                uint32_t selectorNumber = (*iter2).first;
+                
+                if (selectorDef->sourceConfig != 0)
+                {
+                    if (selectorNumber < defaultSourceNumber)
+                    {
+                        defaultSource = selectorDef->sourceConfig->name;
+                        defaultSourceNumber = selectorNumber; 
+                    }
+                    sources.insert(selectorDef->sourceConfig->name);
+                }
+            }
+            break;
+        }
+    }
+    if (sources.size() < 2)
+    {
+        return vector<CutInfo>();
+    }
+    
+    Date creationDate;
+    creationDate.year = creationTs.year;
+    creationDate.month = creationTs.month;
+    creationDate.day = creationTs.day;
+
+    return database->getCuts(creationDate, startTimecode, sources, defaultSource);
+}
+
+
+
+
 static void usage(const char* cmd)
 {
     fprintf(stderr, "Usage: %s <<options>>\n", cmd);
+    fprintf(stderr, "\n");
+    fprintf(stderr, "Output logging to stdout followed by '\\nRESULTS:\\n' which signals the start of results.\n");
+    fprintf(stderr, "The results is a newline separated list of the following elements:\n");
+    fprintf(stderr, "    * Total clips\n");
+    fprintf(stderr, "    * Total multi-camera groups\n");
+    fprintf(stderr, "    * Total director cut sequences\n");
+    fprintf(stderr, "    * List of output filenames separated by a newline\n");
     fprintf(stderr, "\n");
     fprintf(stderr, "Options:\n");
     fprintf(stderr, "  -h, --help                     Display this usage message\n");
@@ -247,13 +326,16 @@ static void usage(const char* cmd)
     fprintf(stderr, "  -m, --multicam                 Also create multi-camera clips\n");
     fprintf(stderr, "  -f, --from <date>S<timecode>   Includes clips created >= date and start timecode\n");
     fprintf(stderr, "  -t, --to <date>S<timecode>     Includes clips created < date and start timecode\n");
+    fprintf(stderr, "  -c, --from-cd <date>T<time>    Includes clips created >= CreationDate of clip\n");
     fprintf(stderr, "  --tag <name>=<value>           Includes clips with user comment tag <name> == <value>\n");
+    fprintf(stderr, "  --mc-cuts <db name>            Includes sequence of multi-camera cuts from database\n");
     fprintf(stderr, "  -d, --dns <string>             Database DNS (default '%s')\n", g_dns);
     fprintf(stderr, "  -u, --dbuser <string>          Database user name (default '%s')\n", g_databaseUserName);
     fprintf(stderr, "  --dbpassword <string>          Database user password (default ***)\n");
     fprintf(stderr, "\n");
     fprintf(stderr, "Notes:\n");
     fprintf(stderr, "* --from and --to form is 'yyyy-mm-ddShh:mm:ss:ff'\n");
+    fprintf(stderr, "* --from-cd form is 'yyyy-mm-ddThh:mm:ss'\n");
     fprintf(stderr, "* The default for --from is the start of today\n"); 
     fprintf(stderr, "* The default for --to is the start of tommorrow\n");
     fprintf(stderr, "* If --tag is used then --to and --from are ignored\n");
@@ -281,6 +363,10 @@ int main(int argc, const char* argv[])
     int videoResolutionID = DV50_MATERIAL_RESOLUTION;
     bool verbose = false;
     bool noTSSuffix = false;
+    std::string mcCutsFilename;
+    bool includeMCCutsSequence = false;
+    CutsDatabase* mcCutsDatabase = 0;
+    Timestamp fromCreationDate = g_nullTimestamp;
     
     Timestamp t = generateTimestampStartToday();
     fromDate.year = t.year;
@@ -385,6 +471,18 @@ int main(int argc, const char* argv[])
                 parseDateAndTimecode(argv[cmdlnIndex + 1], &toDate, &toTimecode);
                 cmdlnIndex += 2;
             }
+            else if (strcmp(argv[cmdlnIndex], "-c") == 0 ||
+                strcmp(argv[cmdlnIndex], "--from-cd") == 0)
+            {
+                if (cmdlnIndex + 1 >= argc)
+                {
+                    usage(argv[0]);
+                    fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
+                    return 1;
+                }
+                parseTimestamp(argv[cmdlnIndex + 1], &fromCreationDate);
+                cmdlnIndex += 2;
+            }
             else if (strcmp(argv[cmdlnIndex], "--tag") == 0)
             {
                 if (cmdlnIndex + 1 >= argc)
@@ -394,6 +492,18 @@ int main(int argc, const char* argv[])
                     return 1;
                 }
                 parseTag(argv[cmdlnIndex + 1], tagName, tagValue);
+                cmdlnIndex += 2;
+            }
+            else if (strcmp(argv[cmdlnIndex], "--mc-cuts") == 0)
+            {
+                if (cmdlnIndex + 1 >= argc)
+                {
+                    usage(argv[0]);
+                    fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
+                    return 1;
+                }
+                mcCutsFilename = argv[cmdlnIndex + 1];
+                includeMCCutsSequence = true;
                 cmdlnIndex += 2;
             }
             else if (strcmp(argv[cmdlnIndex], "-d") == 0 ||
@@ -461,6 +571,8 @@ int main(int argc, const char* argv[])
         suffix = createDateAndTimecodeSuffix(fromDate, fromTimecode, toDate, toTimecode);
     }
     
+    
+    // initialise the prodauto database
     try
     {
         Database::initialise(dns, dbUserName, dbPassword, 1, 3);
@@ -475,6 +587,19 @@ int main(int argc, const char* argv[])
         return 1;
     }
 
+    // open the cuts database
+    if (includeMCCutsSequence)
+    {
+        try
+        {
+            mcCutsDatabase = new CutsDatabase(mcCutsFilename);
+        }
+        catch (const ProdAutoException& ex)
+        {
+            fprintf(stderr, "Failed to open cuts database '%s':\n  %s\n", mcCutsFilename.c_str(), ex.getMessage().c_str());
+            return 1;
+        }
+    }
 
     // load the material    
     Database* database = Database::getInstance();
@@ -490,6 +615,26 @@ int main(int argc, const char* argv[])
             {
                 printf("Loaded %d clips from the database based on the tag %s=%s\n", material.topPackages.size(),
                     tagName.c_str(), tagValue.c_str());
+            }
+        }
+        else if (fromCreationDate.year != 0)
+        {
+            Timestamp endDayTo = g_nullTimestamp;
+            endDayTo.year = fromCreationDate.year;
+            endDayTo.month = fromCreationDate.month;
+            endDayTo.day = fromCreationDate.day;
+            endDayTo.hour = 23;
+            endDayTo.min = 59;
+            endDayTo.sec = 59;
+            endDayTo.qmsec = 249;
+            
+            // load all material created >= fromCreationDate until the end of the day
+            database->loadMaterial(fromCreationDate, endDayTo, &material.topPackages, &material.packages);
+
+            if (verbose)
+            {
+                printf("Loaded %d clips from the database from creation date %s\n", 
+                    material.topPackages.size(), timestampString(fromCreationDate).c_str());
             }
         }
         else
@@ -575,6 +720,7 @@ int main(int argc, const char* argv[])
         return 1;
     }
 
+    
     // go through the material package -> file package and remove any that reference
     // a file package with a non-zero videoResolutionID and !=  targetVideoResolutionID
     int removedCount = 0;
@@ -634,11 +780,17 @@ int main(int argc, const char* argv[])
     }
         
     
+    int totalClips = 0;
+    int totalMulticamGroups = 0;
+    int totalDirectorsCutsSequences = 0;
     
     // create AAF file if there is material    
     if (material.topPackages.size() == 0)
     {
-        fprintf(stderr, "No packages found\n");
+        // Results
+        
+        printf("\n%s\n", g_resultsPrefix);
+        printf("%d\n%d\n%d\n", totalClips, totalMulticamGroups, totalDirectorsCutsSequences);
     }
     else
     {
@@ -681,6 +833,8 @@ int main(int argc, const char* argv[])
                 {
                     aafGroup->addClip(topPackage, material.packages);
                 }
+
+                totalClips++;
             }
             
             
@@ -725,32 +879,37 @@ int main(int argc, const char* argv[])
                         }
                     }
                     
-                    if (!createGroupOnly)
+                    vector<MCClipDef*>::iterator iter3;
+                    int index = 0;
+                    for (iter3 = mcClipDefs.get().begin(); iter3 != mcClipDefs.get().end(); iter3++)
                     {
-                        vector<MCClipDef*>::iterator iter3;
-                        int index = 0;
-                        for (iter3 = mcClipDefs.get().begin(); iter3 != mcClipDefs.get().end(); iter3++)
+                        MCClipDef* mcClipDef = *iter3;
+                        
+                        vector<CutInfo> sequence;
+                        if (mcCutsDatabase != 0)
                         {
-                            MCClipDef* mcClipDef = *iter3;
-                            
+                            getSequence(mcCutsDatabase, mcClipDef, topPackage1->creationDate,
+                                getStartTime(topPackage1, material.packages, palEditRate));
+                        }
+                        
+                        if (!createGroupOnly)
+                        {
                             AAFFile aafFile(
                                 addFilename(filenames, createMCClipFilename(filenamePrefix, 
                                     getStartTime(topPackage1, material.packages, palEditRate), suffix, index++)));
-                            aafFile.addMCClip(mcClipDef, materialPackages, material.packages);
+                            aafFile.addMCClip(mcClipDef, materialPackages, material.packages, sequence);
                             aafFile.save();
-                        }
-                    }
-                    
-                    if (createGroup)
-                    {
-                        vector<MCClipDef*>::iterator iter3;
-                        for (iter3 = mcClipDefs.get().begin(); iter3 != mcClipDefs.get().end(); iter3++)
+                        }       
+                        
+                        if (createGroup)
                         {
-                            MCClipDef* mcClipDef = *iter3;
-                            
-                            aafGroup->addMCClip(mcClipDef, materialPackages, material.packages);
+                            aafGroup->addMCClip(mcClipDef, materialPackages, material.packages, sequence);
                         }
-                    }                            
+
+                        totalMulticamGroups++;
+                        totalDirectorsCutsSequences = sequence.empty() ? 
+                            totalDirectorsCutsSequences : totalDirectorsCutsSequences + 1;
+                    }
                 }
             }
             
@@ -760,7 +919,11 @@ int main(int argc, const char* argv[])
                 delete aafGroup.release();
             }
             
-            // output list of filenames to stdout
+            // Results
+            
+            printf("\n%s\n", g_resultsPrefix);
+            printf("%d\n%d\n%d\n", totalClips, totalMulticamGroups, totalDirectorsCutsSequences);
+            
             vector<string>::const_iterator filenamesIter;
             for (filenamesIter = filenames.begin(); filenamesIter != filenames.end(); filenamesIter++)
             {

@@ -1,5 +1,5 @@
 /*
- * $Id: mjpeg_compress.h,v 1.1 2007/09/11 14:08:45 stuart_hc Exp $
+ * $Id: mjpeg_compress.h,v 1.2 2008/02/06 16:59:12 john_f Exp $
  *
  * MJPEG encoder.
  *
@@ -25,7 +25,12 @@
 #ifndef MJPEG_COMPRESS_H
 #define MJPEG_COMPRESS_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <jpeglib.h>
+#include <pthread.h>
 
 typedef enum MJPEGResolutionID
 {
@@ -35,7 +40,7 @@ typedef enum MJPEGResolutionID
     MJPEG_20_1  = 82,
     MJPEG_15_1s = 78,
     MJPEG_10_1m = 110,
-    MJPEG_4_1m = 111
+    MJPEG_4_1m  = 111
 } MJPEGResolutionID;
 
 typedef struct mjpeg_compress_t {
@@ -54,11 +59,6 @@ typedef struct mjpeg_compress_t {
     struct jpeg_compress_struct cinfo;
 } mjpeg_compress_t;
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-
 extern int mjpeg_compress_init(MJPEGResolutionID id, int width, int height, mjpeg_compress_t **);
 
 extern int mjpeg_compress_free(mjpeg_compress_t *);
@@ -67,6 +67,66 @@ extern int mjpeg_compress_free(mjpeg_compress_t *);
 /* Returns the size of the compressed pair of images or 0 on failure */
 extern unsigned mjpeg_compress_frame_yuv(
                                 mjpeg_compress_t *p,
+                                const unsigned char *y,
+                                const unsigned char *u,
+                                const unsigned char *v,
+                                int y_linesize,
+                                int u_linesize,
+                                int v_linesize,
+                                unsigned char **pp_output);
+
+
+/* Multi-threaded API consists of 3 functions
+ * - mjpeg_compress_init_threaded
+ * - mjpeg_compress_frame_yuv_threaded
+ * - mjpeg_compress_free_threaded
+ */
+
+typedef enum {
+	THREAD_INIT,
+	THREAD_INPUT_READY,
+	THREAD_BUSY,
+	THREAD_OUTPUT_READY,
+	THREAD_FINI
+} mjpeg_thread_state_t;
+
+typedef struct mjpeg_thread_data_t {
+	/* thread management */
+    mjpeg_compress_t *handle;
+    int thread_num;						/* 0 or 1 */
+	pthread_t thread_id;				/* for creating and joining threads */
+    pthread_mutex_t m_state_change;
+    pthread_cond_t state_change;
+	mjpeg_thread_state_t state;
+
+	/* field compression inputs */
+	const unsigned char *y;
+    const unsigned char *u;
+    const unsigned char *v;
+    int y_linesize;
+    int u_linesize;
+    int v_linesize;
+    int quality;
+
+	/* field compression outputs */
+	int compressed_size;
+	int last_compressed_size;
+} mjpeg_thread_data_t;
+
+typedef struct mjpeg_compress_threaded_t {
+	mjpeg_thread_data_t thread[2];
+} mjpeg_compress_threaded_t;
+
+extern int mjpeg_compress_init_threaded(MJPEGResolutionID id, int width, int height, mjpeg_compress_threaded_t **);
+
+extern int mjpeg_compress_free_threaded(mjpeg_compress_threaded_t *);
+
+/* Threaded version of mjpeg_compress_frame_yuv() which encodes each
+ * field in a different thread (2 threads in total)
+ * No advantage is gained for single-field JPEG resolutions such as 15:1s
+ */
+extern unsigned mjpeg_compress_frame_yuv_threaded(
+                                mjpeg_compress_threaded_t *p,
                                 const unsigned char *y,
                                 const unsigned char *u,
                                 const unsigned char *v,
@@ -85,6 +145,5 @@ extern int mjpeg_fix_jpeg(  const unsigned char *in,
 #ifdef __cplusplus
 }
 #endif
-
 
 #endif //#ifndef MJPEG_COMPRESS_H

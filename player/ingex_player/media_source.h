@@ -111,6 +111,28 @@ void msc_close(MediaSource* source);
 int msc_get_buffer_state(MediaSource* source, int* numBuffers, int* numBuffersFilled);
 
 
+/* create a new unique id for the source */
+int msc_create_id();
+
+
+
+/* maps stream ids to source ids */
+typedef struct
+{
+    int streamId;
+    int sourceId;
+} MediaSourceStream;
+
+typedef struct 
+{
+    MediaSourceStream streams[64];
+    int numStreams;
+} MediaSourceStreamMap;
+
+
+void msc_init_stream_map(MediaSourceStreamMap* map);
+int msc_add_stream_to_map(MediaSourceStreamMap* map, int streamId, int sourceId);
+int msc_get_source_id(MediaSourceStreamMap* map, int streamId, int* sourceId);
 
 
 #ifdef __cplusplus

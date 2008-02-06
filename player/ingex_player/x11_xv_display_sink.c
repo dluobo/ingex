@@ -22,6 +22,8 @@
 #include "x11_common.h"
 #include "keyboard_input_connect.h"
 #include "on_screen_display.h"
+#include "YUV_frame.h"
+#include "YUV_small_pic.h"
 #include "video_conversion.h"
 #include "utils.h"
 #include "logging.h"
@@ -55,9 +57,12 @@ typedef struct
     
     MediaSinkFrame sinkFrame;
 
-    /* only used if video conversion required */
-    unsigned char* tmp_frame;
+    unsigned char* inputBuffer;
+    int inputBufferSize;
 
+    unsigned char* scaleInputBuffer;
+    unsigned char* scaleWorkspace;
+    
     XvImage* yuv_image;
     XShmSegmentInfo yuv_shminfo;
 
@@ -94,14 +99,19 @@ struct X11XVDisplaySink
     
     /* image characteristics */
     int32_t frameFormat;
-    StreamFormat videoFormat;
+    StreamFormat inputVideoFormat;
+    StreamFormat outputVideoFormat;
+    formats outputYUVFormat;
     int frameSize;
     int width;
     int height;
+    int inputWidth;
+    int inputHeight;
     Rational aspectRatio;
     Rational pixelAspectRatio;
     Rational monitorAspectRatio;
     float scale;
+    int swScale;
     int initialDisplayWidth;
     int initialDisplayHeight;
     
@@ -315,33 +325,55 @@ static int init_display(X11XVDisplaySink* sink, const StreamInfo* streamInfo)
     
     CHK_OFAIL(x11c_open_display(&sink->x11Common));
 
-    sink->width = streamInfo->width;   
-    sink->height = streamInfo->height;
+    sink->inputWidth = streamInfo->width;   
+    sink->inputHeight = streamInfo->height;
+    
+    sink->width = sink->inputWidth / sink->swScale;   
+    sink->height = sink->inputHeight / sink->swScale;
+    
+    if (streamInfo->format == UYVY_FORMAT)
+    {
+        sink->outputYUVFormat = UYVY;
+    }
+    else if (streamInfo->format == YUV422_FORMAT)
+    {
+        /* format is converted to UYVY */
+        sink->outputYUVFormat = UYVY;
+    }
+    else if (streamInfo->format == YUV420_FORMAT)
+    {
+        sink->outputYUVFormat = I420;
+    }
+    else /* streamInfo->format == YUV444_FORMAT */
+    {
+        /* format is converted to UYVY */
+        sink->outputYUVFormat = UYVY;
+    }
     
     if (streamInfo->aspectRatio.num > 0 && streamInfo->aspectRatio.den > 0)
     {
         sink->aspectRatio = streamInfo->aspectRatio;
 
         /* TODO: we shouldn't assume 702 for 720x576/592 */
-        if (streamInfo->aspectRatio.num == 4 && streamInfo->aspectRatio.den == 3 &&
-            streamInfo->width == 720 && 
-            (streamInfo->height == 576 || streamInfo->height == 592))
+        if (sink->aspectRatio.num == 4 && sink->aspectRatio.den == 3 &&
+            sink->width == 720 && 
+            (sink->height == 576 || sink->height == 592))
         {
             widthForAspectRatio = 702;
         }
         else
         {
-            widthForAspectRatio = streamInfo->width;
+            widthForAspectRatio = sink->width;
         }
         
-        if (streamInfo->width == 720 && streamInfo->height == 592)
+        if (sink->width == 720 && sink->height == 592)
         {
             /* don't include the VBI */
             heightForAspectRatio = 576;
         }
         else
         {
-            heightForAspectRatio = streamInfo->height;
+            heightForAspectRatio = sink->height;
         }
         
         if (sink->pixelAspectRatio.num <= 0 || sink->pixelAspectRatio.den <= 0)
@@ -349,34 +381,34 @@ static int init_display(X11XVDisplaySink* sink, const StreamInfo* streamInfo)
             CHK_OFAIL(x11c_get_screen_dimensions(&sink->x11Common, &screenWidth, &screenHeight));
 
             /* take into account monitor pixel aspect ratio, 
-            intended output aspect ratio (streamInfo->aspectRatio)
-            and the image dimensions (streamInfo->width and streamInfo->height) */
+            intended output aspect ratio (sink->aspectRatio)
+            and the image dimensions (sink->width and sink->height) */
             
             if (sink->monitorAspectRatio.num > 0 && sink->monitorAspectRatio.den > 0)
             {
-                wFactor = (sink->monitorAspectRatio.den * screenWidth * streamInfo->aspectRatio.num * heightForAspectRatio) / 
-                        (double)(sink->monitorAspectRatio.num * screenHeight * streamInfo->aspectRatio.den * widthForAspectRatio);
+                wFactor = (sink->monitorAspectRatio.den * screenWidth * sink->aspectRatio.num * heightForAspectRatio) / 
+                        (double)(sink->monitorAspectRatio.num * screenHeight * sink->aspectRatio.den * widthForAspectRatio);
             }
             else
             {
                 /* assume 4:3 monitor aspect ratio */
-                wFactor = (3 * screenWidth * streamInfo->aspectRatio.num * heightForAspectRatio) / 
-                        (double)(4 * screenHeight * streamInfo->aspectRatio.den * widthForAspectRatio);
+                wFactor = (3 * screenWidth * sink->aspectRatio.num * heightForAspectRatio) / 
+                        (double)(4 * screenHeight * sink->aspectRatio.den * widthForAspectRatio);
             }
         }
         else
         {
             /* take into account monitor pixel aspect ratio, 
-            intended output aspect ratio (streamInfo->aspectRatio)
-            and the image dimensions (streamInfo->width and streamInfo->height) */
-            wFactor = (sink->pixelAspectRatio.den * streamInfo->aspectRatio.num * heightForAspectRatio) / 
-                    (double)(sink->pixelAspectRatio.num * streamInfo->aspectRatio.den * widthForAspectRatio);
+            intended output aspect ratio (sink->aspectRatio)
+            and the image dimensions (sink->width and sink->height) */
+            wFactor = (sink->pixelAspectRatio.den * sink->aspectRatio.num * heightForAspectRatio) / 
+                    (double)(sink->pixelAspectRatio.num * sink->aspectRatio.den * widthForAspectRatio);
         }
         
         
         /* scale in horizontal direction only to avoid dealing with interlacing */
-        sink->initialDisplayWidth = (int)(wFactor * streamInfo->width);
-        sink->initialDisplayHeight = streamInfo->height;
+        sink->initialDisplayWidth = (int)(wFactor * sink->width);
+        sink->initialDisplayHeight = sink->height;
         
         sink->initialDisplayWidth *= sink->scale;
         sink->initialDisplayHeight *= sink->scale;
@@ -386,22 +418,31 @@ static int init_display(X11XVDisplaySink* sink, const StreamInfo* streamInfo)
         sink->aspectRatio.num = 4;
         sink->aspectRatio.den = 3;
         
-        sink->initialDisplayWidth = streamInfo->width;
-        sink->initialDisplayHeight = streamInfo->height;
+        sink->initialDisplayWidth = sink->width;
+        sink->initialDisplayHeight = sink->height;
     }
 
-    if (streamInfo->format == UYVY_FORMAT || streamInfo->format == YUV444_FORMAT)
+    sink->inputVideoFormat = streamInfo->format;
+
+    if (streamInfo->format == UYVY_FORMAT)
     {
         sink->frameFormat = X11_FOURCC('U','Y','V','Y');
         sink->frameSize = sink->width * sink->height * 2;
+        sink->outputVideoFormat = streamInfo->format;
+    }
+    else if (streamInfo->format == YUV422_FORMAT ||
+        streamInfo->format == YUV444_FORMAT)
+    {
+        sink->frameFormat = X11_FOURCC('U','Y','V','Y');
+        sink->frameSize = sink->width * sink->height * 2;
+        sink->outputVideoFormat = UYVY_FORMAT;
     }
     else /* YUV420_FORMAT */
     {
         sink->frameFormat = X11_FOURCC('I','4','2','0');
         sink->frameSize = sink->width * sink->height * 3 / 2;
+        sink->outputVideoFormat = streamInfo->format;
     }
-    
-    sink->videoFormat = streamInfo->format;
     
     
     /* Check that we have access to an XVideo port providing this chroma    */
@@ -439,15 +480,70 @@ static int display_frame(X11XVDisplaySink* sink, X11DisplayFrame* frame, const F
     float scaleFactorX;
     float scaleFactorY;
     float scaleFactor;
+    YUV_frame inputFrame;
+    YUV_frame outputFrame;
+    unsigned char* convertOutputBuffer;
 
     if (frame->videoIsPresent)
     {
-        /* If input is YUV444 convert to UYVY before drawing OSD */
-        if (sink->videoFormat == YUV444_FORMAT)
+        /* convert if required */
+        if (sink->inputVideoFormat == YUV444_FORMAT)
         {
-            yuv444_to_uyvy(sink->width, sink->height, frame->tmp_frame, (unsigned char*)frame->yuv_image->data);
+            if (sink->swScale != 1)
+            {
+                /* scale afterwards */
+                convertOutputBuffer = frame->scaleInputBuffer;
+            }
+            else
+            {
+                /* no scale afterwards */
+                convertOutputBuffer = (unsigned char*)frame->yuv_image->data;
+            }
+            
+            yuv444_to_uyvy(sink->inputWidth, sink->inputHeight, frame->inputBuffer, convertOutputBuffer);
+        }
+        else if (sink->inputVideoFormat == YUV422_FORMAT)
+        {
+            if (sink->swScale != 1)
+            {
+                /* scale afterwards */
+                convertOutputBuffer = frame->scaleInputBuffer;
+            }
+            else
+            {
+                /* no scale afterwards */
+                convertOutputBuffer = (unsigned char*)frame->yuv_image->data;
+            }
+            
+            yuv422_to_uyvy_2(sink->inputWidth, sink->inputHeight, 0, frame->inputBuffer, convertOutputBuffer);
+        }
+        else
+        {
+            /* no conversion - scale input if from the frame input buffer */
+            convertOutputBuffer = frame->inputBuffer;
         }
 
+        /* scale image */
+        if (sink->swScale != 1)
+        {
+            YUV_frame_from_buffer(&inputFrame, (void*)convertOutputBuffer, 
+                sink->inputWidth, sink->inputHeight, sink->outputYUVFormat);
+                
+            YUV_frame_from_buffer(&outputFrame, (void*)(unsigned char*)frame->yuv_image->data, 
+                sink->width, sink->height, sink->outputYUVFormat);
+                
+            small_pic(&inputFrame, 
+                &outputFrame,
+                0, 
+                0,
+                sink->swScale,
+                sink->swScale,
+                1, 
+                1, 
+                1, 
+                frame->scaleWorkspace);
+        }
+        
         /* add OSD to frame */
         if (sink->osd != NULL && sink->osdInitialised)
         {
@@ -542,13 +638,49 @@ static int init_frame(X11DisplayFrame* frame)
     
     PTHREAD_MUTEX_LOCK(&sink->x11Common.eventMutex)
 
-    if (sink->videoFormat == YUV444_FORMAT)
+    if (sink->inputVideoFormat == YUV444_FORMAT)
     {
         /* Conversion required for YUV444 input */
-        MALLOC_ORET(frame->tmp_frame, unsigned char, sink->width * sink->height * 3);
+        frame->inputBufferSize = sink->inputWidth * sink->inputHeight * 3;
+        MALLOC_ORET(frame->inputBuffer, unsigned char, frame->inputBufferSize);
+
+        /* buffer for software scaling */
+        if (sink->swScale != 1)
+        {
+            MALLOC_ORET(frame->scaleInputBuffer, unsigned char, frame->inputBufferSize);
+            MALLOC_ORET(frame->scaleWorkspace, unsigned char, sink->inputWidth * 3);
+        }
     }
-    else
-        frame->tmp_frame = NULL;        /* not needed when no conversion required */
+    else if (sink->inputVideoFormat == YUV422_FORMAT)
+    {
+        /* Conversion required for YUV422 input */
+        frame->inputBufferSize = sink->inputWidth * sink->inputHeight * 2;
+        MALLOC_ORET(frame->inputBuffer, unsigned char, frame->inputBufferSize);
+
+        /* buffer for software scaling */
+        if (sink->swScale != 1)
+        {
+            MALLOC_ORET(frame->scaleInputBuffer, unsigned char, frame->inputBufferSize);
+            MALLOC_ORET(frame->scaleWorkspace, unsigned char, sink->inputWidth * 3);
+        }
+    }
+    else if (sink->swScale != 1)
+    {
+        /* buffer for software scaling */
+        
+        if (sink->inputVideoFormat == UYVY_FORMAT)
+        {
+            frame->inputBufferSize = sink->inputWidth * sink->inputHeight * 2;
+        }
+        else /* sink->inputVideoFormat == YUV420_FORMAT */
+        {
+            frame->inputBufferSize = sink->inputWidth * sink->inputHeight * 3 / 2;
+        }
+        MALLOC_ORET(frame->inputBuffer, unsigned char, frame->inputBufferSize);
+        MALLOC_ORET(frame->scaleWorkspace, unsigned char, sink->inputWidth * 3);
+    }
+    /* else frame->inputBuffer = (unsigned char*)frame->yuv_image->data;
+    delayed until after creating yuv_image */
 
     if (sink->useSharedMemory)
     {
@@ -598,6 +730,16 @@ static int init_frame(X11DisplayFrame* frame)
 
     }
 
+    /* input buffer == output if no scaling and no conversion */
+    if (sink->inputVideoFormat != YUV444_FORMAT &&
+        sink->inputVideoFormat != YUV422_FORMAT && 
+        sink->swScale == 1)
+    {
+        frame->inputBufferSize = frame->yuv_image->data_size;
+        frame->inputBuffer = (unsigned char*)frame->yuv_image->data;
+    }
+    
+    
     PTHREAD_MUTEX_UNLOCK(&sink->x11Common.eventMutex)
     
     if (!result)
@@ -612,7 +754,8 @@ static int xvskf_register_stream(void* data, int streamId, const StreamInfo* str
 {
     X11DisplayFrame* frame = (X11DisplayFrame*)data;
     X11XVDisplaySink* sink = (X11XVDisplaySink*)frame->sink;
-
+    StreamInfo outputStreamInfo;
+    
     /* this should've been checked, but we do it here anyway */
     if (!xvsk_accept_stream(sink, streamInfo))
     {
@@ -642,17 +785,30 @@ static int xvskf_register_stream(void* data, int streamId, const StreamInfo* str
         {
             /* check dimensions */
             /* TODO: allow dimensions to change */
-            if (sink->width != streamInfo->width || sink->height != streamInfo->height)
+            if (sink->inputWidth != streamInfo->width || sink->inputHeight != streamInfo->height)
             {
                 ml_log_error("Image dimensions, %dx%d, does not match previous dimensions %dx%d\n", 
-                    streamInfo->width, streamInfo->height, sink->width, sink->height);
+                    streamInfo->width, streamInfo->height, sink->inputWidth, sink->inputHeight);
                 return 0;
             }
         }
         
         if (sink->osd != NULL && !sink->osdInitialised)
         {
-            CHK_ORET(osd_initialise(sink->osd, streamInfo, &sink->aspectRatio));
+            outputStreamInfo = *streamInfo;
+            
+            /* YUV422 and YUV444 are converted to UYVY */
+            if (streamInfo->format == YUV422_FORMAT ||
+                streamInfo->format == YUV444_FORMAT)
+            {
+                outputStreamInfo.format = UYVY_FORMAT;
+            }
+
+            /* sw scale changes the output dimensions */
+            outputStreamInfo.width = sink->width;
+            outputStreamInfo.height = sink->height;
+            
+            CHK_ORET(osd_initialise(sink->osd, &outputStreamInfo, &sink->aspectRatio));
             sink->osdInitialised = 1;
         }
         
@@ -701,17 +857,12 @@ static int xvskf_allocate_stream_buffer(void* data, int streamId, unsigned int b
     }
     
 
-    if (frame->sink->videoFormat == YUV444_FORMAT)
-        *buffer = frame->tmp_frame;
-    else
+    if ((unsigned int)frame->inputBufferSize != bufferSize)
     {
-        if ((unsigned int)frame->yuv_image->data_size != bufferSize)
-        {
-            ml_log_error("Buffer size (%d) != image data size (%d)\n", bufferSize, frame->yuv_image->data_size);
-            return 0;
-        }
-        *buffer = (unsigned char*)frame->yuv_image->data;
+        ml_log_error("Buffer size (%d) != image data size (%d)\n", bufferSize, frame->inputBufferSize);
+        return 0;
     }
+    *buffer = frame->inputBuffer;
     
     return 1;
 }
@@ -753,6 +904,14 @@ static void xvskf_free(void* data)
     {
         if (frame->yuv_image != NULL)
         {
+            if (frame->inputBuffer != (unsigned char*)frame->yuv_image->data)
+            {
+                /* input buffer is not pointing to the output buffer */
+                SAFE_FREE(&frame->inputBuffer);
+            }
+            SAFE_FREE(&frame->scaleInputBuffer);
+            SAFE_FREE(&frame->scaleWorkspace);
+            
             if (frame->sink->useSharedMemory)
             {
                 XShmDetach(frame->sink->x11Common.display, &frame->yuv_shminfo);
@@ -830,6 +989,7 @@ static int xvsk_accept_stream(void* data, const StreamInfo* streamInfo)
         streamInfo->width > 0 &&
         streamInfo->height > 0 &&
         (streamInfo->format == UYVY_FORMAT || 
+             streamInfo->format == YUV422_FORMAT ||
              streamInfo->format == YUV420_FORMAT ||
              streamInfo->format == YUV444_FORMAT))
     {
@@ -997,7 +1157,7 @@ static int xvsk_reset_or_close(void* data)
             }
             else
             {
-                fill_black(sink->videoFormat, sink->width, sink->height, (unsigned char*)blankFrame->yuv_image->data);
+                fill_black(sink->inputVideoFormat, sink->inputWidth, sink->inputHeight, blankFrame->inputBuffer);
                 blankFrame->videoIsPresent = 1;
                 
                 memset(&blankFrameInfo, 0, sizeof(FrameInfo));
@@ -1073,7 +1233,7 @@ int xvsk_check_is_available()
 
 
 int xvsk_open(int reviewDuration, int disableOSD, const Rational* pixelAspectRatio, 
-    const Rational* monitorAspectRatio, float scale, X11XVDisplaySink** sink)
+    const Rational* monitorAspectRatio, float scale, int swScale, X11XVDisplaySink** sink)
 {
     X11XVDisplaySink* newSink;
     
@@ -1082,6 +1242,7 @@ int xvsk_open(int reviewDuration, int disableOSD, const Rational* pixelAspectRat
     newSink->xvport = -1;
     newSink->pixelAspectRatio = *pixelAspectRatio;
     newSink->monitorAspectRatio = *monitorAspectRatio;
+    newSink->swScale = swScale;
     if (scale > 0.0f)
     {
         newSink->scale = scale;

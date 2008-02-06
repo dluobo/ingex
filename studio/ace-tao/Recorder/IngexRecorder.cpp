@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorder.cpp,v 1.2 2007/10/26 15:50:08 john_f Exp $
+ * $Id: IngexRecorder.cpp,v 1.3 2008/02/06 16:58:59 john_f Exp $
  *
  * Class to manage an individual recording.
  *
@@ -74,7 +74,7 @@ IngexRecorder::~IngexRecorder()
 }
 
 void IngexRecorder::Setup(
-                bool card_enable[],
+                bool channel_enable[],
                 bool trk_enable[],
                 const char * project,
                 const char * description,
@@ -101,23 +101,25 @@ void IngexRecorder::Setup(
 
     // Get MXF info from database.
     // Record threads will access this later.
-    GetDbInfo(tapes);
+    // Also get ProjectName.
+    prodauto::ProjectName project_name;
+    GetDbInfo(tapes, project, project_name);
 
     // Store paths for recorded files
     //strcpy(mVideoPath, video_path);
     //strcpy(mDvdPath, dvd_path);
 
-    unsigned int n_cards = IngexShm::Instance()->Cards();
+    unsigned int n_channels = IngexShm::Instance()->Channels();
 
     // Set up enables
-    int first_enabled_card = -1;
-    for (unsigned int i = 0; i < n_cards; i++)
+    int first_enabled_channel = -1;
+    for (unsigned int i = 0; i < n_channels; i++)
     {
-        if (first_enabled_card < 0 && card_enable[i])
+        if (first_enabled_channel < 0 && channel_enable[i])
         {
-            first_enabled_card = i;
+            first_enabled_channel = i;
         }
-        mCardEnable[i] = card_enable[i];
+        mChannelEnable[i] = channel_enable[i];
         for (unsigned int j = 0; j < 5; ++j)
         {
             unsigned int trk = 5 * i + j;
@@ -155,15 +157,15 @@ void IngexRecorder::Setup(
     {
         if (it->source == Input::NORMAL)
         {
-            for (unsigned int i = 0; i < n_cards; i++)
+            for (unsigned int i = 0; i < n_channels; i++)
             {
-                if (card_enable[i])
+                if (channel_enable[i])
                 {
                     ThreadParam tp;
                     tp.p_rec = this;
 
                     tp.p_opt = new RecordOptions;
-                    tp.p_opt->card_num = i;
+                    tp.p_opt->channel_num = i;
                     tp.p_opt->index = encoding_i;
                     
                     tp.p_opt->resolution = it->resolution;
@@ -181,7 +183,7 @@ void IngexRecorder::Setup(
             tp.p_rec = this;
 
             tp.p_opt = new RecordOptions;
-            tp.p_opt->card_num = first_enabled_card;
+            tp.p_opt->channel_num = first_enabled_channel;
             tp.p_opt->index = 0;
             tp.p_opt->quad = true;
             tp.p_opt->resolution = it->resolution;
@@ -193,9 +195,9 @@ void IngexRecorder::Setup(
         }
     }
 #if 0                
-    for (unsigned int i = 0; i < n_cards; i++)
+    for (unsigned int i = 0; i < n_channels; i++)
     {
-        if (card_enable[i])
+        if (channel_enable[i])
         {
             // For testing multiple encodings, set this to 2.
             //const unsigned int encoding_n = 1;
@@ -210,7 +212,7 @@ void IngexRecorder::Setup(
                 tp.p_rec = this;
 
                 tp.p_opt = new RecordOptions;
-                tp.p_opt->card_num = i;
+                tp.p_opt->channel_num = i;
                 tp.p_opt->index = encoding_i;
                 
                 tp.p_opt->resolution = it->resolution;
@@ -231,7 +233,7 @@ void IngexRecorder::Setup(
         tp.p_rec = this;
 
         tp.p_opt = new RecordOptions;
-        tp.p_opt->card_num = first_enabled_card;
+        tp.p_opt->channel_num = first_enabled_channel;
         tp.p_opt->index = 0;
         tp.p_opt->quad = true;
         tp.p_opt->resolution = quad_res;
@@ -246,7 +248,7 @@ void IngexRecorder::Setup(
     for (std::vector<ThreadParam>::iterator
         it = mThreadParams.begin(); it != mThreadParams.end(); ++it)
     {
-        it->p_opt->project = project;
+        it->p_opt->project = project_name;
         it->p_opt->description = description;
     }
 }
@@ -262,43 +264,43 @@ bool IngexRecorder::PrepareStart(
 {
     ACE_DEBUG((LM_DEBUG, ACE_TEXT("IngexRecorder::PrepareStart()\n")));
 
-    unsigned int n_cards = IngexShm::Instance()->Cards();
+    unsigned int n_channels = IngexShm::Instance()->Channels();
 
     framecount_t target_tc;
 
-    // If crash record, search across all cards for the minimum current (lastframe) timecode
+    // If crash record, search across all channels for the minimum current (lastframe) timecode
     if (crash_record)
     {
         int tc[MAX_CHANNELS];
 
         ACE_DEBUG((LM_DEBUG, ACE_TEXT("Crash record:\n")));
-        for (unsigned int card_i = 0; card_i < n_cards; card_i++)
+        for (unsigned int channel_i = 0; channel_i < n_channels; channel_i++)
         {
-            if (mCardEnable[card_i])
+            if (mChannelEnable[channel_i])
             {
-                tc[card_i] = IngexShm::Instance()->CurrentTimecode(card_i);
+                tc[channel_i] = IngexShm::Instance()->CurrentTimecode(channel_i);
 
                 ACE_DEBUG((LM_DEBUG, ACE_TEXT("    tc[%d]=%C\n"),
-                    card_i, Timecode(tc[card_i]).Text()));
+                    channel_i, Timecode(tc[channel_i]).Text()));
             }
         }
 
         int max_tc = 0;
         int min_tc = INT_MAX;
         bool tc_valid = false;
-        for (unsigned int card_i = 0; card_i < n_cards; card_i++)
+        for (unsigned int channel_i = 0; channel_i < n_channels; channel_i++)
         {
-            if (mCardEnable[card_i])
+            if (mChannelEnable[channel_i])
             {
-                max_tc = max(max_tc, tc[card_i]);
-                min_tc = min(min_tc, tc[card_i]);
+                max_tc = max(max_tc, tc[channel_i]);
+                min_tc = min(min_tc, tc[channel_i]);
                 tc_valid = true;
             }
         }
 
         if (!tc_valid)
         {
-            ACE_DEBUG((LM_ERROR, ACE_TEXT("    No cards enabled!\n")));
+            ACE_DEBUG((LM_ERROR, ACE_TEXT("    No channels enabled!\n")));
         }
 #if 0
         // Old strategy
@@ -308,12 +310,12 @@ bool IngexRecorder::PrepareStart(
         logTF("    crash record max diff=%d sleeping for %d frames...\n", max_diff, max_diff+2);
         ACE_OS::sleep(ACE_Time_Value(0, (max_diff+2) * 40 * 1000)); // sleep max_diff number of frames
 
-        // Use lowest enabled card's timecode as the target.
-        for (int card_i = n_cards - 1; card_i >= 0; card_i--)
+        // Use lowest enabled channel's timecode as the target.
+        for (int channel_i = n_channels - 1; channel_i >= 0; channel_i--)
         {
-            if (card_enable[card_i])
+            if (channel_enable[channel_i])
             {
-                target_tc = tc[card_i];
+                target_tc = tc[channel_i];
             }
         }
 #else
@@ -359,15 +361,15 @@ bool IngexRecorder::PrepareStart(
 
     // Search for desired timecode across all target sources
     ACE_DEBUG((LM_DEBUG, ACE_TEXT("Searching for timecode %C\n"), Timecode(target_tc).Text()));
-    for (unsigned int card_i = 0; card_i < n_cards; card_i++)
+    for (unsigned int channel_i = 0; channel_i < n_channels; channel_i++)
     {
-        if (! mCardEnable[card_i])
+        if (! mChannelEnable[channel_i])
         {
-            ACE_DEBUG((LM_DEBUG, ACE_TEXT("Card %d not enabled\n"), card_i));
+            ACE_DEBUG((LM_DEBUG, ACE_TEXT("Channel %d not enabled\n"), channel_i));
             continue;
         }
 
-        int lastframe = IngexShm::Instance()->LastFrame(card_i);
+        int lastframe = IngexShm::Instance()->LastFrame(channel_i);
 
         bool found_target = false;
         int first_tc_seen = 0;
@@ -382,7 +384,7 @@ bool IngexRecorder::PrepareStart(
 			{
 				frame += ring_length;
             }
-            int tc = IngexShm::Instance()->Timecode(card_i, frame);
+            int tc = IngexShm::Instance()->Timecode(channel_i, frame);
 
             if (i == 0)
             {
@@ -392,20 +394,20 @@ bool IngexRecorder::PrepareStart(
 
             if (tc == target_tc)
             {
-                mStartFrame[card_i] = lastframe - i;
+                mStartFrame[channel_i] = lastframe - i;
                 found_target = true;
 
-                ACE_DEBUG((LM_DEBUG, ACE_TEXT("Found card%d lf=%6d lf-i=%8d tc=%C\n"),
-                    card_i, lastframe, lastframe - i, Timecode(tc).Text()));
+                ACE_DEBUG((LM_DEBUG, ACE_TEXT("Found channel%d lf=%6d lf-i=%8d tc=%C\n"),
+                    channel_i, lastframe, lastframe - i, Timecode(tc).Text()));
             }
             else if (i == 0 && target_tc > tc && target_tc - tc < 5)
             {
                 // Target is slightly in the future.  We predict the start frame.
-                mStartFrame[card_i] = frame + target_tc - tc;
+                mStartFrame[channel_i] = frame + target_tc - tc;
                 found_target = true;
 
-                ACE_DEBUG((LM_WARNING, ACE_TEXT("Target timecode in future for card[%d]: target=%C, most_recent=%C\n"),
-                    card_i,
+                ACE_DEBUG((LM_WARNING, ACE_TEXT("Target timecode in future for channel[%d]: target=%C, most_recent=%C\n"),
+                    channel_i,
                     Timecode(target_tc).Text(),
                     Timecode(first_tc_seen).Text()
                     ));
@@ -414,8 +416,8 @@ bool IngexRecorder::PrepareStart(
 
         if (! found_target)
         {
-            ACE_DEBUG((LM_ERROR, "card[%d] Target tc %C not found, buffer %C - %C\n",
-                card_i,
+            ACE_DEBUG((LM_ERROR, "channel[%d] Target tc %C not found, buffer %C - %C\n",
+                channel_i,
                 Timecode(target_tc).Text(),
                 Timecode(last_tc_seen).Text(),
                 Timecode(first_tc_seen).Text()
@@ -435,7 +437,7 @@ bool IngexRecorder::PrepareStart(
     for (std::vector<ThreadParam>::iterator
         it = mThreadParams.begin(); it != mThreadParams.end(); ++it)
     {
-        const char * src_name = (it->p_opt->quad ? QUAD_NAME : SOURCE_NAME[it->p_opt->card_num]);
+        const char * src_name = (it->p_opt->quad ? QUAD_NAME : SOURCE_NAME[it->p_opt->channel_num]);
         std::ostringstream ident;
         ident << date << "_" << tcode << "_" << mName
             << "_" << src_name
@@ -467,15 +469,15 @@ bool IngexRecorder::Start()
         it = mThreadParams.begin(); it != mThreadParams.end(); ++it)
     {
         // Select which encoding function to invoke
-        //int cardnum = it->p_opt->card_num;
-        //ACE_THR_FUNC fn = (cardnum == QUAD_SOURCE ? start_quad_thread : start_record_thread);
+        //int channelnum = it->p_opt->channel_num;
+        //ACE_THR_FUNC fn = (channelnum == QUAD_SOURCE ? start_quad_thread : start_record_thread);
         ACE_THR_FUNC fn = start_record_thread;
 
         // and start in new thread.
         ACE_thread_t thr;
         int err = ACE_Thread::spawn( fn, &(*it),
                       THR_NEW_LWP|THR_JOINABLE, &thr );
-        const char * src_name = (it->p_opt->quad ? QUAD_NAME : SOURCE_NAME[it->p_opt->card_num]);
+        const char * src_name = (it->p_opt->quad ? QUAD_NAME : SOURCE_NAME[it->p_opt->channel_num]);
         int index = it->p_opt->index;
         if (err == 0)
         {
@@ -536,7 +538,7 @@ bool IngexRecorder::Stop( framecount_t & stop_timecode, framecount_t post_roll )
             framecount_t frames_total = frames_written + frames_dropped;
 
             ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C frames total = %d (written = %d, dropped = %d)\n"),
-                SOURCE_NAME[it->p_opt->card_num], frames_total, frames_written, frames_dropped));
+                SOURCE_NAME[it->p_opt->channel_num], frames_total, frames_written, frames_dropped));
 
             if (capture_length < frames_total)
             {
@@ -607,7 +609,7 @@ bool IngexRecorder::WriteMetadataFile(const char * meta_name)
     }
     fprintf(fp_meta, "path=%s\n", meta_name);
     //fprintf(fp_meta, "a_tape=");
-    //for (int i = 0; i < mCards; i++)
+    //for (int i = 0; i < mChannels; i++)
     //{
     //  fprintf(fp_meta, "%s%s", record_opt[i].tapename.c_str(), i == MAX_CHANNELS - 1 ? "\n" : ",");
     //}
@@ -621,19 +623,19 @@ bool IngexRecorder::WriteMetadataFile(const char * meta_name)
     fprintf(fp_meta, "capture_length=%d\n", record_opt[0].FramesWritten());
 #if 0
     fprintf(fp_meta, "a_start_tc=");
-    for (int i = 0; i < mCards + 1; i++)
+    for (int i = 0; i < mChannels + 1; i++)
     {
-        fprintf(fp_meta, "%d%s", record_opt[i].start_tc, i == mCards ? "\n" : " ");
+        fprintf(fp_meta, "%d%s", record_opt[i].start_tc, i == mChannels ? "\n" : " ");
     }
     fprintf(fp_meta, "a_start_tc_str=");
-    for (int i = 0; i < mCards + 1; i++)
+    for (int i = 0; i < mChannels + 1; i++)
     {
-        fprintf(fp_meta, "%s%s", framesToStr(record_opt[i].start_tc, tmpstr), i == mCards ? "\n" : " ");
+        fprintf(fp_meta, "%s%s", framesToStr(record_opt[i].start_tc, tmpstr), i == mChannels ? "\n" : " ");
     }
     fprintf(fp_meta, "a_duration=");
-    for (int i = 0; i < mCards + 1; i++)
+    for (int i = 0; i < mChannels + 1; i++)
     {
-        fprintf(fp_meta, "%d%s", record_opt[i].FramesWritten(), i == mCards ? "\n" : " ");
+        fprintf(fp_meta, "%d%s", record_opt[i].FramesWritten(), i == mChannels ? "\n" : " ");
     }
     fprintf(fp_meta, "description=%s\n", ""); // not necessarily known at this time
 #endif
@@ -650,7 +652,8 @@ bool IngexRecorder::WriteMetadataFile(const char * meta_name)
 }
 #endif
 
-bool IngexRecorder::GetDbInfo(const std::vector<std::string> & tapes)
+bool IngexRecorder::GetDbInfo(const std::vector<std::string> & tapes,
+                              const std::string & project, prodauto::ProjectName & project_name)
 {
     // Note that we are assuming that Database::initialise() has already been called
     // somewhere.
@@ -664,6 +667,19 @@ bool IngexRecorder::GetDbInfo(const std::vector<std::string> & tapes)
     {
         ACE_DEBUG((LM_ERROR, ACE_TEXT("Database Exception: %C\n"), dbe.getMessage().c_str()));
         db_ok = false;
+    }
+
+    // Get ProjectName
+    if (db_ok)
+    {
+        try
+        {
+            project_name = db->loadOrCreateProjectName(project);
+        }
+        catch (const prodauto::DBException & dbe)
+        {
+            ACE_DEBUG((LM_ERROR, ACE_TEXT("Database Exception: %C\n"), dbe.getMessage().c_str()));
+        }
     }
 
     // Get Recorder.
@@ -686,11 +702,11 @@ bool IngexRecorder::GetDbInfo(const std::vector<std::string> & tapes)
     // Set the source packages
     if (db_ok)
     {
-        unsigned int n_cards = IngexShm::Instance()->Cards();
+        unsigned int n_channels = IngexShm::Instance()->Channels();
 
         try
         {
-            for (unsigned int i = 0; i < n_cards; ++i)
+            for (unsigned int i = 0; i < n_channels; ++i)
             {
                 prodauto::RecorderConfig * rc = 0;
                 if (rec)
@@ -714,6 +730,7 @@ bool IngexRecorder::GetDbInfo(const std::vector<std::string> & tapes)
                 }
                 if (sc)
                 {
+                    // Set name
                     if (tapes.empty())
                     {
                     // Source package names based on source and date
@@ -730,6 +747,10 @@ bool IngexRecorder::GetDbInfo(const std::vector<std::string> & tapes)
                         ss << "Unnamed" << i;
                         sc->setSourcePackage(ss.str());
                     }
+
+                    // Store name in shared memory
+                    //IngexShm::Instance()->SourceName(i, sc->getSourcePackage()->name);
+                    IngexShm::Instance()->SourceName(i, sc->name);
                 }
             } // for
         } // try

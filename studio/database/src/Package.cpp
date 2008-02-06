@@ -1,5 +1,5 @@
 /*
- * $Id: Package.cpp,v 1.1 2007/09/11 14:08:39 stuart_hc Exp $
+ * $Id: Package.cpp,v 1.2 2008/02/06 16:59:06 john_f Exp $
  *
  * A MXF/AAF Package
  *
@@ -32,6 +32,48 @@
 
 using namespace std;
 using namespace prodauto;
+
+
+ProjectName::ProjectName()
+: DatabaseObject()
+{}
+
+ProjectName::ProjectName(string name_)
+: DatabaseObject(), name(name_)
+{}
+
+ProjectName::ProjectName(const ProjectName& projectName)
+: DatabaseObject(projectName), name(projectName.name)
+{}
+
+ProjectName::~ProjectName()
+{}
+
+ProjectName& ProjectName::operator=(const std::string& nm)
+{
+    name = nm;
+    wasLoaded(0); // reset to no persistent
+    
+    return *this;
+}
+
+ProjectName& ProjectName::operator=(const ProjectName& nm)
+{
+    name = nm.name;
+    wasLoaded(nm.isPersistent() ? nm.getDatabaseID() : 0);
+    
+    return *this;
+}
+
+bool ProjectName::operator==(const ProjectName& pn) const
+{
+    return name == pn.name;
+}
+
+bool ProjectName::operator<(const ProjectName& pn) const
+{
+    return name < pn.name;
+}
 
 
 UserComment::UserComment()
@@ -71,7 +113,7 @@ string Package::toString()
     packageStr << "Name = " << name << endl;
     packageStr << "UID = " << getUMIDString(uid) << endl;
     packageStr << "Creation date = " << getTimestampString(creationDate) << endl;
-    packageStr << "Avid project name = " << avidProjectName << endl;
+    packageStr << "Project name = " << projectName.name << endl;
     packageStr << "Tracks:" << endl;
     
     vector<Track*>::const_iterator iter;

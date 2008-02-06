@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorder.h,v 1.2 2007/10/26 15:50:10 john_f Exp $
+ * $Id: IngexRecorder.h,v 1.3 2008/02/06 16:58:59 john_f Exp $
  *
  * Class to manage an individual recording.
  *
@@ -56,7 +56,7 @@ class IngexRecorder;
 Data passed when invoking record thread.
 */
 //typedef struct {
-//    //int         invoke_card;
+//    //int         invoke_channel;
 //    IngexRecorder * p_rec;
 //    RecordOptions * p_opt;
 //} ThreadInvokeArg;
@@ -89,7 +89,7 @@ public:
     ~IngexRecorder();
 
     void Setup(
-                bool card_enable[],
+                bool channel_enable[],
                 bool trk_enable[],
                 const char * project,
                 const char * description,
@@ -132,7 +132,8 @@ private:
     // May be better to return a unique ptr for thread safety
     prodauto::Recorder * Recorder() const { return mRecorder.get(); }
 
-    bool GetDbInfo(const std::vector<std::string> & tapes);
+    bool GetDbInfo(const std::vector<std::string> & tapes,
+        const std::string & project, prodauto::ProjectName & project_name);
     void DoCompletionCallback() { if(mpCompletionCallback) (*mpCompletionCallback)(this); }
 
 // Per-recording data
@@ -155,9 +156,9 @@ private:
     framecount_t mTargetDuration;           ///< To signal when capture should stop
     ACE_Thread_Mutex mDurationMutex;
 
-// Per-card data
+// Per-channel data
 // Enables
-    bool mCardEnable[MAX_CHANNELS];
+    bool mChannelEnable[MAX_CHANNELS];
     bool mTrackEnable[MAX_CHANNELS * 5];
 
 public:

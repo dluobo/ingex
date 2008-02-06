@@ -535,6 +535,7 @@ bool LocalIngexPlayer::start(vector<string> mxfFilenames, vector<bool>& opended)
     bool haveReset = false;
     MXFFileSource* mxfSource = 0;
     LocalIngexPlayerState* currentPlayState = 0;
+    int swScale = 1;
     
     try
     {
@@ -628,6 +629,27 @@ bool LocalIngexPlayer::start(vector<string> mxfFilenames, vector<bool>& opended)
             else
             {
                 mediaSource = mxfs_get_media_source(mxfSource);
+                
+                // set software scaling to 2 if the material dimensions exceeds 1024
+                if (swScale == 1)
+                {
+                    const StreamInfo* streamInfo;
+                    int i;
+                    int numStreams = msc_get_num_streams(mediaSource);
+                    for (i = 0; i < numStreams; i++)
+                    {
+                        if (msc_get_stream_info(mediaSource, i, &streamInfo))
+                        {
+                            if (streamInfo->type == PICTURE_STREAM_TYPE &&
+                                (streamInfo->width > 1024 || streamInfo->height > 1024))
+                            {
+                                swScale = 2;
+                                break;
+                            }
+                        }
+                    }
+                }
+                
                 opended.push_back(true);
                 newPlayState->inputsPresent.push_back(true);
                 atLeastOneInputOpened = true;
@@ -698,7 +720,8 @@ bool LocalIngexPlayer::start(vector<string> mxfFilenames, vector<bool>& opended)
             switch (_actualOutputType)
             {
                 case X11_OUTPUT:
-                    CHK_OTHROW_MSG(xsk_open(20,_disableX11OSD, &_pixelAspectRatio, &_monitorAspectRatio, _scale, &x11Sink),
+                    CHK_OTHROW_MSG(xsk_open(20,_disableX11OSD, &_pixelAspectRatio, &_monitorAspectRatio, 
+                        _scale, swScale, &x11Sink),
                         ("Failed to open X11 display sink\n"));
                     xsk_register_window_listener(x11Sink, &_x11WindowListener);
                     xsk_register_keyboard_listener(x11Sink, &_x11KeyListener);
@@ -711,7 +734,8 @@ bool LocalIngexPlayer::start(vector<string> mxfFilenames, vector<bool>& opended)
                     break;
         
                 case X11_XV_OUTPUT:
-                    CHK_OTHROW_MSG(xvsk_open(20, _disableX11OSD, &_pixelAspectRatio, &_monitorAspectRatio, _scale, &x11XVSink),
+                    CHK_OTHROW_MSG(xvsk_open(20, _disableX11OSD, &_pixelAspectRatio, &_monitorAspectRatio, 
+                        _scale, swScale, &x11XVSink),
                         ("Failed to open X11 XV display sink\n"));
                     xvsk_register_window_listener(x11XVSink, &_x11WindowListener);
                     xvsk_register_keyboard_listener(x11XVSink, &_x11KeyListener);
@@ -732,7 +756,7 @@ bool LocalIngexPlayer::start(vector<string> mxfFilenames, vector<bool>& opended)
                 case DUAL_DVS_X11_OUTPUT:
                     CHK_OTHROW_MSG(dusk_open(20, VITC_AS_SDI_VITC, 0, 12, 0, _disableSDIOSD, 
                         _disableX11OSD, &_pixelAspectRatio, 
-                        &_monitorAspectRatio, _scale, 1, &dualSink),
+                        &_monitorAspectRatio, _scale, swScale, 1, &dualSink),
                         ("Failed to open dual DVS and X11 display sink\n"));
                     dusk_register_window_listener(dualSink, &_x11WindowListener);
                     dusk_register_keyboard_listener(dualSink, &_x11KeyListener);
@@ -744,7 +768,7 @@ bool LocalIngexPlayer::start(vector<string> mxfFilenames, vector<bool>& opended)
                 case DUAL_DVS_X11_XV_OUTPUT:
                     CHK_OTHROW_MSG(dusk_open(20, VITC_AS_SDI_VITC, 0, 12, 1, _disableSDIOSD, 
                         _disableX11OSD, &_pixelAspectRatio, 
-                        &_monitorAspectRatio, _scale, 1, &dualSink),
+                        &_monitorAspectRatio, _scale, swScale, 1, &dualSink),
                         ("Failed to open dual DVS and X11 XV display sink\n"));
                     dusk_register_window_listener(dualSink, &_x11WindowListener);
                     dusk_register_keyboard_listener(dualSink, &_x11KeyListener);
@@ -784,7 +808,8 @@ bool LocalIngexPlayer::start(vector<string> mxfFilenames, vector<bool>& opended)
             if (_videoSwitch)
             {
                 VideoSwitchSink* videoSwitch;
-                CHK_OTHROW(qvs_create_video_switch(newPlayState->mediaSink, 1, _applyQuadSplitFilter, &videoSwitch));
+                CHK_OTHROW(qvs_create_video_switch(newPlayState->mediaSink, QUAD_SPLIT_VIDEO_SWITCH, _applyQuadSplitFilter, 
+                    0, 0, -1, -1, -1, &videoSwitch));
                 newPlayState->mediaSink = vsw_get_media_sink(videoSwitch);
             }
             

@@ -117,6 +117,7 @@ static int append_source(MediaSourceList* sourceList, MediaSource** source)
 {
     MediaSourceElement* ele = sourceList;
     MediaSourceElement* newEle = NULL;
+    int i;
 
     /* handle first appended source */
     if (ele->source == NULL)
@@ -144,7 +145,18 @@ static int append_source(MediaSourceList* sourceList, MediaSource** source)
     /* append source and take ownership */
     ele->next = newEle;
     newEle->source = *source;
+    
+    /* get num streams and disabled count */
     newEle->numStreams = msc_get_num_streams(*source);
+    newEle->disabledStreamCount = 0;
+    for (i = 0; i < newEle->numStreams; i++)
+    {
+        if (msc_stream_is_disabled(newEle->source, i))
+        {
+            newEle->disabledStreamCount++;
+        }
+    }
+    
     *source = NULL;
     return 1;
 }

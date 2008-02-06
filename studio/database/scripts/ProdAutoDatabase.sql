@@ -151,6 +151,16 @@ CREATE TABLE Take
 
 -- PACKAGE
 
+CREATE SEQUENCE pjn_id_seq;
+CREATE TABLE ProjectName
+(
+    pjn_identifier INTEGER DEFAULT nextval('pjn_id_seq') NOT NULL,
+    pjn_name VARCHAR(256) NOT NULL,
+    CONSTRAINT pjn_key UNIQUE (pjn_name),
+    CONSTRAINT pjn_pkey PRIMARY KEY (pjn_identifier)
+) WITHOUT OIDS;
+
+
 CREATE TABLE EssenceDescriptorType
 (
     edt_identifier INTEGER NOT NULL,
@@ -206,12 +216,13 @@ CREATE TABLE Package
     pkg_uid CHAR(64) NOT NULL,
     pkg_name VARCHAR(256),
     pkg_creation_date TIMESTAMP WITHOUT TIME ZONE NOT NULL,
-    pkg_avid_project_name VARCHAR(256),
+    pkg_project_name_id INTEGER,
     pkg_descriptor_id INTEGER DEFAULT NULL, -- SourcePackage only
     pkg_source_config_name VARCHAR(256) DEFAULT NULL, -- file SourcePackage only
     CONSTRAINT pkg_uid_key UNIQUE (pkg_uid),
     CONSTRAINT pkg_descriptor_fkey FOREIGN KEY (pkg_descriptor_id) REFERENCES EssenceDescriptor (eds_identifier)
         ON DELETE SET NULL,
+    CONSTRAINT pkg_project_name_fkey FOREIGN KEY (pkg_project_name_id) REFERENCES ProjectName (pjn_identifier),
     CONSTRAINT pkg_pkey PRIMARY KEY (pkg_identifier)
 ) WITHOUT OIDS;
 
@@ -841,6 +852,13 @@ INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (9, 'MJPEG 10:1m')
 INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (10, 'IMX-30');
 INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (11, 'IMX-40');
 INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (12, 'IMX-50');
+INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (13, 'DNX-36p');
+INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (14, 'DNX-120p');
+INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (15, 'DNX-185p');
+INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (16, 'DNX-120i');
+INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (17, 'DNX-185i');
+INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (20, 'DVD');
+INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (21, 'MOV');
 
 
 INSERT INTO RecorderParameterType (rpt_identifier, rpt_name) VALUES (1, 'Any');

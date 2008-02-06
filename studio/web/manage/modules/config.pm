@@ -1,5 +1,5 @@
 #
-# $Id: config.pm,v 1.1 2007/09/11 14:08:47 stuart_hc Exp $
+# $Id: config.pm,v 1.2 2008/02/06 16:59:14 john_f Exp $
 #
 # 
 #
@@ -42,6 +42,8 @@ BEGIN
         %ingexConfig
         &get_all_avid_aaf_export_dirs
         &get_avid_aaf_export_dir
+        &get_all_directors_cut_dbs
+        &get_directors_cut_db
     );
 }
 
@@ -101,6 +103,8 @@ sub load_config
                 if ($ingexConfig{"avid_aaf_export_dir"});
             ($ingexConfig{"avid_aaf_prefix"}) = ($ingexConfig{"avid_aaf_prefix"} =~ /(.*)/)
                 if ($ingexConfig{"avid_aaf_prefix"});
+            ($ingexConfig{"directors_cut_db"}) = ($ingexConfig{"directors_cut_db"} =~ /(.*)/)
+                if ($ingexConfig{"directors_cut_db"});
             
             ($ingexConfig{"default_material_rows"}) = ($ingexConfig{"default_material_rows"} =~ /(.*)/)
                 if ($ingexConfig{"default_material_rows"});
@@ -143,6 +147,39 @@ sub get_avid_aaf_export_dir
         if ($name eq $targetName)
         {
             return (defined $dir) ? $dir : "";
+        }
+    }
+    
+    return undef;
+}
+
+
+sub get_all_directors_cut_dbs
+{
+    my @pairs = split(/\s*\,\s*/, $ingexConfig{"directors_cut_db"});
+
+    my @dcDBs;
+    foreach my $pair (@pairs)
+    {
+        my ($name, $filename) = split(/\s*\|\s*/, $pair);
+        push(@dcDBs, [$name, $filename]);
+    }
+    
+    return @dcDBs;
+}
+
+sub get_directors_cut_db
+{
+    my ($targetName) = @_;
+    
+    my @pairs = split(/\s*\,\s*/, $ingexConfig{"directors_cut_db"});
+    
+    foreach my $pair (@pairs)
+    {
+        my ($name, $filename) = split(/\s*\|\s*/, $pair);
+        if ($name eq $targetName)
+        {
+            return (defined $filename) ? $filename : "";
         }
     }
     

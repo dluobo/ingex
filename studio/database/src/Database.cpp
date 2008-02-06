@@ -1,5 +1,5 @@
 /*
- * $Id: Database.cpp,v 1.1 2007/09/11 14:08:38 stuart_hc Exp $
+ * $Id: Database.cpp,v 1.2 2008/02/06 16:59:06 john_f Exp $
  *
  * Provides access to the data in the database
  *
@@ -2666,6 +2666,164 @@ int Database::deleteTranscodes(std::vector<int>& statuses, Interval timeBeforeNo
 }
 
 
+#define SQL_GET_PROJECT_NAME \
+" \
+    SELECT \
+        pjn_identifier, \
+        pjn_name \
+    FROM ProjectName \
+    WHERE \
+        pjn_name = ? \
+"
+
+#define SQL_INSERT_PROJECT_NAME \
+" \
+    INSERT INTO ProjectName \
+    ( \
+        pjn_identifier, \
+        pjn_name \
+    ) \
+    VALUES \
+    (?, ?) \
+"
+
+#define SQL_GET_ALL_PROJECT_NAMES \
+" \
+    SELECT \
+        pjn_identifier, \
+        pjn_name \
+    FROM ProjectName \
+"
+
+#define SQL_DELETE_PROJECT_NAME \
+" \
+    DELETE FROM ProjectName WHERE pjn_identifier = ? \
+"
+
+
+
+ProjectName Database::loadOrCreateProjectName(string name, Transaction* transaction)
+{
+    if (name.empty())
+    {
+        PA_LOGTHROW(DBException, ("Project name is empty"));
+    }
+    
+    auto_ptr<Connection> mConnection;
+    Connection* connection = transaction;
+    if (connection == 0)
+    {
+        mConnection = auto_ptr<Connection>(getConnection());
+        connection = mConnection.get();
+    }
+    
+    ProjectName projectName;
+    projectName.name = name;
+
+    // try load the project name
+    START_QUERY_BLOCK
+    {
+        auto_ptr<odbc::PreparedStatement> prepStatement(connection->prepareStatement(SQL_GET_PROJECT_NAME));
+        prepStatement->setString(1, name);
+        
+        odbc::ResultSet* result = prepStatement->executeQuery();
+        if (result->next())
+        {
+            projectName.wasLoaded(result->getInt(1));
+            projectName.name = result->getString(2);
+            return projectName;
+        }
+    }
+    END_QUERY_BLOCK("Failed to load project name")
+    
+    
+    // insert a new project name
+    START_UPDATE_BLOCK
+    {
+        auto_ptr<odbc::PreparedStatement> prepStatement;
+        long nextDatabaseID = 0;
+        int paramIndex = 1;
+        
+        // insert
+        prepStatement = auto_ptr<odbc::PreparedStatement>(connection->prepareStatement(SQL_INSERT_PROJECT_NAME));
+        nextDatabaseID = getNextDatabaseID(connection, "pjn_id_seq");
+        prepStatement->setInt(paramIndex++, nextDatabaseID);
+        connection->registerCommitListener(nextDatabaseID, &projectName);
+        
+        prepStatement->setString(paramIndex++, projectName.name);
+
+        if (prepStatement->executeUpdate() != 1)
+        {
+            PA_LOGTHROW(DBException, ("No inserts/updates when saving project name"));
+        }
+        
+        connection->commit();
+    }
+    END_UPDATE_BLOCK("Failed to save project name")
+    
+    return projectName;
+}
+
+vector<ProjectName> Database::loadProjectNames()
+{
+    auto_ptr<Connection> connection(getConnection());
+    vector<ProjectName> allProjectNames;
+    
+    START_QUERY_BLOCK
+    {
+        auto_ptr<odbc::Statement> statement(connection->createStatement());
+        
+        odbc::ResultSet* result = statement->executeQuery(SQL_GET_ALL_PROJECT_NAMES);
+        while (result->next())
+        {
+            ProjectName projectName;
+            
+            projectName.wasLoaded(result->getInt(1));
+            projectName.name = result->getString(2);
+
+            allProjectNames.push_back(projectName);
+        }
+    }
+    END_QUERY_BLOCK("Failed to load all project names")
+    
+    return allProjectNames;
+}
+
+void Database::deleteProjectName(ProjectName* projectName, Transaction* transaction)
+{
+    if (!projectName->isPersistent())
+    {
+        // project name is not persisted in the database
+        return;
+    }
+    
+    auto_ptr<Connection> mConnection;
+    Connection* connection = transaction;
+    if (connection == 0)
+    {
+        mConnection = auto_ptr<Connection>(getConnection());
+        connection = mConnection.get();
+    }
+    
+    START_UPDATE_BLOCK
+    {
+        auto_ptr<odbc::PreparedStatement> prepStatement;
+        
+        prepStatement = auto_ptr<odbc::PreparedStatement>(connection->prepareStatement(SQL_DELETE_PROJECT_NAME));
+        prepStatement->setInt(1, projectName->getDatabaseID());
+        
+        connection->registerCommitListener(0, projectName);
+
+        if (prepStatement->executeUpdate() != 1)
+        {
+            PA_LOGTHROW(DBException, ("No updates when deleting project name"));
+        }
+        
+        connection->commit();
+    }
+    END_UPDATE_BLOCK("Failed to delete project name")
+}
+
 
 
 // bypassing ODBC Timestamp processing because for pkg_creation_date because
@@ -2677,10 +2835,12 @@ int Database::deleteTranscodes(std::vector<int>& statuses, Interval timeBeforeNo
         pkg_uid, \
         pkg_name, \
         pkg_creation_date::varchar, \
-        pkg_avid_project_name, \
+        pkg_project_name_id, \
+        pjn_name, \
         pkg_descriptor_id, \
         pkg_source_config_name \
     FROM Package \
+        LEFT OUTER JOIN ProjectName ON (pkg_project_name_id = pjn_identifier) \
     WHERE \
         pkg_name = ? AND \
         pkg_descriptor_id IS NOT NULL \
@@ -2695,10 +2855,12 @@ int Database::deleteTranscodes(std::vector<int>& statuses, Interval timeBeforeNo
         pkg_uid, \
         pkg_name, \
         pkg_creation_date::varchar, \
-        pkg_avid_project_name, \
+        pkg_project_name_id, \
+        pjn_name, \
         pkg_descriptor_id, \
         pkg_source_config_name \
     FROM Package \
+        LEFT OUTER JOIN ProjectName ON (pkg_project_name_id = pjn_identifier) \
     WHERE \
         pkg_identifier = ? \
 "
@@ -2712,10 +2874,12 @@ int Database::deleteTranscodes(std::vector<int>& statuses, Interval timeBeforeNo
         pkg_uid, \
         pkg_name, \
         pkg_creation_date::varchar, \
-        pkg_avid_project_name, \
+        pkg_project_name_id, \
+        pjn_name, \
         pkg_descriptor_id, \
         pkg_source_config_name \
     FROM Package \
+        LEFT OUTER JOIN ProjectName ON (pkg_project_name_id = pjn_identifier) \
     WHERE \
         pkg_uid = ? \
 "
@@ -2931,7 +3095,7 @@ void Database::loadPackage(Connection* connection, odbc::ResultSet* result, Pack
     TapeEssenceDescriptor* tapeEssDescriptor;
     LiveEssenceDescriptor* liveEssDescriptor;
 
-    essenceDescDatabaseID = result->getInt(6);
+    essenceDescDatabaseID = result->getInt(7);
     if (result->wasNull())
     {
         // material package
@@ -2951,11 +3115,15 @@ void Database::loadPackage(Connection* connection, odbc::ResultSet* result, Pack
     newPackage->uid = getUMID(result->getString(2));
     newPackage->name = result->getString(3);
     newPackage->creationDate = getTimestampFromODBC(result->getString(4));
-    newPackage->avidProjectName = result->getString(5);
+    newPackage->projectName.name = result->getString(6);
+    if (!result->wasNull())
+    {
+        newPackage->projectName.wasLoaded(result->getInt(5));
+    }
     
     if (sourcePackage != 0)
     {
-        sourcePackage->sourceConfigName = result->getString(7);
+        sourcePackage->sourceConfigName = result->getString(8);
 
         auto_ptr<odbc::PreparedStatement> prepStatement(connection->prepareStatement(SQL_GET_ESSENCE_DESCRIPTOR));
         prepStatement->setLong(1, essenceDescDatabaseID);
@@ -3078,7 +3246,7 @@ void Database::loadPackage(Connection* connection, odbc::ResultSet* result, Pack
         pkg_uid, \
         pkg_name, \
         pkg_creation_date, \
-        pkg_avid_project_name, \
+        pkg_project_name_id, \
         pkg_descriptor_id, \
         pkg_source_config_name \
     ) \
@@ -3092,7 +3260,7 @@ void Database::loadPackage(Connection* connection, odbc::ResultSet* result, Pack
     SET pkg_uid = ?, \
         pkg_name = ?, \
         pkg_creation_date = ?, \
-        pkg_avid_project_name = ?, \
+        pkg_project_name_id = ?, \
         pkg_descriptor_id = ?, \
         pkg_source_config_name = ? \
     WHERE \
@@ -3235,6 +3403,14 @@ void Database::savePackage(Package* package, Transaction* transaction)
         long nextDescriptorDatabaseID = 0;
         int paramIndex = 1;
         
+        // save the package project name if not already done so
+        
+        if (!package->projectName.isPersistent() && !package->projectName.name.empty())
+        {
+            package->projectName = loadOrCreateProjectName(package->projectName.name, connection);
+        }
+        
+        
         // save the source package essence descriptor
             
         if (package->getType() == SOURCE_PACKAGE)
@@ -3350,7 +3526,7 @@ void Database::savePackage(Package* package, Transaction* transaction)
         prepStatement->setString(paramIndex++, getUMIDString(package->uid));
         SET_OPTIONAL_VARCHAR(prepStatement, paramIndex++, package->name);
         prepStatement->setString(paramIndex++, getODBCTimestamp(package->creationDate));
-        SET_OPTIONAL_VARCHAR(prepStatement, paramIndex++, package->avidProjectName);
+        SET_OPTIONAL_INT(package->projectName.isPersistent(), prepStatement, paramIndex++, package->projectName.getDatabaseID());
         if (package->getType() == MATERIAL_PACKAGE)
         {
             prepStatement->setNull(paramIndex++, SQL_INTEGER);

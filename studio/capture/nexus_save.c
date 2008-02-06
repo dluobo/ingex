@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_save.c,v 1.1 2007/10/26 16:54:19 john_f Exp $
+ * $Id: nexus_save.c,v 1.2 2008/02/06 16:59:01 john_f Exp $
  *
  * Utility to store video frames from dvs_sdi ring buffer to disk files
  *
@@ -40,6 +40,10 @@
 
 #include "nexus_control.h"
 
+#ifdef USE_FFMPEG
+#include "../common/ffmpeg_encoder.h"
+#endif
+
 
 int verbose = 1;
 
@@ -61,10 +65,15 @@ static char *framesToStr(int tc, char *s)
 
 static void usage_exit(void)
 {
-    fprintf(stderr, "Usage: save_mem [options] videofile\n");
+    fprintf(stderr, "Usage: save_mem [options] videofile [audiofile]\n");
     fprintf(stderr, "\n");
-    fprintf(stderr, "    -c card    save video on specified card [default 0]\n");
+    fprintf(stderr, "    -c channel save video on specified channel [default 0]\n");
+#ifdef USE_FFMPEG
+    fprintf(stderr, "    -r res     encoder resolution (JPEG,DV25,DV50,IMX30,IMX40,IMX50,\n");
+	fprintf(stderr, "               DNX36p,DNX120p,DNX185p,DNX120i,DNX185i,DMIH264) [default is uncompressed]\n");
+#endif
     fprintf(stderr, "    -s         save the secondary (4:2:0) video frame\n");
+    fprintf(stderr, "    -q         quiet operation (fewer messages)\n");
 	exit(1);
 }
 
@@ -73,9 +82,12 @@ extern int main(int argc, char *argv[])
 	int				shm_id, control_id;
 	uint8_t			*ring[MAX_CHANNELS];
 	NexusControl	*pctl = NULL;
-	int				cardnum = 0, alt_video = 0;
-	char			*video_file = NULL;
-	FILE			*outfp = NULL;
+	int				channelnum = 0, sec_video = 0;
+	char			*video_file = NULL, *audio_file = NULL;
+	FILE			*outfp = NULL, *audiofp = NULL;
+#ifdef USE_FFMPEG
+	ffmpeg_encoder_resolution_t		res = (ffmpeg_encoder_resolution_t)-1;
+#endif
 
 	int n;
 	for (n = 1; n < argc; n++)
@@ -87,24 +99,62 @@ extern int main(int argc, char *argv[])
 		else if (strcmp(argv[n], "-c") == 0)
 		{
 			if (n+1 >= argc ||
-				sscanf(argv[n+1], "%d", &cardnum) != 1 ||
-				cardnum > 3 || cardnum < 0)
+				sscanf(argv[n+1], "%d", &channelnum) != 1 ||
+				channelnum > 7 || channelnum < 0)
 			{
-				fprintf(stderr, "-c requires integer card number {0,1,2,3}\n");
+				fprintf(stderr, "-c requires integer channel number {0...7}\n");
 				return 1;
 			}
 			n++;
 		}
-		else if (strcmp(argv[n], "-a") == 0)
+#ifdef USE_FFMPEG
+		else if (strcmp(argv[n], "-r") == 0)
 		{
-			alt_video = 1;
+			if (strcmp(argv[n+1], "JPEG") == 0)
+				res = FF_ENCODER_RESOLUTION_JPEG;
+			if (strcmp(argv[n+1], "DV25") == 0)
+				res = FF_ENCODER_RESOLUTION_DV25;
+			if (strcmp(argv[n+1], "DV50") == 0)
+				res = FF_ENCODER_RESOLUTION_DV50;
+			if (strcmp(argv[n+1], "IMX30") == 0)
+				res = FF_ENCODER_RESOLUTION_IMX30;
+			if (strcmp(argv[n+1], "IMX40") == 0)
+				res = FF_ENCODER_RESOLUTION_IMX40;
+			if (strcmp(argv[n+1], "IMX50") == 0)
+				res = FF_ENCODER_RESOLUTION_IMX50;
+			if (strcmp(argv[n+1], "DNX36p") == 0)
+				res = FF_ENCODER_RESOLUTION_DNX36p;
+			if (strcmp(argv[n+1], "DNX120p") == 0)
+				res = FF_ENCODER_RESOLUTION_DNX120p;
+			if (strcmp(argv[n+1], "DNX185p") == 0)
+				res = FF_ENCODER_RESOLUTION_DNX185p;
+			if (strcmp(argv[n+1], "DNX120i") == 0)
+				res = FF_ENCODER_RESOLUTION_DNX120i;
+			if (strcmp(argv[n+1], "DNX185i") == 0)
+				res = FF_ENCODER_RESOLUTION_DNX185i;
+			if (strcmp(argv[n+1], "DMIH264") == 0)
+				res = FF_ENCODER_RESOLUTION_DMIH264;
+			if (res == -1)
+				usage_exit();
+			n++;
 		}
-		else if (strcmp(argv[n], "-h") == 0 || strcmp(argv[n], "--help") == 0)
-		{
+#endif
+		else if (strcmp(argv[n], "-s") == 0) {
+			sec_video = 1;
+		}
+		else if (strcmp(argv[n], "-h") == 0 || strcmp(argv[n], "--help") == 0) {
 			usage_exit();
 		}
 		else {
-			video_file = argv[n];
+			if (video_file == NULL) {
+				video_file = argv[n];
+			}
+			else if (audio_file == NULL) {
+				audio_file = argv[n];
+			}
+			else {
+				usage_exit();
+			}
 		}
 	}
 
@@ -131,19 +181,19 @@ extern int main(int argc, char *argv[])
 		printf("connected to pctl\n");
 
 	if (verbose)
-		printf("  cards=%d elementsize=%d ringlen=%d\n",
-				pctl->cards,
+		printf("  channels=%d elementsize=%d ringlen=%d\n",
+				pctl->channels,
 				pctl->elementsize,
 				pctl->ringlen);
 
-	if (cardnum+1 > pctl->cards)
+	if (channelnum+1 > pctl->channels)
 	{
-		printf("  cardnum not available\n");
+		printf("  channelnum not available\n");
 		return 1;
 	}
 
 	int i;
-	for (i = 0; i < pctl->cards; i++)
+	for (i = 0; i < pctl->channels; i++)
 	{
 		while (1)
 		{
@@ -154,11 +204,11 @@ extern int main(int argc, char *argv[])
 		}
 		ring[i] = (uint8_t*)shmat(shm_id, NULL, SHM_RDONLY);
 		if (verbose)
-			printf("  attached to card[%d]\n", i);
+			printf("  attached to channel[%d]\n", i);
 	}
 
 	NexusBufCtl *pc;
-	pc = &pctl->card[cardnum];
+	pc = &pctl->channel[channelnum];
 	int tc, ltc;
 	int last_saved = -1;
 	int width = pctl->width;
@@ -167,47 +217,97 @@ extern int main(int argc, char *argv[])
 	// Default to primary 4:2:2 video
  	int frame_size = width*height*2;
 	int video_offset = 0;
+	int audio_offset = pctl->audio12_offset;
+	int audio_size = pctl->audio_size;
 
-	if (alt_video) {
+	if (sec_video) {
 		// get the alternative video frame (4:2:0 planar)
 		frame_size = width*height*3/2;
 		video_offset = pctl->sec_video_offset;
 	}
 
 	if ((outfp = fopen(video_file, "wb")) == NULL) {
-		perror("fopen for write");
+		perror("fopen for write of video file");
 		return 1;
 	}
+	if (audio_file)
+		if ((audiofp = fopen(audio_file, "wb")) == NULL) {
+			perror("fopen for write of audio file");
+			return 1;
+		}
+
+#ifdef USE_FFMPEG
+	ffmpeg_encoder_t *ffmpeg_encoder = NULL;
+	uint8_t *out = NULL;
+	if (res != -1) {
+		// Initialise ffmpeg encoder
+		if ((ffmpeg_encoder = ffmpeg_encoder_init(res)) == NULL) {
+			fprintf(stderr, "ffmpeg encoder init failed\n");
+			return 1;
+		}
+
+		out = (uint8_t *)malloc(frame_size);	// worst case compressed size
+	}
+
+#endif
 
 	while (1)
 	{
-		if (last_saved == pc->lastframe)
-		{
-			usleep(20 * 1000);		// 0.020 seconds = 50 times a sec
+		if (last_saved == pc->lastframe) {
+			usleep(2 * 1000);		// 0.020 seconds = 50 times a sec
 			continue;
 		}
 
-		tc = *(int*)(ring[cardnum] + pctl->elementsize *
+		int diff_to_last = pc->lastframe - last_saved;
+		if (diff_to_last != 1) {
+			printf("\ndiff_to_last = %d\n", diff_to_last);
+		}
+
+		tc = *(int*)(ring[channelnum] + pctl->elementsize *
 									(pc->lastframe % pctl->ringlen)
-							+ pctl->tc_offset);
-		ltc = *(int*)(ring[cardnum] + pctl->elementsize *
+							+ pctl->vitc_offset);
+		ltc = *(int*)(ring[channelnum] + pctl->elementsize *
 									(pc->lastframe % pctl->ringlen)
 							+ pctl->ltc_offset);
 
-		if (fwrite(	ring[cardnum] + video_offset +
-								pctl->elementsize *
-								(pc->lastframe % pctl->ringlen),
-					frame_size,
-					1,
-					outfp) != 1) {
-			perror("fwrite");
+		uint8_t *video_frame = ring[channelnum] + video_offset +
+								pctl->elementsize * (pc->lastframe % pctl->ringlen);
+		uint8_t *audio_frame = ring[channelnum] + audio_offset +
+								pctl->elementsize * (pc->lastframe % pctl->ringlen);
+
+#ifdef USE_FFMPEG
+		if (ffmpeg_encoder) {
+			int compressed_size = ffmpeg_encoder_encode(ffmpeg_encoder, video_frame, &out);
+			if ( fwrite(out, compressed_size, 1, outfp) != 1 ) {
+					perror("fwrite video");
+					return(1);
+			}
+		}
+		else {
+			if (fwrite(video_frame, frame_size, 1, outfp) != 1) {
+				perror("fwrite video");
+				return 1;					
+			}
+			if (fwrite(audio_frame, audio_size, 1, audiofp) != 1) {
+				perror("fwrite audio");
+				return 1;					
+			}
+		}
+#else
+		if (fwrite(video_frame, frame_size, 1, outfp) != 1) {
+			perror("fwrite video");
 			return 1;					
 		}
+		if (fwrite(audio_frame, audio_size, 1, audiofp) != 1) {
+			perror("fwrite audio");
+			return 1;					
+		}
+#endif
 
 		if (verbose) {
 			char tcstr[32], ltcstr[32];
 			printf("\rcam%d lastframe=%d  tc=%10d  %s   ltc=%11d  %s ",
-					cardnum, pc->lastframe,
+					channelnum, pc->lastframe,
 					tc, framesToStr(tc, tcstr), ltc, framesToStr(ltc, ltcstr));
 			fflush(stdout);
 		}

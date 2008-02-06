@@ -4,13 +4,14 @@
 
 #include "shared_mem_source.h"
 #include "video_conversion.h"
+#include "source_event.h"
 #include "logging.h"
 #include "macros.h"
 
 
 #if defined(DISABLE_SHARED_MEM_SOURCE)
 
-int shared_mem_open(const char *card_name, MediaSource** source)
+int shared_mem_open(const char *channel_name, MediaSource** source)
 {
     return 0;
 }
@@ -41,8 +42,9 @@ typedef struct
 typedef struct
 {
     MediaSource mediaSource;
-    int card;
+    int channel;
     int primary;                    // boolean: primary video buffer or secondary
+    CaptureFormat captureFormat;
 
     TrackInfo tracks[MAX_TRACKS];
     int numTracks;
@@ -50,6 +52,9 @@ typedef struct
     int64_t position;
     
     int prevLastFrame;
+
+    char sourceName[64];
+    int sourceNameUpdate;
 } SharedMemSource;
 
 
@@ -58,7 +63,7 @@ static uint8_t *ring[4];
 static NexusControl    *pctl = NULL;
 static int ring_connected = 0;
 
-static int connect_to_shared_memory(int cardnum)
+static int connect_to_shared_memory(int channelnum)
 {
     if (ring_connected)
         return 1;
@@ -75,7 +80,7 @@ static int connect_to_shared_memory(int cardnum)
     int try = 0;
     while (1)
     {
-        control_id = shmget(9, sizeof(*pctl), 0444);
+        control_id = shmget(9, sizeof(*pctl), 0666);
         if (control_id != -1)
             break;
         try++;
@@ -84,35 +89,35 @@ static int connect_to_shared_memory(int cardnum)
         usleep(20 * 1000);
     }
 
-    pctl = (NexusControl*)shmat(control_id, NULL, SHM_RDONLY);
+    pctl = (NexusControl*)shmat(control_id, NULL, 0 /* read/write */);
     if (verbose)
         printf("connected to pctl\n");
 
     if (verbose)
-        printf("  cards=%d elementsize=%d ringlen=%d\n",
-                pctl->cards,
+        printf("  channels=%d elementsize=%d ringlen=%d\n",
+                pctl->channels,
                 pctl->elementsize,
                 pctl->ringlen);
 
-    if (cardnum+1 > pctl->cards)
+    if (channelnum+1 > pctl->channels)
     {
-        printf("  cardnum not available\n");
+        printf("  channelnum not available\n");
         return 0;
     }
 
     int i;
-    for (i = 0; i < pctl->cards; i++)
+    for (i = 0; i < pctl->channels; i++)
     {
         while (1)
         {
-            shm_id = shmget(10 + i, pctl->elementsize, 0444);
+            shm_id = shmget(10 + i, pctl->elementsize, 0666);
             if (shm_id != -1)
                 break;
             usleep(20 * 1000);
         }
-        ring[i] = (uint8_t*)shmat(shm_id, NULL, SHM_RDONLY);
+        ring[i] = (uint8_t*)shmat(shm_id, NULL, 0 /* read/write */);
         if (verbose)
-            printf("  attached to card[%d]\n", i);
+            printf("  attached to channel[%d] '%s'\n", i, pctl->channel[i].source_name);
     }
 
     ring_connected = 1;
@@ -183,39 +188,39 @@ static int shm_stream_is_disabled(void* data, int streamIndex)
 
 static uint8_t *rec_ring_video(SharedMemSource *source, int lastFrame)
 {
-    int card = source->card;
+    int channel = source->channel;
 
     int video_offset = 0;
     if (! source->primary)
         video_offset = pctl->audio12_offset + pctl->audio_size;
 
-    return ring[card] + video_offset +
+    return ring[channel] + video_offset +
                 pctl->elementsize * (lastFrame % pctl->ringlen);
 }
 
 static uint8_t *rec_ring_audio(SharedMemSource *source, int track, int lastFrame)
 {
-    int card = source->card;
+    int channel = source->channel;
 
     // tracks 0 and 1 are mixed together at audio12_offset
     if (track == 0 || track == 1)
-        return ring[card] + pctl->audio12_offset +
+        return ring[channel] + pctl->audio12_offset +
                 pctl->elementsize * (lastFrame % pctl->ringlen);
 
     // tracks 2 and 3 are mixed together at audio34_offset
-    return ring[card] + pctl->audio34_offset +
+    return ring[channel] + pctl->audio34_offset +
                 pctl->elementsize * (lastFrame % pctl->ringlen);
 }
 
 static uint8_t *rec_ring_timecode(SharedMemSource *source, int track, int lastFrame)
 {
-    int card = source->card;
+    int channel = source->channel;
 
-    int offset = pctl->tc_offset;         // VITC
+    int offset = pctl->vitc_offset;         // VITC
     if (track == 1)
         offset = pctl->ltc_offset;        // LTC
 
-    return ring[card] + pctl->elementsize * (lastFrame % pctl->ringlen) + offset;
+    return ring[channel] + pctl->elementsize * (lastFrame % pctl->ringlen) + offset;
 }
 
 static void dvsaudio32_to_16bitmono(int channel, uint8_t *buf32, uint8_t *buf16)
@@ -247,16 +252,17 @@ static int shm_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceLis
     int lastFrame;
     int waitCount = 0;
     const int sleepUSec = 100;
-
+    int nameUpdated;
+    
     /* wait until a new frame is available in the ring buffer */
-    lastFrame = pctl->card[source->card].lastframe - 1;
+    lastFrame = pctl->channel[source->channel].lastframe - 1;
     waitCount = 0;
     while (lastFrame == source->prevLastFrame && waitCount < 60000 / sleepUSec)
     {
         usleep(sleepUSec);
         waitCount++;
         
-        lastFrame = pctl->card[source->card].lastframe - 1;
+        lastFrame = pctl->channel[source->channel].lastframe - 1;
     }
     if (lastFrame == source->prevLastFrame && waitCount >= 60000 / sleepUSec)
     {
@@ -266,6 +272,24 @@ static int shm_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceLis
     source->prevLastFrame = lastFrame;
     
     
+    /* check for updated source name */
+    
+    PTHREAD_MUTEX_LOCK(&pctl->m_source_name_update);
+    
+    nameUpdated = 0;
+    if (pctl->source_name_update != source->sourceNameUpdate)
+    {
+        if (strcmp(pctl->channel[source->channel].source_name, source->sourceName) != 0)
+        {
+            nameUpdated = 1;
+            strncpy(source->sourceName, pctl->channel[source->channel].source_name, sizeof(source->sourceName) - 1);
+        }
+        
+        source->sourceNameUpdate = pctl->source_name_update;
+    }
+    
+    PTHREAD_MUTEX_UNLOCK(&pctl->m_source_name_update);
+
     // Track numbers are hard-coded by setup code in shared_mem_open()
     // 0 - video
     // 1 - audio 1
@@ -278,13 +302,26 @@ static int shm_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceLis
     for (i = 0; i < source->numTracks; i++)
     {
         track = &source->tracks[i];
-
+        
         if (track->isDisabled)
             continue;
 
         if (! sdl_accept_frame(listener, i, frameInfo))
             continue;
 
+        /* calculate current frame size for events stream */
+        if (track->streamInfo.type == EVENT_STREAM_TYPE)
+        {
+            if (nameUpdated)
+            {
+                track->frameSize = svt_get_buffer_size(1);
+            }
+            else
+            {
+                track->frameSize = svt_get_buffer_size(0);
+            }
+        }
+        
         if (! sdl_allocate_buffer(listener, i, &buffer, track->frameSize))
         {
             /* listener failed to allocate a buffer for us */
@@ -294,22 +331,60 @@ static int shm_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceLis
         /* copy data into buffer */
         if (track->streamInfo.type == PICTURE_STREAM_TYPE)
         {
-            // FIXME: Once the shared mem control structure records the
-            // video format of the primary, decide whether to copy as is:
-            //   memcpy(buffer, rec_ring_video(source), track->frameSize);
-            // or do the following YUV422 -> UYVY conversion:
-
             unsigned char* data = rec_ring_video(source, lastFrame);
-            AVFrame avFrame;
-            avFrame.data[0] = &data[0];
-            avFrame.data[1] = &data[720 * 576];
-            avFrame.data[2] = &data[720 * 576 * 3 / 2];
-
-            avFrame.linesize[0] = 720;
-            avFrame.linesize[1] = 720 / 2;
-            avFrame.linesize[2] = 720 / 2;
-
-            yuv422_to_uyvy(720, 576, 0, &avFrame, buffer);
+            
+            if (source->captureFormat == Format422PlanarYUVShifted)
+            {
+                /* shift picture back up one line */
+                
+                /* Y */
+                memcpy(buffer, &data[track->streamInfo.width], 
+                    track->streamInfo.width * (track->streamInfo.height - 1));
+                memset(&buffer[track->streamInfo.width * (track->streamInfo.height - 1)], 
+                    0x80, track->streamInfo.width);
+                
+                /* U */
+                memcpy(&buffer[track->streamInfo.width * track->streamInfo.height], 
+                    &data[track->streamInfo.width * track->streamInfo.height + track->streamInfo.width / 2], 
+                    track->streamInfo.width * (track->streamInfo.height - 1) / 2);
+                memset(&buffer[track->streamInfo.width * track->streamInfo.height + track->streamInfo.width * (track->streamInfo.height - 1) / 2], 
+                    0x10, track->streamInfo.width / 2);
+                
+                /* V */
+                memcpy(&buffer[track->streamInfo.width * track->streamInfo.height * 3 / 2], 
+                    &data[track->streamInfo.width * track->streamInfo.height * 3 / 2 + track->streamInfo.width / 2], 
+                    track->streamInfo.width * (track->streamInfo.height - 1) / 2);
+                memset(&buffer[track->streamInfo.width * track->streamInfo.height * 3 / 2 + track->streamInfo.width * (track->streamInfo.height - 1) / 2], 
+                    0x10, track->streamInfo.width / 2);
+            }
+            else if (source->captureFormat == Format420PlanarYUVShifted)
+            {
+                /* shift picture back up one line */
+                
+                /* Y */
+                memcpy(buffer, &data[track->streamInfo.width], 
+                    track->streamInfo.width * (track->streamInfo.height - 1));
+                memset(&buffer[track->streamInfo.width * (track->streamInfo.height - 1)], 
+                    0x80, track->streamInfo.width);
+                
+                /* U */
+                memcpy(&buffer[track->streamInfo.width * track->streamInfo.height], 
+                    &data[track->streamInfo.width * track->streamInfo.height + track->streamInfo.width / 2], 
+                    track->streamInfo.width * (track->streamInfo.height - 1) / 4);
+                memset(&buffer[track->streamInfo.width * track->streamInfo.height + track->streamInfo.width * (track->streamInfo.height - 1) / 4], 
+                    0x10, track->streamInfo.width / 2);
+                
+                /* V */
+                memcpy(&buffer[track->streamInfo.width * track->streamInfo.height * 5 / 4], 
+                    &data[track->streamInfo.width * track->streamInfo.height * 5 / 4 + track->streamInfo.width / 2], 
+                    track->streamInfo.width * (track->streamInfo.height - 1) / 4);
+                memset(&buffer[track->streamInfo.width * track->streamInfo.height * 5 / 4 + track->streamInfo.width * (track->streamInfo.height - 1) / 4], 
+                    0x10, track->streamInfo.width / 2);
+            }
+            else
+            {
+                memcpy(buffer, data, track->frameSize);
+            }
         }
 
         if (track->streamInfo.type == SOUND_STREAM_TYPE) {
@@ -328,11 +403,28 @@ static int shm_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceLis
             memcpy(&tc_as_int, rec_ring_timecode(source, i - 5, lastFrame), sizeof(int));
             // convert ts-as-int to Timecode
             Timecode tc;
+            tc.isDropFrame = 0;
             tc.frame = tc_as_int % 25;
             tc.hour = (int)(tc_as_int / (60 * 60 * 25));
             tc.min = (int)((tc_as_int - (tc.hour * 60 * 60 * 25)) / (60 * 25));
             tc.sec = (int)((tc_as_int - (tc.hour * 60 * 60 * 25) - (tc.min * 60 * 25)) / 25);
             memcpy(buffer, &tc, track->frameSize);
+        }
+        
+        if (track->streamInfo.type == EVENT_STREAM_TYPE)
+        {
+            if (nameUpdated)
+            {
+                SourceEvent event;
+                svt_set_name_update_event(&event, source->sourceName);
+                
+                svt_write_num_events(buffer, 1);
+                svt_write_event(buffer, 0, &event);
+            }
+            else
+            {
+                svt_write_num_events(buffer, 0);
+            }
         }
 
         sdl_receive_frame(listener, i, buffer, track->frameSize);
@@ -398,48 +490,82 @@ static void shm_close(void* data)
     SAFE_FREE(&source);
 }
 
-int shared_mem_open(const char *card_name, MediaSource** source)
+int shared_mem_open(const char* channel_name, MediaSource** source)
 {
     SharedMemSource* newSource = NULL;
-    int cardNum;
+    int channelNum;
     int primary;
+    int sourceId;
+    CaptureFormat captureFormat;
+    int disable = 0;
+    int i;
     
-    /* check card number is within range */
-    cardNum = atol(card_name);
-    if (cardNum < 0 || cardNum >= MAX_CHANNELS)
+    /* check channel number is within range */
+    channelNum = atol(channel_name);
+    if (channelNum < 0 || channelNum >= MAX_CHANNELS)
     {
-        ml_log_error("Card %s is out of range of maximum %d supported cards\n", card_name, MAX_CHANNELS);
+        ml_log_error("Card %s is out of range of maximum %d supported channels\n", channel_name, MAX_CHANNELS);
         return 0;
     }
 
-    // Support "0p" or "0s" for primary/secondary video
-    if (strchr(card_name, 'p') == NULL)
+    /* Support "0p" or "0s" for primary/secondary video */
+    if (strchr(channel_name, 'p') == NULL)
+    {
         primary = 0;
+    }
     else
+    {
         primary = 1;
+    }
 
     char title[FILENAME_MAX];
     if (primary)
-        sprintf(title, "Shared Memory Video: card %d primary\n", cardNum);
-    else
-        sprintf(title, "Shared Memory Video: card %d secondary\n", cardNum);
-
-    // try to connect to shared mem
-    if (! connect_to_shared_memory(cardNum))
     {
-        ml_log_error("Failed to connect to shared memory for card %s\n", card_name);
+        sprintf(title, "Shared Memory Video: channel %d primary\n", channelNum);
+    }
+    else
+    {
+        sprintf(title, "Shared Memory Video: channel %d secondary\n", channelNum);
+    }
+
+    /* try to connect to shared mem */
+    if (! connect_to_shared_memory(channelNum))
+    {
+        ml_log_error("Failed to connect to shared memory for channel %s\n", channel_name);
         return 0;
     }
+
+    
+    captureFormat = primary ? pctl->pri_video_format : pctl->sec_video_format;
+    
+    if (captureFormat != Format422UYVY &&
+        captureFormat != Format422PlanarYUV &&
+        captureFormat != Format422PlanarYUVShifted &&
+        captureFormat != Format420PlanarYUV &&
+        captureFormat != Format420PlanarYUVShifted)
+    {
+        ml_log_error("Shared memory video format %d is not supported\n", pctl->pri_video_format);
+        return 0;
+    }
+
+    if (channelNum >= pctl->channels)
+    {
+        ml_log_warn("Shared memory channel %d is not in use - streams will be disabled\n", channelNum);
+        disable = 1;
+    }
+    
     
 
     CALLOC_ORET(newSource, SharedMemSource, 1);
 
-    newSource->card = cardNum;
+    newSource->channel = channelNum;
     newSource->prevLastFrame = -1;
     newSource->primary = primary;
-
-
-    // setup media source
+    newSource->sourceNameUpdate = -1;
+    newSource->captureFormat = captureFormat;
+    
+    
+    /* setup media source */
     newSource->mediaSource.data = newSource;
     newSource->mediaSource.get_num_streams = shm_get_num_streams;
     newSource->mediaSource.get_stream_info = shm_get_stream_info;
@@ -455,22 +581,56 @@ int shared_mem_open(const char *card_name, MediaSource** source)
     newSource->mediaSource.eof = shm_eof;
     newSource->mediaSource.close = shm_close;
 
+    
+    sourceId = msc_create_id();
 
     /* video track */
     CHK_OFAIL(initialise_stream_info(&newSource->tracks[newSource->numTracks].streamInfo));
     newSource->tracks[newSource->numTracks].streamInfo.type = PICTURE_STREAM_TYPE;
-    newSource->tracks[newSource->numTracks].streamInfo.format = (newSource->primary) ? UYVY_FORMAT : YUV420_FORMAT;
+    newSource->tracks[newSource->numTracks].streamInfo.sourceId = sourceId;
     newSource->tracks[newSource->numTracks].streamInfo.frameRate = g_palFrameRate;
-    newSource->tracks[newSource->numTracks].streamInfo.width = 720;
-    newSource->tracks[newSource->numTracks].streamInfo.height = 576;
+    newSource->tracks[newSource->numTracks].streamInfo.width = pctl->width;
+    newSource->tracks[newSource->numTracks].streamInfo.height = pctl->height;
+    newSource->tracks[newSource->numTracks].streamInfo.aspectRatio.num = 16;
+    newSource->tracks[newSource->numTracks].streamInfo.aspectRatio.den = 9;
+    switch (captureFormat)
+    {
+        case Format422UYVY:
+            newSource->tracks[newSource->numTracks].frameSize = pctl->width * pctl->height * 2;
+            newSource->tracks[newSource->numTracks].streamInfo.format = UYVY_FORMAT;
+            break;
+            
+        case Format422PlanarYUV:
+            newSource->tracks[newSource->numTracks].frameSize = pctl->width * pctl->height * 2;
+            newSource->tracks[newSource->numTracks].streamInfo.format = YUV422_FORMAT;
+            break;
+            
+        case Format422PlanarYUVShifted:
+            newSource->tracks[newSource->numTracks].frameSize = pctl->width * pctl->height * 2;
+            newSource->tracks[newSource->numTracks].streamInfo.format = YUV422_FORMAT;
+            break;
+
+        case Format420PlanarYUV:
+            newSource->tracks[newSource->numTracks].frameSize = pctl->width * pctl->height * 3/2;
+            newSource->tracks[newSource->numTracks].streamInfo.format = YUV420_FORMAT;
+            break;
+            
+        case Format420PlanarYUVShifted:
+            newSource->tracks[newSource->numTracks].frameSize = pctl->width * pctl->height * 3/2;
+            newSource->tracks[newSource->numTracks].streamInfo.format = YUV420_FORMAT;
+            break;
+        default:
+            goto fail;
+            break;
+    }
     CHK_OFAIL(add_known_source_info(&newSource->tracks[newSource->numTracks].streamInfo, SRC_INFO_TITLE, title));
-    newSource->tracks[newSource->numTracks].frameSize = (newSource->primary) ? 720*576*2 : 720*576*3/2;
     newSource->numTracks++;
 
     /* audio track 1 */
     CHK_OFAIL(initialise_stream_info(&newSource->tracks[newSource->numTracks].streamInfo));
     newSource->tracks[newSource->numTracks].streamInfo.type = SOUND_STREAM_TYPE;
     newSource->tracks[newSource->numTracks].streamInfo.format = PCM_FORMAT;
+    newSource->tracks[newSource->numTracks].streamInfo.sourceId = sourceId;
     newSource->tracks[newSource->numTracks].streamInfo.samplingRate = g_profAudioSamplingRate;
     newSource->tracks[newSource->numTracks].streamInfo.numChannels = 1;
     newSource->tracks[newSource->numTracks].streamInfo.bitsPerSample = 16;
@@ -482,6 +642,7 @@ int shared_mem_open(const char *card_name, MediaSource** source)
     CHK_OFAIL(initialise_stream_info(&newSource->tracks[newSource->numTracks].streamInfo));
     newSource->tracks[newSource->numTracks].streamInfo.type = SOUND_STREAM_TYPE;
     newSource->tracks[newSource->numTracks].streamInfo.format = PCM_FORMAT;
+    newSource->tracks[newSource->numTracks].streamInfo.sourceId = sourceId;
     newSource->tracks[newSource->numTracks].streamInfo.samplingRate = g_profAudioSamplingRate;
     newSource->tracks[newSource->numTracks].streamInfo.numChannels = 1;
     newSource->tracks[newSource->numTracks].streamInfo.bitsPerSample = 16;
@@ -493,6 +654,7 @@ int shared_mem_open(const char *card_name, MediaSource** source)
     CHK_OFAIL(initialise_stream_info(&newSource->tracks[newSource->numTracks].streamInfo));
     newSource->tracks[newSource->numTracks].streamInfo.type = SOUND_STREAM_TYPE;
     newSource->tracks[newSource->numTracks].streamInfo.format = PCM_FORMAT;
+    newSource->tracks[newSource->numTracks].streamInfo.sourceId = sourceId;
     newSource->tracks[newSource->numTracks].streamInfo.samplingRate = g_profAudioSamplingRate;
     newSource->tracks[newSource->numTracks].streamInfo.numChannels = 1;
     newSource->tracks[newSource->numTracks].streamInfo.bitsPerSample = 16;
@@ -504,6 +666,7 @@ int shared_mem_open(const char *card_name, MediaSource** source)
     CHK_OFAIL(initialise_stream_info(&newSource->tracks[newSource->numTracks].streamInfo));
     newSource->tracks[newSource->numTracks].streamInfo.type = SOUND_STREAM_TYPE;
     newSource->tracks[newSource->numTracks].streamInfo.format = PCM_FORMAT;
+    newSource->tracks[newSource->numTracks].streamInfo.sourceId = sourceId;
     newSource->tracks[newSource->numTracks].streamInfo.samplingRate = g_profAudioSamplingRate;
     newSource->tracks[newSource->numTracks].streamInfo.numChannels = 1;
     newSource->tracks[newSource->numTracks].streamInfo.bitsPerSample = 16;
@@ -515,6 +678,7 @@ int shared_mem_open(const char *card_name, MediaSource** source)
     CHK_OFAIL(initialise_stream_info(&newSource->tracks[newSource->numTracks].streamInfo));
     newSource->tracks[newSource->numTracks].streamInfo.type = TIMECODE_STREAM_TYPE;
     newSource->tracks[newSource->numTracks].streamInfo.format = TIMECODE_FORMAT;
+    newSource->tracks[newSource->numTracks].streamInfo.sourceId = sourceId;
     newSource->tracks[newSource->numTracks].streamInfo.timecodeType = SOURCE_TIMECODE_TYPE;
     newSource->tracks[newSource->numTracks].streamInfo.timecodeSubType = VITC_SOURCE_TIMECODE_SUBTYPE;
     CHK_OFAIL(add_known_source_info(&newSource->tracks[newSource->numTracks].streamInfo, SRC_INFO_TITLE, "Shared Memory Timecode 1"));
@@ -525,12 +689,32 @@ int shared_mem_open(const char *card_name, MediaSource** source)
     CHK_OFAIL(initialise_stream_info(&newSource->tracks[newSource->numTracks].streamInfo));
     newSource->tracks[newSource->numTracks].streamInfo.type = TIMECODE_STREAM_TYPE;
     newSource->tracks[newSource->numTracks].streamInfo.format = TIMECODE_FORMAT;
+    newSource->tracks[newSource->numTracks].streamInfo.sourceId = sourceId;
     newSource->tracks[newSource->numTracks].streamInfo.timecodeType = SOURCE_TIMECODE_TYPE;
     newSource->tracks[newSource->numTracks].streamInfo.timecodeSubType = LTC_SOURCE_TIMECODE_SUBTYPE;
     CHK_OFAIL(add_known_source_info(&newSource->tracks[newSource->numTracks].streamInfo, SRC_INFO_TITLE, "Shared Memory Timecode 2"));
     newSource->tracks[newSource->numTracks].frameSize = sizeof(Timecode);
     newSource->numTracks++;
 
+    /* event track */
+    CHK_OFAIL(initialise_stream_info(&newSource->tracks[newSource->numTracks].streamInfo));
+    newSource->tracks[newSource->numTracks].streamInfo.type = EVENT_STREAM_TYPE;
+    newSource->tracks[newSource->numTracks].streamInfo.format = SOURCE_EVENT_FORMAT;
+    newSource->tracks[newSource->numTracks].streamInfo.sourceId = sourceId;
+    CHK_OFAIL(add_known_source_info(&newSource->tracks[newSource->numTracks].streamInfo, SRC_INFO_TITLE, "Shared Memory Event"));
+    newSource->numTracks++;
+
+    
+    /* disabled tracks if the channel is not in use */
+    if (disable)
+    {
+        for (i = 0; i < newSource->numTracks; i++)
+        {
+            CHK_OFAIL(msc_disable_stream(&newSource->mediaSource, i));
+        }
+    }
+    
+    
     *source = &newSource->mediaSource;
     return 1;
 

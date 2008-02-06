@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorderImpl.cpp,v 1.2 2007/10/26 15:52:26 john_f Exp $
+ * $Id: IngexRecorderImpl.cpp,v 1.3 2008/02/06 16:58:59 john_f Exp $
  *
  * Servant class for Recorder.
  *
@@ -86,8 +86,8 @@ bool IngexRecorderImpl::Init(std::string name, std::string db_user, std::string 
     }
 
     // Base class initialisation
-    // Each card has 1 video and 4 audio tracks
-    const unsigned int max_inputs = IngexShm::Instance()->Cards();
+    // Each channel has 1 video and 4 audio tracks
+    const unsigned int max_inputs = IngexShm::Instance()->Channels();
     const unsigned int max_tracks_per_input = 5;
     RecorderImpl::Init(name, db_user, db_pw, max_inputs, max_tracks_per_input);
 
@@ -168,16 +168,16 @@ char * IngexRecorderImpl::RecordingFormat (
   )
 {
     // Update member with current timecode and status
-    for (unsigned int card_i = 0; card_i < IngexShm::Instance()->Cards(); ++card_i)
+    for (unsigned int channel_i = 0; channel_i < IngexShm::Instance()->Channels(); ++channel_i)
     {
-        bool signal = IngexShm::Instance()->SignalPresent(card_i);
-        framecount_t timecode = IngexShm::Instance()->CurrentTimecode(card_i);
+        bool signal = IngexShm::Instance()->SignalPresent(channel_i);
+        framecount_t timecode = IngexShm::Instance()->CurrentTimecode(channel_i);
 
         // We know each input has mMaxTracksPerInput, see comments
         // in RecorderImpl::UpdateSources()
         for (unsigned int j = 0; j < mMaxTracksPerInput; ++j)
         {
-            CORBA::ULong track_i = mMaxTracksPerInput * card_i + j;
+            CORBA::ULong track_i = mMaxTracksPerInput * channel_i + j;
             if (track_i < mTracksStatus->length())
             {
                 ProdAuto::TrackStatus & ts = mTracksStatus->operator[](track_i);
@@ -237,20 +237,20 @@ char * IngexRecorderImpl::RecordingFormat (
     // Do need to update record parameters and this is indeed on
     // in PrepareStart().
 
-    // Translate enables to per-track and per-card.
-    bool card_enable[MAX_CHANNELS];
-    for (unsigned int card_i = 0; card_i < MAX_CHANNELS; ++card_i)
+    // Translate enables to per-track and per-channel.
+    bool channel_enable[MAX_CHANNELS];
+    for (unsigned int channel_i = 0; channel_i < MAX_CHANNELS; ++channel_i)
     {
-        // Start with card enables false.
-        card_enable[card_i] = false;
+        // Start with channel enables false.
+        channel_enable[channel_i] = false;
     }
 
     bool track_enable[MAX_CHANNELS * 5];
-    for (unsigned int card_i = 0; card_i < IngexShm::Instance()->Cards(); ++card_i)
+    for (unsigned int channel_i = 0; channel_i < IngexShm::Instance()->Channels(); ++channel_i)
     {
         for (int j = 0; j < 5; ++j)
         {
-            CORBA::ULong track_i = card_i * 5 + j;
+            CORBA::ULong track_i = channel_i * 5 + j;
 
             // Copy track enable into local bool array.
             if (track_i < mTracks->length() && mTracks[track_i].has_source)
@@ -263,11 +263,11 @@ char * IngexRecorderImpl::RecordingFormat (
                 track_enable[track_i] = false;
             }
 
-            // Set card enable.
+            // Set channel enable.
             if (track_enable[track_i])
             {
-                // If one track enabled, set card enable.
-                card_enable[card_i] = true;
+                // If one track enabled, set channel enable.
+                channel_enable[channel_i] = true;
             }
         }
     }
@@ -284,7 +284,7 @@ char * IngexRecorderImpl::RecordingFormat (
     for (CORBA::ULong i = 0; i < tapes.length(); ++i)
     {
         const char * s = tapes[i];
-        ACE_DEBUG((LM_DEBUG, ACE_TEXT("card%d tapeid \"%C\"\n"), i, s));
+        ACE_DEBUG((LM_DEBUG, ACE_TEXT("channel%d tapeid \"%C\"\n"), i, s));
         tape_list.push_back(std::string(s));
     }
 
@@ -311,7 +311,7 @@ char * IngexRecorderImpl::RecordingFormat (
 
     // Setup IngexRecorder
     mpIngexRecorder->Setup(
-        card_enable,
+        channel_enable,
         track_enable,
         project,
         description,
@@ -384,7 +384,7 @@ char * IngexRecorderImpl::RecordingFormat (
 
     // Create out parameter
     files = new ::CORBA::StringSeq;
-    files->length(IngexShm::Instance()->Cards() * 5);
+    files->length(IngexShm::Instance()->Channels() * 5);
 
     // Tell recorder when to stop.
     if (mpIngexRecorder)
@@ -397,12 +397,12 @@ char * IngexRecorderImpl::RecordingFormat (
         mxf_stop_timecode.samples = stop_timecode;
 
         // Return the filenames
-        for (unsigned int card_i = 0; card_i < IngexShm::Instance()->Cards(); ++card_i)
+        for (unsigned int channel_i = 0; channel_i < IngexShm::Instance()->Channels(); ++channel_i)
         {
-            //RecordOptions & opt = mpIngexRecorder->record_opt[card_i];
+            //RecordOptions & opt = mpIngexRecorder->record_opt[channel_i];
             for (unsigned int j = 0; j < 5; ++j)
             {
-                CORBA::ULong track_i = card_i * 5 + j;
+                CORBA::ULong track_i = channel_i * 5 + j;
                 std::string name = mpIngexRecorder->mFileNames[track_i];
                 if (!name.empty())
                 {

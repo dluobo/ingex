@@ -1,5 +1,5 @@
 /*
- * $Id: recorder_functions.cpp,v 1.2 2007/10/26 16:02:48 john_f Exp $
+ * $Id: recorder_functions.cpp,v 1.3 2008/02/06 16:58:59 john_f Exp $
  *
  * Functions which execute in recording threads.
  *
@@ -54,6 +54,8 @@
 /// Mutex to ensure only one thread at a time can call avcodec open/close
 static ACE_Thread_Mutex avcodec_mutex;
 
+const bool THREADED_MJPEG = false;
+
 
 /**
 Thread function to encode and record a particular source.
@@ -65,8 +67,8 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     RecordOptions * p_opt = param->p_opt;
 
     bool quad_video = p_opt->quad;
-    int card_i = p_opt->card_num;
-    const char * src_name = (quad_video ? QUAD_NAME : SOURCE_NAME[card_i]);
+    int channel_i = p_opt->channel_num;
+    const char * src_name = (quad_video ? QUAD_NAME : SOURCE_NAME[channel_i]);
 
     // ACE logging to file
     std::ostringstream id;
@@ -77,31 +79,31 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     const int ring_length = IngexShm::Instance()->RingLength();
 
     // Recording starts from start_frame.
-    int start_frame = p_rec->mStartFrame[card_i];
+    int start_frame = p_rec->mStartFrame[channel_i];
     int start_tc = p_rec->mStartTimecode; // passed as metadata to MXFWriter
 
     // We make sure these offsets are positive numbers.
-    // For quad, card_i is first enabled card.
-    int quad0_offset = (p_rec->mStartFrame[0] - p_rec->mStartFrame[card_i] + ring_length) % ring_length;
-    int quad1_offset = (p_rec->mStartFrame[1] - p_rec->mStartFrame[card_i] + ring_length) % ring_length;
-    int quad2_offset = (p_rec->mStartFrame[2] - p_rec->mStartFrame[card_i] + ring_length) % ring_length;
-    int quad3_offset = (p_rec->mStartFrame[3] - p_rec->mStartFrame[card_i] + ring_length) % ring_length;
+    // For quad, channel_i is first enabled channel.
+    int quad0_offset = (p_rec->mStartFrame[0] - p_rec->mStartFrame[channel_i] + ring_length) % ring_length;
+    int quad1_offset = (p_rec->mStartFrame[1] - p_rec->mStartFrame[channel_i] + ring_length) % ring_length;
+    int quad2_offset = (p_rec->mStartFrame[2] - p_rec->mStartFrame[channel_i] + ring_length) % ring_length;
+    int quad3_offset = (p_rec->mStartFrame[3] - p_rec->mStartFrame[channel_i] + ring_length) % ring_length;
 
     // This makes the record start at the target frame
     int last_saved = start_frame - 1;
 
 
-    int size_422_video = IngexShm::Instance()->sizeVideo422();
+    //int size_422_video = IngexShm::Instance()->sizeVideo422();
+    const int WIDTH = IngexShm::Instance()->Width();
+    const int HEIGHT = IngexShm::Instance()->Height();
+    const int SIZE_420 = WIDTH * HEIGHT * 3/2;
+    const int SIZE_422 = WIDTH * HEIGHT * 2;
     const int audio_samples_per_frame = 1920;
-    const int width = 720;
-    const int height = 576;
-    const int SIZE_420 = width * height * 3/2;
-    const int SIZE_422 = width * height * 2;
 
     // Track enables
-    bool enable_video = p_rec->mCardEnable[card_i];
-    bool enable_audio12 = p_rec->mTrackEnable[card_i * 5 + 1] || p_rec->mTrackEnable[card_i * 5 + 2];
-    bool enable_audio34 = p_rec->mTrackEnable[card_i * 5 + 3] || p_rec->mTrackEnable[card_i * 5 + 4];
+    bool enable_video = p_rec->mChannelEnable[channel_i];
+    bool enable_audio12 = p_rec->mTrackEnable[channel_i * 5 + 1] || p_rec->mTrackEnable[channel_i * 5 + 2];
+    bool enable_audio34 = p_rec->mTrackEnable[channel_i * 5 + 3] || p_rec->mTrackEnable[channel_i * 5 + 4];
 
     // Mask for MXF track enables
     uint32_t mxf_mask = 0;
@@ -112,11 +114,11 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     // Settings pointer
     RecorderSettings * settings = RecorderSettings::Instance();
 
-    bool browse_audio = (card_i == 0 && !quad_video && settings->browse_audio);
+    bool browse_audio = (channel_i == 0 && !quad_video && settings->browse_audio);
 
     // Get encode settings for this thread
     int resolution = p_opt->resolution;
-    bool uncompressed_video = false;
+    bool uncompressed_video = (UNC_MATERIAL_RESOLUTION == resolution);
 
     bool mxf = (Wrapping::MXF == p_opt->wrapping);
     bool raw = !mxf;
@@ -148,15 +150,17 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
 #endif
 
     ACE_DEBUG((LM_INFO,
-        ACE_TEXT("start_record_thread(%C, start_tc=%C res=%d)\n"),
-        src_name, Timecode(start_tc).Text(), resolution));
+        ACE_TEXT("start_record_thread(%C, start_tc=%C res=%d bitc=%C)\n"),
+        src_name, Timecode(start_tc).Text(), resolution, (bitc ? "on" : "off")));
 
     // Set some flags based on encoding type
     enum {PIXFMT_420, PIXFMT_422} pix_fmt;
     enum {ENCODER_NONE, ENCODER_FFMPEG, ENCODER_FFMPEG_AV, ENCODER_MJPEG} encoder;
-    ffmpeg_encoder_resolution_t ff_res;
-    ffmpeg_encoder_av_resolution_t ff_av_res;
-    MJPEGResolutionID mjpeg_res;
+    // Initialising these just to avoid compiler warnings
+    ffmpeg_encoder_resolution_t    ff_res    = FF_ENCODER_RESOLUTION_IMX30;
+    ffmpeg_encoder_av_resolution_t ff_av_res = FF_ENCODER_RESOLUTION_MOV;
+    MJPEGResolutionID              mjpeg_res = MJPEG_20_1;
+
     switch (resolution)
     {
     // DV formats
@@ -200,7 +204,6 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         encoder = ENCODER_MJPEG;
         pix_fmt = PIXFMT_422;
         mjpeg_res = MJPEG_10_1m;
-        bitc = true; // special for Dragons' Den
         break;
     // IMX formats
     case IMX30_MATERIAL_RESOLUTION:
@@ -217,6 +220,32 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         pix_fmt = PIXFMT_422;
         encoder = ENCODER_FFMPEG;
         ff_res = FF_ENCODER_RESOLUTION_IMX50;
+        break;
+    // DNxHD formats
+    case DNX36p_MATERIAL_RESOLUTION:
+        pix_fmt = PIXFMT_422;
+        encoder = ENCODER_FFMPEG;
+        ff_res = FF_ENCODER_RESOLUTION_DNX36p;
+        break;
+    case DNX120p_MATERIAL_RESOLUTION:
+        pix_fmt = PIXFMT_422;
+        encoder = ENCODER_FFMPEG;
+        ff_res = FF_ENCODER_RESOLUTION_DNX120p;
+        break;
+    case DNX185p_MATERIAL_RESOLUTION:
+        pix_fmt = PIXFMT_422;
+        encoder = ENCODER_FFMPEG;
+        ff_res = FF_ENCODER_RESOLUTION_DNX185p;
+        break;
+    case DNX120i_MATERIAL_RESOLUTION:
+        pix_fmt = PIXFMT_422;
+        encoder = ENCODER_FFMPEG;
+        ff_res = FF_ENCODER_RESOLUTION_DNX120i;
+        break;
+    case DNX185i_MATERIAL_RESOLUTION:
+        pix_fmt = PIXFMT_422;
+        encoder = ENCODER_FFMPEG;
+        ff_res = FF_ENCODER_RESOLUTION_DNX185i;
         break;
     // Browse formats
     case DVD_MATERIAL_RESOLUTION:
@@ -239,6 +268,23 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         pix_fmt = PIXFMT_422;
         encoder = ENCODER_NONE;
         break;
+    }
+
+    if (PIXFMT_422 == pix_fmt)
+    {
+        if (IngexShm::Instance()->PrimaryCaptureFormat() != Format422PlanarYUV
+            && IngexShm::Instance()->PrimaryCaptureFormat() != Format422PlanarYUVShifted)
+        {
+            ACE_DEBUG((LM_ERROR, ACE_TEXT("Wrong 422 capture format!\n")));
+        }
+    }
+    else if (PIXFMT_420 == pix_fmt)
+    {
+        if (IngexShm::Instance()->SecondaryCaptureFormat() != Format420PlanarYUV
+            && IngexShm::Instance()->SecondaryCaptureFormat() != Format420PlanarYUVShifted)
+        {
+            ACE_DEBUG((LM_ERROR, ACE_TEXT("Wrong 420 capture format!\n")));
+        }
     }
 
     // Directories
@@ -355,10 +401,18 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     }
     
     // Initialise MJPEG encoder
+    mjpeg_compress_threaded_t * mj_encoder_threaded = 0;
     mjpeg_compress_t * mj_encoder = 0;
     if (ENCODER_MJPEG == encoder)
     {
-        mjpeg_compress_init(mjpeg_res, width, height, &mj_encoder);
+        if (THREADED_MJPEG)
+        {
+            mjpeg_compress_init_threaded(mjpeg_res, WIDTH, HEIGHT, &mj_encoder_threaded);
+        }
+        else
+        {
+            mjpeg_compress_init(mjpeg_res, WIDTH, HEIGHT, &mj_encoder);
+        }
     }
 
     // Initialisation for browse av files
@@ -390,7 +444,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     if (rec && rec->hasConfig())
     {
         rc = rec->getConfig();
-        //ric = rc->getInputConfig(card_i + 1); // Index starts from 1
+        //ric = rc->getInputConfig(channel_i + 1); // Index starts from 1
     }
     
     if (mxf && (0 == rc))
@@ -420,7 +474,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         {
             prodauto::MXFWriter * p = new prodauto::MXFWriter(
                                             rc,
-                                            card_i + 1, // index starts from 1
+                                            channel_i + 1, // index starts from 1
                                             resolution,
                                             image_aspect,
                                             mxf_audio_bits,
@@ -447,7 +501,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             mxf = false;
         }
 
-        ACE_DEBUG((LM_DEBUG, ACE_TEXT("Project name: %C\n"), p_opt->project.c_str()));
+        ACE_DEBUG((LM_DEBUG, ACE_TEXT("Project name: %C\n"), p_opt->project.name.c_str()));
 
         // Get filenames for each track.
         if (mxf)
@@ -459,7 +513,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                 {
                     //std::string fname = p_opt->dir + '/' + writer->getFilename(track);
                     std::string fname = writer->getDestinationFilename(writer->getFilename(track));
-                    p_rec->mFileNames[card_i * 5 + i] = fname;
+                    p_rec->mFileNames[channel_i * 5 + i] = fname;
                     ACE_DEBUG((LM_DEBUG, ACE_TEXT("File name: %C\n"), fname.c_str()));
                 }
                 else
@@ -491,7 +545,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     }
 
     AudioMixer mixer;
-    if (card_i == 0)
+    if (channel_i == 0)
     {
         mixer.SetMix(AudioMixer::CH12);
         //mixer.SetMix(AudioMixer::COMMENTARY3);
@@ -512,16 +566,16 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     if (quad_video && pix_fmt == PIXFMT_420)
     {
         p_quadvideo = new uint8_t[SIZE_420];
-        memset(p_quadvideo,               0x10, 720*576);           // Y black
-        memset(p_quadvideo + 720*576,     0x80, 720*576/4);         // U neutral
-        memset(p_quadvideo + 720*576*5/4, 0x80, 720*576/4);         // V neutral
+        memset(p_quadvideo,                        0x10, WIDTH * HEIGHT);           // Y black
+        memset(p_quadvideo + WIDTH * HEIGHT,       0x80, WIDTH * HEIGHT / 4);       // U neutral
+        memset(p_quadvideo + WIDTH * HEIGHT * 5/4, 0x80, WIDTH * HEIGHT / 4);       // V neutral
     }
     else if (quad_video && pix_fmt == PIXFMT_422)
     {
         p_quadvideo = new uint8_t[SIZE_422];
-        memset(p_quadvideo,               0x10, 720*576);           // Y black
-        memset(p_quadvideo + 720*576,     0x80, 720*576/2);         // U neutral
-        memset(p_quadvideo + 720*576*3/2, 0x80, 720*576/2);         // V neutral
+        memset(p_quadvideo,                        0x10, WIDTH * HEIGHT);           // Y black
+        memset(p_quadvideo + WIDTH * HEIGHT,       0x80, WIDTH * HEIGHT / 2);       // U neutral
+        memset(p_quadvideo + WIDTH * HEIGHT * 3/2, 0x80, WIDTH * HEIGHT / 2);       // V neutral
     }
     
 
@@ -541,14 +595,19 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         int lastframe;
         int diff;
         int guard = (quad_video ? 2 : 1);
-        while ((diff = (lastframe = IngexShm::Instance()->LastFrame(card_i)) - last_saved) < guard)
+        bool slept = false;
+        while ((diff = (lastframe = IngexShm::Instance()->LastFrame(channel_i)) - last_saved) < guard)
         {
             // Caught up to latest available frame - sleep for a while.
-            //ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C sleeping (a)\n"), src_name));
-            ACE_OS::sleep(ACE_Time_Value(0, 20 * 1000));    // 0.020 seconds
+            const int sleep_ms = 20;
+            ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C sleeping %d ms\n"), src_name, sleep_ms));
+            ACE_OS::sleep(ACE_Time_Value(0, sleep_ms * 1000));
+            slept = true;
         }
-        //ACE_DEBUG((LM_DEBUG, ACE_TEXT("last_saved=%d, lastframe=%d\n"),
-        //    last_saved, lastframe));
+        if (slept)
+        {
+            ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C processing %d frame(s)\n"), src_name, diff));
+        }
 
         int allowed_backlog = ring_length - 3;
         if (diff > allowed_backlog / 2)
@@ -566,7 +625,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                 src_name, drop));
         }
 
-        framecount_t last_tc = IngexShm::Instance()->Timecode(card_i, last_saved);
+        framecount_t last_tc = IngexShm::Instance()->Timecode(channel_i, last_saved);
 
         // Save all frames which have not been saved
         for (int fi = diff - 1; fi >= 0; fi--)
@@ -582,19 +641,19 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             int frame3 = (frame + quad3_offset) % ring_length;
 
             // Pointer to 422 video
-            void * p_422_video = IngexShm::Instance()->pVideo422(card_i, frame);
+            void * p_422_video = IngexShm::Instance()->pVideo422(channel_i, frame);
 
             // Pointer to 420 video
-            void * p_420_video = IngexShm::Instance()->pVideo420(card_i, frame);
+            void * p_420_video = IngexShm::Instance()->pVideo420(channel_i, frame);
 
             // Pointer to audio12
-            int32_t * p_audio12 = IngexShm::Instance()->pAudio12(card_i, frame);
+            int32_t * p_audio12 = IngexShm::Instance()->pAudio12(channel_i, frame);
 
             // Pointer to audio34
-            int32_t * p_audio34 = IngexShm::Instance()->pAudio34(card_i, frame);
+            int32_t * p_audio34 = IngexShm::Instance()->pAudio34(channel_i, frame);
 
             // Timecode value
-            framecount_t tc_i = IngexShm::Instance()->Timecode(card_i, frame);
+            framecount_t tc_i = IngexShm::Instance()->Timecode(channel_i, frame);
 
             // Check for timecode irregularities
             if (tc_i != last_tc + 1)
@@ -611,29 +670,29 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             if (quad_video && pix_fmt == PIXFMT_420)
             {
                 I420_frame in;
-                in.size = 720*576*3/2;
-                in.w = 720;
-                in.h = 576;
+                in.size = SIZE_420;
+                in.w = WIDTH;
+                in.h = HEIGHT;
                 // Other elements set below
 
                 I420_frame out;
                 out.cbuff = p_quadvideo;
-                out.size = 720*576*3/2;
+                out.size = SIZE_420;
                 out.Ybuff = out.cbuff;
-                out.Ubuff = out.cbuff + 720*576;
-                out.Vbuff = out.cbuff + 720*576 *5/4;
-                out.w = 720;
-                out.h = 576;
+                out.Ubuff = out.cbuff + WIDTH * HEIGHT;
+                out.Vbuff = out.cbuff + WIDTH * HEIGHT * 5/4;
+                out.w = WIDTH;
+                out.h = HEIGHT;
 
                 // NB. p_quadvideo was filled with black earlier.
 
-                // top left - card0
-                if (p_rec->mCardEnable[0])
+                // top left - channel0
+                if (p_rec->mChannelEnable[0])
                 {
                     in.cbuff = IngexShm::Instance()->pVideo420(0, frame0);
                     in.Ybuff = in.cbuff;
-                    in.Ubuff = in.cbuff + 720*576;
-                    in.Vbuff = in.cbuff + 720*576 *5/4;
+                    in.Ubuff = in.cbuff + WIDTH * HEIGHT;
+                    in.Vbuff = in.cbuff + WIDTH * HEIGHT * 5/4;
 
                     quarter_frame_I420(&in, &out,
                                     0,      // x offset
@@ -643,42 +702,42 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                                     1);     // vert filter?
                 }
 
-                // top right - card1
-                if (p_rec->mCardEnable[1])
+                // top right - channel1
+                if (p_rec->mChannelEnable[1])
                 {
                     in.cbuff = IngexShm::Instance()->pVideo420(1, frame1);
                     in.Ybuff = in.cbuff;
-                    in.Ubuff = in.cbuff + 720*576;
-                    in.Vbuff = in.cbuff + 720*576 *5/4;
+                    in.Ubuff = in.cbuff + WIDTH * HEIGHT;
+                    in.Vbuff = in.cbuff + WIDTH * HEIGHT * 5/4;
 
                     quarter_frame_I420(&in, &out,
-                                    720/2, 0,
+                                    WIDTH/2, 0,
                                     1, 1, 1);
                 }
 
-                // bottom left - card2
-                if (p_rec->mCardEnable[2])
+                // bottom left - channel2
+                if (p_rec->mChannelEnable[2])
                 {
                     in.cbuff = IngexShm::Instance()->pVideo420(2, frame2);
                     in.Ybuff = in.cbuff;
-                    in.Ubuff = in.cbuff + 720*576;
-                    in.Vbuff = in.cbuff + 720*576 *5/4;
+                    in.Ubuff = in.cbuff + WIDTH * HEIGHT;
+                    in.Vbuff = in.cbuff + WIDTH * HEIGHT * 5/4;
 
                     quarter_frame_I420(&in, &out,
-                                        0, 576/2,
+                                        0, HEIGHT/2,
                                         1, 1, 1);
                 }
 
-                // bottom right - card3
-                if (p_rec->mCardEnable[3])
+                // bottom right - channel3
+                if (p_rec->mChannelEnable[3])
                 {
                     in.cbuff = IngexShm::Instance()->pVideo420(3, frame3);
                     in.Ybuff = in.cbuff;
-                    in.Ubuff = in.cbuff + 720*576;
-                    in.Vbuff = in.cbuff + 720*576 *5/4;
+                    in.Ubuff = in.cbuff + WIDTH * HEIGHT;
+                    in.Vbuff = in.cbuff + WIDTH * HEIGHT * 5/4;
 
                     quarter_frame_I420(&in, &out,
-                                        720/2, 576/2,
+                                        WIDTH/2, HEIGHT/2,
                                         1, 1, 1);
                 }
 
@@ -695,9 +754,9 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                     // Need to copy video as can't overwrite shared memory
                     memcpy(tc_overlay_buffer, p_420_video, SIZE_420);
                     uint8_t * p_y = tc_overlay_buffer;
-                    uint8_t * p_u = p_y + width * height;
-                    uint8_t * p_v = p_u + width * height / 4;
-                    tc_overlay_apply420(tco, p_y, p_u, p_v, width, height, tc_xoffset, tc_yoffset);
+                    uint8_t * p_u = p_y + WIDTH * HEIGHT;
+                    uint8_t * p_v = p_u + WIDTH * HEIGHT / 4;
+                    tc_overlay_apply420(tco, p_y, p_u, p_v, WIDTH, HEIGHT, tc_xoffset, tc_yoffset);
                     // Source for encoding is now the timecode overlay buffer
                     p_420_video = tc_overlay_buffer;
                 }
@@ -706,9 +765,9 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                     // Need to copy video as can't overwrite shared memory
                     memcpy(tc_overlay_buffer, p_422_video, SIZE_422);
                     uint8_t * p_y = tc_overlay_buffer;
-                    uint8_t * p_u = p_y + width * height;
-                    uint8_t * p_v = p_u + width * height / 2;
-                    tc_overlay_apply420(tco, p_y, p_u, p_v, width, height, tc_xoffset, tc_yoffset);
+                    uint8_t * p_u = p_y + WIDTH * HEIGHT;
+                    uint8_t * p_v = p_u + WIDTH * HEIGHT / 2;
+                    tc_overlay_apply420(tco, p_y, p_u, p_v, WIDTH, HEIGHT, tc_xoffset, tc_yoffset);
                     // Source for encoding is now the timecode overlay buffer
                     p_422_video = tc_overlay_buffer;
                 }
@@ -758,9 +817,16 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             if (ENCODER_MJPEG == encoder)
             {
                 uint8_t * y = (uint8_t *)p_422_video;
-                uint8_t * u = y + width * height;
-                uint8_t * v = u + width * height / 2;
-                size_enc_video = mjpeg_compress_frame_yuv(mj_encoder, y, u, v, width, width/2, width/2, &p_enc_video);
+                uint8_t * u = y + WIDTH * HEIGHT;
+                uint8_t * v = u + WIDTH * HEIGHT / 2;
+                if (THREADED_MJPEG)
+                {
+                    size_enc_video = mjpeg_compress_frame_yuv_threaded(mj_encoder_threaded, y, u, v, WIDTH, WIDTH/2, WIDTH/2, &p_enc_video);
+                }
+                else
+                {
+                    size_enc_video = mjpeg_compress_frame_yuv(mj_encoder, y, u, v, WIDTH, WIDTH/2, WIDTH/2, &p_enc_video);
+                }
             }
 
 
@@ -769,7 +835,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             {
                 if (uncompressed_video)
                 {
-                    fwrite(p_422_video, size_422_video, 1, fp_video);
+                    fwrite(p_422_video, SIZE_422, 1, fp_video);
                 }
                 else
                 {
@@ -802,7 +868,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                     if (UNC_MATERIAL_RESOLUTION == resolution)
                     {
                         // write uncompressed video data to input track 1
-                        writer->writeSample(1, 1, (uint8_t *)p_422_video, size_422_video);
+                        writer->writeSample(1, 1, (uint8_t *)p_422_video, SIZE_422);
                     }
                     else
                     {
@@ -867,7 +933,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
 
             //int tc_diff = tc - last_tc;
             //char tcstr[32];
-            //logF("card%d lastframe=%6d diff(fi=%d) =%6d tc_i=%7d tc_diff=%3d %s\n", cardnum, lastframe, fi, diff, tc_i, tc_diff, framesToStr(tc, tcstr));
+            //logF("channel%d lastframe=%6d diff(fi=%d) =%6d tc_i=%7d tc_diff=%3d %s\n", channelnum, lastframe, fi, diff, tc_i, tc_diff, framesToStr(tc, tcstr));
 
             // Finish when we've reached target duration
             framecount_t target = p_rec->TargetDuration();
@@ -894,7 +960,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     // End of main record loop
     // ************************
 
-    framecount_t last_saved_tc = IngexShm::Instance()->Timecode(card_i, last_saved);
+    framecount_t last_saved_tc = IngexShm::Instance()->Timecode(channel_i, last_saved);
     ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C last_saved=%d tc=%C\n"),
         src_name, last_saved, Timecode(last_saved_tc).Text()));
 
@@ -943,6 +1009,10 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     if (mj_encoder)
     {
         mjpeg_compress_free(mj_encoder);
+    }
+    if (mj_encoder_threaded)
+    {
+        mjpeg_compress_free_threaded(mj_encoder_threaded);
     }
 
     // cleanup timecode overlay

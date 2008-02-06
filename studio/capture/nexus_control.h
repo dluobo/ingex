@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_control.h,v 1.2 2007/10/26 13:52:35 john_f Exp $
+ * $Id: nexus_control.h,v 1.3 2008/02/06 16:59:01 john_f Exp $
  *
  * Shared memory interface between SDI capture threads and reader threads.
  *
@@ -32,12 +32,12 @@
 #endif
 
 typedef enum {
-	FormatNone,			// Indicates off or disabled
-	FormatUYVY,			// 4:2:2 buffer suitable for uncompressed capture
-	FormatYUV422,		// 4:2:2 buffer suitable for JPEG encoding
-	FormatYUV422DV,		// 4:2:2 buffer suitable for DV50 encoding (picture shift down 1 line)
-	FormatYUV420,		// 4:2:0 buffer suitable for MPEG encoding
-	FormatYUV420DV		// 4:2:0 buffer suitable for DV25 encoding (picture shift down 1 line)
+    FormatNone,                // Indicates off or disabled
+    Format422UYVY,             // 4:2:2 buffer suitable for uncompressed capture
+    Format422PlanarYUV,        // 4:2:2 buffer suitable for JPEG encoding
+    Format422PlanarYUVShifted, // 4:2:2 buffer suitable for DV50 encoding (picture shift down 1 line)
+    Format420PlanarYUV,        // 4:2:0 buffer suitable for MPEG encoding
+    Format420PlanarYUVShifted  // 4:2:0 buffer suitable for DV25 encoding (picture shift down 1 line)
 } CaptureFormat;
 
 // Each channel's ring buffer is described by the NexusBufCtl structure
@@ -46,9 +46,10 @@ typedef struct {
 	pthread_mutex_t		m_lastframe;	// mutex for lastframe counter
 	// TODO: use a condition variable to signal when new frame arrives
 #endif
-	int		lastframe;		// last frame number stored and now available
-							// use lastframe % ringlen to get buffer index
-	int		hwdrop;			// frame-drops recorded by sv interface
+	int		lastframe;			// last frame number stored and now available
+								// use lastframe % ringlen to get buffer index
+	int		hwdrop;				// frame-drops recorded by sv interface
+	char	source_name[64];	// identifies the source for this channel
 } NexusBufCtl;
 
 #define MAX_CHANNELS 8
@@ -60,16 +61,16 @@ typedef struct {
 //	audio channels 3,4		- offset given by audio34_offset
 //	(padding)
 //	signal status			- offset given by signal_ok_offset
-//	timecodes				- offsets given by tc_offset, ltc_offset
+//	timecodes				- offsets given by vitc_offset, ltc_offset
 //	video (4:2:0 secondary)	- offset given by sec_video_offset, size width*height*3/2
 
 // NexusControl is the top-level control struture describing how many channels
 // are in use and what their parameters are
 typedef struct {
-	NexusBufCtl		card[MAX_CHANNELS];	// array of buffer control information
+	NexusBufCtl		channel[MAX_CHANNELS];	// array of buffer control information
 										// for all 8 possible channels
 
-	int				cards;				// number of channels and therefore ring buffers in use
+	int				channels;			// number of channels and therefore ring buffers in use
 	int				ringlen;			// number of elements in ring buffer
 	int				elementsize;		// an element is video + audio + timecode
 
@@ -86,8 +87,15 @@ typedef struct {
 										// including internal padding for DMA transfer
 	int				signal_ok_offset;	// offset to flag for good input status
 	int				ltc_offset;			// offset to start of LTC timecode data (int)
-	int				tc_offset;			// offset to start of VITC timecode data (int)
+	int				vitc_offset;		// offset to start of VITC timecode data (int)
 	int				sec_video_offset;	// offset to secondary video buffer
+	
+	
+#ifndef _MSC_VER
+	pthread_mutex_t	m_source_name_update;	// mutex for source_name_update
+#endif
+	int				source_name_update;		// incremented each time the source_name is changed
+	
 } NexusControl;
 
 #endif // NEXUS_CONTROL_H

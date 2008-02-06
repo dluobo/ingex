@@ -12,7 +12,8 @@ static const char* g_streamTypeStrings[] =
     "unknown",
     "picture",
     "sound",
-    "timecode"
+    "timecode",
+    "event"
 };
 
 static const char* g_streamFormatStrings[] = 
@@ -29,8 +30,10 @@ static const char* g_streamFormatStrings[] =
     "dv50",
     "d10_picture",
     "avid_mjpeg",
+    "avid_dnxhd",
     "pcm",
-    "timecode"
+    "timecode",
+    "source_event"
 };
 
 /* keep length <= MAX_SOURCE_INFO_NAME_LEN */
@@ -182,4 +185,28 @@ void clear_stream_info(StreamInfo* streamInfo)
 }
 
 
+int select_frame_timecode(const FrameInfo* frameInfo, int tcIndex, int tcType, int tcSubType, Timecode* timecode)
+{
+    int typedIndex = 0;
+    int index = 0;
+    int i;
+    for (i = 0; i < frameInfo->numTimecodes; i++)
+    {
+        if ((tcIndex < 0 || tcIndex == typedIndex) &&
+            (tcType < 0 || frameInfo->timecodes[i].timecodeType == (TimecodeType)tcType) &&
+            (tcSubType < 0 || frameInfo->timecodes[i].timecodeSubType == (TimecodeSubType)tcSubType))
+        {
+            *timecode = frameInfo->timecodes[i].timecode;
+            return 1;
+        }
+        else if ((tcType < 0 || frameInfo->timecodes[i].timecodeType == (TimecodeType)tcType) &&
+            (tcSubType < 0 || frameInfo->timecodes[i].timecodeSubType == (TimecodeSubType)tcSubType))
+        {
+            typedIndex++;
+        }
+        index++;
+    }
+    
+    return 0;
+}
 

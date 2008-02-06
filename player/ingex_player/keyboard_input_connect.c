@@ -268,7 +268,15 @@ static void default_key_pressed(void* data, int key)
                 mc_select_menu_item_center(connect->control);
             }
             break;
-                
+
+        case '\'':
+            mc_toggle_show_source_name(connect->control);
+            break;
+            
+        case '#':
+            mc_toggle_show_audio_level(connect->control);
+            break;
+            
         default:
             break;
     }
@@ -526,6 +534,10 @@ static void qc_key_pressed(void* data, int key)
                     connect->halfSplitSpeed = 0;
                 }
                 mc_move_half_split(connect->control, 1 /* right or up */, connect->halfSplitSpeed);
+                break;
+                
+            case '\'':
+                mc_toggle_show_source_name(connect->control);
                 break;
                 
             default:

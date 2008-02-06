@@ -13,7 +13,7 @@ extern "C"
 
 /* shared memory source */
 
-int shared_mem_open(const char *card_name, MediaSource** source);
+int shared_mem_open(const char *channel_name, MediaSource** source);
 
 
 

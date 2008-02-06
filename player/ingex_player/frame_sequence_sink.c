@@ -7,7 +7,7 @@
 #include "frame_sequence_sink.h"
 #include "video_conversion.h"
 #include "YUV_frame.h"
-#include "YUV_quarter_frame.h"
+#include "YUV_small_pic.h"
 #include "utils.h"
 #include "logging.h"
 #include "macros.h"
@@ -224,10 +224,12 @@ static int fss_receive_stream_frame(void* data, int streamId, unsigned char* buf
                 sequence->streamInfo.width / scale, sequence->streamInfo.height / scale, 
                 UYVY);
         
-            quarter_frame(&srcFrame, 
+            small_pic(&srcFrame, 
                 &intermediateFrame,
                 0, 
-                0, 
+                0,
+                2,
+                2,
                 1, 
                 i == sequence->numImageQuads - 1, 
                 i == sequence->numImageQuads - 1, 
@@ -273,10 +275,12 @@ static int fss_receive_stream_frame_const(void* data, int streamId, const unsign
                 sequence->streamInfo.width / scale, sequence->streamInfo.height / scale, 
                 UYVY);
         
-            quarter_frame(&srcFrame, 
+            small_pic(&srcFrame, 
                 &intermediateFrame,
                 0, 
-                0, 
+                0,
+                2,
+                2,
                 1, 
                 i == sequence->numImageQuads - 1, 
                 i == sequence->numImageQuads - 1, 

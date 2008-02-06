@@ -356,6 +356,7 @@ int rfs_open(const char* filename, const StreamInfo* streamInfo, MediaSource** s
     newSource->mediaSource.close = rfs_close;
     
     newSource->streamInfo = *streamInfo;
+    newSource->streamInfo.sourceId = msc_create_id();
     
     rfs_get_length(newSource, &duration);
     

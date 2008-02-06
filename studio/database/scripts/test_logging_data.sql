@@ -14,6 +14,11 @@ INSERT INTO Series
     (srs_identifier, srs_name)
 VALUES
     (3, 'Demo');
+INSERT INTO Series
+    (srs_identifier, srs_name)
+VALUES
+    (4, 'Dragons Den');
+    
 SELECT setval('srs_id_seq', max(srs_identifier)) FROM Series;
 
     
@@ -43,6 +48,19 @@ INSERT INTO Programme
     (prg_identifier, prg_name, prg_series_id)
 VALUES
     (6, 'Test 3', 3);
+INSERT INTO Programme
+    (prg_identifier, prg_name, prg_series_id)
+VALUES
+    (7, 'Block 1', 4);
+INSERT INTO Programme
+    (prg_identifier, prg_name, prg_series_id)
+VALUES
+    (8, 'Block 2', 4);
+INSERT INTO Programme
+    (prg_identifier, prg_name, prg_series_id)
+VALUES
+    (9, 'Block 3', 4);
+    
 SELECT setval('prg_id_seq', max(prg_identifier)) FROM Programme;
 
 

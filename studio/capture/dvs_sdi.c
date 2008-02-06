@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.c,v 1.3 2007/10/26 14:43:06 john_f Exp $
+ * $Id: dvs_sdi.c,v 1.4 2008/02/06 16:59:01 john_f Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -62,15 +62,20 @@ NexusControl	*p_control = NULL;
 uint8_t			*ring[MAX_CHANNELS] = {0};
 int				control_id, ring_id[MAX_CHANNELS];
 int				width = 0, height = 0;
-int				element_size = 0, dma_video_size = 0, audio_offset = 0, audio_size = 0;
-CaptureFormat	video_format = FormatYUV422;
+int     element_size = 0, dma_video_size = 0, dma_total_size = 0;
+int     audio_offset = 0, audio_size = 0;
+int     ltc_offset = 0, vitc_offset = 0, tick_offset = 0, signal_ok_offset = 0;
+CaptureFormat	video_format = Format422PlanarYUV;
 CaptureFormat	video_secondary_format = FormatNone;
 static int verbose = 0;
-static int verbose_card = -1;	// which card to show when verbose is on
+static int verbose_channel = -1;	// which channel to show when verbose is on
 static int test_avsync = 0;
+static int benchmark = 0;
+static uint8_t *benchmark_video = NULL;
+static char *video_sample_file = NULL;
 pthread_mutex_t	m_log = PTHREAD_MUTEX_INITIALIZER;		// logging mutex to prevent intermixing logs
 
-// Master Timecode support, where one timecode is distributed to other cards
+// Master Timecode support, where one timecode is distributed to other channels
 typedef enum {
 	MasterNone,			// no timecode distribution
 	MasterVITC,			// use VITC as master
@@ -85,7 +90,7 @@ typedef enum {
 
 pthread_mutex_t	m_master_tc = PTHREAD_MUTEX_INITIALIZER;
 static MasterTimecodeType master_type = MasterNone;	// do not use master timecode
-static int master_card = 0;				// card with master timecode source (default card 0)
+static int master_channel = 0;				// channel with master timecode source (default channel 0)
 // TODO: use mutex to guard access
 static int master_tc = 0;				// timecode as integer
 static int64_t master_tod = 0;			// gettimeofday value corresponding to master_tc
@@ -183,7 +188,7 @@ static void catch_sigint(int sig_number)
 	cleanup_exit(0, NULL);
 }
 
-static void log_avsync_analysis(int card, int lastframe, const uint8_t *addr, unsigned long audio12_offset, unsigned long audio34_offset)
+static void log_avsync_analysis(int chan, int lastframe, const uint8_t *addr, unsigned long audio12_offset, unsigned long audio34_offset)
 {
 	int line_size = width*2;
 	int click1 = 0, click1_off = -1;
@@ -201,21 +206,21 @@ static void log_avsync_analysis(int card, int lastframe, const uint8_t *addr, un
 
 	if (flash || click1 || click2 || click3 || click4) {
 		if (flash)
-			logFF("card %d: %5d  red-flash      \n", card, lastframe + 1);
+			logTF("chan %d: %5d  red-flash      \n", chan, lastframe + 1);
 		if (click1)
-			logFF("card %d: %5d  a1off=%d %.1fms\n", card, lastframe + 1, click1_off, click1_off / 1920.0 * 40);
+			logTF("chan %d: %5d  a1off=%d %.1fms%s\n", chan, lastframe + 1, click1_off, click1_off / 48.0 , (click1_off > 480 ? " A/V sync error!" : ""));
 		if (click2)
-			logFF("card %d: %5d  a2off=%d %.1fms\n", card, lastframe + 1, click2_off, click2_off / 1920.0 * 40);
+			logTF("chan %d: %5d  a2off=%d %.1fms\n", chan, lastframe + 1, click2_off, click2_off / 48.0);
 		if (click3)
-			logFF("card %d: %5d  a3off=%d %.1fms\n", card, lastframe + 1, click3_off, click3_off / 1920.0 * 40);
+			logTF("chan %d: %5d  a3off=%d %.1fms\n", chan, lastframe + 1, click3_off, click3_off / 48.0);
 		if (click4)
-			logFF("card %d: %5d  a4off=%d %.1fms\n", card, lastframe + 1, click4_off, click4_off / 1920.0 * 40);
+			logFF("chan %d: %5d  a4off=%d %.1fms\n", chan, lastframe + 1, click4_off, click4_off / 48.0);
 	}
 }
 
 // Read available physical memory stats and
 // allocate shared memory ring buffers accordingly
-static int allocate_shared_buffers(int num_cards)
+static int allocate_shared_buffers(int num_channels)
 {
 	long long	k_shmmax = 0;
 	int			ring_len, i;
@@ -239,8 +244,8 @@ static int allocate_shared_buffers(int num_cards)
 
 	// calculate reasonable ring buffer length
 	// reduce by small number 5 to leave a little room for other shared mem
-	ring_len = k_shmmax / num_cards / element_size - 5;
-	printf("shmmax=%lld (%.3fMiB) calculated per card ring_len=%d\n", k_shmmax, k_shmmax / (1024*1024.0), ring_len);
+	ring_len = k_shmmax / num_channels / element_size - 5;
+	printf("shmmax=%lld (%.3fMiB) calculated per channel ring_len=%d\n", k_shmmax, k_shmmax / (1024*1024.0), ring_len);
 
 	printf("element_size=%d ring_len=%d (%.2f secs) (total=%lld)\n", element_size, ring_len, ring_len / 25.0, (long long)element_size * ring_len);
 	if (ring_len < 10)
@@ -271,7 +276,7 @@ static int allocate_shared_buffers(int num_cards)
 	}
 	p_control = (NexusControl*)shmat(control_id, NULL, 0);
 
-	p_control->cards = num_cards;
+	p_control->channels = num_channels;
 	p_control->ringlen = ring_len;
 	p_control->elementsize = element_size;
 
@@ -283,13 +288,17 @@ static int allocate_shared_buffers(int num_cards)
 	p_control->sec_video_format = video_secondary_format;
 
 	p_control->audio12_offset = audio_offset;
-	p_control->audio34_offset = audio_offset + 0x4000;
+	p_control->audio34_offset = audio_offset + audio_size / 2;
 	p_control->audio_size = audio_size;
 
-	p_control->tc_offset = audio_offset + audio_size - sizeof(int);
-	p_control->ltc_offset = p_control->tc_offset - sizeof(int);
-	p_control->signal_ok_offset = p_control->ltc_offset - sizeof(int);
+	p_control->vitc_offset = vitc_offset;
+	p_control->ltc_offset = ltc_offset;
+	p_control->signal_ok_offset = signal_ok_offset;
 	p_control->sec_video_offset = dma_video_size + audio_size;
+    
+    p_control->source_name_update = 0;
+    if (pthread_mutex_init(&p_control->m_source_name_update, NULL) != 0)
+        fprintf(stderr, "Mutex init error\n");
 
 	// Allocate multiple element ring buffers containing video + audio + tc
 	//
@@ -299,7 +308,7 @@ static int allocate_shared_buffers(int num_cards)
 	//  root# echo 1073741824 >> /proc/sys/kernel/shmmax  # 1294 frms (1GB)
 
 	// key for variable number of ring buffers can be 10, 11, 12, 13, 14, 15, 16, 17
-	for (i = 0; i < num_cards; i++)
+	for (i = 0; i < num_channels; i++)
 	{
 		int key = i + 10;
 		ring_id[i] = shmget(key, element_size * ring_len, IPC_CREAT | IPC_EXCL | 0666);
@@ -320,15 +329,17 @@ static int allocate_shared_buffers(int num_cards)
 
 		ring[i] = (uint8_t *)shmat(ring_id[i], NULL, 0);
 		if (ring[i] == (void *)-1) {
-			fprintf(stderr, "shmat failed for card[%d], ring_id[%d] = %d\n", i, i, ring_id[i]);
+			fprintf(stderr, "shmat failed for channel[%d], ring_id[%d] = %d\n", i, i, ring_id[i]);
 			perror("shmat");
 			return 0;
 		}
-		p_control->card[i].lastframe = -1;
-		p_control->card[i].hwdrop = 0;
+		p_control->channel[i].lastframe = -1;
+		p_control->channel[i].hwdrop = 0;
+        sprintf(p_control->channel[i].source_name, "ch%d", i);
+        p_control->channel[i].source_name[sizeof(p_control->channel[i].source_name) - 1] = '\0';
 
 		// initialise mutex in shared memory
-		if (pthread_mutex_init(&p_control->card[i].m_lastframe, NULL) != 0)
+		if (pthread_mutex_init(&p_control->channel[i].m_lastframe, NULL) != 0)
 			fprintf(stderr, "Mutex init error\n");
 
 		// Set ring frames to black - too slow!
@@ -349,16 +360,23 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
 	sv_fifo_bufferinfo	bufferinfo;
 	int					get_res;
 	int					ring_len = p_control->ringlen;
-	NexusBufCtl			*pc = &(p_control->card[chan]);
+	NexusBufCtl			*pc = &(p_control->channel[chan]);
 
 	// Get sv memmory buffer
 	// Ignore problems with missing audio, and carry on with good video but zeroed audio
-	get_res = sv_fifo_getbuffer(sv, poutput, &pbuffer, NULL, 0);
+    int flags = 0;
+    if (recover_from_video_loss)
+    {
+        flags |= SV_FIFO_FLAG_FLUSH;
+        logTF("chan %d: Setting SV_FIFO_FLAG_FLUSH\n", chan);
+    }
+	get_res = sv_fifo_getbuffer(sv, poutput, &pbuffer, NULL, flags);
 	if (get_res != SV_OK && get_res != SV_ERROR_INPUT_AUDIO_NOAIV
 			&& get_res != SV_ERROR_INPUT_AUDIO_NOAESEBU)
 	{
 		// reset master timecode to "unset"
-		if (chan == master_card) {
+		if (chan == master_channel)
+        {
 			PTHREAD_MUTEX_LOCK( &m_master_tc )
 			master_tod = 0;
 			master_tc = 0;
@@ -387,12 +405,12 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
 
 	uint8_t *vid_dest = ring[chan] + element_size * ((pc->lastframe+1) % ring_len);
 	uint8_t *dma_dest = vid_dest;
-	if (video_format == FormatYUV422 || video_format == FormatYUV422DV) {
+	if (video_format == Format422PlanarYUV || video_format == Format422PlanarYUVShifted) {
 		// Store frame at pc->lastframe+2 to allow space for UYVY->YUV422 conversion
 		dma_dest = ring[chan] + element_size * ((pc->lastframe+2) % ring_len);
 	}
 	pbuffer->dma.addr = (char *)dma_dest;
-	pbuffer->dma.size = element_size;			// video + audio + tc + yuv
+	pbuffer->dma.size = dma_total_size;			// video + audio
 
 	// read frame from DVS chan
 	// reception of a SIGUSR1 can sometimes cause this to fail
@@ -404,7 +422,13 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
 		SV_CHECK( sv_fifo_start(sv, poutput) );
 	}
 
-	if (test_avsync) {
+    // set flag so we can zero audio if not present
+    int no_audio = (SV_ERROR_INPUT_AUDIO_NOAIV == get_res
+                || SV_ERROR_INPUT_AUDIO_NOAESEBU == get_res
+                || 0 == pbuffer->audio[0].addr[0]);
+
+	if (test_avsync && !no_audio)
+    {
 		log_avsync_analysis(chan, pc->lastframe,
 			dma_dest, (unsigned long)pbuffer->audio[0].addr[0], (unsigned long)pbuffer->audio[0].addr[1]);
 	}
@@ -423,17 +447,18 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
 	int64_t clock_diff = cur_clock - rec_clock;
 	int64_t tod_rec = tod - clock_diff;
 
-    // set flag so we can zero audio if not present
-    int no_audio = (SV_ERROR_INPUT_AUDIO_NOAIV == get_res
-                || SV_ERROR_INPUT_AUDIO_NOAESEBU == get_res
-                || 0 == pbuffer->audio[0].addr[0]);
-
-	if (video_format == FormatYUV422 || video_format == FormatYUV422DV)
+	if (video_format == Format422PlanarYUV || video_format == Format422PlanarYUVShifted)
     {
+		uint8_t *vid_input = dma_dest;
+
+		// Use hard-to-code picture when benchmarking
+		if (benchmark)
+			vid_input = benchmark_video;
+
 		// Repack to planar YUV 4:2:2
 		uyvy_to_yuv422(		width, height,
-							video_format == FormatYUV422DV,	// do DV50 line shift?
-							dma_dest,						// input
+							video_format == Format422PlanarYUVShifted,	// do DV50 line shift?
+							vid_input,						// input
 							vid_dest);						// output
 
 		// copy audio to match
@@ -453,7 +478,7 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
 	if (video_secondary_format != FormatNone) {
 		// Downconvert to 4:2:0 YUV buffer located just after audio
 		uyvy_to_yuv420(width, height,
-					video_secondary_format == FormatYUV420DV,	// do DV25 line shift?
+					video_secondary_format == Format420PlanarYUVShifted,	// do DV25 line shift?
 					dma_dest,									// input
 					vid_dest + (audio_offset + audio_size));	// output
 	}
@@ -470,8 +495,8 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
 			PTHREAD_MUTEX_UNLOCK( &m_log )
 		}
 	}
-	int tc_as_int = dvs_tc_to_int(vitc_to_use);
-	int orig_tc_as_int = tc_as_int;
+	int vitc_as_int = dvs_tc_to_int(vitc_to_use);
+	int orig_vitc_as_int = vitc_as_int;
 
 	// A similar check must be done for LTC since the field
 	// flag is occasionally set when the fifo call returns
@@ -491,10 +516,10 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
 	int derived_tc = 0;
 	int64_t diff_to_master = 0;
 	if (master_type != MasterNone) {
-		if (chan == master_card) {
+		if (chan == master_channel) {
 			// Store timecode and time-of-day the frame was recorded in shared variable
 			PTHREAD_MUTEX_LOCK( &m_master_tc )
-			master_tc = (master_type == MasterLTC) ? ltc_as_int : tc_as_int;
+			master_tc = (master_type == MasterLTC) ? ltc_as_int : vitc_as_int;
 			master_tod = tod_rec;
 			PTHREAD_MUTEX_UNLOCK( &m_master_tc )
 		}
@@ -520,21 +545,21 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
 			if (master_type == MasterLTC)
 				ltc_as_int = derived_tc;
 			else
-				tc_as_int = derived_tc;
+				vitc_as_int = derived_tc;
 		}
 	}
 
 	// Lookup last frame's timecodes to calculate timecode discontinuity
-	int last_tc = *(int *)(ring[chan] + element_size * ((pc->lastframe) % ring_len) + p_control->tc_offset);
-	int last_ltc = *(int *)(ring[chan] + element_size * ((pc->lastframe) % ring_len) + p_control->tc_offset-4);
+	int last_vitc = *(int *)(ring[chan] + element_size * ((pc->lastframe) % ring_len) + vitc_offset);
+	int last_ltc = *(int *)(ring[chan] + element_size * ((pc->lastframe) % ring_len) + ltc_offset);
 
 	// Check number of frames to recover if any
 	// A maximum of 50 frames will be recovered.
-	int recover_diff = (recover_timecode_type == RecoverVITC) ? tc_as_int - last_tc : ltc_as_int - last_ltc;
+	int recover_diff = (recover_timecode_type == RecoverVITC) ? vitc_as_int - last_vitc : ltc_as_int - last_ltc;
 	if (recover_from_video_loss && recover_diff > 1 && recover_diff < 52) {
 		logTF("chan %d: Need to recover %d frames\n", chan, recover_diff);
 
-		tc_as_int += recover_diff - 1;
+		vitc_as_int += recover_diff - 1;
 		ltc_as_int += recover_diff - 1;
 
 		// Increment pc->lastframe by amount to avoid discontinuity
@@ -551,37 +576,42 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
 	// Copy timecode into last 4 bytes of element_size
 	// This is a bit sneaky but saves maintaining a separate ring buffer
 	// Also copy LTC just before VITC timecode as int.
-	memcpy(ring[chan] + element_size * ((pc->lastframe+1) % ring_len) + p_control->tc_offset, &tc_as_int, 4);
-	memcpy(ring[chan] + element_size * ((pc->lastframe+1) % ring_len) + p_control->tc_offset-4, &ltc_as_int, 4);
+	memcpy(ring[chan] + element_size * ((pc->lastframe+1) % ring_len) + vitc_offset, &vitc_as_int, sizeof(int));
+	memcpy(ring[chan] + element_size * ((pc->lastframe+1) % ring_len) + ltc_offset, &ltc_as_int, sizeof(int));
 
 	// Copy "frame" tick (tick / 2) into unused area at end of element_size
 	int frame_tick = pbuffer->control.tick / 2;
-	memcpy(ring[chan] + element_size * ((pc->lastframe+1) % ring_len) + p_control->tc_offset-8, &frame_tick, 4);
+	memcpy(ring[chan] + element_size * ((pc->lastframe+1) % ring_len) + tick_offset, &frame_tick, sizeof(int));
+
+    // Set signal_ok flag
+    *(int *)(ring[chan] + element_size * ((pc->lastframe+1) % ring_len) + signal_ok_offset) = 1;
 
 	// Get info structure for statistics
 	sv_fifo_info info;
 	SV_CHECK(sv_fifo_status(sv, poutput, &info));
 
 	// Timecode error occurs when difference is not exactly 1
+    // or (around midnight) not exactly -2159999
 	// (ignore the first frame captured when lastframe is -1)
-	int tc_diff = tc_as_int - last_tc;
+	int vitc_diff = vitc_as_int - last_vitc;
 	int ltc_diff = ltc_as_int - last_ltc;
-	int tc_err = (tc_diff != 1 && ltc_diff != 1) && pc->lastframe != -1;
+	int tc_err = (vitc_diff != 1 && vitc_diff != -2159999
+        && ltc_diff != 1 && ltc_diff != -2159999) && pc->lastframe != -1;
 
 	// log timecode discontinuity if any, or give verbose log of specified chan
-	if (tc_err || (verbose && chan == verbose_card)) {
+	if (tc_err || (verbose && chan == verbose_channel)) {
 		PTHREAD_MUTEX_LOCK( &m_log )
-		logTF("chan %d: lastframe=%6d tick/2=%7d hwdrop=%5d vitc_tc=%8x vitc_tc2=%8x ltc=%8x tc_int=%d ltc_int=%d last_tc=%d tc_diff=%d %s ltc_diff=%d %s\n",
+		logTF("chan %d: lastframe=%6d tick/2=%7d hwdrop=%5d vitc_tc=%8x vitc_tc2=%8x ltc=%8x tc_int=%d ltc_int=%d last_vitc=%d vitc_diff=%d %s ltc_diff=%d %s\n",
 		chan, pc->lastframe, pbuffer->control.tick / 2,
 		info.dropped,
 		pbuffer->timecode.vitc_tc,
 		pbuffer->timecode.vitc_tc2,
 		pbuffer->timecode.ltc_tc,
-		tc_as_int,
+		vitc_as_int,
 		ltc_as_int,
-		last_tc,
-		tc_diff,
-		tc_diff != 1 ? "!" : "",
+		last_vitc,
+		vitc_diff,
+		vitc_diff != 1 ? "!" : "",
 		ltc_diff,
 		ltc_diff != 1 ? "!" : "");
 		PTHREAD_MUTEX_UNLOCK( &m_log )
@@ -591,14 +621,14 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
 		PTHREAD_MUTEX_LOCK( &m_log )		// guard logging with mutex to avoid intermixing
 
 		if (info.dropped != pc->hwdrop)
-			logTF("chan %d: lf=%7d vitc=%8d ltc=%8d dropped=%d\n", chan, pc->lastframe+1, tc_as_int, ltc_as_int, info.dropped);
+			logTF("chan %d: lf=%7d vitc=%8d ltc=%8d dropped=%d\n", chan, pc->lastframe+1, vitc_as_int, ltc_as_int, info.dropped);
 
 		logFF("chan[%d]: tick=%d hc=%u,%u diff_to_mast=%12lld  lf=%7d vitc=%8d ltc=%8d (orig v=%8d l=%8d] drop=%d\n", chan,
 			pbuffer->control.tick,
 			pbuffer->control.clock_high, pbuffer->control.clock_low,
 			diff_to_master,
-			pc->lastframe+1, tc_as_int, ltc_as_int,
-			orig_tc_as_int, orig_ltc_as_int,
+			pc->lastframe+1, vitc_as_int, ltc_as_int,
+			orig_vitc_as_int, orig_ltc_as_int,
 			info.dropped);
 
 		PTHREAD_MUTEX_UNLOCK( &m_log )		// end logging guard
@@ -634,7 +664,7 @@ static int write_dummy_frames(sv_handle *sv, int chan, int current_frame_tick, i
 		for (i = 0; i < num_dummy_frames; i++) {
 			// Read ring buffer info
 			int					ring_len = p_control->ringlen;
-			NexusBufCtl			*pc = &(p_control->card[chan]);
+			NexusBufCtl			*pc = &(p_control->channel[chan]);
 
 			// dummy video frame
 			uint8_t *vid_dest = ring[chan] + element_size * ((pc->lastframe+1) % ring_len);
@@ -644,18 +674,20 @@ static int write_dummy_frames(sv_handle *sv, int chan, int current_frame_tick, i
 			memset(ring[chan] + element_size * ((pc->lastframe+1) % ring_len) + audio_offset, 0, 1920*4*4);
 
 			// Increment timecode by 1
-			int last_tc = *(int *)(ring[chan] + element_size * ((pc->lastframe) % ring_len) + p_control->tc_offset);
-			int last_ltc = *(int *)(ring[chan] + element_size * ((pc->lastframe) % ring_len) + p_control->tc_offset-4);
-			int last_ftk = *(int *)(ring[chan] + element_size * ((pc->lastframe) % ring_len) + p_control->tc_offset-8);
-			last_tc++;
+			int last_vitc = *(int *)(ring[chan] + element_size * ((pc->lastframe) % ring_len) + vitc_offset);
+			int last_ltc = *(int *)(ring[chan] + element_size * ((pc->lastframe) % ring_len) + ltc_offset);
+			int last_ftk = *(int *)(ring[chan] + element_size * ((pc->lastframe) % ring_len) + tick_offset);
+			last_vitc++;
 			last_ltc++;
 			last_ftk++;
-			memcpy(ring[chan] + element_size * ((pc->lastframe+1) % ring_len) + p_control->tc_offset, &last_tc, 4);
-			memcpy(ring[chan] + element_size * ((pc->lastframe+1) % ring_len) + p_control->tc_offset-4, &last_ltc, 4);
-			memcpy(ring[chan] + element_size * ((pc->lastframe+1) % ring_len) + p_control->tc_offset-8, &last_ftk, 4);
+			memcpy(ring[chan] + element_size * ((pc->lastframe+1) % ring_len) + vitc_offset, &last_vitc, sizeof(int));
+			memcpy(ring[chan] + element_size * ((pc->lastframe+1) % ring_len) + ltc_offset, &last_ltc, sizeof(int));
+			memcpy(ring[chan] + element_size * ((pc->lastframe+1) % ring_len) + tick_offset, &last_ftk, sizeof(int));
 
-			if (verbose)
-				logTF("chan: %d i:%2d  cur_frame_tick=%d tick_last_dummy_frame=%d last_ftk=%d tc=%d ltc=%d\n", chan, i, current_frame_tick, tick_last_dummy_frame, last_ftk, last_tc, last_ltc);
+            if (verbose)
+            {
+	            logTF("chan: %d i:%2d  cur_frame_tick=%d tick_last_dummy_frame=%d last_ftk=%d tc=%d ltc=%d\n", chan, i, current_frame_tick, tick_last_dummy_frame, last_ftk, last_vitc, last_ltc);
+            }
 
 			// signal frame is now ready
 			PTHREAD_MUTEX_LOCK( &pc->m_lastframe )
@@ -742,8 +774,8 @@ static void * sdi_monitor(void *arg)
 							sizeof(storage_info),
 							0) );
 
-	// To aid debugging, delay cards by a small amount of time so that
-	// they appear in log files in card 0, 1, 2, 3 order
+	// To aid debugging, delay channels by a small amount of time so that
+	// they appear in log files in channel 0...7 order
 	if (chan > 0) {
 		usleep(10000 + 5000 * chan);				
 	}
@@ -777,7 +809,7 @@ static void * sdi_monitor(void *arg)
 			SV_CHECK( sv_fifo_stop(sv, poutput, 0) );
 			wait_for_good_signal(sv, chan, 25);
 
-			// Note the card's tick counter appears to pause while
+			// Note the channel's tick counter appears to pause while
 			// the init() and start() take place
 			//SV_CHECK( sv_fifo_init(sv, &poutput, TRUE, FALSE, TRUE, FALSE, 0) );
 			SV_CHECK( sv_fifo_reset(sv, poutput) );
@@ -814,15 +846,16 @@ static void usage_exit(void)
 	fprintf(stderr, "                         None   - secondary buffer disabled (default)\n");
 	fprintf(stderr, "                         MPEG   - secondary buffer is planar YUV 4:2:0\n");
 	fprintf(stderr, "                         DV25   - secondary buffer is planar YUV 4:2:0 with field order line shift\n");
-	fprintf(stderr, "    -mt <master tc type> type of master card timecode to use: VITC, LTC, OFF\n");
-	fprintf(stderr, "    -mc <master card>    card to use as timecode master: 0, 1, 2, 3\n");
+	fprintf(stderr, "    -mt <master tc type> type of master channel timecode to use: VITC, LTC, OFF\n");
+	fprintf(stderr, "    -mc <master ch>      channel to use as timecode master: 0...7\n");
 	fprintf(stderr, "    -rt <recover type>   timecode type to calculate missing frames to recover: VITC, LTC\n");
 	fprintf(stderr, "    -c <max channels>    maximum number of channels to use for capture\n");
 	fprintf(stderr, "    -avsync              perform avsync analysis - requires clapper-board input video\n");
+	fprintf(stderr, "    -b <video_sample>    benchmark using video_sample instead of captured UYVY video frames\n");
 	fprintf(stderr, "    -q                   quiet operation (fewer messages)\n");
 	fprintf(stderr, "    -v                   increase verbosity\n");
 	fprintf(stderr, "    -ld                  logfile directory\n");
-	fprintf(stderr, "    -d <card>            card number to print verbose debug messages for\n");
+	fprintf(stderr, "    -d <channel>         channel number to print verbose debug messages for\n");
 	fprintf(stderr, "    -h                   usage\n");
 	fprintf(stderr, "\n");
 	exit(1);
@@ -831,7 +864,7 @@ static void usage_exit(void)
 int main (int argc, char ** argv)
 {
 	int					n, max_channels = MAX_CHANNELS;
-	char *logfiledir = ".";
+	const char * logfiledir = ".";
 
 	time_t now;
 	struct tm *tm_now;
@@ -857,6 +890,15 @@ int main (int argc, char ** argv)
 		else if (strcmp(argv[n], "-avsync") == 0)
 		{
 			test_avsync = 1;
+		}
+		else if (strcmp(argv[n], "-b") == 0)
+		{
+			if (argc <= n+1)
+				usage_exit();
+
+			benchmark = 1;
+			video_sample_file = argv[n+1];
+			n++;
 		}
 		else if (strcmp(argv[n], "-ld") == 0)
 		{
@@ -890,10 +932,10 @@ int main (int argc, char ** argv)
 			if (argc <= n+1)
 				usage_exit();
 
-			if (sscanf(argv[n+1], "%d", &master_card) != 1 ||
-				master_card > 3 || master_card < 0)
+			if (sscanf(argv[n+1], "%d", &master_channel) != 1 ||
+				master_channel > 7 || master_channel < 0)
 			{
-				fprintf(stderr, "-mc requires card number from 0 .. 3\n");
+				fprintf(stderr, "-mc requires channel number from 0...7\n");
 				return 1;
 			}
 			n++;
@@ -932,10 +974,10 @@ int main (int argc, char ** argv)
 			if (argc <= n+1)
 				usage_exit();
 
-			if (sscanf(argv[n+1], "%d", &verbose_card) != 1 ||
-				verbose_card > 3 || verbose_card < 0)
+			if (sscanf(argv[n+1], "%d", &verbose_channel) != 1 ||
+				verbose_channel > 7 || verbose_channel < 0)
 			{
-				fprintf(stderr, "-d requires card number {0,1,2,3}\n");
+				fprintf(stderr, "-d requires channel number {0...7}\n");
 				return 1;
 			}
 			n++;
@@ -946,13 +988,13 @@ int main (int argc, char ** argv)
 				usage_exit();
 
 			if (strcmp(argv[n+1], "UYVY") == 0) {
-				video_format = FormatUYVY;
+				video_format = Format422UYVY;
 			}
 			else if (strcmp(argv[n+1], "YUV422") == 0) {
-				video_format = FormatYUV422;
+				video_format = Format422PlanarYUV;
 			}
 			else if (strcmp(argv[n+1], "DV50") == 0) {
-				video_format = FormatYUV422DV;
+				video_format = Format422PlanarYUVShifted;
 			}
 			else {
 				usage_exit();
@@ -968,10 +1010,10 @@ int main (int argc, char ** argv)
 				video_secondary_format = FormatNone;
 			}
 			else if (strcmp(argv[n+1], "MPEG") == 0) {
-				video_secondary_format = FormatYUV420;
+				video_secondary_format = Format420PlanarYUV;
 			}
 			else if (strcmp(argv[n+1], "DV25") == 0) {
-				video_secondary_format = FormatYUV420DV;
+				video_secondary_format = Format420PlanarYUVShifted;
 			}
 			else {
 				usage_exit();
@@ -981,11 +1023,11 @@ int main (int argc, char ** argv)
 	}
 
 	switch (video_format) {
-		case FormatUYVY:
+		case Format422UYVY:
 				logTF("Capturing video as UYVY (4:2:2)\n"); break;
-		case FormatYUV422:
+		case Format422PlanarYUV:
 				logTF("Capturing video as planar YUV 4:2:2\n"); break;
-		case FormatYUV422DV:
+		case Format422PlanarYUVShifted:
 				logTF("Capturing video as YUV 4:2:2 planar with picture shifted down by one line\n"); break;
 		default:
 				logTF("Unsupported video buffer format\n");
@@ -995,9 +1037,9 @@ int main (int argc, char ** argv)
 	switch (video_secondary_format) {
 		case FormatNone:
 				logTF("Secondary video buffer is disabled\n"); break;
-		case FormatYUV420:
+		case Format420PlanarYUV:
 				logTF("Secondary video buffer is YUV 4:2:0 planar\n"); break;
-		case FormatYUV420DV:
+		case Format420PlanarYUVShifted:
 				logTF("Secondary video buffer is YUV 4:2:0 planar with picture shifted down by one line\n"); break;
 		default:
 				logTF("Unsupported Secondary video buffer format\n");
@@ -1007,8 +1049,8 @@ int main (int argc, char ** argv)
 	if (master_type == MasterNone)
 		logTF("Master timecode not used\n");
 	else
-		logTF("Master timecode type is %s using card %d\n",
-				master_type == MasterVITC ? "VITC" : "LTC", master_card);
+		logTF("Master timecode type is %s using channel %d\n",
+				master_type == MasterVITC ? "VITC" : "LTC", master_channel);
 
 	logTF("Using %s to determine number of frames to recover when video re-aquired\n",
 			recover_timecode_type == RecoverVITC ? "VITC" : "LTC");
@@ -1050,15 +1092,17 @@ int main (int argc, char ** argv)
 	//
 
 	// Check SDK multichannel capability
-	if (check_sdk_version3()) {
+	if (check_sdk_version3())
+    {
 		sv_info status_info;
 		int card = 0;
 		int channel = 0;
 		for (card = 0; card < max_channels && channel < max_channels; card++)
 		{
 			char card_str[64] = {0};
-	
-			snprintf(card_str, sizeof(card_str)-1, "PCI,card=%d,channel=0", card);
+
+            snprintf(card_str, sizeof(card_str)-1, "PCI,card=%d,channel=0", card);
+            //snprintf(card_str, sizeof(card_str)-1, "PCI,card=%d", card);
 	
 			int res = sv_openex(&a_sv[channel],
 								card_str,
@@ -1066,38 +1110,70 @@ int main (int argc, char ** argv)
 								SV_OPENTYPE_INPUT,		// Open V+A input, not output too
 								0,
 								0);
-			if (res == SV_OK) {
+            if (res == SV_ERROR_WRONGMODE)
+            {
+                // Multichannel mode not on so doesn't like "channel=0"
+                snprintf(card_str, sizeof(card_str)-1, "PCI,card=%d", card);
+        
+                res = sv_openex(&a_sv[channel],
+                                    card_str,
+                                    SV_OPENPROGRAM_DEMOPROGRAM,
+                                    SV_OPENTYPE_INPUT,		// Open V+A input, not output too
+                                    0,
+                                    0);
+            }
+			if (res == SV_OK)
+            {
 				sv_status(a_sv[channel], &status_info);
-				width = status_info.xsize;
-				height = status_info.ysize;
-				logTF("card %d: device present (%dx%d)\n", card, width, height);
+				logTF("card %d: device present (%dx%d)\n", card, status_info.xsize, status_info.ysize);
 				channel++;
 				num_sdi_threads++;
+                if (width == 0)
+                {
+                    // Set size from first channel
+				    width = status_info.xsize;
+				    height = status_info.ysize;
+                }
+                else if (width != status_info.xsize || height != status_info.ysize)
+                {
+                    // Warn if other channels different from first
+                    logTF("card %d: warning: different video size!\n", card);
+                }
+
+
+                // check for multichannel mode
+                int multichannel_mode = 0;
+                if ((res = sv_option_get(a_sv[channel-1], SV_OPTION_MULTICHANNEL, &multichannel_mode)) != SV_OK) {
+                    logTF("card %d: sv_option_get(SV_OPTION_MULTICHANNEL) failed: %s\n", card, sv_geterrortext(res));
+                }
 
 				// If card has a multichannel mode on, open second channel
-				int multichannel_mode = 0;
-				if ((res = sv_option_get(a_sv[channel-1], SV_OPTION_MULTICHANNEL, &multichannel_mode)) != SV_OK) {
-					logTF("card %d: sv_option_get(SV_OPTION_MULTICHANNEL) failed: %s\n", card, sv_geterrortext(res));
-				}
-				if (multichannel_mode) {
-					snprintf(card_str, sizeof(card_str)-1, "PCI,card=%d,channel=1", card);
-					int res = sv_openex(&a_sv[channel],
-								card_str,
-								SV_OPENPROGRAM_DEMOPROGRAM,
-								SV_OPENTYPE_INPUT,		// Open V+A input, not output too
-								0,
-								0);
-					if (res == SV_OK) {
-						sv_status(a_sv[channel], &status_info);
-						logTF("card %d: opened second channel (%dx%d)\n", card, status_info.xsize, status_info.ysize);
-						channel++;
-						num_sdi_threads++;
+				if (multichannel_mode)
+                {
+                    if (channel < max_channels)
+                    {
+                        snprintf(card_str, sizeof(card_str)-1, "PCI,card=%d,channel=1", card);
+                        int res = sv_openex(&a_sv[channel],
+                                    card_str,
+                                    SV_OPENPROGRAM_DEMOPROGRAM,
+                                    SV_OPENTYPE_INPUT,		// Open V+A input, not output too
+                                    0,
+                                    0);
+                        if (res == SV_OK)
+                        {
+                            sv_status(a_sv[channel], &status_info);
+                            logTF("card %d: opened second channel (%dx%d)\n", card, status_info.xsize, status_info.ysize);
+                            channel++;
+                            num_sdi_threads++;
+                        }
+                        else
+                        {
+                            logTF("card %d: failed opening second channel: %s\n", card, sv_geterrortext(res));
+                        }
 					}
-					else {
-						logTF("card %d: failed opening second channel: %s\n", card, sv_geterrortext(res));
-					}
 				}
-				else {
+				else
+                {
 					logTF("card %d: multichannel mode off\n", card);
 				}
 	
@@ -1112,9 +1188,9 @@ int main (int argc, char ** argv)
 			}
 		}
 	}
-	else {
-		//////////////////////////////////////////////////////
-		// Attempt to open all sv cards
+	else
+    {
+        // older SDK
 		//
 		// card specified by string of form "PCI,card=n" where n = 0,1,2,3
 		//
@@ -1132,12 +1208,21 @@ int main (int argc, char ** argv)
 								SV_OPENTYPE_INPUT,		// Open V+A input, not output too
 								0,
 								0);
-			if (res == SV_OK) {
+			if (res == SV_OK)
+            {
 				sv_status(a_sv[card], &status_info);
-				width = status_info.xsize;
-				height = status_info.ysize;
-				logTF("card %d: device present (%dx%d)\n", card, width, height);
+				logTF("card %d: device present (%dx%d)\n", card, status_info.xsize, status_info.ysize);
                 num_sdi_threads++;
+                if (width == 0)
+                {
+                    width = status_info.xsize;
+                    height = status_info.ysize;
+                }
+                else if (width != status_info.xsize || height != status_info.ysize)
+                {
+                    // Warn if other channels different from first
+                    logTF("card %d: different video size!\n", card);
+                }
 			}
 			else
 			{
@@ -1169,30 +1254,55 @@ int main (int argc, char ** argv)
 	audio_size = 0x8000;
 	audio_offset = dma_video_size;
 
+    // audio_size is greater than 1920 * 4 * 4
+    // so we use the spare bytes at end for timecode
+    vitc_offset         = audio_offset + audio_size - sizeof(int);
+    ltc_offset          = audio_offset + audio_size - 2 * sizeof(int);
+    tick_offset         = audio_offset + audio_size - 3 * sizeof(int);
+    signal_ok_offset    = audio_offset + audio_size - 4 * sizeof(int);
+
 	// An element in the ring buffer contains: video(4:2:2) + audio + video(4:2:0)
-	element_size =	dma_video_size		// video frame as captured by dma transfer
-					+ audio_size		// size of internal structure of dvs dma transfer
-										// for 4 channels.  This is greater than 1920 * 4 * 4
-										// so we use the last 4 spare bytes for timecode
+	dma_total_size = dma_video_size		// video frame as captured by dma transfer
+					+ audio_size;		// DVS internal structure for 4 audio channels
+										
+
+    element_size = dma_total_size
 					+ width*height*3/2;	// YUV 4:2:0 video buffer
 
 
 	// Create "NO VIDEO" frame
 	no_video_frame = (uint8_t*)malloc(width*height*2);
 	uyvy_no_video_frame(width, height, no_video_frame);
-	if (video_format == FormatYUV422 || video_format == FormatYUV422DV) {
+	if (video_format == Format422PlanarYUV || video_format == Format422PlanarYUVShifted)
+    {
 		uint8_t *tmp_frame = (uint8_t*)malloc(width*height*2);
 		uyvy_no_video_frame(width, height, tmp_frame);
 
 		// Repack to planar YUV 4:2:2
 		uyvy_to_yuv422(		width, height,
-							video_format == FormatYUV422DV,	// do DV50 line shift?
+							video_format == Format422PlanarYUVShifted,	// do DV50 line shift?
 							tmp_frame,						// input
 							no_video_frame);				// output
 
 		free(tmp_frame);
 	}
 
+	// Create benchmark video if specified
+	if (benchmark) {
+		benchmark_video = (uint8_t*)malloc(width*height*2);
+		FILE *fp_sample = fopen(video_sample_file, "rb");
+		if (! fp_sample) {
+			perror("fopen");
+			return 1;
+		}
+		if (fread(benchmark_video, width*height*2, 1, fp_sample) != 1) {
+			printf("Could not read sample video frame\n");
+			return 1;
+		}
+		logTF("Read one frame (%dx%d) for use as benchmark frame from %s\n", width, height, video_sample_file);
+	}
+
+    // Allocate shared memory buffers
 	if (! allocate_shared_buffers(num_sdi_threads))
 	{
 		return 1;

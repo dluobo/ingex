@@ -16,28 +16,6 @@ static overlay g_ballOverlay0 = {0, 0, 0, 0, 0, 0};
 static overlay g_ballOverlay1 = {0, 0, 0, 0, 0, 0};
 static void init_ball_overlay();
 
-/* TODO: make this common - the OSD also has this */
-/* Rec 601 colours for colours defined in Colour */
-typedef struct 
-{
-    unsigned char Y;
-    unsigned char U;
-    unsigned char V;
-} YUVColours;
-
-static const YUVColours g_rec601YUVColours[] = 
-{
-    {235, 128, 128},    /* WHITE_COLOUR */
-    {210, 16, 146},     /* YELLOW_COLOUR */
-    {169, 166, 16},     /* CYAN_COLOUR */
-    {144, 53, 34},      /* GREEN_COLOUR */
-    {106, 200, 221},    /* MAGENTA_COLOUR */
-    {81, 90, 240},      /* RED_COLOUR */
-    {40, 240, 110},     /* BLUE_COLOUR */
-    {16, 128, 128},     /* BLACK_COLOUR */
-    {165, 43, 180},     /* ORANGE_COLOUR */
-};
-
 typedef struct
 {
     Colour colour;
@@ -50,6 +28,7 @@ typedef struct
 {
     MediaSource mediaSource;
     StreamInfo streamInfo;
+    formats yuvFormat;
 
     int isDisabled;
 
@@ -113,7 +92,7 @@ static void add_balls(BouncingBallSource* source)
     YUV_frame yuvFrame;
     char txtY, txtU, txtV, box;
 
-    CHK_OFAIL(YUV_frame_from_buffer(&yuvFrame, source->image, source->streamInfo.width, source->streamInfo.height, UYVY) == 1);
+    CHK_OFAIL(YUV_frame_from_buffer(&yuvFrame, source->image, source->streamInfo.width, source->streamInfo.height, source->yuvFormat) == 1);
 
     
     /* remove existing balls */
@@ -335,13 +314,15 @@ int bbs_create(const StreamInfo* videoStreamInfo, int64_t length, int numBalls, 
     Colour ballColours[] = 
     {
         ORANGE_COLOUR, YELLOW_COLOUR, GREEN_COLOUR, MAGENTA_COLOUR,
-        RED_COLOUR, WHITE_COLOUR, BLUE_COLOUR, BLACK_COLOUR, CYAN_COLOUR 
+        RED_COLOUR, LIGHT_WHITE_COLOUR, BLUE_COLOUR, BLACK_COLOUR, CYAN_COLOUR 
     };
     double angle;
 
     
     if (videoStreamInfo->type != PICTURE_STREAM_TYPE ||
-        videoStreamInfo->format != UYVY_FORMAT)
+        (videoStreamInfo->format != UYVY_FORMAT &&
+            videoStreamInfo->format != YUV422_FORMAT &&
+            videoStreamInfo->format != YUV420_FORMAT))
     {
         ml_log_error("Invalid stream for bouncing ball source\n");
         return 0;
@@ -353,6 +334,7 @@ int bbs_create(const StreamInfo* videoStreamInfo, int64_t length, int numBalls, 
     CALLOC_ORET(newSource, BouncingBallSource, 1);
     
     newSource->length = length;
+    
     
     CALLOC_OFAIL(newSource->balls, BallInfo, numBalls);
     newSource->numBalls = numBalls;
@@ -366,9 +348,23 @@ int bbs_create(const StreamInfo* videoStreamInfo, int64_t length, int numBalls, 
         newSource->balls[i].speed = videoStreamInfo->width / 100;
     }
 
-    newSource->imageSize = videoStreamInfo->width * videoStreamInfo->height * 2;
+    if (videoStreamInfo->format == UYVY_FORMAT)
+    {
+        newSource->yuvFormat = UYVY;
+        newSource->imageSize = videoStreamInfo->width * videoStreamInfo->height * 2;
+    }
+    else if (videoStreamInfo->format == YUV422_FORMAT)
+    {
+        newSource->yuvFormat = YUV422;
+        newSource->imageSize = videoStreamInfo->width * videoStreamInfo->height * 2;
+    }
+    else /* videoStreamInfo->format == YUV420_FORMAT */
+    {
+        newSource->yuvFormat = I420;
+        newSource->imageSize = videoStreamInfo->width * videoStreamInfo->height * 3 / 2;
+    }
     MALLOC_OFAIL(newSource->image, unsigned char, newSource->imageSize);
-    fill_black(UYVY_FORMAT, videoStreamInfo->width, videoStreamInfo->height, newSource->image);
+    fill_black(videoStreamInfo->format, videoStreamInfo->width, videoStreamInfo->height, newSource->image);
     
     newSource->blackOverlay.w = g_ballOverlay0.w;
     newSource->blackOverlay.h = g_ballOverlay0.h;
@@ -392,6 +388,7 @@ int bbs_create(const StreamInfo* videoStreamInfo, int64_t length, int numBalls, 
     newSource->mediaSource.close = bbs_close;
     
     newSource->streamInfo = *videoStreamInfo;
+    newSource->streamInfo.sourceId = msc_create_id();
     
     CHK_OFAIL(add_known_source_info(&newSource->streamInfo, SRC_INFO_TITLE, "Bouncing balls"));
     

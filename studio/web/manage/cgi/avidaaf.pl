@@ -1,7 +1,7 @@
 #!/usr/bin/perl -wT
 
 #
-# $Id: avidaaf.pl,v 1.1 2007/09/11 14:08:45 stuart_hc Exp $
+# $Id: avidaaf.pl,v 1.2 2008/02/06 16:59:14 john_f Exp $
 #
 # 
 #
@@ -60,6 +60,7 @@ elsif (defined param("Send1") || defined param("Send2"))
     my $fromDateStr;
     my $toDateStr;
     my $vres;
+    my $fromCreationDateStr;
         
     if (defined param("Send1") && !($errorMessage = validate_params($vresIds, "Send1")))
     {
@@ -84,24 +85,62 @@ elsif (defined param("Send1") || defined param("Send2"))
         }
 
         
-        if (param("periodpop") == 1) # morning
+        if (param("periodpop") == 1) # last 10 minutes
+        {
+            my ($sec,$min,$hour,$mday,$mon,$year) = gmtime(time);
+            $min -= 10;
+            if ($min < 0)
+            {
+                $min = 60 + $min;
+                $hour -= 1;
+                if ($hour < 0)
+                {
+                    # we don't go back beyond the start of day
+                    $hour = 0;
+                    $min = 0;
+                    $sec = 0;
+                }
+            }
+            $fromCreationDateStr = sprintf("%04d-%02d-%02dT%02d:%02d:%02d", 
+                $year + 1900, $mon + 1, $mday, $hour, $min, $sec);
+        }
+        elsif (param("periodpop") == 2) # last 20 minutes
+        {
+            my ($sec,$min,$hour,$mday,$mon,$year) = gmtime(time);
+            $min -= 20;
+            if ($min < 0)
+            {
+                $min = 60 + $min;
+                $hour -= 1;
+                if ($hour < 0)
+                {
+                    # we don't go back beyond the start of day
+                    $hour = 0;
+                    $min = 0;
+                    $sec = 0;
+                }
+            }
+            $fromCreationDateStr = sprintf("%04d-%02d-%02dT%02d:%02d:%02d", 
+                $year + 1900, $mon + 1, $mday, $hour, $min, $sec);
+        }
+        elsif (param("periodpop") == 3) # morning
         {
             $fromTimeStr = sprintf("%02d:%02d:%02d:%02d", 0, 0, 0, 0);    
             $toTimeStr = sprintf("%02d:%02d:%02d:%02d", 12, 0, 0, 0);    
         }
-        elsif (param("periodpop") == 2) # afternoon
+        elsif (param("periodpop") == 4) # afternoon
         {
             $fromTimeStr = sprintf("%02d:%02d:%02d:%02d", 12, 0, 0, 0);    
             $toTimeStr = sprintf("%02d:%02d:%02d:%02d", 0, 0, 0, 0);    
             $toDate += 24 * 60 * 60;
         }
-        elsif (param("periodpop") == 3) # day
+        elsif (param("periodpop") == 5) # day
         {
             $fromTimeStr = sprintf("%02d:%02d:%02d:%02d", 0, 0, 0, 0);    
             $toTimeStr = sprintf("%02d:%02d:%02d:%02d", 0, 0, 0, 0);   
             $toDate += 24 * 60 * 60;
         }
-        elsif (param("periodpop") == 4) # 2 days
+        elsif (param("periodpop") == 6) # 2 days
         {
             $fromTimeStr = sprintf("%02d:%02d:%02d:%02d", 0, 0, 0, 0);    
             $toTimeStr = sprintf("%02d:%02d:%02d:%02d", 0, 0, 0, 0);   
@@ -147,6 +186,9 @@ elsif (defined param("Send1") || defined param("Send2"))
         }
 
         my $addTSSuffix = defined param("ftssuffix");
+
+        my $includeDirectorsCut = defined param("directorscut");
+        my $dcDb = get_directors_cut_db(param("dcsource"));
         
         
         # TODO: set when installing or hold in central location
@@ -158,7 +200,7 @@ elsif (defined param("Send1") || defined param("Send2"))
         
         #TODO: handle error where no files are included
         
-        my $filenamesFilename = mktemp("/tmp/aaffilenamesXXXXXX");
+        my $resultsFilename = mktemp("/tmp/createaafresultsXXXXXX");
         system(join(" ",
                 "create_aaf", 
                 "-p \"$prefix\"", # AAF filename prefix
@@ -166,26 +208,60 @@ elsif (defined param("Send1") || defined param("Send2"))
                 "-o", # group only
                 $addTSSuffix ? "" : "--no-ts-suffix",
                 "-m", # include multi-camera clips
-                "-f $fromDateStr" . "S" . "$fromTimeStr", # from date and start timecode 
-                "-t $toDateStr" . "S" . "$toTimeStr", # to date and start timecode
+                $includeDirectorsCut && $dcDb ? "--mc-cuts \"$dcDb\"" : "", # directors cut database
+                $fromCreationDateStr ? 
+                    "-c $fromCreationDateStr" : # from creation date (timestamp)
+                    join(" ", "-f $fromDateStr" . "S" . "$fromTimeStr", # from date and start timecode 
+                        $fromCreationDateStr ? "" : "-t $toDateStr" . "S" . "$toTimeStr"), # to date and start timecode
                 "-d $ingexConfig{'db_odbc_dsn'}", # database DSN
                 "-u $ingexConfig{'db_user'}", # database user
                 "--dbpassword $ingexConfig{'db_password'}", # database password
-                ">$filenamesFilename"
+                ">$resultsFilename"
         )) == 0 or return_error_page("failed to export Avid AAF file");
         
-        # extract the list of filenames
-        open(AAFFILENAMES, "<", "$filenamesFilename") 
-            or return_error_page("failed to open AAF filename list: $!");
+        # extract the results
+        open(AAFRESULTS, "<", "$resultsFilename") 
+            or return_error_page("failed to open AAF results file: $!");
         
+        my $index = 0;
+        my $totalClips;
+        my $totalMulticamGroups;
+        my $totalDirectorsCutSequences;
         my @filenames;
-        while (my $filename = <AAFFILENAMES>)
+        my $haveResultsHeader;
+        while (my $line = <AAFRESULTS>)
         {
-            push(@filenames, $filename);
+            chomp($line);
+            
+            if ($haveResultsHeader)
+            {
+                if ($index == 0)
+                {
+                    $totalClips = $line;
+                }
+                elsif ($index == 1)
+                {
+                    $totalMulticamGroups = $line;
+                }
+                elsif ($index == 2)
+                {
+                    $totalDirectorsCutSequences = $line;
+                }
+                else
+                {
+                    push(@filenames, $line);
+                }
+                
+                $index++;
+            }
+            elsif ($line =~ /^RESULTS/)
+            {
+                $haveResultsHeader = 1;
+            }
         }
         
-        close(AAFFILENAMES);
-        unlink($filenamesFilename); # be nice and clean up
+        close(AAFRESULTS);
+        unlink($resultsFilename); # be nice and clean up
         
         if (!scalar @filenames)
         {
@@ -193,7 +269,8 @@ elsif (defined param("Send1") || defined param("Send2"))
         }
         
         
-        return_success_page("Created AAF file: ". join(",", @filenames));
+        return_success_page($totalClips, $totalMulticamGroups, $totalDirectorsCutSequences, 
+            \@filenames);
     }
 }
 
@@ -273,9 +350,9 @@ sub validate_params
     
 sub return_success_page
 {
-    my ($message) = @_;
+    my ($totalClips, $totalMulticamGroups, $totalDirectorsCutSequences, $filenames) = @_;
     
-    my $page = construct_page(get_success_content($message)) or
+    my $page = construct_page(get_success_content($totalClips, $totalMulticamGroups, $totalDirectorsCutSequences, $filenames)) or
         return_error_page("failed to fill in content for successful export of aaf file page");
        
     print header;
@@ -298,14 +375,53 @@ sub return_no_material_page
 
 sub get_success_content
 {
-    my ($message) = @_;
+    my ($totalClips, $totalMulticamGroups, $totalDirectorsCutSequences, $filenames) = @_;
     
     
     my @pageContent;
     
     push(@pageContent, h1("Successfully exported Avid AAF file"));
 
-    push(@pageContent, p($message));
+    push(@pageContent, 
+        p(
+            span({-class=>"propHeading1"}, "Totals: ") 
+        )
+    );
+    push(@pageContent, 
+        table({-border=>0, -cellspacing=>3,-cellpadding=>3},
+            Tr({-align=>"left", -valign=>"top"}, 
+                td([
+                    span({-class=>"propHeading2"}, "Clips:"),
+                    $totalClips
+                ]),
+            ),
+            Tr({-align=>"left", -valign=>"top"}, 
+                td([
+                    span({-class=>"propHeading2"}, "Multi-camera Clips:"),
+                    $totalMulticamGroups
+                ]),
+            ),
+            Tr({-align=>"left", -valign=>"top"}, 
+                td([
+                    span({-class=>"propHeading2"}, "Director's Cut Sequences:"),
+                    $totalDirectorsCutSequences
+                ]),
+            ),
+        ),
+    );
+            
+    push(@pageContent, 
+        p(
+            span({-class=>"propHeading1"}, "Filename: ")
+        )
+    );
+    
+    foreach my $filename (@ { $filenames })
+    {
+        push(@pageContent, "&nbsp;&nbsp;" . $filename); 
+        push(@pageContent, "<br/>");
+    }
+    
 
     return join("", @pageContent);
 }
@@ -412,6 +528,49 @@ sub get_page_content
         ),
     );
 
+    push(@pageContent,
+        p(
+            checkbox({
+                name => 'directorscut',
+                checked => 1,
+                value => 'on',
+                label => 'Add Director\'s Cut'
+            }),
+        ),
+    );
+
+    my $defaultDCSource;
+    my @dcSourceValues;
+    my %dcSourceLabels;
+    foreach my $dctDb (get_all_directors_cut_dbs())
+    {
+        if (-e $dctDb->[1])
+        {
+            my $label = $dctDb->[0] . " ($dctDb->[1])";
+            my $value = $dctDb->[0];
+            push(@dcSourceValues, $value);
+            $dcSourceLabels{$value} = $label;
+    
+            if (!defined $defaultDCSource)
+            {
+                $defaultDCSource = $value;
+            }
+        }
+    }
+    
+    push(@pageContent,
+        p(
+            "Director's Cut Source:",
+            popup_menu({
+                -name => "dcsource", 
+                -default => $defaultDCSource,
+                -values => \@dcSourceValues,
+                -labels => \%dcSourceLabels,
+            }),
+        ),
+    );
+    
+    
     push(@pageContent, h3("Select preset time period")); 
 
     push(@pageContent, 
@@ -435,13 +594,15 @@ sub get_page_content
                     popup_menu(
                         -name => "periodpop", 
                         -default => 1,
-                        -values => [1, 2, 3, 4, 5],
+                        -values => [1, 2, 3, 4, 5, 6],
                         -labels => {
-                            1 => "morning (00:00 - 11:59)",
-                            2 => "afternoon (12:00 - 23:59)",
-                            3 => "day",
-                            4 => "2 days",
-                            5 => "3 days",
+                            1 => "last 10 minutes",
+                            2 => "last 20 minutes",
+                            3 => "morning (00:00 - 11:59)",
+                            4 => "afternoon (12:00 - 23:59)",
+                            5 => "day",
+                            6 => "2 days",
+                            7 => "3 days",
                         }
                     ), 
                 ]),

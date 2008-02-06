@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.2 2007/10/26 16:19:13 john_f Exp $
+# $Id: Makefile,v 1.3 2008/02/06 16:59:00 john_f Exp $
 #
 # Makefile for building ingex server and utilities.
 #
@@ -52,10 +52,9 @@ HARDWARE_INCLUDE=-I$(DVSSDK)/development/header
 HARDWARE_LIB=-L$(DVSSDK)/linux-x86/lib -ldvsoem
 
 SDI_PROGS=dvs_sdi testgen
-PROGS=$(SDI_PROGS) nexus_save nexus_xv nexus_stats
+PROGS=$(SDI_PROGS) nexus_save nexus_xv nexus_stats nexus_multicast
 
-.PHONY: sdi all
-sdi: $(SDI_PROGS)
+.PHONY: all
 all: $(PROGS)
 
 dvs_sdi: dvs_sdi.c nexus_control.h
@@ -67,8 +66,17 @@ testgen: testgen.c nexus_control.h
 nexus_stats: nexus_stats.c nexus_control.h
 	g++ $(FLAGS) nexus_stats.c $(LIBS) -lpthread -o nexus_stats
 
+ifeq ($(USE_FFMPEG), 1)
+.PHONY: ../common/ffmpeg_encoder.o
+nexus_save: nexus_save.c nexus_control.h ../common/ffmpeg_encoder.o
+	g++ $(FLAGS) -DUSE_FFMPEG nexus_save.c -o nexus_save ../common/ffmpeg_encoder.o -lavformat -lavcodec -lavutil -lz -lmp3lame -lx264 -la52 -lfaac -lfaad -lm -lpthread
+else
 nexus_save: nexus_save.c nexus_control.h
 	g++ $(FLAGS) nexus_save.c -o nexus_save
+endif
+
+nexus_multicast: nexus_multicast.c nexus_control.h
+	gcc -I../../common $(FLAGS) nexus_multicast.c -o nexus_multicast -L../../common -lcommon -L../../common/YUVlib -lYUVlib
 
 nexus_xv: nexus_xv.c nexus_control.h
 	g++ $(FLAGS) nexus_xv.c -o nexus_xv -L/usr/X11R6/lib -lXv

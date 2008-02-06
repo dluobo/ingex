@@ -62,28 +62,28 @@ Install via YaST if not already present.
 
 Building the CPP library:
 
-> cd ingex/IngexPlayer/IngexPlayer
+> cd ingex/player/IngexPlayer
 > make
 
 
 
 Testing the CPP library:
 
-> ingex/IngexPlayer/IngexPlayer/test_IngexPlayer -m test_v1.mxf
+> ingex/player/IngexPlayer/test_IngexPlayer -m test_v1.mxf
 
 
 
 
 Building the C library:
 
-> cd ingex/IngexPlayer/ingex_player
+> cd ingex/player/ingex_player
 > make
 
 
 
 Testing the C library:
 
-> ingex/IngexPlayer/ingex_player/player -h
+> ingex/player/ingex_player/player -h
 > ...
 or 
 > make testapps

@@ -1,5 +1,5 @@
 /*
- * $Id: DatabaseEnums.h,v 1.2 2007/10/26 16:23:41 john_f Exp $
+ * $Id: DatabaseEnums.h,v 1.3 2008/02/06 16:59:06 john_f Exp $
  *
  * Defines enumerated data values matching those in the database
  *
@@ -48,6 +48,12 @@
 #define IMX30_MATERIAL_RESOLUTION           10
 #define IMX40_MATERIAL_RESOLUTION           11
 #define IMX50_MATERIAL_RESOLUTION           12
+#define DNX36p_MATERIAL_RESOLUTION          13
+#define DNX120p_MATERIAL_RESOLUTION         14
+#define DNX185p_MATERIAL_RESOLUTION         15
+#define DNX120i_MATERIAL_RESOLUTION         16
+#define DNX185i_MATERIAL_RESOLUTION         17
+
 
 #define DVD_MATERIAL_RESOLUTION             20
 #define MOV_MATERIAL_RESOLUTION             21

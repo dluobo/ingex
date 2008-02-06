@@ -35,7 +35,8 @@ typedef enum
     UNKNOWN_STREAM_TYPE = 0,
     PICTURE_STREAM_TYPE,
     SOUND_STREAM_TYPE,
-    TIMECODE_STREAM_TYPE
+    TIMECODE_STREAM_TYPE,
+    EVENT_STREAM_TYPE
 } StreamType;
 
 typedef enum
@@ -54,12 +55,16 @@ typedef enum
     DV50_FORMAT,
     D10_PICTURE_FORMAT,
     AVID_MJPEG_FORMAT,
+    AVID_DNxHD_FORMAT,
     
     /* Sound */
     PCM_FORMAT,
     
     /* Timecode */
-    TIMECODE_FORMAT
+    TIMECODE_FORMAT,
+    
+    /* Event */
+    SOURCE_EVENT_FORMAT
     
 } StreamFormat;
 
@@ -108,6 +113,9 @@ typedef enum
 typedef struct
 {
     StreamType type;
+    
+    /* source */
+    int sourceId;
     
     /* general identifier for format */
     StreamFormat format;
@@ -177,6 +185,9 @@ int initialise_stream_info(StreamInfo* streamInfo);
 int add_source_info(StreamInfo* streamInfo, const char* name, const char* value);
 int add_known_source_info(StreamInfo* streamInfo, SourceInfoName name, const char* value);
 void clear_stream_info(StreamInfo* streamInfo);
+
+
+int select_frame_timecode(const FrameInfo* frameInfo, int tcIndex, int tcType, int tcSubType, Timecode* timecode);
 
 
 #ifdef __cplusplus

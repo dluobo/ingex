@@ -1,7 +1,6 @@
 
 project(routerlogger): taoserver, naming, messaging, valuetype {
   exename = routerlogger
-  includes += ../Corba
   includes += ../IDL/Generated
   includes += ../IDL
   includes += ../common

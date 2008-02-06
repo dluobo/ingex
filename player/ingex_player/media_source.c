@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "media_source.h"
+#include "logging.h"
 
 
 int sdl_accept_frame(MediaSourceListener* listener, int streamId, const FrameInfo* frameInfo)
@@ -221,5 +222,64 @@ int msc_get_buffer_state(MediaSource* source, int* numBuffers, int* numBuffersFi
     }
     return 0;
 }
+
+
+int msc_create_id()
+{
+    static int id = 0;
+    
+    return id++;
+}
+
+
+void msc_init_stream_map(MediaSourceStreamMap* map)
+{
+    memset(map, 0, sizeof(*map));
+}
+
+int msc_add_stream_to_map(MediaSourceStreamMap* map, int streamId, int sourceId)
+{
+    int i;
+    
+    for (i = 0; i < map->numStreams; i++)
+    {
+        if (map->streams[i].streamId == streamId)
+        {
+            map->streams[i].sourceId = sourceId;
+            return 1;
+        }
+    }
+    
+    if (map->numStreams + 1 < (int)(sizeof(map->streams) / sizeof(int)))
+    {
+        map->streams[map->numStreams].sourceId = sourceId;
+        map->streams[map->numStreams].streamId = streamId;
+        map->numStreams++;
+    }
+    else
+    {
+        ml_log_error("Number streams exceeds maximum (%d) expected\n", sizeof(map->streams) / sizeof(int));
+        return 0;
+    }
+    
+    return 1;
+}
+
+int msc_get_source_id(MediaSourceStreamMap* map, int streamId, int* sourceId)
+{
+    int i;
+    
+    for (i = 0; i < map->numStreams; i++)
+    {
+        if (map->streams[i].streamId == streamId)
+        {
+            *sourceId = map->streams[i].sourceId;
+            return 1;
+        }
+    }
+    
+    return 0;
+}
+
 
 

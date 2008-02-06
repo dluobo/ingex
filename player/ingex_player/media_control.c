@@ -76,6 +76,14 @@ void mc_play_speed(MediaControl* control, int speed, PlayUnit unit)
     }
 }
 
+void mc_play_speed_factor(MediaControl* control, float factor)
+{
+    if (control && control->play_speed_factor)
+    {
+        control->play_speed_factor(control->data, factor);
+    }
+}
+
 void mc_step(MediaControl* control, int forward, PlayUnit unit)
 {
     if (control && control->step)
@@ -164,6 +172,14 @@ void mc_next_osd_timecode(MediaControl* control)
     }
 }
 
+void mc_toggle_show_audio_level(MediaControl* control)
+{
+    if (control && control->toggle_show_audio_level)
+    {
+        control->toggle_show_audio_level(control->data);
+    }
+}
+
 void mc_switch_next_video(MediaControl* control)
 {
     if (control && control->switch_next_video)
@@ -185,6 +201,22 @@ void mc_switch_video(MediaControl* control, int index)
     if (control && control->switch_video)
     {
         control->switch_video(control->data, index);
+    }
+}
+
+void mc_show_source_name(MediaControl* control, int enable)
+{
+    if (control && control->show_source_name)
+    {
+        control->show_source_name(control->data, enable);
+    }
+}
+
+void mc_toggle_show_source_name(MediaControl* control)
+{
+    if (control && control->toggle_show_source_name)
+    {
+        control->toggle_show_source_name(control->data);
     }
 }
 

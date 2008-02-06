@@ -38,6 +38,7 @@ typedef struct UserMark
 {
     struct UserMark* next;
     struct UserMark* prev;
+    struct UserMark* pairedMark;
     
     int64_t position;
     int type;
@@ -48,6 +49,7 @@ typedef struct
     UserMark* first;
     UserMark* current;
     UserMark* last;
+    UserMark* currentClipMark;
     int count;
 } UserMarks;
 
@@ -99,6 +101,8 @@ struct MediaPlayer
 {
     int closeAtEnd;
     int loop;
+
+    int clipMarkType;
     
     /* player state */
     MediaPlayerState state;
@@ -146,6 +150,13 @@ struct MediaPlayer
     FILE* bufferStateLogFile;
 };
 
+
+static void _set_current_clip_mark(MediaPlayer* player, UserMark* mark)
+{
+    osd_highlight_progress_bar_pointer(msk_get_osd(player->mediaSink), mark != NULL);
+    
+    player->userMarks.currentClipMark = mark;
+}
 
 /* caller must lock the user marks mutex */
 static void _clear_marks_model(MediaPlayer* player)
@@ -416,6 +427,13 @@ static void __remove_mark(MediaPlayer* player, UserMark* mark)
     {
         player->userMarks.last = mark->prev;
     }
+    
+    /* reset current clip mark */
+    if (player->userMarks.currentClipMark == mark)
+    {
+        _set_current_clip_mark(player, NULL);
+    }
+
 
     player->userMarks.count--;
     _remove_mark_from_marks_model(player, mark->position);
@@ -427,15 +445,50 @@ static void __remove_mark(MediaPlayer* player, UserMark* mark)
 /* mark is only removed if the resulting type == 0 */
 static void _remove_mark(MediaPlayer* player, int64_t position, int typeMask)
 {
-    UserMark* mark = NULL; 
+    UserMark* mark = NULL;
+    
+    /* limit mask to the clip mark if a clip mark is active */
+    if (player->userMarks.currentClipMark != NULL)
+    {
+        typeMask &= player->clipMarkType;
+    }
+    
+    if (typeMask == 0)
+    {
+        return;
+    }
     
     if (_find_mark(player, position, &mark))
     {
         mark->type &= ~typeMask;
         
+        if ((mark->type & player->clipMarkType) == 0)
+        {
+            if (mark->pairedMark != NULL)
+            {
+                /* remove the clip mark pair */
+                mark->pairedMark->pairedMark = NULL;
+                mark->pairedMark->type &= ~player->clipMarkType;
+                if (mark->pairedMark->type == 0)
+                {
+                    __remove_mark(player, mark->pairedMark);
+                }
+                mark->pairedMark = NULL;
+
+                /* deactivate clip mark (TODO: not neccessary because mark already paired and not active?) */
+                _set_current_clip_mark(player, NULL);
+            }
+            else if (mark == player->userMarks.currentClipMark)
+            {
+                /* deactivate clip mark */
+                _set_current_clip_mark(player, NULL);
+            }
+        }
+        
         if (mark->type == 0)
         {
             __remove_mark(player, mark);
+            mark = NULL;
         }
     }
 }
@@ -460,6 +513,7 @@ static void _add_mark(MediaPlayer* player, int64_t position, int type, int toggl
         return;
     }
 
+    /* find the insertion point */
     mark = player->userMarks.current;
     if (mark == NULL)
     {
@@ -478,19 +532,101 @@ static void _add_mark(MediaPlayer* player, int64_t position, int type, int toggl
     if (mark != NULL && mark->position == position)
     {
         /* add type to existing mark */
-        if (toggle)
+        
+        /* process clip marks first */
+        if ((player->clipMarkType & type) != 0)
         {
-            mark->type ^= type & ALL_MARK_TYPE;
-        }
-        else
-        {
-            mark->type |= type & ALL_MARK_TYPE;
-        }
+            if (player->userMarks.currentClipMark != NULL)
+            {
+                /* busy with a clip mark */
+                
+                if (mark == player->userMarks.currentClipMark)
+                {
+                    if (toggle)
+                    {
+                        /* remove the clip mark */
+                        mark->type &= ~(player->clipMarkType);
+                        if (mark->type == 0)
+                        {
+                            __remove_mark(player, mark);
+                            mark = NULL;
+                        }
+                        
+                        /* done with clip mark */
+                        _set_current_clip_mark(player, NULL);
+                    }
+                    /* else ignore the request to complete the clip with length 0 */
+                }
+                else if (mark->pairedMark == NULL)
+                {
+                    /* complete the clip mark */
+                    mark->type |= player->clipMarkType & ALL_MARK_TYPE;
+                    player->userMarks.currentClipMark->pairedMark = mark;
+                    mark->pairedMark = player->userMarks.currentClipMark;
+                    
+                    /* done with clip mark */
+                    _set_current_clip_mark(player, NULL);
+                }
+                /* else ignore the request to complete a clip mark at an existing clip mark */
+            }
+            else
+            {
+                /* not busy with a clip mark */
+                
+                if ((mark->type & player->clipMarkType) == 0)
+                {
+                    /* start clip mark */
+                    mark->type |= player->clipMarkType & ALL_MARK_TYPE;
+                    _set_current_clip_mark(player, mark);
+                }
+                else if (toggle)
+                {
+                    /* remove clip mark */
+                    
+                    if (mark->pairedMark != NULL)
+                    {
+                        mark->pairedMark->pairedMark = NULL;
+                        mark->pairedMark->type &= ~(player->clipMarkType);
+                        if (mark->pairedMark->type == 0)
+                        {
+                            __remove_mark(player, mark->pairedMark);
+                        }
+                        mark->pairedMark = NULL;
+                    }
 
-        /* remove mark if type == 0 */
-        if (mark->type == 0)
+                    mark->type &= ~(player->clipMarkType);
+                    if (mark->type == 0)
+                    {
+                        __remove_mark(player, mark);
+                        mark = NULL;
+                    }
+                }
+                /* else ignore the request to start a clip mark on an existing one */
+            }
+
+            /* done with clip marks */
+            type &= ~player->clipMarkType;
+        }
+        
+        /* deal with non-clip marks */
+        
+        if (mark != NULL)
         {
-            __remove_mark(player, mark);
+            if (toggle)
+            {
+                mark->type ^= type & ALL_MARK_TYPE;
+            }
+            else
+            {
+                mark->type |= type & ALL_MARK_TYPE;
+            }
+    
+            /* remove mark if type == 0 */
+            if (mark->type == 0)
+            {
+                __remove_mark(player, mark);
+                mark = NULL;
+            }
         }
     }
     else
@@ -561,6 +697,23 @@ static void _add_mark(MediaPlayer* player, int64_t position, int type, int toggl
             }
         }
 
+        /* handle clip marks */
+        if ((player->clipMarkType & type) != 0)
+        {
+            if (player->userMarks.currentClipMark != NULL)
+            {
+                /* complete the clip mark */
+                player->userMarks.currentClipMark->pairedMark = newMark;
+                newMark->pairedMark = player->userMarks.currentClipMark;
+                _set_current_clip_mark(player, NULL);
+            }
+            else
+            {
+                /* start the clip mark */
+                _set_current_clip_mark(player, newMark);
+            }
+        }
+        
         player->userMarks.count++;
         _add_mark_to_marks_model(player, position);
     }
@@ -584,6 +737,12 @@ static void _free_marks(MediaPlayer* player, int typeMask)
 {
     UserMark* mark;
     UserMark* nextMark;
+
+    /* don't allow all marks to be cleared when busy with clip mark */    
+    if (player->userMarks.currentClipMark != NULL)
+    {
+        return;
+    }
     
     if ((typeMask & ALL_MARK_TYPE) == ALL_MARK_TYPE)
     {
@@ -599,7 +758,8 @@ static void _free_marks(MediaPlayer* player, int typeMask)
         player->userMarks.current = NULL;
         player->userMarks.last = NULL;
         player->userMarks.count = 0;
-
+        _set_current_clip_mark(player, NULL);
+        
         _clear_marks_model(player);        
     }
     else
@@ -609,12 +769,26 @@ static void _free_marks(MediaPlayer* player, int typeMask)
         while (mark != NULL)
         {
             nextMark = mark->next;
-            
+
             mark->type &= ~typeMask;
+            
+            /* handle clip marks */
+            if (mark->pairedMark != NULL)
+            {
+                /* remove paired clip mark */
+                mark->pairedMark->pairedMark = NULL;
+                mark->pairedMark->type &= ~player->clipMarkType;
+                if (mark->pairedMark->type == 0)
+                {
+                    __remove_mark(player, mark->pairedMark);
+                }
+                mark->pairedMark = NULL;
+            }
             
             if (mark->type == 0)
             {
                 __remove_mark(player, mark);
+                mark = NULL;
             }
             
             mark = nextMark;
@@ -827,6 +1001,12 @@ static void ply_play_speed(void* data, int speed, PlayUnit unit)
 {
     MediaPlayer* player = (MediaPlayer*)data;
     
+    if (speed == 0)
+    {
+        /* zero speed no allowed */
+        return;
+    }
+    
     PTHREAD_MUTEX_LOCK(&player->stateMutex)
     
     if (!player->state.locked)
@@ -849,6 +1029,49 @@ static void ply_play_speed(void* data, int speed, PlayUnit unit)
     }
     
     PTHREAD_MUTEX_UNLOCK(&player->stateMutex)
+}
+
+static void ply_play_speed_factor(void* data, float factor)
+{
+    MediaPlayer* player = (MediaPlayer*)data;
+    int newSpeed = 1;
+    
+    if (factor == 0.0)
+    {
+        /* zero speed not allowed */
+        return;
+    }
+
+    PTHREAD_MUTEX_LOCK(&player->stateMutex)
+    
+    if (player->state.speed > 0 && factor <= -1.0)
+    {
+        /* switch from forward to reverse */
+        newSpeed = -1;
+    }
+    else if (player->state.speed < 0 && factor >= 1.0)
+    {
+        /* switch from reverse to forward */
+        newSpeed = 1;
+    }
+    else if (factor < 0.0) 
+    {
+        newSpeed = (int)(player->state.speed * (-1) * factor);
+    }
+    else /* factor >= 0.0 */
+    {
+        newSpeed = (int)(player->state.speed * factor);
+    }
+
+    if (newSpeed == 0)
+    {
+        newSpeed = (player->state.speed > 0) ? 1 : -1;
+    }
+    
+    PTHREAD_MUTEX_UNLOCK(&player->stateMutex)
+    
+    
+    ply_play_speed(data, newSpeed, FRAME_PLAY_UNIT);
 }
 
 static void ply_step(void* data, int forward, PlayUnit unit)
@@ -1031,6 +1254,22 @@ static void ply_next_osd_timecode(void* data)
     PTHREAD_MUTEX_UNLOCK(&player->stateMutex)
 }
 
+static void ply_toggle_show_audio_level(void* data)
+{
+    MediaPlayer* player = (MediaPlayer*)data;
+    
+    PTHREAD_MUTEX_LOCK(&player->stateMutex)
+    
+    if (!player->state.locked)
+    {
+        osd_toggle_audio_level_visibility(msk_get_osd(player->mediaSink));
+    
+        switch_source_info_screen(player);
+    }
+    
+    PTHREAD_MUTEX_UNLOCK(&player->stateMutex)
+}
+
 static void ply_switch_next_video(void* data)
 {
     MediaPlayer* player = (MediaPlayer*)data;
@@ -1062,6 +1301,30 @@ static void ply_switch_video(void* data, int index)
     if (!player->state.locked)
     {
         vsw_switch_video(msk_get_video_switch(player->mediaSink), index);
+
+        switch_source_info_screen(player);
+    }
+}
+
+static void ply_show_source_name(void* data, int enable)
+{
+    MediaPlayer* player = (MediaPlayer*)data;
+    
+    if (!player->state.locked)
+    {
+        vsw_show_source_name(msk_get_video_switch(player->mediaSink), enable);
+
+        switch_source_info_screen(player);
+    }
+}
+
+static void ply_toggle_show_source_name(void* data)
+{
+    MediaPlayer* player = (MediaPlayer*)data;
+    
+    if (!player->state.locked)
+    {
+        vsw_toggle_show_source_name(msk_get_video_switch(player->mediaSink));
 
         switch_source_info_screen(player);
     }
@@ -1684,6 +1947,18 @@ static void ply_refresh_required(void* data)
     PTHREAD_MUTEX_UNLOCK(&player->stateMutex)
 }
 
+static void ply_refresh_required_for_menu(void* data)
+{
+    MediaPlayer* player = (MediaPlayer*)data;
+
+    PTHREAD_MUTEX_LOCK(&player->stateMutex)
+    if (player->state.mode == MENU_MODE)
+    {
+        player->state.refreshRequired = 1;
+    }
+    PTHREAD_MUTEX_UNLOCK(&player->stateMutex)
+}
+
 static void ply_osd_screen_changed(void* data, OSDScreen screen)
 {
     MediaPlayer* player = (MediaPlayer*)data;
@@ -1900,6 +2175,7 @@ int ply_create_player(MediaSource* mediaSource, MediaSink* mediaSink,
     newPlayer->control.toggle_play_pause = ply_toggle_play_pause;
     newPlayer->control.seek = ply_seek;
     newPlayer->control.play_speed = ply_play_speed;
+    newPlayer->control.play_speed_factor = ply_play_speed_factor;
     newPlayer->control.step = ply_step;
     newPlayer->control.mark = ply_mark;
     newPlayer->control.mark_position = ply_mark_position;
@@ -1911,9 +2187,12 @@ int ply_create_player(MediaSource* mediaSource, MediaSink* mediaSink,
     newPlayer->control.next_osd_screen = ply_next_osd_screen;
     newPlayer->control.set_osd_timecode = ply_set_osd_timecode;
     newPlayer->control.next_osd_timecode = ply_next_osd_timecode;
+    newPlayer->control.toggle_show_audio_level = ply_toggle_show_audio_level;
     newPlayer->control.switch_next_video = ply_switch_next_video;
     newPlayer->control.switch_prev_video = ply_switch_prev_video;
     newPlayer->control.switch_video = ply_switch_video;
+    newPlayer->control.show_source_name = ply_show_source_name;
+    newPlayer->control.toggle_show_source_name = ply_toggle_show_source_name;
     newPlayer->control.set_half_split_orientation = ply_set_half_split_orientation;
     newPlayer->control.set_half_split_type = ply_set_half_split_type;
     newPlayer->control.show_half_split = ply_show_half_split;
@@ -1929,7 +2208,7 @@ int ply_create_player(MediaSource* mediaSource, MediaSink* mediaSink,
     newPlayer->control.select_menu_item_extra = ply_select_menu_item_extra;
 
     newPlayer->menuListener.data = newPlayer;
-    newPlayer->menuListener.refresh_required = ply_refresh_required;
+    newPlayer->menuListener.refresh_required = ply_refresh_required_for_menu;
     
     if (initialLock)
     {
@@ -2577,6 +2856,14 @@ int ply_get_marks(MediaPlayer* player, Mark** marks)
     {
         markP->position = userMark->position;
         markP->type = userMark->type;
+        if (userMark->pairedMark != NULL)
+        {
+            markP->pairedPosition = userMark->pairedMark->position;
+        }
+        else
+        {
+            markP->pairedPosition = -1;
+        }
         
         userMark = userMark->next;
         markP++;
@@ -2606,6 +2893,11 @@ void ply_set_menu_handler(MediaPlayer* player, MenuHandler* handler)
     
     player->menuHandler = handler;
     mnh_set_listener(handler, &player->menuListener);
+}
+
+void ply_enable_clip_marks(MediaPlayer* player, int markType)
+{
+    player->clipMarkType = markType;
 }
 
 

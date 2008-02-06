@@ -1,5 +1,5 @@
 /*
- * $Id: MXFWriter.h,v 1.1 2007/09/11 14:08:44 stuart_hc Exp $
+ * $Id: MXFWriter.h,v 1.2 2008/02/06 16:59:11 john_f Exp $
  *
  * Writes essence data to MXF files
  *
@@ -76,14 +76,14 @@ public:
         uint8_t audioQuantizationBits, int64_t startPosition, 
         std::string creatingFilePath, std::string destinationFilePath,
         std::string failuresFilePath, std::string filenamePrefix,
-        std::vector<UserComment> userComments, std::string avidProjectName);
+        std::vector<UserComment> userComments, ProjectName projectName);
         
     MXFWriter(RecorderConfig* recorderConfig, uint32_t inputConfigIndex, 
         int resolutionID, Rational imageAspectRatio, 
         uint8_t audioQuantizationBits, uint32_t inputMask, int64_t startPosition, 
         std::string creatingFilePath, std::string destinationFilePath,
         std::string failuresFilePath, std::string filenamePrefix,
-        std::vector<UserComment> userComments, std::string avidProjectName);
+        std::vector<UserComment> userComments, ProjectName projectName);
     ~MXFWriter();
     
     // returns true if the track is present    

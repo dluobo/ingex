@@ -1,5 +1,5 @@
 /*
- * $Id: logF.h,v 1.1 2007/09/11 14:08:01 stuart_hc Exp $
+ * $Id: logF.h,v 1.2 2008/02/06 16:58:50 john_f Exp $
  *
  * Logging and debugging utility functions.
  *
@@ -32,7 +32,9 @@ extern "C" {
 
 // Utilities
 extern int openLogFileWithDate(const char *logfile);
+extern int reopenLogFileWithDate(const char *logfile);
 extern int openLogFile(const char *logfile);
+extern int reopenLogFile(const char *logfile);
 extern void logF(const char *fmt, ...) __attribute__ ((format (printf, 1, 2)));
 extern void vlogTF(const char *fmt, va_list ap) __attribute__ ((format (printf, 1, 0)));
 extern void logTF(const char *fmt, ...) __attribute__ ((format (printf, 1, 2)));

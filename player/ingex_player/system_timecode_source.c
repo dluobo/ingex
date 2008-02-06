@@ -212,6 +212,7 @@ int sts_create(int64_t startTimecode, MediaSource** source)
     CHK_OFAIL(initialise_stream_info(&newSource->streamInfo));
     newSource->streamInfo.type = TIMECODE_STREAM_TYPE;
     newSource->streamInfo.format = TIMECODE_FORMAT;
+    newSource->streamInfo.sourceId = msc_create_id();
     newSource->streamInfo.timecodeType = SYSTEM_TIMECODE_TYPE;
     newSource->streamInfo.timecodeSubType = NO_TIMECODE_SUBTYPE;
     

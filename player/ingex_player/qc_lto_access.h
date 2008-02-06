@@ -9,7 +9,8 @@
 typedef struct QCLTOAccess QCLTOAccess;
 
 
-int qla_create_qc_lto_access(const char* cacheDirectory, QCLTOExtract* extract, QCLTOAccess** access);
+int qla_create_qc_lto_access(const char* cacheDirectory, QCLTOExtract* extract, 
+    const char* deleteScriptName, const char* deleteScriptOptions, QCLTOAccess** access);
 void qla_free_qc_lto_access(QCLTOAccess** access);
 
 int qla_connect_to_player(QCLTOAccess* access, MediaPlayer* player);

@@ -1,5 +1,5 @@
 /*
- * $Id: testgen.c,v 1.1 2007/09/11 14:08:35 stuart_hc Exp $
+ * $Id: testgen.c,v 1.2 2008/02/06 16:59:01 john_f Exp $
  *
  * Dummy SDI input for testing shared memory video & audio interface.
  *
@@ -37,26 +37,32 @@
 #include <time.h>
 #include <pthread.h>
 #include <sys/shm.h>
+#include <sys/time.h>
 #ifdef __MMX__
 #include <mmintrin.h>
 #endif
 
 #include "nexus_control.h"
 #include "video_conversion.h"
+#include "video_test_signals.h"
 
 // Globals
-pthread_t       sdi_thread[4];
+pthread_t       sdi_thread[8];
 int             num_sdi_threads = 0;
 NexusControl    *p_control = NULL;
-unsigned char   *ring[4] = {0};
-int             timecode[4] = {0};
-int             control_id, ring_id[4];
-int             element_size;
+unsigned char   *ring[8] = {0};
+int             timecode[8] = {0};
+int             control_id, ring_id[8];
 int             g_timecode = 0x10000000;        // 10:00:00:00
-char * video_file = 0;
-char * audio_file = 0;
-int             audio_offset = 720*576*2;
-int             audio_size = 0x8000;
+char            *video_file = 0;
+char            *audio_file = 0;
+int             use_random_video = 0;
+int				width = 720, height = 576;
+int     element_size = 0, dma_video_size = 0, dma_total_size = 0;
+int     audio_offset = 0, audio_size = 0;
+int     ltc_offset = 0, vitc_offset = 0, tick_offset = 0, signal_ok_offset = 0;
+CaptureFormat	video_format = Format422PlanarYUV;
+CaptureFormat	video_secondary_format = FormatNone;
 
 static int verbose = 1;
 
@@ -106,7 +112,7 @@ static void catch_sigint(int sig_number)
 
 // Read available physical memory stats and
 // allocate shared memory ring buffers accordingly
-static int allocate_shared_buffers(int num_cards)
+static int allocate_shared_buffers(int num_channels, long long max_memory)
 {
     long long   k_shmmax = 0;
     int         ring_len, i;
@@ -121,23 +127,28 @@ static int allocate_shared_buffers(int num_cards)
     fscanf(procfp, "%lld", &k_shmmax);
     fclose(procfp);
 
-    // Reduce maximum to 1GiB to avoid misleading shmmat errors since
-    // Documentation/sysctl/kernel.txt says "memory segments up to 1Gb are now supported"
-    if (k_shmmax > 0x40000000)
-    {
-        printf("shmmax=%lld (%.3fMiB) probably too big, reducing to 1024MiB\n", k_shmmax, k_shmmax / (1024*1024.0));
-        k_shmmax = 0x40000000;  // 1GiB
-    }
+	if (max_memory > 0) {
+		// Limit to specified maximum memory usage
+		k_shmmax = max_memory;
+	}
+	else {
+		// Reduce maximum to 1GiB to avoid misleading shmmat errors since
+		// Documentation/sysctl/kernel.txt says "memory segments up to 1Gb are now supported"
+		if (k_shmmax > 0x40000000) {
+			printf("shmmax=%lld (%.3fMiB) probably too big, reducing to 1024MiB\n", k_shmmax, k_shmmax / (1024*1024.0));
+			k_shmmax = 0x40000000;  // 1GiB
+		}
+	}
 
     // calculate reasonable ring buffer length
     // reduce by small number 5 to leave a little room for other shared mem
-    ring_len = k_shmmax / num_cards / element_size - 5;
-    printf("shmmax=%lld (%.3fMiB) calculated per card ring_len=%d\n", k_shmmax, k_shmmax / (1024*1024.0), ring_len);
+    ring_len = k_shmmax / num_channels / element_size - 5;
+    printf("shmmax=%lld (%.3fMiB) calculated per channel ring_len=%d\n", k_shmmax, k_shmmax / (1024*1024.0), ring_len);
 
     printf("element_size=%d ring_len=%d (%.2f secs) (total=%lld)\n", element_size, ring_len, ring_len / 25.0, (long long)element_size * ring_len);
     if (ring_len < 10)
     {
-        printf("ring_len=%d too small - try increasing shmmax:\n", ring_len);
+        printf("ring_len=%d too small (< 10)- try increasing shmmax:\n", ring_len);
         printf("  echo 1073741824 >> /proc/sys/kernel/shmmax\n");
         return 0;
     }
@@ -163,132 +174,146 @@ static int allocate_shared_buffers(int num_cards)
     }
     p_control = (NexusControl*)shmat(control_id, NULL, 0);
 
-    p_control->cards = num_cards;
-    p_control->elementsize = element_size;
-    p_control->audio12_offset = audio_offset;
-    p_control->audio34_offset = audio_offset + 0x4000;
-    p_control->audio_size = audio_size;
-    p_control->tc_offset = audio_offset + audio_size - sizeof(int);
-    p_control->ringlen = ring_len;
+    p_control->channels = num_channels;
+	p_control->ringlen = ring_len;
+	p_control->elementsize = element_size;
 
-    // Allocate multiple element ring buffers containing video + audio + tc
-    //
-    // by default 32MB is available (40 PAL frames), or change it with:
-    //  root# echo  104857600 >> /proc/sys/kernel/shmmax  # 120 frms (100MB)
-    //  root# echo  201326592 >> /proc/sys/kernel/shmmax  # 240 frms (192MB)
-    //  root# echo 1073741824 >> /proc/sys/kernel/shmmax  # 1294 frms (1GB)
+	p_control->width = width;
+	p_control->height = height;
+	p_control->frame_rate_numer = 25;
+	p_control->frame_rate_denom = 1;
+	p_control->pri_video_format = video_format;
+	p_control->sec_video_format = video_secondary_format;
 
-    // key for variable number of ring buffers can be 10, 11, 12, 13
-    for (i = 0; i < num_cards; i++)
-    {
-        int key = i + 10;
-        ring_id[i] = shmget(key, element_size * ring_len, IPC_CREAT | IPC_EXCL | 0666);
-        if (ring_id[i] == -1)   /* shm error */
-        {
-            int save_errno = errno;
-            fprintf(stderr, "Attemp to shmget for key %d: ", key);
-            perror("shmget");
-            switch (save_errno)
-            {
-            case EEXIST:
-                fprintf(stderr, "Use\n\tipcs | grep '0x0000000[9abcd]'\nplus ipcrm -m <id> to cleanup\n");
-                break;
-            case ENOMEM:
-                fprintf(stderr, "Perhaps you could increase shmmax: e.g.\n  echo 1073741824 >> /proc/sys/kernel/shmmax\n");
-                break;
-            case EINVAL:
-                fprintf(stderr, "You asked for too much?\n");
-                break;
-            }
-    
-            return 0;
-        }
+	p_control->audio12_offset = audio_offset;
+	p_control->audio34_offset = audio_offset + audio_size / 2;
+	p_control->audio_size = audio_size;
 
-        ring[i] = (unsigned char*)shmat(ring_id[i], NULL, 0);
-        if (ring[i] == (void *)-1)
-        {
-            fprintf(stderr, "shmat failed for card[%d], ring_id[%d] = %d\n", i, i, ring_id[i]);
-            perror("shmat");
-            return 0;
-        }
-        p_control->card[i].key = key;
-        p_control->card[i].lastframe = -1;
-        p_control->card[i].hwdrop = 0;
+	p_control->vitc_offset = vitc_offset;
+	p_control->ltc_offset = ltc_offset;
+	p_control->signal_ok_offset = signal_ok_offset;
+	p_control->sec_video_offset = dma_video_size + audio_size;
 
-        // initialise mutex in shared memory
-        if (pthread_mutex_init(&p_control->card[i].m_lastframe, NULL) != 0)
-        {
-            fprintf(stderr, "Mutex init error\n");
-        }
+    p_control->source_name_update = 0;
+    if (pthread_mutex_init(&p_control->m_source_name_update, NULL) != 0)
+        fprintf(stderr, "Mutex init error\n");
 
-        // Set ring frames to black - too slow!
-        // memset(ring[i], 0x80, element_size * ring_len);
-    }
+	// Allocate multiple element ring buffers containing video + audio + tc
+	//
+	// by default 32MB is available (40 PAL frames), or change it with:
+	//  root# echo  104857600 >> /proc/sys/kernel/shmmax  # 120 frms (100MB)
+	//  root# echo  201326592 >> /proc/sys/kernel/shmmax  # 240 frms (192MB)
+	//  root# echo 1073741824 >> /proc/sys/kernel/shmmax  # 1294 frms (1GB)
+
+	// key for variable number of ring buffers can be 10, 11, 12, 13, 14, 15, 16, 17
+	for (i = 0; i < num_channels; i++)
+	{
+		int key = i + 10;
+		ring_id[i] = shmget(key, element_size * ring_len, IPC_CREAT | IPC_EXCL | 0666);
+		if (ring_id[i] == -1)	/* shm error */
+		{
+			int save_errno = errno;
+			fprintf(stderr, "Attemp to shmget for key %d: ", key);
+			perror("shmget");
+			if (save_errno == EEXIST)
+				fprintf(stderr, "Use\n\tipcs | grep '0x0000000[9abcd]'\nplus ipcrm -m <id> to cleanup\n");
+			if (save_errno == ENOMEM)
+				fprintf(stderr, "Perhaps you could increase shmmax: e.g.\n  echo 1073741824 >> /proc/sys/kernel/shmmax\n");
+			if (save_errno == EINVAL)
+				fprintf(stderr, "You asked for too much?\n");
+	
+			return 0;
+		}
+
+		ring[i] = (uint8_t *)shmat(ring_id[i], NULL, 0);
+		if (ring[i] == (void *)-1) {
+			fprintf(stderr, "shmat failed for channel[%d], ring_id[%d] = %d\n", i, i, ring_id[i]);
+			perror("shmat");
+			return 0;
+		}
+		p_control->channel[i].lastframe = -1;
+		p_control->channel[i].hwdrop = 0;
+        sprintf(p_control->channel[i].source_name, "ch%d", i);
+        p_control->channel[i].source_name[sizeof(p_control->channel[i].source_name) - 1] = '\0';
+
+		// initialise mutex in shared memory
+		if (pthread_mutex_init(&p_control->channel[i].m_lastframe, NULL) != 0)
+			fprintf(stderr, "Mutex init error\n");
+
+		// Set ring frames to black - too slow!
+		// memset(ring[i], 0x80, element_size * ring_len);
+	}
 
     return 1;
 }
 
-static int fill_buffers(int num_cards, int shift)
+static int fill_buffers(int num_channels, int shift)
 {
-    // Open sample video and audio files
-    FILE * fp_video = 0;
-    FILE * fp_audio = 0;
-    if (video_file && (fp_video = fopen(video_file, "rb")) == NULL)
-    {
-        perror("fopen input video file");
-        //return 0;
-    }
-    if (audio_file && (fp_audio = fopen(audio_file, "rb")) == NULL)
-    {
-        perror("fopen input video file");
-        //return 0;
-    }
-    if (fp_audio)
-    {
-        fseek(fp_audio, 44, SEEK_SET);      // skip WAV header
-    }
+	FILE *fp_video = NULL;
+	FILE *fp_audio = NULL;
+    int video_uyvy_size = width*height*2;
+    uint8_t *video_uyvy = (uint8_t*)malloc(video_uyvy_size);
+    int video_yuv422_size = width*height*2;
+    uint8_t *video_yuv422 = (uint8_t*)malloc(video_yuv422_size);
+    int video_yuv_size = width*height*3/2;
+    uint8_t *video_yuv = (uint8_t*)malloc(video_yuv_size);
+    int audio_buf_size = 1920*2*4;
+    uint8_t *audio_buf = (uint8_t*)malloc(audio_buf_size);
+	int video_read_ok = 0;
 
+	if (use_random_video) {
+		uyvy_random_frame(width, height, video_uyvy);
+		video_read_ok = 1;
+	}
+	else {
+		// Open sample video and audio files
+		if (video_file && (fp_video = fopen(video_file, "rb")) == NULL) {
+			perror("fopen input video file");
+			return 0;
+		}
+		if (audio_file && (fp_audio = fopen(audio_file, "rb")) == NULL) {
+			perror("fopen input video file");
+			return 0;
+		}
+		if (fp_audio) {
+			fseek(fp_audio, 44, SEEK_SET);      // skip WAV header
+		}
+	}
+		
     // Read from sample files storing video + audio in ring buffer
-    uint8_t video_uyvy[720*576*2];
-    uint8_t video_yuv422[720*576*2];
-    uint8_t video_yuv[720*576*3/2];
-    uint8_t audio_buf[1920*2*4];
-
     printf("Filling buffers...\n");
     int frame_num;
     for (frame_num = 0; p_control && frame_num < p_control->ringlen; ++ frame_num)
     {
-        if (fp_video && fread(video_uyvy, sizeof(video_uyvy), 1, fp_video) == 1)
-        {
-            // Video frame successfully read
+        if (fp_video && fread(video_uyvy, video_uyvy_size, 1, fp_video) == 1) {
+            video_read_ok = 1;
         }
-        else
-        {
-            memset(video_uyvy, 0x80, sizeof(video_uyvy));
+        else {
+			// Use last video frame, otherwise gray frame
+			if (!video_read_ok)
+	            memset(video_uyvy, 0x80, video_uyvy_size);
         }
-        if (fp_audio && fread(audio_buf, sizeof(audio_buf), 1, fp_audio) == 1)
-        {
+        if (fp_audio && fread(audio_buf, audio_buf_size, 1, fp_audio) == 1) {
             // Audio frame successfully read
         }
-        else
-        {
-            memset(audio_buf, 0, sizeof(audio_buf));
+        else {
+            memset(audio_buf, 0, audio_buf_size);
         }
 
         // create YUV buffer
-        uyvy_to_yuv420(720, 576, shift, video_uyvy, video_yuv);
+        uyvy_to_yuv420(width, height, shift, video_uyvy, video_yuv);
 
         // convert UYVY to planar 4:2:2
-        uyvy_to_yuv422(720, 576, shift, video_uyvy, video_yuv422);
+        uyvy_to_yuv422(width, height, shift, video_uyvy, video_yuv422);
 
-        // Copy video and audio across all cards
+        // Copy video and audio across all channels
         int i;
-        for (i = 0; i < num_cards; i++)
+        for (i = 0; i < num_channels; i++)
         {
-            memcpy(ring[i] + element_size * frame_num, video_yuv422, sizeof(video_yuv422));
-            memcpy(ring[i] + element_size * frame_num + sizeof(video_yuv422), audio_buf, sizeof(audio_buf));
+            memcpy(ring[i] + element_size * frame_num, video_yuv422, video_yuv422_size);
+            memcpy(ring[i] + element_size * frame_num + video_yuv422_size, audio_buf, audio_buf_size);
             memcpy(ring[i] + element_size * frame_num + p_control->audio12_offset + p_control->audio_size,
-                video_yuv, sizeof(video_yuv));
+                video_yuv, video_yuv_size);
         }
     }
 
@@ -303,6 +328,11 @@ static int fill_buffers(int num_cards, int shift)
     {
         fclose(fp_audio);
     }
+
+    free(video_uyvy);
+    free(video_yuv422);
+    free(video_yuv);
+    free(audio_buf);
 
     return 1;
 }
@@ -323,23 +353,23 @@ static char * framesToStr(int tc, char *s)
 //
 // Gets a frame from the SDI FIFO and stores it to memory ring buffer
 // (also can write to disk as a debugging option)
-static int write_picture(int card)
+static int write_picture(int channel)
 {
     int                 ring_len = p_control->ringlen;
-    NexusBufCtl         *pc = &(p_control->card[card]);
+    NexusBufCtl         *pc = &(p_control->channel[channel]);
 
     // Copy timecode into last 4 bytes of element_size
     // This is a bit sneaky but saves maintaining a separate ring buffer
-    memcpy(ring[card] + element_size * ((pc->lastframe+1) % ring_len)
-            + p_control->tc_offset,
-            &timecode[card], sizeof(int));
+    memcpy(ring[channel] + element_size * ((pc->lastframe+1) % ring_len)
+            + p_control->vitc_offset,
+            &timecode[channel], sizeof(int));
     // And same in LTC position
-    memcpy(ring[card] + element_size * ((pc->lastframe+1) % ring_len)
-            + p_control->tc_offset - 4,
-            &timecode[card], sizeof(int));
+    memcpy(ring[channel] + element_size * ((pc->lastframe+1) % ring_len)
+            + p_control->vitc_offset - 4,
+            &timecode[channel], sizeof(int));
 
     // Increment timecode by 1 for each frame for testing
-    timecode[card] = (timecode[card] + 1) % (24 * 60 * 60 * 25);
+    timecode[channel] = (timecode[channel] + 1) % (24 * 60 * 60 * 25);
 
     // TODO: Update a burnt-in timecode in the test picture residing in the ring buffer
 
@@ -349,9 +379,9 @@ static int write_picture(int card)
         //   vitc_tc=268441105 vitc_tc2=-1879042543   for "10:00:16:11"
         char tcstr[32];
 
-        printf("card %d: Wrote frame %5d  size=%d vitc_tc=%s\n",
-                    card, pc->lastframe, element_size,
-                    framesToStr(timecode[card], tcstr)
+        printf("channel %d: Wrote frame %5d  size=%d vitc_tc=%s\n",
+                    channel, pc->lastframe, element_size,
+                    framesToStr(timecode[channel], tcstr)
                     );
         fflush(stdout);
     }
@@ -364,17 +394,36 @@ static int write_picture(int card)
     return 0;
 }
 
-// card number passed as void * (using cast)
+static int64_t tv_diff_microsec(const struct timeval* a, const struct timeval* b)
+{
+	int64_t diff = (b->tv_sec - a->tv_sec) * 1000000 + b->tv_usec - a->tv_usec;
+	return diff;
+}
+
+// channel number passed as void * (using cast)
 static void * sdi_monitor(void * arg)
 {
-    int card = (int)arg;
+    int channel = (int)arg;
 
-    // Write frames at 25 fps
+	// record start time as reference for frame timing
+	struct timeval   start_time;
+	gettimeofday(&start_time, NULL);
+
+    int framecount = 0;
     while (1)
     {
-        write_picture(card);
+        write_picture(channel);
 
-        usleep(40 * 1000);
+		// compute time to sleep based on starting reference and framecount
+		struct timeval now_time;
+		gettimeofday(&now_time, NULL);
+		int64_t elapsed = tv_diff_microsec(&start_time, &now_time);
+		int64_t expected = (framecount+1) * 40*1000;
+		int64_t diff = expected - elapsed;
+		if (diff > 0)
+	        usleep(diff);
+
+		framecount++;
     }
 
     return NULL;
@@ -382,13 +431,16 @@ static void * sdi_monitor(void * arg)
 
 static void usage_exit(void)
 {
-    fprintf(stderr, "Usage: testgen [-v] [-q] [-h] [-c cards] video_file audio_file\n");
+    fprintf(stderr, "Usage: testgen [-v] [-q] [-h] [-c channels] [video_file audio_file]\n");
     fprintf(stderr, "\n");
     fprintf(stderr, "e.g.   testgen -c 4 video.uyvy audio.wav\n");
     fprintf(stderr, "\n");
-    fprintf(stderr, "    -c cards     number of cards to simulate\n");
-    fprintf(stderr, "    -q           quiet operation\n");
-    fprintf(stderr, "    -h           help message\n");
+    fprintf(stderr, "    -r             random video data (no video or audio files required)\n");
+    fprintf(stderr, "    -c channels    number of channels to simulate [default 4 for SD, 2 for HD]\n");
+    fprintf(stderr, "    -t <type>      video frame type SD/HD1080/HD720 [default SD]\n");
+    fprintf(stderr, "    -m memory(MB)  maximum meory to use in MB\n");
+    fprintf(stderr, "    -q             quiet operation\n");
+    fprintf(stderr, "    -h             help message\n");
     fprintf(stderr, "\n");
     exit(1);
 }
@@ -396,8 +448,9 @@ static void usage_exit(void)
 int main (int argc, char ** argv)
 {
     int n;
-    int max_cards = 4;
+    int max_channels = 4;
     int shift = 1; // Shift field order for DV
+	long long opt_max_memory = 0;
 
     time_t now;
     struct tm * tm_now;
@@ -420,12 +473,46 @@ int main (int argc, char ** argv)
         {
             usage_exit();
         }
+        else if (strcmp(argv[n], "-r") == 0)
+        {
+            use_random_video = 1;
+        }
+        else if (strcmp(argv[n], "-m") == 0)
+        {
+            if (sscanf(argv[n+1], "%lld", &opt_max_memory) != 1) {
+                fprintf(stderr, "-m requires integer maximum memory in MB\n");
+                return 1;
+            }
+            opt_max_memory = opt_max_memory * 1024 * 1024;
+            n++;
+        }
         else if (strcmp(argv[n], "-c") == 0)
         {
-            if (sscanf(argv[n+1], "%d", &max_cards) != 1 ||
-                max_cards > 4 || max_cards <= 0)
+            if (sscanf(argv[n+1], "%d", &max_channels) != 1 ||
+                max_channels > 8 || max_channels <= 0)
             {
-                fprintf(stderr, "-c requires integer maximum card number <= 4\n");
+                fprintf(stderr, "-c requires integer maximum channel number <= 8\n");
+                return 1;
+            }
+            n++;
+        }
+        else if (strcmp(argv[n], "-t") == 0)
+        {
+            if (strcmp(argv[n+1], "HD1080") == 0) {
+				width = 1920; height = 1080;
+				if (max_channels > 2)
+					max_channels = 2;
+			}
+			else if (strcmp(argv[n+1], "HD720") == 0) {
+				width = 1280; height = 720;
+				if (max_channels > 2)
+					max_channels = 2;
+			}
+			else if (strcmp(argv[n+1], "SD") == 0) {
+				width = 720; height = 576;
+			}
+            else {
+                fprintf(stderr, "-t requires video type [SD/HD1080/HD720]\n");
                 return 1;
             }
             n++;
@@ -471,8 +558,8 @@ int main (int argc, char ** argv)
     //
     // card specified by string of form "PCI,card=n" where n = 0,1,2,3
     //
-    int card;
-    for (card = 0; card < max_cards; card++)
+    int channel;
+    for (channel = 0; channel < max_channels; channel++)
     {
         num_sdi_threads++;
     }
@@ -483,18 +570,27 @@ int main (int argc, char ** argv)
         return 1;
     }
 
-    // FIXME - this could be calculated correctly by using a struct for example
-    element_size =  720*576*2       // video frame
-                    + 0x8000        // size of internal structure of dvs dma transfer
-                                    // for 4 channels.  This is greater than 1920 * 4 * 4
-                                    // so we use the last 4 bytes for timecode
+    // Values worked out by experiment to match DVS values
+	dma_video_size = width*height*2;
+	audio_size = 0x8000;
+	audio_offset = dma_video_size;
 
-                    + 720*576*3/2;  // YUV 4:2:0 video buffer
+    // audio_size is greater than 1920 * 4 * 4
+    // so we use the spare bytes at end for timecode
+    vitc_offset         = audio_offset + audio_size - sizeof(int);
+    ltc_offset          = audio_offset + audio_size - 2 * sizeof(int);
+    tick_offset         = audio_offset + audio_size - 3 * sizeof(int);
+    signal_ok_offset    = audio_offset + audio_size - 4 * sizeof(int);
 
-    audio_offset = 720*576*2;
-    audio_size = 0x8000;
+	// An element in the ring buffer contains: video(4:2:2) + audio + video(4:2:0)
+	dma_total_size = dma_video_size		// video frame as captured by dma transfer
+					+ audio_size;		// DVS internal structure for 4 audio channels
+										
 
-    if (! allocate_shared_buffers(num_sdi_threads))
+    element_size = dma_total_size
+					+ width*height*3/2;	// YUV 4:2:0 video buffer
+
+    if (! allocate_shared_buffers(num_sdi_threads, opt_max_memory))
     {
         return 1;
     }
@@ -504,12 +600,12 @@ int main (int argc, char ** argv)
         return 1;
     }
 
-    for (card = 0; card < num_sdi_threads; card++)
+    for (channel = 0; channel < num_sdi_threads; channel++)
     {
         int err;
-        fprintf(stderr, "card %d: starting capture thread\n", card);
+        fprintf(stderr, "channel %d: starting capture thread\n", channel);
 
-        if ((err = pthread_create(&sdi_thread[card], NULL, sdi_monitor, (void *)card)) != 0)
+        if ((err = pthread_create(&sdi_thread[channel], NULL, sdi_monitor, (void *)channel)) != 0)
         {
             fprintf(stderr, "Failed to create sdi_monitor thread: %s\n", strerror(err));
             return 1;

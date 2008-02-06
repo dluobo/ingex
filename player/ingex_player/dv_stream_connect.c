@@ -281,7 +281,7 @@ static int decode_and_send_const(DVDecodeStreamConnect* connect, const unsigned 
         return 0;
     }
 
-    /* reformat decoded frame to UYVY */
+    /* reformat decoded frame */
     if (connect->streamInfo.format == DV25_YUV420_FORMAT || connect->streamInfo.format == DV25_YUV411_FORMAT)
     {
         if (connect->decodedFormat == UYVY_FORMAT)
@@ -727,7 +727,7 @@ int create_dv_connect(MediaSink* sink, int sinkStreamId, int sourceStreamId,
 
         result = msk_accept_stream(sink, &decodedStreamInfo);
     }
-    else /* DV50_FORMAT */
+    else /* streamInfo->format == DV50_FORMAT */
     {
         decodedStreamInfo = *streamInfo;
         decodedStreamInfo.format = YUV422_FORMAT;
@@ -758,7 +758,7 @@ int create_dv_connect(MediaSink* sink, int sinkStreamId, int sourceStreamId,
     {
         newConnect->dvDataSize = 144000;
     }
-    else
+    else /* streamInfo->format == DV50_FORMAT */
     {
         newConnect->dvDataSize = 288000;
     }

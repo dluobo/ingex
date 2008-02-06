@@ -11,7 +11,6 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <errno.h>
-#include <sys/inotify.h>
 #include <sys/statvfs.h>
 
 #include "qc_lto_access.h"
@@ -39,6 +38,39 @@
 /* the first entry is '../' and optional second is 'Extract all' */
 #define OSD_TAPE_DIR_ENTRY_INDEX(tapeDir, index)     (index + 1 + ((tapeDir)->haveExtractAllOption ? 1 : 0))
 
+
+#if defined(DISABLE_QC_LTO_ACCESS)
+/* For systems without <sys/inotify.h> */
+
+int qla_create_qc_lto_access(const char* cacheDirectory, QCLTOExtract* extract, QCLTOAccess** access)
+{
+    return 0;
+}
+void qla_free_qc_lto_access(QCLTOAccess** access)
+{
+}
+int qla_connect_to_player(QCLTOAccess* access, MediaPlayer* player)
+{
+    return 0;
+}
+int qla_get_file_to_play(QCLTOAccess* access, char directory[FILENAME_MAX], char name[FILENAME_MAX], 
+    char sessionName[FILENAME_MAX])
+{
+    return 0;
+}
+void qla_set_current_session_name(QCLTOAccess* access, const char* sessionName)
+{
+}
+void qla_set_current_play_name(QCLTOAccess* access, const char* directory, const char* name)
+{
+}
+void qla_remove_old_sessions(QCLTOAccess* access, const char* directory, const char* name)
+{
+}
+
+#else
+
+#include <sys/inotify.h>
 
 typedef struct
 {
@@ -144,6 +176,9 @@ struct QCLTOAccess
 {
     QCLTOExtract* extract;
     char* cacheDirName;
+
+    char* deleteScriptName;
+    char* deleteScriptOptions;
 
     MenuHandler menuHandler;
     
@@ -1934,7 +1969,7 @@ static int create_play_select_menu(QCLTOAccess* access, TapeDirectory* tapeDir, 
     char timestampText[64];
     char statusString[40];
     QCLTOExtractState extractState;
-    struct tm ltime;
+    int year, month, day, hour, min, sec;
     
     memset(sessions, 0, sizeof(sessions));
 
@@ -2025,7 +2060,7 @@ static int create_play_select_menu(QCLTOAccess* access, TapeDirectory* tapeDir, 
     if (tapeDir->entries[entryIndex].sizeOnDisk > 0)
     {
         CHK_OFAIL(osdm_insert_list_item(newMenu, LAST_MENU_ITEM_INDEX, &listItem));
-        CHK_OFAIL(osdm_set_list_item_text(newMenu, listItem, "\t\t\t\tPlay"));
+        CHK_OFAIL(osdm_set_list_item_text(newMenu, listItem, "\t\t\t\tPlay new session"));
         
         for (i = 0; i < MAX_SELECT_SESSION; i++)
         {
@@ -2038,10 +2073,9 @@ static int create_play_select_menu(QCLTOAccess* access, TapeDirectory* tapeDir, 
             strcpy(lineText, "\t\t");
             strcat(lineText, "\t\tPlay session ");
             
-            localtime_r(&sessions[i].modTime, &ltime);
+            CHK_OFAIL(qcs_extract_timestamp(access->playSelect.sessionNames[i], &year, &month, &day, &hour, &min, &sec));
             snprintf(timestampText, sizeof(timestampText), "%04d-%02d-%02d %02d:%02d:%02d", 
-                ltime.tm_year + 1900, ltime.tm_mon + 1, ltime.tm_mday, 
-                ltime.tm_hour, ltime.tm_min, ltime.tm_sec);
+                year, month, day, hour, min, sec);
             strcat(lineText, timestampText);
 
             CHK_OFAIL(osdm_insert_list_item(newMenu, LAST_MENU_ITEM_INDEX, &listItem));
@@ -2639,16 +2673,42 @@ static void qla_select_menu_item_right(void* data)
                 goto fail;
             }
             
-            /* delete the tape directory */
-            strcpy(rmCmd, "rm -Rf ");
-            strcat(rmCmd, access->deleteTapeDir.filename);
-            if (system(rmCmd) == 0)
+            /* call the delete script or delete the tape directory */
+            if (access->deleteScriptName != 0)
             {
-                ml_log_info("Removed tape directory '%s'\n", access->deleteTapeDir.filename); 
+                /* call the delete script */
+                
+                strcpy(rmCmd, access->deleteScriptName);
+                if (access->deleteScriptOptions != 0)
+                {
+                    strcat(rmCmd, " ");
+                    strcat(rmCmd, access->deleteScriptOptions);
+                }
+                strcat(rmCmd, " ");
+                strcat(rmCmd, access->deleteTapeDir.filename);
+                if (system(rmCmd) == 0)
+                {
+                    ml_log_info("Called '%s' to remove the tape directory '%s'\n", access->deleteScriptName, access->deleteTapeDir.filename); 
+                }
+                else
+                {
+                    ml_log_error("Script '%s' failed to remove tape directory '%s'\n", access->deleteScriptName, access->deleteTapeDir.filename); 
+                }
             }
             else
             {
-                ml_log_error("Failed to remove tape directory '%s'\n", access->deleteTapeDir.filename); 
+                /* delete the tape directory */
+                
+                strcpy(rmCmd, "rm -Rf ");
+                strcat(rmCmd, access->deleteTapeDir.filename);
+                if (system(rmCmd) == 0)
+                {
+                    ml_log_info("Removed tape directory '%s'\n", access->deleteTapeDir.filename); 
+                }
+                else
+                {
+                    ml_log_error("Failed to remove tape directory '%s'\n", access->deleteTapeDir.filename); 
+                }
             }
             
             /* go back up to the root menu */
@@ -2836,7 +2896,8 @@ static void qla_free(void* data)
 
 
 
-int qla_create_qc_lto_access(const char* cacheDirectory, QCLTOExtract* extract, QCLTOAccess** access)
+int qla_create_qc_lto_access(const char* cacheDirectory, QCLTOExtract* extract, 
+    const char* deleteScriptName, const char* deleteScriptOptions, QCLTOAccess** access)
 {
     QCLTOAccess* newAccess = NULL;
     DIR* cacheDir = NULL;
@@ -2855,6 +2916,18 @@ int qla_create_qc_lto_access(const char* cacheDirectory, QCLTOExtract* extract, 
     
     CALLOC_OFAIL(newAccess->cacheDirName, char, strlen(cacheDirectory) + 1);
     strcpy(newAccess->cacheDirName, cacheDirectory);
+
+    if (deleteScriptName != 0)
+    {
+        CALLOC_OFAIL(newAccess->deleteScriptName, char, strlen(deleteScriptName) + 1);
+        strcpy(newAccess->deleteScriptName, deleteScriptName);
+        
+        if (deleteScriptOptions != 0)
+        {
+            CALLOC_OFAIL(newAccess->deleteScriptOptions, char, strlen(deleteScriptOptions) + 1);
+            strcpy(newAccess->deleteScriptOptions, deleteScriptOptions);
+        }
+    }
 
 
     newAccess->inotifyFD = inotify_init();
@@ -2901,6 +2974,9 @@ void qla_free_qc_lto_access(QCLTOAccess** access)
     free_cache_contents(*access);
 
     SAFE_FREE(&(*access)->cacheDirName);
+
+    SAFE_FREE(&(*access)->deleteScriptName);
+    SAFE_FREE(&(*access)->deleteScriptOptions);
     
     SAFE_FREE(&(*access)->selectedDirectory);
     SAFE_FREE(&(*access)->selectedName);
@@ -3104,4 +3180,6 @@ void qla_remove_old_sessions(QCLTOAccess* access, const char* directory, const c
         closedir(tapeDirStream);
     }
 }
+
+#endif //#if defined(DISABLE_QC_LTO_ACCESS)
 

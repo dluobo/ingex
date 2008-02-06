@@ -18,7 +18,7 @@ public:
 // singleton access
 	static routerloggerApp * Instance()
 	{
-		if(0 == mInstance)
+		if (0 == mInstance)
 		{
 			mInstance = new routerloggerApp();
 		}
@@ -35,7 +35,7 @@ public:
 
 protected:
 // constructor protected as this is a singleton
-	routerloggerApp() {};
+	routerloggerApp();
 
 private:
 // singleton instance pointer

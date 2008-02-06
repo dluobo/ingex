@@ -1,5 +1,5 @@
 /*
- * $Id: avsync_analysis.c,v 1.1 2007/09/11 14:08:01 stuart_hc Exp $
+ * $Id: avsync_analysis.c,v 1.2 2008/02/06 16:58:50 john_f Exp $
  *
  * Functions to find click and flash in clapper board video and audio
  *
@@ -42,6 +42,10 @@ extern double red_diff_uyvy(const unsigned char *video)
 	sumSqDiff += ( red[2] - video[2] ) * ( red[2] - video[2] );
 	sumSqDiff += ( red[3] - video[3] ) * ( red[3] - video[3] );
 
+	if (sumSqDiff == 0)
+	{
+		return 20.0 * log10( 255.0 / sqrt(1.0 / 4) );
+	}
 	return 20.0 * log10( 255.0 / sqrt((double)sumSqDiff / 4) );
 }
 

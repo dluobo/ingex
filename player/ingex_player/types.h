@@ -6,6 +6,7 @@
 typedef enum
 {
     WHITE_COLOUR = 0,
+    LIGHT_WHITE_COLOUR,
     YELLOW_COLOUR,
     CYAN_COLOUR,
     GREEN_COLOUR,
@@ -15,6 +16,27 @@ typedef enum
     BLACK_COLOUR,
     ORANGE_COLOUR
 } Colour;
+
+typedef struct 
+{
+    unsigned char Y;
+    unsigned char U;
+    unsigned char V;
+} YUVColours;
+
+static const YUVColours g_rec601YUVColours[] = 
+{
+    {235, 128, 128},    /* WHITE_COLOUR */
+    {210, 128, 128},    /* LIGHT_WHITE_COLOUR */
+    {210, 16, 146},     /* YELLOW_COLOUR */
+    {169, 166, 16},     /* CYAN_COLOUR */
+    {144, 53, 34},      /* GREEN_COLOUR */
+    {106, 200, 221},    /* MAGENTA_COLOUR */
+    {81, 90, 240},      /* RED_COLOUR */
+    {40, 240, 110},     /* BLUE_COLOUR */
+    {16, 128, 128},     /* BLACK_COLOUR */
+    {165, 43, 180},     /* ORANGE_COLOUR */
+};
 
 typedef struct
 {

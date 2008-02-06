@@ -1,5 +1,5 @@
 /*
- * $Id: Database.h,v 1.1 2007/09/11 14:08:38 stuart_hc Exp $
+ * $Id: Database.h,v 1.2 2008/02/06 16:59:06 john_f Exp $
  *
  * Provides access to the data in the database
  *
@@ -137,6 +137,13 @@ public:
     
     // Packages
 
+    // project names
+    
+    // loads or creates a project name
+    // Note: an exception is thrown if name is empty
+    ProjectName loadOrCreateProjectName(std::string name, Transaction* transaction = 0);
+    std::vector<ProjectName> loadProjectNames();
+    void deleteProjectName(ProjectName* projectName, Transaction* transaction = 0);
     
     // returns 0 if source package not in database
     SourcePackage* loadSourcePackage(std::string name);

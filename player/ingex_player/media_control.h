@@ -53,6 +53,7 @@ typedef struct
     void (*seek)(void* data, int64_t offset, int whence /* SEEK_SET, SEEK_CUR or SEEK_END */, 
         PlayUnit unit /* offset is in units of 1/1000 % if unit is PERCENTAGE_PLAY_UNIT */);
     void (*play_speed)(void* data, int speed, PlayUnit unit);
+    void (*play_speed_factor)(void* data, float factor);
     void (*step)(void* data, int forward /* else backward */, PlayUnit unit);
     
     
@@ -66,12 +67,13 @@ typedef struct
     void (*seek_prev_mark)(void* data);
 
     
-    /* on screen timecode display */
+    /* on screen display */
     
     void (*set_osd_screen)(void* data, OSDScreen screen);
     void (*next_osd_screen)(void* data);
     void (*set_osd_timecode)(void* data, int index, int type, int subType);
     void (*next_osd_timecode)(void* data);
+    void (*toggle_show_audio_level)(void* data);
  
     
     /* video switch control */
@@ -79,6 +81,8 @@ typedef struct
     void (*switch_next_video)(void* data);
     void (*switch_prev_video)(void* data);
     void (*switch_video)(void* data, int index);
+    void (*show_source_name)(void* data, int enable);
+    void (*toggle_show_source_name)(void* data);
 
     
     /* functions for sinks supporting half-split */
@@ -121,6 +125,7 @@ void mc_pause(MediaControl* control);
 void mc_toggle_play_pause(MediaControl* control);
 void mc_seek(MediaControl* control, int64_t offset, int whence, PlayUnit unit);
 void mc_play_speed(MediaControl* control, int speed, PlayUnit unit);
+void mc_play_speed_factor(MediaControl* control, float factor);
 void mc_step(MediaControl* control, int forward, PlayUnit unit);
 
 void mc_mark(MediaControl* control, int type, int toggle);
@@ -134,10 +139,13 @@ void mc_set_osd_screen(MediaControl* control, OSDScreen screen);
 void mc_next_osd_screen(MediaControl* control);
 void mc_set_osd_timecode(MediaControl* control, int index, int type, int subType);
 void mc_next_osd_timecode(MediaControl* control);
+void mc_toggle_show_audio_level(MediaControl* control);
 
 void mc_switch_next_video(MediaControl* control);
 void mc_switch_prev_video(MediaControl* control);
 void mc_switch_video(MediaControl* control, int index);
+void mc_show_source_name(MediaControl* control, int enable);
+void mc_toggle_show_source_name(MediaControl* control);
 
 void mc_set_half_split_orientation(MediaControl* sink, int vertical);
 void mc_set_half_split_type(MediaControl* sink, int type);

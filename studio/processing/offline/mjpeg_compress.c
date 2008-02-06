@@ -1,5 +1,5 @@
 /*
- * $Id: mjpeg_compress.c,v 1.1 2007/09/11 14:08:45 stuart_hc Exp $
+ * $Id: mjpeg_compress.c,v 1.2 2008/02/06 16:59:12 john_f Exp $
  *
  * MJPEG encoder.
  *
@@ -266,51 +266,8 @@ extern int mjpeg_compress_free(mjpeg_compress_t *p)
     return 1;
 }
 
-// Sub sample a line with (1,2,1)/4 Y filtering
-// w is width of source image
-static void half_line_121(const unsigned char* srcLine, unsigned char* dstLine, int src_w, int dst_w)
-{
-    const unsigned char*  src0;
-    const unsigned char*  src1;
-    unsigned char*  dst;
-    int         i;
-    unsigned char   held;
-
-    // Work backwards to allow for awkward end of line stuff
-    src1 = srcLine + src_w - 1;
-    dst = dstLine + dst_w - 1;
-    held = *src1;   // pre-load with edge value
-    for (i = 0; i < dst_w; i++)
-    {
-        src0 = src1 - 1;
-        *dst-- = (*src0 + (*src1 * 2) + held) / 4;
-        held = *src0;
-        src1 = src0 - 1;
-    }
-}
-
-#if 0   // FIXME: make this work on width 360 -> 144 operation
-// Sub sample a line with (1,1)/2 filtering
-static void half_line_11(const unsigned char* srcLine, unsigned char* dstLine, int w)
-{
-    const unsigned char*    src0;
-    const unsigned char*    src1;
-    unsigned char*  dst;
-    int         i;
-
-    src0 = srcLine;
-    dst = dstLine;
-    for (i = 0; i < w / 2; i++)
-    {
-        src1 = src0 + 1;
-        *dst++ = (*src0 + *src1) / 2;
-        src0 = src1 + 1;
-    }
-}
-#endif
-
 /* Given a frame of YUV422, encode the specified field (0 or 1) */
-// returns size of compressed jpeg image, or 0 on failure
+/* returns size of compressed jpeg image, or 0 on failure */
 static unsigned mjpeg_compress_field_yuv(
                                 mjpeg_compress_t *p,
                                 const unsigned char *y,
@@ -364,18 +321,6 @@ static unsigned mjpeg_compress_field_yuv(
     // For single-field formats, like 15:1s, subsample original image horizontally
     // and use temp buffers for compression source
     if (p->single_field) {
-#if 0
-        // Source image is full size: two mixed fields at full height
-        // Dest image is quarter size: one field at half width
-        for (i = 0; i < p->src_height/2; i++) {
-            half_line_121(y + i*2 * y_linesize, p->half_y + i * cinfo->image_width, y_linesize, cinfo->image_width);
-        }
-
-        for (i = 0; i < p->src_height/2; i++) {
-            half_line_121(u + i*2 * u_linesize, p->half_u + i * cinfo->image_width/2, u_linesize, cinfo->image_width/2);
-            half_line_121(v + i*2 * v_linesize, p->half_v + i * cinfo->image_width/2, v_linesize, cinfo->image_width/2);
-        }
-#else
         // More general subsampling e.g. for 10:1m
         YUV_frame input_frame;
         input_frame.Y.w = y_linesize;
@@ -418,7 +363,6 @@ static unsigned mjpeg_compress_field_yuv(
             0, 0, output_frame.Y.w, output_frame.Y.h,
             0, 1, 1,				// intlc, hfil, vfil
             p->workspace);
-#endif
 
         while (cinfo->next_scanline < cinfo->image_height) {
             for (i = 0; i < DCTSIZE; i++) {
@@ -458,15 +402,7 @@ static unsigned mjpeg_compress_field_yuv(
     return compressed_size;
 }
 
-extern unsigned mjpeg_compress_frame_yuv(
-                                mjpeg_compress_t *p,
-                                const unsigned char *y,
-                                const unsigned char *u,
-                                const unsigned char *v,
-                                int y_linesize,
-                                int u_linesize,
-                                int v_linesize,
-                                unsigned char **pp_output)
+static int resolution_id_to_quality(int resID)
 {
     // Resolution Id to bitrate based on experiment and the following table
     // Avid Help has a "Estimated Storage Requirements: JFIF Interlaced" page
@@ -485,7 +421,7 @@ extern unsigned mjpeg_compress_frame_yuv(
     // 4:1m     ?           ?           35800 bytes per frame average
 
     int quality;
-    switch (p->resID) {
+    switch (resID) {
         case MJPEG_2_1: quality = 98; break;        // 2:1
         case MJPEG_3_1: quality = 97; break;        // 3:1
         case MJPEG_10_1: quality = 84; break;       // 10:1
@@ -494,20 +430,38 @@ extern unsigned mjpeg_compress_frame_yuv(
         case MJPEG_10_1m: quality = 71; break;      // 10:1m
         case MJPEG_4_1m: quality = 94; break;       // 4:1m
         default:
-                fprintf(stderr, "Unknown resolution ID %d, compression failed\n", p->resID);
+                fprintf(stderr, "Unknown resolution ID %d, compression failed\n", resID);
                 return 0;
                 break;
     }
+
+	return quality;
+}
+
+extern unsigned mjpeg_compress_frame_yuv(
+                                mjpeg_compress_t *p,
+                                const unsigned char *y,
+                                const unsigned char *u,
+                                const unsigned char *v,
+                                int y_linesize,
+                                int u_linesize,
+                                int v_linesize,
+                                unsigned char **pp_output)
+{
+	int quality = resolution_id_to_quality(p->resID);
 
     unsigned total_size = 0;
     j_compress_ptr cinfo = &(p->cinfo);
 
     // compress top field
-    total_size += mjpeg_compress_field_yuv(p, y, u, v, y_linesize, u_linesize, v_linesize, 0, quality);
+	unsigned top_size = 0, bot_size = 0;
+    top_size = mjpeg_compress_field_yuv(p, y, u, v, y_linesize, u_linesize, v_linesize, 0, quality);
+	total_size += top_size;
 
     if (! p->single_field) {
         // compress bottom field
-        total_size += mjpeg_compress_field_yuv(p, y, u, v, y_linesize, u_linesize, v_linesize, 1, quality);
+        bot_size += mjpeg_compress_field_yuv(p, y, u, v, y_linesize, u_linesize, v_linesize, 1, quality);
+        total_size += bot_size;
     }
 
     *pp_output = ((my_dest_ptr)cinfo->dest)->pair_buffer;
@@ -568,7 +522,7 @@ extern int mjpeg_fix_jpeg(const JOCTET *p_in, int size, int last_size, int resol
     unsigned char com_buf[59] = "AVID\x11";
     com_buf[11] = resolution_id;                // ResolutionID 0x4C=2:1, 0x4E=15:1s etc
     com_buf[12] = 0x02;                         // Always 2
-    storeUInt32_BE(&com_buf[7], last_size);     // store last size
+    storeUInt32_BE(&com_buf[7], last_size);     // store last_size
     memcpy(p, com_buf, sizeof(com_buf));
     p += sizeof(com_buf);
 
@@ -674,3 +628,156 @@ extern int mjpeg_fix_jpeg(const JOCTET *p_in, int size, int last_size, int resol
     return new_size;
 }
 
+static void set_jpeg_last_size(uint8_t *jpegbuf, int last_size)
+{
+	// last size metadata always located at offset 32 (4 bytes long)
+    storeUInt32_BE(jpegbuf + 31, last_size);     // store last_size
+}
+
+static void *mjpeg_compress_worker_thread(void *p_obj);
+
+extern int mjpeg_compress_init_threaded(MJPEGResolutionID id, int width, int height, mjpeg_compress_threaded_t **pp_handle)
+{
+	// allocate memory for handle
+    *pp_handle = (mjpeg_compress_threaded_t *)malloc(sizeof(mjpeg_compress_threaded_t));
+	mjpeg_thread_data_t *thread = (*pp_handle)->thread;
+
+	/* Setup thread-specific data for each thread */
+	int i;
+	for (i = 0; i < 2; i++) {
+		if (! mjpeg_compress_init(id, width, height, &thread[i].handle))
+			return 0;
+
+		thread[i].thread_num = i;
+
+		pthread_mutex_init(&thread[i].m_state_change, NULL);
+		pthread_cond_init(&thread[i].state_change, NULL);
+		thread[i].state = THREAD_INIT;
+
+		thread[i].compressed_size = 0;
+		thread[i].last_compressed_size = 0;
+
+		/* Create two worker threads which will start out waiting for an input frame */
+		int res;
+		if ((res = pthread_create(	&thread[i].thread_id, NULL,
+									mjpeg_compress_worker_thread, &thread[i])) != 0) {
+        	fprintf(stderr, "Failed to create worker thread: %s\n", strerror(res));
+        	return 0;
+		}
+	}
+
+	return 1;
+}
+
+static void *mjpeg_compress_worker_thread(void *p_obj)
+{
+    mjpeg_thread_data_t *p = (mjpeg_thread_data_t*)(p_obj);
+	int count = 0;
+
+	while (1) {
+		/* wait for next frame to encode */
+		while (p->state != THREAD_INPUT_READY) {
+			if (p->state == THREAD_FINI)
+				pthread_exit(NULL);
+			pthread_mutex_lock(&p->m_state_change);
+			pthread_cond_wait(&p->state_change, &p->m_state_change);
+			pthread_mutex_unlock(&p->m_state_change);
+		}
+
+		/* encode frame (thread_num determines top / bottom field) */
+		/* resulting compressed size is stored in thread data */
+		p->state = THREAD_BUSY;
+		p->last_compressed_size = p->compressed_size;
+		p->compressed_size = mjpeg_compress_field_yuv(p->handle, p->y, p->u, p->v, p->y_linesize, p->u_linesize, p->v_linesize, p->thread_num, p->quality);
+
+        // reset field_number to 0 to treat as single-field compression
+    	j_compress_ptr cinfo = &(p->handle->cinfo);
+        ((my_dest_ptr)cinfo->dest)->field_number = 0;
+
+		/* signal compressed frame is ready */
+		p->state = THREAD_OUTPUT_READY;
+	    pthread_mutex_lock(&p->m_state_change);
+   		pthread_cond_signal(&p->state_change);
+		pthread_mutex_unlock(&p->m_state_change);
+		count++;
+	}
+
+    return NULL;
+}
+
+extern unsigned mjpeg_compress_frame_yuv_threaded(
+                                mjpeg_compress_threaded_t *p,
+                                const unsigned char *y,
+                                const unsigned char *u,
+                                const unsigned char *v,
+                                int y_linesize,
+                                int u_linesize,
+                                int v_linesize,
+                                unsigned char **pp_output)
+{
+	mjpeg_thread_data_t *thread = p->thread;
+	int quality = resolution_id_to_quality(thread[0].handle->resID);
+
+	// Setup inputs
+	int i;
+	for (i = 0; i < 2; i++) {
+		thread[i].y = y;
+		thread[i].u = u;
+		thread[i].v = v;
+		thread[i].y_linesize = y_linesize;
+		thread[i].u_linesize = u_linesize;
+		thread[i].v_linesize = v_linesize;
+		thread[i].quality = quality;
+	}
+
+	for (i = 0; i < 2; i++) {
+    	// Signal worker to compress a field
+		thread[i].state = THREAD_INPUT_READY;
+		pthread_mutex_lock(&thread[i].m_state_change);
+		pthread_cond_signal(&thread[i].state_change);
+		pthread_mutex_unlock(&thread[i].m_state_change);
+	}
+	
+	// Wait for both threads to finish, getting the compressed sizes
+	for (i = 0; i < 2; i++) {
+		while (thread[i].state != THREAD_OUTPUT_READY) {
+			pthread_mutex_lock(&thread[i].m_state_change);
+			pthread_cond_wait(&thread[i].state_change, &thread[i].m_state_change);
+			pthread_mutex_unlock(&thread[i].m_state_change);
+		}
+	}
+	int top_size = thread[0].compressed_size;
+	int bottom_size = thread[1].compressed_size;
+
+	// Serialise results by copying bottom field after top field
+	j_compress_ptr cinfo = &(thread[0].handle->cinfo);
+	uint8_t *top_buffer = ((my_dest_ptr)cinfo->dest)->pair_buffer;
+	cinfo = &(thread[1].handle->cinfo);
+	uint8_t *bottom_buffer = ((my_dest_ptr)cinfo->dest)->pair_buffer;
+	memcpy(top_buffer + top_size, bottom_buffer, bottom_size);
+
+	// update last_size metadata in JPEG headers
+	set_jpeg_last_size(top_buffer, thread[1].last_compressed_size);
+	set_jpeg_last_size(top_buffer + top_size, top_size);
+
+    *pp_output = top_buffer;
+    return top_size + bottom_size;
+}
+
+extern int mjpeg_compress_free_threaded(mjpeg_compress_threaded_t *p)
+{
+	mjpeg_thread_data_t *thread = p->thread;
+
+    int i;
+	for (i = 0; i < 2; i++) {
+		mjpeg_compress_free(thread[i].handle);
+		thread[i].state = THREAD_FINI;
+		pthread_mutex_lock(&thread[i].m_state_change);
+		pthread_cond_signal(&thread[i].state_change);
+		pthread_mutex_unlock(&thread[i].m_state_change);
+		pthread_join(thread[i].thread_id, NULL);
+	}
+
+	free(p);
+    return 1;
+}

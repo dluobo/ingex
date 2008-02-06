@@ -1,5 +1,5 @@
 /*
- * $Id: test_mxfwriter.cpp,v 1.1 2007/09/11 14:08:44 stuart_hc Exp $
+ * $Id: test_mxfwriter.cpp,v 1.2 2008/02/06 16:59:11 john_f Exp $
  *
  * Tests the MXF writer
  *
@@ -51,9 +51,6 @@ using namespace prodauto;
 #define NUM_FRAMES                  15
 #define NUM_RECORDS                 1
 
-#define RECORDER_NAME		"Ingex"
-//#define RECORDER_NAME               "Studio A"
-//#define RECORDER_NAME               "KW-A44"
 #define NUM_RECORDER_INPUTS         4
 
 //#define CREATING_FILE_PATH          "creating"
@@ -76,7 +73,7 @@ typedef struct
     Recorder* recorder; 
     int32_t inputIndex;
     vector<UserComment> userComments;
-    string avidProjectName;
+    ProjectName projectName;
     string dv50Filename;
 } RecordData;
 
@@ -133,7 +130,7 @@ void* start_record_routine(void* data)
             16, 0xffffffff, recordData->startPosition, recordData->creatingFilePath,
             recordData->destinationFilePath, recordData->failuresFilePath,
             recordData->filenamePrefix, recordData->userComments, 
-            recordData->avidProjectName));
+            recordData->projectName));
     
         int i;
         int trackIndex;
@@ -249,7 +246,12 @@ void* start_record_routine(void* data)
 
 static void usage(const char* prog)
 {
-    fprintf(stderr, "%s [--dv50 <filename>] [--old-session] <filename prefix>\n", prog);
+    fprintf(stderr, "%s [options] <filename prefix>\n", prog);
+    fprintf(stderr, "\n");
+    fprintf(stderr, "Options:\n");
+    fprintf(stderr, "    --dv50 <filename>    Essence file to read and wrap in MXF (default is blank uncompressed)\n");
+    fprintf(stderr, "    --old-session\n");
+    fprintf(stderr, "    -r <recorder name>   Recorder name to use to connect to database [\"Ingex\"]\n");
 }
 
 
@@ -259,6 +261,7 @@ int main(int argc, const char* argv[])
     int k;
     const char* dv50Filename = NULL;
     const char* filenamePrefix = NULL;
+    const char* recorderName = "Ingex";
     bool oldSession = false;
     int cmdlnIndex = 1;
     
@@ -287,6 +290,17 @@ int main(int argc, const char* argv[])
             dv50Filename = argv[cmdlnIndex + 1];
             cmdlnIndex += 2;
         }
+        else if (strcmp(argv[cmdlnIndex], "-r") == 0)
+        {
+            if (cmdlnIndex + 1 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing value for argument '%s'\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            recorderName = argv[cmdlnIndex + 1];
+            cmdlnIndex += 2;
+        }
         else if (strcmp(argv[cmdlnIndex], "--old-session") == 0)
         {
             oldSession = true;
@@ -309,7 +323,7 @@ int main(int argc, const char* argv[])
     
     filenamePrefix = argv[cmdlnIndex];    
 
-    
+
     // initialise the database
     try
     {
@@ -326,17 +340,32 @@ int main(int argc, const char* argv[])
     try
     {
         Database* database = Database::getInstance();
-        recorder = auto_ptr<Recorder>(database->loadRecorder(RECORDER_NAME));
+        recorder = auto_ptr<Recorder>(database->loadRecorder(recorderName));
         if (!recorder->hasConfig())
         {
-            fprintf(stderr, "Recorder '%s' has null config\n", RECORDER_NAME);
+            fprintf(stderr, "Recorder '%s' has null config\n", recorderName);
             Database::close();
             return 1;
         }
     }
     catch (const DBException& ex)
     {
-        fprintf(stderr, "Failed to load recorder '%s':\n  %s\n", RECORDER_NAME, ex.getMessage().c_str());
+        fprintf(stderr, "Failed to load recorder '%s':\n  %s\n", recorderName, ex.getMessage().c_str());
+        Database::close();
+        return 1;
+    }
+    
+    
+    // save the project name
+    ProjectName projectName;
+    try
+    {
+        string name = "testproject";
+        projectName = Database::getInstance()->loadOrCreateProjectName(name);
+    }
+    catch (const DBException& ex)
+    {
+        fprintf(stderr, "Failed to load recorder '%s':\n  %s\n", recorderName, ex.getMessage().c_str());
         Database::close();
         return 1;
     }
@@ -438,7 +467,8 @@ int main(int argc, const char* argv[])
                     "a test file"));
                 recordData[i].userComments.push_back(UserComment(AVID_UC_DESCRIPTION_NAME, 
                     "an mxfwriter test file produced by test_mxfwriter"));
-                recordData[i].avidProjectName = "testproject";
+                recordData[i].projectName = projectName;
+                
                 if (dv50Filename != NULL)
                 {
                     recordData[i].dv50Filename = dv50Filename;

@@ -1,5 +1,5 @@
 /*
- * $Id: transcode_avid_mxf.cpp,v 1.2 2007/10/26 16:44:50 john_f Exp $
+ * $Id: transcode_avid_mxf.cpp,v 1.3 2008/02/06 16:59:12 john_f Exp $
  *
  * Transcodes Avid MXF files
  *
@@ -717,7 +717,7 @@ int transcode_avid_mxf(DV50Codec* dv50Codec,
             failureDirectory,
             outputPrefix,
             pa_materialPackage->getUserComments(),
-            pa_materialPackage->avidProjectName); 
+            pa_materialPackage->projectName); 
 
             
         // initialise transcode

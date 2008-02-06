@@ -224,6 +224,11 @@ The solution is to configure libodbc++ for ODBC version 2.5 (592 == 0x0250) inst
 The postgres ODBC driver listed at http://www.unixodbc.org/ does state that it supports version 2.5. This suggests that version 2.5 is the correct version to use and newer versions on older SuSE installations just happened to work in our limited application.
 
 
+Client apps on Windows
+----------------------
+
+Install psqlodbc
+Administrative Tools->Data Sources->User DSN ... Add prodautodb
 
 
 pgAdminIII installation on Windows 
