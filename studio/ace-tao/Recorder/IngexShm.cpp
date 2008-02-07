@@ -1,5 +1,5 @@
 /*
- * $Id: IngexShm.cpp,v 1.2 2007/10/26 16:00:41 john_f Exp $
+ * $Id: IngexShm.cpp,v 1.3 2008/02/07 16:48:37 john_f Exp $
  *
  * Interface for reading audio/video data from shared memory.
  *
@@ -33,7 +33,7 @@
 IngexShm * IngexShm::mInstance = 0;
 
 IngexShm::IngexShm(void)
-: mCards(0), mTcMode(VITC)
+: mChannels(0), mTcMode(VITC)
 {
 }
 
@@ -43,7 +43,7 @@ IngexShm::~IngexShm(void)
 
 /**
 Attach to shared memory.
-@return The number of buffers (cards) attached to.
+@return The number of buffers (channels) attached to.
 */
 int IngexShm::Init()
 {
@@ -51,11 +51,11 @@ int IngexShm::Init()
 // but with the settings below the code will still compile.
 #ifdef WIN32
     const key_t control_shm_key = "control";
-    const key_t card_shm_key[MAX_CHANNELS] = { "card0", "card1", "card2", "card3" };
+    const key_t channel_shm_key[MAX_CHANNELS] = { "channel0", "channel1", "channel2", "channel3" };
     const int shm_flags = 0;
 #else
     const key_t control_shm_key = 9;
-    const key_t card_shm_key[MAX_CHANNELS] = { 10, 11, 12, 13, 14, 15, 16, 17 };
+    const key_t channel_shm_key[MAX_CHANNELS] = { 10, 11, 12, 13, 14, 15, 16, 17 };
     const int shm_flags = SHM_RDONLY;
 #endif
 
@@ -79,34 +79,55 @@ int IngexShm::Init()
 
     // Shared memory found for control data, attach to it
     mpControl = (NexusControl *)ACE_OS::shmat(control_id, NULL, 0);
-    mCards = mpControl->cards;
+    mChannels = mpControl->channels;
 
     ACE_DEBUG((LM_DEBUG,
-        ACE_TEXT("Connected to p_control %@\n  cards=%d elementsize=%d ringlen=%d\n"),
+        ACE_TEXT("Connected to p_control %@\n  channels=%d elementsize=%d ringlen=%d\n"),
         mpControl,
-        mpControl->cards,
+        mpControl->channels,
         mpControl->elementsize,
         mpControl->ringlen));
 
     // Attach to each video ring buffer
-    for (int i = 0; i < mpControl->cards; i++)
+    for (int i = 0; i < mpControl->channels; i++)
     {
         int shm_id;
         for (int attempt = 0; attempt < 5; ++attempt)
         {
-            shm_id = ACE_OS::shmget(card_shm_key[i], mpControl->elementsize, 0444);
+            shm_id = ACE_OS::shmget(channel_shm_key[i], mpControl->elementsize, 0444);
             if (shm_id != -1)
             {
                 break;
             }
-            ACE_DEBUG((LM_DEBUG, ACE_TEXT("Waiting for card[%d] shared memory...\n"), i));
+            ACE_DEBUG((LM_DEBUG, ACE_TEXT("Waiting for channel[%d] shared memory...\n"), i));
             ACE_OS::sleep(ACE_Time_Value(0, 50 * 1000));
         }
         mRing[i] = (unsigned char *)ACE_OS::shmat(shm_id, NULL, shm_flags);
-        ACE_DEBUG((LM_DEBUG, ACE_TEXT("Connected to card[%d] %@\n"), i, mRing[i]));
+        ACE_DEBUG((LM_DEBUG, ACE_TEXT("Connected to channel[%d] %@\n"), i, mRing[i]));
     }
 
-    return mCards;
+    return mChannels;
+}
+
+std::string IngexShm::SourceName(unsigned int channel_i)
+{
+    if (channel_i < mChannels)
+    {
+        return mpControl->channel[channel_i].source_name;
+    }
+    else
+    {
+        return "";
+    }
+}
+
+void IngexShm::SourceName(unsigned int channel_i, const std::string & name)
+{
+    if (channel_i < mChannels)
+    {
+        strncpy( mpControl->channel[channel_i].source_name, name.c_str(),
+            sizeof(mpControl->channel[channel_i].source_name));
+    }
 }
 
 
