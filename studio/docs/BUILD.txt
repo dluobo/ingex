@@ -1,5 +1,6 @@
 cd $workspace/ingex/libMXF/lib
-./make_install.sh
+make
+sudo make install
 
 cd $workspace/ingex/studio/mxfwriter
 make   (also makes database/src)
