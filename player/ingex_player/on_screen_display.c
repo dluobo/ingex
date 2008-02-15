@@ -1532,7 +1532,7 @@ static int get_progress_bar_width(int imageWidth)
 {
     int width;
     
-    width = imageWidth * 3 / 5;
+    width = imageWidth * 8 / 10;
     width += PROGRESS_BAR_MARK_WIDTH - (width % PROGRESS_BAR_MARK_WIDTH); /* ensure that a series of marks PROGRESS_BAR_MARK_WIDTH pixels wide fit exactly */
     width += 2 * PROGRESS_BAR_ENDS_WIDTH;
     

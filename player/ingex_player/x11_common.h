@@ -79,7 +79,7 @@ void x11c_unregister_progress_bar_listener(X11Common* x11Common, ProgressBarInpu
 int x11c_open_display(X11Common* x11Common);
 int x11c_get_screen_dimensions(X11Common* x11Common, int* width, int* height);
 int x11c_create_window(X11Common* x11Common, unsigned int displayWidth, unsigned int displayHeight,
-    unsigned int imageWidth, unsigned int imageHeight);
+    unsigned int imageWidth, unsigned int imageHeight, Window embedWindowId);
 
 void x11c_set_media_control(X11Common* x11Common, ConnectMapping mapping, MediaControl* control);
 void x11c_unset_media_control(X11Common* x11Common);

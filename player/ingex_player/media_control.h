@@ -65,6 +65,7 @@ typedef struct
     void (*clear_all_marks)(void* data, int typeMask /* ALL_MARK_TYPE will clear all mark types */);
     void (*seek_next_mark)(void* data);
     void (*seek_prev_mark)(void* data);
+    void (*seek_clip_mark)(void* data);
 
     
     /* on screen display */
@@ -134,6 +135,7 @@ void mc_clear_mark(MediaControl* control, int typeMask);
 void mc_clear_all_marks(MediaControl* control, int typeMask);
 void mc_seek_next_mark(MediaControl* control);
 void mc_seek_prev_mark(MediaControl* control);
+void mc_seek_clip_mark(MediaControl* control);
 
 void mc_set_osd_screen(MediaControl* control, OSDScreen screen);
 void mc_next_osd_screen(MediaControl* control);

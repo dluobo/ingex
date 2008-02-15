@@ -70,7 +70,7 @@ typedef struct
     int videoIsPresent;
 
     OnScreenDisplayState* osdState;
-    
+
     FrameInfo frameInfo;
 } X11DisplayFrame;
 
@@ -96,6 +96,7 @@ struct X11XVDisplaySink
     /* display stuff */
     int xvport;
     int useSharedMemory;
+    Window windowId;                   /* id of existing embedded window (0 = none) */
     
     /* image characteristics */
     int32_t frameFormat;
@@ -458,7 +459,7 @@ static int init_display(X11XVDisplaySink* sink, const StreamInfo* streamInfo)
     sink->useSharedMemory = x11c_shared_memory_available(&sink->x11Common);
     
     CHK_OFAIL(x11c_create_window(&sink->x11Common, sink->initialDisplayWidth, sink->initialDisplayHeight, 
-        sink->width, sink->height));
+        sink->width, sink->height, sink->windowId));
 
     sink->displayInitialised = 1;
     sink->displayInitFailed = 0;
@@ -1233,7 +1234,7 @@ int xvsk_check_is_available()
 
 
 int xvsk_open(int reviewDuration, int disableOSD, const Rational* pixelAspectRatio, 
-    const Rational* monitorAspectRatio, float scale, int swScale, X11XVDisplaySink** sink)
+    const Rational* monitorAspectRatio, float scale, int swScale, unsigned long windowId, X11XVDisplaySink** sink)
 {
     X11XVDisplaySink* newSink;
     
@@ -1280,7 +1281,9 @@ int xvsk_open(int reviewDuration, int disableOSD, const Rational* pixelAspectRat
     }
     
     CHK_OFAIL(x11c_initialise(&newSink->x11Common, reviewDuration, newSink->osd));
-    
+
+    /* Non-zero windowId will cause existing embedded window to be used */
+    newSink->windowId = windowId;
     
     gettimeofday(&newSink->lastFrameTime, NULL);
     

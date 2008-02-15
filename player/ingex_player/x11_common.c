@@ -260,7 +260,7 @@ int x11c_get_screen_dimensions(X11Common* x11Common, int* width, int* height)
 }
 
 int x11c_create_window(X11Common* x11Common, unsigned int displayWidth, unsigned int displayHeight,
-    unsigned int imageWidth, unsigned int imageHeight)
+    unsigned int imageWidth, unsigned int imageHeight, Window embedWindowId)
 {
     XSetWindowAttributes x_attr;
     XEvent event;
@@ -291,16 +291,26 @@ int x11c_create_window(X11Common* x11Common, unsigned int displayWidth, unsigned
     x_attr.backing_store = Always;
     x_attr.event_mask = ExposureMask | StructureNotifyMask;
 
-    x11Common->window = XCreateWindow(
-        x11Common->display, 
-        DefaultRootWindow(x11Common->display),
-        0, 0, 
-        displayWidth, displayHeight,
-        0, 
-        DefaultDepth(x11Common->display, DefaultScreen(x11Common->display)), 
-        InputOutput, 
-        CopyFromParent,
-        CWBackingStore | CWBackPixel | CWBorderPixel | CWEventMask, &x_attr);
+    if (embedWindowId)
+    {
+        /* embedded window should already exist so just use it */
+        x11Common->window = embedWindowId;
+    }
+    else
+    {
+        /* create a new X11 window  */
+        x11Common->window = XCreateWindow(
+            x11Common->display, 
+            DefaultRootWindow(x11Common->display),
+            0, 0, 
+            displayWidth, displayHeight,
+            0, 
+            DefaultDepth(x11Common->display, DefaultScreen(x11Common->display)), 
+            InputOutput, 
+            CopyFromParent,
+            CWBackingStore | CWBackPixel | CWBorderPixel | CWEventMask, &x_attr);
+    }
+
     XStoreName(x11Common->display, x11Common->window, x11Common->windowName);
     XSelectInput(x11Common->display, x11Common->window, 
         ExposureMask | StructureNotifyMask | FocusChangeMask | 
@@ -314,16 +324,17 @@ int x11c_create_window(X11Common* x11Common, unsigned int displayWidth, unsigned
     {
         ml_log_warn("Failed to register interest in X11 window closing event\n");
     }
-    
-    
-    XMapWindow(x11Common->display, x11Common->window);
 
-    do 
+    if (embedWindowId == 0)    /* not using embedded window */
     {
-        XNextEvent(x11Common->display, &event);
-    } 
-    while (event.type != MapNotify || event.xmap.event != x11Common->window);
-
+        XMapWindow(x11Common->display, x11Common->window);
+        /* Wait until window is mapped */
+        do 
+        {
+            XNextEvent(x11Common->display, &event);
+        } 
+        while (event.type != MapNotify || event.xmap.event != x11Common->window);
+    }
 
     x11Common->gc = XCreateGC(x11Common->display, x11Common->window, 0, 0);
     

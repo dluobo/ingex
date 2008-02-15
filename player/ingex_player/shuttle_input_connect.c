@@ -21,6 +21,7 @@
 struct ShuttleConnect
 {
     int reviewDuration;
+    int useQCLockButton;
     ConnectMapping mapping;
     MediaControl* control;
     ShuttleInput* shuttle;
@@ -476,7 +477,14 @@ static void qc_listener(void* data, ShuttleEvent* event)
                             mc_next_osd_timecode(connect->control);
                             break;
                         case 3:
-                            mc_toggle_lock(connect->control);
+                            if (connect->useQCLockButton)
+                            {
+                                mc_toggle_lock(connect->control);
+                            }
+                            else
+                            {
+                                mc_seek_clip_mark(connect->control);
+                            }
                             break;
                         case 4:
                             gettimeofday(&connect->qcQuitPressedTime, NULL);
@@ -611,8 +619,8 @@ static void qc_listener(void* data, ShuttleEvent* event)
 }
 
 
-int sic_create_shuttle_connect(int reviewDuration, MediaControl* control, ShuttleInput* shuttle, 
-    ConnectMapping mapping, ShuttleConnect** connect)
+int sic_create_shuttle_connect(int reviewDuration, int useQCLockButton, MediaControl* control, 
+    ShuttleInput* shuttle, ConnectMapping mapping, ShuttleConnect** connect)
 {
     ShuttleConnect* newConnect;
 

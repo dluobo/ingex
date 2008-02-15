@@ -172,7 +172,7 @@ typedef struct
     int markType;
 
     /* all timecodes are only present when all streams in the frame have been read */
-    TimecodeInfo timecodes[16];
+    TimecodeInfo timecodes[64];
     int numTimecodes;
 } FrameInfo;
 

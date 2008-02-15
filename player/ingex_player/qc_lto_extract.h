@@ -39,7 +39,7 @@ typedef struct
 typedef struct QCLTOExtract QCLTOExtract;
 
 
-int qce_create_lto_extract(const char* cacheDirectory, QCLTOExtract** extract);
+int qce_create_lto_extract(const char* cacheDirectory, const char* tapeDevice, QCLTOExtract** extract);
 void qce_free_lto_extract(QCLTOExtract** extract);
 
 void qce_start_extract(QCLTOExtract* extract, const char* ltoSpoolNumber, const char* filename);

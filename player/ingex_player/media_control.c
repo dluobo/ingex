@@ -140,6 +140,14 @@ void mc_seek_prev_mark(MediaControl* control)
     }
 }
 
+void mc_seek_clip_mark(MediaControl* control)
+{
+    if (control && control->seek_clip_mark)
+    {
+        control->seek_clip_mark(control->data);
+    }
+}
+
 void mc_next_osd_screen(MediaControl* control)
 {
     if (control && control->next_osd_screen)

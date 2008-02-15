@@ -731,7 +731,7 @@ fail:
 
 int dusk_open(int reviewDuration, SDIVITCSource sdiVITCSource, int extraSDIVITCSource, int numBuffers, 
     int useXV, int disableSDIOSD, int disableX11OSD, const Rational* pixelAspectRatio, 
-    const Rational* monitorAspectRatio, float scale, int swScale, int fitVideo, DualSink** dualSink)
+    const Rational* monitorAspectRatio, float scale, int swScale, int fitVideo, unsigned long windowId, DualSink** dualSink)
 {
     DualSink* newDualSink = NULL;
     
@@ -749,14 +749,14 @@ int dusk_open(int reviewDuration, SDIVITCSource sdiVITCSource, int extraSDIVITCS
     {
         /* open buffered X11 XV display sink */    
         CHK_OFAIL(xvsk_open(reviewDuration, disableX11OSD, pixelAspectRatio, monitorAspectRatio, 
-            scale, swScale, &newDualSink->x11XVDisplaySink));
+            scale, swScale, windowId, &newDualSink->x11XVDisplaySink));
         newDualSink->x11Sink = xvsk_get_media_sink(newDualSink->x11XVDisplaySink);
     }
     else
     {
         /* open buffered X11 display sink */    
         CHK_OFAIL(xsk_open(reviewDuration, disableX11OSD, pixelAspectRatio, monitorAspectRatio, 
-            scale, swScale, &newDualSink->x11DisplaySink));
+            scale, swScale, windowId, &newDualSink->x11DisplaySink));
         newDualSink->x11Sink = xsk_get_media_sink(newDualSink->x11DisplaySink);
     }
 

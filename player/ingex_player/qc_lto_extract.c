@@ -56,6 +56,7 @@ typedef struct
 struct QCLTOExtract
 {
     char* cacheDirectory;
+    char* tapeDevice;
     
     char startLTOSpoolNumber[32];
     char startFilename[32];
@@ -77,8 +78,6 @@ struct QCLTOExtract
     char* currentPlayLTONumber;
     char* currentPlayName;
 };
-
-static const char* g_tapeDevice = "/dev/nst0";
 
 
 static int64_t get_file_size_on_disk(const char* name1, const char* name2, const char* name3)
@@ -485,7 +484,7 @@ static int seek_to_file(QCLTOExtract* extract, int num)
     int fileNo = -1;
     int blockNo = -1;
     
-    if (get_tape_pos(g_tapeDevice, &fileNo, &blockNo))
+    if (get_tape_pos(extract->tapeDevice, &fileNo, &blockNo))
     {
         ml_log_warn("Failed to get tape pos - rewinding tape\n");
     }
@@ -494,14 +493,14 @@ static int seek_to_file(QCLTOExtract* extract, int num)
     {
         set_extract_state(extract, LTO_BUSY_REWINDING_STATUS, NULL, NULL, -1);
         
-        if (!rewind_tape(g_tapeDevice))
+        if (!rewind_tape(extract->tapeDevice))
         {
             ml_log_error("Failed to rewind tape to allow seek to file\n");
             return 0;
         }
         haveRewoundTape = 1;
         
-        if (!get_tape_pos(g_tapeDevice, &fileNo, &blockNo) || fileNo < 0 || blockNo < 0)
+        if (!get_tape_pos(extract->tapeDevice, &fileNo, &blockNo) || fileNo < 0 || blockNo < 0)
         {
             ml_log_error("Failed to get tape pos\n");
             return 0;
@@ -520,7 +519,7 @@ static int seek_to_file(QCLTOExtract* extract, int num)
             set_extract_state(extract, LTO_BUSY_REWINDING_STATUS, NULL, NULL, -1);
 
             /* the start of the tape doesn't have a file mark so we do a rewind */
-            if (!rewind_tape(g_tapeDevice))
+            if (!rewind_tape(extract->tapeDevice))
             {
                 ml_log_error("Failed to rewind tape to allow seek to file\n");
                 return 0;
@@ -530,8 +529,8 @@ static int seek_to_file(QCLTOExtract* extract, int num)
     else 
     {
         int fd;
-        if ((fd = open(g_tapeDevice, O_RDONLY|O_NONBLOCK|O_LARGEFILE)) == -1) {
-            ml_log_error("Failed to open device %s: %s\n", g_tapeDevice, strerror(errno));
+        if ((fd = open(extract->tapeDevice, O_RDONLY|O_NONBLOCK|O_LARGEFILE)) == -1) {
+            ml_log_error("Failed to open device %s: %s\n", extract->tapeDevice, strerror(errno));
             return 0;
         }
     
@@ -734,8 +733,8 @@ static int extract_index_file(QCLTOExtract* extract, unsigned char* buffer)
     set_extract_state(extract, LTO_BUSY_EXTRACTING_INDEX_STATUS, NULL, NULL, -1);
 
     int fd;
-    if ((fd = open(g_tapeDevice, O_RDONLY|O_NONBLOCK|O_LARGEFILE)) == -1) {
-        ml_log_error("Failed to open device %s: %s\n", g_tapeDevice, strerror(errno));
+    if ((fd = open(extract->tapeDevice, O_RDONLY|O_NONBLOCK|O_LARGEFILE)) == -1) {
+        ml_log_error("Failed to open device %s: %s\n", extract->tapeDevice, strerror(errno));
         return -1;
     }
 
@@ -920,8 +919,8 @@ static int extract_file(QCLTOExtract* extract, unsigned char* buffer, int fileNu
     
     /* read and write to the cache sub-directory */
     int fd;
-    if ((fd = open(g_tapeDevice, O_RDONLY|O_NONBLOCK|O_LARGEFILE)) == -1) {
-        ml_log_error("Failed to open device %s: %s\n", g_tapeDevice, strerror(errno));
+    if ((fd = open(extract->tapeDevice, O_RDONLY|O_NONBLOCK|O_LARGEFILE)) == -1) {
+        ml_log_error("Failed to open device %s: %s\n", extract->tapeDevice, strerror(errno));
         return 0;
     }
 
@@ -1098,7 +1097,7 @@ static void* extract_thread(void* arg)
             case 0: /* poll tape device status */
                 if (diffTime > 1000000) /* poll status every second - note below with lastBusyLoadPosCount that we assume 1 second poll interval */
                 {
-                    status = probe_tape_status(g_tapeDevice);
+                    status = probe_tape_status(extract->tapeDevice);
                     
                     if (status == LTO_ONLINE_STATUS)
                     {
@@ -1146,7 +1145,7 @@ static void* extract_thread(void* arg)
             case 1: /* tape device is online */
                 
                 /* set tape params */
-                set_tape_params(g_tapeDevice);
+                set_tape_params(extract->tapeDevice);
                 
                 
                 /* extract index file */
@@ -1204,7 +1203,7 @@ static void* extract_thread(void* arg)
                     if (extractAll)
                     {
                         /* start with the next file */
-                        if (get_tape_pos(g_tapeDevice, &fileNo, &blockNo))
+                        if (get_tape_pos(extract->tapeDevice, &fileNo, &blockNo))
                         {
                             if (blockNo == 0)
                             {
@@ -1367,7 +1366,7 @@ static void* extract_thread(void* arg)
                 {
                     if (diffTime > 1000000) /* poll status every second */
                     {
-                        status = probe_tape_status(g_tapeDevice);
+                        status = probe_tape_status(extract->tapeDevice);
                         
                         if (status != LTO_ONLINE_STATUS)
                         {
@@ -1405,7 +1404,7 @@ breakout:
 }
 
 
-int qce_create_lto_extract(const char* cacheDirectory, QCLTOExtract** extract)
+int qce_create_lto_extract(const char* cacheDirectory, const char* tapeDevice, QCLTOExtract** extract)
 {
     QCLTOExtract* newExtract = NULL;
     
@@ -1413,6 +1412,9 @@ int qce_create_lto_extract(const char* cacheDirectory, QCLTOExtract** extract)
     
     CALLOC_OFAIL(newExtract->cacheDirectory, char, strlen(cacheDirectory) + 1);
     strcpy(newExtract->cacheDirectory, cacheDirectory);
+
+    CALLOC_OFAIL(newExtract->tapeDevice, char, strlen(tapeDevice) + 1);
+    strcpy(newExtract->tapeDevice, tapeDevice);
 
     CHK_OFAIL(init_mutex(&newExtract->stateMutex));
     CHK_OFAIL(init_mutex(&newExtract->indexFileMutex));
@@ -1439,6 +1441,7 @@ void qce_free_lto_extract(QCLTOExtract** extract)
     join_thread(&(*extract)->extractThreadId, NULL, NULL);
     
     SAFE_FREE(&(*extract)->cacheDirectory);
+    SAFE_FREE(&(*extract)->tapeDevice);
     
     SAFE_FREE(&(*extract)->indexFile.entries);
     SAFE_FREE(&(*extract)->indexFile.filename);

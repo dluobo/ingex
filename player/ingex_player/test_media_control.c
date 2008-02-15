@@ -100,6 +100,11 @@ static void tmc_seek_prev_mark(void* data)
     printf("Seek previous mark\n");
 }
  
+static void tmc_seek_clip_mark(void* data)
+{
+    printf("Seek clip mark\n");
+}
+ 
 static void tmc_toggle_osd(void* data)
 {
     printf("Toggle OSD\n");
@@ -144,6 +149,7 @@ static void init_media_control(MediaControl* control)
     control->clear_all_marks = tmc_clear_all_marks;
     control->seek_next_mark = tmc_seek_next_mark;
     control->seek_prev_mark = tmc_seek_prev_mark;
+    control->seek_clip_mark = tmc_seek_clip_mark;
     control->toggle_osd = tmc_toggle_osd;
     control->next_osd_timecode = tmc_next_osd_timecode;
     control->switch_next_video = tmc_switch_next_video;

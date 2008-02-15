@@ -18,7 +18,7 @@ typedef struct DualSink DualSink;
 
 int dusk_open(int reviewDuration, SDIVITCSource sdiVITCSource, int extraSDIVITCSource, int numBuffers, 
     int useXV, int disableSDIOSD, int disableX11OSD, const Rational* pixelAspectRatio, 
-    const Rational* monitorAspectRatio, float scale, int swScale, int fitVideo, DualSink** dualSink);
+    const Rational* monitorAspectRatio, float scale, int swScale, int fitVideo, unsigned long windowId, DualSink** dualSink);
 MediaSink* dusk_get_media_sink(DualSink* dualSink);
 void dusk_set_media_control(DualSink* dualSink, ConnectMapping mapping, MediaControl* control);
 void dusk_unset_media_control(DualSink* dualSink);

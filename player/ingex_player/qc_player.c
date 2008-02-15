@@ -41,7 +41,6 @@
 #define LOG_CLEAN_PERIOD            30
 
 
-
 typedef enum
 {
     UNKNOWN_OUTPUT = 0,
@@ -105,6 +104,7 @@ typedef struct
     int markPSEFails;
     int markVTRErrors;
     const char* ltoCacheDirectory;
+    const char* tapeDevice;
     int enableTermKeyboard;
     const char* deleteScriptName;
     const char* deleteScriptOptions;
@@ -112,6 +112,7 @@ typedef struct
     const char* sessionScriptOptions;
     int writeAllMarks;
     int clipMarkType;
+    int useLockButton;
 } Options;
 
 static const Options g_defaultOptions = 
@@ -135,13 +136,15 @@ static const Options g_defaultOptions =
     1,
     1,
     0,
+    "/dev/nst0",
     0,
     0,
     0,
     0,
     0,
     1,
-    M0_MARK_TYPE
+    M0_MARK_TYPE,
+    0
 };
 
 typedef struct
@@ -164,6 +167,7 @@ static const ControlInputHelp g_qcKeyboardInputHelp[] =
     {"'b'", "Clear all marks (except D3 VTR error and PSE failure)"},
     {"','", "Seek to previous mark"},
     {"'.'", "Seek to next mark"},
+    {"'/'", "Seek to clip mark"},
     {"'a'", "Review start"},
     {"'z'", "Review end"},
     {"'x'", "Review mark"},
@@ -189,7 +193,7 @@ static const ControlInputHelp g_qcShuttleInputHelp[] =
 {
     {"1", "Display next OSD screen"},
     {"2", "Display next timecode"},
-    {"3", "Toggle lock"},
+    {"3", "Seek to clip mark / Toggle lock"},
     {"4", "Quit after a 1.5 second hold"},
     {"5", "Toggle mark magenta (type M1)"},
     {"6", "Toggle mark green (type M2)"},
@@ -298,13 +302,14 @@ static void terminate_control_threads(QCPlayer* player)
     }
 }
 
-static int connect_to_control_threads(QCPlayer* player, int reviewDuration)
+static int connect_to_control_threads(QCPlayer* player, int reviewDuration, int useLockButton)
 {
     /* shuttle input connect */
     if (player->shuttle != NULL)
     {
         if (!sic_create_shuttle_connect(
-            reviewDuration, 
+            reviewDuration,
+            useLockButton,
             ply_get_media_control(player->mediaPlayer), 
             player->shuttle, 
             QC_MAPPING, 
@@ -478,7 +483,7 @@ static int create_sink(QCPlayer* player, Options* options, const char* x11Window
             if (player->mediaSink == NULL)
             {
                 if (!xvsk_open(options->reviewDuration, options->disableX11OSD, &options->pixelAspectRatio, 
-                    &options->monitorAspectRatio, options->scale, 1, &player->x11XVDisplaySink))
+                    &options->monitorAspectRatio, options->scale, 1, 0, &player->x11XVDisplaySink))
                 {
                     ml_log_error("Failed to open x11 xv display sink\n");
                     fprintf(stderr, "Failed to open x11 xv display sink\n");
@@ -507,7 +512,7 @@ static int create_sink(QCPlayer* player, Options* options, const char* x11Window
             if (player->mediaSink == NULL)
             {
                 if (!xsk_open(options->reviewDuration, options->disableX11OSD, &options->pixelAspectRatio, 
-                    &options->monitorAspectRatio, options->scale, 1, &player->x11DisplaySink))
+                    &options->monitorAspectRatio, options->scale, 1, 0, &player->x11DisplaySink))
                 {
                     ml_log_error("Failed to open x11 display sink\n");
                     fprintf(stderr, "Failed to open x11 display sink\n");
@@ -553,7 +558,7 @@ static int create_sink(QCPlayer* player, Options* options, const char* x11Window
             {
                 if (!dusk_open(options->reviewDuration, options->sdiVITCSource, options->extraSDIVITCSource, 
                     options->dvsBufferSize, options->xOutputType == XV_DISPLAY_OUTPUT, options->disableSDIOSD, options->disableX11OSD, 
-                    &options->pixelAspectRatio, &options->monitorAspectRatio, options->scale, 1, 0, &player->dualSink))
+                    &options->pixelAspectRatio, &options->monitorAspectRatio, options->scale, 1, 0, 0, &player->dualSink))
                 {
                     ml_log_error("Failed to open dual X11 and DVS sink\n");
                     fprintf(stderr, "Failed to open dual X11 and DVS sink\n");
@@ -708,7 +713,7 @@ static int play_balls(QCPlayer* player, Options* options)
 
     /* reconnect to control threads */
     
-    if (!connect_to_control_threads(player, options->reviewDuration))
+    if (!connect_to_control_threads(player, options->reviewDuration, options->useLockButton))
     {
         ml_log_error("Failed to set QC lTO access menu handler\n");
         goto fail;
@@ -897,7 +902,7 @@ static int play_d3_mxf_file(QCPlayer* player, int argc, const char** argv, Optio
 
     /* reconnect to control threads */
     
-    if (!connect_to_control_threads(player, options->reviewDuration))
+    if (!connect_to_control_threads(player, options->reviewDuration, options->useLockButton))
     {
         ml_log_error("Failed to set QC lTO access menu handler\n");
         goto fail;
@@ -1252,6 +1257,7 @@ static void usage(const char* cmd)
     fprintf(stderr, "  -h, --help               Display this usage message plus keyboard and shuttle input help\n");
     fprintf(stderr, "  -v, --version            Display the player version\n");
     fprintf(stderr, "* --tape-cache <dir>       The LTO tape cache directory\n");
+    fprintf(stderr, "  --tape-dev <name>        The tape device filename (default %s)\n", g_defaultOptions.tapeDevice);
     fprintf(stderr, "  --delete-script <name>   The <name> script is called to delete an LTO tape cache directory (delete the directory is the default)\n");
     fprintf(stderr, "  --delete-script-opt <options>   Options string to pass to the delete script before the cache directory name\n");
     fprintf(stderr, "  --session-script <name>   The <name> script is called when a session is completed\n");
@@ -1290,6 +1296,7 @@ static void usage(const char* cmd)
     fprintf(stderr, "                                  colour is one of white|yellow|cyan|green|magenta|red|blue|orange\n");
     fprintf(stderr, "  --enable-term-keyb       Enable terminal window keyboard input.\n");
     fprintf(stderr, "  --clip-mark <type>       Clip mark type (default 0x%04x).\n", g_defaultOptions.clipMarkType);
+    fprintf(stderr, "  --use-lock-button        Map the clip seek button to lock button\n");
     fprintf(stderr, "\n");
 }
 
@@ -1625,6 +1632,17 @@ int main(int argc, const char **argv)
             options.ltoCacheDirectory = argv[cmdlnIndex + 1];
             cmdlnIndex += 2;
         }
+        else if (strcmp(argv[cmdlnIndex], "--tape-dev") == 0)
+        {
+            if (cmdlnIndex + 1 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            options.tapeDevice = argv[cmdlnIndex + 1];
+            cmdlnIndex += 2;
+        }
         else if (strcmp(argv[cmdlnIndex], "--delete-script") == 0)
         {
             if (cmdlnIndex + 1 >= argc)
@@ -1690,6 +1708,11 @@ int main(int argc, const char **argv)
                 return 1;
             }
             cmdlnIndex += 2;
+        }
+        else if (strcmp(argv[cmdlnIndex], "--use-lock-button") == 0)
+        {
+            options.useLockButton = 1;
+            cmdlnIndex += 1;
         }
         else
         {
@@ -1838,7 +1861,7 @@ int main(int argc, const char **argv)
     
     /* create QC Tape extract */
     
-    if (!qce_create_lto_extract(options.ltoCacheDirectory, &g_player.qcLTOExtract))
+    if (!qce_create_lto_extract(options.ltoCacheDirectory, options.tapeDevice, &g_player.qcLTOExtract))
     {
         ml_log_error("Failed to create QC LTO Extract\n");
         goto fail;

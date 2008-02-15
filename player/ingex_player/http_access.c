@@ -363,6 +363,10 @@ static void http_player_control(struct shttpd_arg* arg)
     {
         mc_seek_next_mark(access->control);
     }
+    else if (strcmp("/player/control/clip-mark", requestURI) == 0)
+    {
+        mc_seek_clip_mark(access->control);
+    }
     else if (strcmp("/player/control/next-osd-screen", requestURI) == 0)
     {
         mc_next_osd_screen(access->control);

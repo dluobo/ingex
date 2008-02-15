@@ -86,7 +86,8 @@ struct X11DisplaySink
     int depth;
     Visual* visual;
     int useSharedMemory;
-    
+    Window windowId;                   /* id of existing embedded window (0 = none) */
+
     /* image characteristics */
     int inputWidth;
     int inputHeight;
@@ -373,7 +374,7 @@ static int init_display(X11DisplaySink* sink, const StreamInfo* streamInfo)
     sink->useSharedMemory = x11c_shared_memory_available(&sink->x11Common);
     
     CHK_OFAIL(x11c_create_window(&sink->x11Common, sink->displayWidth, sink->displayHeight,
-        sink->width, sink->height));
+        sink->width, sink->height, sink->windowId));
 
     sink->displayInitialised = 1;
     sink->displayInitFailed = 0;
@@ -1095,7 +1096,7 @@ static void xsk_osd_screen_changed(void* data, OSDScreen screen)
 
 
 int xsk_open(int reviewDuration, int disableOSD, const Rational* pixelAspectRatio, 
-    const Rational* monitorAspectRatio, float scale, int swScale, X11DisplaySink** sink)
+    const Rational* monitorAspectRatio, float scale, int swScale, unsigned long windowId, X11DisplaySink** sink)
 {
     X11DisplaySink* newSink;
     
@@ -1146,7 +1147,9 @@ int xsk_open(int reviewDuration, int disableOSD, const Rational* pixelAspectRati
     
     init_lookup_tables(newSink);
     
-    
+    /* Non-zero windowId will cause existing embedded window to be used */
+    newSink->windowId = windowId;
+
     gettimeofday(&newSink->lastFrameTime, NULL);
     
     *sink = newSink;

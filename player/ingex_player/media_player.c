@@ -372,26 +372,34 @@ static void _update_current_mark(MediaPlayer* player, int64_t position)
     }
 }
 
-static int find_next_mark(MediaPlayer* player, int64_t position, UserMark** matchedMark)
+static int64_t find_next_mark(MediaPlayer* player, int64_t currentPosition)
 {
-    int result;
+    int64_t position = -1;
+    UserMark* matchedMark;
     
     PTHREAD_MUTEX_LOCK(&player->userMarksMutex)
-    result = _find_next_mark(player, position, matchedMark);
+    if (_find_next_mark(player, currentPosition, &matchedMark))
+    {
+        position = matchedMark->position;
+    }
     PTHREAD_MUTEX_UNLOCK(&player->userMarksMutex)
     
-    return result;
+    return position;
 }
 
-static int find_prev_mark(MediaPlayer* player, int64_t position, UserMark** matchedMark)
+static int64_t find_prev_mark(MediaPlayer* player, int64_t currentPosition)
 {
-    int result;
+    int64_t position = -1;
+    UserMark* matchedMark;
     
     PTHREAD_MUTEX_LOCK(&player->userMarksMutex)
-    result = _find_prev_mark(player, position, matchedMark);
+    if (_find_prev_mark(player, currentPosition, &matchedMark))
+    {
+        position = matchedMark->position;
+    }
     PTHREAD_MUTEX_UNLOCK(&player->userMarksMutex)
     
-    return result;
+    return position;
 }
 
 /* caller must lock the user marks mutex */
@@ -730,6 +738,28 @@ static void add_mark(MediaPlayer* player, int64_t position, int type, int toggle
     PTHREAD_MUTEX_LOCK(&player->userMarksMutex)
     _add_mark(player, position, type, toggle);
     PTHREAD_MUTEX_UNLOCK(&player->userMarksMutex)
+}
+
+static int64_t _find_clip_mark(MediaPlayer* player, int64_t currentPosition)
+{
+    int64_t position = -1;
+    
+    PTHREAD_MUTEX_LOCK(&player->userMarksMutex)
+    if (player->userMarks.currentClipMark != NULL)
+    {
+        /* return the current clip mark position */
+        position = player->userMarks.currentClipMark->position;
+    }
+    else if (player->userMarks.current != NULL &&
+        player->userMarks.current->position == currentPosition &&
+        player->userMarks.current->pairedMark != NULL)
+    {
+        /* player is on a clip mark - return the paired clip mark position */
+        position = player->userMarks.current->pairedMark->position;
+    }
+    PTHREAD_MUTEX_UNLOCK(&player->userMarksMutex)
+    
+    return position;
 }
 
 /* caller must lock the user marks mutex */
@@ -1154,16 +1184,17 @@ static void ply_clear_all_marks(void* data, int typeMask)
 static void ply_seek_next_mark(void* data)
 {
     MediaPlayer* player = (MediaPlayer*)data;
-    UserMark* mark = NULL;
+    int64_t position = -1;
     
     PTHREAD_MUTEX_LOCK(&player->stateMutex)
     
     if (!player->state.locked)
     {
-        if (find_next_mark(player, player->state.lastFrameDisplayed.position, &mark))
+        position = find_next_mark(player, player->state.lastFrameDisplayed.position);
+        if (position >= 0)
         {
             player->state.play = 0;
-            player->state.nextPosition = mark->position;
+            player->state.nextPosition = position;
         }
     }
     
@@ -1175,16 +1206,39 @@ static void ply_seek_next_mark(void* data)
 static void ply_seek_prev_mark(void* data)
 {
     MediaPlayer* player = (MediaPlayer*)data;
-    UserMark* mark = NULL;
+    int64_t position = -1;
     
     PTHREAD_MUTEX_LOCK(&player->stateMutex)
     
     if (!player->state.locked)
     {
-        if (find_prev_mark(player, player->state.lastFrameDisplayed.position, &mark))
+        position = find_prev_mark(player, player->state.lastFrameDisplayed.position);
+        if (position >= 0)
         {
             player->state.play = 0;
-            player->state.nextPosition = mark->position;
+            player->state.nextPosition = position;
+        }
+    }
+
+    switch_source_info_screen(player);
+    
+    PTHREAD_MUTEX_UNLOCK(&player->stateMutex)
+}
+ 
+static void ply_seek_clip_mark(void* data)
+{
+    MediaPlayer* player = (MediaPlayer*)data;
+    int64_t position = -1;
+    
+    PTHREAD_MUTEX_LOCK(&player->stateMutex)
+    
+    if (!player->state.locked)
+    {
+        position = _find_clip_mark(player, player->state.lastFrameDisplayed.position);
+        if (position >= 0)
+        {
+            player->state.play = 0;
+            player->state.nextPosition = position;
         }
     }
 
@@ -1638,7 +1692,7 @@ static int ply_tex_get_stream_buffer(void* data, int streamId, unsigned int buff
                 return 0;
             }
             
-            if ((size_t)player->frameInfo.numTimecodes < sizeof(player->frameInfo.timecodes))
+            if ((size_t)player->frameInfo.numTimecodes < sizeof(player->frameInfo.timecodes) / sizeof(TimecodeInfo))
             {
                 player->frameInfo.timecodes[player->frameInfo.numTimecodes].streamId = streamId;
                 player->frameInfo.timecodes[player->frameInfo.numTimecodes].timecodeType = streamInfo->timecodeType;
@@ -1684,7 +1738,7 @@ static int ply_tex_receive_stream_frame(void* data, int streamId, unsigned char*
             streamInfo->type == TIMECODE_STREAM_TYPE)
         {
             if (sizeof(Timecode) == bufferSize &&
-                (size_t)player->frameInfo.numTimecodes < sizeof(player->frameInfo.timecodes))
+                (size_t)player->frameInfo.numTimecodes < sizeof(player->frameInfo.timecodes) / sizeof(TimecodeInfo))
             {
                 player->frameInfo.timecodes[player->frameInfo.numTimecodes].streamId = streamId;
                 player->frameInfo.timecodes[player->frameInfo.numTimecodes].timecode = *(Timecode*)buffer;
@@ -1743,7 +1797,7 @@ static int ply_tex_receive_stream_frame_const(void* data, int streamId, const un
         streamInfo->type == TIMECODE_STREAM_TYPE)
     {
         if (sizeof(Timecode) == bufferSize &&
-            (size_t)player->frameInfo.numTimecodes < sizeof(player->frameInfo.timecodes))
+            (size_t)player->frameInfo.numTimecodes < sizeof(player->frameInfo.timecodes) / sizeof(TimecodeInfo))
         {
             player->frameInfo.timecodes[player->frameInfo.numTimecodes].streamId = streamId;
             player->frameInfo.timecodes[player->frameInfo.numTimecodes].timecode = *(Timecode*)buffer;
@@ -2183,6 +2237,7 @@ int ply_create_player(MediaSource* mediaSource, MediaSink* mediaSink,
     newPlayer->control.clear_all_marks = ply_clear_all_marks;
     newPlayer->control.seek_next_mark = ply_seek_next_mark;
     newPlayer->control.seek_prev_mark = ply_seek_prev_mark;
+    newPlayer->control.seek_clip_mark = ply_seek_clip_mark;
     newPlayer->control.set_osd_screen = ply_set_osd_screen;
     newPlayer->control.next_osd_screen = ply_next_osd_screen;
     newPlayer->control.set_osd_timecode = ply_set_osd_timecode;

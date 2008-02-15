@@ -277,6 +277,7 @@ static int start_control_threads(Player* player, int reviewDuration)
     {
         result = sic_create_shuttle_connect(
             reviewDuration, 
+            0,
             ply_get_media_control(player->mediaPlayer), 
             player->shuttle, 
             player->connectMapping, 
@@ -805,6 +806,7 @@ static void usage(const char* cmd)
 #endif    
     fprintf(stderr, "  --xv                     X11 Xv extension display output (YUV colourspace)\n");
     fprintf(stderr, "  --x11                    X11 display output (RGB colourspace)\n");
+    fprintf(stderr, "  --window-id <id>         Don't create a new window, use existing window id e.g. for browser plugin use\n");
 #if defined(HAVE_SDL)    
     fprintf(stderr, "  --sdl                    Simple DirectMedia Layer output\n");
 #endif    
@@ -955,6 +957,7 @@ int main(int argc, const char **argv)
     Rational sourceAspectRatio = {0, 0};
     float scale = 0.0;
     int swScale = 1;
+    unsigned long windowId = 0;
     SDIVITCSource sdiVITCSource = VITC_AS_SDI_VITC;
     int loop = 0;
     int extraSDIVITCSource = 0; 
@@ -1151,6 +1154,25 @@ int main(int argc, const char **argv)
             cmdlnIndex += 1;
         }
 #endif        
+        else if (strcmp(argv[cmdlnIndex], "--window-id") == 0)
+        {
+            if (cmdlnIndex + 1 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            if (sscanf(argv[cmdlnIndex + 1], "0x%lx", &windowId) != 1)
+            {
+                if (sscanf(argv[cmdlnIndex + 1], "%lu", &windowId) != 1)
+                {
+                    usage(argv[0]);
+                    fprintf(stderr, "Invalid argument for %s\n", argv[cmdlnIndex]);
+                    return 1;
+                }
+            }
+            cmdlnIndex += 2;
+        }
         else if (strcmp(argv[cmdlnIndex], "--disable-x11-osd") == 0)
         {
             disableX11OSD = 1;
@@ -2200,7 +2222,7 @@ int main(int argc, const char **argv)
             g_player.x11WindowListener.close_request = x11_window_close_request;
             
             if (!xvsk_open(reviewDuration, disableX11OSD, &pixelAspectRatio, &monitorAspectRatio,
-                scale, swScale, &g_player.x11XVDisplaySink))
+                scale, swScale, windowId, &g_player.x11XVDisplaySink))
             {
                 ml_log_error("Failed to open x11 xv display sink\n");
                 goto fail;
@@ -2222,7 +2244,7 @@ int main(int argc, const char **argv)
             g_player.x11WindowListener.close_request = x11_window_close_request;
             
             if (!xsk_open(reviewDuration, disableX11OSD, &pixelAspectRatio, &monitorAspectRatio,
-                scale, swScale, &g_player.x11DisplaySink))
+                scale, swScale, windowId, &g_player.x11DisplaySink))
             {
                 ml_log_error("Failed to open x11 display sink\n");
                 goto fail;
@@ -2254,7 +2276,7 @@ int main(int argc, const char **argv)
             
             if (!dusk_open(reviewDuration, sdiVITCSource, extraSDIVITCSource, dvsBufferSize, 
                 xOutputType == X11_XV_DISPLAY_OUTPUT, disableSDIOSD, disableX11OSD, &pixelAspectRatio, &monitorAspectRatio,
-                scale, swScale, fitVideo, &g_player.dualSink))
+                scale, swScale, fitVideo, windowId, &g_player.dualSink))
             {
                 ml_log_error("Failed to open dual X11 and DVS sink\n");
                 goto fail;

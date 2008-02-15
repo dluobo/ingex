@@ -168,6 +168,9 @@ static void default_key_pressed(void* data, int key)
         case '.':
             mc_seek_next_mark(connect->control);
             break;
+        case '/':
+            mc_seek_clip_mark(connect->control);
+            break;
         case XK_Home:
             mc_seek(connect->control, 0, SEEK_SET, FRAME_PLAY_UNIT);
             break;
@@ -448,6 +451,9 @@ static void qc_key_pressed(void* data, int key)
                 break;
             case '.':
                 mc_seek_next_mark(connect->control);
+                break;
+            case '/':
+                mc_seek_clip_mark(connect->control);
                 break;
             case XK_Home:
                 mc_seek(connect->control, 0, SEEK_SET, FRAME_PLAY_UNIT);
