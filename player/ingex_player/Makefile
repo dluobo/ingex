@@ -106,7 +106,10 @@ ifdef FFMPEG_INCLUDE_PATH
 	else
 		LIBS += -lavformat -lavcodec -lavutil -lm
 	endif
-	
+
+        ifdef HAVE_FFMPEG_DNXHD
+                CFLAGS += -DHAVE_DNXHD
+        endif	
 else
 	CFLAGS += -Werror
 endif

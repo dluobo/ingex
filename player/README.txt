@@ -12,7 +12,7 @@ etc. etc.
 
 Build requirements:
 
-libMXF, libMXFReader, libD3MXFInfo, FFMPEG, DVS SDK, FreeType
+libMXF, libMXFReader, libD3MXFInfo, libcommon, FFMPEG, DVS SDK, FreeType
 
 
 
@@ -33,17 +33,19 @@ Install libD3MXFInfo to /usr/local:
 > sudo make install
 
 
+2) libcommon
 
-2) FFMPEG
+> cd ingex/common
+> make
+
+
+3) FFMPEG
 
 Note: The player will still compile if you don't have FFMPEG. However, you will not be 
-able to play DV files.
+able to play MXF DV files.
 
 
-
-3) DVS SDK
-
-Ask Philip or Stuart for the latest pre-built copy
+4) DVS SDK
 
 Set the DVS_SDK_INSTALL environment variable or install in /usr/local.
 
@@ -53,7 +55,7 @@ be able to playout over SDI.
 
 
 
-4) Freetype font library
+5) Freetype font library
 
 Install via YaST if not already present.
 
@@ -80,14 +82,6 @@ Building the C library:
 > make
 
 
-
-Testing the C library:
-
-> ingex/player/ingex_player/player -h
-> ...
-or 
-> make testapps
-> ./test_...
 
 
 
