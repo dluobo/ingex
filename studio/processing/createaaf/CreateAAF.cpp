@@ -1,5 +1,5 @@
 /*
- * $Id: CreateAAF.cpp,v 1.2 2008/02/06 16:59:12 john_f Exp $
+ * $Id: CreateAAF.cpp,v 1.3 2008/02/19 11:12:11 philipn Exp $
  *
  * AAF file for defining clips, multi-camera clips, etc
  *
@@ -225,6 +225,7 @@ AAFFile::AAFFile(string filename)
 {
     IAAFSmartPointer<IAAFTypeDef> pTypeDef;
     IAAFSmartPointer<IAAFPropertyDef> pPropertyDef;
+
     
     remove(filename.c_str());
     wchar_t wFilename[FILENAME_MAX];
@@ -232,10 +233,13 @@ AAFFile::AAFFile(string filename)
 
     aafProductIdentification_t productInfo;
     aafProductVersion_t ver = {0, 1, 0, 0, kAAFVersionUnknown};
-    productInfo.companyName = L"BBC Research";
-    productInfo.productName = L"Avid MXF import";
+    aafCharacter companyName[] = L"BBC Research";
+    aafCharacter productName[] = L"Avid MXF import";
+    aafCharacter productVersionString[] = L"Unknown";
+    productInfo.companyName = companyName;
+    productInfo.productName = productName;
     productInfo.productVersion = &ver;
-    productInfo.productVersionString = L"Unknown";
+    productInfo.productVersionString = productVersionString;
     productInfo.productID = NIL_UID;
     productInfo.platform = NULL;
 
