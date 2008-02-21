@@ -720,8 +720,8 @@ bool LocalIngexPlayer::start(vector<string> mxfFilenames, vector<bool>& opended)
             switch (_actualOutputType)
             {
                 case X11_OUTPUT:
-                    CHK_OTHROW_MSG(xsk_open(20,_disableX11OSD, &_pixelAspectRatio, &_monitorAspectRatio, 
-                        _scale, swScale, &x11Sink),
+                    CHK_OTHROW_MSG(xsk_open(20, _disableX11OSD, &_pixelAspectRatio, &_monitorAspectRatio, 
+                        _scale, swScale, 0, &x11Sink),
                         ("Failed to open X11 display sink\n"));
                     xsk_register_window_listener(x11Sink, &_x11WindowListener);
                     xsk_register_keyboard_listener(x11Sink, &_x11KeyListener);
@@ -735,7 +735,7 @@ bool LocalIngexPlayer::start(vector<string> mxfFilenames, vector<bool>& opended)
         
                 case X11_XV_OUTPUT:
                     CHK_OTHROW_MSG(xvsk_open(20, _disableX11OSD, &_pixelAspectRatio, &_monitorAspectRatio, 
-                        _scale, swScale, &x11XVSink),
+                        _scale, swScale, 0, &x11XVSink),
                         ("Failed to open X11 XV display sink\n"));
                     xvsk_register_window_listener(x11XVSink, &_x11WindowListener);
                     xvsk_register_keyboard_listener(x11XVSink, &_x11KeyListener);
@@ -756,7 +756,7 @@ bool LocalIngexPlayer::start(vector<string> mxfFilenames, vector<bool>& opended)
                 case DUAL_DVS_X11_OUTPUT:
                     CHK_OTHROW_MSG(dusk_open(20, VITC_AS_SDI_VITC, 0, 12, 0, _disableSDIOSD, 
                         _disableX11OSD, &_pixelAspectRatio, 
-                        &_monitorAspectRatio, _scale, swScale, 1, &dualSink),
+                        &_monitorAspectRatio, _scale, swScale, 1, 0, &dualSink),
                         ("Failed to open dual DVS and X11 display sink\n"));
                     dusk_register_window_listener(dualSink, &_x11WindowListener);
                     dusk_register_keyboard_listener(dualSink, &_x11KeyListener);
@@ -768,7 +768,7 @@ bool LocalIngexPlayer::start(vector<string> mxfFilenames, vector<bool>& opended)
                 case DUAL_DVS_X11_XV_OUTPUT:
                     CHK_OTHROW_MSG(dusk_open(20, VITC_AS_SDI_VITC, 0, 12, 1, _disableSDIOSD, 
                         _disableX11OSD, &_pixelAspectRatio, 
-                        &_monitorAspectRatio, _scale, swScale, 1, &dualSink),
+                        &_monitorAspectRatio, _scale, swScale, 1, 0, &dualSink),
                         ("Failed to open dual DVS and X11 XV display sink\n"));
                     dusk_register_window_listener(dualSink, &_x11WindowListener);
                     dusk_register_keyboard_listener(dualSink, &_x11KeyListener);
