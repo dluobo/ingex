@@ -1,0 +1,606 @@
+--- MediaHarmony-orig/media_harmony.c	2008-03-26 22:01:34.000000000 +0000
++++ media_harmony.c	2008-03-26 22:33:53.000000000 +0000
+@@ -211,7 +211,7 @@
+ 
+ 
+ 
+-static int mh_statvfs(vfs_handle_struct *handle, connection_struct *conn, const char *path,
++static int mh_statvfs(vfs_handle_struct *handle, const char *path,
+     vfs_statvfs_struct *statbuf)
+ {
+     if (is_in_media_files(path))
+@@ -219,16 +219,16 @@
+         pstring clientPath;
+         get_client_path(handle, path, clientPath);
+         
+-        return SMB_VFS_NEXT_STATVFS(handle, conn, clientPath, statbuf);
++        return SMB_VFS_NEXT_STATVFS(handle, clientPath, statbuf);
+     }
+     else
+     {
+-        return SMB_VFS_NEXT_STATVFS(handle, conn, path, statbuf);
++        return SMB_VFS_NEXT_STATVFS(handle, path, statbuf);
+     }
+ }
+ 
+ // returns a mh_dirinfo_struct cast as a SMB_STRUCT_DIR
+-static SMB_STRUCT_DIR *mh_opendir(vfs_handle_struct *handle, connection_struct *conn, const char *path,
++static SMB_STRUCT_DIR *mh_opendir(vfs_handle_struct *handle, const char *path,
+     const char *mask, uint32 attr)
+ {
+     mh_dirinfo_struct* dirInfo = SMB_MALLOC_P(mh_dirinfo_struct);
+@@ -253,14 +253,14 @@
+         pstring clientPath;
+         get_client_path(handle, path, clientPath);
+         
+-        dirInfo->dirstream = SMB_VFS_NEXT_OPENDIR(handle, conn, clientPath, mask, attr);
++        dirInfo->dirstream = SMB_VFS_NEXT_OPENDIR(handle, clientPath, mask, attr);
+         
+         return (SMB_STRUCT_DIR*)dirInfo;
+     }
+     else
+     {
+         dirInfo->isInMediaFiles = False;
+-        dirInfo->dirstream = SMB_VFS_NEXT_OPENDIR(handle, conn, path, mask, attr);
++        dirInfo->dirstream = SMB_VFS_NEXT_OPENDIR(handle, path, mask, attr);
+         
+         return (SMB_STRUCT_DIR*)dirInfo;
+     }
+@@ -270,7 +270,7 @@
+ // skip other client's suffixed MDB_FILENAME and PMR_FILENAME filenames and CREATING_DIRNAME directory, 
+ // replace this client's suffixed MDB_FILENAME and PMR_FILENAME filenames and CREATING_DIRNAME directory
+ //   with non suffixed
+-static SMB_STRUCT_DIRENT *mh_readdir(vfs_handle_struct *handle, connection_struct *conn, SMB_STRUCT_DIR *dirp)
++static SMB_STRUCT_DIRENT *mh_readdir(vfs_handle_struct *handle, SMB_STRUCT_DIR *dirp)
+ {
+     mh_dirinfo_struct* dirInfo = (mh_dirinfo_struct*)dirp;
+     
+@@ -281,7 +281,7 @@
+         do
+         {
+             skip = False;
+-            d = SMB_VFS_NEXT_READDIR(handle, conn, dirInfo->dirstream);
++            d = SMB_VFS_NEXT_READDIR(handle, dirInfo->dirstream);
+             if (d != NULL)
+             {
+                 const char* dname;
+@@ -359,79 +359,80 @@
+     }
+     else
+     {
+-        return SMB_VFS_NEXT_READDIR(handle, conn, dirInfo->dirstream);
++        return SMB_VFS_NEXT_READDIR(handle, dirInfo->dirstream);
+     }
+ }
+ 
+-static void mh_seekdir(vfs_handle_struct *handle, connection_struct *conn, SMB_STRUCT_DIR *dirp, long offset)
++static void mh_seekdir(vfs_handle_struct *handle, SMB_STRUCT_DIR *dirp, long offset)
+ {
+-    return SMB_VFS_NEXT_SEEKDIR(handle, conn, ((mh_dirinfo_struct*)dirp)->dirstream, offset);
++    return SMB_VFS_NEXT_SEEKDIR(handle, ((mh_dirinfo_struct*)dirp)->dirstream, offset);
+ }
+ 
+-static long mh_telldir(vfs_handle_struct *handle, connection_struct *conn, SMB_STRUCT_DIR *dirp)
++static long mh_telldir(vfs_handle_struct *handle, SMB_STRUCT_DIR *dirp)
+ {
+-    return SMB_VFS_NEXT_TELLDIR(handle, conn, ((mh_dirinfo_struct*)dirp)->dirstream);
++    return SMB_VFS_NEXT_TELLDIR(handle, ((mh_dirinfo_struct*)dirp)->dirstream);
+ }
+ 
+-static void mh_rewinddir(vfs_handle_struct *handle, connection_struct *conn, SMB_STRUCT_DIR *dirp)
++static void mh_rewinddir(vfs_handle_struct *handle, SMB_STRUCT_DIR *dirp)
+ {
+-    return SMB_VFS_NEXT_REWINDDIR(handle, conn, ((mh_dirinfo_struct*)dirp)->dirstream);
++    return SMB_VFS_NEXT_REWINDDIR(handle, ((mh_dirinfo_struct*)dirp)->dirstream);
+ }
+ 
+-static int mh_mkdir(vfs_handle_struct *handle, connection_struct *conn, const char *path, mode_t mode)
++static int mh_mkdir(vfs_handle_struct *handle, const char *path, mode_t mode)
+ {
+     if (is_in_media_files(path))
+     {
+         pstring clientPath;
+         get_client_path(handle, path, clientPath);
+         
+-        return SMB_VFS_NEXT_MKDIR(handle, conn, clientPath, mode);
++        return SMB_VFS_NEXT_MKDIR(handle, clientPath, mode);
+     }
+     else
+     {
+-        return SMB_VFS_NEXT_MKDIR(handle, conn, path, mode);
++        return SMB_VFS_NEXT_MKDIR(handle, path, mode);
+     }
+ }
+ 
+-static int mh_rmdir(vfs_handle_struct *handle, connection_struct *conn, const char *path)
++static int mh_rmdir(vfs_handle_struct *handle, const char *path)
+ {
+     if (is_in_media_files(path))
+     {
+         pstring clientPath;
+         get_client_path(handle, path, clientPath);
+         
+-        return SMB_VFS_NEXT_RMDIR(handle, conn, clientPath);
++        return SMB_VFS_NEXT_RMDIR(handle, clientPath);
+     }
+     else
+     {
+-        return SMB_VFS_NEXT_RMDIR(handle, conn, path);
++        return SMB_VFS_NEXT_RMDIR(handle, path);
+     }
+ }
+ 
+-static int mh_closedir(vfs_handle_struct *handle, connection_struct *conn, SMB_STRUCT_DIR *dirp)
++static int mh_closedir(vfs_handle_struct *handle, SMB_STRUCT_DIR *dirp)
+ {
+     SMB_STRUCT_DIR* realdirp = ((mh_dirinfo_struct*)dirp)->dirstream;
+     SAFE_FREE(dirp);
+     
+-    return SMB_VFS_NEXT_CLOSEDIR(handle, conn, realdirp);
++    return SMB_VFS_NEXT_CLOSEDIR(handle, realdirp);
+ }
+ 
+-static int mh_open(vfs_handle_struct *handle, connection_struct *conn, const char *path, int flags, mode_t mode)
++// TODO PJW does the added files_struct parameter mean more fiddling is needed?
++static int mh_open(vfs_handle_struct *handle, const char *path, files_struct *fsp, int flags, mode_t mode)
+ {
+     if (is_in_media_files(path))
+     {
+         pstring clientPath;
+         get_client_path(handle, path, clientPath);
+         
+-        return SMB_VFS_NEXT_OPEN(handle, conn, clientPath, flags, mode);
++        return SMB_VFS_NEXT_OPEN(handle, clientPath, fsp, flags, mode);
+     }
+     else
+     {
+-        return SMB_VFS_NEXT_OPEN(handle, conn, path, flags, mode);
++        return SMB_VFS_NEXT_OPEN(handle, path, fsp, flags, mode);
+     }
+ }
+ 
+-static int mh_rename(vfs_handle_struct *handle, connection_struct *conn, const char *oldpath, const char *newpath)
++static int mh_rename(vfs_handle_struct *handle, const char *oldpath, const char *newpath)
+ {
+     if (is_in_media_files(oldpath) || is_in_media_files(newpath))
+     {
+@@ -440,107 +441,107 @@
+         get_client_path(handle, oldpath, oldClientPath);
+         get_client_path(handle, newpath, newClientPath);
+         
+-        return SMB_VFS_NEXT_RENAME(handle, conn, oldClientPath, newClientPath);
++        return SMB_VFS_NEXT_RENAME(handle, oldClientPath, newClientPath);
+     }
+     else
+     {
+-        return SMB_VFS_NEXT_RENAME(handle, conn, oldpath, newpath);
++        return SMB_VFS_NEXT_RENAME(handle, oldpath, newpath);
+     }
+ }
+ 
+-static int mh_stat(vfs_handle_struct *handle, connection_struct *conn, const char *path, SMB_STRUCT_STAT *sbuf)
++static int mh_stat(vfs_handle_struct *handle, const char *path, SMB_STRUCT_STAT *sbuf)
+ {
+     if (is_in_media_files(path))
+     {
+         pstring clientPath;
+         get_client_path(handle, path, clientPath);
+         
+-        return SMB_VFS_NEXT_STAT(handle, conn, clientPath, sbuf);
++        return SMB_VFS_NEXT_STAT(handle, clientPath, sbuf);
+     }
+     else
+     {
+-        return SMB_VFS_NEXT_STAT(handle, conn, path, sbuf);
++        return SMB_VFS_NEXT_STAT(handle, path, sbuf);
+     }
+ }
+ 
+-static int mh_lstat(vfs_handle_struct *handle, connection_struct *conn, const char *path, SMB_STRUCT_STAT *sbuf)
++static int mh_lstat(vfs_handle_struct *handle, const char *path, SMB_STRUCT_STAT *sbuf)
+ {
+     if (is_in_media_files(path))
+     {
+         pstring clientPath;
+         get_client_path(handle, path, clientPath);
+         
+-        return SMB_VFS_NEXT_LSTAT(handle, conn, clientPath, sbuf);
++        return SMB_VFS_NEXT_LSTAT(handle, clientPath, sbuf);
+     }
+     else
+     {
+-        return SMB_VFS_NEXT_LSTAT(handle, conn, path, sbuf);
++        return SMB_VFS_NEXT_LSTAT(handle, path, sbuf);
+     }
+ }
+ 
+-static int mh_unlink(vfs_handle_struct *handle, connection_struct *conn, const char *path)
++static int mh_unlink(vfs_handle_struct *handle, const char *path)
+ {
+     if (is_in_media_files(path))
+     {
+         pstring clientPath;
+         get_client_path(handle, path, clientPath);
+         
+-        return SMB_VFS_NEXT_UNLINK(handle, conn, clientPath);
++        return SMB_VFS_NEXT_UNLINK(handle, clientPath);
+     }
+     else
+     {
+-        return SMB_VFS_NEXT_UNLINK(handle, conn, path);
++        return SMB_VFS_NEXT_UNLINK(handle, path);
+     }    
+ }
+ 
+-static int mh_chmod(vfs_handle_struct *handle, connection_struct *conn, const char *path, mode_t mode)
++static int mh_chmod(vfs_handle_struct *handle, const char *path, mode_t mode)
+ {
+     if (is_in_media_files(path))
+     {
+         pstring clientPath;
+         get_client_path(handle, path, clientPath);
+         
+-        return SMB_VFS_NEXT_CHMOD(handle, conn, clientPath, mode);
++        return SMB_VFS_NEXT_CHMOD(handle, clientPath, mode);
+     }
+     else
+     {
+-        return SMB_VFS_NEXT_CHMOD(handle, conn, path, mode);
++        return SMB_VFS_NEXT_CHMOD(handle, path, mode);
+     }
+ }
+ 
+-static int mh_chown(vfs_handle_struct *handle, connection_struct *conn, const char *path, uid_t uid, gid_t gid)
++static int mh_chown(vfs_handle_struct *handle, const char *path, uid_t uid, gid_t gid)
+ {
+     if (is_in_media_files(path))
+     {
+         pstring clientPath;
+         get_client_path(handle, path, clientPath);
+         
+-        return SMB_VFS_NEXT_CHOWN(handle, conn, clientPath, uid, gid);
++        return SMB_VFS_NEXT_CHOWN(handle, clientPath, uid, gid);
+     }
+     else
+     {
+-        return SMB_VFS_NEXT_CHOWN(handle, conn, path, uid, gid);
++        return SMB_VFS_NEXT_CHOWN(handle, path, uid, gid);
+     }
+ }
+ 
+-static int mh_chdir(vfs_handle_struct *handle, connection_struct *conn, const char *path)
++static int mh_chdir(vfs_handle_struct *handle, const char *path)
+ {
+     if (is_in_media_files(path))
+     {
+         pstring clientPath;
+         get_client_path(handle, path, clientPath);
+         
+-        return SMB_VFS_NEXT_CHDIR(handle, conn, clientPath);
++        return SMB_VFS_NEXT_CHDIR(handle, clientPath);
+     }
+     else
+     {
+-        return SMB_VFS_NEXT_CHDIR(handle, conn, path);
++        return SMB_VFS_NEXT_CHDIR(handle, path);
+     }
+ }
+ 
+-static char* mh_getwd(vfs_handle_struct *handle, connection_struct *conn, char *buf)
++static char* mh_getwd(vfs_handle_struct *handle, char *buf)
+ {
+-    char* path = SMB_VFS_NEXT_GETWD(handle, conn, buf);
++    char* path = SMB_VFS_NEXT_GETWD(handle, buf);
+     if (path != NULL && is_in_media_files(path))
+     {
+         pstring clientPath;
+@@ -551,22 +552,22 @@
+     return path;
+ }
+ 
+-static int mh_utime(vfs_handle_struct *handle, connection_struct *conn, const char *path, struct utimbuf *times)
++static int mh_utime(vfs_handle_struct *handle, const char *path, struct utimbuf *times)
+ {
+     if (is_in_media_files(path))
+     {
+         pstring clientPath;
+         get_client_path(handle, path, clientPath);
+         
+-        return SMB_VFS_NEXT_UTIME(handle, conn, clientPath, times);
++        return SMB_VFS_NEXT_UTIME(handle, clientPath, times);
+     }
+     else
+     {
+-        return SMB_VFS_NEXT_UTIME(handle, conn, path, times);
++        return SMB_VFS_NEXT_UTIME(handle, path, times);
+     }
+ }
+ 
+-static BOOL mh_symlink(vfs_handle_struct *handle, connection_struct *conn, const char *oldpath, const char *newpath)
++static BOOL mh_symlink(vfs_handle_struct *handle, const char *oldpath, const char *newpath)
+ {
+     if (is_in_media_files(oldpath) || is_in_media_files(newpath))
+     {
+@@ -575,30 +576,30 @@
+         get_client_path(handle, oldpath, oldClientPath);
+         get_client_path(handle, newpath, newClientPath);
+         
+-        return SMB_VFS_NEXT_SYMLINK(handle, conn, oldClientPath, newClientPath);
++        return SMB_VFS_NEXT_SYMLINK(handle, oldClientPath, newClientPath);
+     }
+     else
+     {
+-        return SMB_VFS_NEXT_SYMLINK(handle, conn, oldpath, newpath);
++        return SMB_VFS_NEXT_SYMLINK(handle, oldpath, newpath);
+     }
+ }
+ 
+-static BOOL mh_readlink(vfs_handle_struct *handle, connection_struct *conn, const char *path, char *buf, size_t bufsiz)
++static BOOL mh_readlink(vfs_handle_struct *handle, const char *path, char *buf, size_t bufsiz)
+ {
+     if (is_in_media_files(path))
+     {
+         pstring clientPath;
+         get_client_path(handle, path, clientPath);
+         
+-        return SMB_VFS_NEXT_READLINK(handle, conn, clientPath, buf, bufsiz);
++        return SMB_VFS_NEXT_READLINK(handle, clientPath, buf, bufsiz);
+     }
+     else
+     {
+-        return SMB_VFS_NEXT_READLINK(handle, conn, path, buf, bufsiz);
++        return SMB_VFS_NEXT_READLINK(handle, path, buf, bufsiz);
+     }
+ }
+ 
+-static int mh_link(vfs_handle_struct *handle, connection_struct *conn, const char *oldpath, const char *newpath)
++static int mh_link(vfs_handle_struct *handle, const char *oldpath, const char *newpath)
+ {
+     if (is_in_media_files(oldpath) || is_in_media_files(newpath))
+     {
+@@ -607,41 +608,41 @@
+         get_client_path(handle, oldpath, oldClientPath);
+         get_client_path(handle, newpath, newClientPath);
+         
+-        return SMB_VFS_NEXT_LINK(handle, conn, oldClientPath, newClientPath);
++        return SMB_VFS_NEXT_LINK(handle, oldClientPath, newClientPath);
+     }
+     else
+     {
+-        return SMB_VFS_NEXT_LINK(handle, conn, oldpath, newpath);
++        return SMB_VFS_NEXT_LINK(handle, oldpath, newpath);
+     }
+ }
+ 
+-static int mh_mknod(vfs_handle_struct *handle, connection_struct *conn, const char *path, mode_t mode, SMB_DEV_T dev)
++static int mh_mknod(vfs_handle_struct *handle, const char *path, mode_t mode, SMB_DEV_T dev)
+ {
+     if (is_in_media_files(path))
+     {
+         pstring clientPath;
+         get_client_path(handle, path, clientPath);
+         
+-        return SMB_VFS_NEXT_MKNOD(handle, conn, clientPath, mode, dev);
++        return SMB_VFS_NEXT_MKNOD(handle, clientPath, mode, dev);
+     }
+     else
+     {
+-        return SMB_VFS_NEXT_MKNOD(handle, conn, path, mode, dev);
++        return SMB_VFS_NEXT_MKNOD(handle, path, mode, dev);
+     }
+ }
+ 
+-static char *mh_realpath(vfs_handle_struct *handle, connection_struct *conn, const char *path, char *resolved_path)
++static char *mh_realpath(vfs_handle_struct *handle, const char *path, char *resolved_path)
+ {
+     if (is_in_media_files(path))
+     {
+         pstring clientPath;
+         get_client_path(handle, path, clientPath);
+         
+-        return SMB_VFS_NEXT_REALPATH(handle, conn, clientPath, resolved_path);
++        return SMB_VFS_NEXT_REALPATH(handle, clientPath, resolved_path);
+     }
+     else
+     {
+-        return SMB_VFS_NEXT_REALPATH(handle, conn, path, resolved_path);
++        return SMB_VFS_NEXT_REALPATH(handle, path, resolved_path);
+     }
+ }
+ 
+@@ -675,63 +676,63 @@
+     }
+ }
+ 
+-static int mh_chmod_acl(vfs_handle_struct *handle, connection_struct *conn, const char *path, mode_t mode)
++static int mh_chmod_acl(vfs_handle_struct *handle, const char *path, mode_t mode)
+ {
+     if (is_in_media_files(path))
+     {
+         pstring clientPath;
+         get_client_path(handle, path, clientPath);
+         
+-        return SMB_VFS_NEXT_CHMOD_ACL(handle, conn, clientPath, mode);
++        return SMB_VFS_NEXT_CHMOD_ACL(handle, clientPath, mode);
+     }
+     else
+     {
+-        return SMB_VFS_NEXT_CHMOD_ACL(handle, conn, path, mode);
++        return SMB_VFS_NEXT_CHMOD_ACL(handle, path, mode);
+     }
+ }
+ 
+-static SMB_ACL_T mh_sys_acl_get_file(vfs_handle_struct *handle, connection_struct *conn, const char *path, SMB_ACL_TYPE_T type)
++static SMB_ACL_T mh_sys_acl_get_file(vfs_handle_struct *handle, const char *path, SMB_ACL_TYPE_T type)
+ {
+     if (is_in_media_files(path))
+     {
+         pstring clientPath;
+         get_client_path(handle, path, clientPath);
+         
+-        return SMB_VFS_NEXT_SYS_ACL_GET_FILE(handle, conn, clientPath, type);
++        return SMB_VFS_NEXT_SYS_ACL_GET_FILE(handle, clientPath, type);
+     }
+     else
+     {
+-        return SMB_VFS_NEXT_SYS_ACL_GET_FILE(handle, conn, path, type);
++        return SMB_VFS_NEXT_SYS_ACL_GET_FILE(handle, path, type);
+     }
+ }
+ 
+-static int mh_sys_acl_set_file(vfs_handle_struct *handle, connection_struct *conn, const char *path, SMB_ACL_TYPE_T acltype, SMB_ACL_T theacl)
++static int mh_sys_acl_set_file(vfs_handle_struct *handle, const char *path, SMB_ACL_TYPE_T acltype, SMB_ACL_T theacl)
+ {
+     if (is_in_media_files(path))
+     {
+         pstring clientPath;
+         get_client_path(handle, path, clientPath);
+      
+-        return SMB_VFS_NEXT_SYS_ACL_SET_FILE(handle, conn, clientPath, acltype, theacl);
++        return SMB_VFS_NEXT_SYS_ACL_SET_FILE(handle, clientPath, acltype, theacl);
+     }
+     else
+     {
+-        return SMB_VFS_NEXT_SYS_ACL_SET_FILE(handle, conn, path, acltype, theacl);
++        return SMB_VFS_NEXT_SYS_ACL_SET_FILE(handle, path, acltype, theacl);
+     }
+ }
+ 
+-static int mh_sys_acl_delete_def_file(vfs_handle_struct *handle, connection_struct *conn, const char *path)
++static int mh_sys_acl_delete_def_file(vfs_handle_struct *handle, const char *path)
+ {
+     if (is_in_media_files(path))
+     {
+         pstring clientPath;
+         get_client_path(handle, path, clientPath);
+         
+-        return SMB_VFS_NEXT_SYS_ACL_DELETE_DEF_FILE(handle, conn, clientPath);
++        return SMB_VFS_NEXT_SYS_ACL_DELETE_DEF_FILE(handle, clientPath);
+     }
+     else
+     {
+-        return SMB_VFS_NEXT_SYS_ACL_DELETE_DEF_FILE(handle, conn, path);
++        return SMB_VFS_NEXT_SYS_ACL_DELETE_DEF_FILE(handle, path);
+     }
+ }
+ 
+@@ -742,11 +743,11 @@
+         pstring clientPath;
+         get_client_path(handle, path, clientPath);
+         
+-        return SMB_VFS_NEXT_GETXATTR(handle, conn, clientPath, name, value, size);
++        return SMB_VFS_NEXT_GETXATTR(handle, clientPath, name, value, size);
+     }
+     else
+     {
+-        return SMB_VFS_NEXT_GETXATTR(handle, conn, path, name, value, size);
++        return SMB_VFS_NEXT_GETXATTR(handle, path, name, value, size);
+     }
+ }
+ 
+@@ -758,11 +759,11 @@
+         pstring clientPath;
+         get_client_path(handle, path, clientPath);
+         
+-        return SMB_VFS_NEXT_LGETXATTR(handle, conn, clientPath, name, value, size);
++        return SMB_VFS_NEXT_LGETXATTR(handle, clientPath, name, value, size);
+     }
+     else
+     {
+-        return SMB_VFS_NEXT_LGETXATTR(handle, conn, path, name, value, size);
++        return SMB_VFS_NEXT_LGETXATTR(handle, path, name, value, size);
+     }
+ }
+ 
+@@ -773,11 +774,11 @@
+         pstring clientPath;
+         get_client_path(handle, path, clientPath);
+         
+-        return SMB_VFS_NEXT_LISTXATTR(handle, conn, clientPath, list, size);
++        return SMB_VFS_NEXT_LISTXATTR(handle, clientPath, list, size);
+     }
+     else
+     {
+-        return SMB_VFS_NEXT_LISTXATTR(handle, conn, path, list, size);
++        return SMB_VFS_NEXT_LISTXATTR(handle, path, list, size);
+     }
+ }
+ 
+@@ -788,11 +789,11 @@
+         pstring clientPath;
+         get_client_path(handle, path, clientPath);
+         
+-        return SMB_VFS_NEXT_LLISTXATTR(handle, conn, clientPath, list, size);
++        return SMB_VFS_NEXT_LLISTXATTR(handle, clientPath, list, size);
+     }
+     else
+     {
+-        return SMB_VFS_NEXT_LLISTXATTR(handle, conn, path, list, size);
++        return SMB_VFS_NEXT_LLISTXATTR(handle, path, list, size);
+     }
+ }
+ 
+@@ -803,11 +804,11 @@
+         pstring clientPath;
+         get_client_path(handle, path, clientPath);
+         
+-        return SMB_VFS_NEXT_REMOVEXATTR(handle, conn, clientPath, name);
++        return SMB_VFS_NEXT_REMOVEXATTR(handle, clientPath, name);
+     }
+     else
+     {
+-        return SMB_VFS_NEXT_REMOVEXATTR(handle, conn, path, name);
++        return SMB_VFS_NEXT_REMOVEXATTR(handle, path, name);
+     }
+ }
+ 
+@@ -818,11 +819,11 @@
+         pstring clientPath;
+         get_client_path(handle, path, clientPath);
+         
+-        return SMB_VFS_NEXT_LREMOVEXATTR(handle, conn, clientPath, name);
++        return SMB_VFS_NEXT_LREMOVEXATTR(handle, clientPath, name);
+     }
+     else
+     {
+-        return SMB_VFS_NEXT_LREMOVEXATTR(handle, conn, path, name);
++        return SMB_VFS_NEXT_LREMOVEXATTR(handle, path, name);
+     }
+ }
+ 
+@@ -833,11 +834,11 @@
+         pstring clientPath;
+         get_client_path(handle, path, clientPath);
+         
+-        return SMB_VFS_NEXT_SETXATTR(handle, conn, clientPath, name, value, size, flags);
++        return SMB_VFS_NEXT_SETXATTR(handle, clientPath, name, value, size, flags);
+     }
+     else
+     {
+-        return SMB_VFS_NEXT_SETXATTR(handle, conn, path, name, value, size, flags);
++        return SMB_VFS_NEXT_SETXATTR(handle, path, name, value, size, flags);
+     }
+ }
+ 
+@@ -848,11 +849,11 @@
+         pstring clientPath;
+         get_client_path(handle, path, clientPath);
+         
+-        return SMB_VFS_NEXT_LSETXATTR(handle, conn, clientPath, name, value, size, flags);
++        return SMB_VFS_NEXT_LSETXATTR(handle, clientPath, name, value, size, flags);
+     }
+     else
+     {
+-        return SMB_VFS_NEXT_LSETXATTR(handle, conn, path, name, value, size, flags);
++        return SMB_VFS_NEXT_LSETXATTR(handle, path, name, value, size, flags);
+     }
+ }
+ 
+@@ -888,7 +889,6 @@
+     {SMB_VFS_OP(mh_chown),              SMB_VFS_OP_CHOWN,       SMB_VFS_LAYER_TRANSPARENT},
+     {SMB_VFS_OP(mh_chdir),              SMB_VFS_OP_CHDIR,       SMB_VFS_LAYER_TRANSPARENT},
+     {SMB_VFS_OP(mh_getwd),              SMB_VFS_OP_GETWD,       SMB_VFS_LAYER_TRANSPARENT},
+-    {SMB_VFS_OP(mh_utime),              SMB_VFS_OP_UTIME,       SMB_VFS_LAYER_TRANSPARENT},
+     {SMB_VFS_OP(mh_symlink),            SMB_VFS_OP_SYMLINK,     SMB_VFS_LAYER_TRANSPARENT},
+     {SMB_VFS_OP(mh_readlink),           SMB_VFS_OP_READLINK,    SMB_VFS_LAYER_TRANSPARENT},
+     {SMB_VFS_OP(mh_link),               SMB_VFS_OP_LINK,        SMB_VFS_LAYER_TRANSPARENT},
