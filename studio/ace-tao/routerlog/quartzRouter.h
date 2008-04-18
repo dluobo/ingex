@@ -1,21 +1,42 @@
-// quartzRouter.h
+/*
+ * $Id: quartzRouter.h,v 1.2 2008/04/18 16:56:38 john_f Exp $
+ *
+ * Class to handle communication with Quartz router.
+ *
+ * Copyright (C) 2006  British Broadcasting Corporation.
+ * All Rights Reserved.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+ * 02110-1301, USA.
+ */
 
 #ifndef quartzRouter_h
 #define quartzRouter_h
 
-#include "ace/DEV_Addr.h"
-#include "ace/DEV_Connector.h"
-#include "ace/DEV_IO.h"
-#include "ace/TTY_IO.h"
-
-#include "ace/Task.h"
-#include "Observer.h"
+#include <ace/DEV_Addr.h>
+#include <ace/DEV_Connector.h>
+#include <ace/DEV_IO.h>
+#include <ace/TTY_IO.h>
+#include <ace/Task.h>
 
 #include <string>
 
 const int qbufsize = 128;
 
 class Observer;
+class CommunicationPort;
 
 /**
 Interface to Quartz router
@@ -27,23 +48,25 @@ public:
     Router();
     Router(std::string rp);
     ~Router();
-    void Init(const std::string & port);
+    bool Init(const std::string & port, bool router_tcp);
     void Stop();
+    bool Connected() { return mConnected; }
 
     virtual int svc ();
 
     void SetObserver(Observer * obs) { mpObserver = obs; }
 
-    char readByte();
-    void readUpdate();
-    bool readReply();
-    std::string CurrentSrc(unsigned int dest);
-    void setSource(int source);
+    void QuerySrc(unsigned int dest);
+
+    //void setSource(int source);
     std::string getSrc();
-    bool isConnected();
 
 private:
 // methods
+    void ProcessMessage(const std::string & message);
+    char readByte();
+    void readUpdate();
+    bool readReply();
 
 // members
     ACE_TTY_IO mSerialDevice;
@@ -53,10 +76,11 @@ private:
     char mBuffer[qbufsize];
     char * mWritePtr;
     char * mBufferEnd;
-    bool mRun;
-    bool m_routerConnected;
 
     Observer * mpObserver;
+    CommunicationPort * mpCommunicationPort;
+    bool mConnected;
+    bool mRun;
 };
 
 #endif //#ifndef quartzRouter_h

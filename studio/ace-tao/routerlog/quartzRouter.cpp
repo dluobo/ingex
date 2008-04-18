@@ -1,4 +1,26 @@
-// quartzRouter.cpp
+/*
+ * $Id: quartzRouter.cpp,v 1.2 2008/04/18 16:56:38 john_f Exp $
+ *
+ * Class to handle communication with Quartz router.
+ *
+ * Copyright (C) 2006  British Broadcasting Corporation.
+ * All Rights Reserved.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+ * 02110-1301, USA.
+ */
 
 #include <ace/OS_NS_unistd.h>
 #include <string>
@@ -6,8 +28,13 @@
 #include <list>
 
 #include "quartzRouter.h"
+#include "Observer.h"
+#include "SerialPort.h"
+#include "TcpPort.h"
 
-Router::svc ()
+#define NEW_SERIAL 1
+
+int Router::svc ()
 {
     ACE_DEBUG((LM_DEBUG, ACE_TEXT ("(%t) router handler running\n"))); 
 
@@ -22,113 +49,39 @@ Router::svc ()
 Default Constructor
 */
 Router::Router()
-: mpObserver(0), mRun(false)
+: mpObserver(0), mpCommunicationPort(0), mConnected(false), mRun(false)
 {
 }
-
-/**
-Constructor
-*/
-#if 0
-Router::Router(std::string rp)
-: mpObserver(0)
-{
-
-    m_routerConnected = 0;
-    ACE_TTY_IO::Serial_Params myparams;
-    myparams.baudrate = 38400; /* 38400 for router */
-    myparams.parityenb = false;
-    myparams.databits = 8;
-    myparams.stopbits = 1;
-    myparams.readtimeoutmsec = 100; //-1;
-    myparams.ctsenb = 0;
-    myparams.rcvenb = true;
-
-    if (rp.compare("default") == 0)
-    {
-        ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("rp =  %s\n"), rp.c_str() ));
-        ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("default settings router.\n") ));
-        for(int i = 0; i < 16; i++) // how many should we look for and what should the timeout be?
-        { /* test it */
-        char com[20];
-
-        sprintf(com, "COM%d", i);
-        ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("trying %s\n"), com ));
-        //ACE_Time_Value tm(0.2);
-        ACE_Time_Value tm(0, 200000);
-        ACE_DEV_Connector mTestConnector;
-        int ret = mTestConnector.connect(mSerialDevice, ACE_DEV_Addr(ACE_TEXT(com)), &tm);
-        mSerialDevice.control(ACE_TTY_IO::SETPARAMS, &myparams);
-        //ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("return value =  %d\t"), ret ));
-
-        if(ret == 0)
-        {
-            ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("port available - %s\t"), com ));
-            //check for router then close connection
-            ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("Checking for router: Sending .#01\n") ));
-            mSerialDevice.send ((const void *)".#01\r", 5);
-            //ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("Sent\n") ));
-            bool tst = readReply();
-            if (tst)
-            {
-                ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("Ack from router!\n") ));
-                //strcpy(rp, com.c_str()); 
-                rp.assign(com);
-                ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("rp =  %s\n"), rp.c_str() ));
-                i=16;
-            } 
-        
-        }
-        else
-        {
-            ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("Port unavailable.\n") ));
-        }
-        //set rp to correct com value
-        mSerialDevice.close(); // is this needed?
-        } /* test it */
-    } 
-    //mSerialPort.Open("com1");
-    //if (mDeviceConnector.connect(mSerialDevice, ACE_DEV_Addr(ACE_TEXT("com1")))== -1)
-    if (mDeviceConnector.connect(mSerialDevice, ACE_DEV_Addr(ACE_TEXT(rp.c_str()))) == -1)
-    {
-        ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("Could not open router.\n") ));
-    }
-    else
-    {
-        //check for router
-        ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("Checking for router: Sending .#01\n") ));
-        mSerialDevice.send ((const void *)".#01\r", 5);
-        bool tst = readReply();
-        if (tst)
-        {
-            m_routerConnected = 1;
-            ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("Ack from router!\n") ));
-        } 
-        else
-        {
-            ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("No router connected!\nExiting!\n") ));
-        }
-    }
-
-
-    mSerialDevice.control(ACE_TTY_IO::SETPARAMS, &myparams);
-
-    //Init();
-}
-#endif
 
 /**
 Destructor
 */
 Router::~Router()
 {
+    delete mpCommunicationPort;
 }
 
 /**
 Open serial port and send set-up string to router
 */
-void Router::Init(const std::string & port)
+bool Router::Init(const std::string & port, bool router_tcp)
 {
+    bool result = false;
+    if (mpCommunicationPort)
+    {
+        delete mpCommunicationPort;
+        mpCommunicationPort = 0;
+    }
+    if (router_tcp)
+    {
+        mpCommunicationPort = new TcpPort;
+    }
+    else
+    {
+        mpCommunicationPort = new SerialPort;
+    }
+
+#if 0  // No longer attempting to discover router
     std::list<std::string> port_list;
 
     if (port.empty())
@@ -162,6 +115,34 @@ void Router::Init(const std::string & port)
         // Use the supplied port name
         port_list.push_back(port);
     }
+#endif
+
+#if NEW_SERIAL
+    if (mpCommunicationPort->Connect(port))
+    {
+        SerialPort * p_serial = dynamic_cast<SerialPort *> (mpCommunicationPort);
+        if (p_serial)
+        {
+            p_serial->BaudRate(38400);
+        }
+
+        mpCommunicationPort->Send ((const void *)".#01\r", 5);
+        bool tst = readReply();
+        if (tst)
+        {
+            ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("Ack from router!\n") ));
+            result = true;
+        } 
+        else
+        {
+            ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("No router connected!\n") ));
+        }
+    }
+    else
+    {
+        ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("Could not open %C.\n"), port.c_str() ));
+    }
+#else
 
     //Now search for connected router
     ACE_TTY_IO::Serial_Params myparams;
@@ -200,12 +181,13 @@ void Router::Init(const std::string & port)
             }
         }
     }
-
-
-    //mSerialDevice.send((const void *)"Hello router", 12); 
+#endif
 
     mWritePtr = &mBuffer[0];
     mBufferEnd = mBuffer + qbufsize;
+
+    mConnected = result;
+    return result;
 }
 
 
@@ -240,11 +222,16 @@ void Router::readUpdate()
     // expect quartz router command as .U{level}ddd,sss\r
 
     const ACE_Time_Value READ_INTERVAL(0, 10000);
+    const ACE_Time_Value READ_TIMEOUT(0, 10000);
 
     mRun = true; // set running flag
     while (mRun)
     {
+#if NEW_SERIAL
+        bytes_read = mpCommunicationPort->Recv ((void *) &charReceived, 1, &READ_TIMEOUT);
+#else
         bytes_read = mSerialDevice.recv ((void *) &charReceived, 1);
+#endif
 
 
         if (bytes_read == 1)
@@ -277,17 +264,13 @@ void Router::readUpdate()
                         // {level} is one or more alpha chars, so find first digit in string
 
                         router_update_string += *(readPtr++); // copy update command string
-                        //run = 0; // exit
                     }
                 }
 
                 // reset write pointer
                 mWritePtr = mBuffer;
 
-                if (mpObserver)
-                {
-                    mpObserver->Observe(router_update_string);
-                }
+                ProcessMessage(router_update_string);
             }
             else
             {
@@ -319,6 +302,7 @@ void Router::Stop()
     ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("Stopping router thread\n") )); 
 }
 
+#if 0
 void Router::setSource(int source)
 {
     char command[20];
@@ -334,7 +318,7 @@ void Router::setSource(int source)
     ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("Send finished at %ds %d\n"), st2.wSecond, st2.wMilliseconds));
 
 }
-
+#endif
 
 // read router reply from ".01#(cr)" (is router connected?) command. Should be ".A(cr)"
 bool Router::readReply()
@@ -358,7 +342,11 @@ bool Router::readReply()
         // timeout
         //ACE_Time_Value tm(0.2);
         ACE_Time_Value tm(0, 200000);
+#if NEW_SERIAL
+        bytes_read = mpCommunicationPort->Recv ((void *) &charReceived, 1, &tm);
+#else
         bytes_read = mSerialDevice.recv_n ((void *) &charReceived, 1, &tm);
+#endif
 
         if (bytes_read == 1)
         {
@@ -419,31 +407,38 @@ bool Router::readReply()
 }
 
 
-// read current source connected to router 
-//(reply from interrogate route command, ".I{level}{dest}(cr)" )
-std::string Router::CurrentSrc(unsigned int dest)
+// Query current source connected to router.
+// Expect observer to read reply.
+// (reply from interrogate route command, ".I{level}{dest}(cr)" )
+void Router::QuerySrc(unsigned int dest)
 {
     //find current source connected to router
     std::ostringstream ss;
     ss << ".IV" << dest << "\r";
     const std::string & command = ss.str();
     ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("Sending %C\n"), command.c_str() ));
+#if NEW_SERIAL
+    mpCommunicationPort->Send (command.c_str(), command.length());
+#else
     mSerialDevice.send (command.c_str(), command.length());
+#endif
 
+#if 0
     char charReceived;
     ssize_t bytes_read;
     char * readPtr;
         
     
-    std::string RouterString;
+    std::string router_response;
     char * mWPtr, *mBufEnd;
     char mBuf[qbufsize];
     mWPtr = &mBuf[0];
     mBufEnd = mBuf + qbufsize;
 
     // expect quartz router reply as .I{level}{dest},{srce}\r
-    bool run = 1; // set running flag NB. hiding global here!
-    while (run)
+    bool done = false;
+    int read_attempts = 0;
+    while (!done)
     {
         //ACE_Time_Value tm(0.2);
         ACE_Time_Value tm(0, 200000);
@@ -454,7 +449,6 @@ std::string Router::CurrentSrc(unsigned int dest)
         {
             if (charReceived == '\r')
             {
-                run = 0;
                 // convert the bytes received so far into a router command string.
                 // First, see if we have received enough bytes to decode
 
@@ -465,7 +459,7 @@ std::string Router::CurrentSrc(unsigned int dest)
                     readPtr--;
                 }
 
-                RouterString = "";                  
+                router_response = "";                  
                 if (readPtr >= mBuf)
                 {
                     // still in buffer, so . found
@@ -473,13 +467,17 @@ std::string Router::CurrentSrc(unsigned int dest)
                     // next char should be an I
                     while (readPtr < mWPtr)
                     {
-                        RouterString += *(readPtr++); // copy update command string
-                        //run = 0; // exit
+                        router_response += *(readPtr++); // copy update command string
                     }
+                }
+                else
+                {
+                    ACE_DEBUG((LM_DEBUG, ACE_TEXT("Empty string from router.\n")));
                 }
 
                 // reset write pointer
                 mWPtr = mBuf;
+                done = true;
             }
             else
             {
@@ -496,24 +494,36 @@ std::string Router::CurrentSrc(unsigned int dest)
         } // end of bytes read OK
         else
         {
-            run = false;
+            if (++read_attempts > 2)
+            {
+                done = true;
+            }
+            else
+            {
+                ACE_DEBUG((LM_DEBUG, ACE_TEXT("Re-trying read from router.\n")));
+            }
         }
-    } // end of infinite while loop
+    } // end of while loop
 
-    ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("router reply [.{level}{destination},{source}]: %C\n"), RouterString.c_str() ));
-    //m_CurSrc = RouterString.c_str();
+    ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("router reply [.{level}{destination},{source}]: %C\n"), router_response.c_str() ));
+    //m_CurSrc = router_response.c_str();
 
-    return RouterString;
+    unsigned int src = 0;
+    if (router_response.size() > 6)
+    {
+        src = ACE_OS::atoi(router_response.substr(6).c_str());
+    }
+
+    return src;
+#endif
 }
 
-// returns the string containing the current source connected to the router
-//std::string Router::getSrc()
-//{
-//    return m_CurSrc;
-//}
-
-// returns true if router is connected
-bool Router::isConnected()
+void Router::ProcessMessage(const std::string & message)
 {
-    return m_routerConnected;
+    ACE_DEBUG((LM_DEBUG, ACE_TEXT("Message from router: \"%C\"\n"), message.c_str()));
+
+    if (mpObserver)
+    {
+        mpObserver->Observe(message);
+    }
 }

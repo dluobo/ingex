@@ -19,8 +19,16 @@
 
 #include <string>
 
-const char * const USAGE = "Usage: Routerlogger.exe [-r <router port>] [-t <timecode port>] [-n <name>] [-d <dest>] [-b <db file>] <CORBA options>\n"
+const char * const USAGE =
+    "Usage: Routerlogger.exe [-r <router port>] [-s] [-t <timecode port>] [-u]"
+    " [-n <name>] [-f <db file>]"
+    " [-a <VT1 dest>]  [-b <VT2 dest>] [-c <VT1 dest>]  [-d <VT2 dest>] [-m <MixerOut dest>"
+    " <CORBA options>\n"
+    "    -s  router on TCP socket, router port in format host:port\n"
+    "    -u  timecode reader on TCP socket, timecode port in format host:port\n"
     "    example CORBA options: -ORBDefaultInitRef corbaloc:iiop:192.168.1.1:8888\n";
+
+const char * const OPTS = "r:st:un:f:a:b:c:d:m:";
 
 
 // Static member
@@ -45,16 +53,25 @@ bool routerloggerApp::Init(int argc, char * argv[])
 		ACE_ERROR_RETURN((LM_ERROR, ACE_TEXT (USAGE)), 0);
     }
 
-	// get command line args
-    static const ACE_TCHAR options[] = ACE_TEXT (":t:r:n:d:b:h");
-	ACE_Get_Opt cmd_opts (argc, argv, options);
+    // get command line args
+    ACE_Get_Opt cmd_opts (argc, argv, OPTS);
 
 
     std::string routerlogger_name = "RouterLog"; // default name
     std::string router_port; // default blank, router will be discovered
+    bool router_tcp = false;
     std::string tc_port;
-    unsigned int dest = 1; // default destination to watch
+    bool tc_tcp = false;
+    unsigned int mix_dest = 1; // default destination to record
+    unsigned int vt1_dest = 1;
+    unsigned int vt2_dest = 2;
+    unsigned int vt3_dest = 3;
+    unsigned int vt4_dest = 4;
+#ifdef WIN32
     std::string db_file = "C:\\TEMP\\RouterLogs\\database.txt";
+#else
+    std::string db_file = "/var/tmp/routerlogdb.txt";
+#endif
 
 	int option;
 	while ((option = cmd_opts ()) != EOF)
@@ -62,39 +79,58 @@ bool routerloggerApp::Init(int argc, char * argv[])
 		//ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("option %d\n"), option ));
 		switch (option)
         {
-		case 't':
-            // timecode reader port
-			//ACE_OS_String::strncpy (tcport,
-            //            cmd_opts.opt_arg (),
-            //            MAXPATHLEN);           //timecode port
-            tc_port = ACE_TEXT_ALWAYS_CHAR( cmd_opts.opt_arg() );
-			break;
-		
 		case 'r':
             // router port
-			//ACE_OS_String::strncpy (rport,
-            //            cmd_opts.opt_arg (),
-            //            MAXPATHLEN);			
             router_port = ACE_TEXT_ALWAYS_CHAR( cmd_opts.opt_arg() );
 			break;
 				
-		case 'n':
-			//ACE_OS_String::strncpy (routerlogger_name,
-            //            cmd_opts.opt_arg (),
-            //            MAXPATHLEN);
-            routerlogger_name = ACE_TEXT_ALWAYS_CHAR( cmd_opts.opt_arg() );
+        case 's':
+            router_tcp = true;
+            break;
+		
+		case 't':
+            // timecode reader port
+            tc_port = ACE_TEXT_ALWAYS_CHAR( cmd_opts.opt_arg() );
 			break;
 
-        case 'd':
-            // Router destination to record
-            dest = ACE_OS::atoi( cmd_opts.opt_arg() );
+        case 'u':
+            tc_tcp = true;
             break;
+		
+		case 'n':
+          routerlogger_name = ACE_TEXT_ALWAYS_CHAR( cmd_opts.opt_arg() );
+			break;
 
-        case 'b':
+        case 'f':
             // cuts databse filename
             db_file = ACE_TEXT_ALWAYS_CHAR( cmd_opts.opt_arg() );
             break;
 	
+        case 'a':
+            // Router destination for VT1
+            vt1_dest = ACE_OS::atoi( cmd_opts.opt_arg() );
+            break;
+
+        case 'b':
+            // Router destination for VT2
+            vt2_dest = ACE_OS::atoi( cmd_opts.opt_arg() );
+            break;
+
+        case 'c':
+            // Router destination for VT3
+            vt3_dest = ACE_OS::atoi( cmd_opts.opt_arg() );
+            break;
+
+        case 'd':
+            // Router destination for VT4
+            vt4_dest = ACE_OS::atoi( cmd_opts.opt_arg() );
+            break;
+
+        case 'm':
+            // Router destination to record
+            mix_dest = ACE_OS::atoi( cmd_opts.opt_arg() );
+            break;
+
 		case 'h':
 			ACE_ERROR_RETURN
     			((LM_ERROR, ACE_TEXT (USAGE)), 0);	// help 
@@ -115,8 +151,8 @@ bool routerloggerApp::Init(int argc, char * argv[])
     }
 
 	ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("routerlogger name is \"%C\"\n"), routerlogger_name.c_str() ));
-	ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("router on   \"%C\"\n"), router_port.c_str() ));
-	ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("timecode on \"%C\"\n"), tc_port.c_str() ));
+    ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("router on   \"%C\"%C\n"), router_port.c_str(), (router_tcp ? " (TCP)" : "") ));
+	ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("timecode on \"%C\"%C\n"), tc_port.c_str(), (tc_tcp ? " (TCP)" : "") ));
 
 
 // apply timeout for CORBA operations
@@ -131,7 +167,7 @@ bool routerloggerApp::Init(int argc, char * argv[])
 
 // and initialise
     mpServant->Name(routerlogger_name);
-	bool ok = mpServant->Init(router_port, tc_port, dest, db_file);
+	bool ok = mpServant->Init(router_port, router_tcp, tc_port, tc_tcp, db_file, mix_dest, vt1_dest, vt2_dest, vt3_dest, vt4_dest);
 
 // incarnate servant object
 	mRef = mpServant->_this();

@@ -1,5 +1,5 @@
 /*
- * $Id: SimplerouterloggerImpl.cpp,v 1.2 2008/02/06 16:59:00 john_f Exp $
+ * $Id: SimplerouterloggerImpl.cpp,v 1.3 2008/04/18 16:56:38 john_f Exp $
  *
  * Servant class for RouterRecorder.
  *
@@ -36,31 +36,29 @@
 #include "quartzRouter.h"
 #include "CutsDatabase.h"
 
-const bool USE_EASYREADER = true;
-const std::string DEFAULT_TC_PORT = "com4";
+#ifdef WIN32
+const std::string RECORD_DIR = "C:\\TEMP\\RouterLogs\\";
+#else
+const std::string RECORD_DIR = "/var/tmp/RouterLogs/";
+#endif
+
+// Constructor for Vt struct
+Vt::Vt(int rd, const std::string & n)
+: router_dest(rd), router_src(0), name(n)
+{
+}
 
 SimplerouterloggerImpl * SimplerouterloggerImpl::mInstance = 0;
 
 
 // Implementation skeleton constructor
 SimplerouterloggerImpl::SimplerouterloggerImpl (void)
-: mpRouter(0), mpTcReader(0), mpSrcReader(0), mpCutsDatabase(0), mpFile(0), mDestination(0)
+: mpRouter(0), mpTcReader(0), mpSrcReader(0), mpCutsDatabase(0), mpFile(0), mMixDestination(0)
 {
     mInstance = this;
 
     mpRouter = new Router;
-    if (USE_EASYREADER)
-    {
-        // Use external timecode reader
-        mpTcReader = new EasyReader;
-    }
-    else
-    {
-        // Use PC clock
-        mpTcReader = new ClockReader;
-    }
     mpSrcReader = new SourceReader;
-
     mpCutsDatabase = new CutsDatabase();
 }
 
@@ -81,8 +79,13 @@ SimplerouterloggerImpl::~SimplerouterloggerImpl (void)
 
 
 // Initialise the routerlogger
-bool SimplerouterloggerImpl::Init(const std::string & rport, const std::string & tcport, unsigned int dest, const std::string & db_file)
+bool SimplerouterloggerImpl::Init(const std::string & rport, bool router_tcp,
+    const std::string & tcport, bool tc_tcp,
+    const std::string & db_file,
+    unsigned int mix_dest, unsigned int vt1_dest, unsigned int vt2_dest, unsigned int vt3_dest, unsigned int vt4_dest)
 {
+    bool result = true;
+
     // Setup pre-roll
     mMaxPreRoll.undefined = false;
     mMaxPreRoll.edit_rate = EDIT_RATE;
@@ -93,12 +96,18 @@ bool SimplerouterloggerImpl::Init(const std::string & rport, const std::string &
     mMaxPostRoll.edit_rate = EDIT_RATE;
     mMaxPostRoll.samples = 0;
 
+    // Setup format reply
+    mFormat = "*ROUTER*";
+
     // Create tracks
     mTracks->length(1);
     ProdAuto::Track & track = mTracks->operator[](0);
     track.type = ProdAuto::VIDEO;
     track.name = "V";
+    track.id = 1;
+    // Setting source package name to appear in controller
     track.has_source = 1;
+    track.src.package_name = CORBA::string_dup("Mixer out destination");
 
     mTracksStatus->length(1);
     ProdAuto::TrackStatus & ts = mTracksStatus->operator[](0);
@@ -115,43 +124,88 @@ bool SimplerouterloggerImpl::Init(const std::string & rport, const std::string &
         mpCutsDatabase->Filename(db_file);
     }
 
-    // Init router
-    mpRouter->Init(rport);
-    mpRouter->SetObserver(this);
-    mpRouter->activate();
-
     // Init timecode reader, if present
-    if (USE_EASYREADER)
+    delete mpTcReader;
+    if (tcport.empty())
     {
-        EasyReader * er = static_cast<EasyReader *>(mpTcReader);
-        if (!tcport.empty())
+        // Use PC clock
+        mpTcReader = new ClockReader;
+    }
+    else
+    {
+        // Use external timecode reader
+        mpTcReader = new EasyReader;
+    }
+
+    EasyReader * er = dynamic_cast<EasyReader *>(mpTcReader);
+    if (er)
+    {
+        if (er->Init(tcport))
         {
-            er->Init(tcport.c_str());
+            ACE_DEBUG((LM_DEBUG, ACE_TEXT("EasyReader initialised on port \"%C\"\n"),
+                tcport.c_str()));
         }
         else
         {
-            er->Init(DEFAULT_TC_PORT.c_str());
+            ACE_DEBUG((LM_ERROR, ACE_TEXT("EasyReader initialisation failed on port \"%C\"\n"),
+                tcport.c_str()));
+            result = false;
         }
+    }
+    else
+    {
+        ACE_DEBUG((LM_DEBUG, ACE_TEXT("Timecode will be derived from PC clock\n")));
     }
 
     // Set destination
-    mDestination = dest;
+    mMixDestination = mix_dest;
 
+    // VT name and router info
+    // Eventually this will come from database but 
+    // hard-coded for now.
+    mVts.clear();
+    mVts.push_back( Vt(vt1_dest, "VT1") );
+    mVts.push_back( Vt(vt2_dest, "VT2") );
+    mVts.push_back( Vt(vt3_dest, "VT3") );
+    mVts.push_back( Vt(vt4_dest, "VT4") );
+
+
+    // Init router
+    result &= mpRouter->Init(rport, router_tcp);
+
+#if 0
     // Get info about current routing to write at start of file
     // and/or in database
     std::string tc = mpTcReader->Timecode();
 
-    std::string src = mpRouter->CurrentSrc(mDestination);
-    int src_index = atoi(src.substr(6).c_str());
+    unsigned int src_index = mpRouter->CurrentSrc(mMixDestination);
 
-    std::string srcstring;
-    uint32_t track_i;
-    mpSrcReader->GetSource(src_index, srcstring, track_i);
+    if (src_index > 0)
+    {
+        std::string srcstring;
+        uint32_t track_i;
+        mpSrcReader->GetSource(src_index, srcstring, track_i);
 
-    mLastSrc = srcstring;
-    mLastTc = tc;
+        mLastSrc = srcstring;
+        mLastTc = tc;
+    }
+#endif
 
-    return true;
+    if (mpRouter->Connected())
+    {
+        // Start monitoring messages from router
+        mpRouter->SetObserver(this);
+        mpRouter->activate();
+
+        // Query routing to destinations we're interested in
+        mpRouter->QuerySrc(mMixDestination);
+        for (std::vector<Vt>::iterator it = mVts.begin(); it != mVts.end(); ++it)
+        {
+            mpRouter->QuerySrc(it->router_dest);
+        }
+    }
+
+    return result;
 }
 
 ::ProdAuto::TrackStatusList * SimplerouterloggerImpl::TracksStatus (
@@ -189,14 +243,12 @@ bool SimplerouterloggerImpl::Init(const std::string & rport, const std::string &
 {
     ACE_DEBUG((LM_DEBUG, ACE_TEXT("SimplerouterloggerImpl::Start()\n")));
 
-    const std::string dir = "C:\\TEMP\\RouterLogs\\";
-
-    FileUtils::CreatePath(dir);
+    FileUtils::CreatePath(RECORD_DIR);
 
     std::string date = DateTime::DateNoSeparators();
     Timecode tc = mpTcReader->Timecode().c_str();
     std::ostringstream ss;
-    ss << dir << date << "_" << tc.TextNoSeparators() << "_" << mName << ".txt";
+    ss << RECORD_DIR << date << "_" << tc.TextNoSeparators() << "_" << mName << ".txt";
 
 
     //start saving to file
@@ -204,6 +256,10 @@ bool SimplerouterloggerImpl::Init(const std::string & rport, const std::string &
 
     ProdAuto::TrackStatus & ts = mTracksStatus->operator[](0);
     ts.rec = 1;
+
+    // so a sensible number comes back, even for start now
+    start_timecode.undefined = false; 
+    start_timecode.samples = tc.FramesSinceMidnight();
 
     // Return
     return ProdAuto::Recorder::SUCCESS;
@@ -251,15 +307,17 @@ void SimplerouterloggerImpl::StartSavingFile(const std::string & filename)
     // Get info about current routing to write at start of file
     // and/or in database
     std::string tc = mpTcReader->Timecode();
-
-    std::string src = mpRouter->CurrentSrc(mDestination);
-    int src_index = atoi(src.substr(6).c_str());
+#if 0
+    unsigned int src_index = mpRouter->CurrentSrc(mMixDestination);
 
     std::string srcstring;
     uint32_t track;
     mpSrcReader->GetSource(src_index, srcstring, track);
     std::string deststring;
-    mpSrcReader->GetDestination(mDestination, deststring);
+    mpSrcReader->GetDestination(mMixDestination, deststring);
+#else
+    std::string deststring = "Mixer Out";
+#endif
 
     // Open file
     mpFile = ACE_OS::fopen (filename.c_str(), ACE_TEXT ("w+"));
@@ -273,8 +331,8 @@ void SimplerouterloggerImpl::StartSavingFile(const std::string & filename)
         ACE_DEBUG((LM_DEBUG, ACE_TEXT ("filename ok %C\n"), filename.c_str()));
 
         // Write info at head of file
-	    ACE_OS::fprintf (mpFile, "Destination index = %d, name = %s\n", mDestination, deststring.c_str() );
-	    ACE_OS::fprintf (mpFile, "%s start   source index = %3d, name = %s\n", tc.c_str(), src_index, srcstring.c_str() );
+	    ACE_OS::fprintf (mpFile, "Destination index = %d, name = %s\n", mMixDestination, deststring.c_str() );
+	    ACE_OS::fprintf (mpFile, "%s start   source name = %s\n", tc.c_str(), mLastSrc.c_str() );
     }
 
     // Open database file
@@ -284,10 +342,6 @@ void SimplerouterloggerImpl::StartSavingFile(const std::string & filename)
         if (! mLastSrc.empty())
         {
             mpCutsDatabase->AppendEntry(mLastSrc, mLastTc);
-        }
-        else
-        {
-            mpCutsDatabase->AppendEntry(srcstring, tc);
         }
     }
 }
@@ -322,49 +376,51 @@ void SimplerouterloggerImpl::Observe(std::string msg)
     //ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C %C\n"), tc.c_str(), srcstring.c_str()));
 
     unsigned int dest = ACE_OS::atoi(msg.substr(2, 3).c_str());
+    unsigned int src  = ACE_OS::atoi(msg.substr(6).c_str());
 
-    // Filter destinations
-    if (dest == mDestination)
+    // Update our routing records for the recorders
+    for (std::vector<Vt>::iterator it = mVts.begin(); it != mVts.end(); ++it)
     {
-        ACE_DEBUG((LM_DEBUG, ACE_TEXT ("destination match\n")));
-        std::string src = msg.substr(6);
-        //ACE_DEBUG((LM_DEBUG, ACE_TEXT("%s\n"), src.c_str()));
+        if (dest == it->router_dest)
+        {
+            it->router_src = src;
+        }
+    }
 
-        // convert to integer
-        //std::string srcstring = mpSrcReader->SourceName(atoi(src.c_str()));
-        int src_index = atoi(src.c_str());
-	    //std::string srcstring = mpSrcReader->SourceName(atoi(src.c_str()));
-        std::string srcstring;
-        uint32_t track;
-        mpSrcReader->GetSource(src_index, srcstring, track);
+
+    // Process changes to mixer-out destination
+    if (dest == mMixDestination)
+    {
+        ACE_DEBUG((LM_DEBUG, ACE_TEXT ("mixer-out destination\n")));
+
+        // Are we recording the source just selected?
+        // Avoid VT1 if possible as that may be recording mixer out
+        // so we take highest number match.
+        std::string src_name;
+        for (std::vector<Vt>::const_iterator it = mVts.begin(); it != mVts.end(); ++it)
+        {
+            if (it->router_src == src)
+            {
+                src_name = it->name;
+            }
+        }
 
         // Remember last cut for when we start a new recording
-        mLastSrc = srcstring;
+        mLastSrc = src_name;
         mLastTc = tc;
 
         //save if file is open
         if (mpFile != 0)
         {
-    	    ACE_OS::fprintf (mpFile, "%s update  source index = %3d, name = %s\n", tc.c_str(), src_index, srcstring.c_str() );
+    	    ACE_OS::fprintf (mpFile, "%s update  source index = %3d, name = %s\n", tc.c_str(), src, src_name.c_str() );
         }
 
         // update database file
         if (mpCutsDatabase)
         {
-            mpCutsDatabase->AppendEntry(srcstring, tc);
+            mpCutsDatabase->AppendEntry(src_name, tc);
         }
     }
-}
-
-char * SimplerouterloggerImpl::RecordingFormat (
-    
-  )
-  throw (
-    ::CORBA::SystemException
-  )
-{
-  // Add your implementation here
-    return CORBA::string_dup("Router Logger");
 }
 
 ::ProdAuto::TrackList * SimplerouterloggerImpl::Tracks (

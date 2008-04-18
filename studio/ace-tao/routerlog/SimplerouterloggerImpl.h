@@ -1,5 +1,5 @@
 /*
- * $Id: SimplerouterloggerImpl.h,v 1.2 2008/02/06 16:59:00 john_f Exp $
+ * $Id: SimplerouterloggerImpl.h,v 1.3 2008/04/18 16:56:38 john_f Exp $
  *
  * Servant class for RouterRecorder.
  *
@@ -38,6 +38,14 @@ class SourceReader;
 class Router;
 class CutsDatabase;
 
+struct Vt
+{
+    Vt(int rd, const std::string & n);
+    unsigned int router_dest;
+    unsigned int router_src; // what is routed to that VT
+    std::string name;
+};
+
 class  SimplerouterloggerImpl
   : public Observer, public RecorderImpl
 {
@@ -52,9 +60,12 @@ public:
 
 
   // Initialisation
-  bool Init(const std::string & rport, const std::string & tcport, unsigned int dest, const std::string & db_file);
+  bool Init(const std::string & rport, bool router_tcp,
+      const std::string & tcport, bool tc_tcp,
+      const std::string & db_file,
+      unsigned int mix_dest, unsigned int vt1_dest, unsigned int vt2_dest, unsigned int vt3_dest, unsigned int vt4_dest);
 
-  void Destination(unsigned int dest) { mDestination = dest; }
+  void Destination(unsigned int dest) { mMixDestination = dest; }
 
 
   void SetTimecodePort(std::string tcp);
@@ -88,14 +99,6 @@ public:
       ::ProdAuto::MxfTimecode & stop_timecode,
       const ::ProdAuto::MxfDuration & post_roll,
       ::CORBA::StringSeq_out files
-    )
-    throw (
-      ::CORBA::SystemException
-    );
-
-  virtual
-  char * RecordingFormat (
-      
     )
     throw (
       ::CORBA::SystemException
@@ -136,7 +139,8 @@ private:
 	SourceReader * mpSrcReader;
     CutsDatabase * mpCutsDatabase;
 
-    unsigned int mDestination;
+    unsigned int mMixDestination;
+    std::vector<Vt> mVts;  // eventually from database
 
     std::string mLastSrc;
     std::string mLastTc;
