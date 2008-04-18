@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorder.h,v 1.3 2008/02/06 16:58:59 john_f Exp $
+ * $Id: IngexRecorder.h,v 1.4 2008/04/18 16:15:31 john_f Exp $
  *
  * Class to manage an individual recording.
  *
@@ -42,7 +42,7 @@ const char * const SOURCE_NAME[] = {
 const char * const QUAD_NAME = "quad";
 
 
-// This interval ensures that timecode found during PrepareStart() is still
+// This interval ensures that timecode found during CheckStartTimecode() is still
 // available in buffer for Start().
 const int SEARCH_GUARD = 5;
 
@@ -85,24 +85,25 @@ class IngexRecorder
 
 // Per-recording functions
 public:
-    IngexRecorder(const std::string & name);
+    IngexRecorder(prodauto::Recorder * rec);
     ~IngexRecorder();
 
-    void Setup(
-                bool channel_enable[],
-                bool trk_enable[],
-                const char * project,
-                const char * description,
-                const std::vector<std::string> & tapes);
+    void Setup( framecount_t start_timecode,
+                const std::vector<bool> & channel_enables,
+                const std::vector<bool> & track_enables);
 
-    bool PrepareStart(
+    bool CheckStartTimecode(
+                std::vector<bool> & channel_enables,
                 framecount_t & start_timecode,
                 framecount_t pre_roll,
                 bool crash_record);
 
     bool Start(void);
 
-    bool Stop(framecount_t & stop_timecode, framecount_t post_roll);
+    bool Stop(framecount_t & stop_timecode,
+                framecount_t post_roll,
+                const char * project,
+                const char * description);
 
     void SetCompletionCallback(void(*p_fn)(IngexRecorder *)) { mpCompletionCallback = p_fn; }
 
@@ -112,6 +113,18 @@ public:
     {
         // Should maybe use a mutex
         mRecordingOK = false;
+    }
+
+    void NoteDroppedFrames()
+    {
+        ACE_Guard<ACE_Thread_Mutex> guard(mDroppedFramesMutex);
+        mDroppedFrames = true;
+    }
+
+    bool DroppedFrames()
+    {
+        ACE_Guard<ACE_Thread_Mutex> guard(mDroppedFramesMutex);
+        return mDroppedFrames;
     }
 
     framecount_t OutTime();
@@ -130,11 +143,14 @@ public:
 private:
     // Current RecorderConfig
     // May be better to return a unique ptr for thread safety
-    prodauto::Recorder * Recorder() const { return mRecorder.get(); }
+    // - can't do that as tape names are only stored in the instance
+    prodauto::Recorder * Recorder() const { return mRecorder; }
 
-    bool GetDbInfo(const std::vector<std::string> & tapes,
-        const std::string & project, prodauto::ProjectName & project_name);
+    bool GetProjectFromDb(const std::string & name, prodauto::ProjectName & project_name);
     void DoCompletionCallback() { if(mpCompletionCallback) (*mpCompletionCallback)(this); }
+
+    // Get copies of metadata in thread-safe manner
+    void GetMetadata(prodauto::ProjectName & project_name, std::vector<prodauto::UserComment> & user_comments);
 
 // Per-recording data
 private:
@@ -150,7 +166,7 @@ private:
     ACE_thread_t mManageThreadId;
 
 // Database objects
-    std::auto_ptr<prodauto::Recorder> mRecorder;
+    prodauto::Recorder * mRecorder;
 
 // Duration
     framecount_t mTargetDuration;           ///< To signal when capture should stop
@@ -158,8 +174,11 @@ private:
 
 // Per-channel data
 // Enables
-    bool mChannelEnable[MAX_CHANNELS];
-    bool mTrackEnable[MAX_CHANNELS * 5];
+    //bool mChannelEnable[MAX_CHANNELS];
+    //bool mTrackEnable[MAX_CHANNELS * 5];
+    std::vector<bool> mChannelEnable;
+    std::vector<bool> mTrackEnable;
+    unsigned int mTracksPerChannel;
 
 public:
 // MXF filenames
@@ -169,7 +188,14 @@ public:
 
     //RecordOptions   record_opt[MAX_RECORD];
 private:
+    ACE_Thread_Mutex mDroppedFramesMutex;
+    bool mDroppedFrames;
     int mStartFrame[MAX_CHANNELS];
+
+// Recording metadata
+    ACE_Thread_Mutex mMetadataMutex;
+    prodauto::ProjectName mProjectName; ///< Avid project name.
+    std::vector<prodauto::UserComment> mUserComments;
 
 // Per-thread data
     std::vector<ThreadParam> mThreadParams;
@@ -179,7 +205,7 @@ private:
 
 // Thread functions are friends
     friend ACE_THR_FUNC_RETURN start_record_thread(void *p_arg);
-    friend ACE_THR_FUNC_RETURN start_quad_thread(void *p_arg);
+    //friend ACE_THR_FUNC_RETURN start_quad_thread(void *p_arg);
     friend ACE_THR_FUNC_RETURN manage_record_thread(void *p_arg);
 
 };

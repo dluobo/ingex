@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorder.cpp,v 1.3 2008/02/06 16:58:59 john_f Exp $
+ * $Id: IngexRecorder.cpp,v 1.4 2008/04/18 16:15:28 john_f Exp $
  *
  * Class to manage an individual recording.
  *
@@ -51,12 +51,11 @@
 Constructor clears all member data.
 The name parameter is used when reading config from database.
 */
-IngexRecorder::IngexRecorder(const std::string & name)
-: mpCompletionCallback(0), mTargetDuration(0), mRecordingOK(true)
+IngexRecorder::IngexRecorder(prodauto::Recorder * rec)
+: mpCompletionCallback(0), mRecorder(rec), mTargetDuration(0),
+  mRecordingOK(true), mDroppedFrames(false)
 {
     ACE_DEBUG((LM_DEBUG, ACE_TEXT("IngexRecorder::IngexRecorder()\n")));
-
-    mName = name;
 }
 
 /**
@@ -74,15 +73,15 @@ IngexRecorder::~IngexRecorder()
 }
 
 void IngexRecorder::Setup(
-                bool channel_enable[],
-                bool trk_enable[],
-                const char * project,
-                const char * description,
-                const std::vector<std::string> & tapes)
+                framecount_t start_timecode,
+                const std::vector<bool> & channel_enables,
+                const std::vector<bool> & track_enables)
 {
+    ACE_DEBUG((LM_DEBUG, ACE_TEXT("IngexRecorder::Setup()\n")));
+
     // Get current recorder settings from database
     RecorderSettings * settings = RecorderSettings::Instance();
-    settings->Update(mName);
+    settings->Update(mRecorder);
 
     switch (settings->timecode_mode)
     {
@@ -99,31 +98,22 @@ void IngexRecorder::Setup(
         break;
     }
 
-    // Get MXF info from database.
-    // Record threads will access this later.
-    // Also get ProjectName.
-    prodauto::ProjectName project_name;
-    GetDbInfo(tapes, project, project_name);
-
-    // Store paths for recorded files
-    //strcpy(mVideoPath, video_path);
-    //strcpy(mDvdPath, dvd_path);
-
-    unsigned int n_channels = IngexShm::Instance()->Channels();
+    //unsigned int n_channels = IngexShm::Instance()->Channels();
+    // Tracks per channel
+    // e.g. 5 (1 video, 4 audio) or 9 (1 video, 8 audio)
+    // A bit dodgy as different inputs on a recorder can have
+    // different numbers of tracks.
+    mTracksPerChannel = track_enables.size() / channel_enables.size();
 
     // Set up enables
+    mChannelEnable = channel_enables;
+    mTrackEnable = track_enables;
     int first_enabled_channel = -1;
-    for (unsigned int i = 0; i < n_channels; i++)
+    for (unsigned int i = 0; first_enabled_channel < 0 && i < mChannelEnable.size(); ++i)
     {
-        if (first_enabled_channel < 0 && channel_enable[i])
+        if (mChannelEnable[i])
         {
             first_enabled_channel = i;
-        }
-        mChannelEnable[i] = channel_enable[i];
-        for (unsigned int j = 0; j < 5; ++j)
-        {
-            unsigned int trk = 5 * i + j;
-            mTrackEnable[trk] = trk_enable[trk];
         }
     }
 
@@ -157,9 +147,9 @@ void IngexRecorder::Setup(
     {
         if (it->source == Input::NORMAL)
         {
-            for (unsigned int i = 0; i < n_channels; i++)
+            for (unsigned int i = 0; i < mChannelEnable.size(); i++)
             {
-                if (channel_enable[i])
+                if (mChannelEnable[i])
                 {
                     ThreadParam tp;
                     tp.p_rec = this;
@@ -194,75 +184,55 @@ void IngexRecorder::Setup(
             mThreadParams.push_back(tp);
         }
     }
-#if 0                
-    for (unsigned int i = 0; i < n_channels; i++)
-    {
-        if (channel_enable[i])
-        {
-            // For testing multiple encodings, set this to 2.
-            //const unsigned int encoding_n = 1;
-            //const int second_res = MOV_MATERIAL_RESOLUTION;
-            
-            int encoding_i = 0;
-            for (std::vector<EncodeParams>::const_iterator it = settings->encodings.begin();
-                it != settings->encodings.end(); ++it, ++encoding_i)
-            //for (unsigned int encoding_i = 0; encoding_i < encoding_n; ++encoding_i)
-            {
-                ThreadParam tp;
-                tp.p_rec = this;
-
-                tp.p_opt = new RecordOptions;
-                tp.p_opt->channel_num = i;
-                tp.p_opt->index = encoding_i;
-                
-                tp.p_opt->resolution = it->resolution;
-                tp.p_opt->wrapping = it->wrapping;
-                tp.p_opt->dir = it->dir;
-
-                mThreadParams.push_back(tp);
-            }
-        }
-    }
-
-    // Set RecordOptions for quad-split.
-    //const int quad_res = settings->mxf_resolution;
-    const int quad_res = MOV_MATERIAL_RESOLUTION;
-    if (settings->quad)
+#if 0
+// For test only, add a further encoding
     {
         ThreadParam tp;
         tp.p_rec = this;
 
         tp.p_opt = new RecordOptions;
-        tp.p_opt->channel_num = first_enabled_channel;
-        tp.p_opt->index = 0;
-        tp.p_opt->quad = true;
-        tp.p_opt->resolution = quad_res;
-        tp.p_opt->wrapping = Wrapping::NONE;
+        tp.p_opt->channel_num = 0;
+        tp.p_opt->index = 2;
+        
+        tp.p_opt->resolution = 8;
+        tp.p_opt->wrapping = Wrapping::MXF;
+        tp.p_opt->bitc = true;
+        tp.p_opt->dir = "/video/mxf_offline";
 
         mThreadParams.push_back(tp);
     }
 #endif
 
-    // Set further RecordOptions members.
-    // Maybe these should be IngexRecorder members
+    // Create and store filenames based on source, target timecode and date
+    ::Timecode tc(start_timecode);
+    std::string date = DateTime::DateNoSeparators();
+    const char * tcode = tc.TextNoSeparators();
+
+    // Set filename stems in RecordOptions.
     for (std::vector<ThreadParam>::iterator
         it = mThreadParams.begin(); it != mThreadParams.end(); ++it)
     {
-        it->p_opt->project = project_name;
-        it->p_opt->description = description;
+        const char * src_name = (it->p_opt->quad ? QUAD_NAME : SOURCE_NAME[it->p_opt->channel_num]);
+        std::ostringstream ident;
+        ident << date << "_" << tcode << "_" << mRecorder->name
+            << "_" << src_name
+            << "_" << it->p_opt->index;
+        it->p_opt->file_ident = ident.str();
     }
+
 }
 
 
 /**
 Prepare for a recording.  Search for target timecode and set some of the RecordOptions
 */
-bool IngexRecorder::PrepareStart(
+bool IngexRecorder::CheckStartTimecode(
+                std::vector<bool> & channel_enables,
                 framecount_t & start_timecode,
                 framecount_t pre_roll,
                 bool crash_record)
 {
-    ACE_DEBUG((LM_DEBUG, ACE_TEXT("IngexRecorder::PrepareStart()\n")));
+    ACE_DEBUG((LM_DEBUG, ACE_TEXT("IngexRecorder::CheckStartTimecode()\n")));
 
     unsigned int n_channels = IngexShm::Instance()->Channels();
 
@@ -271,17 +241,23 @@ bool IngexRecorder::PrepareStart(
     // If crash record, search across all channels for the minimum current (lastframe) timecode
     if (crash_record)
     {
-        int tc[MAX_CHANNELS];
+        //int tc[MAX_CHANNELS];
+        struct { int framecount; bool valid; } tc[MAX_CHANNELS];
+        for (unsigned int i = 0; i < MAX_CHANNELS; ++i)
+        {
+            tc[i].valid = false;
+        }
 
         ACE_DEBUG((LM_DEBUG, ACE_TEXT("Crash record:\n")));
-        for (unsigned int channel_i = 0; channel_i < n_channels; channel_i++)
+        for (unsigned int channel_i = 0; channel_i < channel_enables.size(); channel_i++)
         {
-            if (mChannelEnable[channel_i])
+            if (channel_enables[channel_i] && IngexShm::Instance()->SignalPresent(channel_i))
             {
-                tc[channel_i] = IngexShm::Instance()->CurrentTimecode(channel_i);
+                tc[channel_i].framecount = IngexShm::Instance()->CurrentTimecode(channel_i);
+                tc[channel_i].valid = true;
 
                 ACE_DEBUG((LM_DEBUG, ACE_TEXT("    tc[%d]=%C\n"),
-                    channel_i, Timecode(tc[channel_i]).Text()));
+                    channel_i, Timecode(tc[channel_i].framecount).Text()));
             }
         }
 
@@ -290,10 +266,10 @@ bool IngexRecorder::PrepareStart(
         bool tc_valid = false;
         for (unsigned int channel_i = 0; channel_i < n_channels; channel_i++)
         {
-            if (mChannelEnable[channel_i])
+            if (tc[channel_i].valid)
             {
-                max_tc = max(max_tc, tc[channel_i]);
-                min_tc = min(min_tc, tc[channel_i]);
+                max_tc = max(max_tc, tc[channel_i].framecount);
+                min_tc = min(min_tc, tc[channel_i].framecount);
                 tc_valid = true;
             }
         }
@@ -302,27 +278,9 @@ bool IngexRecorder::PrepareStart(
         {
             ACE_DEBUG((LM_ERROR, ACE_TEXT("    No channels enabled!\n")));
         }
-#if 0
-        // Old strategy
-        int max_diff = max_tc - min_tc;
 
-        // NB. could reduce sleep time by amount of pre-roll
-        logTF("    crash record max diff=%d sleeping for %d frames...\n", max_diff, max_diff+2);
-        ACE_OS::sleep(ACE_Time_Value(0, (max_diff+2) * 40 * 1000)); // sleep max_diff number of frames
-
-        // Use lowest enabled channel's timecode as the target.
-        for (int channel_i = n_channels - 1; channel_i >= 0; channel_i--)
-        {
-            if (channel_enable[channel_i])
-            {
-                target_tc = tc[channel_i];
-            }
-        }
-#else
-        // Simpler strategy
         target_tc = min_tc;
         //target_tc = tc[1]; // just for testing
-#endif
     }
     else
     {
@@ -363,7 +321,7 @@ bool IngexRecorder::PrepareStart(
     ACE_DEBUG((LM_DEBUG, ACE_TEXT("Searching for timecode %C\n"), Timecode(target_tc).Text()));
     for (unsigned int channel_i = 0; channel_i < n_channels; channel_i++)
     {
-        if (! mChannelEnable[channel_i])
+        if (! channel_enables[channel_i])
         {
             ACE_DEBUG((LM_DEBUG, ACE_TEXT("Channel %d not enabled\n"), channel_i));
             continue;
@@ -423,27 +381,22 @@ bool IngexRecorder::PrepareStart(
                 Timecode(first_tc_seen).Text()
             ));
 
-            found_all_target = false;
+            if (IngexShm::Instance()->SignalPresent(channel_i))
+            {
+                found_all_target = false;
+            }
+            else
+            {
+                // As there is no signal at this input we won't
+                // prevent recording from starting but will
+                // simply disable this input.
+                ACE_DEBUG((LM_ERROR,
+                    ACE_TEXT("This channel has no signal present so will be disabled for the current recording.\n")
+                    ));
+                channel_enables[channel_i] = false;
+            }
         }
-    }
-
-    // Create and store filenames based on source, target timecode and date
-    ::Timecode tc;
-    tc = target_tc;
-    std::string date = DateTime::DateNoSeparators();
-    const char * tcode = tc.TextNoSeparators();
-
-    // Set filename stems in RecordOptions.
-    for (std::vector<ThreadParam>::iterator
-        it = mThreadParams.begin(); it != mThreadParams.end(); ++it)
-    {
-        const char * src_name = (it->p_opt->quad ? QUAD_NAME : SOURCE_NAME[it->p_opt->channel_num]);
-        std::ostringstream ident;
-        ident << date << "_" << tcode << "_" << mName
-            << "_" << src_name
-            << "_" << it->p_opt->index;
-        it->p_opt->file_ident = ident.str();
-    }
+    } // for channel_i
 
 
     // Return
@@ -513,10 +466,23 @@ bool IngexRecorder::Start()
 }
 
 
-bool IngexRecorder::Stop( framecount_t & stop_timecode, framecount_t post_roll )
+bool IngexRecorder::Stop( framecount_t & stop_timecode,
+                framecount_t post_roll,
+                const char * project,
+                const char * description)
 {
     ACE_DEBUG((LM_DEBUG, ACE_TEXT("IngexRecorder::Stop(%C, %d)\n"),
         Timecode(stop_timecode).Text(), post_roll));
+
+    // Get ProjectName associated with supplied name.
+    prodauto::ProjectName project_name;
+    GetProjectFromDb(project, project_name);
+
+    // Store project name and recording description
+    mProjectName = project_name;
+    mUserComments.clear();
+    mUserComments.push_back(
+        prodauto::UserComment(AVID_UC_DESCRIPTION_NAME, description));
 
     // Really want to pass stop_timecode and post_roll to the record threads
     // or do some kind of "prepare_stop"
@@ -652,137 +618,37 @@ bool IngexRecorder::WriteMetadataFile(const char * meta_name)
 }
 #endif
 
-bool IngexRecorder::GetDbInfo(const std::vector<std::string> & tapes,
-                              const std::string & project, prodauto::ProjectName & project_name)
+bool IngexRecorder::GetProjectFromDb(const std::string & name, prodauto::ProjectName & project_name)
 {
-    // Note that we are assuming that Database::initialise() has already been called
-    // somewhere.
-    prodauto::Database * db;
-    bool db_ok = true;
+    // Note that we are assuming that Database::initialise() has already
+    // been called somewhere.
+
+    // Get ProjectName
+    bool result = false;
+    prodauto::Database * db = 0;
     try
     {
         db = prodauto::Database::getInstance();
+        if (db)
+        {
+            project_name = db->loadOrCreateProjectName(name);
+            result = true;
+        }
     }
-    catch(const prodauto::DBException & dbe)
+    catch (const prodauto::DBException & dbe)
     {
         ACE_DEBUG((LM_ERROR, ACE_TEXT("Database Exception: %C\n"), dbe.getMessage().c_str()));
-        db_ok = false;
     }
 
-    // Get ProjectName
-    if (db_ok)
-    {
-        try
-        {
-            project_name = db->loadOrCreateProjectName(project);
-        }
-        catch (const prodauto::DBException & dbe)
-        {
-            ACE_DEBUG((LM_ERROR, ACE_TEXT("Database Exception: %C\n"), dbe.getMessage().c_str()));
-        }
-    }
+    return result;
+}
 
-    // Get Recorder.
-    prodauto::Recorder * rec = 0;
-    if (db_ok)
-    {
-        try
-        {
-            rec = db->loadRecorder(mName);
-            ACE_DEBUG((LM_DEBUG, ACE_TEXT("Loaded Recorder \"%C\"\n"), rec->name.c_str()));
-        }
-        catch (const prodauto::DBException & dbe)
-        {
-            ACE_DEBUG((LM_ERROR, ACE_TEXT("Database Exception: %C\n"), dbe.getMessage().c_str()));
-            db_ok = false;
-        }
-    }
-    mRecorder.reset(rec);
+void IngexRecorder::GetMetadata(prodauto::ProjectName & project_name, std::vector<prodauto::UserComment> & user_comments)
+{
+    ACE_Guard<ACE_Thread_Mutex> guard(mMetadataMutex);
 
-    // Set the source packages
-    if (db_ok)
-    {
-        unsigned int n_channels = IngexShm::Instance()->Channels();
-
-        try
-        {
-            for (unsigned int i = 0; i < n_channels; ++i)
-            {
-                prodauto::RecorderConfig * rc = 0;
-                if (rec)
-                {
-                    rc = rec->getConfig();
-                }
-                prodauto::RecorderInputConfig * ric = 0;
-                if (rc)
-                {
-                    ric = rc->getInputConfig(i + 1);
-                }
-                prodauto::RecorderInputTrackConfig * ritc = 0;
-                if (ric)
-                {
-                    ritc = ric->trackConfigs[0]; // video track
-                }
-                prodauto::SourceConfig * sc = 0;
-                if (ritc)
-                {
-                    sc = ritc->sourceConfig;
-                }
-                if (sc)
-                {
-                    // Set name
-                    if (tapes.empty())
-                    {
-                    // Source package names based on source and date
-                        sc->setSessionSourcePackage();
-                    }
-                    else if (i < tapes.size() && !tapes[i].empty())
-                    {
-                    // Source package name is tape name
-                        sc->setSourcePackage(tapes[i]);
-                    }
-                    else
-                    {
-                        std::ostringstream ss;
-                        ss << "Unnamed" << i;
-                        sc->setSourcePackage(ss.str());
-                    }
-
-                    // Store name in shared memory
-                    //IngexShm::Instance()->SourceName(i, sc->getSourcePackage()->name);
-                    IngexShm::Instance()->SourceName(i, sc->name);
-                }
-            } // for
-        } // try
-        catch (const prodauto::DBException & dbe)
-        {
-            ACE_DEBUG((LM_ERROR, ACE_TEXT("Database Exception: %C\n"), dbe.getMessage().c_str()));
-            db_ok = false;
-        }
-    }
-
-#if 0
-    // For debug, have a look what's in the SourceSession
-    for (std::vector<prodauto::SourcePackage *>::const_iterator
-        it = source_session->sourcePackages.begin();
-        it != source_session->sourcePackages.end(); ++it)
-    {
-        ACE_DEBUG((LM_DEBUG, ACE_TEXT("SourcePackage name: %C, sourceConfigName: %C\n"),
-            (*it)->name.c_str(),
-            (*it)->sourceConfigName.c_str()));
-        // Now look at tracks
-        for (std::vector<prodauto::Track *>::const_iterator
-            track_it = (*it)->tracks.begin();
-            track_it != (*it)->tracks.end();
-            ++track_it)
-        {
-            ACE_DEBUG((LM_DEBUG, ACE_TEXT("  Track name: %C\n"), (*track_it)->name.c_str()));
-        }
-    }
-#endif
-
-
-    return db_ok;
+    project_name = mProjectName;
+    user_comments = mUserComments;
 }
 
 

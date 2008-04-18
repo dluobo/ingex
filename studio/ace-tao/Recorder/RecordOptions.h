@@ -1,5 +1,5 @@
 /*
- * $Id: RecordOptions.h,v 1.3 2008/02/06 16:58:59 john_f Exp $
+ * $Id: RecordOptions.h,v 1.4 2008/04/18 16:15:33 john_f Exp $
  *
  * Class for channel-specific (i.e. thread-specific) recording data.
  *
@@ -53,8 +53,6 @@ public:
     bool bitc; ///< True for burnt-in timecode
 
     std::string file_ident;
-    std::string description;
-    prodauto::ProjectName project; ///< Avid project name.
 
     framecount_t FramesWritten()
     {

@@ -1,5 +1,5 @@
 /*
- * $Id: IngexShm.cpp,v 1.3 2008/02/07 16:48:37 john_f Exp $
+ * $Id: IngexShm.cpp,v 1.4 2008/04/18 16:15:31 john_f Exp $
  *
  * Interface for reading audio/video data from shared memory.
  *
@@ -33,7 +33,7 @@
 IngexShm * IngexShm::mInstance = 0;
 
 IngexShm::IngexShm(void)
-: mChannels(0), mTcMode(VITC)
+: mChannels(0), mAudioTracksPerChannel(0), mTcMode(VITC)
 {
 }
 
@@ -80,6 +80,7 @@ int IngexShm::Init()
     // Shared memory found for control data, attach to it
     mpControl = (NexusControl *)ACE_OS::shmat(control_id, NULL, 0);
     mChannels = mpControl->channels;
+    mAudioTracksPerChannel = (mpControl->audio78_offset ? 8 : 4);
 
     ACE_DEBUG((LM_DEBUG,
         ACE_TEXT("Connected to p_control %@\n  channels=%d elementsize=%d ringlen=%d\n"),
@@ -125,8 +126,17 @@ void IngexShm::SourceName(unsigned int channel_i, const std::string & name)
 {
     if (channel_i < mChannels)
     {
+        // Set name
         strncpy( mpControl->channel[channel_i].source_name, name.c_str(),
             sizeof(mpControl->channel[channel_i].source_name));
+        // Signal the change
+#ifndef _MSC_VER
+        PTHREAD_MUTEX_LOCK(&mpControl->m_source_name_update)
+#endif
+        ++mpControl->source_name_update;
+#ifndef _MSC_VER
+        PTHREAD_MUTEX_UNLOCK(&mpControl->m_source_name_update)
+#endif
     }
 }
 

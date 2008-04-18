@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorderImpl.cpp,v 1.3 2008/02/06 16:58:59 john_f Exp $
+ * $Id: IngexRecorderImpl.cpp,v 1.4 2008/04/18 16:15:31 john_f Exp $
  *
  * Servant class for Recorder.
  *
@@ -46,16 +46,12 @@ void recording_completed(IngexRecorder * rec)
     // Test - keep recording in chunks
     const framecount_t chunk_size = 60 * 25; // 1 min
     framecount_t restart = rec->OutTime();
-    bool ok = rec->PrepareStart(restart, 0, false);
-    if (ok)
-    {
-        // make new out time a round figure
-        framecount_t out = restart + chunk_size;
-        out = (out / chunk_size) * chunk_size;
-        // set duration for this chunk
-        rec->TargetDuration(out - restart);
-        rec->Start();
-    }
+    // make new out time a round figure
+    framecount_t out = restart + chunk_size;
+    out = (out / chunk_size) * chunk_size;
+    // set duration for this chunk
+    rec->TargetDuration(out - restart);
+    rec->Start();
 #else
     // notify observers
     IngexRecorderImpl::Instance()->NotifyCompletion(rec);
@@ -66,8 +62,9 @@ void recording_completed(IngexRecorder * rec)
 }
 
 // Implementation skeleton constructor
+// Note that CopyManager mode is set here.
 IngexRecorderImpl::IngexRecorderImpl (void)
-: mRecording(false)//, mpDatabase(0)
+: mRecording(false), mCopyManager(CopyMode::NEW)
 {
     mInstance = this;
 }
@@ -86,11 +83,13 @@ bool IngexRecorderImpl::Init(std::string name, std::string db_user, std::string 
     }
 
     // Base class initialisation
-    // Each channel has 1 video and 4 audio tracks
+    // Each channel has 1 video and 4 or 8 audio tracks
     const unsigned int max_inputs = IngexShm::Instance()->Channels();
-    const unsigned int max_tracks_per_input = 5;
+    const unsigned int max_tracks_per_input = 1 + IngexShm::Instance()->AudioTracksPerChannel();
     RecorderImpl::Init(name, db_user, db_pw, max_inputs, max_tracks_per_input);
 
+    // Store video source names in shared memory
+    UpdateShmSourceNames();
 
     // Setup pre-roll
     mMaxPreRoll.undefined = false;
@@ -111,7 +110,9 @@ bool IngexRecorderImpl::Init(std::string name, std::string db_user, std::string 
     mMaxPostRoll.samples = 0;
 
     RecorderSettings * settings = RecorderSettings::Instance();
-    settings->Update(mName);
+    settings->Update(mRecorder.get());
+
+    mCopyManager.RecorderName(name);
 
     // Set timecode mode
     switch (settings->timecode_mode)
@@ -128,10 +129,7 @@ bool IngexRecorderImpl::Init(std::string name, std::string db_user, std::string 
     }
 
     // Start copy process
-    mCopyManager.Command(settings->copy_command);
-    ACE_DEBUG((LM_DEBUG, ACE_TEXT("Copy command: %C\n"),
-        settings->copy_command.c_str()));
-    mCopyManager.StartCopying();
+    this->StartCopying();
 
     char buf[256];
     if (ACE_OS::hostname(buf, 256) == 0)
@@ -193,6 +191,7 @@ char * IngexRecorderImpl::RecordingFormat (
                     ts.timecode.undefined = 1;
                     ts.timecode.samples = 0;
                 }
+                //ACE_DEBUG((LM_INFO, ACE_TEXT("Track %d: %C\n"), track_i, (ts.rec ? "recording" : "not recording")));
             }
         }
     }
@@ -206,9 +205,6 @@ char * IngexRecorderImpl::RecordingFormat (
     ::ProdAuto::MxfTimecode & start_timecode,
     const ::ProdAuto::MxfDuration & pre_roll,
     const ::CORBA::BooleanSeq & rec_enable,
-    const char * project,
-    const char * description,
-    const ::CORBA::StringSeq & tapes,
     ::CORBA::Boolean test_only
   )
   throw (
@@ -216,8 +212,9 @@ char * IngexRecorderImpl::RecordingFormat (
   )
 {
     Timecode start_tc(start_timecode.undefined ? 0 : start_timecode.samples);
-    ACE_DEBUG((LM_INFO, ACE_TEXT("IngexRecorderImpl::Start(), tc %C, time %C\n"),
-        start_tc.Text(), DateTime::Timecode().c_str()));
+    framecount_t pre = (pre_roll.undefined ? 0 : pre_roll.samples);
+    ACE_DEBUG((LM_INFO, ACE_TEXT("IngexRecorderImpl::Start(), tc %C, pre-roll %d, time %C\n"),
+        start_tc.Text(), pre, DateTime::Timecode().c_str()));
     //ACE_DEBUG((LM_DEBUG, ACE_TEXT("project \"%C\", description \"%C\"\n"), project, description));
 
     // Enforce start-stop-start sequence
@@ -238,58 +235,49 @@ char * IngexRecorderImpl::RecordingFormat (
     // in PrepareStart().
 
     // Translate enables to per-track and per-channel.
-    bool channel_enable[MAX_CHANNELS];
-    for (unsigned int channel_i = 0; channel_i < MAX_CHANNELS; ++channel_i)
+
+    std::vector<bool> channel_enables;
+    std::vector<bool> track_enables;
+    for (unsigned int channel_i = 0; channel_i < mMaxInputs; ++channel_i)
     {
         // Start with channel enables false.
-        channel_enable[channel_i] = false;
-    }
+        bool ce = false;
 
-    bool track_enable[MAX_CHANNELS * 5];
-    for (unsigned int channel_i = 0; channel_i < IngexShm::Instance()->Channels(); ++channel_i)
-    {
-        for (int j = 0; j < 5; ++j)
+        // Go through tracks
+        for (unsigned int j = 0; j < mMaxTracksPerInput; ++j)
         {
-            CORBA::ULong track_i = channel_i * 5 + j;
+            CORBA::ULong track_i = channel_i * mMaxTracksPerInput + j;
 
-            // Copy track enable into local bool array.
+            bool te = false;
             if (track_i < mTracks->length() && mTracks[track_i].has_source)
             {
-                track_enable[track_i] = rec_enable[track_i];
+                te = rec_enable[track_i];
+                ACE_DEBUG((LM_DEBUG, ACE_TEXT("Track %2d %C\n"),
+                    track_i, te ? "enabled" : "not enabled"));
             }
             else
             {
-                // If no source connected, disable track.
-                track_enable[track_i] = false;
+                // If no source connected, track is left disabled.
+                ACE_DEBUG((LM_DEBUG, ACE_TEXT("Track %2d not connected\n"),
+                    track_i));
             }
+            track_enables.push_back(te);
 
-            // Set channel enable.
-            if (track_enable[track_i])
+            if (te)
             {
-                // If one track enabled, set channel enable.
-                channel_enable[channel_i] = true;
+                // If one track enabled, enable channel.
+                ce = true;
             }
         }
+
+        // Set channel enable
+        channel_enables.push_back(ce);
     }
     // NB. We don't do anything about quad-split here, that is a
     // lower level matter.
 
-    // Tape names
-    if (tapes.length() != mVideoTrackCount)
-    {
-        ACE_DEBUG((LM_WARNING, ACE_TEXT("Wrong number of tape names: %d supplied, %d expected.\n"),
-            tapes.length(), mVideoTrackCount));
-    }
-    std::vector<std::string> tape_list;
-    for (CORBA::ULong i = 0; i < tapes.length(); ++i)
-    {
-        const char * s = tapes[i];
-        ACE_DEBUG((LM_DEBUG, ACE_TEXT("channel%d tapeid \"%C\"\n"), i, s));
-        tape_list.push_back(std::string(s));
-    }
-
     // Make a new IngexRecorder to manage this recording.
-    mpIngexRecorder = new IngexRecorder(mName);
+    mpIngexRecorder = new IngexRecorder(mRecorder.get());
 
     // Set-up callback for completion of recording
     mpIngexRecorder->SetCompletionCallback(&recording_completed);
@@ -298,7 +286,6 @@ char * IngexRecorderImpl::RecordingFormat (
     framecount_t start;
     bool crash;
     if (start_timecode.undefined)
-    //if (1)  // tmp force "start now"
     {
         start = 0;
         crash = true;
@@ -309,16 +296,10 @@ char * IngexRecorderImpl::RecordingFormat (
         crash = false;
     }
 
-    // Setup IngexRecorder
-    mpIngexRecorder->Setup(
-        channel_enable,
-        track_enable,
-        project,
-        description,
-        tape_list);
-
-    // Prepare start
-    bool ok = mpIngexRecorder->PrepareStart(
+    // Check for start timecode.
+    // This may modify the channel_enable array.
+    bool ok = mpIngexRecorder->CheckStartTimecode(
+        channel_enables,
         start,
         pre_roll.undefined ? 0 : pre_roll.samples,
         crash);
@@ -327,6 +308,12 @@ char * IngexRecorderImpl::RecordingFormat (
     start_timecode.undefined = false;
     start_timecode.edit_rate = EDIT_RATE;
     start_timecode.samples = start;
+
+    // Setup IngexRecorder
+    mpIngexRecorder->Setup(
+        start,
+        channel_enables,
+        track_enables);
 
     // Start
     if (!test_only)
@@ -366,13 +353,18 @@ char * IngexRecorderImpl::RecordingFormat (
 ::ProdAuto::Recorder::ReturnCode IngexRecorderImpl::Stop (
     ::ProdAuto::MxfTimecode & mxf_stop_timecode,
     const ::ProdAuto::MxfDuration & mxf_post_roll,
+    const char * project,
+    const char * description,
     ::CORBA::StringSeq_out files
   )
   throw (
     ::CORBA::SystemException
   )
 {
-    ACE_DEBUG((LM_INFO, ACE_TEXT("IngexRecorderImpl::Stop()\n")));
+    Timecode stop_tc(mxf_stop_timecode.undefined ? 0 : mxf_stop_timecode.samples);
+    framecount_t post = (mxf_post_roll.undefined ? 0 : mxf_post_roll.samples);
+    ACE_DEBUG((LM_INFO, ACE_TEXT("IngexRecorderImpl::Stop(), tc %C, post-roll %d, time %C\n"),
+        stop_tc.Text(), post, DateTime::Timecode().c_str()));
 
     // Translate parameters.
     framecount_t stop_timecode = (mxf_stop_timecode.undefined ? -1 : mxf_stop_timecode.samples);
@@ -384,12 +376,14 @@ char * IngexRecorderImpl::RecordingFormat (
 
     // Create out parameter
     files = new ::CORBA::StringSeq;
-    files->length(IngexShm::Instance()->Channels() * 5);
+    files->length(mTracks->length());
 
     // Tell recorder when to stop.
     if (mpIngexRecorder)
     {
-        mpIngexRecorder->Stop(stop_timecode, post_roll);
+        mpIngexRecorder->Stop(stop_timecode, post_roll,
+            project,
+            description);
 
         // Return the expected "out time"
         mxf_stop_timecode.undefined = false;
@@ -397,19 +391,15 @@ char * IngexRecorderImpl::RecordingFormat (
         mxf_stop_timecode.samples = stop_timecode;
 
         // Return the filenames
-        for (unsigned int channel_i = 0; channel_i < IngexShm::Instance()->Channels(); ++channel_i)
+        for (CORBA::ULong track_i = 0; track_i < mTracks->length(); ++track_i)
         {
-            //RecordOptions & opt = mpIngexRecorder->record_opt[channel_i];
-            for (unsigned int j = 0; j < 5; ++j)
+            std::string name = mpIngexRecorder->mFileNames[track_i];
+            if (!name.empty())
             {
-                CORBA::ULong track_i = channel_i * 5 + j;
-                std::string name = mpIngexRecorder->mFileNames[track_i];
-                if (!name.empty())
-                {
-                    name = "/" + mHostname + name;
-                }
-                files->operator[](track_i) = name.c_str();
+                name = "/" + mHostname + name;
             }
+            ACE_DEBUG((LM_DEBUG, ACE_TEXT("Track %d \"%C\"\n"), track_i, name.c_str()));
+            files->operator[](track_i) = name.c_str();
         }
     }
     mpIngexRecorder = 0;  // It will be deleted when it signals completion
@@ -434,7 +424,7 @@ void IngexRecorderImpl::DoStop(framecount_t timecode, framecount_t post_roll)
     // Tell recorder when to stop.
     if (mpIngexRecorder)
     {
-        mpIngexRecorder->Stop(timecode, post_roll);
+        mpIngexRecorder->Stop(timecode, post_roll, "Ingex", "recording halted");
     }
     mpIngexRecorder = 0;  // It will be deleted when it signals completion
 
@@ -453,22 +443,80 @@ void IngexRecorderImpl::NotifyCompletion(IngexRecorder * rec)
 
     ProdAuto::StatusItem status;
     status.name = CORBA::string_dup("recording");
-    if (rec->mRecordingOK)
+    if (!rec->mRecordingOK)
     {
-        status.value = CORBA::string_dup("completed");
+        ACE_DEBUG((LM_ERROR, ACE_TEXT("Recording failed!\n")));
+        status.value = CORBA::string_dup("failed");
+    }
+    else if (rec->DroppedFrames())
+    {
+        ACE_DEBUG((LM_ERROR, ACE_TEXT("Recording dropped frames!\n")));
+        status.value = CORBA::string_dup("dropped frames");
     }
     else
     {
-        status.value = CORBA::string_dup("failed");
+        status.value = CORBA::string_dup("completed");
     }
 
     mStatusDist.SendStatus(status);
 
+    this->StartCopying();
+}
+
+void IngexRecorderImpl::StartCopying()
+{
     mCopyManager.Command(RecorderSettings::Instance()->copy_command);
+    mCopyManager.ClearSrcDest();
+    std::vector<EncodeParams> & encodings = RecorderSettings::Instance()->encodings;
+    for (std::vector<EncodeParams>::const_iterator it = encodings.begin(); it != encodings.end(); ++it)
+    {
+        mCopyManager.AddSrcDest(it->dir, it->dest);
+    }
+
     mCopyManager.StartCopying();
 }
 
+void IngexRecorderImpl::UpdateShmSourceNames()
+{
+    try
+    {
+        prodauto::RecorderConfig * rc = 0;
+        if (mRecorder.get() && mRecorder->hasConfig())
+        {
+            rc = mRecorder->getConfig();
+        }
+        if (rc)
+        {
+            const unsigned int n_inputs = ACE_MIN((unsigned int)rc->recorderInputConfigs.size(), mMaxInputs);
 
+            for (unsigned int i = 0; i < n_inputs; ++i)
+            {
+                prodauto::RecorderInputConfig * ric = rc->getInputConfig(i + 1);
+
+                prodauto::RecorderInputTrackConfig * ritc = 0;
+                if (ric)
+                {
+                    ritc = ric->trackConfigs[0]; // video track
+                }
+                prodauto::SourceConfig * sc = 0;
+                if (ritc)
+                {
+                    sc = ritc->sourceConfig;
+                }
+                if (sc)
+                {
+                    // Store name in shared memory
+                    //IngexShm::Instance()->SourceName(i, sc->getSourcePackage()->name);
+                    IngexShm::Instance()->SourceName(i, sc->name);
+                }
+            } // for
+        }
+    } // try
+    catch (const prodauto::DBException & dbe)
+    {
+        ACE_DEBUG((LM_ERROR, ACE_TEXT("Database Exception: %C\n"), dbe.getMessage().c_str()));
+    }
+}
 
 
 

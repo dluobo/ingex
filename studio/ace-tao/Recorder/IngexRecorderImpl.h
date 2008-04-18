@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorderImpl.h,v 1.1 2007/09/11 14:08:30 stuart_hc Exp $
+ * $Id: IngexRecorderImpl.h,v 1.2 2008/04/18 16:15:31 john_f Exp $
  *
  * Servant class for Recorder.
  *
@@ -76,9 +76,6 @@ public:
       ::ProdAuto::MxfTimecode & start_timecode,
       const ::ProdAuto::MxfDuration & pre_roll,
       const ::CORBA::BooleanSeq & rec_enable,
-      const char * project,
-      const char * description,
-      const ::CORBA::StringSeq & tapes,
       ::CORBA::Boolean test_only
    )
     throw (
@@ -89,6 +86,8 @@ public:
   ::ProdAuto::Recorder::ReturnCode Stop (
       ::ProdAuto::MxfTimecode & stop_timecode,
       const ::ProdAuto::MxfDuration & post_roll,
+      const char * project,
+      const char * description,
       ::CORBA::StringSeq_out files
     )
     throw (
@@ -100,6 +99,8 @@ public:
 private:
 // methods
 	void DoStop(framecount_t timecode, framecount_t post_roll);
+    void UpdateShmSourceNames();
+    void StartCopying();
 // data
 	bool mRecording;
 	IngexRecorder * mpIngexRecorder;

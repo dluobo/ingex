@@ -1,5 +1,5 @@
 /*
- * $Id: IngexShm.h,v 1.3 2008/02/06 16:58:59 john_f Exp $
+ * $Id: IngexShm.h,v 1.4 2008/04/18 16:15:32 john_f Exp $
  *
  * Interface for reading audio/video data from shared memory.
  *
@@ -53,6 +53,7 @@ public:
     ~IngexShm(void);
     int Init();
     unsigned int Channels() { return mChannels; }
+    unsigned int AudioTracksPerChannel() { return mAudioTracksPerChannel; }
     int RingLength() { if (mpControl) return mpControl->ringlen; else return 0; }
     int LastFrame(unsigned int channel_i)
     {
@@ -100,7 +101,7 @@ public:
         uint8_t * p_ok = mRing[channel]
             + mpControl->elementsize * (LastFrame(channel) % mpControl->ringlen)
             + mpControl->signal_ok_offset;
-        return * (int32_t *) p_ok;
+        return 0 != * (int32_t *) p_ok;
     }
 
     unsigned int Width() { return mpControl->width; }
@@ -131,6 +132,20 @@ public:
         return  (int32_t *)
             (mRing[channel] + mpControl->elementsize * (frame % mpControl->ringlen)
             + mpControl->audio34_offset);
+    }
+
+    int32_t * pAudio56(unsigned int channel, unsigned int frame)
+    {
+        return (int32_t *)
+            (mRing[channel] + mpControl->elementsize * (frame % mpControl->ringlen)
+            + mpControl->audio56_offset);
+    }
+
+    int32_t * pAudio78(unsigned int channel, unsigned int frame)
+    {
+        return  (int32_t *)
+            (mRing[channel] + mpControl->elementsize * (frame % mpControl->ringlen)
+            + mpControl->audio78_offset);
     }
 
     CaptureFormat PrimaryCaptureFormat()
@@ -167,6 +182,7 @@ protected:
 
 private:
     unsigned int mChannels;
+    unsigned int mAudioTracksPerChannel;
     uint8_t * mRing[MAX_CHANNELS];
     NexusControl * mpControl;
     TcEnum mTcMode;
