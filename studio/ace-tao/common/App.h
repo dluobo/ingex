@@ -1,5 +1,5 @@
 /*
- * $Id: App.h,v 1.1 2007/09/11 14:08:32 stuart_hc Exp $
+ * $Id: App.h,v 1.2 2008/04/18 16:03:26 john_f Exp $
  *
  * Base class for application control.
  *
@@ -33,6 +33,8 @@ public:
     virtual void Run() = 0;
     virtual void Clean() = 0;
     virtual void Stop() = 0;
+
+    virtual ~App() {}
 };
 
 #endif //#ifndef App_h

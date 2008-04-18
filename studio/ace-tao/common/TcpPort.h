@@ -1,9 +1,9 @@
 /*
- * $Id: TimecodeReader.h,v 1.2 2008/04/18 16:03:31 john_f Exp $
+ * $Id: TcpPort.h,v 1.1 2008/04/18 16:03:31 john_f Exp $
  *
- * Abstract base for a timecode reader.
+ * Communicate with remote TCP port.
  *
- * Copyright (C) 2007  British Broadcasting Corporation.
+ * Copyright (C) 2008  British Broadcasting Corporation.
  * All Rights Reserved.
  *
  * This program is free software; you can redistribute it and/or
@@ -22,18 +22,26 @@
  * 02110-1301, USA.
  */
 
-#ifndef TimecodeReader_h
-#define TimecodeReader_h
+#ifndef TcpPort_h
+#define TcpPort_h
 
-#include <string>
+#include "CommunicationPort.h"
 
-class TimecodeReader
+#include <ace/SOCK_Connector.h>
+#include <ace/SOCK_Stream.h>
+
+
+class TcpPort : public CommunicationPort
 {
 public:
-    virtual std::string Timecode() = 0;
+    bool Connect(const std::string &);
+    int Send(const void * buf, size_t n, const ACE_Time_Value * timeout = 0);
+    int Recv(void * buf, size_t n, const ACE_Time_Value * timeout=0);
 
-    virtual ~TimecodeReader() {}
+    ~TcpPort();
+private:
+    ACE_SOCK_Connector mConnector;
+    ACE_SOCK_Stream mStream;
 };
 
-#endif //#ifndef TimecodeReader_h
-
+#endif //#ifndef TcpPort_h

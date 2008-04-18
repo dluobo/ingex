@@ -1,5 +1,5 @@
 /*
- * $Id: Recorder.idl,v 1.1 2007/09/11 14:08:21 stuart_hc Exp $
+ * $Id: Recorder.idl,v 1.2 2008/04/18 16:07:57 john_f Exp $
  *
  * Interface for Recorder.
  *
@@ -71,7 +71,14 @@ module ProdAuto
         /// Status of inputs
         readonly attribute TrackStatusList TracksStatus;
 
-        //ReturnCode SetSources(in SourceList sources);
+        /// List available recorder configs
+        readonly attribute CORBA::StringSeq Configs;
+
+        /// Current config
+        readonly attribute string CurrentConfig;
+
+        /// Select recorder config
+        boolean SelectConfig(in string config);
 
 
         /// Maximum pre-roll available before StartRecord received
@@ -86,17 +93,12 @@ module ProdAuto
         /// @param pre_roll Duration to be included at start of recording prior to start_timecode.
         /// @param rec_enable Enable for required recording tracks. Sequence should
         /// have one element for each track.
-        /// @param project A label to be used when grouping recordings - e.g. the project name.
-        /// @param description Information about this particular recording.
-        /// @param tapes Tape numbers, one per video track.
+        /// @param test_only If true, test ability to record but don't actually record.
         /// @return Indication of success or failure.
         ReturnCode Start(
             inout MxfTimecode start_timecode,
             in MxfDuration pre_roll,
             in CORBA::BooleanSeq rec_enable,
-            in string project,
-            in string description,
-            in CORBA::StringSeq tapes,
             in boolean test_only
         );
 
@@ -107,15 +109,23 @@ module ProdAuto
         /// the last frame present in the recording.
         /// If timecode has invalid flag set, the meaning is "now".
         /// @param post_roll Duration to be included at end of recording.
+        /// @param project A label to be used when grouping recordings - e.g. the project name.
+        /// @param description Information about this particular recording.
         /// @param files One filename per track.  Where multiple tracks are recorded in
         /// one file, the filename is repeated for each track.
         /// @return Indication of success or failure.
         ReturnCode Stop(
             inout MxfTimecode stop_timecode,
             in MxfDuration post_roll,
+            in string project,
+            in string description,
             //out StringList files
             out CORBA::StringSeq files           
         );
+
+        /// Set tape names corresponding to source package names of recorder tracks.
+        /// The two sequences should be the same length.
+        void SetTapeNames(in CORBA::StringSeq source_names, in CORBA::StringSeq tape_names);
 
         /// Instruct the recorder to re-read its configuration data.
         void UpdateConfig();

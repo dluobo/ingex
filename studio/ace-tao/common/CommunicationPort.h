@@ -1,9 +1,9 @@
 /*
- * $Id: TimecodeReader.h,v 1.2 2008/04/18 16:03:31 john_f Exp $
+ * $Id: CommunicationPort.h,v 1.1 2008/04/18 16:03:27 john_f Exp $
  *
- * Abstract base for a timecode reader.
+ * Abstract base for communication port.
  *
- * Copyright (C) 2007  British Broadcasting Corporation.
+ * Copyright (C) 2008  British Broadcasting Corporation.
  * All Rights Reserved.
  *
  * This program is free software; you can redistribute it and/or
@@ -22,18 +22,20 @@
  * 02110-1301, USA.
  */
 
-#ifndef TimecodeReader_h
-#define TimecodeReader_h
+#ifndef CommunicationPort_h
+#define CommunicationPort_h
 
 #include <string>
+#include "ace/Time_Value.h"
 
-class TimecodeReader
+class CommunicationPort
 {
 public:
-    virtual std::string Timecode() = 0;
+    virtual bool Connect(const std::string &) = 0;
+    virtual int Send(const void * buf, size_t n, const ACE_Time_Value * timeout = 0) = 0;
+    virtual int Recv(void * buf, size_t n, const ACE_Time_Value * timeout = 0) = 0;
 
-    virtual ~TimecodeReader() {}
+    virtual ~CommunicationPort() {}
 };
 
-#endif //#ifndef TimecodeReader_h
-
+#endif //#ifndef CommunicationPort_h

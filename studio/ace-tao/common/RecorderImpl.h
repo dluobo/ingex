@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderImpl.h,v 1.1 2007/09/11 14:08:33 stuart_hc Exp $
+ * $Id: RecorderImpl.h,v 1.2 2008/04/18 16:03:28 john_f Exp $
  *
  * Base class for Recorder servant.
  *
@@ -28,8 +28,8 @@
 #include <vector>
 #include <string>
 
+#include "Database.h"  // For Recorder
 #include "RecorderS.h"
-
 #include "DataSourceImpl.h"
 
 const ProdAuto::Rational EDIT_RATE = { 25, 1 };
@@ -96,6 +96,39 @@ public:
     );
   
   virtual
+  ::CORBA::StringSeq * Configs (
+      void
+    )
+    throw (
+      ::CORBA::SystemException
+    );
+  
+  virtual
+  char * CurrentConfig (
+      void
+    )
+    throw (
+      ::CORBA::SystemException
+    );
+  
+  virtual
+  ::CORBA::Boolean SelectConfig (
+      const char * config
+    )
+    throw (
+      ::CORBA::SystemException
+    );
+  
+  virtual
+  void SetTapeNames (
+      const ::CORBA::StringSeq & source_names,
+      const ::CORBA::StringSeq & tape_names
+    )
+    throw (
+      ::CORBA::SystemException
+    );
+  
+  virtual
   void UpdateConfig (
       
     )
@@ -104,18 +137,20 @@ public:
     );
   
 protected:
-	std::string mName;
-	ProdAuto::MxfDuration mMaxPreRoll;
-	ProdAuto::MxfDuration mMaxPostRoll;
+    ProdAuto::MxfDuration mMaxPreRoll;
+    ProdAuto::MxfDuration mMaxPostRoll;
     unsigned int mMaxInputs;
-	unsigned int mMaxTracksPerInput;
+    unsigned int mMaxTracksPerInput;
     unsigned int mVideoTrackCount;
-	ProdAuto::TrackList_var mTracks;
-	ProdAuto::TrackStatusList_var mTracksStatus;
+    ProdAuto::TrackList_var mTracks;
+    ProdAuto::TrackStatusList_var mTracksStatus;
+    std::string mName;
+    std::string mFormat;
+    std::auto_ptr<prodauto::Recorder> mRecorder;
 
 private:
 // methods
-	void UpdateSources();
+    void UpdateSources();
 };
 
 

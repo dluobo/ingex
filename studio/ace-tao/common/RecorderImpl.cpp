@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderImpl.cpp,v 1.1 2007/09/11 14:08:33 stuart_hc Exp $
+ * $Id: RecorderImpl.cpp,v 1.2 2008/04/18 16:03:28 john_f Exp $
  *
  * Base class for Recorder servant.
  *
@@ -26,6 +26,8 @@
 #include <ace/Min_Max.h>
 
 #include <sstream>
+#include <map>
+#include <string>
 
 #include <Database.h>
 #include <DBException.h>
@@ -36,7 +38,7 @@
 
 // Implementation skeleton constructor
 RecorderImpl::RecorderImpl (void)
-: mMaxInputs(0), mMaxTracksPerInput(0), mVideoTrackCount(0)
+: mMaxInputs(0), mMaxTracksPerInput(0), mVideoTrackCount(0), mFormat("Ingex recorder")
 {
     mTracks = new ProdAuto::TrackList;
     mTracksStatus = new ProdAuto::TrackStatusList;
@@ -46,8 +48,8 @@ RecorderImpl::RecorderImpl (void)
 bool RecorderImpl::Init(std::string name, std::string db_user, std::string db_pw,
                         unsigned int max_inputs, unsigned int max_tracks_per_input)
 {
-	ACE_DEBUG((LM_DEBUG, ACE_TEXT("RecorderImpl::Init(%C, %C, %C)\n"),
-	    name.c_str(), db_user.c_str(), db_pw.c_str()));
+    ACE_DEBUG((LM_DEBUG, ACE_TEXT("RecorderImpl::Init(%C, %C, %C)\n"),
+        name.c_str(), db_user.c_str(), db_pw.c_str()));
 
     // Save name
     mName = name;
@@ -68,6 +70,31 @@ bool RecorderImpl::Init(std::string name, std::string db_user, std::string db_pw
         ACE_DEBUG((LM_ERROR, ACE_TEXT("Database init failed!\n")));
         ok_so_far = false;
     }
+
+    prodauto::Database * db = 0;
+    try
+    {
+        db = prodauto::Database::getInstance();
+    }
+    catch (const prodauto::DBException & dbe)
+    {
+        ACE_DEBUG((LM_ERROR, ACE_TEXT("Database Exception: %C\n"), dbe.getMessage().c_str()));
+        ok_so_far = false;
+    }
+
+    prodauto::Recorder * rec = 0;
+    if (db)
+    {
+        try
+        {
+            rec = db->loadRecorder(name);
+        }
+        catch(const prodauto::DBException & dbe)
+        {
+            ACE_DEBUG((LM_ERROR, ACE_TEXT("Database Exception: %C\n"), dbe.getMessage().c_str()));
+        }
+    }
+    mRecorder.reset(rec);
 
     // Recorder track sources
     UpdateSources();
@@ -109,7 +136,7 @@ char * RecorderImpl::RecordingFormat (
   )
 {
   // Add your implementation here
-    return CORBA::string_dup("Ingex recorder");
+    return CORBA::string_dup(mFormat.c_str());
 }
 
 ::ProdAuto::Rational RecorderImpl::EditRate (
@@ -138,6 +165,239 @@ char * RecorderImpl::RecordingFormat (
     return tracks._retn();
 }
 
+::CORBA::StringSeq * RecorderImpl::Configs (
+    void
+  )
+  ACE_THROW_SPEC ((
+    ::CORBA::SystemException
+  ))
+{
+    CORBA::StringSeq_var config_list = new CORBA::StringSeq;
+
+    prodauto::Database * db = 0;
+    try
+    {
+        db = prodauto::Database::getInstance();
+    }
+    catch (const prodauto::DBException & dbe)
+    {
+        ACE_DEBUG((LM_ERROR, ACE_TEXT("Database Exception: %C\n"), dbe.getMessage().c_str()));
+    }
+
+    prodauto::Recorder * rec = 0;
+    if (db)
+    {
+        try
+        {
+            rec = db->loadRecorder(mName);
+        }
+        catch (const prodauto::DBException & dbe)
+        {
+            ACE_DEBUG((LM_ERROR, ACE_TEXT("Database Exception: %C\n"), dbe.getMessage().c_str()));
+        }
+    }
+    std::auto_ptr<prodauto::Recorder> recorder(rec); // so it gets deleted
+
+    if (rec)
+    {
+        try
+        {
+            std::vector<prodauto::RecorderConfig *> & configs = rec->getAllConfigs();
+            unsigned int n_configs = configs.size();
+            config_list->length(n_configs);
+            for (unsigned int i = 0; i < n_configs; ++i)
+            {
+                config_list->operator[](i) = CORBA::string_dup(configs[i]->name.c_str());
+            }
+              
+        }
+        catch (const prodauto::DBException & dbe)
+        {
+            ACE_DEBUG((LM_ERROR, ACE_TEXT("Database Exception: %C\n"), dbe.getMessage().c_str()));
+        }
+    }
+
+    return config_list._retn();
+}
+
+char * RecorderImpl::CurrentConfig (
+    void
+  )
+  ACE_THROW_SPEC ((
+    ::CORBA::SystemException
+  ))
+{
+    std::string config_name;
+    prodauto::Database * db = 0;
+    try
+    {
+        db = prodauto::Database::getInstance();
+    }
+    catch (const prodauto::DBException & dbe)
+    {
+        ACE_DEBUG((LM_ERROR, ACE_TEXT("Database Exception: %C\n"), dbe.getMessage().c_str()));
+    }
+
+    prodauto::Recorder * rec = 0;
+    if (db)
+    {
+        try
+        {
+            rec = db->loadRecorder(mName);
+        }
+        catch (const prodauto::DBException & dbe)
+        {
+            ACE_DEBUG((LM_ERROR, ACE_TEXT("Database Exception: %C\n"), dbe.getMessage().c_str()));
+        }
+    }
+    std::auto_ptr<prodauto::Recorder> recorder(rec); // so it gets deleted
+
+    if (rec)
+    {
+        try
+        {
+            prodauto::RecorderConfig * rc = rec->getConfig();
+            if (rc)
+            {
+                config_name = rc->name;
+            }
+        }
+        catch (const prodauto::DBException & dbe)
+        {
+            ACE_DEBUG((LM_ERROR, ACE_TEXT("Database Exception: %C\n"), dbe.getMessage().c_str()));
+        }
+    }
+
+    return CORBA::string_dup(config_name.c_str());
+}
+
+::CORBA::Boolean RecorderImpl::SelectConfig (
+    const char * config
+  )
+  ACE_THROW_SPEC ((
+    ::CORBA::SystemException
+  ))
+{
+    prodauto::Database * db = 0;
+    try
+    {
+        db = prodauto::Database::getInstance();
+    }
+    catch (const prodauto::DBException & dbe)
+    {
+        ACE_DEBUG((LM_ERROR, ACE_TEXT("Database Exception: %C\n"), dbe.getMessage().c_str()));
+    }
+
+    prodauto::Recorder * rec = 0;
+    if (db)
+    {
+        try
+        {
+            rec = db->loadRecorder(mName);
+        }
+        catch (const prodauto::DBException & dbe)
+        {
+            ACE_DEBUG((LM_ERROR, ACE_TEXT("Database Exception: %C\n"), dbe.getMessage().c_str()));
+        }
+    }
+    std::auto_ptr<prodauto::Recorder> recorder(rec); // so it gets deleted
+
+    bool found = false;
+    if (rec)
+    {
+        try
+        {
+            std::vector<prodauto::RecorderConfig *> & configs = rec->getAllConfigs();
+            for (std::vector<prodauto::RecorderConfig *>::const_iterator it = configs.begin();
+                !found && it != configs.end(); ++it)
+            {
+                if (ACE_OS::strcmp((*it)->name.c_str(), config) == 0)
+                {
+                    rec->setConfig(*it);
+                    found = true;
+                }
+            }
+              
+        }
+        catch (const prodauto::DBException & dbe)
+        {
+            ACE_DEBUG((LM_ERROR, ACE_TEXT("Database Exception: %C\n"), dbe.getMessage().c_str()));
+        }
+    }
+
+    return (found ? 1 : 0);
+}
+
+void RecorderImpl::SetTapeNames (
+    const ::CORBA::StringSeq & source_names,
+    const ::CORBA::StringSeq & tape_names
+  )
+  throw (
+    ::CORBA::SystemException
+  )
+{
+    ACE_DEBUG((LM_DEBUG, ACE_TEXT("RecorderImpl::SetTapeNames()\n")));
+
+    // Make a map of tape names with source package name as key
+    std::map<std::string, std::string> tape_map;
+    for (CORBA::ULong i = 0; i < source_names.length() && i < tape_names.length(); ++i)
+    {
+        tape_map[(const char *)source_names[i]] = (const char *)tape_names[i];
+        ACE_DEBUG((LM_DEBUG, ACE_TEXT("Source \"%C\"  Tape \"%C\"\n"),
+            (const char *)source_names[i],  (const char *)tape_names[i]));
+    }
+
+    try
+    {
+        prodauto::Recorder * rec = mRecorder.get();
+
+        prodauto::RecorderConfig * rc = 0;
+        if (rec && rec->hasConfig())
+        {
+            rc = rec->getConfig();
+        }
+
+        if (rc)
+        {
+            // Go through inputs
+            for (unsigned int i = 0; i < rc->recorderInputConfigs.size(); ++i)
+            {
+                prodauto::RecorderInputConfig * ric = rc->getInputConfig(i + 1);
+
+                // Go through tracks
+                for (unsigned int j = 0; ric && j < ric->trackConfigs.size(); ++j)
+                {
+                    prodauto::RecorderInputTrackConfig * ritc = 0;
+                    if (ric)
+                    {
+                        ritc = ric->trackConfigs[j];
+                    }
+
+                    // SourceConfig for the track
+                    prodauto::SourceConfig * sc = 0;
+                    if (ritc)
+                    {
+                        sc = ritc->sourceConfig;
+                    }
+
+                    if (sc)
+                    {
+                        ACE_DEBUG((LM_DEBUG, ACE_TEXT("Input %d, track %d, source package name \"%C\"\n"),
+                        i, j, sc->name.c_str()));
+                        // Source package name is sc->name
+                        // Use map of tape names with source package name as key
+                        sc->setSourcePackage(tape_map[sc->name]);
+                    }
+                } // tracks
+            } // inputs
+       }
+    }
+    catch (const prodauto::DBException & dbe)
+    {
+        ACE_DEBUG((LM_ERROR, ACE_TEXT("Database Exception: %C\n"), dbe.getMessage().c_str()));
+    }
+}
+
 /**
 Means of externally forcing a re-reading of config from database.
 */
@@ -160,45 +420,19 @@ Update source information from database
 */
 void RecorderImpl::UpdateSources()
 {
-    prodauto::Database * db;
-    bool db_ok = true;
-    try
-    {
-        db = prodauto::Database::getInstance();
-    }
-    catch(const prodauto::DBException & dbe)
-    {
-        ACE_DEBUG((LM_ERROR, ACE_TEXT("Database Exception: %C\n"), dbe.getMessage().c_str()));
-        db_ok = false;
-    }
-
-    prodauto::Recorder * rec = 0;
-    if (db_ok)
-    {
-        try
-        {
-            rec = db->loadRecorder(mName);
-        }
-        catch(const prodauto::DBException & dbe)
-        {
-            ACE_DEBUG((LM_ERROR, ACE_TEXT("Database Exception: %C\n"), dbe.getMessage().c_str()));
-            db_ok = false;
-        }
-    }
-    std::auto_ptr<prodauto::Recorder> recorder(rec); // so it gets deleted
-
     prodauto::RecorderConfig * rc = 0;
-    if (rec && rec->hasConfig())
+    if (mRecorder.get() && mRecorder->hasConfig())
     {
-        rc = rec->getConfig();
-        ACE_DEBUG((LM_DEBUG, ACE_TEXT("Loaded Recorder \"%C\", Config \"%C\"\n"),
-            rec->name.c_str(), rc->name.c_str()));
+        rc = mRecorder->getConfig();
     }
 
     // Now we have RecorderConfig, we can set the source track names
-    if (db_ok && rc)
+    if (rc)
     {
-        const unsigned int n_inputs = ACE_MIN(rc->recorderInputConfigs.size(), mMaxInputs);
+        ACE_DEBUG((LM_INFO, ACE_TEXT("UpdateSources() loaded config \"%C\" of recorder \"%C\".\n"),
+            rc->name.c_str(), mRecorder->name.c_str()));
+
+        const unsigned int n_inputs = ACE_MIN((unsigned int)rc->recorderInputConfigs.size(), mMaxInputs);
         CORBA::ULong track_i = 0;
         unsigned int n_video_tracks = 0;
         for (unsigned int i = 0; i < n_inputs; ++i)
@@ -212,7 +446,7 @@ void RecorderImpl::UpdateSources()
             for (unsigned int j = 0; j < n_tracks; ++j)
             {
                 prodauto::RecorderInputTrackConfig * ritc = 0;
-                if (ric)
+                if (ric && j < ric->trackConfigs.size())
                 {
                     ritc = ric->trackConfigs[j];
                 }
@@ -228,7 +462,7 @@ void RecorderImpl::UpdateSources()
                 }
 
                 mTracks->length(track_i + 1);
-		        ProdAuto::Track & track = mTracks[track_i];
+                ProdAuto::Track & track = mTracks[track_i];
 
                 // Assuming first track of an input is video, others audio.
                 std::ostringstream s;
@@ -249,35 +483,41 @@ void RecorderImpl::UpdateSources()
 
                 if (sc && stc)
                 {
-		            track.has_source = 1;
-		            track.src.package_name = CORBA::string_dup(sc->name.c_str());
-		            track.src.track_name = CORBA::string_dup(stc->name.c_str());
+                    track.has_source = 1;
+                    track.src.package_name = CORBA::string_dup(sc->name.c_str());
+                    track.src.track_name = CORBA::string_dup(stc->name.c_str());
                 }
-		        else
-		        {
-		            // No connection to this input
-		            track.has_source = 0;
-		            track.src.package_name = CORBA::string_dup("zz No Connection");
-		            track.src.track_name = CORBA::string_dup("");
-		        }
+                else
+                {
+                    // No connection to this input
+                    track.has_source = 0;
+                    track.src.package_name = CORBA::string_dup("zz No Connection");
+                    track.src.track_name = CORBA::string_dup("");
+                }
 
                 ++track_i;
             } // tracks
         } // inputs
         mVideoTrackCount = n_video_tracks;
     }
-
-    // Initialise tracks status, details will be filled out
-    // whenever client requests it.
-    mTracksStatus->length(mTracks->length());
-
-    for (unsigned int i = 0; i < mTracksStatus->length(); ++i)
+    else
     {
-        ProdAuto::TrackStatus & ts = mTracksStatus->operator[](i);
-        ts.rec = 0;
-        ts.signal_present = 0;
-        ts.timecode.undefined = true;
-        ts.timecode.edit_rate = EDIT_RATE;
+        ACE_DEBUG((LM_ERROR, ACE_TEXT("UpdateSources() failed to load recorder config!\n")));
+    }
+
+    // Re-initialise tracks status, if necessary.
+    if (mTracksStatus->length() != mTracks->length())
+    {
+        mTracksStatus->length(mTracks->length());
+
+        for (unsigned int i = 0; i < mTracksStatus->length(); ++i)
+        {
+            ProdAuto::TrackStatus & ts = mTracksStatus->operator[](i);
+            ts.rec = 0;
+            ts.signal_present = 0;
+            ts.timecode.undefined = true;
+            ts.timecode.edit_rate = EDIT_RATE;
+        }
     }
 }
 

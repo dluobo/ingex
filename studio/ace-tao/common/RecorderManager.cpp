@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderManager.cpp,v 1.1 2007/09/11 14:08:33 stuart_hc Exp $
+ * $Id: RecorderManager.cpp,v 1.2 2008/04/18 16:03:29 john_f Exp $
  *
  * Wrapper for ProdAuto::Recorder.
  *
@@ -137,7 +137,7 @@ void RecorderManager::Start(const std::string & project)
 
         try
         {
-            mRecorder->Start(start_tc, pre_roll, rec_enable, project.c_str(), "", tapes, false);
+            mRecorder->Start(start_tc, pre_roll, rec_enable, false);
             ACE_DEBUG((LM_DEBUG, ACE_TEXT("Start command sent.\n")));
         }
         catch (const CORBA::Exception & e)
@@ -167,7 +167,7 @@ void RecorderManager::Stop()
 
         try
         {
-            mRecorder->Stop(stop_tc, post_roll, files.out());
+            mRecorder->Stop(stop_tc, post_roll, "Test Project", "", files.out());
             ACE_DEBUG((LM_DEBUG, ACE_TEXT("Stop command sent.\n")));
         }
         catch(const CORBA::Exception & e)

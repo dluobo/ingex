@@ -1,5 +1,5 @@
 /*
- * $Id: Timecode.h,v 1.1 2007/09/11 14:08:34 stuart_hc Exp $
+ * $Id: Timecode.h,v 1.2 2008/04/18 16:03:31 john_f Exp $
  *
  * Class to hold a Timecode
  *
@@ -36,9 +36,10 @@ public:
     const char * Text() const { return mText; }
 private:
 // fundamental data
+    int mFrameCount;
     int mFramesPerSecond;
     bool mDropFrame;
-    int mFrameCount;
+
 // derived data
     int mHours;
     int mMinutes;
@@ -84,10 +85,9 @@ public:
 
 private:
 // fundamental data
-    //Mode mMode;
+    int mFramesSinceMidnight;
     int mFramesPerSecond;
     bool mDropFrame;
-    int mFramesSinceMidnight;
 
 // derived data
     int mHours;

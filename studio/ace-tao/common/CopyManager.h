@@ -1,5 +1,5 @@
 /*
- * $Id: CopyManager.h,v 1.1 2007/09/11 14:08:32 stuart_hc Exp $
+ * $Id: CopyManager.h,v 1.2 2008/04/18 16:03:28 john_f Exp $
  *
  * Class to manage file copying in a separate process.
  *
@@ -27,21 +27,36 @@
 
 #include <ace/Process_Manager.h>
 #include <string>
+//#include <vector>
+//#include <utility>
 
+namespace CopyMode
+{
+    enum EnumType { OLD, NEW };
+}
 
 class CopyManager
 {
 public:
-    CopyManager();
+    CopyManager(CopyMode::EnumType mode = CopyMode::OLD);
     void Command(const std::string & command);
+    void RecorderName(const std::string & s);
+    void ClearSrcDest();
+    void AddSrcDest(const std::string & src, const std::string & dest);
     void StartCopying();
     void StopCopying();
 
 private:
+    void StopProcess();
+
+    CopyMode::EnumType mMode;
     bool mEnabled;
 	pid_t mPid;
     ACE_Process_Manager * mPm;
     ACE_Process_Options mOptions;
+    std::string mCommand;
+    std::string mRecorderName;
+    std::string mArgs;
 };
 
 #endif //#ifndef CopyManager_h

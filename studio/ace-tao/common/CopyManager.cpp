@@ -1,5 +1,5 @@
 /*
- * $Id: CopyManager.cpp,v 1.1 2007/09/11 14:08:32 stuart_hc Exp $
+ * $Id: CopyManager.cpp,v 1.2 2008/04/18 16:03:27 john_f Exp $
  *
  * Class to manage file copying in a separate process.
  *
@@ -27,8 +27,8 @@
 #include "CopyManager.h"
 
 
-CopyManager::CopyManager()
-: mEnabled(false), mPid(0)
+CopyManager::CopyManager(CopyMode::EnumType mode)
+: mMode(mode), mEnabled(false), mPid(0)
 {
     // Get the processwide process manager.
     mPm = ACE_Process_Manager::instance();
@@ -42,26 +42,99 @@ void CopyManager::Command(const std::string & command)
     }
     else
     {
-        // Create options for copy process.
         mEnabled = true;
-        mOptions.command_line (ACE_TEXT_CHAR_TO_TCHAR(command.c_str()));
+        switch (mMode)
+        {
+        case CopyMode::OLD:
+            // Create options for copy process.
+            mOptions.command_line (ACE_TEXT_CHAR_TO_TCHAR(command.c_str()));
+            break;
+
+        case CopyMode::NEW:
+            // Store command
+            mCommand = command;
+            break;
+        }
+    }
+}
+
+void CopyManager::RecorderName(const std::string & s)
+{
+    // Only applicable to CopyMode::NEW
+    mRecorderName = s;
+}
+
+void CopyManager::ClearSrcDest()
+{
+    // Only applicable to CopyMode::NEW
+    mArgs.clear();
+}
+
+void CopyManager::AddSrcDest(const std::string & src, const std::string & dest)
+{
+    // Only applicable to CopyMode::NEW
+    if (!src.empty() && !dest.empty())
+    {
+        mArgs += " ";
+        mArgs += src;
+        mArgs += " ";
+        mArgs += dest;
     }
 }
 
 void CopyManager::StartCopying()
 {
     // Stop any existing copy process
-    StopCopying();
+    StopProcess();
 
-    // Spawn child process.
-    if (mEnabled && mPm)
+    switch (mMode)
     {
-        mPid = mPm->spawn(mOptions);
-        ACE_DEBUG(( LM_DEBUG, ACE_TEXT("Started process %d\n"), mPid ));
+    case CopyMode::OLD:
+        // Spawn child process.
+        if (mEnabled && mPm)
+        {
+            mPid = mPm->spawn(mOptions);
+            ACE_DEBUG(( LM_DEBUG, ACE_TEXT("Started process %d\n"), mPid ));
+        }
+        break;
+
+    case CopyMode::NEW:
+        // Spawn child process.
+        if (mEnabled && mPm)
+        {
+            // command plus src/dest args
+            mOptions.command_line (ACE_TEXT_CHAR_TO_TCHAR((mCommand + " " + mRecorderName + mArgs).c_str()));
+            ACE_DEBUG(( LM_DEBUG, ACE_TEXT("Spawning command \"%s\"\n"), mOptions.command_line_buf() ));
+            mPid = mPm->spawn(mOptions);
+            ACE_DEBUG(( LM_DEBUG, ACE_TEXT("Started process %d\n"), mPid ));
+        }
+        break;
     }
 }
 
 void CopyManager::StopCopying()
+{
+    StopProcess();
+
+    switch (mMode)
+    {
+    case CopyMode::OLD:
+        break;
+
+    case CopyMode::NEW:
+        if (mEnabled && mPm)
+        {
+            // command only
+            mOptions.command_line (ACE_TEXT_CHAR_TO_TCHAR((mCommand + " " + mRecorderName).c_str()));
+            ACE_DEBUG(( LM_DEBUG, ACE_TEXT("Spawning command \"%s\"\n"), mOptions.command_line_buf() ));
+            mPid = mPm->spawn(mOptions);
+            ACE_DEBUG(( LM_DEBUG, ACE_TEXT("Started process %d\n"), mPid ));
+        }
+        break;
+    }
+}
+
+void CopyManager::StopProcess()
 {
     // If we have a process still running, terminate it.
     if (mPid)
@@ -72,9 +145,9 @@ void CopyManager::StopCopying()
             ACE_DEBUG((LM_DEBUG, "Process %d has exited.\n", mPid));
             mPid = 0;
         }
+        // Otherwise, signal process to terminate
         else
         {
-        // Signal process to terminate
             if (0 == mPm->terminate(mPid, SIGINT))
             {
                 ACE_DEBUG((LM_DEBUG, "Sent SIGINT to process %d\n", mPid));
@@ -83,13 +156,14 @@ void CopyManager::StopCopying()
             {
                 ACE_DEBUG((LM_ERROR, "Failed to signal process %d\n", mPid));
             }
-	// And try to collect its exit status.
-	// Probably too soon but we will try again on next start.
-	    if (mPm->wait(mPid, ACE_Time_Value(0, 1000)) == mPid)
-	    {
-		ACE_DEBUG((LM_DEBUG, "Process %d has exited.\n", mPid));
-		mPid = 0;
-	    }
+            // Try to collect its exit status.
+            // Probably too soon but we will try again on next start.
+            if (mPm->wait(mPid, ACE_Time_Value(0, 1000)) == mPid)
+            {
+                ACE_DEBUG((LM_DEBUG, "Process %d has exited.\n", mPid));
+                mPid = 0;
+            }
         }
     }
 }
+

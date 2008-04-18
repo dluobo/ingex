@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderSettings.h,v 1.2 2007/10/26 15:44:20 john_f Exp $
+ * $Id: RecorderSettings.h,v 1.3 2008/04/18 16:03:29 john_f Exp $
  *
  * Recorder Configuration.
  *
@@ -53,6 +53,7 @@ struct EncodeParams
     Input::EnumType source;
     bool bitc;
     std::string dir;
+    std::string dest;
 };
 
 
@@ -67,7 +68,7 @@ public:
     static RecorderSettings * Instance();
 
     // Methods
-    bool Update(const std::string & name);
+    bool Update(prodauto::Recorder * rec);
 
     // Record Parameters
     prodauto::Rational image_aspect;

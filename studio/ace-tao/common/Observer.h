@@ -9,6 +9,8 @@ class Observer
 {
 public:
     virtual void Observe(std::string msg) = 0;
+
+    virtual ~Observer() {}
 };
 
 #endif //#ifndef Observer_h
