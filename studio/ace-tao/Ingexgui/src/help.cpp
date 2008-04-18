@@ -117,6 +117,6 @@ AboutDlg::AboutDlg(wxWindow * parent)
 #ifndef HAVE_DVS
 	message += wxT("not ");
 #endif
-	message += wxT("included.  Please send feedback to matthewmarks@users.sourceforge.net.\n\nVersion $Id: help.cpp,v 1.3 2008/04/18 18:36:07 john_f Exp $\n\nCopyright (C) British Broadcasting Corporation 2006-2008 - All rights reserved.\n\n$Date: 2008/04/18 18:36:07 $.");
+	message += wxT("included.  Please send feedback to matthewmarks@users.sourceforge.net.\n\nVersion $Id: help.cpp,v 1.2 2008/04/18 18:31:16 john_f Exp $\n\nCopyright (C) British Broadcasting Corporation 2006-2008 - All rights reserved.\n\n$Date: 2008/04/18 18:31:16 $.");
 	textBox->SetValue(message);
 };
