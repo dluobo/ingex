@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.3 2008/02/06 16:59:00 john_f Exp $
+# $Id: Makefile,v 1.4 2008/04/18 16:41:11 john_f Exp $
 #
 # Makefile for building ingex server and utilities.
 #
@@ -42,17 +42,18 @@ ifndef DVSSDK
   ifneq "$(TMP_DVSSDK)" ""
     DVSSDK = $(TMP_DVSSDK)
   else
-    $(error DVSSDK not set and could not be detected)
+    $(warning DVSSDK not set and could not be detected)
   endif
 endif
 
 
 HARDWARE_INCLUDE=-I$(DVSSDK)/development/header
 #HARDWARE_LIB=-L$(DVSSDK)/linux/lib -ldvsoem
-HARDWARE_LIB=-L$(DVSSDK)/linux-x86/lib -ldvsoem
+HARDWARE_LIB=-L$(DVSSDK)/linux-x86/lib -L$(DVSSDK)/linux-x86_64/lib -ldvsoem
+#HARDWARE_LIB=-L$(DVSSDK)/linux-x86_64/lib -ldvsoem
 
 SDI_PROGS=dvs_sdi testgen
-PROGS=$(SDI_PROGS) nexus_save nexus_xv nexus_stats nexus_multicast
+PROGS=$(SDI_PROGS) nexus_save nexus_xv nexus_stats nexus_multicast nexus_set_source
 
 .PHONY: all
 all: $(PROGS)
@@ -65,6 +66,9 @@ testgen: testgen.c nexus_control.h
 
 nexus_stats: nexus_stats.c nexus_control.h
 	g++ $(FLAGS) nexus_stats.c $(LIBS) -lpthread -o nexus_stats
+
+nexus_set_source: nexus_set_source.c nexus_control.h
+	g++ $(FLAGS) nexus_set_source.c $(LIBS) -lpthread -o nexus_set_source
 
 ifeq ($(USE_FFMPEG), 1)
 .PHONY: ../common/ffmpeg_encoder.o
@@ -82,4 +86,4 @@ nexus_xv: nexus_xv.c nexus_control.h
 	g++ $(FLAGS) nexus_xv.c -o nexus_xv -L/usr/X11R6/lib -lXv
 
 clean:
-	rm -f $(PROGS)
+	rm -f core $(PROGS)

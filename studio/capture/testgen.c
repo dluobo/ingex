@@ -1,5 +1,5 @@
 /*
- * $Id: testgen.c,v 1.2 2008/02/06 16:59:01 john_f Exp $
+ * $Id: testgen.c,v 1.3 2008/04/18 16:41:13 john_f Exp $
  *
  * Dummy SDI input for testing shared memory video & audio interface.
  *
@@ -368,6 +368,9 @@ static int write_picture(int channel)
             + p_control->vitc_offset - 4,
             &timecode[channel], sizeof(int));
 
+	// Write signal_ok flag into buffer
+	*(int *)(ring[channel] + element_size * ((pc->lastframe+1) % ring_len) + signal_ok_offset) = 1;
+
     // Increment timecode by 1 for each frame for testing
     timecode[channel] = (timecode[channel] + 1) % (24 * 60 * 60 * 25);
 
@@ -403,7 +406,7 @@ static int64_t tv_diff_microsec(const struct timeval* a, const struct timeval* b
 // channel number passed as void * (using cast)
 static void * sdi_monitor(void * arg)
 {
-    int channel = (int)arg;
+    int channel = (long)arg;
 
 	// record start time as reference for frame timing
 	struct timeval   start_time;

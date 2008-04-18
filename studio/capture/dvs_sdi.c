@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.c,v 1.4 2008/02/06 16:59:01 john_f Exp $
+ * $Id: dvs_sdi.c,v 1.5 2008/04/18 16:41:12 john_f Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -49,12 +49,15 @@
 
 #include "nexus_control.h"
 #include "logF.h"
+#include "video_VITC.h"
 #include "video_conversion.h"
 #include "video_test_signals.h"
 #include "avsync_analysis.h"
 
+//#define MAX_CHANNELS 8  (defined in nexus_control.h)
+// each DVS card can have 2 channels, so 4 cards gives 8 channels
+
 // Globals
-#define MAX_CHANNELS 8				// each DVS card can have 2 channels, so 4 cards gives 8 channels
 pthread_t		sdi_thread[MAX_CHANNELS];
 sv_handle		*a_sv[MAX_CHANNELS];
 int				num_sdi_threads = 0;
@@ -63,12 +66,13 @@ uint8_t			*ring[MAX_CHANNELS] = {0};
 int				control_id, ring_id[MAX_CHANNELS];
 int				width = 0, height = 0;
 int     element_size = 0, dma_video_size = 0, dma_total_size = 0;
-int     audio_offset = 0, audio_size = 0;
+static int     audio_offset = 0, audio_size = 0, audio_pair_size = 0;
 int     ltc_offset = 0, vitc_offset = 0, tick_offset = 0, signal_ok_offset = 0;
 CaptureFormat	video_format = Format422PlanarYUV;
 CaptureFormat	video_secondary_format = FormatNone;
 static int verbose = 0;
 static int verbose_channel = -1;	// which channel to show when verbose is on
+static int audio8ch = 0;
 static int test_avsync = 0;
 static int benchmark = 0;
 static uint8_t *benchmark_video = NULL;
@@ -161,16 +165,13 @@ static int check_sdk_version3(void)
 	sv_handle *sv;
 	sv_version version;
 	int device = 0;
-    //int module = 0;
 	int result = 0;
 
-	SV_CHECK( sv_openex(&sv, "PCI,card=0", SV_OPENPROGRAM_DEMOPROGRAM, SV_OPENTYPE_INPUT, 0, 0) );
-	//for (module = 0; module < 2; module++) {
-		SV_CHECK( sv_version_status(sv, &version, sizeof(version), device, 1, 0) );
-		printf("%s version = (%d,%d,%d,%d)\n", version.module, version.release.v.major, version.release.v.minor, version.release.v.patch, version.release.v.fix);
-		if (/*strstr( version.module, "clib-oem" ) &&*/ version.release.v.major >= 3)
-			result = 1;
-	//}
+	SV_CHECK( sv_openex(&sv, (char*)"PCI,card=0", SV_OPENPROGRAM_DEMOPROGRAM, SV_OPENTYPE_INPUT, 0, 0) );
+	SV_CHECK( sv_version_status(sv, &version, sizeof(version), device, 1, 0) );
+	printf("%s version = (%d,%d,%d,%d)\n", version.module, version.release.v.major, version.release.v.minor, version.release.v.patch, version.release.v.fix);
+	if (version.release.v.major >= 3)
+		result = 1;
 
 	SV_CHECK( sv_close(sv) );
 
@@ -288,7 +289,17 @@ static int allocate_shared_buffers(int num_channels)
 	p_control->sec_video_format = video_secondary_format;
 
 	p_control->audio12_offset = audio_offset;
-	p_control->audio34_offset = audio_offset + audio_size / 2;
+	p_control->audio34_offset = audio_offset + audio_pair_size;
+    if (audio8ch)
+    {
+	    p_control->audio56_offset = audio_offset + audio_pair_size * 2;
+	    p_control->audio78_offset = audio_offset + audio_pair_size * 3;
+    }
+    else
+    {
+	    p_control->audio56_offset = 0;
+	    p_control->audio78_offset = 0;
+    }
 	p_control->audio_size = audio_size;
 
 	p_control->vitc_offset = vitc_offset;
@@ -298,7 +309,9 @@ static int allocate_shared_buffers(int num_channels)
     
     p_control->source_name_update = 0;
     if (pthread_mutex_init(&p_control->m_source_name_update, NULL) != 0)
+    {
         fprintf(stderr, "Mutex init error\n");
+    }
 
 	// Allocate multiple element ring buffers containing video + audio + tc
 	//
@@ -374,15 +387,6 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
 	if (get_res != SV_OK && get_res != SV_ERROR_INPUT_AUDIO_NOAIV
 			&& get_res != SV_ERROR_INPUT_AUDIO_NOAESEBU)
 	{
-		// reset master timecode to "unset"
-		if (chan == master_channel)
-        {
-			PTHREAD_MUTEX_LOCK( &m_master_tc )
-			master_tod = 0;
-			master_tc = 0;
-			PTHREAD_MUTEX_UNLOCK( &m_master_tc )
-		}
-
 		return get_res;
 	}
 
@@ -684,6 +688,9 @@ static int write_dummy_frames(sv_handle *sv, int chan, int current_frame_tick, i
 			memcpy(ring[chan] + element_size * ((pc->lastframe+1) % ring_len) + ltc_offset, &last_ltc, sizeof(int));
 			memcpy(ring[chan] + element_size * ((pc->lastframe+1) % ring_len) + tick_offset, &last_ftk, sizeof(int));
 
+			// Indicate we've got a bad video signal
+			*(int *)(ring[chan] + element_size * ((pc->lastframe+1) % ring_len) + signal_ok_offset) = 0;
+
             if (verbose)
             {
 	            logTF("chan: %d i:%2d  cur_frame_tick=%d tick_last_dummy_frame=%d last_ftk=%d tc=%d ltc=%d\n", chan, i, current_frame_tick, tick_last_dummy_frame, last_ftk, last_vitc, last_ltc);
@@ -708,28 +715,45 @@ static void wait_for_good_signal(sv_handle *sv, int chan, int required_good_fram
 
 	// Poll until we get a good video signal for at least required_good_frames
 	while (1) {
-		int sdiA, videoin, audioin, timecode;
-		unsigned int h_clock, l_clock;
-		int current_tick;
+		int					current_tick;
+		unsigned int		h_clock, l_clock;
+		sv_timecode_info	timecodes;
+		int					sdiA, videoin, audioin, tc_status;
+
 		SV_CHECK( sv_currenttime(sv, SV_CURRENTTIME_CURRENT, &current_tick, &h_clock, &l_clock) );
+		SV_CHECK( sv_timecode_feedback(sv, &timecodes, NULL) );		// read current input timecodes
+		int64_t tod_tc_read = gettimeofday64();
+
+		// Keep master timecode ticking over when video signal is not present
+		if (chan == master_channel) {
+			int ltc_as_int = dvs_tc_to_int(timecodes.altc_tc);
+			int vitc_as_int = dvs_tc_to_int(timecodes.avitc_tc[0]);
+
+			// update time-of-day the timecodes were read
+			PTHREAD_MUTEX_LOCK( &m_master_tc )
+			master_tc = (master_type == MasterLTC) ? ltc_as_int : vitc_as_int;
+			master_tod = tod_tc_read;
+			PTHREAD_MUTEX_UNLOCK( &m_master_tc )
+		}
+
 		SV_CHECK( sv_query(sv, SV_QUERY_INPUTRASTER_SDIA, 0, &sdiA) );
 		SV_CHECK( sv_query(sv, SV_QUERY_VIDEOINERROR, 0, &videoin) );
 		SV_CHECK( sv_query(sv, SV_QUERY_AUDIOINERROR, 0, &audioin) );
-		SV_CHECK( sv_query(sv, SV_QUERY_VALIDTIMECODE, 0, &timecode) );
+		SV_CHECK( sv_query(sv, SV_QUERY_VALIDTIMECODE, 0, &tc_status) );
 
 		if (verbose > 1) {
-			printf("\r%8d raster=0x%08x video=%s audio=%s timecode=%s%s%s%s%s%s (0x%x)",
+			printf("\r%8d raster=0x%08x video=%s audio=%s tc_status=%s%s%s%s%s%s (0x%x)",
 				current_tick,
 				sdiA,
 				videoin == SV_OK ? "OK" : "error",
 				audioin == SV_OK ? "OK" : "error",
-				(timecode & SV_VALIDTIMECODE_LTC) ? "LTC " : "",
-				(timecode & SV_VALIDTIMECODE_DLTC) ? "DLTC " : "",
-				(timecode & SV_VALIDTIMECODE_VITC_F1) ? "VITC/F1 " : "",
-				(timecode & SV_VALIDTIMECODE_VITC_F2) ? "VITC/F2 " : "",
-				(timecode & SV_VALIDTIMECODE_DVITC_F1) ? "DVITC/F1 " : "",
-				(timecode & SV_VALIDTIMECODE_DVITC_F2) ? "DVITC/F2 " : "",
-				timecode
+				(tc_status & SV_VALIDTIMECODE_LTC) ? "LTC " : "",
+				(tc_status & SV_VALIDTIMECODE_DLTC) ? "DLTC " : "",
+				(tc_status & SV_VALIDTIMECODE_VITC_F1) ? "VITC/F1 " : "",
+				(tc_status & SV_VALIDTIMECODE_VITC_F2) ? "VITC/F2 " : "",
+				(tc_status & SV_VALIDTIMECODE_DVITC_F1) ? "DVITC/F1 " : "",
+				(tc_status & SV_VALIDTIMECODE_DVITC_F2) ? "DVITC/F2 " : "",
+				tc_status
 				);
 			fflush(stdout);
 		}
@@ -850,6 +874,7 @@ static void usage_exit(void)
 	fprintf(stderr, "    -mc <master ch>      channel to use as timecode master: 0...7\n");
 	fprintf(stderr, "    -rt <recover type>   timecode type to calculate missing frames to recover: VITC, LTC\n");
 	fprintf(stderr, "    -c <max channels>    maximum number of channels to use for capture\n");
+	fprintf(stderr, "    -a8                  use 8 audio tracks per video channel\n");
 	fprintf(stderr, "    -avsync              perform avsync analysis - requires clapper-board input video\n");
 	fprintf(stderr, "    -b <video_sample>    benchmark using video_sample instead of captured UYVY video frames\n");
 	fprintf(stderr, "    -q                   quiet operation (fewer messages)\n");
@@ -1020,6 +1045,10 @@ int main (int argc, char ** argv)
 			}
 			n++;
 		}
+		else if (strcmp(argv[n], "-a8") == 0)
+		{
+			audio8ch = 1;
+		}
 	}
 
 	switch (video_format) {
@@ -1054,6 +1083,11 @@ int main (int argc, char ** argv)
 
 	logTF("Using %s to determine number of frames to recover when video re-aquired\n",
 			recover_timecode_type == RecoverVITC ? "VITC" : "LTC");
+
+    if (audio8ch)
+    {
+        logTF("Audio 8 channel mode enabled\n");
+    }
 
 	char logfile[FILENAME_MAX];
 	strcpy(logfile, logfiledir);
@@ -1251,10 +1285,18 @@ int main (int argc, char ** argv)
 #else
 	dma_video_size = width*height*2;
 #endif
-	audio_size = 0x8000;
+    audio_pair_size = 0x4000;
+    if (audio8ch)
+    {
+	    audio_size = audio_pair_size * 4;
+    }
+    else
+    {
+	    audio_size = audio_pair_size * 2;
+    }
 	audio_offset = dma_video_size;
 
-    // audio_size is greater than 1920 * 4 * 4
+    // audio_size is greater than 1920 * 4 * (4 or 8)
     // so we use the spare bytes at end for timecode
     vitc_offset         = audio_offset + audio_size - sizeof(int);
     ltc_offset          = audio_offset + audio_size - 2 * sizeof(int);
@@ -1263,7 +1305,7 @@ int main (int argc, char ** argv)
 
 	// An element in the ring buffer contains: video(4:2:2) + audio + video(4:2:0)
 	dma_total_size = dma_video_size		// video frame as captured by dma transfer
-					+ audio_size;		// DVS internal structure for 4 audio channels
+					+ audio_size;		// DVS internal structure for audio channels
 										
 
     element_size = dma_total_size

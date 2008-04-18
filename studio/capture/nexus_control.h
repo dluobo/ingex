@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_control.h,v 1.3 2008/02/06 16:59:01 john_f Exp $
+ * $Id: nexus_control.h,v 1.4 2008/04/18 16:41:12 john_f Exp $
  *
  * Shared memory interface between SDI capture threads and reader threads.
  *
@@ -83,7 +83,9 @@ typedef struct {
 
 	int				audio12_offset;		// offset to start of audio ch 1,2 samples
 	int				audio34_offset;		// offset to start of audio ch 3,4 samples
-	int				audio_size;			// size in bytes of all audio data (4 chans)
+	int				audio56_offset;		// offset to start of audio ch 5,6 samples (if used)
+	int				audio78_offset;		// offset to start of audio ch 7,8 samples (if used)
+	int				audio_size;			// size in bytes of all audio data (4/8 chans)
 										// including internal padding for DMA transfer
 	int				signal_ok_offset;	// offset to flag for good input status
 	int				ltc_offset;			// offset to start of LTC timecode data (int)
