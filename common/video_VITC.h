@@ -1,7 +1,7 @@
 /*
- * $Id: video_VITC.h,v 1.1 2007/09/11 14:08:01 stuart_hc Exp $
+ * $Id: video_VITC.h,v 1.2 2008/04/18 15:54:34 john_f Exp $
  *
- * Logging and debugging utility functions.
+ * Utilities for reading, writing and dealing with VITC timecodes
  *
  * Copyright (C) 2005  Stuart Cunningham <stuart_hc@users.sourceforge.net>
  *
@@ -21,24 +21,12 @@
  * 02110-1301, USA.
  */
 
-#ifndef UTILS_H
-#define UTILS_H
+#ifndef VIDEO_VITC_H
+#define VIDEO_VITC_H
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include <stdarg.h>		// for va_list
-
-// Utilities
-extern int openLogFileWithDate(const char *logfile);
-extern int openLogFile(const char *logfile);
-extern void logF(const char *fmt, ...) __attribute__ ((format (printf, 1, 2)));
-extern void vlogTF(const char *fmt, va_list ap) __attribute__ ((format (printf, 1, 0)));
-extern void logTF(const char *fmt, ...) __attribute__ ((format (printf, 1, 2)));
-extern void logerrF(const char *fmt, ...) __attribute__ ((format (printf, 1, 2)));
-extern void logFF(const char *fmt, ...) __attribute__ ((format (printf, 1, 2)));
-extern void logFFi(const char *fmt, ...) __attribute__ ((format (printf, 1, 2)));
 
 extern char *framesToStr(int tc, char *s);
 extern int dvs_tc_to_int(int tc);
@@ -50,4 +38,4 @@ extern int black_or_grey_line(const unsigned char *line, int width);
 }
 #endif
 
-#endif /* UTILS_H */
+#endif /* VIDEO_VITC_H */

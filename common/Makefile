@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.4 2008/02/06 16:58:50 john_f Exp $
+# $Id: Makefile,v 1.5 2008/04/18 15:54:16 john_f Exp $
 #
 # Makefile for building common functions
 #
@@ -56,9 +56,9 @@ valgrind-check: all
 
 .PHONY: clean
 clean:
+	rm -f $(LIBCOMMON) $(OBJECTS) $(PROGS)
 	cd YUVlib && $(MAKE) $@
 	cd tools && $(MAKE) $@
-	rm -f $(LIBCOMMON) $(OBJECTS) $(PROGS)
 	
 .PHONY: YUVlib
 YUVlib:

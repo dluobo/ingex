@@ -1,5 +1,5 @@
 /*
- * $Id: logF.h,v 1.2 2008/02/06 16:58:50 john_f Exp $
+ * $Id: logF.h,v 1.3 2008/04/18 15:54:24 john_f Exp $
  *
  * Logging and debugging utility functions.
  *
@@ -41,12 +41,6 @@ extern void logTF(const char *fmt, ...) __attribute__ ((format (printf, 1, 2)));
 extern void logerrF(const char *fmt, ...) __attribute__ ((format (printf, 1, 2)));
 extern void logFF(const char *fmt, ...) __attribute__ ((format (printf, 1, 2)));
 extern void logFFi(const char *fmt, ...) __attribute__ ((format (printf, 1, 2)));
-
-extern char *framesToStr(int tc, char *s);
-extern int dvs_tc_to_int(int tc);
-extern int tc_to_int(unsigned hh, unsigned mm, unsigned ss, unsigned ff);
-extern int readVITC(const unsigned char *line, unsigned *hh, unsigned *mm, unsigned *ss, unsigned *ff);
-extern int black_or_grey_line(const unsigned char *line, int width);
 
 #ifdef __cplusplus
 }

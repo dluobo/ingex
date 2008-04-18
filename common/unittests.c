@@ -57,7 +57,7 @@ int main(int argc, char *argv[])
 	size_t frame_size = width * height * 2;
 	size_t frame_size_10bit = frame_size * 4 / 3;
 	char *output_name = "test.uyvy";
-	char *input_name = "/dp_videoedit/sport10bit";
+	char *input_name = "sport10bit";
 
 	int i;
 	for (i = 1; i < argc; i++) {
@@ -100,6 +100,17 @@ int main(int argc, char *argv[])
 		result = 1;
 	}
 
+	// Testing random frame generation
+	uyvy_random_frame(width, height, frame);
+	for (i = 0; i < 50; i++) {
+		uyvy_random_frame(width, height, frame2);
+		psnr_uyvy(frame, frame2, width, height, &y, &u, &v);
+		// PSNR should be < 9.5 for 720x576 images (based on experiment - the theory is left as an exercise)
+		if (y > 9.5 || u > 8.0 || v > 8.0)
+			return 1;
+	}
+	
+	// cleanup
 	free(frame);
 	free(frame2);
 	free(frame10bit);

@@ -1,5 +1,5 @@
 /*
- * $Id: audio_utils.h,v 1.1 2007/10/26 16:48:36 john_f Exp $
+ * $Id: audio_utils.h,v 1.2 2008/04/18 15:54:23 john_f Exp $
  *
  * Write uncompressed audio in WAV format, and update WAV header.
  *
@@ -34,7 +34,8 @@ extern "C" {
 extern int writeWavHeader(FILE *fp, int bits_per_sample, int num_ch);
 extern void update_WAV_header(FILE *fp);
 extern void write_audio(FILE *fp, uint8_t *p, int num_samples, int bits_per_sample);
-
+extern void dvsaudio32_to_16bitmono(int channel, uint8_t *buf32, uint8_t *buf16);
+extern double calc_audio_peak_power(const unsigned char* p_samples, int num_samples, int byte_alignment, double min_power);
 
 #ifdef __cplusplus
 }

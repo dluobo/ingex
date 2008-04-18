@@ -1,5 +1,5 @@
 /*
- * $Id: audio_utils.c,v 1.1 2007/10/26 16:48:36 john_f Exp $
+ * $Id: audio_utils.c,v 1.2 2008/04/18 15:54:22 john_f Exp $
  *
  * Write uncompressed audio in WAV format, and update WAV header.
  *
@@ -20,6 +20,8 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
  * 02110-1301, USA.
  */
+
+#include <math.h>
 
 #include "audio_utils.h"
 
@@ -123,4 +125,100 @@ extern void write_audio(FILE *fp, uint8_t *p, int num_samples, int bits_per_samp
 		fwrite(buf24, num_samples * 3, 1, fp);
 		return;
 	}
+}
+
+extern void dvsaudio32_to_16bitmono(int channel, uint8_t *buf32, uint8_t *buf16)
+{
+    int i;
+    // A DVS audio buffer contains a mix of two 32bits-per-sample channels
+    // Data for one sample pair is 8 bytes:
+    //  a0 a0 a0 a0  a1 a1 a1 a1
+
+    int channel_offset = 0;
+    if (channel == 1)
+        channel_offset = 4;
+
+    // Skip every other channel, copying 16 most significant bits of 32 bits
+    // from little-endian DVS format to little-endian 16bits
+    for (i = channel_offset; i < 1920*4*2; i += 8) {
+        *buf16++ = buf32[i+2];
+        *buf16++ = buf32[i+3];
+    }
+}
+
+extern double calc_audio_peak_power(const unsigned char* p_samples, int num_samples, int byte_alignment, double min_power)
+{
+    int i;
+    int32_t sample;
+    int32_t maxSample = 0;
+    double power;
+
+    switch (byte_alignment)
+    {
+        case 1:
+            for (i = 0; i < num_samples; i++) 
+            {
+                sample = (int32_t)((uint32_t)p_samples[i] << 24);
+                
+                maxSample = (sample > maxSample) ? sample : maxSample;
+                maxSample = (-sample > maxSample) ? -sample : maxSample;
+            }
+            break;
+        case 2:
+            for (i = 0; i < num_samples; i++) 
+            {
+                sample = (int32_t)(
+                    (((uint32_t)p_samples[i * 2]) << 16) | 
+                    (((uint32_t)p_samples[i * 2 + 1]) << 24));
+
+                maxSample = (sample > maxSample) ? sample : maxSample;
+                maxSample = (-sample > maxSample) ? -sample : maxSample;
+            }
+            break;
+        case 3:
+            for (i = 0; i < num_samples; i++) 
+            {
+                sample = (int32_t)(
+                    (((uint32_t)p_samples[i * 3]) << 8) | 
+                    (((uint32_t)p_samples[i * 3 + 1]) << 16) | 
+                    (((uint32_t)p_samples[i * 3 + 2]) << 24)); 
+                    
+                maxSample = (sample > maxSample) ? sample : maxSample;
+                maxSample = (-sample > maxSample) ? -sample : maxSample;
+            }
+            break;
+        case 4:
+            for (i = 0; i < num_samples; i++) 
+            {
+                sample = (int32_t)(
+                    (uint32_t)p_samples[i * 4] | 
+                    (((uint32_t)p_samples[i * 4 + 1]) << 8) | 
+                    (((uint32_t)p_samples[i * 4 + 2]) << 16) | 
+                    (((uint32_t)p_samples[i * 4 + 3]) << 24));
+                    
+                maxSample = (sample > maxSample) ? sample : maxSample;
+                maxSample = (-sample > maxSample) ? -sample : maxSample;
+            }
+            break;
+        default:
+            /* not supported */
+            break;
+    }
+    
+    /* return min_power - 1 if no audio is present */
+    if (maxSample == 0)
+    {
+        return min_power - 1;
+    }
+    
+    /* dBFS - decibel full scale */
+    power = 20 * log10(maxSample / (2.0*1024*1024*1024));
+    
+    /* always return min_power if there is audio */
+    if (power < min_power)
+    {
+        return min_power;
+    }
+    
+    return power;
 }

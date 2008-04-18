@@ -1,6 +1,25 @@
 #include "multicast_video.h"
 #include "YUV_scale_pic.h"
 
+// Define DEBUG_UDP_SEND_RECV to have packets read/written to a file instead of sockets
+// This is useful for testing out-of-order and never-arrives packet reception.
+#ifdef DEBUG_UDP_SEND_RECV
+
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
+extern int connect_to_multicast_address(const char *address, int port __attribute__ ((unused)))
+{
+	return open(address, O_RDONLY);
+}
+extern int open_socket_for_streaming(const char *remote, int port __attribute__ ((unused)))
+{
+	return open(remote, O_CREAT|O_TRUNC|O_RDWR, 0664);
+}
+
+#else
+
 extern int connect_to_multicast_address(const char *address, int port)
 {
 	int fd;
@@ -112,21 +131,44 @@ extern int open_socket_for_streaming(const char *remote, int port)
 
 	return fd;
 }
+#endif
 
-extern int udp_read_frame_audio_video(int fd, IngexNetworkHeader *p_header, uint8_t *video, uint8_t *audio, int *p_total)
+// Packet structure for uncompressed video and audio with timecode transmission:
+//  packet-header       [4] ('I'[1], flags[1], packet_num[2] (little-endian))
+//  packet-data         [PACKET_SIZE - 4]
+//  
+// packet-data contains:
+//  packet_num=0                      IngexNetworkHeader, audio
+//  packet_num=1,2                    audio
+//  packet_num=3..packets_per_frame   video
+//
+
+// flags set in second byte of packet (after 'I')
+#define UDP_FLAG_HEADER	0x80
+#define UDP_FLAG_AUDIO	0x40
+#define UDP_FLAG_VIDEO	0x20
+
+extern int udp_read_frame_audio_video(int fd, double timeout, IngexNetworkHeader *p_header, uint8_t *video, uint8_t *audio, int *p_total)
 {
-	struct timeval timeout = {2, 0};		// timeout of 2 seconds used to read a packet
+	long sec_val = (int)timeout; 
+	long microsec_val = (timeout - sec_val) * 1000000; 
+	struct timeval timeout_val = {sec_val, microsec_val};
 
 	int packets_read = 0;
+	int packets_lost_for_sync = 0;
 	int total_bytes = 0;
 	int last_packet_num = -1;
 	int video_size = 0;
-	int audio_size = 1920*2;
-	int remaining_audio = audio_size;
+	int audio_size = 0;
 	int found_first_packet = 0;
-	unsigned short packet_num;
+	uint16_t packet_num;
+
+	uint8_t *orig_video = video;
+	uint8_t *orig_audio = audio;
 
 	uint8_t buf[PACKET_SIZE];
+
+	//printf("\n*** udp_read_frame_audio_video() orig video=%p orig audio=%p\n", orig_video, orig_audio);
 
     /* Read a frame from the network */
 	while (1)
@@ -137,14 +179,20 @@ extern int udp_read_frame_audio_video(int fd, IngexNetworkHeader *p_header, uint
 		FD_ZERO(&readfds);
 		FD_SET(fd, &readfds);
 
-		n = select(fd + 1, &readfds, NULL, NULL, &timeout);
+		n = select(fd + 1, &readfds, NULL, NULL, &timeout_val);
 		if (n == 0)
 			return -1;		// timeout
 
 		if (! FD_ISSET(fd, &readfds))
 			continue;		// not readable - try again
 
+#ifdef DEBUG_UDP_SEND_RECV
+		ssize_t bytes_read = read(fd, buf, PACKET_SIZE);
+		char junk[1];
+		read(fd, junk, 1);
+#else
 		ssize_t bytes_read = recv(fd, buf, PACKET_SIZE, 0);
+#endif
 
 		if ((bytes_read != PACKET_SIZE) || (buf[0] != 'I'))
 			return -1;		// bad packet
@@ -155,49 +203,76 @@ extern int udp_read_frame_audio_video(int fd, IngexNetworkHeader *p_header, uint
 		// Since the video is intended for monitoring only, it doesn't matter if
 		// we mix data from different frames.
 
-		memcpy(&packet_num, &buf[2], 2);
+		uint8_t flags = buf[1];
+		memcpy(&packet_num, &buf[2], sizeof(packet_num));
+
+		//printf("0x%02x,0x%02x,0x%02x,0x%02x 0x%02x,0x%02x,0x%02x,0x%02x packet_num=%d packets_read=%d found_first_packet=%d\n", buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[6], buf[7], packet_num, packets_read, found_first_packet);
 
 		// keeping trying until we read a packet number 0
 		if (!found_first_packet && packet_num != 0) {
+			packets_lost_for_sync++;
 			continue;
 		}
 
 		packets_read++;
 
-		if (packet_num == 0) {
+		if ((flags & UDP_FLAG_HEADER) && packet_num == 0) {
+			if (found_first_packet) {
+				// If we've only read one previous packet (the first start packet)
+				// then reset variables and overwrite data
+				if (packets_read == 2) {
+					printf("- found second start packet - discarding previous start packet\n");
+					audio = orig_audio;
+					video = orig_video;
+				}
+				else {
+					printf("- break - stopping since found second start packet (packets_read=%d)\n", packets_read);
+					break;
+				}
+			}
 			found_first_packet = 1;
 
-			// fill out header
+			// copy header into structure
 			memcpy(p_header, &buf[4], sizeof(IngexNetworkHeader));
 			video_size = p_header->width * p_header->height * 3 / 2;
+			audio_size = p_header->audio_size;
 
 			// copy audio
 			int audio_chunk_size = PACKET_SIZE - (4 + sizeof(IngexNetworkHeader));
-			memcpy(audio, &buf[4 + sizeof(IngexNetworkHeader)], audio_chunk_size);
-			audio += audio_chunk_size;
-			remaining_audio -= audio_chunk_size;
+			if (audio_chunk_size >= 0 && audio_chunk_size <= audio_size)
+				memcpy(audio, &buf[4 + sizeof(IngexNetworkHeader)], audio_chunk_size);
 		}
-		else if (packet_num == 1 || packet_num == 2) {
-			// copy audio
+		else if ((flags & UDP_FLAG_AUDIO)) {
+			// The first portion of audio from the header has already been filled
+			int audio_from_header_size = PACKET_SIZE - (4 + sizeof(IngexNetworkHeader));
 			int audio_chunk_size = PACKET_SIZE - 4;
-			if (remaining_audio > 0) {
-				if (remaining_audio < audio_chunk_size)
-					audio_chunk_size = remaining_audio;
-				memcpy(audio, &buf[4], audio_chunk_size);
-				audio += audio_chunk_size;
-				remaining_audio -= audio_chunk_size;
-			}
+
+			// Packets containing only audio data start from packet_num==1
+			// We must skip over the audio which was carried in the header.
+			int audio_pos = audio_from_header_size + (packet_num - 1) * audio_chunk_size;
+			if (audio_pos + audio_chunk_size > audio_size)
+				audio_chunk_size = audio_size - audio_pos;
+
+			if (audio_pos >= 0 && (audio_pos + audio_chunk_size) <= audio_size)
+				memcpy(audio + audio_pos, &buf[4], audio_chunk_size);
+			else
+				printf("Bad memcpy calc: packet_num=%d audio_pos=%d audio_chunk_size=%d audio_size=%d\n", packet_num, audio_pos, audio_chunk_size, audio_size);
 		}
-		else if (packet_num >= 3) {
+		else if (flags & UDP_FLAG_VIDEO) {
 			// video packet
 			int video_chunk_size = PACKET_SIZE - 4;
 
-			// store video
+			// packets can arrive out-of-order so
 			// calculate position in video frame for data based on packet_num
-			int video_pos = (packet_num - 3) * video_chunk_size;
+			int first_video_packet = (int)( (sizeof(IngexNetworkHeader) + audio_size) / (double)(PACKET_SIZE-4) + 0.999999 );
+			int video_pos = (packet_num - first_video_packet) * video_chunk_size;
 			if (video_pos + video_chunk_size > video_size)
 				video_chunk_size = video_size - video_pos;
-			memcpy(video + video_pos, &buf[4], video_chunk_size);
+
+			if (video_pos >= 0 && (video_pos + video_chunk_size) <= video_size)
+				memcpy(video + video_pos, &buf[4], video_chunk_size);
+			else
+				printf("Bad memcpy calc: packet_num=%d video_pos=%d video_chunk_size=%d video_size=%d\n", packet_num, video_pos, video_chunk_size, video_size);
 		}
 
 		if (p_header->packets_per_frame > 0) {
@@ -209,6 +284,10 @@ extern int udp_read_frame_audio_video(int fd, IngexNetworkHeader *p_header, uint
 
 		last_packet_num = packet_num;
     }
+	if (packets_lost_for_sync > 0 || packet_num+1 != p_header->packets_per_frame
+		|| packet_num+1 != packets_read)
+		printf("packets_per_frame=%d packets_read=%d packet_num=%d last_num=%d packets_lost_for_sync=%d header.frame_number=%d\n", p_header->packets_per_frame, packets_read, packet_num, last_packet_num, packets_lost_for_sync, p_header->frame_number);
+
 	*p_total = total_bytes;
 	return 0;
 }
@@ -236,14 +315,20 @@ extern int udp_read_frame_header(int fd, IngexNetworkHeader *p_header)
 		if (! FD_ISSET(fd, &readfds))
 			continue;		// not readable - try again
 
+#ifdef DEBUG_UDP_SEND_RECV
+		ssize_t bytes_read = read(fd, buf, PACKET_SIZE);
+		char junk[1];
+		read(fd, junk, 1);
+#else
 		ssize_t bytes_read = recv(fd, buf, PACKET_SIZE, 0);
+#endif
 
 		if ((bytes_read != PACKET_SIZE) || (buf[0] != 'I'))
 			return -1;		// bad packet
 
 		// The header is always in packet number 0
-		unsigned short packet_num;
-		memcpy(&packet_num, &buf[2], 2);
+		uint16_t packet_num;
+		memcpy(&packet_num, &buf[2], sizeof(packet_num));
 
 		if (packet_num != 0)
 			continue;
@@ -253,26 +338,28 @@ extern int udp_read_frame_header(int fd, IngexNetworkHeader *p_header)
 
 		break;
     }
-	printf(" width=%d height=%d packets_per_frame=%d source_name=\"%s\"\n",
-			p_header->width, p_header->height, p_header->packets_per_frame, p_header->source_name);
+	printf(" width=%d height=%d audio_size=%d packets_per_frame=%d frame_number=%d source_name=\"%s\"\n",
+			p_header->width, p_header->height, p_header->audio_size, p_header->packets_per_frame, p_header->frame_number, p_header->source_name);
 	return 0;
 }
 
-
-// write 50 UDP packets with video data
-// each packet is 1475 bytes
-extern int send_audio_video(int fd, int width, int height, const uint8_t *video, const uint8_t *audio,
-						int frame_number, int vitc, int ltc)
+// Write a full frame of video and audio to the network, breaking it up into
+// a number of UDP packets for transmission.
+extern int send_audio_video(int fd, int width, int height, int audio_channels,
+						const uint8_t *video, const uint8_t *audio,
+						int frame_number, int vitc, int ltc, const char *source_name)
 {
 	// FIXME: change this to a stack variable after testing with valgrind
 	unsigned char *buf = malloc(PACKET_SIZE);
 	int total_bytes_written = 0;
 
-	int video_size = width * height * 3/2;
-	int audio_size = 1920 * 2;
+	int video_size = width * height * 3/2;				// video is YUV planar 4:2:0
+	int audio_size = audio_channels * (1920 * 2);		// each audio channel is 48kHz, 16bit
 	int header_size = sizeof(IngexNetworkHeader);
 	IngexNetworkHeader header;
 
+	// Number of whole packets required to transmit header, audio and video.
+	// There may be unused space at the end of the last video packet.
 	int packets_per_frame = (int)( (header_size + audio_size + video_size) / (double)(PACKET_SIZE-4) + 0.999999 );
 
 	// fill out header
@@ -283,35 +370,43 @@ extern int send_audio_video(int fd, int width, int height, const uint8_t *video,
 	header.framerate_denom = 25;
 	header.width = width;
 	header.height = height;
+	header.audio_size = audio_size;
 	header.frame_number = frame_number;
 	header.vitc = vitc;
 	header.ltc = ltc;
-	strcpy(header.source_name, "TEST_SOURCE");
+	if (source_name) {
+		strncpy(header.source_name, source_name, sizeof(header.source_name)-1);
+		header.source_name[sizeof(header.source_name)-1] = '\0';
+	}
+	else
+		header.source_name[0] = '\0';
 
 	int video_chunk_size = PACKET_SIZE - 4;
 	const uint8_t *p_video_chunk = video;
 	int remaining_audio = audio_size;
 
-	unsigned short packet_num = 0;
+	uint16_t packet_num = 0;
 	while (1) {
 		// packet header is 4 bytes starting with 'I' sync byte
 		buf[0] = 'I';		// sync byte 'I' for ingex
 		buf[1] = 0;			// flags
-		memcpy(&buf[2], &packet_num, 2);
+		memcpy(&buf[2], &packet_num, sizeof(packet_num));
 
 		if (packet_num == 0) {
-			// write header followed by audio data
-			buf[1] |= 0x80;	// set high bit to indicate start-of-frame
+			// write header followed by some audio data
+			buf[1] |= UDP_FLAG_HEADER;			// set flag to indicate start-of-frame
 			memcpy(&buf[4], &header, sizeof(IngexNetworkHeader));
 
 			// write as much audio as will fit
+			buf[1] |= UDP_FLAG_AUDIO;			// contains audio flag
 			int audio_chunk_size = PACKET_SIZE - (4 + sizeof(IngexNetworkHeader));
 			memcpy(&buf[4 + sizeof(IngexNetworkHeader)], audio, audio_chunk_size);
 			audio += audio_chunk_size;
 			remaining_audio -= audio_chunk_size;
 		}
-		else if (packet_num == 1 || packet_num == 2) {
-			// second & third parts of audio
+		else if (remaining_audio > 0) {
+			// write remaining audio data
+			buf[1] |= UDP_FLAG_AUDIO;			// contains audio flag
 			int audio_chunk_size = PACKET_SIZE - 4;
 			if (remaining_audio < audio_chunk_size)
 				audio_chunk_size = remaining_audio;
@@ -320,19 +415,28 @@ extern int send_audio_video(int fd, int width, int height, const uint8_t *video,
 			remaining_audio -= audio_chunk_size;
 		}
 		else {
-			// video
+			// write video data
+			buf[1] |= UDP_FLAG_VIDEO;			// contains video flag
 			if (p_video_chunk - video + video_chunk_size > video_size)
 				video_chunk_size = video_size - (p_video_chunk - video);
 			memcpy(&buf[4], p_video_chunk, video_chunk_size);
 			p_video_chunk += video_chunk_size;
 		}
 
+#ifdef DEBUG_UDP_SEND_RECV
+		// We could use stat() and (((mode) & _S_IFMT) == _S_IFSOCK))
+		ssize_t bytes_written = write(fd, buf, PACKET_SIZE);
+		write(fd, "\n", 1);
+#else
 		ssize_t bytes_written = send(fd, buf, PACKET_SIZE, 0);
+#endif
 		if (bytes_written == -1) {
 			perror("send");
 			return 0;
 		}
 		total_bytes_written += bytes_written;
+
+		// stop when we have written video_size video data
 		if (p_video_chunk - video >= video_size)
 			break;
 

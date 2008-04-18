@@ -1,5 +1,5 @@
 /*
- * $Id: logF.c,v 1.2 2008/02/06 16:58:50 john_f Exp $
+ * $Id: logF.c,v 1.3 2008/04/18 15:54:23 john_f Exp $
  *
  * Logging and debugging utility functions.
  *
@@ -152,20 +152,21 @@ extern int reopenLogFile(const char *logfile)
 
 extern void logF(const char *fmt, ...)
 {
-	va_list		ap;
+	va_list	ap;
 
 	va_start(ap, fmt);
-
 	vprintf(fmt, ap);
+	va_end(ap);
 
 	int logfile_open = 1;
 	if (! pLogFile)
 		logfile_open = openLogFile(NULL);
 
-	if (logfile_open)
+	if (logfile_open) {
+		va_start(ap, fmt);
 		vfprintf(pLogFile, fmt, ap);
-
-	va_end(ap);
+		va_end(ap);
+	}
 }
 
 // same as logTF but takes a va_list instead of ...
@@ -178,7 +179,9 @@ extern void vlogTF(const char *fmt, va_list ap)
 	localtime_r(&now, &l);
 
 	printf("%02d %02d:%02d:%02d.%06ld ", l.tm_mday, l.tm_hour, l.tm_min, l.tm_sec, tv.tv_usec);
+
 	vprintf(fmt, ap);
+
 	fflush(stdout);
 
 	int logfile_open = 1;
@@ -187,7 +190,9 @@ extern void vlogTF(const char *fmt, va_list ap)
 
 	if (logfile_open) {
 		fprintf(pLogFile, "%02d %02d:%02d:%02d.%06ld ", l.tm_mday, l.tm_hour, l.tm_min, l.tm_sec, tv.tv_usec);
+		
 		vfprintf(pLogFile, fmt, ap);
+
 		fflush(pLogFile);
 	}
 }
@@ -195,10 +200,8 @@ extern void vlogTF(const char *fmt, va_list ap)
 // logging with time stamp and flushing to stdout and file
 extern void logTF(const char *fmt, ...)
 {
-	va_list		ap;
-
-	va_start(ap, fmt);
-
+	va_list ap;
+	
 	struct timeval tv;
 	time_t now = time(NULL);
 	gettimeofday(&tv, NULL);
@@ -206,7 +209,9 @@ extern void logTF(const char *fmt, ...)
 	localtime_r(&now, &l);
 
 	printf("%02d %02d:%02d:%02d.%06ld ", l.tm_mday, l.tm_hour, l.tm_min, l.tm_sec, tv.tv_usec);
+        va_start(ap, fmt);
 	vprintf(fmt, ap);
+	va_end(ap);
 	fflush(stdout);
 
 	int logfile_open = 1;
@@ -215,19 +220,17 @@ extern void logTF(const char *fmt, ...)
 
 	if (logfile_open) {
 		fprintf(pLogFile, "%02d %02d:%02d:%02d.%06ld ", l.tm_mday, l.tm_hour, l.tm_min, l.tm_sec, tv.tv_usec);
+		va_start(ap, fmt);
 		vfprintf(pLogFile, fmt, ap);
+		va_end(ap);
 		fflush(pLogFile);
 	}
-
-	va_end(ap);
 }
 
 // logging with time stamp and flushing to file only
 extern void logFF(const char *fmt, ...)
 {
-	va_list		ap;
-
-	va_start(ap, fmt);
+	va_list	ap;
 
 	struct timeval tv;
 	time_t now = time(NULL);
@@ -241,47 +244,46 @@ extern void logFF(const char *fmt, ...)
 
 	if (logfile_open) {
 		fprintf(pLogFile, "%02d %02d:%02d:%02d.%06ld ", l.tm_mday, l.tm_hour, l.tm_min, l.tm_sec, tv.tv_usec);
+		va_start(ap, fmt);
 		vfprintf(pLogFile, fmt, ap);
+		va_end(ap);
 		fflush(pLogFile);
 	}
-
-	va_end(ap);
 }
 
 // logging flushing to file only
 extern void logFFi(const char *fmt, ...)
 {
-	va_list		ap;
-
-	va_start(ap, fmt);
+	va_list	ap;
 
 	int logfile_open = 1;
 	if (! pLogFile)
 		logfile_open = openLogFile(NULL);
 
 	if (logfile_open) {
+        	va_start(ap, fmt);
 		vfprintf(pLogFile, fmt, ap);
+		va_end(ap);
 		fflush(pLogFile);
 	}
-
-	va_end(ap);
 }
 
 // printf style logging to stderr and logfile
 extern void logerrF(const char *fmt, ...)
 {
-	va_list		ap;
+	va_list	ap;
 
 	va_start(ap, fmt);
-
 	vfprintf(stderr, fmt, ap);
+	va_end(ap);
 
 	int logfile_open = 1;
 	if (! pLogFile)
 		logfile_open = openLogFile(NULL);
 
-	if (logfile_open)
+	if (logfile_open) {
+		va_start(ap, fmt);
 		vfprintf(pLogFile, fmt, ap);
-
-	va_end(ap);
+		va_end(ap);
+	}
 }
