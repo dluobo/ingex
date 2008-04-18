@@ -1,6 +1,6 @@
 /***************************************************************************
- *   Copyright (C) 2006 by BBC Research   *
- *   info@rd.bbc.co.uk   *
+ *   Copyright (C) 2006-2008 British Broadcasting Corporation              *
+ *   - all rights reserved.                                                *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -28,7 +28,7 @@
 #define NO_TIMECODE wxT("--:--:--:--")
 #define NO_POSITION wxT("   --:--")
 #define UNKNOWN_TIMECODE wxT("??:??:??:??")
-#define UNKNOWN_POSITION wxT("??:??")
+#define UNKNOWN_POSITION wxT("   ??:??")
 #define TC_DISPLAY_UPDATE_INTERVAL 100 //ms
 
 /// Controls timecode and position displays
@@ -38,16 +38,17 @@ class Timepos : public wxEvtHandler
 		Timepos(wxStaticText *, wxStaticText *);
 		void Reset();
 		void SetTimecode(const ProdAuto::MxfTimecode, bool);
-		void SetPosition(long);
+		void SetPosition(unsigned long);
 		void SetPositionUnknown(bool = false);
 		const wxString Record(const ProdAuto::MxfTimecode);
 		void Stop(const ProdAuto::MxfTimecode);
 		void DisableTimecode(const wxString & = NO_TIMECODE);
 		const wxString GetTimecode(ProdAuto::MxfTimecode * = 0);
-		const wxString GetStartTimecode();
+		const wxString GetStartTimecode(ProdAuto::MxfTimecode * = 0);
 		const wxString GetPosition();
 		const wxString GetStartPosition();
-		long GetFrameCount();
+		const wxString FormatTimecode(const ProdAuto::MxfTimecode tc);
+		unsigned long GetFrameCount();
 	private:
 		void OnRefreshTimer(wxTimerEvent& WXUNUSED(event));
 		const wxString FormatPosition(const wxTimeSpan);
@@ -63,6 +64,7 @@ class Timepos : public wxEvtHandler
 		ProdAuto::MxfTimecode mStartTimecode;
 		ProdAuto::MxfTimecode mDuration;
 		ProdAuto::MxfTimecode mLastTimecodeReceived;
+		ProdAuto::MxfTimecode mLastKnownTimecode;
 
 	DECLARE_EVENT_TABLE()
 };

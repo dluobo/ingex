@@ -1,6 +1,6 @@
 /***************************************************************************
- *   Copyright (C) 2006 by BBC Research   *
- *   info@rd.bbc.co.uk   *
+ *   Copyright (C) 2006-2008 British Broadcasting Corporation              *
+ *   - all rights reserved.                                                *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -63,9 +63,9 @@ void Timepos::OnRefreshTimer(wxTimerEvent& WXUNUSED(event))
 
 /// Gets the position display as a frame number, or returns 0 if the position display is not running.
 /// @return The frame count.
-long Timepos::GetFrameCount()
+unsigned long Timepos::GetFrameCount()
 {
-	long frameCount = 0;
+	unsigned long frameCount = 0;
 	if (mPositionRunning) {
 		wxTimeSpan position = wxDateTime::UNow() - mPositionOrigin;
 		frameCount = position.GetMilliseconds().GetLo() * mLastTimecodeReceived.edit_rate.numerator / mLastTimecodeReceived.edit_rate.denominator / 1000;
@@ -79,17 +79,18 @@ long Timepos::GetFrameCount()
 /// @return Formatted string.
 const wxString Timepos::FormatPosition(const wxTimeSpan position)
 {
-	if (mLastTimecodeReceived.undefined) {
+	if (mLastKnownTimecode.undefined) {
 		return UNKNOWN_POSITION;
 	}
 	else {
-		//show hours if any
-		wxString msg = position.GetHours() ? wxString::Format(wxT(" %2d:"), position.GetHours()) : wxT(" ");
+//		//show hours if any
+//		wxString msg = position.GetHours() ? wxString::Format(wxT(" %2d:"), position.GetHours()) : wxT(" ");
 		//show minutes if any hours or minutes
-		msg += position.GetHours() || position.GetMinutes() ? wxString::Format(wxT("%02d:"), position.GetMinutes()) : wxT("  ");
+//		msg += position.GetHours() || position.GetMinutes() ? wxString::Format(wxT("%02d:"), position.GetMinutes()) : wxT("  ");
+		wxString msg = position.GetMinutes() ? wxString::Format(wxT("%02d:"), position.GetMinutes()) : wxT("    "); //Minutes count to >59
 		//show seconds and frames
 		msg += wxString::Format(wxT("%02d:"), (int) (position.GetSeconds().GetLo() % 60));
-		msg += wxString::Format(wxT("%02d"), (int) (position.GetMilliseconds().GetLo() % 1000 * mLastTimecodeReceived.edit_rate.numerator / mLastTimecodeReceived.edit_rate.denominator / 1000));
+		msg += wxString::Format(wxT("%02d"), (int) (position.GetMilliseconds().GetLo() % 1000 * mLastKnownTimecode.edit_rate.numerator / mLastKnownTimecode.edit_rate.denominator / 1000));
 		return msg;
 	}
 }
@@ -155,7 +156,8 @@ void Timepos::Stop(const ProdAuto::MxfTimecode tc)
 	}
 }
 
-/// @param tc Timecode structure to be populated
+/// Supplies the timecode corresponding to now, both as a timecode structure and a formatted string.
+/// @param tc Timecode structure to be populated.
 /// @return The formatted string displayed on the timecode control.
 const wxString Timepos::GetTimecode(ProdAuto::MxfTimecode * tc)
 {
@@ -163,7 +165,8 @@ const wxString Timepos::GetTimecode(ProdAuto::MxfTimecode * tc)
 		if (mTimecodeRunning) {
 			*tc = mLastTimecodeReceived; // for edit rate/defined
 			wxDateTime timecode = wxDateTime::UNow() + mTimecodeOffset;
-			tc->samples = ((((timecode.GetHour() * 60) + timecode.GetMinute()) * 60) + timecode.GetSecond()) * tc->edit_rate.numerator / tc->edit_rate.denominator;
+			tc->samples = (((((unsigned long) timecode.GetHour() * 60) + timecode.GetMinute()) * 60) + timecode.GetSecond()) * tc->edit_rate.numerator / tc->edit_rate.denominator;
+			tc->samples += timecode.GetMillisecond() * tc->edit_rate.numerator / mLastTimecodeReceived.edit_rate.denominator / 1000;
 		}
 		else {
 			tc->undefined = true;
@@ -172,18 +175,32 @@ const wxString Timepos::GetTimecode(ProdAuto::MxfTimecode * tc)
 	return mTimecodeDisplay->GetLabel();
 }
 
-/// @return A formatted string representing the last timecode supplied to Record().
-const wxString Timepos::GetStartTimecode()
+/// Supplies the timecode corresponding to the value sent to Record(), both as a timecode structure and a formatted string.
+/// @param tc Timecode structure to be populated.
+/// @return Timecode as a formatted string.
+const wxString Timepos::GetStartTimecode(ProdAuto::MxfTimecode * tc)
 {
-	if (mStartTimecode.undefined || !mStartTimecode.edit_rate.numerator || mStartTimecode.edit_rate.denominator > mStartTimecode.edit_rate.numerator) { //arithmetic fault
+	if (tc) {
+		*tc = mStartTimecode;
+	}
+	return FormatTimecode(mStartTimecode);
+}
+
+/// Formats the supplied timecode as a displayable string.
+/// @param tc The timecode to format.
+/// @return The formatted string.
+const wxString Timepos::FormatTimecode(const ProdAuto::MxfTimecode tc)
+{
+	if (tc.undefined || !tc.edit_rate.numerator || !tc.edit_rate.denominator) { //arithmetic fault
 		return UNKNOWN_TIMECODE;
 	}
 	else {
-		wxTimeSpan tc(0, 0, 0, (unsigned long) 1000 * mStartTimecode.samples * mStartTimecode.edit_rate.denominator / mStartTimecode.edit_rate.numerator); //use unsigned long because long isn't quite big enough and rolls over at about 23:51:38 (@25fps)
-
-		return wxString::Format(tc.Format(wxT("%H:%M:%S:"))) + wxString::Format(wxT("%02d"), mStartTimecode.samples % (mStartTimecode.edit_rate.numerator / mStartTimecode.edit_rate.denominator));
+		wxTimeSpan timespan(0, 0, 0, (unsigned long) 1000 * tc.samples * tc.edit_rate.denominator / tc.edit_rate.numerator); //use unsigned long because long isn't quite big enough and rolls over at about 23:51:38 (@25fps)
+		return wxString::Format(timespan.Format(wxT("%H:%M:%S:"))) + wxString::Format(wxT("%02d"), tc.samples % (tc.edit_rate.numerator / tc.edit_rate.denominator));
 	}
 }
+
+
 
 /// @return The formatted string displayed on the position control, or a similarly formatted string showing the recording duration, if postrolling.
 const wxString Timepos::GetPosition()
@@ -207,6 +224,7 @@ const wxString Timepos::GetStartPosition()
 void Timepos::Reset()
 {
 	DisableTimecode();
+	mLastKnownTimecode.undefined = true;
 	mPositionDisplay->SetLabel(NO_POSITION);
 	mPostrolling = false;
 	mPositionRunning = false;
@@ -214,9 +232,9 @@ void Timepos::Reset()
 
 /// Manually sets the position display to a given position, based on the edit rate in use.
 /// @param samples The number of frames into the recording.
-void Timepos::SetPosition(long samples) {
-	if (mLastTimecodeReceived.edit_rate.numerator) {
-		mPositionDisplay->SetLabel(FormatPosition(wxTimeSpan(0, 0, 0, (unsigned long) 1000 * samples * mLastTimecodeReceived.edit_rate.denominator / mLastTimecodeReceived.edit_rate.numerator))); //use unsigned long because long isn't quite big enough and rolls over at about 23:51:38 (@25fps)
+void Timepos::SetPosition(unsigned long samples) {
+	if (!mLastKnownTimecode.undefined) {
+		mPositionDisplay->SetLabel(FormatPosition(wxTimeSpan(0, 0, 0, (unsigned long) 1000 * samples * mLastKnownTimecode.edit_rate.denominator / mLastKnownTimecode.edit_rate.numerator))); //use unsigned long because long isn't quite big enough and rolls over at about 23:51:38 (@25fps)
 	}
 }
 
@@ -253,6 +271,7 @@ void Timepos::SetTimecode(const ProdAuto::MxfTimecode tc, bool stuck)
 	}
 	else if (tc.edit_rate.numerator && tc.edit_rate.denominator) { //sensible values: no chance of divide by zero!
 		mLastTimecodeReceived = tc;
+		mLastKnownTimecode = tc;
 		if (stuck) {
 			mTimecodeRunning = false;
 			//show the stuck value

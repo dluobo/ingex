@@ -1,6 +1,6 @@
 /***************************************************************************
- *   Copyright (C) 2006 by BBC Research   *
- *   info@rd.bbc.co.uk   *
+ *   Copyright (C) 2006-2008 British Broadcasting Corporation              *
+ *   - all rights reserved.                                                *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *

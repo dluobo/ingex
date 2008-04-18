@@ -1,6 +1,6 @@
 /***************************************************************************
- *   Copyright (C) 2006 by BBC Research   *
- *   info@rd.bbc.co.uk   *
+ *   Copyright (C) 2006-2008 British Broadcasting Corporation              *
+ *   - all rights reserved.                                                *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -28,21 +28,49 @@ using namespace prodauto; //IngexPlayer class is in this namespace
 BEGIN_EVENT_TABLE( Player, wxEvtHandler )
 	EVT_COMMAND( FRAME_DISPLAYED, wxEVT_PLAYER_MESSAGE, Player::OnFrameDisplayed )
 	EVT_COMMAND( STATE_CHANGE, wxEVT_PLAYER_MESSAGE, Player::OnStateChange )
+	EVT_COMMAND( SPEED_CHANGE, wxEVT_PLAYER_MESSAGE, Player::OnSpeedChange )
+	EVT_COMMAND( PROGRESS_BAR_DRAG, wxEVT_PLAYER_MESSAGE, Player::OnProgressBarDrag )
 	EVT_TIMER( wxID_ANY, Player::OnFilePollTimer )
 END_EVENT_TABLE()
+
+//static Rational Zero = {0, 0};
+//static Rational Aspect = {4, 3};
 
 /// Creates the player, but does not display it.
 /// @param handler The handler where events will be sent.
 /// @param enabled True to enable player.
 /// @param outputType The output type - accelerated or unaccelerated; SDI or not.
 /// @param displayType The on screen display type.
-Player::Player(wxEvtHandler * handler, const bool enabled, const PlayerOutputType outputType, const OSDtype displayType) : LocalIngexPlayer(outputType), mOSDtype(displayType), mEnabled(enabled), mOK(false) //simple LocalIngexPlayer constructor with defaults
+Player::Player(wxEvtHandler * handler, const bool enabled, const PlayerOutputType outputType, const OSDtype displayType)
+/*: LocalIngexPlayer(
+	outputType,
+	true,
+	4,
+	false,
+	true,
+	true,
+	0,
+	false,
+	false,
+	Zero,
+	Zero,
+	Aspect,
+	(float) 1.0,
+	false,
+	0),*/
+: 
+LocalIngexPlayer(outputType), 
+ mOSDtype(displayType), mEnabled(enabled), mOK(false), mSpeed(0) //simple LocalIngexPlayer constructor with defaults
 {
-	mListener = new Listener(this);
+	mListener = new Listener(this); //registers with the player
 	mFilePollTimer = new wxTimer(this, wxID_ANY);
 	SetNextHandler(handler);
-	mSelectedSource = 0; //display the quad split by default
-	registerListener(mListener);
+	mDesiredSourceName = ""; //display the quad split by default
+}
+
+Player::~Player()
+{
+	delete mListener;
 }
 
 /// Indicates whether the player has successfully loaded anything.
@@ -75,7 +103,7 @@ void Player::Enable(bool state)
 		}
 		else {
 			mFilePollTimer->Stop(); //suspend any current attempts to load
-			stop(); //closes window
+			close(); //stops and closes window
 			//clear the position display
 			wxCommandEvent guiFrameEvent(wxEVT_PLAYER_MESSAGE, FRAME_DISPLAYED);
 			guiFrameEvent.SetInt(false); //invalid position
@@ -89,41 +117,45 @@ void Player::Enable(bool state)
 /// If player is disabled, stores the given filenames for later.
 /// @param fileNames List of file paths, or if zero, use previous supplied list and ignore all other parameters.
 /// @param sourceNames Corresponding list of source names, for display as the player window title.
-/// @param cuePoints Frame numbers of cue points.
+/// @param cuePoints Frame numbers of cue points (not including start and end positions).
 /// @param startIndex Event list index for entry corresponding to start of file.
 /// @param cuePoint Index in cuePoints to jump to.
 void Player::Load(std::vector<std::string> * fileNames, std::vector<std::string> * sourceNames, std::vector<int64_t> * cuePoints, int startIndex, unsigned int cuePoint)
 {
 //std::cerr << "Player Load" << std::endl;
-	if (mEnabled) {
-		mFilePollTimer->Stop(); //may be running from another take
-		//see how many files we have before the player loads them, so we can start polling even if more appear just after loading
-		mNFilesExisting = 0;
-		std::vector<std::string> * fNames = fileNames ? fileNames : &mFileNames;
-		for (size_t i = 0; i < fNames->size(); i++) {
-			if (wxFile::Exists(wxString(fNames->at(i).c_str(), *wxConvCurrent))) {
-				mNFilesExisting++;
+	std::vector<std::string> * fNames = fileNames ? fileNames : &mFileNames;
+	if (!fNames->size()) { //router recorder recording only, for instance
+		Reset(); //otherwise it keeps showing what was there before
+	}
+	else {
+		if (mEnabled) {
+			mFilePollTimer->Stop(); //may be running from another take
+			//see how many files we have before the player loads them, so we can start polling even if more appear just after loading
+			mNFilesExisting = 0;
+			for (size_t i = 0; i < fNames->size(); i++) {
+				if (wxFile::Exists(wxString((*fNames)[i].c_str(), *wxConvCurrent))) {
+					mNFilesExisting++;
+				}
 			}
 		}
-	}
-	//load the player (this will merely store the parameters if the player is not enabled
-	if (!Start(fileNames, sourceNames, cuePoints, startIndex, cuePoint) && mFileNames.size() != mNFilesExisting && mEnabled) {
-		//player isn't happy, and (probably) not all files were there when the player opened, so start polling for them
-		mFilePollTimer->Start(FILE_POLL_TIMER_INTERVAL);
+		//load the player (this will merely store the parameters if the player is not enabled
+		if (!Start(fileNames, sourceNames, cuePoints, startIndex, cuePoint) && mFileNames.size() != mNFilesExisting && mEnabled) {
+			//player isn't happy, and (probably) not all files were there when the player opened, so start polling for them
+			mFilePollTimer->Start(FILE_POLL_TIMER_INTERVAL);
+		}
 	}
 }
 
-
-//Starts player (if enabled), either with a new set of files/cue points or with the previously stored values
-
-/// If player is enabled, tries to load the given filenames or re-load previously given filenames.
+/// If player is enabled, tries to load the given filenames or re-load previously given filenames, and generates a NEW_FILESET event indicating which filenames were opened and which has been selected.
+/// Tries to select the file position previously selected by the user.  If this wasn't opened, selects the only file open or a quad split otherwise.
 /// If player is disabled, stores the given filenames for later.
 /// This method is the same as Load() except that it does not manipulate the polling timer.
 /// @param fileNames List of file paths, or if zero, use previous supplied list and ignore all other parameters.
 /// @param sourceNames Corresponding list of source names, for display as the player window title.
-/// @param cuePoints Frame numbers of cue points.
+/// @param cuePoints Frame numbers of cue points (not including start and end positions).
 /// @param startIndex Event list index for entry corresponding to start of file.
 /// @param cuePoint Index in cuePoints to jump to.
+/// @return True if all files were opened.
 bool Player::Start(std::vector<std::string> * fileNames, std::vector<std::string> * sourceNames, std::vector<int64_t> * cuePoints, int startIndex, unsigned int cuePoint)
 {
 //std::cerr << "Player Start" << std::endl;
@@ -132,16 +164,18 @@ bool Player::Start(std::vector<std::string> * fileNames, std::vector<std::string
 		mFileNames.clear();
 		mSourceNames.clear();
 		for (size_t i = 0; i < fileNames->size(); i++) {
-			mFileNames.push_back(fileNames->at(i));
-			mSourceNames.push_back(sourceNames->at(i));
+			mFileNames.push_back((*fileNames)[i]);
+		}
+		for (size_t i = 0; i < sourceNames->size(); i++) {
+			mSourceNames.push_back((*sourceNames)[i]);
 		}
 		mCuePoints.clear();
 		mListener->ClearCuePoints();
 		mStartIndex = startIndex;
 		mListener->SetStartIndex(mStartIndex); //an offset for all the cue point event values
 		for (size_t i = 0; i < cuePoints->size(); i++) {
-			mCuePoints.push_back(cuePoints->at(i)); //so that we know where to jump to for a given cue point
-			mListener->AddCuePoint(cuePoints->at(i)); //so we can work out which cue point has been reached
+			mCuePoints.push_back((*cuePoints)[i]); //so that we know where to jump to for a given cue point
+			mListener->AddCuePoint((*cuePoints)[i]); //so we can work out which cue point has been reached
 		}
 		mLastFrameDisplayed = 0; //new clip, so previous position not relevant
 		mLastRequestedCuePoint = cuePoint;
@@ -151,10 +185,11 @@ bool Player::Start(std::vector<std::string> * fileNames, std::vector<std::string
 	if (mEnabled) {
 		mOpened.clear();
 		mOK = start(mFileNames, mOpened);
+		int sourceToSelect = 0; //display quad split by default
 		if (mOK) {
 			//(re)loading stored cue points
 			for (size_t i = 0; i < mCuePoints.size(); i++) {
-				markPosition(mCuePoints.at(i), 0); //so that an event is generated at each cue point
+				markPosition(mCuePoints[i], 0); //so that an event is generated at each cue point
 			}
 			//player starts off in play forwards mode
 			if (PAUSE == mMode || STOP == mMode) {
@@ -166,32 +201,37 @@ bool Player::Start(std::vector<std::string> * fileNames, std::vector<std::string
 			SetOSD(mOSDtype);
 			if (mLastFrameDisplayed) {
 				//player was already some way into a clip and has been reloaded
-				seek(mLastFrameDisplayed, SEEK_SET); //restore position
+				seek(mLastFrameDisplayed, SEEK_SET, FRAME_PLAY_UNIT); //restore position
 			}
 			else {
 				//if mLastRequestedCuePoint isn't zero (start), player was requested to go to a cue point in this clip while no files were available
 				JumpToCue(mLastRequestedCuePoint);
 			}
-			allFilesOpen = true;
-			int nFilesOpen = 0;
-			int aWorkingSource = 0; //default to quad split if no working sources
+
+			// work out which source to select
+			unsigned int nFilesOpen = 0;
+			int aWorkingSource = 0; //initialisation prevents compiler warning
 			for (size_t i = 0; i < mOpened.size(); i++) {
-				allFilesOpen &= mOpened.at(i);
-				if (mOpened.at(i)) {
+				if (mOpened[i]) {
 					nFilesOpen++;
-					aWorkingSource = i + 1;
+					aWorkingSource = i + 1; // +1 because source 0 is quad split
 				}
 			}
-			if (1 == nFilesOpen) {
-				//display the only source, full screen
-				mSelectedSource = aWorkingSource;
+			if (mDesiredSourceName.size()) { //want something other than quad split
+				size_t i;
+				for (i = 0; i < mSourceNames.size(); i++) {
+					if (mSourceNames[i] == mDesiredSourceName && mOpened[i]) { //located the desired source and it's available
+						sourceToSelect = i + 1; // + 1 to offset for quad split
+						break;
+					}
+				}
+				if (mSourceNames.size() == i && 1 == nFilesOpen) { //can't use the desired source and only one file open
+					//display the only source, full screen
+					sourceToSelect = aWorkingSource;
+				}
 			}
-			else if (nFilesOpen > 1 && mSelectedSource && !mOpened.at(mSelectedSource - 1)) {
-				//display quad split, as several sources available but the requested one isn't
-				mSelectedSource = 0;
-			}
-			//else, display the source last displayed
-			SelectSource(mSelectedSource);
+			SelectSource(sourceToSelect);
+			allFilesOpen = mOpened.size() == nFilesOpen;
 		}
 		else {
 			setX11WindowName("Ingex Player - no files");
@@ -199,29 +239,29 @@ bool Player::Start(std::vector<std::string> * fileNames, std::vector<std::string
 		//tell the source selection list the situation
 		wxCommandEvent guiEvent(wxEVT_PLAYER_MESSAGE, NEW_FILESET);
 		guiEvent.SetClientData(&mOpened);
-		guiEvent.SetInt(mSelectedSource);
+		guiEvent.SetInt(sourceToSelect);
 		AddPendingEvent(guiEvent);
 	}
 	return allFilesOpen;
 }
 
-/// Displays the given source and titles the window appropriately.
+/// Displays the file corresponding to the given source (which is assumed to have been loaded) and titles the window appropriately.
 /// @param id The source ID - 0 for quad split.
 void Player::SelectSource(const int id)
 {
 //std::cerr << "Player Select Source" << std::endl;
 	if (mOK) {
+		std::string title;
 		switchVideo(id);
-		mSelectedSource = id;
-		if (mSelectedSource) {
-			//individual source
-			setX11WindowName(mSourceNames[mSelectedSource - 1]);
+		if (id) { //individual source
+			mDesiredSourceName = mSourceNames[id - 1]; // -1 to offset for quad split
+			title = mSourceNames[id - 1];
 		}
-		else {
-			std::string title;
+		else { //quad split
+			mDesiredSourceName = "";
 			unsigned int nSources = 0;
-			for (size_t i = 0; i < mOpened.size(); i++) {
-				if (mOpened.at(i)) {
+			for (size_t i = 0; i < mSourceNames.size(); i++) { //only go through video files
+				if (mOpened[i]) {
 					title += mSourceNames[i] + "; ";
 					if (4 == ++nSources) {
 						//Quad Split displays the first four successfully opened files
@@ -229,9 +269,15 @@ void Player::SelectSource(const int id)
 					}
 				}
 			}
-			title.resize(title.size() - 2); //remove trailing semicolon and space
-			setX11WindowName(title.c_str());
+			if (title.size()) { //trap for only audio files
+				title.resize(title.size() - 2); //remove trailing semicolon and space
+			}
 		}
+		//add player type
+		if (X11_OUTPUT == getActualOutputType() || DUAL_DVS_X11_OUTPUT == getActualOutputType()) {
+			title += " (unaccelerated)";
+		}
+		setX11WindowName(title.c_str());
 	}
 }
 
@@ -240,7 +286,12 @@ void Player::Play()
 {
 //std::cerr << "Player Play" << std::endl;
 	if (mOK) {
-		play();
+		if (mSpeed <= 0) {
+			play();
+		}
+		else if (mSpeed < MAX_SPEED) {
+			playSpeed(mSpeed * 2);
+		}
 	}
 }
 
@@ -249,8 +300,27 @@ void Player::PlayBackwards()
 {
 //std::cerr << "Player Play backwards" << std::endl;
 	if (Within()) {
-		playSpeed(-1);
+		if (mSpeed >= 0) {
+			playSpeed(-1);
+		}
+		else if (mSpeed > -MAX_SPEED) {
+			playSpeed(mSpeed * 2);
+		}
 	}
+}
+
+/// Indicates if playing at max forward speed.
+/// @return True if at max speed.
+bool Player::AtMaxForwardSpeed()
+{
+	return mSpeed == MAX_SPEED;
+}
+
+/// Indicates if playing at max reverse speed.
+/// @return True if at max speed.
+bool Player::AtMaxReverseSpeed()
+{
+	return mSpeed == -MAX_SPEED;
 }
 
 /// Pauses playback.
@@ -297,15 +367,15 @@ void Player::JumpToCue(unsigned int cuePoint)
 	if (mOK) {
 		if (cuePoint > mCuePoints.size()) {
 			//the end
-			seek(0, SEEK_END);
+			seek(0, SEEK_END, FRAME_PLAY_UNIT);
 		}
 		else if (cuePoint) {
 			//somewhere in the middle
-			seek(mCuePoints.at(cuePoint - 1), SEEK_SET);
+			seek(mCuePoints[cuePoint - 1], SEEK_SET, FRAME_PLAY_UNIT);
 		}
 		else {
 			//the start
-			seek(0, SEEK_SET);
+			seek(0, SEEK_SET, FRAME_PLAY_UNIT);
 		}
 	}
 	mLastRequestedCuePoint = cuePoint;
@@ -336,13 +406,12 @@ void Player::SetOSD(const OSDtype type)
 	}
 }
 
-/// Sets how the player appears and what size it is.
+/// Sets how the player appears.
 /// @param outputType Whether external, on-screen or both, and whether on-screen is accelerated.
-/// @param scale <= 1 for on-screen accelerated player size.
-void Player::SetDisplayParams(const PlayerOutputType outputType, const float scale)
+void Player::SetOutputType(const PlayerOutputType outputType)
 {
-//std::cerr << "Player SetDisplayParams" << std::endl;
-	setOutputType(outputType, scale);
+//std::cerr << "Player SetOutputType" << std::endl;
+	setOutputType(outputType, 1.0);
 	if (mOK) {
 		//we're already seeing something, so make changes take effect immediately
 		Start();
@@ -372,15 +441,42 @@ void Player::OnFrameDisplayed(wxCommandEvent& event) {
 /// Notes the state change to restore the state if the player is re-loaded.
 /// Skips the event so it passes to the parent handler.
 /// @param event The command event.
-void Player::OnStateChange(wxCommandEvent& event) {
+void Player::OnStateChange(wxCommandEvent& event)
+{
 	//remember the mode to set if re-loading occurs
 //std::cerr << "State Change " << event.GetInt() << std::endl;
 	if (CLOSE != event.GetInt()) {
 		mMode = (prodauto::PlayerMode) event.GetInt();
+		if (PAUSE == event.GetInt()) {
+			mSpeed = 0;
+		}
 	}
 	//tell the gui
 	event.Skip();
 }
+
+/// Responds to a speed change event from the listener.
+/// Notes the speed to enable new speed to be calculated for repeated play or play backwards requests.
+/// Skips the event so it passes to the parent handler.
+/// @param event The command event.
+void Player::OnSpeedChange(wxCommandEvent& event)
+{
+	//remember the current speed to set if re-loading occurs and if changing speed
+	mSpeed = event.GetInt();
+//std::cerr << mSpeed << std::endl;
+	//tell the gui
+	event.Skip();
+}
+
+/// Responds to a progress bar drag event from the listener.
+/// Seeks to the given position.
+/// @param event The command event.
+void Player::OnProgressBarDrag(wxCommandEvent& event)
+{
+	seek(event.GetInt(), SEEK_SET, PERCENTAGE_PLAY_UNIT);
+}
+
+
 
 /// Responds to the file poll timer.
 /// Checks to see if any more files have appeared, and if so, restarts the player.
@@ -392,7 +488,7 @@ void Player::OnFilePollTimer(wxTimerEvent& WXUNUSED(event))
 	//Have any more files appeared?
 	unsigned int nFilesExisting = 0;
 	for (size_t i = 0; i < mFileNames.size(); i++) {
-		if (wxFile::Exists(wxString(mFileNames.at(i).c_str(), *wxConvCurrent))) {
+		if (wxFile::Exists(wxString(mFileNames[i].c_str(), *wxConvCurrent))) {
 			nFilesExisting++;
 		}
 	}
@@ -424,56 +520,73 @@ void Listener::SetStartIndex(const int startIndex)
 {
 	wxMutexLocker lock(mMutex);
 	mStartIndex = startIndex;
+	mLastCuePointNotified = startIndex;
 }
 
 /// Erases all cue points previously set.
 void Listener::ClearCuePoints()
 {
 	wxMutexLocker lock(mMutex);
-	mCuePointMap.clear();
+	mCuePoints.clear();
 }
 
 /// Adds a cue point to detect a position within the file.
-/// @param cuePoint The frame number of the cue point.
-void Listener::AddCuePoint(const int64_t cuePoint)
+/// @param frameNo The frame number of the cue point - expected to be greater than all previous frame numbers
+void Listener::AddCuePoint(const int64_t frameNo)
 {
 	wxMutexLocker lock(mMutex);
-	int index = mCuePointMap.size() + 1 + mStartIndex; //do this as a separate line or size() seems to be increased before the assignment!  Can't rely on this being consistent behaviour
-	mCuePointMap[cuePoint] = index;
+	mCuePoints.push_back(frameNo);
 }
 
 /// Callback for each frame displayed.
-/// Sends a Frame Displayed event to the player.
-/// Sends a Cue Point event to the player if a cue point has been reached.
+/// Sends a Cue Point event to the player if a cue point (including start or finish) has been reached.
+/// Sends a Frame Displayed event to the player (after the Cue Point event so that the gui stops the player at the end of the file).
+/// NB a cue point is reached if the position is between it and the next cue point in the sense of playing forwards - regardless of the playing direction
 /// @param frameInfo Structure with information about the frame being displayed.
 /// NB Called in another thread context.
 void Listener::frameDisplayedEvent(const FrameInfo* frameInfo)
 {
+	//work out which cue point area we're in
+	unsigned int mark = 0;
+	wxMutexLocker lock(mMutex);
+	if (frameInfo->position == frameInfo->sourceLength - 1) { //at the end of the file
+		mark = mCuePoints.size() + 1;
+	}
+	else { //somewhere within the file
+		for (mark = 0; mark < mCuePoints.size(); mark++) {
+			if (mCuePoints[mark] > frameInfo->position) { //not reached this mark yet
+				break;
+			}
+		}
+	}
+	//Tell gui if we've moved into a new area
+	mark += mStartIndex;
+	if (mLastCuePointNotified != mark) {
+//std::cerr << "cue point event" << std::endl;
+		mLastCuePointNotified = mark;
+		wxCommandEvent guiEvent(wxEVT_PLAYER_MESSAGE, CUE_POINT);
+		guiEvent.SetExtraLong(frameInfo->position);
+		guiEvent.SetInt(mLastCuePointNotified);
+		mPlayer->AddPendingEvent(guiEvent);
+	}
+	//tell gui the frame number
 	wxCommandEvent guiFrameEvent(wxEVT_PLAYER_MESSAGE, FRAME_DISPLAYED);
 	guiFrameEvent.SetInt(true); //valid position
 	guiFrameEvent.SetExtraLong(frameInfo->position);
 	mPlayer->AddPendingEvent(guiFrameEvent);
-	if (frameInfo->isMarked) {
-//std::cerr << "Player cue point reached" << std::endl;
-		wxCommandEvent guiCueEvent(wxEVT_PLAYER_MESSAGE, CUE_POINT);
-		wxMutexLocker lock(mMutex);
-		guiCueEvent.SetInt(mCuePointMap[frameInfo->position]);
-		guiFrameEvent.SetExtraLong(frameInfo->position);
-		mPlayer->AddPendingEvent(guiCueEvent);
-	}
 }
 
 /// Callback for a frame being repeated from the SDI card because the player didn't supply the next one in time.
 /// Currently does nothing
-/// @param frameInfo Structure with information about the repeated frame
 /// NB Called in another thread context
-void Listener::frameDroppedEvent(const FrameInfo* lastFrameInfo)
+void Listener::frameDroppedEvent(const FrameInfo*)
 {
 //std::cerr << "frame dropped event" << std::endl;
 }
 
 /// Callback for the player changing state.
 /// Sends a state change event to the player in the case of a change in direction or between stop, play and pause.
+/// Sends a speed change event for the above and a speed change.
 /// @param playerEvent Structure with information about state changes.
 /// NB Called in another thread context
 void Listener::stateChangeEvent(const MediaPlayerStateEvent* playerEvent)
@@ -488,51 +601,41 @@ void Listener::stateChangeEvent(const MediaPlayerStateEvent* playerEvent)
 	}
 	if (playerEvent->playChanged) {
 		//play/pause
-		wxCommandEvent guiEvent(wxEVT_PLAYER_MESSAGE, STATE_CHANGE);
+		wxCommandEvent stateEvent(wxEVT_PLAYER_MESSAGE, STATE_CHANGE);
+		wxCommandEvent speedEvent(wxEVT_PLAYER_MESSAGE, SPEED_CHANGE);
 		if (playerEvent->play) {
-//std::cerr << "speed factor: " << playerEvent->speedFactor << std::endl;
-			guiEvent.SetInt(playerEvent->speed < 0 ? PLAY_BACKWARDS : PLAY);
+//std::cerr << "state change PLAY: speed: " << playerEvent->speed << std::endl;
+			stateEvent.SetInt(playerEvent->speed < 0 ? PLAY_BACKWARDS : PLAY);
+			speedEvent.SetInt(playerEvent->speed); //always need this as mSpeed will be 0 and speedChanged will be false if speed is 1
 		}
 		else {
-			guiEvent.SetInt(PAUSE);
+//std::cerr << "state change PAUSE: speed: " << playerEvent->speed << std::endl;
+			stateEvent.SetInt(PAUSE);
+			speedEvent.SetInt(0); //Pause reports speed as being 1
 		}	
-		mPlayer->AddPendingEvent(guiEvent);
+		mPlayer->AddPendingEvent(stateEvent);
+		mPlayer->AddPendingEvent(speedEvent);
 	}
-	if (playerEvent->speedChanged && playerEvent->play) {
-		//forward/reverse
-		wxCommandEvent guiEvent(wxEVT_PLAYER_MESSAGE, STATE_CHANGE);
-		guiEvent.SetInt(playerEvent->speed < 0 ? PLAY_BACKWARDS : PLAY);
-		mPlayer->AddPendingEvent(guiEvent);
-//std::cerr << "speed factor changed: " << playerEvent->speedFactor << std::endl;
+	else if (playerEvent->speedChanged) {
+		wxCommandEvent speedEvent(wxEVT_PLAYER_MESSAGE, SPEED_CHANGE);
+		speedEvent.SetInt(playerEvent->speed);
+		mPlayer->AddPendingEvent(speedEvent);
+//std::cerr << "speed change: " << playerEvent->speed << std::endl;
 	}
 }
 
 /// Callback for the player reaching the end of the file (while playing forwards).
-/// Sends a Cue Point event to the player.
-/// @param lastReadFrameInfo Sructure containing information about the last frame read from the file.
+/// Does nothing (situation detected in frameDisplayedEvent() instead)
 /// NB Called in another thread context.
-void Listener::endOfSourceEvent(const FrameInfo* lastReadFrameInfo)
+void Listener::endOfSourceEvent(const FrameInfo*)
 {
-//std::cerr << "end of source event" << std::endl;
-	wxCommandEvent guiEvent(wxEVT_PLAYER_MESSAGE, CUE_POINT);
-	guiEvent.SetExtraLong(lastReadFrameInfo->position);
-	wxMutexLocker lock(mMutex);
-	guiEvent.SetInt(mCuePointMap.size() + 1 + mStartIndex);
-	mPlayer->AddPendingEvent(guiEvent);
 }
 
 /// Callback for the player reaching the start of the file (while playing backwards).
-/// Sends a Cue Point event to the player.
-/// @param lastReadFrameInfo Sructure containing information about the last frame read from the file.
+/// Does nothing (situation detected in frameDisplayedEvent() instead)
 /// NB Called in another thread context.
-void Listener::startOfSourceEvent(const FrameInfo* lastReadFrameInfo)
+void Listener::startOfSourceEvent(const FrameInfo*)
 {
-//std::cerr << "start of source event" << std::endl;
-	wxCommandEvent guiEvent(wxEVT_PLAYER_MESSAGE, CUE_POINT);
-	guiEvent.SetExtraLong(lastReadFrameInfo->position); //should be 0!
-	wxMutexLocker lock(mMutex);
-	guiEvent.SetInt(mStartIndex);
-	mPlayer->AddPendingEvent(guiEvent);
 }
 
 /// Callback for the player being closed.
@@ -570,10 +673,20 @@ void Listener::keyPressed(int code)
 }
 
 /// Callback for the user releasing a key when the player window has focus.
-/// Currently does nothing.
-/// @param code The X11 key code
+/// Does nothing.
 /// NB Called in another thread context.
-void Listener::keyReleased(int code)
+void Listener::keyReleased(int)
 {
 //std::cerr << "key released" << std::endl;
+}
+
+/// Callback for the progress bar being dragged with the mouse.
+/// Seeks to the given position.
+/// @param position The progress bar position, from 0 to 100.
+/// NB Called in another thread context.
+void Listener::progressBarPositionSet(float position)
+{
+	wxCommandEvent event(wxEVT_PLAYER_MESSAGE, PROGRESS_BAR_DRAG);
+	event.SetInt((int) (position * 1000.)); //this is the resulution the player seek command works to
+	mPlayer->AddPendingEvent(event);
 }

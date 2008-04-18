@@ -1,6 +1,6 @@
 /***************************************************************************
- *   Copyright (C) 2006 by Matthew Marks   *
- *   matthew@pcx208   *
+ *   Copyright (C) 2006-2008 British Broadcasting Corporation              *
+ *   - all rights reserved.                                                *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -44,7 +44,7 @@ Comms::Comms(wxEvtHandler * handler, int argc, wxChar** argv)
 		char ** argv_ = new char * [argc];
 		for (int i = 0; i < argc; i++) {
 			wxString wxArg = argv[i];
-			char * arg = new char[wxArg.Len()];
+			char * arg = new char[wxArg.Len() + 1];
 			strcpy(arg, wxArg.mb_str());
 			argv_[i] = arg;
 		}
@@ -471,54 +471,58 @@ CORBA::Object_ptr Comms::ResolveObject(const CosNaming::Name & name, wxString & 
 	ACE_Guard<ACE_Thread_Mutex> guard(mNsMutex);
 	int retry;
 	bool done;
-	for(retry = 0, done = false; !done; ++retry)
-	{
-		try
+	if (!CORBA::is_nil(mNameService)) { //sanity check
+		for(retry = 0, done = false; !done; ++retry)
 		{
-			obj = mNameService->resolve(name);
-			done = true;
-		}
-		catch(CosNaming::NamingContext::NotFound &)
-		{
-		// Naming service has no recorder of this name
-//			ACE_DEBUG(( LM_ERROR, "CorbaMisc::ResolveObject() - Exception during resolve: %C\n",
-//				e._name() ));
-			msg = wxT("Category not found in naming service.");// + wxString(e._name(), *wxConvCurrent);
-			msg += wxT("\nAre there recorders available, and is this the right name server?");
-			done = true;
-		}
-		catch(CORBA::COMM_FAILURE & e)
-		{
-			// COMM_FAILURE while communicating with naming service
-//				ACE_DEBUG(( LM_ERROR, "CorbaMisc::ResolveObject() - Exception during resolve: %C\n",
-//					e._name() ));
-			if(retry < 1)
+			try
 			{
-				// allow a retry
+				obj = mNameService->resolve(name);
+				done = true;
 			}
-			else
+			catch(CosNaming::NamingContext::NotFound &)
 			{
-				mNameService = CosNaming::NamingContext::_nil();
-					// set to nil so that next time we will ResolveNameService
-				msg = wxT("Exception communicating with name server: ") + wxString(e._name(), *wxConvCurrent);
-				msg += wxT("\nTry again.");
+			// Naming service has no recorder of this name
+	//			ACE_DEBUG(( LM_ERROR, "CorbaMisc::ResolveObject() - Exception during resolve: %C\n",
+	//				e._name() ));
+				msg = wxT("Category not found in naming service.");// + wxString(e._name(), *wxConvCurrent);
+				msg += wxT("\nAre there recorders available, and is this the right name server?");
+				done = true;
+			}
+			catch(CORBA::COMM_FAILURE & e)
+			{
+				// COMM_FAILURE while communicating with naming service
+	//				ACE_DEBUG(( LM_ERROR, "CorbaMisc::ResolveObject() - Exception during resolve: %C\n",
+	//					e._name() ));
+				if(retry < 1)
+				{
+					// allow a retry
+				}
+				else
+				{
+					mNameService = CosNaming::NamingContext::_nil();
+						// set to nil so that next time we will ResolveNameService
+					msg = wxT("Exception communicating with name server: ") + wxString(e._name(), *wxConvCurrent);
+					msg += wxT("\nTry again.");
+					done = true;
+				}
+			}
+			catch(CORBA::Exception &)
+			{
+				// Other problem while communicating with naming service
+	//				ACE_DEBUG(( LM_ERROR, "CorbaMisc::ResolveObject() - Exception during resolve: %C\n",
+	//					e._name() ));
+	//			mNameService = CosNaming::NamingContext::_nil();
+				// set to nil so that next time we will ResolveNameService
 				done = true;
 			}
 		}
-		catch(CORBA::Exception &)
-		{
-			// Other problem while communicating with naming service
-//				ACE_DEBUG(( LM_ERROR, "CorbaMisc::ResolveObject() - Exception during resolve: %C\n",
-//					e._name() ));
-			mNameService = CosNaming::NamingContext::_nil();
-			// set to nil so that next time we will ResolveNameService
-			done = true;
-		}
+	}
+	else {
+		msg = wxT("I do not have a naming service!");
 	}
 	return obj;
 }
 
-//this needs to be thread-safe
 /// Returns a recorder object corresponding to the supplied name.
 /// This function is thread safe.
 /// @param recorder The name of the recorder.

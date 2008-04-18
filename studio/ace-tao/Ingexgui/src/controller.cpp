@@ -1,6 +1,6 @@
 /***************************************************************************
- *   Copyright (C) 2006 by Matthew Marks   *
- *   matthew@pcx208   *
+ *   Copyright (C) 2006-2008 British Broadcasting Corporation              *
+ *   - all rights reserved.                                                *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -20,15 +20,13 @@
 
 #include "controller.h"
 #include "comms.h"
-//#include "source.h"
-//#include "controllergroup.h"
+#include "ingexgui.h"
 
 DEFINE_EVENT_TYPE (wxEVT_CONTROLLER_THREAD);
-IMPLEMENT_DYNAMIC_CLASS(wxControllerThreadEvent, wxEvent)
+IMPLEMENT_DYNAMIC_CLASS(ControllerThreadEvent, wxEvent)
 
 BEGIN_EVENT_TABLE( Controller, wxEvtHandler )
 	EVT_CONTROLLER_THREAD(Controller::OnThreadEvent)
-//	EVT_CHECKBOX( -1, Controller::OnCheckBox )
 	EVT_TIMER( -1, Controller::OnTimer )
 END_EVENT_TABLE()
 
@@ -38,45 +36,32 @@ END_EVENT_TABLE()
 /// @param comms The comms object, to allow the recorder object to be resolved.
 /// @param handler The handler where events will be sent.
 Controller::Controller(const wxString & name, Comms * comms, wxEvtHandler * handler)
-: wxThread(wxTHREAD_JOINABLE), mWatchdogTimer(NULL), mCommand(NONE), mName(name), mComms(comms) //joinable means we can wait until the thread terminates, and this object doesn't delete itself when that happens
+: wxThread(wxTHREAD_JOINABLE), mComms(comms), mName(name), mTimecodeRunning(false), mReconnecting(false), mPendingCommand(NONE) //joinable means we can wait until the thread terminates, and this object doesn't delete itself when that happens
 {
 	mCondition = new wxCondition(mMutex);
-	SetNextHandler(handler); //allow thread wxControllerThreadEvents to propagate to the frame
+	SetNextHandler(handler); //allow thread ControllerThreadEvents to propagate to the frame
 	wxString msg;
+	mWatchdogTimer = new wxTimer(this);
+	mMutex.Lock(); //to allow a test for the thread being ready, when it unlocks the mutex with Wait();
 	if (wxTHREAD_NO_ERROR != wxThread::Create()) {
 		msg = wxT("Could not create thread for recorder.");
-		Delete();
 	}
 	else if (wxTHREAD_NO_ERROR != wxThread::Run()) {
 		msg = wxT("Could not run thread for recorder.");
-		Delete();
 	}
 	else { //thread is starting
-		mMutex.Lock(); //wait for thread to be ready to accept signals
-		mMutex.Unlock();
+		mMutex.Lock(); //wait, if necessary, for thread to be ready to accept signals (which is indicated by it unlocking the mutex, locked before the thread started)
+		mMutex.Unlock(); //undo the above to return to normal
 		Signal(CONNECT);
 	}
 	if (!msg.IsEmpty()) {
 		//whine
-		wxControllerThreadEvent event(wxEVT_CONTROLLER_THREAD);
+		ControllerThreadEvent event(wxEVT_CONTROLLER_THREAD);
 		event.SetName(mName);
 		event.SetCommand(CONNECT);
 		event.SetResult(FAILURE);
 		event.SetMessage(msg);
 		handler->AddPendingEvent(event);
-	}
-}
-
-/// Shuts down thread (if running) to avoid memory leaks.
-Controller::~Controller()
-{
-	Signal(DIE);
-	if (IsAlive()) { //won't be if initialisation failed
-		Wait();
-	}
-	delete mCondition;
-	if (NULL != mWatchdogTimer) {
-		delete mWatchdogTimer;
 	}
 }
 
@@ -99,48 +84,102 @@ const ProdAuto::MxfDuration Controller::GetMaxPostroll()
 	return mMaxPostroll;
 }
 
-
-/// Called by the watchdog timer.
-void Controller::OnTimer(wxTimerEvent& WXUNUSED(event))
+/// Signals to the thread to tell the recorder the tape IDs, or stores the command for later execution
+/// @param sourceNames The names of the video sources
+/// @param tapeIDs The Tape ID of each source, as identified in sourceNames
+void Controller::SetTapeIds(const CORBA::StringSeq & sourceNames, const CORBA::StringSeq & tapeIds)
 {
-	//timer is one-shot so has stopped
-	Signal(STATUS); //re-starts timer once recorder responds or times out
+	//Set up the parameters
+	mMutex.Lock();
+	mSourceNames = sourceNames;
+	mTapeIds = tapeIds;
+	mMutex.Unlock();
+	if (mReconnecting) { //can't send a command now
+		Signal(RECONNECT); //try to get things moving immediately; SET_TAPE_IDs will always be sent after reconnection
+	}
+	else {
+		Signal(SET_TAPE_IDS);
+	}
 }
 
-/// Signals to the thread to tell the recorder to start recording.
+/// Signals to the thread to tell the recorder to start recording, or stores the command for later execution.
 /// @param startTimecode The first frame to be recorded after preroll.
 /// @param preroll The preroll to be applied to the recording.
 /// @param enableList True for each source that should record (in order of source index).
-/// @param tag The label to be applied to the recording.
-/// @param tapeIds The tape ID of each video source (in order of source index), whether enabled for recording or not.
-void Controller::Record(const ProdAuto::MxfTimecode & startTimecode, const ProdAuto::MxfDuration & preroll, const CORBA::BooleanSeq & enableList, const wxString & tag, const CORBA::StringSeq & tapeIds)
+void Controller::Record(const ProdAuto::MxfTimecode & startTimecode, const ProdAuto::MxfDuration & preroll, const CORBA::BooleanSeq & enableList)
 {
+	//Set up the parameters
 	mMutex.Lock();
-	mStartTimecode = startTimecode;
 	mPreroll = preroll;
 	mEnableList = enableList;
-	mTag = tag;
-	mTapeIds = tapeIds;
-	mMutex.Unlock();
-	Signal(RECORD);
+	if (mReconnecting) { //can't send a command now
+		mPendingCommand = RECORD; //will act on this when we can
+		mStartTimecode.undefined = true; //the requested frame might not be available by the time we reconnect
+		mMutex.Unlock();
+		Signal(RECONNECT); //try to get things moving immediately
+	}
+	else {
+		mStartTimecode = startTimecode;
+		mMutex.Unlock();
+		Signal(RECORD);
+	}
 }
 
-/// Signals to the thread to tell the recorder to stop recording.
+/// Signals to the thread to tell the recorder to stop recording, or stores the command for later execution.
 /// @param stopTimecode The first frame of the postroll period.
 /// @param postroll The postroll to be applied to the recording.
-void Controller::Stop(const ProdAuto::MxfTimecode & stopTimecode, const ProdAuto::MxfDuration & postroll)
+/// @param project The project name to be applied to the recording.
+/// @param description The description to be applied to the recording.
+void Controller::Stop(const ProdAuto::MxfTimecode & stopTimecode, const ProdAuto::MxfDuration & postroll, const wxString & project, const wxString & description)
 {
+	//Set up the parameters
 	mMutex.Lock();
-	mStopTimecode = stopTimecode;
 	mPostroll = postroll;
-	mMutex.Unlock();
-	Signal(STOP);
+	mProject = project;
+	mDescription = description;
+	if (mReconnecting) { //can't send a command now
+		mPendingCommand = STOP; //will act on this when we can
+		mStopTimecode.undefined = true; //the requested frame might not be available by the time we reconnect
+		mMutex.Unlock();
+		Signal(RECONNECT); //try to get things moving immediately
+	}
+	else {
+		mStopTimecode = stopTimecode;
+		mMutex.Unlock();
+		Signal(STOP);
+	}
 }
 
-/// Kicks the thread into life.
+/// @return True if this is a router recorder
+bool Controller::IsRouterRecorder()
+{
+	return mRouterRecorder;
+}
+
+/// If thread isn't running, deletes this controller immediately.
+/// Otherwise, signals to the thread to tell it to die, which will (at its leisure) send an event resulting in this controller deleting itself.
+/// This allows the controller to be deleted without waiting for a pending CORBA command.
+/// Once this function has been called, the controller should be considered unusable.
+void Controller::Destroy()
+{
+	if (IsAlive()) { //won't be if initialisation failed
+		Signal(DIE);
+		delete mWatchdogTimer; //don't want any stray events
+		mWatchdogTimer = 0; //to prevent it being started again
+	}
+	else {
+		delete mCondition;
+		delete this;
+	}
+}
+
+/// Kicks the thread into life
 /// @param command The command to execute.
 void Controller::Signal(Command command)
 {
+	if (mWatchdogTimer) {
+		mWatchdogTimer->Stop(); //about to execute a command, so timer is irrelevant
+	}
 	wxMutexLocker lock(mMutex); //prevent concurrent access to mCommand
 	mCommand = command; //this will ensure the thread runs again even if it's currently busy (so not listening for a signal)
 	mCondition->Signal(); //this will set the thread going if it's currently waiting
@@ -149,165 +188,357 @@ void Controller::Signal(Command command)
 /// Respond to a thread event.
 /// Triggers the watchdog timer and passes the event on.
 /// @param event The thread event.
-void Controller::OnThreadEvent(wxControllerThreadEvent & event)
+void Controller::OnThreadEvent(ControllerThreadEvent & event)
 {
-	if (CONNECT != event.GetCommand() || SUCCESS == event.GetResult()) { //this is not a report of failure to connect
-		//Send the event to the parent
-		if (NULL == mWatchdogTimer) {
-			//first time
-			mWatchdogTimer = new wxTimer(this);
-			mWatchdogTimer->Start(WATCHDOG_TIMER_SHORT_INTERVAL, wxTIMER_ONE_SHOT); //set as a one-shot so that CORBA response delays are accounted for; initial interval is short so that stuck timecode is quickly detected
-			//Set sources' status
+	mReconnecting = COMM_FAILURE == event.GetResult();
+	if (DIE == event.GetCommand()) { //the thread is on its last legs
+		Wait(); //on the offchance the thread is still running
+		delete mCondition;
+		delete this;
+	}
+	else if (mWatchdogTimer) { //not waiting to die
+		if (CONNECT == event.GetCommand() && SUCCESS != event.GetResult()) { //failure to connect - fatal
+			//let the parent know - parent will delete this controller
+//std::cerr << "connect failure notification" << std::endl;
+			GetNextHandler()->AddPendingEvent(event); //NB don't use Skip() because the next event handler can delete this controller, leading to a hang
 		}
-		else if (WATCHDOG_TIMER_SHORT_INTERVAL == mWatchdogTimer->GetInterval()) {
-			mWatchdogTimer->Start(WATCHDOG_TIMER_LONG_INTERVAL, wxTIMER_ONE_SHOT);
-		}
-		else {
+		else if (mReconnecting || FAILURE == event.GetResult()) {
+			if (RECONNECT != event.GetCommand()) { //paren't doesn't want to know about reconnect attempts
+//std::cerr << "reconnect notification" << std::endl;
+				//let the parent know
+				GetNextHandler()->AddPendingEvent(event);
+				if (RECORD == event.GetCommand()) {
+					//record when reconnected
+					mMutex.Lock();
+					mStartTimecode.undefined = true; //the requested frame might not be available by the time we succeed
+					mMutex.Unlock();
+					//Let the timer handler know what to do
+					mPendingCommand = RECORD;
+				}
+				else if (STOP == event.GetCommand()) {
+					//stop when reconnected
+					mMutex.Lock();
+					mStopTimecode.undefined = true; //the requested frame might not be available by the time we succeed
+					mMutex.Unlock();
+					//Let the timer handler know what to do
+					mPendingCommand = STOP;
+				}
+			}
+			//Set the timer to try again soon
 			mWatchdogTimer->Start(WATCHDOG_TIMER_SHORT_INTERVAL, wxTIMER_ONE_SHOT);
 		}
+		else if (RECONNECT == event.GetCommand()) {
+			//let the parent know
+//std::cerr << "reconnect notification" << std::endl;
+			GetNextHandler()->AddPendingEvent(event);
+			Signal(SET_TAPE_IDS); //may be a restarted recorder which won't have the tape IDs
+		}
+		else { //a successful ordinary event
+			if (event.GetCommand() == mPendingCommand) { //pending command successfully sent
+				mPendingCommand = NONE;
+			}
+			else if (NONE != mPendingCommand) { //pending command not sent yet
+				//Send the pending command again immediately, with updated parameters
+				Signal(mPendingCommand);
+			}
+			//let the parent know
+//std::cerr << "ordinary notification" << std::endl;
+			GetNextHandler()->AddPendingEvent(event);
+			//start the timer
+			if (WATCHDOG_TIMER_SHORT_INTERVAL == mWatchdogTimer->GetInterval() && RUNNING == event.GetTimecodeState()) {
+				//everything is fine so wake up after a while
+				mWatchdogTimer->Start(WATCHDOG_TIMER_LONG_INTERVAL, wxTIMER_ONE_SHOT);
+			}
+			else {
+				//need to do timecode check so wake up soon
+				mWatchdogTimer->Start(WATCHDOG_TIMER_SHORT_INTERVAL, wxTIMER_ONE_SHOT);
+			}
+		}
 	}
-	GetNextHandler()->AddPendingEvent(event); //don't use Skip() because the next event handler can delete this controller, leading to a hang
+}
+
+/// Called by the watchdog timer.
+/// Executes pending commands, or makes a status request
+void Controller::OnTimer(wxTimerEvent& WXUNUSED(event))
+{
+	//timer is one-shot so has stopped: it will be re-started if necessary when the thread returns an event in response to Signal() or the parent issues a command in response to Retry()
+	if (mReconnecting) {
+		//try again
+//std::cerr << "signal reconnect" << std::endl;
+		Signal(RECONNECT);
+	}
+	else if (NONE != mPendingCommand) {
+		Signal(mPendingCommand);
+	}
+	else {
+		//periodic status request
+//std::cerr << "signal status" << std::endl;
+		Signal(STATUS);
+	}
 }
 
 /// Thread entry point, called by wxWidgets.
 /// @return Always 0.
 wxThread::ExitCode Controller::Entry()
 {
-	//assumes mutex already locked here, so can signal that thread has started by unlocking it when Wait() is called
+	mCommand = NONE;
+	//assumes mutex already locked here, so we can signal to the main thread that we are ready to accept signals by unlocking it when Wait() is called
 	while (1) {
 		if (NONE == mCommand) { //not been told to do anything new during previous interation
 			mCondition->Wait(); //unlock mutex and wait for a signal, then relock
 		}
 		//Now we're going
-		wxControllerThreadEvent event(wxEVT_CONTROLLER_THREAD);
+		ControllerThreadEvent event(wxEVT_CONTROLLER_THREAD);
 		event.SetName(mName);
 		event.SetCommand(mCommand);
 		mCommand = NONE; //can now detect if another command is issued while busy
 		mMutex.Unlock();
 		if (DIE == event.GetCommand()) {
+			AddPendingEvent(event);
 			break;
 		}
-		//do the work
-		ProdAuto::Recorder::ReturnCode rc;
+		//do the work...
+		ProdAuto::Recorder::ReturnCode rc = ProdAuto::Recorder::SUCCESS;
 		wxString msg;
 		CORBA::StringSeq_var files; //deletes itself
 		ProdAuto::MxfTimecode timecode; //structure so deletes itself
+		//send a recorder command, if any
 		for (int i = 0; i < 2; i++) { //always good to try things twice with CORBA
-			try {
-				switch (event.GetCommand())
-				{
-					case CONNECT:
-						mMutex.Lock(); //this will hold up any calls to the controller, but there shouldn't be any until we've initialised anyway
-						msg = mComms->SelectRecorder(mName, mRecorder);
-						if (msg.IsEmpty()) {
-							try {
-								mTrackList = mRecorder->Tracks();
-								mMaxPreroll = mRecorder->MaxPreRoll();
-								mMaxPostroll = mRecorder->MaxPostRoll();
-								event.SetTrackStatusList(mRecorder->TracksStatus());
-								event.SetMessage(wxString(mRecorder->RecordingFormat(), *wxConvCurrent));
-							}
-							catch (const CORBA::Exception & e) {
-								msg = wxT("Error communicating with this recorder: ") + wxString(e._name(), *wxConvCurrent) + wxT(".  Is it operational and connected to the network?  The problem may resolve itself if you try again.");
-							}
+			event.SetResult(SUCCESS); //default
+			switch (event.GetCommand())
+			{
+				case CONNECT: case RECONNECT: {
+//					ProdAuto::MxfDuration maxPreroll, maxPostroll;
+					ProdAuto::MxfDuration maxPreroll = InvalidMxfDuration; //initialisation prevents compiler warning
+					ProdAuto::MxfDuration maxPostroll = InvalidMxfDuration; //initialisation prevents compiler warning
+					ProdAuto::TrackList_var trackList;
+					bool routerRecorder = false; //initialisation prevents compiler warning
+					event.SetTimecodeStateChanged(); //always trigger action
+					mLastTimecodeReceived.undefined = true; //guarantee that a valid timecode will be assumed to be running timecode
+					msg = mComms->SelectRecorder(mName, mRecorder);
+					if (msg.IsEmpty()) { //OK so far
+						try {
+							trackList = mRecorder->Tracks();
+							maxPreroll = mRecorder->MaxPreRoll();
+							maxPostroll = mRecorder->MaxPostRoll();
+							event.SetTrackStatusList(mRecorder->TracksStatus());
+							routerRecorder = wxString(mRecorder->RecordingFormat(), *wxConvCurrent).MakeUpper().Matches(wxT("*ROUTER*"));
 						}
-						if (msg.IsEmpty()) {
+						catch (const CORBA::Exception & e) {
+//std::cerr << "connect/reconnect exception" << std::endl;
+							msg = wxT("Error communicating with this recorder: ") + wxString(e._name(), *wxConvCurrent) + wxT(".  Is it operational and connected to the network?  The problem may resolve itself if you try again.");
+						}
+					}
+					if (!msg.IsEmpty()) { //failed to select
+						event.SetResult(COMM_FAILURE);
+					}
+					else { //OK so far
+						mMutex.Lock();
+						if (CONNECT == event.GetCommand()) {
 							//various checks on the data we've acquired
-							if (!mTrackList->length() || !event.GetNTracks()) {
+							if (!trackList->length() || !event.GetNTracks()) {
 								msg = wxT("This recorder has no tracks.");
 							}
-							else if (mMaxPreroll.undefined) {
+							else if (maxPreroll.undefined) {
 								msg = wxT("This recorder has no maximum preroll.");
 							}
-							else if (!mMaxPreroll.edit_rate.numerator || !mMaxPreroll.edit_rate.denominator) {
+							else if (!maxPreroll.edit_rate.numerator || !maxPreroll.edit_rate.denominator) {
 								msg = wxT("This recorder has invalid maximum preroll."); //don't want divide by zero errors
 							}
-							else if (mMaxPostroll.undefined) { //quite likely as postroll isn't dependent on buffer length
-								mMaxPostroll = mMaxPreroll; //for the edit rate values
+							else if (maxPostroll.undefined) { //quite likely as postroll isn't dependent on buffer length
+								mMaxPostroll = maxPreroll; //for the edit rate values
 								mMaxPostroll.undefined = false;
 								mMaxPostroll.samples = DEFAULT_MAX_POSTROLL;
 							}
-							else if (!mMaxPostroll.edit_rate.numerator || !mMaxPostroll.edit_rate.denominator) {
+							else if (!maxPostroll.edit_rate.numerator || !maxPostroll.edit_rate.denominator) {
 								msg = wxT("This recorder has invalid maximum postroll."); //don't want divide by zero errors
 							}
-						}
-						mMutex.Unlock();
-						if (msg.IsEmpty()) {
-							mSourceList.length(mTrackList->length());
-							//check timecode
-							ProdAuto::TrackStatus status = event.GetTrackStatusList()[0]; //already checked there are some tracks
-							if (status.timecode.undefined) {
-								msg = wxT("This recorder has no timecode.");
+							else {
+								mMaxPostroll = maxPostroll;
 							}
-							else if (!status.timecode.edit_rate.numerator || !status.timecode.edit_rate.denominator) { //invalid/no timecode
-								msg = wxT("This recorder has invalid timecode.");
+							mTrackList = trackList;
+							mMaxPreroll = maxPreroll;
+							mSourceList.length(mTrackList->length());
+							mRouterRecorder = routerRecorder;
+						}
+						else { //reconnecting
+							//check nothing's changed after reconnection
+							if (maxPreroll.undefined
+							 || maxPreroll.edit_rate.numerator != mMaxPreroll.edit_rate.numerator
+							 || maxPreroll.edit_rate.denominator != mMaxPreroll.edit_rate.denominator
+							 || maxPreroll.samples != mMaxPreroll.samples) {
+								msg = wxT("Maximum preroll has changed.");
+							}
+							else if ((maxPostroll.undefined && mMaxPostroll.samples != DEFAULT_MAX_POSTROLL) ||
+							 (!maxPostroll.undefined &&
+							  (maxPostroll.edit_rate.numerator != mMaxPostroll.edit_rate.numerator
+							  || maxPostroll.edit_rate.denominator != mMaxPostroll.edit_rate.denominator
+							  || maxPostroll.samples != mMaxPostroll.samples))) {
+								msg = wxT("Maximum postroll has changed.");
+							}
+							else if (trackList->length() != mTrackList->length()) {
+								msg = wxT("Number of tracks has changed.");
+							}
+							else if (mRouterRecorder && !routerRecorder) {
+								msg = wxT("No longer a router recorder.");
+							}
+							else if (!mRouterRecorder && routerRecorder) {
+								msg = wxT("Now presents itself as a router recorder.");
 							}
 							else {
-								mLastTimecodeReceived = status.timecode;
-								event.SetTimecodeRunning(true); //as far as we know at the moment!
-								event.SetTimecodeStateChanged(true);
-								mTimecodeRunning = true;
+								for (unsigned int i = 0; i < trackList->length(); i++) {
+									if (strcmp(trackList[i].name, mTrackList[i].name)) {
+										msg = wxT("name.");
+									}
+									else if (trackList[i].type != mTrackList[i].type) {
+										msg = wxT("type.");
+									}
+									else if (trackList[i].id != mTrackList[i].id) {
+										msg = wxT("ID.");
+									}
+									else if (trackList[i].has_source != mTrackList[i].has_source) {
+										msg = wxT("\"has_source\" status.");
+									}
+									else if (trackList[i].has_source && strcmp(trackList[i].src.package_name, mTrackList[i].src.package_name)) {
+										msg = wxT("package name.");
+									}
+									else if (trackList[i].has_source && strcmp(trackList[i].src.track_name, mTrackList[i].src.track_name)) {
+										msg = wxT("track name.");
+									}
+									if (msg.Length()) {
+										msg = wxT("Track \"") + wxString(mTrackList[i].name, *wxConvCurrent) + wxT("\" has changed ") + msg;
+										break;
+									}
+								}
 							}
 						}
-						rc = msg.IsEmpty() ? ProdAuto::Recorder::SUCCESS : ProdAuto::Recorder::FAILURE;
-						break;
-					case RECORD: {
-						mMutex.Lock();
-						timecode = mStartTimecode;
-						ProdAuto::MxfDuration preroll = mPreroll;
-						char * tag = CORBA::string_dup(mTag.mb_str(*wxConvCurrent));
-						CORBA::BooleanSeq rec_enable = mEnableList;
-						CORBA::StringSeq tapeIds = mTapeIds;
 						mMutex.Unlock();
-						rc = mRecorder->Start(timecode, preroll, rec_enable, tag, tapeIds);
-						break;
 					}
-					case STOP: {
-						mMutex.Lock();
-						timecode = mStopTimecode;
-						ProdAuto::MxfDuration postroll = mPostroll;
-						mMutex.Unlock();
-						rc = mRecorder->Stop(timecode, postroll, files.out());
-						break;
+					if (msg.IsEmpty()) {
+						rc = ProdAuto::Recorder::SUCCESS;
 					}
-					default:
-						break;
+					else {
+						rc = ProdAuto::Recorder::FAILURE;
+						event.SetMessage(msg);
+						event.SetTrackStatusList(0); //track status not valid
+					}
+					break;
 				}
+				case SET_TAPE_IDS: {
+					mMutex.Lock();
+					CORBA::StringSeq sourceNames = mSourceNames;
+					CORBA::StringSeq tapeIds = mTapeIds;
+					mMutex.Unlock();
+					try {
+						mRecorder->SetTapeNames(sourceNames, tapeIds);
+					}
+					catch (const CORBA::Exception & e) {
+//std::cerr << "set tape IDs exception" << std::endl;
+						event.SetResult(COMM_FAILURE);
+					}
+					rc = ProdAuto::Recorder::SUCCESS; //no return code suppled by SetTapeNames()
+					break;
+				}
+				case RECORD: {
+					mMutex.Lock();
+					timecode = mStartTimecode;
+					ProdAuto::MxfDuration preroll = mPreroll;
+					CORBA::BooleanSeq rec_enable = mEnableList;
+					CORBA::StringSeq tapeIds = mTapeIds;
+					mMutex.Unlock();
+					try {
+						rc = mRecorder->Start(timecode, preroll, rec_enable, false);
+					}
+					catch (const CORBA::Exception & e) {
+//std::cerr << "start exception" << std::endl;
+						event.SetResult(COMM_FAILURE);
+					}
+					break;
+				}
+				case STOP: {
+					mMutex.Lock();
+					timecode = mStopTimecode;
+					ProdAuto::MxfDuration postroll = mPostroll;
+					char * project = CORBA::string_dup(mProject.mb_str(*wxConvCurrent));
+					char * description = CORBA::string_dup(mDescription.mb_str(*wxConvCurrent));
+					mMutex.Unlock();
+					try {
+						rc = mRecorder->Stop(timecode, postroll, project, description, files.out());
+					}
+					catch (const CORBA::Exception & e) {
+//std::cerr << "stop exception" << std::endl;
+						event.SetResult(COMM_FAILURE);
+					}
+					event.SetTimecodeStateChanged(); //so that a timecode that was stuck during the recording will be reported as such
+					break;
+				}
+				default:
+					break;
+			}
+			if (COMM_FAILURE != event.GetResult()) {
 				if (ProdAuto::Recorder::SUCCESS == rc) {
-					event.SetResult(SUCCESS);
 					event.SetFileList(files); //only relevant for STOP
 					event.SetTimecode(timecode); //only relevant for START and STOP
 				}
 				else {
 					event.SetResult(FAILURE);
-					event.SetMessage(msg);
 				}
-				i++; //successful or no call made: no need to try again
-			}
-			catch (const CORBA::Exception &) {
-				event.SetResult(COMM_FAILURE);
+				break; //comms successful or no call made: no need to try again
 			}
 		}
 		event.SetTrackList(mTrackList);
-		if (SUCCESS == event.GetResult() && CONNECT != event.GetCommand()) {
+		//get status
+		if (COMM_FAILURE != event.GetResult()) {
 			for (int j = 0; j < 2; j++) { //always good to try things twice with CORBA
 				try {
-					event.SetTrackStatusList(mRecorder->TracksStatus());
-					//stuck timecode?
-					ProdAuto::TrackStatus status = event.GetTrackStatusList()[0];
-					if (status.timecode.samples != mLastTimecodeReceived.samples && !mTimecodeRunning) { //just started
-						mTimecodeRunning = true;
-						event.SetTimecodeStateChanged(true);
+					if (CONNECT != event.GetCommand() && RECONNECT != event.GetCommand()) { //haven't already got track status list
+						event.SetTrackStatusList(mRecorder->TracksStatus());
 					}
-					else if (status.timecode.samples == mLastTimecodeReceived.samples && mTimecodeRunning) { //just stopped
-						mTimecodeRunning = false;
-						event.SetTimecodeStateChanged(true);
+					//timecode situation
+					if (!event.GetNTracks() || event.GetTrackStatusList()[0].timecode.undefined || !event.GetTrackStatusList()[0].timecode.edit_rate.numerator || !event.GetTrackStatusList()[0].timecode.edit_rate.denominator) { //no or invalid timecode
+						if (!mLastTimecodeReceived.undefined) { //newly in this state
+							mLastTimecodeReceived.undefined = true; //to allow future detection of state change
+							event.SetTimecodeStateChanged();
+							//ABSENT is the default timecode state in the event
+						}
 					}
-					event.SetTimecodeRunning(mTimecodeRunning);
-					mLastTimecodeReceived = status.timecode;
+					else { //timecode value is OK
+						ProdAuto::MxfTimecode timecode = event.GetTrackStatusList()[0].timecode;
+						if (mLastTimecodeReceived.undefined) { //timecode has just appeared
+							event.SetTimecodeState(UNCONFIRMED);
+							if (!mTimecodeRunning) { //just started
+								mTimecodeRunning = true; //to allow future detection of state change
+								event.SetTimecodeStateChanged();
+							}
+						}
+						else if (!wxDateTime::Now().IsEqualUpTo(mLastTimecodeRequest, wxTimeSpan::Milliseconds(100))) { //long enough since the last stored value was received to assume that the timecode has changed
+							if (timecode.samples != mLastTimecodeReceived.samples) { //timecode is running
+								event.SetTimecodeState(RUNNING);
+								if (!mTimecodeRunning) { //just started
+									mTimecodeRunning = true; //to allow future detection of state change
+									event.SetTimecodeStateChanged();
+								}
+							}
+							else { //timecode is stuck
+								event.SetTimecodeState(STUCK);
+								if (mTimecodeRunning) { //just stopped
+									mTimecodeRunning = false; //to allow future detection of state change
+									event.SetTimecodeStateChanged();
+								}
+							}
+						}
+						else {
+							//repeat previous status
+							event.SetTimecodeState(mTimecodeRunning ? UNCONFIRMED : STUCK);
+						}
+						mLastTimecodeReceived = timecode;
+						mLastTimecodeRequest = wxDateTime::Now(); //now or sometime before!
+					}
 					break; //successful: no need to try again
 				}
 				catch (const CORBA::Exception &) {
+//std::cerr << "status exception" << std::endl;
+					event.SetResult(COMM_FAILURE);
 				//indicated by list size being zero
 				}
 			}

@@ -1,6 +1,6 @@
 /***************************************************************************
- *   Copyright (C) 2006 by BBC Research   *
- *   info@rd.bbc.co.uk   *
+ *   Copyright (C) 2006-2008 British Broadcasting Corporation              *
+ *   - all rights reserved.                                                *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -22,15 +22,17 @@
 #define _RECORDERGROUP_H_
 #include <wx/wx.h>
 #include "controller.h"
+#include "ingexgui.h"
 DECLARE_EVENT_TYPE(wxEVT_RECORDERGROUP_MESSAGE, -1)
 
 class Comms;
+class wxXmlDocument;
 
 /// A control derived from a list box containing a list of recorders, connected and disconnected.
 class RecorderGroupCtrl : public wxListBox
 {
 	public:
-		RecorderGroupCtrl(wxWindow *, wxWindowID id, const wxPoint &, const wxSize &, int, wxChar**);
+		RecorderGroupCtrl(wxWindow *, wxWindowID id, const wxPoint &, const wxSize &, int, wxChar**, const wxXmlDocument *);
 		~RecorderGroupCtrl();
 		void StartGettingRecorders();
 		void SetPreroll(const ProdAuto::MxfDuration);
@@ -39,17 +41,17 @@ class RecorderGroupCtrl : public wxListBox
 		const ProdAuto::MxfDuration GetPostroll();
 		const ProdAuto::MxfDuration GetMaxPreroll();
 		const ProdAuto::MxfDuration GetMaxPostroll();
-		void RecordAll(const wxString, const ProdAuto::MxfTimecode);
-		void Record( const wxString &, const CORBA::BooleanSeq &, const CORBA::StringSeq &);
-		void Stop(const ProdAuto::MxfTimecode &);
-		bool IsEmpty();
+		void SetTapeIds(const wxString &, const CORBA::StringSeq &, const CORBA::StringSeq &);
+		void RecordAll(const ProdAuto::MxfTimecode);
+		void Record(const wxString &, const CORBA::BooleanSeq &);
+		void Stop(const ProdAuto::MxfTimecode &, const wxString &, const wxString &);
+		void EnableForInput(const bool = true);
 		enum RecorderGroupCtrlEventType {
-			GETTING_RECORDERS,
-			GOT_RECORDERS,
+			DISABLE_REFRESH,
+			ENABLE_REFRESH,
 			NEW_RECORDER,
 			REMOVE_RECORDER,
 			REQUEST_RECORD,
-			STATUS_UNKNOWN,
 			RECORDING,
 			TRACK_STATUS,
 			STOPPED,
@@ -60,13 +62,15 @@ class RecorderGroupCtrl : public wxListBox
 			TIMECODE_RUNNING,
 			TIMECODE_STUCK,
 			TIMECODE_MISSING,
+			COMM_FAILURE,
 		};
 	private:
 		void OnListRefreshed(wxCommandEvent &);
 		void OnLMouseDown(wxMouseEvent &);
 		void OnUnwantedMouseDown(wxMouseEvent &);
-		void OnControllerEvent(wxControllerThreadEvent &);
+		void OnControllerEvent(ControllerThreadEvent &);
 		void Insert(const wxString &, unsigned int);
+		void Deselect(unsigned int);
 		const wxString GetName(unsigned int);
 		void Connect(unsigned int);
 		void Disconnect(unsigned int);
@@ -75,13 +79,12 @@ class RecorderGroupCtrl : public wxListBox
 		Comms * mComms;
 		bool mEnabledForInput;
 		ProdAuto::MxfDuration mMaxPreroll, mMaxPostroll, mPreroll, mPostroll;
-		wxString mTag;
 		wxString mTimecodeRecorder;
+		bool mTimecodeRecorderStuck;
 		ProdAuto::MxfTimecode mStartTimecode;
+		const wxXmlDocument * mDoc;
 		DECLARE_EVENT_TABLE()
 };
-
-static const ProdAuto::MxfTimecode InvalidMxfTimecode = { {0, 0}, 0, true};
 
 /// Class storing various information about a recorder, to be attached to events from the recorder group.
 /// Various constructors for different information; all data constant.
@@ -103,14 +106,15 @@ class RecorderData
 };
 
 /// Class storing a recorder name and a controller object, to be attached to each entry in the list control.
-/// Recorder name must be present; controller object is created and destroyed with the Connect() and Disconnect() methods.
+/// This class is used to allow names in the list to be remembered while messages such as "Connecting..." are displayed.
+/// Recorder name must be present; controller object is created and destroyed with the Start() and Stop() methods.
 class ControllerContainer : public wxClientData
 {
 	public:
 		ControllerContainer(const wxString & name) : mName(name), mController(0) {};
 		~ControllerContainer() { if (mController) { delete mController; } };
-		void Connect(Comms * comms, wxEvtHandler * handler) { mController = new Controller(mName, comms, handler); };
-		void Disconnect() { if (mController) { delete mController; mController = 0; } };
+		void Start(Comms * comms, wxEvtHandler * handler) { mController = new Controller(mName, comms, handler); }; //the controller's Destroy() method will delete it
+		void Stop() { if (mController) { mController->Destroy(); mController = 0; } };
 		const wxString GetName() { return mName; };
 		Controller * GetController() { return mController; };
 	private:

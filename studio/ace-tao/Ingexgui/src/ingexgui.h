@@ -1,20 +1,35 @@
+/***************************************************************************
+ *   Copyright (C) 2006-2008 British Broadcasting Corporation              *
+ *   - all rights reserved.                                                *
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ *   This program is distributed in the hope that it will be useful,       *
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+ *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program; if not, write to the                         *
+ *   Free Software Foundation, Inc.,                                       *
+ *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ ***************************************************************************/
 
 #ifndef _INGEXGUI_H_
 #define _INGEXGUI_H_
 #include <vector>
 #include "comms.h"
 #include "controller.h"
-//#include <wx/spinctrl.h>
-//#include "source.h"
 #include <wx/listctrl.h> //for Win32
 #include <wx/datetime.h> //for Win32
 #include <wx/xml/xml.h>
-//#include "ticktree.h"
 #include <wx/notebook.h> //for wx 2.7+
 
 #define DEFAULT_PREROLL 10 //frames
 #define DEFAULT_POSTROLL 10 //frames
-//#define REVIEW_THRESHOLD 5 //seconds
 
 #define CONTROL_BORDER 5 //pixels to space controls from edge, each other, etc
 #define EVENT_COL_WIDTH 100
@@ -30,14 +45,14 @@
 
 #define SAVED_STATE_FILENAME wxT(".ingexguirc")
 
-//class Source;
-//class ControllerGroup;
-//class ingexguiFrame;
+static const ProdAuto::MxfTimecode InvalidMxfTimecode = { {0, 0}, 0, true};
+static const ProdAuto::MxfDuration InvalidMxfDuration = { {0, 0}, 0, true};
+
 class TickTreeCtrl;
 class DragButtonList;
 
 class 
-ingexguiapp : public wxApp
+IngexguiApp : public wxApp
 {
 	public:
 		virtual bool OnInit();
@@ -48,29 +63,24 @@ WX_DECLARE_OBJARRAY(ProdAuto::TrackList_var, ArrayOfTrackList_var);
 WX_DECLARE_OBJARRAY(CORBA::StringSeq_var, ArrayOfStringSeq_var);
 
 /// Class holding information about a take, for later replay.
-/// Holds the position of the take within the displayed list of events, the project name (recording tag), an array of lists of video files
+/// Holds the position of the take within the displayed list of events, the project name, an array of lists of video files
 /// (one for each recorder) and an array of lists of track names (ditto).
 class TakeInfo
 {
 	public:
-		TakeInfo(unsigned long startIndex, const wxString tag) : mStartIndex(startIndex), mTag(tag) {};
-//		void SetFiles(ProdAuto::StringList_var files) {mFiles = files;};
+		TakeInfo(unsigned long startIndex, const wxString & projectName) : mStartIndex(startIndex), mProjectName(projectName) {};
 		void AddRecorder(ProdAuto::TrackList_var trackList, CORBA::StringSeq_var fileList) {mFiles.Add(fileList); mTracks.Add(trackList);};
 		const unsigned long GetStartIndex() {return mStartIndex;};
-//		ProdAuto::StringList_var GetFiles() {return mFiles;};
 		ArrayOfStringSeq_var * GetFiles() {return &mFiles;};
-		const wxString GetTag() {return mTag;};
-//		ProdAuto::TrackList_var GetTrackList() {return mTrackList;};
+		const wxString GetProjectName() {return mProjectName;};
 		ArrayOfTrackList_var * GetTracks() {return &mTracks;};
 		void AddCuePoint(int64_t cuePoint) {mCuePoints.push_back(cuePoint);};
 		std::vector<int64_t> * GetCuePoints() {return &mCuePoints;};
 	private:
 		const unsigned long mStartIndex; //the index in the event list for the start of this take
 		ArrayOfStringSeq_var mFiles;
-//		ProdAuto::StringList_var mFiles; //deletes itself
-		const wxString mTag;
+		const wxString mProjectName;
 		ArrayOfTrackList_var mTracks; //deletes itself
-//		ProdAuto::TrackList_var mTrackList; //deletes itself
 		std::vector<int64_t> mCuePoints;
 
 };
@@ -86,17 +96,10 @@ class HelpDlg;
 class RecorderGroupCtrl;
 
 /// The main displayed frame, at the heart of the application
-class ingexguiFrame : public wxFrame
+class IngexguiFrame : public wxFrame
 {
 	public:
-		ingexguiFrame(int, wxChar**);
-//		~ingexguiFrame();
-//		void RecordEnable(const bool enable);
-//		const unsigned int GetPreroll();
-//		const unsigned int GetPostroll();
-//		const wxString GetDir();
-//		const bool IsRecording();
-
+		IngexguiFrame(int, wxChar**);
 	enum
 	{
 		MENU_About = wxID_HIGHEST + 1,
@@ -119,6 +122,7 @@ class ingexguiFrame : public wxFrame
 		MENU_J,
 		MENU_K,
 		MENU_L,
+		MENU_Space,
 		MENU_AutoClear,
 		MENU_ClearLog,
 		MENU_DisablePlayer,
@@ -128,25 +132,25 @@ class ingexguiFrame : public wxFrame
 		MENU_ExtAccelOutput,
 		MENU_ExtUnaccelOutput,
 		MENU_UnaccelOutput,
-		MENU_PlayerSize,
-		MENU_NormalDisplay,
-		MENU_SmallerDisplay,
-		MENU_SmallestDisplay,
 		MENU_PlayerOSD,
 		MENU_AbsoluteTimecode,
 		MENU_RelativeTimecode,
 		MENU_NoOSD,
+		MENU_TestMode,
 		BUTTON_Record,
 		BUTTON_Stop,
 		BUTTON_Cue,
 		TIMER_Refresh,
 		BUTTON_RecorderListRefresh,
 		BUTTON_TapeId,
+		BUTTON_ClearDescription,
 		CHOICE_RecorderSelector,
 		CHECKLIST_Sources,
 		BUTTON_PrevTake,
 		BUTTON_NextTake,
-		TREE
+		TEXTCTRL_Description,
+		TREE,
+		BUTTON_JumpToTimecode,
 	};
 	private:
 	enum EventType
@@ -160,11 +164,12 @@ class ingexguiFrame : public wxFrame
 	enum Stat
 	{
 		STOPPED,
+		RUNNING_UP,
 		RECORDING,
 		PLAYING,
 		PAUSED,
 		PLAYING_BACKWARDS,
-		UNKNOWN,
+//		UNKNOWN,
 	};
 		void OnClose(wxCloseEvent &);
 		void OnHelp(wxCommandEvent&);
@@ -185,24 +190,35 @@ class ingexguiFrame : public wxFrame
 		void OnRefreshTimer(wxTimerEvent&);
 		void OnPrevTake(wxCommandEvent&);
 		void OnNextTake(wxCommandEvent&);
+		void OnJumpToTimecode(wxCommandEvent&);
 		void OnPlayerEvent(wxCommandEvent&);
 		void OnRecorderGroupEvent(wxCommandEvent&);
+		void OnTestDlgEvent(wxCommandEvent&);
 		void OnTreeEvent(wxCommandEvent& event);
 		void OnPlaybackSourceSelect(wxCommandEvent&);
 		void OnShortcut(wxCommandEvent &);
 		void OnDisablePlayer(wxCommandEvent &);
-		void OnNotebookPageChange(wxNotebookEvent &);
+		void OnClearDescription(wxCommandEvent &);
+		void OnDescriptionChange(wxCommandEvent &);
+		void OnDescriptionEnterKey(wxCommandEvent &);
+		void OnFocusGot(wxFocusEvent &);
+		void OnFocusLost(wxFocusEvent &);
+		void OnTestMode(wxCommandEvent &);
 
 		void UpdatePlayerAndEventControls(bool = false);
+		void UpdateTextShortcutStates();
 		void AddEvent(EventType);
 		void SetStatus(Stat);
 		ProdAuto::MxfDuration SetRoll(const wxChar *, int, const ProdAuto::MxfDuration &, wxStaticBoxSizer *);
 		bool AtStopEvent();
 		bool AtStartEvent();
 		void ClearLog();
-		void Connect(bool);
 		void SelectAdjacentEvent(bool down);
 		void ResetPlayer();
+		void Play(const bool = false);
+		void ResetToDisconnected();
+		void Log(const wxString &);
+		void EnableButtonReliably(wxButton *, bool = true);
 
 		wxStaticBitmap * mStatusCtrl, * mAlertCtrl;
 		RecorderGroupCtrl * mRecorderGroup;
@@ -212,28 +228,44 @@ class ingexguiFrame : public wxFrame
 		RecordButton * mRecordButton;
 		wxListView * mEventList; //used wxListCtrl for a while because wxListView crashed when you added an item - seems ok with 2.8
 		wxNotebook * mNotebook;
+		wxButton * mDescClearButton;
 		TickTreeCtrl * mTree;
-		wxStaticText * mPlaybackTagCtrl;
-		wxStaticText * mRecordTagCtrl;
+		wxStaticText * mRecProjectNameCtrl;
+		wxStaticText * mPlayProjectNameCtrl;
+		wxTextCtrl * mDescriptionCtrl;
 		wxButton * mPrevTakeButton, * mNextTakeButton;
+		wxButton * mJumpToTimecodeButton;
+
 		DragButtonList * mPlaybackSourceSelector;
 		HelpDlg * mHelpDlg;
 		wxStaticBoxSizer * mTimecodeBox;
 
-		bool mConnected;
 		Stat mStatus;
 		long mStartEvent, mEndEvent;
 		long mEditRateNumerator, mEditRateDenominator;
-		TakeInfoArray mTakeInfo;
+		TakeInfoArray mTakeInfoArray;
 		wxString mProjectName;
 		Timepos * mTimepos;
 		TakeInfo * mCurrentTakeInfo;
 		unsigned long mCurrentSelectedEvent;
 		prodauto::Player * mPlayer;
 		wxXmlDocument mSavedState;
+		bool mLastPlayingBackwards;
+		bool mDescriptionControlHasFocus;
+		wxLogStream * mLogStream;
 
 		DECLARE_EVENT_TABLE()
+};
 
+/// As the stock text ctrl but passes on focus set and kill events
+class MyTextCtrl : public wxTextCtrl
+{
+	public:
+		MyTextCtrl(wxWindow * parent, wxWindowID id, const wxString & value = wxT(""), const wxPoint & pos = wxDefaultPosition, const wxSize & size = wxDefaultSize, long style = 0) : wxTextCtrl(parent, id, value, pos, size, style) { SetNextHandler(parent); };
+	private:
+		void OnFocus(wxFocusEvent & event) { event.Skip(); };
+
+		DECLARE_EVENT_TABLE()
 };
 
 #endif // _INGEXGUI_H_

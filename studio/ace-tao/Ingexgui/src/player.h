@@ -1,6 +1,6 @@
 /***************************************************************************
- *   Copyright (C) 2006 by BBC Research   *
- *   info@rd.bbc.co.uk   *
+ *   Copyright (C) 2006-2008 British Broadcasting Corporation              *
+ *   - all rights reserved.                                                *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -29,6 +29,7 @@
 
 //File poll timer checks for files appearing after completion of a recording
 #define FILE_POLL_TIMER_INTERVAL 250 //ms
+#define MAX_SPEED 64 //times normal; must be power of 2
 
 DECLARE_EVENT_TYPE(wxEVT_PLAYER_MESSAGE, -1)
 
@@ -42,7 +43,9 @@ enum PlayerEventType {
 	NEW_FILESET,
 	WITHIN_TAKE,
 	CLOSE_REQ,
-	KEYPRESS
+	KEYPRESS,
+	PROGRESS_BAR_DRAG,
+	SPEED_CHANGE,
 };
 
 enum PlayerMode {
@@ -78,11 +81,14 @@ class Listener : public IngexPlayerListener
 		virtual void playerCloseRequested();
 		virtual void keyPressed(int);
 		virtual void keyReleased(int);
+		virtual void progressBarPositionSet(float);
 	private:
 		Player * mPlayer; //never changed so doesn't need protecting by mutex
 		wxMutex mMutex;
-		int mStartIndex;
-		std::map<int64_t, int> mCuePointMap;
+		unsigned int mStartIndex;
+		unsigned int mLastCuePointNotified;
+//		std::map<int64_t, int> mCuePointMap;
+		std::vector<int64_t> mCuePoints;
 };
 
 /// Class representing the X11/SDI MXF video player.
@@ -90,12 +96,13 @@ class Player : public wxEvtHandler, LocalIngexPlayer
 {
 	public:
 		Player(wxEvtHandler *, const bool, const PlayerOutputType, const OSDtype);
+		~Player();
 		bool IsOK();
 		void Enable(bool);
 		void Load(std::vector<std::string> *, std::vector<std::string> * = 0, std::vector<int64_t> * = 0, int = 0, unsigned int = 0);
 		void SelectSource(const int);
 		void SetOSD(const OSDtype);
-		void SetDisplayParams(const PlayerOutputType, const float);
+		void SetOutputType(const PlayerOutputType);
 		void Play();
 		void PlayBackwards();
 		void Pause();
@@ -104,6 +111,8 @@ class Player : public wxEvtHandler, LocalIngexPlayer
 		void JumpToCue(unsigned int cuePoint);
 		bool Within();
 		bool ExtOutputIsAvailable();
+		bool AtMaxForwardSpeed();
+		bool AtMaxReverseSpeed();
 //		std::vector<bool> GetFilesStatus();
 	private:
 		bool Start(std::vector<std::string> * = 0, std::vector<std::string> * = 0, std::vector<int64_t> * = 0, int = 0, unsigned int = 0);
@@ -111,13 +120,15 @@ class Player : public wxEvtHandler, LocalIngexPlayer
 //		void OnPlayerClosing(wxCommandEvent&);
 		void OnFilePollTimer(wxTimerEvent&);
 		void OnStateChange(wxCommandEvent& event);
+		void OnSpeedChange(wxCommandEvent& event);
+		void OnProgressBarDrag(wxCommandEvent& event);
 		Listener * mListener;
 		OSDtype mOSDtype;
 		bool mEnabled;
 		bool mOK;
 		PlayerMode mMode;
 		int mStartIndex;
-		int mSelectedSource;
+		std::string mDesiredSourceName;
 		unsigned int mNFilesExisting;
 		std::vector<std::string> mFileNames;
 		std::vector<std::string> mSourceNames;
@@ -126,6 +137,7 @@ class Player : public wxEvtHandler, LocalIngexPlayer
 		long mLastFrameDisplayed;
 		wxTimer * mFilePollTimer;
 		unsigned int mLastRequestedCuePoint;
+		int mSpeed;
 		DECLARE_EVENT_TABLE()
 };
 
