@@ -1,0 +1,31 @@
+HOW TO BUILD INGEXGUI
+
+1) Build the C++ version of the player in ingex/player/IngexPlayer/ - see separate instructions.  If the player is built with DVS card support, ingexgui will be similarly built (and will be able to play back through a DVS card).
+
+2) Build ACE/TAO if you haven't already built another CORBA application such as the recorder - see separate instructions
+
+3) Build libidl if you haven't already built another CORBA application such as the recorder:
+
+> cd .../ingex/studio/ace-tao/IDL
+> $ACE_ROOT/bin/mwc.pl -type gnuace
+> make
+
+(Don't worry about the CIAO_ROOT and DDS_ROOT warnings.)
+
+4) Build and install wxGTK:
+
+Install gtk2-devel package if you don't have it.
+Download latest wxGTK from http://www.wxwidgets.org/
+Untar/configure/make/install.
+
+# ldconfig
+
+5) Build ingexgui:
+
+Install autoconf, automake and libtool packages if you don't have them.
+Make sure $ACE_ROOT, $TAO_ROOT and $DVS_SDK (if player has DVS card support) are defined.
+In this directory:
+
+> autoreconf
+> ./configure
+> make

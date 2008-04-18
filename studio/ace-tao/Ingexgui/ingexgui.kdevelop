@@ -15,9 +15,9 @@
     <ignoreparts/>
     <projectdirectory>.</projectdirectory>
     <absoluteprojectpath>false</absoluteprojectpath>
-    <description/>
+    <description></description>
     <projectname>ingexgui</projectname>
-    <defaultencoding/>
+    <defaultencoding></defaultencoding>
   </general>
   <kdevautoproject>
     <general>
@@ -25,15 +25,17 @@
       <useconfiguration>debug</useconfiguration>
     </general>
     <run>
-      <mainprogram>/home/matthew/cvs_workspace/ingex/Ingex/corba/Ingexgui/debug/src/ingexgui</mainprogram>
+      <mainprogram>/home/matthew/cvs_build/ingex/studio/ace-tao/Ingexgui/debug/src/ingexgui</mainprogram>
       <directoryradio>executable</directoryradio>
       <customdirectory>/</customdirectory>
       <programargs>-ORBDefaultInitRef corbaloc:iiop:132.185.129.118:8888</programargs>
       <terminal>false</terminal>
       <autocompile>true</autocompile>
-      <envvars/>
+      <envvars>
+        <envvar value="/home/matthew/packages/ACE_wrappers/lib" name="LD_LIBRARY_PATH" />
+      </envvars>
       <globaldebugarguments>-ORBDefaultInitRef corbaloc:iiop:132.185.129.118:8888</globaldebugarguments>
-      <globalcwd>/home/matthew/cvs_workspace/ingex/Ingex/corba/Ingexgui/debug</globalcwd>
+      <globalcwd></globalcwd>
       <useglobalprogram>true</useglobalprogram>
       <autoinstall>false</autoinstall>
       <autokdesu>false</autokdesu>
@@ -52,11 +54,14 @@
         <ccompiler>kdevgccoptions</ccompiler>
         <cxxcompiler>kdevgppoptions</cxxcompiler>
         <f77compiler>kdevg77options</f77compiler>
-        <cxxflags>-O0 -g3 `wx-config --cxxflags`</cxxflags>
-        <envvars/>
+        <cxxflags>-O0 -g3 -W -Wall `wx-config --cxxflags`</cxxflags>
+        <envvars>
+          <envvar value="/home/matthew/packages/ACE_wrappers/" name="ACE_ROOT" />
+          <envvar value="$ACE_ROOT/TAO" name="TAO_ROOT" />
+        </envvars>
         <topsourcedir/>
         <cppflags/>
-        <ldflags>-lTAO -lACE -lTAO_CosNaming -lTAO_PortableServer -lTAO_AnyTypeCode -lTAO_Valuetype -lTAO_Messaging -lTAO_PI -lTAO_CodecFactory -L/usr/X11R6/lib `pwd`/../../../../IngexPlayer/IngexPlayer/libIngexPlayer.a -lX11 -lXv -lpthread -lfreetype -lfontconfig -luuid -ld3mxfinfo -lMXFReader -lMXF -lavformat -lavcodec -lavutil -lmp3lame -lx264 -la52 -lfaac -lfaad /home/matthew/packages/sdk3.0.1.4/linux-x86/lib/libdvsoem.a</ldflags>
+        <ldflags/>
         <ccompilerbinary/>
         <cxxcompilerbinary/>
         <f77compilerbinary/>
@@ -143,12 +148,13 @@
       <dbgshell>libtool</dbgshell>
       <programargs>-ORBDefaultInitRef corbaloc:iiop:132.185.129.118:8888 </programargs>
       <gdbpath>/usr/bin/gdb</gdbpath>
-      <configGdbScript/>
-      <runShellScript/>
-      <runGdbScript/>
+      <configGdbScript></configGdbScript>
+      <runShellScript></runShellScript>
+      <runGdbScript></runGdbScript>
       <breakonloadinglibs>true</breakonloadinglibs>
       <separatetty>false</separatetty>
       <floatingtoolbar>false</floatingtoolbar>
+      <raiseGDBOnStart>false</raiseGDBOnStart>
     </general>
     <display>
       <staticmembers>false</staticmembers>
@@ -181,7 +187,7 @@
     <LICENSEFILE>COPYING</LICENSEFILE>
     <VERSION>0.1</VERSION>
     <YEAR>2006</YEAR>
-    <dest>/home/matthew/cvs_workspace/ingex/Ingex/Corba/ingexgui</dest>
+    <dest>/home/matthew/cvs_workspace/ingex/studio/Corba/ingexgui</dest>
   </substmap>
   <kdevcppsupport>
     <references/>
@@ -225,7 +231,7 @@
       <designerpluginpaths/>
     </qt>
     <creategettersetter>
-      <prefixGet/>
+      <prefixGet></prefixGet>
       <prefixSet>set</prefixSet>
       <prefixVariable>m_,_</prefixVariable>
       <parameterName>theValue</parameterName>

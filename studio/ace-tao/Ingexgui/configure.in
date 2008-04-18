@@ -46,9 +46,63 @@ else
 fi
 
 
-CPPFLAGS="$CPPFLAGS $WX_CPPFLAGS"
-CXXFLAGS="$CXXFLAGS $WX_CPPFLAGS"
+AC_DEFUN([PLAYERTEST],
+[
+	INGEXROOT=`pwd | sed 's/\(.*\)\/studio\/ace-tao\/Ingexgui.*\?/\1/'`
+	PLAYERLIB="libIngexPlayer.a"
+	AC_MSG_CHECKING([for $PLAYERLIB])
+	if test -f "$INGEXROOT/player/IngexPlayer/$PLAYERLIB"; then
+		AC_MSG_RESULT([yes])
+		AC_MSG_CHECKING([player for DVS card support])
+		if test `readelf -s $INGEXROOT/player/IngexPlayer/$PLAYERLIB | grep -c dvs_register_listener` -gt 0; then
+			AC_MSG_RESULT([yes])
+			DVS_CPPFLAGS="-DHAVE_DVS"
+			AC_MSG_CHECKING([for DVSSDK variable])
+			if test -n "$DVSSDK"; then
+				AC_MSG_RESULT([yes])
+				DVS_LDFLAGS="-L$DVSSDK/linux-x86/lib -L$DVSSDK/linux-x86_64/lib -ldvsoem"
+			else
+				AC_MSG_RESULT([no])
+				AC_MSG_ERROR([You need to define the DVSSDK environment variable.])
+			fi
+		else
+			AC_MSG_RESULT([no])
+		fi
+	else
+		AC_MSG_RESULT([no])
+		AC_MSG_ERROR([You need to build the Ingex Player first.])
+	fi
+])
 
+#Call PLAYERTEST func
+PLAYERTEST
+
+AC_DEFUN([ACETAOTEST],
+[
+	AC_MSG_CHECKING([for ACE_ROOT and TAO_ROOT variables])
+	if test -n "$ACE_ROOT" && test -n "$TAO_ROOT"; then
+		AC_MSG_RESULT([yes])
+	else
+		AC_MSG_RESULT([no])
+		AC_MSG_ERROR([You need to define ACE_ROOT and TAO_ROOT environment variables.])
+	fi
+	IDLLOC=`pwd | sed 's/\(.*\)\/Ingexgui.*\?/\1\/IDL/'`
+	IDLLIB="libidl.a"
+	AC_MSG_CHECKING([for $IDLLIB])
+	if test -f "$IDLLOC/$IDLLIB"; then
+		AC_MSG_RESULT([yes])
+	else
+		AC_MSG_RESULT([no])
+		AC_MSG_ERROR([You need to build the IDL library first.])
+	fi
+])
+
+#call ACETAOTEST func
+ACETAOTEST
+
+CPPFLAGS="$CPPFLAGS $WX_CPPFLAGS $DVS_CPPFLAGS -I$ACE_ROOT -I$TAO_ROOT -I$TAO_ROOT/orbsvcs -I$IDLLOC/Generated -I$INGEXROOT/player/ingex_player -I$INGEXROOT/player/IngexPlayer"
+CXXFLAGS="$CXXFLAGS $WX_CPPFLAGS"
+LDFLAGS="$LDFLAGS -L$ACE_ROOT/lib -lTAO -lACE -lTAO_CosNaming -lTAO_PortableServer -lTAO_AnyTypeCode -lTAO_Valuetype -lTAO_Messaging -lTAO_PI -lTAO_CodecFactory -L$IDLLOC $IDLLOC/$IDLLIB -L/usr/X11R6/lib $INGEXROOT/player/IngexPlayer/$PLAYERLIB $INGEXROOT/common/libcommon.a $INGEXROOT/common/YUVlib/libYUVlib.a -lX11 -lXv -lpthread -lfreetype -lfontconfig -luuid -ld3mxfinfo -lMXFReader -lMXF -lavformat -lavcodec -lavutil -lmp3lame -lx264 -la52 -lfaac -lfaad -lportaudio $DVS_LDFLAGS"
 
 AC_SUBST(WX_LIBS)
 
