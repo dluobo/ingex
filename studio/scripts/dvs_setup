@@ -1,0 +1,130 @@
+#! /bin/sh
+# $Id: dvs_setup,v 1.1 2008/04/23 19:07:35 john_f Exp $
+# Author: Stuart Cunningham
+#
+# /etc/init.d/dvs_setup
+#
+### BEGIN INIT INFO
+# Provides:          dvs_setup
+# Required-Start:    $syslog $time
+# Required-Stop:
+# Default-Start:     3 5
+# Default-Stop:
+# Description:       Setup up DVS SDI I/O cards
+### END INIT INFO
+
+. /etc/rc.status
+rc_reset
+
+#DRIVER_DIR=/usr/lib/dvs
+DRIVER_DIR=/home/ingex/dvs/sdk3.2.1.0/linux-x86/driver
+
+#BIN_DIR=/usr/bin
+BIN_DIR=/home/ingex/dvs/sdk3.2.1.0/linux-x86/bin
+
+DVS_DEFAULT_MODE=PAL/YUV422/FRAME/AUDIO8CH
+#DVS_DEFAULT_MODE=SMPTE274/25I/YUV422/FRAME
+DVS_NOAUDIO_MODE=PAL/YUV422/FRAME
+
+if [ -r /etc/dvs.conf ]
+then
+	# Read in DVS mode configuration
+	. /etc/dvs.conf
+fi
+
+set_mode() {
+	env="env SCSIVIDEO_CMD=PCI,card=$1"
+
+	if   [ "$1" = "0" -a -n "$DVS_CARD0_MODE" ]
+	then
+		mode=$DVS_CARD0_MODE
+	elif [ "$1" = "1" -a -n "$DVS_CARD1_MODE" ]
+	then
+		mode=$DVS_CARD1_MODE
+	elif [ "$1" = "2" -a -n "$DVS_CARD2_MODE" ]
+	then
+		mode=$DVS_CARD2_MODE
+	elif [ "$1" = "3" -a -n "$DVS_CARD3_MODE" ]
+	then
+		mode=$DVS_CARD3_MODE
+	else
+		mode=$DVS_DEFAULT_MODE
+	fi
+
+	out=`$env $BIN_DIR/svram mode $mode`
+	if echo $out | grep 'device not found' > /dev/null
+	then
+		# echo "DVS card $1: device not found"
+		true
+	else
+		if echo $out | grep mode > /dev/null
+		then
+			if $env $BIN_DIR/svram mode $DVS_NOAUDIO_MODE | grep mode
+			then
+				echo "DVS card $1: mode failed"
+			else
+				echo "DVS card $1: $DVS_NOAUDIO_MODE"
+			fi
+		else
+			echo "DVS card $1: $mode"
+		fi
+	fi
+
+    # Enable multichannel mode
+    $env $BIN_DIR/svram multichannel on
+    # switch to aes audio input
+    #$env $BIN_DIR/svram audioinput aes
+    # switch to embedded audio input
+    $env $BIN_DIR/svram audioinput aiv
+
+}
+
+# See how we were called.
+case "$1" in
+    start)
+        echo -n "Starting DVS setup"
+        # Make devices
+        #(cd $DRIVER_DIR && ./mkdev)
+
+        # Load driver
+        (cd $DRIVER_DIR && ./driver_load)
+
+	# Set mode for all dvs cards
+	for card in 0 1
+	do
+		set_mode $card
+	done
+
+        # Make tape drives read/write by all users
+        #chmod a+rw /dev/st[0-9]* /dev/nst[0-9]* 2> /dev/null
+
+	# At least card 0 should be there
+	$BIN_DIR/svram info > /dev/null
+
+        rc_status -v
+        ;;
+    stop)
+        echo -n "Stopping DVS setup"
+        (cd $DRIVER_DIR && ./driver_unload)
+        rc_status -v
+        ;;
+    restart)
+        ## Stop the service and regardless of whether it was
+        ## running or not, start it again.
+        $0 stop
+        $0 start
+
+        # Remember status and be quiet
+        rc_status
+        ;;
+    status)
+        echo "Current status of DVS cards:"
+        $BIN_DIR/svram info
+
+        rc_status -v
+        ;;
+    *)
+        echo "Usage: $0 start"
+        exit 1
+esac
+rc_exit

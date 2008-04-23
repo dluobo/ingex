@@ -1,0 +1,81 @@
+#! /bin/sh
+# $Id: Naming_Service,v 1.1 2008/04/23 19:07:35 john_f Exp $
+# Author: Stuart Cunningham
+#
+# /etc/init.d/Naming_Service
+#
+### BEGIN INIT INFO
+# Provides:          Naming_Service
+# Required-Start:    $network
+# Required-Stop:
+# Default-Start:     3 5
+# Default-Stop:
+# Description:       Start TAO Naming Service
+### END INIT INFO
+
+#NAMING_BIN=/usr/bin/Naming_Service
+ACE_ROOT=/home/ingex/ACETAO_x63/ACE_wrappers
+NAMING_BIN=$ACE_ROOT/TAO/orbsvcs/Naming_Service/Naming_Service
+NAMING_LIB=$ACE_ROOT/lib
+NAMING_OPTIONS="-ORBEndPoint iiop://192.168.1.181:8888 -ORBDottedDecimalAddresses 1"
+
+# In the -ORBEndPoint option, you sometimes need to specify the host
+# IP address explicity, otherwise you get naming contexts on localhost
+# which obviously don't work for remote client.
+
+export LD_LIBRARY_PATH=$NAMING_LIB
+
+if [ -f /etc/rc.status ]
+then
+        # SUSE init.d functions
+        . /etc/rc.status
+else
+        # Non SUSE machine so define missing functions
+        rc_reset() {
+                true
+        }
+        rc_exit() {
+                true
+        }
+        rc_status() {
+                retval=$?
+                return $retval
+        }
+fi
+
+rc_reset
+
+# See how we were called.
+case "$1" in
+    start)
+        echo -n "Starting Naming Service"
+        startproc $NAMING_BIN $NAMING_OPTIONS
+
+        rc_status -v
+        ;;
+    stop)
+        echo -n "Stopping Naming Service"
+        killproc -TERM $NAMING_BIN
+        rc_status -v
+        ;;
+    restart)
+        ## Stop the service and regardless of whether it was
+        ## running or not, start it again.
+        $0 stop
+        $0 start
+
+        # Remember status and be quiet
+        rc_status
+        ;;
+    status)
+        echo "Checking for Naming Service:"
+        checkproc $NAMING_BIN
+
+        rc_status -v
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart|status}"
+        exit 1
+esac
+rc_exit
+
