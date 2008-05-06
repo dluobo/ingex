@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderImpl.cpp,v 1.2 2008/04/18 16:03:28 john_f Exp $
+ * $Id: RecorderImpl.cpp,v 1.3 2008/05/06 16:26:25 john_f Exp $
  *
  * Base class for Recorder servant.
  *
@@ -98,6 +98,11 @@ bool RecorderImpl::Init(std::string name, std::string db_user, std::string db_pw
 
     // Recorder track sources
     UpdateSources();
+
+    // Set source package names, which at this point will be based on
+    // source name and date.  Later they may be updated with tape names.
+    SetSourcePackages();
+
 
     return ok_so_far;
 }
@@ -338,14 +343,27 @@ void RecorderImpl::SetTapeNames (
 {
     ACE_DEBUG((LM_DEBUG, ACE_TEXT("RecorderImpl::SetTapeNames()\n")));
 
-    // Make a map of tape names with source package name as key
+    // Update map of tape names with source package name as key
     std::map<std::string, std::string> tape_map;
     for (CORBA::ULong i = 0; i < source_names.length() && i < tape_names.length(); ++i)
     {
-        tape_map[(const char *)source_names[i]] = (const char *)tape_names[i];
+        mTapeMap[(const char *)source_names[i]] = (const char *)tape_names[i];
         ACE_DEBUG((LM_DEBUG, ACE_TEXT("Source \"%C\"  Tape \"%C\"\n"),
             (const char *)source_names[i],  (const char *)tape_names[i]));
     }
+
+    // Set source package names
+    SetSourcePackages();
+}
+
+/**
+Private method to set source package names.
+If we have a tape name, we use it.
+Otherwise we use source name and date.
+*/
+void RecorderImpl::SetSourcePackages()
+{
+    ACE_DEBUG((LM_DEBUG, ACE_TEXT("RecorderImpl::SetSourcePackages()\n")));
 
     try
     {
@@ -382,11 +400,20 @@ void RecorderImpl::SetTapeNames (
 
                     if (sc)
                     {
+                        // Source package name is sc->name
                         ACE_DEBUG((LM_DEBUG, ACE_TEXT("Input %d, track %d, source package name \"%C\"\n"),
                         i, j, sc->name.c_str()));
-                        // Source package name is sc->name
-                        // Use map of tape names with source package name as key
-                        sc->setSourcePackage(tape_map[sc->name]);
+
+                        if (mTapeMap.find(sc->name) != mTapeMap.end())
+                        {
+                            // We have a corresponding tape name.
+                            sc->setSourcePackage(mTapeMap[sc->name]);
+                        }
+                        else
+                        {
+                            // No corresponding tape name, use source name and date
+                            sc->setSessionSourcePackage();
+                        }
                     }
                 } // tracks
             } // inputs
@@ -397,6 +424,8 @@ void RecorderImpl::SetTapeNames (
         ACE_DEBUG((LM_ERROR, ACE_TEXT("Database Exception: %C\n"), dbe.getMessage().c_str()));
     }
 }
+
+
 
 /**
 Means of externally forcing a re-reading of config from database.
@@ -494,6 +523,8 @@ void RecorderImpl::UpdateSources()
                     track.src.package_name = CORBA::string_dup("zz No Connection");
                     track.src.track_name = CORBA::string_dup("");
                 }
+                ACE_DEBUG((LM_DEBUG, ACE_TEXT("Input %d, track %d, src.track_name %C\n"),
+                    i, j, (const char *) track.src.track_name));
 
                 ++track_i;
             } // tracks
@@ -520,6 +551,7 @@ void RecorderImpl::UpdateSources()
         }
     }
 }
+
 
 void RecorderImpl::Destroy()
 {

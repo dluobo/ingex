@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderImpl.h,v 1.2 2008/04/18 16:03:28 john_f Exp $
+ * $Id: RecorderImpl.h,v 1.3 2008/05/06 16:26:30 john_f Exp $
  *
  * Base class for Recorder servant.
  *
@@ -147,10 +147,12 @@ protected:
     std::string mName;
     std::string mFormat;
     std::auto_ptr<prodauto::Recorder> mRecorder;
+    std::map<std::string, std::string> mTapeMap;
 
 private:
 // methods
     void UpdateSources();
+    void SetSourcePackages();
 };
 
 
