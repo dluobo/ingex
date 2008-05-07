@@ -110,6 +110,7 @@ static void usage(const char* cmd)
     fprintf(stderr, "\n");
     fprintf(stderr, "Options:\n");
     fprintf(stderr, "  -h, --help               display this usage message\n");
+    fprintf(stderr, "  --window-id <id>         X11 window id to test plugin\n");
     fprintf(stderr, "Inputs:\n");
     fprintf(stderr, "  -m, --mxf  <file>        MXF file input\n");
 //    fprintf(stderr, "  --rawin  <file>          Raw UYVY video file input\n");
@@ -122,6 +123,7 @@ int main (int argc, const char** argv)
     vector<string> filenames;
     vector<bool> opened;
     int cmdlnIndex = 1;
+    unsigned long windowId = 0;
     auto_ptr<TestIngexPlayerListener> listener;
     bool dvsCardIsAvailable = false;
 
@@ -132,6 +134,21 @@ int main (int argc, const char** argv)
         {
             usage(argv[0]);
             return 0;
+        }
+        else if (strcmp(argv[cmdlnIndex], "--window-id") == 0)
+        {
+            if (cmdlnIndex + 1 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing argument for --window-id\n");
+                return 1;
+            }
+            if (sscanf(argv[cmdlnIndex + 1], "%lu", &windowId) != 1)
+            {
+                fprintf(stderr, "Invalid argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            cmdlnIndex += 2;
         }
         else if (strcmp(argv[cmdlnIndex], "-m") == 0 ||
             strcmp(argv[cmdlnIndex], "--mxf") == 0)
@@ -169,7 +186,14 @@ int main (int argc, const char** argv)
     
     printf("Version %s, build %s\n", player->getVersion().c_str(),
         player->getBuildTimestamp().c_str());
-    
+
+    // Set plugin window info if any
+    X11PluginWindowInfo pluginInfo = {NULL, 0};
+    if (windowId) {
+        pluginInfo.pluginWindow = windowId;
+        player->setPluginInfo(&pluginInfo);
+    }
+
     CHECK(player->setX11WindowName("test 0"));
     CHECK(player->start(filenames, opened));
     vector<string>::const_iterator iterFilenames;

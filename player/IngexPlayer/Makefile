@@ -1,3 +1,10 @@
+C_INGEX_PLAYER_DIR = ../ingex_player
+COMMON_DIR = ../../common
+LIBMXF_DIR = ../../libMXF
+LIBMXF_ARCHIVE_DIR = $(LIBMXF_DIR)/examples/archive
+LIBMXF_READER_DIR = $(LIBMXF_DIR)/examples/reader
+
+
 ifneq "$(MAKECMDGOALS)" "clean"
 
 DVS_PATH := $(shell for f in /usr/local /usr; do test -e $$f/include/dvs_fifo.h && echo $$f && break; done)
@@ -24,28 +31,35 @@ endif
 
 endif	
 
-C_INGEX_PLAYER_DIR = ../ingex_player
-
 
 CFLAGS = -Wall -W -Wno-unused-parameter -D_THREAD_SAFE
 OPT = -O3 -mmmx -msse2
 
-INCLUDEDIRS = -I. -I$(C_INGEX_PLAYER_DIR) 
+INCLUDEDIRS = -I. -I$(LIBMXF_DIR)/lib/include -I$(LIBMXF_ARCHIVE_DIR) -I$(LIBMXF_ARCHIVE_DIR)/info -I$(LIBMXF_READER_DIR) -I$(C_INGEX_PLAYER_DIR) 
 
-LIBDIRS = -L$(C_INGEX_PLAYER_DIR) -L/usr/X11R6/lib -L/usr/local/lib
-LIBS = -lX11 -lXv -lpthread -lfreetype -lfontconfig -luuid -ld3mxfinfo -lMXFReader -lMXF
+LIBDIRS = -L$(C_INGEX_PLAYER_DIR) -L$(LIBMXF_DIR)/lib -L$(LIBMXF_ARCHIVE_DIR)/info -L$(LIBMXF_READER_DIR) -L$(COMMON_DIR) -L$(COMMON_DIR)/YUVlib -L/usr/X11R6/lib -L/usr/local/lib
+LIBS = -lX11 -lXv -lpthread -lfreetype -lfontconfig -luuid -lcommon -lYUVlib -ld3mxfinfo -lMXFReader -lMXF
+ 
 
 ifdef DVS_PATH
 	INCLUDEDIRS += -I$(DVS_PATH)/include
-	LIBDIRS += -L$(DVS_PATH)/lib
+	LIBDIRS += -L$(DVS_PATH)/lib -L$(DVS_PATH)/lib64
 	LIBS += -ldvsoem
 	CFLAGS += -DHAVE_DVS
 else 
-	ifdef DVS_SDK_INSTALL
-		INCLUDEDIRS += -I$(DVS_SDK_INSTALL)/development/header
-		LIBDIRS += -L$(DVS_SDK_INSTALL)/linux/lib
+	ifdef DVSSDK
+		# DVS SDK version 3		
+		INCLUDEDIRS += -I$(DVSSDK)/development/header
+		LIBDIRS += -L$(DVSSDK)/linux-x86/lib -L$(DVSSDK)/linux-x86_64/lib
 		LIBS += -ldvsoem
 		CFLAGS += -DHAVE_DVS
+	else
+		ifdef DVS_SDK_INSTALL
+			INCLUDEDIRS += -I$(DVS_SDK_INSTALL)/development/header
+			LIBDIRS += -L$(DVS_SDK_INSTALL)/linux/lib
+			LIBS += -ldvsoem
+			CFLAGS += -DHAVE_DVS
+		endif
 	endif
 endif
 
@@ -87,12 +101,11 @@ all: libIngexPlayer.a test_IngexPlayer
 
 
 
-.PHONY: libingexplayer.a
-libingexplayer.a:
-	@cd $(C_INGEX_PLAYER_DIR) && $(MAKE) $@
+$(C_INGEX_PLAYER_DIR)/libingexplayer.a:
+	@cd $(C_INGEX_PLAYER_DIR) && $(MAKE) libingexplayer.a
 
 	
-libIngexPlayer.a: $(OBJECTS) libingexplayer.a
+libIngexPlayer.a: $(OBJECTS) $(C_INGEX_PLAYER_DIR)/libingexplayer.a
 	cp $(C_INGEX_PLAYER_DIR)/libingexplayer.a libIngexPlayer.a
 	$(AR_APPEND) libIngexPlayer.a $(OBJECTS) 
 
@@ -120,7 +133,7 @@ libIngexPlayer.a: $(OBJECTS) libingexplayer.a
 test_IngexPlayer: .objs/test_IngexPlayer.o libIngexPlayer.a
 	$(CC) $(LIBDIRS) .objs/test_IngexPlayer.o libIngexPlayer.a $(LIBS) -o $@
 
-	
+
 .PHONY: clean
 clean:
 	@rm -f *~ *.a test_IngexPlayer

@@ -9,6 +9,8 @@
 #include <multiple_sources.h>
 #include <raw_file_source.h>
 #include <mxf_source.h>
+#include <udp_source.h>
+#include <blank_source.h>
 #include <buffered_media_source.h>
 #include <x11_display_sink.h>
 #include <x11_xv_display_sink.h>
@@ -21,13 +23,17 @@
 #include <mjpeg_stream_connect.h>
 #include <audio_sink.h>
 #include <audio_level_sink.h>
-#include <version.h>
 #include <utils.h>
 #include <logging.h>
 
 
 using namespace prodauto;
 using namespace std;
+
+
+static const char* g_playerVersion = "version 0.1";
+static const char* g_playerBuildTimestamp = __DATE__ " " __TIME__;
+
 
 
 class MutexGuard
@@ -202,6 +208,8 @@ public:
 
 
 
+
+
 static void* player_thread(void* arg)
 {
     LocalIngexPlayerState* playState = ((PlayerThreadArgs*)arg)->playState;
@@ -368,7 +376,7 @@ _numAudioLevelMonitors(numAudioLevelMonitors), _audioLineupLevel(audioLineupLeve
 LocalIngexPlayer::LocalIngexPlayer(PlayerOutputType outputType)
 : _nextOutputType(outputType), _outputType(X11_OUTPUT), _actualOutputType(X11_OUTPUT), _videoSwitch(true), _numFFMPEGThreads(4),
 _initiallyLocked(false), _useWorkerThreads(true), 
-_applyQuadSplitFilter(true), _srcBufferSize(0), _disableSDIOSD(false), _disableX11OSD(false), 
+_applyQuadSplitFilter(true), _srcBufferSize(0), _disableSDIOSD(false), _disableX11OSD(false), _pluginInfo(NULL),
 _x11WindowName("Ingex Player"), _scale(1.0), _prevScale(1.0), _disablePCAudio(false), _audioDevice(0), 
 _numAudioLevelMonitors(2), _audioLineupLevel(-18.0)
 {
@@ -410,6 +418,8 @@ void LocalIngexPlayer::initialise()
     _x11ProgressBarListener.data = this;
     _x11ProgressBarListener.position_set = x11_progress_bar_position_set;
     
+    memset(&_videoStreamInfo, 0, sizeof(_videoStreamInfo));
+    
     pthread_rwlock_init(&_listenersRWLock, NULL);
     pthread_rwlock_init(&_playStateRWLock, NULL);
     
@@ -447,12 +457,12 @@ LocalIngexPlayer::~LocalIngexPlayer()
 
 string LocalIngexPlayer::getVersion()
 {
-    return get_player_version();
+    return g_playerVersion;
 }
 
 string LocalIngexPlayer::getBuildTimestamp()
 {
-    return get_player_build_timestamp();
+    return g_playerBuildTimestamp;
 }
 
 bool LocalIngexPlayer::dvsCardIsAvailable()
@@ -463,6 +473,11 @@ bool LocalIngexPlayer::dvsCardIsAvailable()
 bool LocalIngexPlayer::x11XVIsAvailable()
 {
     return xvsk_check_is_available() == 1;
+}
+
+void LocalIngexPlayer::setPluginInfo(X11PluginWindowInfo *pluginInfo)
+{
+    _pluginInfo = pluginInfo;
 }
 
 void LocalIngexPlayer::setOutputType(PlayerOutputType outputType, float scale)
@@ -522,7 +537,7 @@ bool LocalIngexPlayer::close()
     return true;
 }
 
-bool LocalIngexPlayer::start(vector<string> mxfFilenames, vector<bool>& opended)
+bool LocalIngexPlayer::start(vector<string> mxfFilenames, vector<bool>& opened)
 {
     auto_ptr<LocalIngexPlayerState> newPlayState;
     MultipleMediaSources* multipleSource = 0;
@@ -533,9 +548,10 @@ bool LocalIngexPlayer::start(vector<string> mxfFilenames, vector<bool>& opended)
     BufferedMediaSink* bufSink = 0;
     DualSink* dualSink = 0;
     bool haveReset = false;
-    MXFFileSource* mxfSource = 0;
     LocalIngexPlayerState* currentPlayState = 0;
     int swScale = 1;
+    vector<bool> inputsPresent;
+    MediaSource* mainMediaSource = 0;
     
     try
     {
@@ -551,12 +567,172 @@ bool LocalIngexPlayer::start(vector<string> mxfFilenames, vector<bool>& opended)
             _playState = 0;
         }
         
+        
+        // create a multiple source source 
+        
+        CHK_OTHROW(mls_create(&_sourceAspectRatio, -1, &multipleSource));
+        mainMediaSource = mls_get_media_source(multipleSource);
+    
+        
+        // open the MXF media sources 
+        
+        int videoStreamIndex = -1;
+        bool videoChanged = false;
+        bool atLeastOneInputOpened = false;
+        vector<string>::const_iterator iter;
+        for (iter = mxfFilenames.begin(); iter != mxfFilenames.end(); iter++)
+        {
+            string filename = *iter;
+            MediaSource* mediaSource;
+
+            // udp MRLs start with "udp://" while MXF MRLs are plain file paths
+            if (filename.find("udp://", 0 ) != string::npos)
+			{
+				if (! udp_open(filename.c_str()+6, &mediaSource))
+				{
+                    ml_log_warn("Failed to open UDP source '%s'\n", filename.c_str());
+                    opened.push_back(false);
+                    inputsPresent.push_back(false);
+					continue;
+                }
+			}
+            else
+            {
+                MXFFileSource* mxfSource = 0;
+                if (! mxfs_open(filename.c_str(), 0, 0, 0, &mxfSource))
+				{
+                    ml_log_warn("Failed to open MXF file source '%s'\n", filename.c_str());
+                    opened.push_back(false);
+                    inputsPresent.push_back(false);
+					continue;
+				}
+                mediaSource = mxfs_get_media_source(mxfSource);
+            }
+
+            // set software scaling to 2 if the material dimensions exceeds 1024
+            // also, get the index of the first video stream
+            // also, check if the video format has changed
+            if (swScale == 1)
+            {
+                const StreamInfo* streamInfo;
+                int i;
+                int numStreams = msc_get_num_streams(mediaSource);
+                for (i = 0; i < numStreams; i++)
+                {
+                    if (msc_get_stream_info(mediaSource, i, &streamInfo))
+                    {
+                        if (videoStreamIndex == -1 && streamInfo->type == PICTURE_STREAM_TYPE)
+                        {
+                            videoStreamIndex = i;
+                            
+                            if (_videoStreamInfo.type == PICTURE_STREAM_TYPE)
+                            {
+                                if (streamInfo->format != _videoStreamInfo.format ||
+                                    streamInfo->width != _videoStreamInfo.width ||
+                                    streamInfo->height != _videoStreamInfo.height ||
+                                    memcmp(&streamInfo->aspectRatio, &_videoStreamInfo.aspectRatio, sizeof(_videoStreamInfo.aspectRatio)))
+                                {
+                                    videoChanged = true;
+                                }
+                            }
+                            
+                            _videoStreamInfo = *streamInfo;
+                        }
+                        
+                        if (swScale == 1 &&
+                            streamInfo->type == PICTURE_STREAM_TYPE &&
+                            (streamInfo->width > 1024 || streamInfo->height > 1024))
+                        {
+                            swScale = 2;
+                        }
+                    }
+                }
+            }
+            
+            opened.push_back(true);
+            inputsPresent.push_back(true);
+            atLeastOneInputOpened = true;
+            CHK_OTHROW(mls_assign_source(multipleSource, &mediaSource));
+        }
+        
+        // check at least one input could be opened
+        if (!atLeastOneInputOpened)
+        {
+            msc_close(mainMediaSource);
+            {
+                ReadWriteLockGuard guard(&_playStateRWLock, true);
+                _playState = currentPlayState;
+            }
+            return false;
+        }
+        
+        
+        // add a blank video source if no video source is present
+        
+        if (videoStreamIndex == -1)
+        {
+            if (_videoStreamInfo.type == PICTURE_STREAM_TYPE)
+            {
+                if (_videoStreamInfo.format != UYVY_FORMAT)
+                {
+                    videoChanged = true;
+                }
+
+                StreamInfo prevStreamInfo = _videoStreamInfo;
+
+                memset(&_videoStreamInfo, 0, sizeof(_videoStreamInfo));
+                _videoStreamInfo.type = PICTURE_STREAM_TYPE;
+                _videoStreamInfo.format = UYVY_FORMAT;
+                _videoStreamInfo.width = prevStreamInfo.width;
+                _videoStreamInfo.height = prevStreamInfo.height;
+                _videoStreamInfo.frameRate.num = prevStreamInfo.frameRate.num;
+                _videoStreamInfo.frameRate.den = prevStreamInfo.frameRate.den;
+                _videoStreamInfo.aspectRatio.num = prevStreamInfo.aspectRatio.num;
+                _videoStreamInfo.aspectRatio.den = prevStreamInfo.aspectRatio.den;
+            }
+            else
+            {
+                memset(&_videoStreamInfo, 0, sizeof(_videoStreamInfo));
+                _videoStreamInfo.type = PICTURE_STREAM_TYPE;
+                _videoStreamInfo.format = UYVY_FORMAT;
+                _videoStreamInfo.width = 720;
+                _videoStreamInfo.height = 576;
+                _videoStreamInfo.frameRate.num = 25;
+                _videoStreamInfo.frameRate.den = 1;
+                _videoStreamInfo.aspectRatio.num = 4;
+                _videoStreamInfo.aspectRatio.den = 3;
+            }
+
+            MediaSource* mediaSource;
+            CHK_OTHROW(bks_create(&_videoStreamInfo, 120 * 60 * 60 * 25, &mediaSource));
+            CHK_OTHROW(mls_assign_source(multipleSource, &mediaSource));
+            
+            CHK_OTHROW(mls_finalise_blank_sources(multipleSource));
+        }
+        
+        
+        // open the buffered media source 
+        
+        if (_srcBufferSize > 0)
+        {
+            CHK_OTHROW(bmsrc_create(mainMediaSource, _srcBufferSize, 1, -1.0, &bufferedSource));
+            mainMediaSource = bmsrc_get_source(bufferedSource);
+        }
+        
+
         // decide how to proceed if already playing 
 
         if (currentPlayState)
         {
             bool resetPlayer = true;
-            if (_nextOutputType != _outputType || _scale != _prevScale)
+            if (videoChanged)
+            {
+                // video format has changed - stop the player
+                SAFE_DELETE(&currentPlayState);
+                newPlayState = auto_ptr<LocalIngexPlayerState>(new LocalIngexPlayerState());
+                resetPlayer = false;
+            }
+            else if (_nextOutputType != _outputType || _scale != _prevScale)
             {
                 // output type or scale has changed - stop the player
                 SAFE_DELETE(&currentPlayState);
@@ -604,79 +780,11 @@ bool LocalIngexPlayer::start(vector<string> mxfFilenames, vector<bool>& opended)
             newPlayState = auto_ptr<LocalIngexPlayerState>(new LocalIngexPlayerState());
         }
    
-        
-        // create multiple source source 
-        
-        CHK_OTHROW(mls_create(&_sourceAspectRatio, -1, &multipleSource));
-        newPlayState->mediaSource = mls_get_media_source(multipleSource);
-    
-        
-        // open the MXF media sources 
-        
-        bool atLeastOneInputOpened = false;
-        vector<string>::const_iterator iter;
-        for (iter = mxfFilenames.begin(); iter != mxfFilenames.end(); iter++)
-        {
-            string filename = *iter;
-            MediaSource* mediaSource;
-            
-            if (!mxfs_open(filename.c_str(), 0, 0, 0, &mxfSource))
-            {
-                ml_log_warn("Failed to open MXF file source '%s'\n", filename.c_str());
-                opended.push_back(false);
-                newPlayState->inputsPresent.push_back(false);
-            }
-            else
-            {
-                mediaSource = mxfs_get_media_source(mxfSource);
-                
-                // set software scaling to 2 if the material dimensions exceeds 1024
-                if (swScale == 1)
-                {
-                    const StreamInfo* streamInfo;
-                    int i;
-                    int numStreams = msc_get_num_streams(mediaSource);
-                    for (i = 0; i < numStreams; i++)
-                    {
-                        if (msc_get_stream_info(mediaSource, i, &streamInfo))
-                        {
-                            if (streamInfo->type == PICTURE_STREAM_TYPE &&
-                                (streamInfo->width > 1024 || streamInfo->height > 1024))
-                            {
-                                swScale = 2;
-                                break;
-                            }
-                        }
-                    }
-                }
-                
-                opended.push_back(true);
-                newPlayState->inputsPresent.push_back(true);
-                atLeastOneInputOpened = true;
-                CHK_OTHROW(mls_assign_source(multipleSource, &mediaSource));
-            }
-        }
-        
-        // check at least one input could be opened
-        if (!atLeastOneInputOpened)
-        {
-            if (haveReset && currentPlayState != 0)
-            {
-                // keep the old play state
-                ReadWriteLockGuard guard(&_playStateRWLock, true);
-                _playState = newPlayState.release();
-            }
-            return false;
-        }
-        
-        
-        // open the buffered media source 
-        
-        if (_srcBufferSize > 0)
-        {
-            CHK_OTHROW(bmsrc_create(newPlayState->mediaSource, _srcBufferSize, 1, -1.0, &bufferedSource));
-            newPlayState->mediaSource = bmsrc_get_source(bufferedSource);
-        }
+        newPlayState->mediaSource = mainMediaSource;
+        mainMediaSource = 0;
+        newPlayState->inputsPresent = inputsPresent;
+        inputsPresent.clear();
+
         
         
         // open media sink 
@@ -721,7 +829,7 @@ bool LocalIngexPlayer::start(vector<string> mxfFilenames, vector<bool>& opended)
             {
                 case X11_OUTPUT:
                     CHK_OTHROW_MSG(xsk_open(20, _disableX11OSD, &_pixelAspectRatio, &_monitorAspectRatio, 
-                        _scale, swScale, 0, &x11Sink),
+                        _scale, swScale, _pluginInfo, &x11Sink),
                         ("Failed to open X11 display sink\n"));
                     xsk_register_window_listener(x11Sink, &_x11WindowListener);
                     xsk_register_keyboard_listener(x11Sink, &_x11KeyListener);
@@ -735,7 +843,7 @@ bool LocalIngexPlayer::start(vector<string> mxfFilenames, vector<bool>& opended)
         
                 case X11_XV_OUTPUT:
                     CHK_OTHROW_MSG(xvsk_open(20, _disableX11OSD, &_pixelAspectRatio, &_monitorAspectRatio, 
-                        _scale, swScale, 0, &x11XVSink),
+                        _scale, swScale, _pluginInfo, &x11XVSink),
                         ("Failed to open X11 XV display sink\n"));
                     xvsk_register_window_listener(x11XVSink, &_x11WindowListener);
                     xvsk_register_keyboard_listener(x11XVSink, &_x11KeyListener);
@@ -756,7 +864,7 @@ bool LocalIngexPlayer::start(vector<string> mxfFilenames, vector<bool>& opended)
                 case DUAL_DVS_X11_OUTPUT:
                     CHK_OTHROW_MSG(dusk_open(20, VITC_AS_SDI_VITC, 0, 12, 0, _disableSDIOSD, 
                         _disableX11OSD, &_pixelAspectRatio, 
-                        &_monitorAspectRatio, _scale, swScale, 1, 0, &dualSink),
+                        &_monitorAspectRatio, _scale, swScale, 1, _pluginInfo, &dualSink),
                         ("Failed to open dual DVS and X11 display sink\n"));
                     dusk_register_window_listener(dualSink, &_x11WindowListener);
                     dusk_register_keyboard_listener(dualSink, &_x11KeyListener);
@@ -768,7 +876,7 @@ bool LocalIngexPlayer::start(vector<string> mxfFilenames, vector<bool>& opended)
                 case DUAL_DVS_X11_XV_OUTPUT:
                     CHK_OTHROW_MSG(dusk_open(20, VITC_AS_SDI_VITC, 0, 12, 1, _disableSDIOSD, 
                         _disableX11OSD, &_pixelAspectRatio, 
-                        &_monitorAspectRatio, _scale, swScale, 1, 0, &dualSink),
+                        &_monitorAspectRatio, _scale, swScale, 1, _pluginInfo, &dualSink),
                         ("Failed to open dual DVS and X11 XV display sink\n"));
                     dusk_register_window_listener(dualSink, &_x11WindowListener);
                     dusk_register_keyboard_listener(dualSink, &_x11KeyListener);
@@ -809,7 +917,7 @@ bool LocalIngexPlayer::start(vector<string> mxfFilenames, vector<bool>& opended)
             {
                 VideoSwitchSink* videoSwitch;
                 CHK_OTHROW(qvs_create_video_switch(newPlayState->mediaSink, QUAD_SPLIT_VIDEO_SWITCH, _applyQuadSplitFilter, 
-                    0, 0, -1, -1, -1, &videoSwitch));
+                    0, 0, 0, -1, -1, -1, &videoSwitch));
                 newPlayState->mediaSink = vsw_get_media_sink(videoSwitch);
             }
             
@@ -831,7 +939,7 @@ bool LocalIngexPlayer::start(vector<string> mxfFilenames, vector<bool>& opended)
         
         CHK_OTHROW(ply_create_player(newPlayState->mediaSource, newPlayState->mediaSink, 
             _initiallyLocked, 0, _numFFMPEGThreads, _useWorkerThreads, 0, 0, 
-            &g_invalidTimecode, &g_invalidTimecode, NULL, &newPlayState->mediaPlayer));
+            &g_invalidTimecode, &g_invalidTimecode, NULL, NULL, 0, &newPlayState->mediaPlayer));
         CHK_OTHROW(ply_register_player_listener(newPlayState->mediaPlayer, &_mediaPlayerListener));
             
         if (_srcBufferSize > 0)
@@ -861,6 +969,10 @@ bool LocalIngexPlayer::start(vector<string> mxfFilenames, vector<bool>& opended)
     }
     catch (...)
     {
+        if (mainMediaSource != 0)
+        {
+            msc_close(mainMediaSource);
+        }
         return false;
     }
     return true;

@@ -1,5 +1,5 @@
 /*
- * $Id: create_aaf.cpp,v 1.2 2008/02/06 16:59:12 john_f Exp $
+ * $Id: create_aaf.cpp,v 1.3 2008/05/07 17:21:27 philipn Exp $
  *
  * Creates AAF files with clips extracted from the database
  *
@@ -252,41 +252,99 @@ static string addFilename(vector<string>& filenames, string filename)
     return filename;
 }
 
-static vector<CutInfo> getSequence(CutsDatabase* database, MCClipDef* mcClipDef, Timestamp creationTs, 
-    int64_t startTimecode)
+static set<string> getSourceConfigNames(PackageSet& packages, Package* package)
 {
     set<string> sources;
-    string defaultSource;
-    uint32_t defaultSourceNumber = 0xffffffff;
     
-    // the sources in multi-camera sequence is taken from the track that has more than 1 selector
-    
-    map<uint32_t, MCTrackDef*>::const_iterator iter1;
-    for (iter1 = mcClipDef->trackDefs.begin(); iter1 != mcClipDef->trackDefs.end(); iter1++)
+    if (package->getType() == FILE_ESSENCE_DESC_TYPE)
     {
-        MCTrackDef* trackDef = (*iter1).second;
+        sources.insert(dynamic_cast<SourcePackage*>(package)->sourceConfigName);
+        return sources;
+    }
+    
+    vector<Track*>::const_iterator iter1;
+    for (iter1 = package->tracks.begin(); iter1 != package->tracks.end(); iter1++)
+    {
+        Track* track = *iter1;
+
+        SourcePackage dummy;
+        dummy.uid = track->sourceClip->sourcePackageUID;
+        PackageSet::iterator result = packages.find(&dummy);
+        if (result != packages.end())
+        {
+            Package* referencedPackage = *result;
+            
+            set<string> refSources = getSourceConfigNames(packages, referencedPackage);
+            sources.insert(refSources.begin(), refSources.end());
+        }
+    }
+    
+    return sources;
+}
+
+static void getDirectorsCutSources(MCClipDef* mcClipDef, MaterialPackageSet& materialPackages, PackageSet& packages,
+    set<string>* sources, string* defaultSource)
+{
+    // get the source config names for the material packages
+
+    set<string> packageSources;
+    MaterialPackageSet::const_iterator iter1;
+    for (iter1 = materialPackages.begin(); iter1 != materialPackages.end(); iter1++)
+    {
+        MaterialPackage* materialPackage = *iter1;
+        
+        set<string> sources = getSourceConfigNames(packages, materialPackage);
+        packageSources.insert(sources.begin(), sources.end());
+    }
+    
+    // intersect the material package sources with the sources for the selectable track group 
+    // in the multi-camera group
+    
+    uint32_t defaultSourceNumber = 0xffffffff;
+    map<uint32_t, MCTrackDef*>::const_iterator iter2;
+    for (iter2 = mcClipDef->trackDefs.begin(); iter2 != mcClipDef->trackDefs.end(); iter2++)
+    {
+        MCTrackDef* trackDef = (*iter2).second;
         
         if (trackDef->selectorDefs.size() > 1)
         {
-            map<uint32_t, MCSelectorDef*>::const_iterator iter2;
-            for (iter2 = trackDef->selectorDefs.begin(); iter2 != trackDef->selectorDefs.end(); iter2++)
+            map<uint32_t, MCSelectorDef*>::const_iterator iter3;
+            for (iter3 = trackDef->selectorDefs.begin(); iter3 != trackDef->selectorDefs.end(); iter3++)
             {
-                MCSelectorDef* selectorDef = (*iter2).second;
-                uint32_t selectorNumber = (*iter2).first;
+                MCSelectorDef* selectorDef = (*iter3).second;
+                uint32_t selectorNumber = (*iter3).first;
                 
                 if (selectorDef->sourceConfig != 0)
                 {
+                    if (packageSources.find(selectorDef->sourceConfig->name) == packageSources.end())
+                    {
+                        // source not referenced by the material packages
+                        continue;
+                    }
+                    
                     if (selectorNumber < defaultSourceNumber)
                     {
-                        defaultSource = selectorDef->sourceConfig->name;
+                        *defaultSource = selectorDef->sourceConfig->name;
                         defaultSourceNumber = selectorNumber; 
                     }
-                    sources.insert(selectorDef->sourceConfig->name);
+                    sources->insert(selectorDef->sourceConfig->name);
                 }
             }
             break;
         }
     }
+    
+    
+}
+
+static vector<CutInfo> getDirectorsCutSequence(CutsDatabase* database, MCClipDef* mcClipDef, 
+    MaterialPackageSet& materialPackages, PackageSet& packages,
+    Timestamp creationTs, int64_t startTimecode)
+{
+    set<string> sources;
+    string defaultSource;
+    getDirectorsCutSources(mcClipDef, materialPackages, packages, &sources, &defaultSource);
+
     if (sources.size() < 2)
     {
         return vector<CutInfo>();
@@ -613,8 +671,7 @@ int main(int argc, const char* argv[])
             database->loadMaterial(tagName.c_str(), tagValue.c_str(), &material.topPackages, &material.packages);
             if (verbose)
             {
-                printf("Loaded %d clips from the database based on the tag %s=%s\n", material.topPackages.size(),
-                    tagName.c_str(), tagValue.c_str());
+                printf("Loaded %d clips from the database based on the tag %s=%s\n", (int)material.topPackages.size(), tagName.c_str(), tagValue.c_str());
             }
         }
         else if (fromCreationDate.year != 0)
@@ -633,8 +690,7 @@ int main(int argc, const char* argv[])
 
             if (verbose)
             {
-                printf("Loaded %d clips from the database from creation date %s\n", 
-                    material.topPackages.size(), timestampString(fromCreationDate).c_str());
+                printf("Loaded %d clips from the database from creation date %s\n", (int)material.topPackages.size(), timestampString(fromCreationDate).c_str());
             }
         }
         else
@@ -657,7 +713,7 @@ int main(int argc, const char* argv[])
 
             if (verbose)
             {
-                printf("Loaded %d clips from the database based on the dates alone\n", material.topPackages.size());
+                printf("Loaded %d clips from the database based on the dates alone\n", (int)material.topPackages.size());
             }
             
             // remove all packages that are < fromTimecode (at fromDate) and > toTimecode (at toDate)
@@ -888,8 +944,8 @@ int main(int argc, const char* argv[])
                         vector<CutInfo> sequence;
                         if (mcCutsDatabase != 0)
                         {
-                            getSequence(mcCutsDatabase, mcClipDef, topPackage1->creationDate,
-                                getStartTime(topPackage1, material.packages, palEditRate));
+                            sequence = getDirectorsCutSequence(mcCutsDatabase, mcClipDef, materialPackages, material.packages, 
+                                topPackage1->creationDate, getStartTime(topPackage1, material.packages, palEditRate));
                         }
                         
                         if (!createGroupOnly)

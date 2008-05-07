@@ -51,6 +51,9 @@ public:
     /* returns true if a DVS card is available for output */
     bool dvsCardIsAvailable();
     
+    /* set the window-id when used as a browser plugin */
+    void setPluginInfo(X11PluginWindowInfo *pluginInfo);
+    
     /* setting the output type will cause the the player to be stop()ped and restarted when start() is called again */
     void setOutputType(PlayerOutputType outputType, float scale);
     
@@ -126,6 +129,7 @@ private:
     int _srcBufferSize;
     bool _disableSDIOSD;
     bool _disableX11OSD;
+    X11PluginWindowInfo *_pluginInfo;
     std::string _x11WindowName;
     Rational _sourceAspectRatio;
     Rational _pixelAspectRatio;
@@ -144,6 +148,8 @@ private:
     X11WindowListener _x11WindowListener;
     KeyboardInputListener _x11KeyListener;
     ProgressBarInputListener _x11ProgressBarListener;
+    
+    StreamInfo _videoStreamInfo;
 };
 
 
