@@ -112,7 +112,7 @@ typedef struct
     const char* sessionScriptOptions;
     int writeAllMarks;
     int clipMarkType;
-    int useLockButton;
+    int pbMarkMask[2];
 } Options;
 
 static const Options g_defaultOptions = 
@@ -144,7 +144,7 @@ static const Options g_defaultOptions =
     0,
     1,
     M0_MARK_TYPE,
-    0
+    {ALL_MARK_TYPE, 0}
 };
 
 typedef struct
@@ -193,16 +193,16 @@ static const ControlInputHelp g_qcShuttleInputHelp[] =
 {
     {"1", "Display next OSD screen"},
     {"2", "Display next timecode"},
-    {"3", "Seek to clip mark / Toggle lock"},
+    {"3", "Toggle lock"},
     {"4", "Quit after a 1.5 second hold"},
     {"5", "Toggle mark magenta (type M1)"},
     {"6", "Toggle mark green (type M2)"},
     {"7", "Toggle mark blue (type M3)"},
     {"8", "Toggle mark cyan (type M4)"},
     {"9", "Clear mark or clear all marks after a 1.5 second hold (except D3 VTR error and PSE failure)"},
-    {"10", "Play"},
-    {"11", "Review mark"},
-    {"12", "Pause"},
+    {"10", "Toggle play/pause or play/step percentage in combination with shuttle/jog"},
+    {"11", "Seek clip mark"},
+    {"12", "Next active mark bar"},
     {"13", "Toggle mark red (type M0)"},
     {"14", "Seek to previous mark or seek to start after a 1.5 second hold"},
     {"15", "Seek to next mark or seek to end after a 1.5 second hold"},
@@ -302,14 +302,13 @@ static void terminate_control_threads(QCPlayer* player)
     }
 }
 
-static int connect_to_control_threads(QCPlayer* player, int reviewDuration, int useLockButton)
+static int connect_to_control_threads(QCPlayer* player, int reviewDuration)
 {
     /* shuttle input connect */
     if (player->shuttle != NULL)
     {
         if (!sic_create_shuttle_connect(
             reviewDuration,
-            useLockButton,
             ply_get_media_control(player->mediaPlayer), 
             player->shuttle, 
             QC_MAPPING, 
@@ -673,6 +672,8 @@ static int play_balls(QCPlayer* player, Options* options)
         &g_invalidTimecode, 
         &g_invalidTimecode,
         NULL,
+        options->pbMarkMask,
+        2,
         &player->mediaPlayer))
     {
         ml_log_error("Failed to create media player\n");
@@ -713,7 +714,7 @@ static int play_balls(QCPlayer* player, Options* options)
 
     /* reconnect to control threads */
     
-    if (!connect_to_control_threads(player, options->reviewDuration, options->useLockButton))
+    if (!connect_to_control_threads(player, options->reviewDuration))
     {
         ml_log_error("Failed to set QC lTO access menu handler\n");
         goto fail;
@@ -798,7 +799,7 @@ static int play_d3_mxf_file(QCPlayer* player, int argc, const char** argv, Optio
     strcat_separator(filename);
     strcat(filename, name);
     
-    if (!qcs_open(filename, player->mediaSource, argc, argv, name, &player->qcSession))
+    if (!qcs_open(filename, player->mediaSource, argc, argv, name, sessionName, &player->qcSession))
     {
         fprintf(stderr, "Failed to open QC session with prefix '%s'\n", filename);
         goto fail;
@@ -832,6 +833,8 @@ static int play_d3_mxf_file(QCPlayer* player, int argc, const char** argv, Optio
         &g_invalidTimecode, 
         &g_invalidTimecode,
         g_player.bufferStateLogFile,
+        options->pbMarkMask,
+        2,
         &player->mediaPlayer))
     {
         ml_log_error("Failed to create media player\n");
@@ -902,7 +905,7 @@ static int play_d3_mxf_file(QCPlayer* player, int argc, const char** argv, Optio
 
     /* reconnect to control threads */
     
-    if (!connect_to_control_threads(player, options->reviewDuration, options->useLockButton))
+    if (!connect_to_control_threads(player, options->reviewDuration))
     {
         ml_log_error("Failed to set QC lTO access menu handler\n");
         goto fail;
@@ -1296,7 +1299,8 @@ static void usage(const char* cmd)
     fprintf(stderr, "                                  colour is one of white|yellow|cyan|green|magenta|red|blue|orange\n");
     fprintf(stderr, "  --enable-term-keyb       Enable terminal window keyboard input.\n");
     fprintf(stderr, "  --clip-mark <type>       Clip mark type (default 0x%04x).\n", g_defaultOptions.clipMarkType);
-    fprintf(stderr, "  --use-lock-button        Map the clip seek button to lock button\n");
+    fprintf(stderr, "  --pb-mark-mask <val>     32-bit mark type mask to show on the progress bar (decimal or 0x hex) (default 0x%08x)\n", g_defaultOptions.pbMarkMask[0]);
+    fprintf(stderr, "  --pb2-mark-mask <val>    32-bit mark type mask to show on the second progress bar (decimal or 0x hex) (default 0x%08x)\n", g_defaultOptions.pbMarkMask[1]);
     fprintf(stderr, "\n");
 }
 
@@ -1709,10 +1713,39 @@ int main(int argc, const char **argv)
             }
             cmdlnIndex += 2;
         }
-        else if (strcmp(argv[cmdlnIndex], "--use-lock-button") == 0)
+        else if (strcmp(argv[cmdlnIndex], "--pb-mark-mask") == 0)
         {
-            options.useLockButton = 1;
-            cmdlnIndex += 1;
+            if (cmdlnIndex + 1 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            if (sscanf(argv[cmdlnIndex + 1], "0x%x\n", &options.pbMarkMask[0]) != 1 &&
+                sscanf(argv[cmdlnIndex + 1], "%d\n", &options.pbMarkMask[0]) != 1)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Invalid argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            cmdlnIndex += 2;
+        }
+        else if (strcmp(argv[cmdlnIndex], "--pb2-mark-mask") == 0)
+        {
+            if (cmdlnIndex + 1 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            if (sscanf(argv[cmdlnIndex + 1], "0x%x\n", &options.pbMarkMask[1]) != 1 &&
+                sscanf(argv[cmdlnIndex + 1], "%d\n", &options.pbMarkMask[1]) != 1)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Invalid argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            cmdlnIndex += 2;
         }
         else
         {

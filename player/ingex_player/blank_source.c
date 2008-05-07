@@ -210,6 +210,13 @@ static int bks_eof(void* data)
     return 0;
 }
 
+static void bks_set_source_name(void* data, const char* name)
+{
+    BlankSource* source = (BlankSource*)data;
+
+    add_known_source_info(&source->streamInfo, SRC_INFO_NAME, name);    
+}
+
 static void bks_close(void* data)
 {
     BlankSource* source = (BlankSource*)data;
@@ -255,6 +262,7 @@ int bks_create(const StreamInfo* videoStreamInfo, int64_t length, MediaSource** 
     newSource->mediaSource.get_position = bks_get_position;
     newSource->mediaSource.get_available_length = bks_get_available_length;
     newSource->mediaSource.eof = bks_eof;
+    newSource->mediaSource.set_source_name = bks_set_source_name;
     newSource->mediaSource.close = bks_close;
     
     newSource->streamInfo = *videoStreamInfo;

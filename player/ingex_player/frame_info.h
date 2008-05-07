@@ -99,6 +99,7 @@ typedef enum
     SRC_INFO_D3MXF_CREATION_DATE,
     SRC_INFO_D3MXF_LTO_SPOOL_NO,
     SRC_INFO_D3MXF_D3_SPOOL_NO,
+    SRC_INFO_D3MXF_D3_ITEM_NO,
     SRC_INFO_D3MXF_PROGRAMME_TITLE,
     SRC_INFO_D3MXF_EPISODE_TITLE,
     SRC_INFO_D3MXF_TX_DATE,
@@ -106,6 +107,8 @@ typedef enum
     SRC_INFO_D3MXF_PROGRAMME_DURATION,
     
     SRC_INFO_TITLE,
+    
+    SRC_INFO_NAME,
     
     SRC_INFO_UNKNOWN
 } SourceInfoName;
@@ -155,6 +158,7 @@ typedef struct
     int64_t position; /* position in the media source */
     int64_t sourceLength; /* length of media source - 0 <= position < sourceLength */
     int64_t availableSourceLength; /* this will progress from 0 to sourceLength for a file that is still being written to  */
+    int64_t startOffset;
     
     int64_t frameCount; /* count of frames read and accepted */
     int rateControl; /* true if the frame is the next one and the playing speed is normal */
@@ -185,6 +189,8 @@ int initialise_stream_info(StreamInfo* streamInfo);
 int add_source_info(StreamInfo* streamInfo, const char* name, const char* value);
 int add_known_source_info(StreamInfo* streamInfo, SourceInfoName name, const char* value);
 void clear_stream_info(StreamInfo* streamInfo);
+const char* get_source_info_value(const StreamInfo* streamInfo, const char* name);
+const char* get_known_source_info_value(const StreamInfo* streamInfo, SourceInfoName name);
 
 
 int select_frame_timecode(const FrameInfo* frameInfo, int tcIndex, int tcType, int tcSubType, Timecode* timecode);

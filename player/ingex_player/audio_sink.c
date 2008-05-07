@@ -563,35 +563,38 @@ static int aus_complete_frame(void* data, const FrameInfo* frameInfo)
     unsigned char* front;
     unsigned char* back;
 
-    if (!frameInfo->isRepeat)
+    if (sink->numAudioStreams > 0)
     {
-        if (frameInfo->reversePlay)
+        if (!frameInfo->isRepeat)
         {
-            /* reverse the audio */
-            for (i = 0; i < sink->numAudioStreams; i++)
+            if (frameInfo->reversePlay)
             {
-                front = sink->audioStreams[i].buffer[sink->writeBuffer];
-                back = &sink->audioStreams[i].buffer[sink->writeBuffer][sink->audioStreams[i].bufferSize - sink->byteAlignment];
-                for (j = 0; j < sink->audioStreams[i].bufferSize / 2; j += sink->byteAlignment)
+                /* reverse the audio */
+                for (i = 0; i < sink->numAudioStreams; i++)
                 {
-                    memcpy(tmp, front, sink->byteAlignment);
-                    memcpy(front, back, sink->byteAlignment);
-                    memcpy(back, tmp, sink->byteAlignment);
-                    front += sink->byteAlignment;
-                    back -= sink->byteAlignment;
+                    front = sink->audioStreams[i].buffer[sink->writeBuffer];
+                    back = &sink->audioStreams[i].buffer[sink->writeBuffer][sink->audioStreams[i].bufferSize - sink->byteAlignment];
+                    for (j = 0; j < sink->audioStreams[i].bufferSize / 2; j += sink->byteAlignment)
+                    {
+                        memcpy(tmp, front, sink->byteAlignment);
+                        memcpy(front, back, sink->byteAlignment);
+                        memcpy(back, tmp, sink->byteAlignment);
+                        front += sink->byteAlignment;
+                        back -= sink->byteAlignment;
+                    }
                 }
             }
-        }
-    
-        /* signal buffer is ready */
-        for (i = 0; i < sink->numAudioStreams; i++)
-        {
-            sink->audioStreams[i].bufferIsReady[sink->writeBuffer] = 1;
-        }
         
-        sink->writeBuffer = (sink->writeBuffer + 1) % 2;
+            /* signal buffer is ready */
+            for (i = 0; i < sink->numAudioStreams; i++)
+            {
+                sink->audioStreams[i].bufferIsReady[sink->writeBuffer] = 1;
+            }
+            
+            sink->writeBuffer = (sink->writeBuffer + 1) % 2;
+        }
+        /* else the frame is a repeat and we don't send any audio */
     }
-    /* else the frame is a repeat and we don't send any audio */
     
     return msk_complete_frame(sink->nextSink, frameInfo);
 }

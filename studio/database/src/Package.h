@@ -1,5 +1,5 @@
 /*
- * $Id: Package.h,v 1.2 2008/02/06 16:59:07 john_f Exp $
+ * $Id: Package.h,v 1.3 2008/05/07 17:13:27 philipn Exp $
  *
  * A MXF/AAF Package
  *
@@ -99,6 +99,7 @@ public:
     void addUserComment(std::string, std::string value);
     std::vector<UserComment> getUserComments(std::string name); 
     std::vector<UserComment> getUserComments();
+    void clearUserComments();
 
     virtual void cloneInPlace(UMID newUID, bool resetLengths);
     

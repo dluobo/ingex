@@ -1,5 +1,10 @@
 PLAYER_INSTALL_PREFIX ?= /usr/local
 
+COMMON_DIR = ../../common
+LIBMXF_DIR = ../../libMXF
+LIBMXF_ARCHIVE_DIR = $(LIBMXF_DIR)/examples/archive
+LIBMXF_READER_DIR = $(LIBMXF_DIR)/examples/reader
+
 
 ifneq "$(MAKECMDGOALS)" "clean"
 
@@ -7,7 +12,7 @@ DVS_PATH := $(shell for f in /usr/local /usr; do test -e $$f/include/dvs_fifo.h 
 ifeq "$(DVS_PATH)" ""
 	ifndef DVSSDK
 		ifndef DVS_SDK_INSTALL
-$(warning no DVS available - set the DVSSDK or DVS_SDK_INSTALL environment variable to the location of your installed DVS SDK version 2 or version 3 respectively)
+$(warning no DVS available - set the DVSSDK or DVS_SDK_INSTALL environment variable to the location of your installed DVS SDK version 3 or version 2 respectively)
 		endif
 	endif
 endif
@@ -63,21 +68,22 @@ endif
 CFLAGS = -Wall -W -Wno-unused-parameter -D_THREAD_SAFE -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE
 OPT = -O3 -mmmx -msse2
 
-INCLUDEDIRS = -I. -I/usr/local/include -I/usr/include/freetype2 -I/usr/include/fontconfig 
+INCLUDEDIRS = -I. -I$(LIBMXF_DIR)/lib/include -I$(LIBMXF_ARCHIVE_DIR) -I$(LIBMXF_ARCHIVE_DIR)/info -I$(LIBMXF_READER_DIR) -I/usr/local/include -I/usr/include/freetype2 -I/usr/include/fontconfig 
 
-LIBDIRS = -L. -L/usr/X11R6/lib -L/usr/local/lib
+LIBDIRS = -L. -L$(LIBMXF_DIR)/lib -L$(LIBMXF_ARCHIVE_DIR)/info -L$(LIBMXF_READER_DIR) -L/usr/X11R6/lib -L/usr/local/lib -L/usr/X11R6/lib64 -L/usr/local/lib64
 LIBS = -lX11 -lXv -lpthread -lfreetype -lfontconfig -luuid -ld3mxfinfo -lMXFReader -lMXF
+LIB_DEPS = $(LIBMXF_DIR)/lib/libMXF.a $(LIBMXF_ARCHIVE_DIR)/info/libd3mxfinfo.a $(LIBMXF_READER_DIR)/libMXFReader.a
 
 ifdef DVS_PATH
 	INCLUDEDIRS += -I$(DVS_PATH)/include
-	LIBDIRS += -L$(DVS_PATH)/lib
+	LIBDIRS += -L$(DVS_PATH)/lib -L$(DVS_PATH)/lib64
 	LIBS += -ldvsoem
 	CFLAGS += -DHAVE_DVS
 else 
 	ifdef DVSSDK
 		# DVS SDK version 3		
 		INCLUDEDIRS += -I$(DVSSDK)/development/header
-		LIBDIRS += -L$(DVSSDK)/linux-x86/lib
+		LIBDIRS += -L$(DVSSDK)/linux-x86/lib -L$(DVSSDK)/linux-x86_64/lib
 		LIBS += -ldvsoem
 		CFLAGS += -DHAVE_DVS
 	else
@@ -100,16 +106,14 @@ ifdef FFMPEG_INCLUDE_PATH
 	FFMPEG_DNXHD_RPM := $(shell rpm -q ffmpeg-DNxHD-h264-aac > /dev/null && echo YES)
 	ifeq "$(FFMPEG_RPM)" "YES"
 		LIBS += -lavformat -lavcodec -lavutil -lz -lmp3lame -lx264 -la52 -lfaac -lfaad -lm
-	else ifeq "$(FFMPEG_DNXHD_RPM)" "YES"
+	else
+		ifeq "$(FFMPEG_DNXHD_RPM)" "YES"
 		LIBS += -lavformat -lavcodec -lavutil -lz -lmp3lame -lx264 -la52 -lfaac -lfaad -lm
 		CFLAGS += -DHAVE_DNXHD
-	else
+		else
 		LIBS += -lavformat -lavcodec -lavutil -lm
+		endif
 	endif
-
-        ifdef HAVE_FFMPEG_DNXHD
-                CFLAGS += -DHAVE_DNXHD
-        endif	
 else
 	CFLAGS += -Werror
 endif
@@ -136,8 +140,9 @@ ifndef TEST_UDP_PATH
 	CFLAGS += -DDISABLE_UDP_SOURCE
 else
 	INCLUDEDIRS += -I../../common
-	LIBDIRS += -L../../common -L../../common/YUVlib
+	LIBDIRS += -L$(COMMON_DIR) -L$(COMMON_DIR)/YUVlib
 	LIBS += -lcommon -lYUVlib
+	LIB_DEPS += $(COMMON_DIR)/libcommon.a $(COMMON_DIR)/YUVlib/libYUVlib.a
 endif
 
 ifdef HAVE_PORTAUDIO
@@ -161,7 +166,7 @@ SOURCES = multiple_sources.c dvs_sink.c connection_matrix.c stream_connect.c uti
 	raw_file_source.c media_sink.c x11_xv_display_sink.c raw_file_sink.c console_monitor.c \
 	YUV_frame.c YUV_text_overlay.c YUV_small_pic.c \
 	video_switch_sink.c qc_session.c dv_stream_connect.c logging.c buffered_media_sink.c media_sink_frame.c \
-	dual_sink.c null_sink.c version.c frame_info.c buffered_media_source.c osd_symbols.c \
+	dual_sink.c null_sink.c frame_info.c buffered_media_source.c osd_symbols.c \
 	x11_display_sink.c keyboard_input.c keyboard_input_connect.c x11_common.c \
 	video_conversion.c system_timecode_source.c half_split_sink.c audio_level_sink.c \
 	http_access.c http_access_resources.c qc_lto_access.c bouncing_ball_source.c \
@@ -177,9 +182,26 @@ DEPENDENCIES = $(patsubst %.c,.deps/%.d,$(SOURCES))
 all: libingexplayer.a player qc_player
 
 
+$(LIBMXF_DIR)/lib/libMXF.a:
+		cd $(LIBMXF_DIR)/lib && $(MAKE) libMXF.a
+
+$(LIBMXF_ARCHIVE_DIR)/info/libd3mxfinfo.a:
+		cd $(LIBMXF_ARCHIVE_DIR)/info && $(MAKE) libd3mxfinfo.a
+
+$(LIBMXF_READER_DIR)/libMXFReader.a:
+		cd $(LIBMXF_READER_DIR) && $(MAKE) libMXFReader.a
+
+$(COMMON_DIR)/libcommon.a:
+		cd $(COMMON_DIR) && $(MAKE) libcommon.a
+
+$(COMMON_DIR)/YUVlib/libYUVlib.a:
+		cd $(COMMON_DIR)/YUVlib && $(MAKE) all
+
+		
+		
 libingexplayer.a: $(OBJECTS)
-	$(CC) -c $(INCLUDEDIRS) version.c -o .objs/version.o
 	$(AR) libingexplayer.a $(OBJECTS)
+	
 	
 	
 .deps/%.d : %.c
@@ -202,8 +224,9 @@ libingexplayer.a: $(OBJECTS)
 	sed 's,\($*\)\.o[ :]*,\.objs/\1.o $@ : ,g' < $@.$$$$ > $@; \
 	rm -f $@.$$$$
 
-player: .objs/player.o libingexplayer.a
-	$(CC) $(LIBDIRS) .objs/player.o libingexplayer.a $(LIBS) -o $@
+player: .objs/player.o libingexplayer.a $(LIB_DEPS)
+	$(CC) -c $(INCLUDEDIRS) version.c -o .objs/version.o
+	$(CC) $(LIBDIRS) .objs/player.o .objs/version.o libingexplayer.a $(LIBS) -o $@
 
 .deps/qc_player.d : qc_player.c
 	@echo Generating dependency file for $<; \
@@ -212,8 +235,9 @@ player: .objs/player.o libingexplayer.a
 	sed 's,\($*\)\.o[ :]*,\.objs/\1.o $@ : ,g' < $@.$$$$ > $@; \
 	rm -f $@.$$$$
 
-qc_player: .objs/qc_player.o libingexplayer.a
-	$(CC) $(LIBDIRS) .objs/qc_player.o libingexplayer.a $(LIBS) -o $@
+qc_player: .objs/qc_player.o libingexplayer.a $(LIB_DEPS)
+	$(CC) -c $(INCLUDEDIRS) version.c -o .objs/version.o
+	$(CC) $(LIBDIRS) .objs/qc_player.o .objs/version.o libingexplayer.a $(LIBS) -o $@
 
 	
 	
@@ -223,15 +247,19 @@ test_shuttle_input: .objs/test_shuttle_input.o .objs/shuttle_input.o .objs/loggi
 
 TESTAPPS += test_emulate_key	
 test_emulate_key: .objs/test_emulate_key.o .objs/emulate_key.o .objs/logging.o
-	$(CC) $(INCLUDEDIRS) -L/usr/X11R6/lib -lX11 .objs/test_emulate_key.o .objs/emulate_key.o .objs/logging.o -o test_emulate_key
+	$(CC) $(INCLUDEDIRS) -L/usr/X11R6/lib -lX11 -L/usr/X11R6/lib64 .objs/test_emulate_key.o .objs/emulate_key.o .objs/logging.o -o test_emulate_key
 
 TESTAPPS += test_media_control	
 test_media_control: .objs/test_media_control.o .objs/media_control.o .objs/shuttle_input_connect.o .objs/shuttle_input.o .objs/x11_keyboard_input.o .objs/term_keyboard_input.o .objs/logging.o
-	$(CC) $(INCLUDEDIRS) -L/usr/X11R6/lib -lX11 .objs/test_media_control.o .objs/media_control.o .objs/shuttle_input_connect.o .objs/shuttle_input.o .objs/x11_keyboard_input.o .objs/term_keyboard_input.o .objs/logging.o -o test_media_control
+	$(CC) $(INCLUDEDIRS) -L/usr/X11R6/lib -L/usr/X11R6/lib64 -lX11 .objs/test_media_control.o .objs/media_control.o .objs/shuttle_input_connect.o .objs/shuttle_input.o .objs/x11_keyboard_input.o .objs/term_keyboard_input.o .objs/logging.o -o test_media_control
 
 TESTAPPS += ffmpeg_shuttle_emu	
 ffmpeg_shuttle_emu: .objs/ffmpeg_shuttle_emu.o .objs/emulate_key.o .objs/shuttle_input.o .objs/logging.o
-	$(CC) $(INCLUDEDIRS) -L/usr/X11R6/lib -lX11 .objs/ffmpeg_shuttle_emu.o .objs/emulate_key.o .objs/shuttle_input.o .objs/logging.o -o ffmpeg_shuttle_emu
+	$(CC) $(INCLUDEDIRS) -L/usr/X11R6/lib -L/usr/X11R6/lib64 -lX11 .objs/ffmpeg_shuttle_emu.o .objs/emulate_key.o .objs/shuttle_input.o .objs/logging.o -o ffmpeg_shuttle_emu
+
+TESTAPPS += recorder_shuttle_emu	
+recorder_shuttle_emu: .objs/recorder_shuttle_emu.o .objs/emulate_key.o .objs/shuttle_input.o .objs/logging.o .objs/utils.o 
+	$(CC) $(INCLUDEDIRS) -L/usr/X11R6/lib -L/usr/X11R6/lib64 -lX11 .objs/recorder_shuttle_emu.o .objs/emulate_key.o .objs/shuttle_input.o .objs/logging.o .objs/utils.o -lm -lXtst -lpthread -o recorder_shuttle_emu
 
 	
 

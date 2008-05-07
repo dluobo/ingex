@@ -217,26 +217,33 @@ static int als_complete_frame(void* data, const FrameInfo* frameInfo)
     int i;
     int result;
 
-    /* send audio levels to OSD */
-    for (i = 0; i < sink->numAudioStreams; i++)
+    if (sink->numAudioStreams > 0)
     {
-        osd_set_audio_stream_level(msk_get_osd(sink->targetSink), 
-            sink->audioStreams[i].streamId,
-            sink->audioStreams[i].level);
-    }        
-
-    /* reset levels */
-    for (i = 0; i < sink->numAudioStreams; i++)
-    {
-        sink->audioStreams[i].level = 0.0;
-    }
-
-    result = msk_complete_frame(sink->targetSink, frameInfo);
+        /* send audio levels to OSD */
+        for (i = 0; i < sink->numAudioStreams; i++)
+        {
+            osd_set_audio_stream_level(msk_get_osd(sink->targetSink), 
+                sink->audioStreams[i].streamId,
+                sink->audioStreams[i].level);
+        }        
     
-    /* reset OSD audio levels */
-    osd_reset_audio_stream_levels(msk_get_osd(sink->targetSink));
+        /* reset levels */
+        for (i = 0; i < sink->numAudioStreams; i++)
+        {
+            sink->audioStreams[i].level = 0.0;
+        }
+    
+        result = msk_complete_frame(sink->targetSink, frameInfo);
+        
+        /* reset OSD audio levels */
+        osd_reset_audio_stream_levels(msk_get_osd(sink->targetSink));
 
-    return result;
+        return result;
+    }
+    else
+    {
+        return msk_complete_frame(sink->targetSink, frameInfo);
+    }
 }
 
 static void als_cancel_frame(void* data)

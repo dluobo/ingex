@@ -272,11 +272,11 @@ static void default_key_pressed(void* data, int key)
             }
             break;
 
-        case '\'':
+        case '-':
             mc_toggle_show_source_name(connect->control);
             break;
             
-        case '#':
+        case XK_KP_Add:
             mc_toggle_show_audio_level(connect->control);
             break;
             

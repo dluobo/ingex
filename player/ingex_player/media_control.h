@@ -62,10 +62,12 @@ typedef struct
     void (*mark)(void* data, int type, int toggle);
     void (*mark_position)(void* data, int64_t position, int type, int toggle);
     void (*clear_mark)(void* data, int typeMask /* ALL_MARK_TYPE will clear all mark types */);
+    void (*clear_mark_position)(void* data, int64_t position, int typeMask /* ALL_MARK_TYPE will clear all mark types */);
     void (*clear_all_marks)(void* data, int typeMask /* ALL_MARK_TYPE will clear all mark types */);
     void (*seek_next_mark)(void* data);
     void (*seek_prev_mark)(void* data);
     void (*seek_clip_mark)(void* data);
+    void (*next_active_mark_selection)(void* data);
 
     
     /* on screen display */
@@ -132,10 +134,12 @@ void mc_step(MediaControl* control, int forward, PlayUnit unit);
 void mc_mark(MediaControl* control, int type, int toggle);
 void mc_mark_position(MediaControl* control, int64_t position, int type, int toggle);
 void mc_clear_mark(MediaControl* control, int typeMask);
+void mc_clear_mark_position(MediaControl* control, int64_t position, int typeMask);
 void mc_clear_all_marks(MediaControl* control, int typeMask);
 void mc_seek_next_mark(MediaControl* control);
 void mc_seek_prev_mark(MediaControl* control);
 void mc_seek_clip_mark(MediaControl* control);
+void mc_next_active_mark_selection(MediaControl* control);
 
 void mc_set_osd_screen(MediaControl* control, OSDScreen screen);
 void mc_next_osd_screen(MediaControl* control);

@@ -472,6 +472,17 @@ static int shm_eof(void* data)
     return 0;
 }
 
+static void shm_set_source_name(void* data, const char* name)
+{
+    SharedMemSource* source = (SharedMemSource*)data;
+
+    int i;
+    for (i = 0; i < source->numTracks; i++)
+    {
+        add_known_source_info(&source->tracks[i].streamInfo, SRC_INFO_NAME, name);    
+    }
+}
+
 static void shm_close(void* data)
 {
     SharedMemSource* source = (SharedMemSource*)data;
@@ -579,6 +590,7 @@ int shared_mem_open(const char* channel_name, MediaSource** source)
     newSource->mediaSource.get_position = shm_get_position;
     newSource->mediaSource.get_available_length = shm_get_available_length;
     newSource->mediaSource.eof = shm_eof;
+    newSource->mediaSource.set_source_name = shm_set_source_name;
     newSource->mediaSource.close = shm_close;
 
     

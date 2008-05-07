@@ -13,7 +13,7 @@ struct ClipSource
     int64_t start;
     int64_t duration;
     
-    MediaSource source;
+    MediaSource mediaSource;
     
     MediaSource* targetSource;
 };
@@ -27,11 +27,11 @@ static int cps_is_complete(void* data)
     return msc_is_complete(clipSource->targetSource);
 }
 
-static int cps_post_complete(void* data, MediaControl* mediaControl)
+static int cps_post_complete(void* data, MediaSource* rootSource, MediaControl* mediaControl)
 {
     ClipSource* clipSource = (ClipSource*)data;
 
-    return msc_post_complete(clipSource->targetSource, mediaControl);
+    return msc_post_complete(clipSource->targetSource, rootSource, mediaControl);
 }
 
 static int cps_finalise_blank_source(void* data, const StreamInfo* streamInfo)
@@ -319,6 +319,13 @@ static int cps_eof(void* data)
     return msc_eof(clipSource->targetSource);
 }
 
+static void cps_set_source_name(void* data, const char* name)
+{
+    ClipSource* clipSource = (ClipSource*)data;
+    
+    msc_set_source_name(clipSource->targetSource, name);    
+}
+
 static void cps_close(void* data)
 {
     ClipSource* clipSource = (ClipSource*)data;
@@ -338,6 +345,19 @@ static int cps_get_buffer_state(void* data, int* numBuffers, int* numBuffersFill
     return msc_get_buffer_state(clipSource->targetSource, numBuffers, numBuffersFilled);
 }    
 
+static int64_t cps_convert_position(void* data, int64_t position, MediaSource* childSource)
+{
+    ClipSource* clipSource = (ClipSource*)data;
+    int64_t childPosition = position;
+    
+    if (childSource != &clipSource->mediaSource)
+    {
+        childPosition = msc_convert_position(clipSource->targetSource, position, childSource);
+    }
+    
+    return childPosition - clipSource->start;
+}    
+
 
 int cps_create(MediaSource* targetSource, int64_t start, int64_t duration, ClipSource** clipSource)
 {
@@ -354,25 +374,27 @@ int cps_create(MediaSource* targetSource, int64_t start, int64_t duration, ClipS
     newClipSource->start = (start < 0) ? 0 : start;
     newClipSource->duration = duration;
     
-    newClipSource->source.data = newClipSource;
-    newClipSource->source.is_complete = cps_is_complete;
-    newClipSource->source.post_complete = cps_post_complete;
-    newClipSource->source.finalise_blank_source = cps_finalise_blank_source;
-    newClipSource->source.get_num_streams = cps_get_num_streams;
-    newClipSource->source.get_stream_info = cps_get_stream_info;
-    newClipSource->source.disable_stream = cps_disable_stream;
-    newClipSource->source.disable_audio = cps_disable_audio;
-    newClipSource->source.stream_is_disabled = cps_stream_is_disabled;
-    newClipSource->source.read_frame = cps_read_frame;
-    newClipSource->source.is_seekable = cps_is_seekable;
-    newClipSource->source.seek = cps_seek;
-    newClipSource->source.seek_timecode = cps_seek_timecode;
-    newClipSource->source.get_length = cps_get_length;
-    newClipSource->source.get_position = cps_get_position;
-    newClipSource->source.get_available_length = cps_get_available_length;
-    newClipSource->source.eof = cps_eof;
-    newClipSource->source.close = cps_close;
-    newClipSource->source.get_buffer_state = cps_get_buffer_state;
+    newClipSource->mediaSource.data = newClipSource;
+    newClipSource->mediaSource.is_complete = cps_is_complete;
+    newClipSource->mediaSource.post_complete = cps_post_complete;
+    newClipSource->mediaSource.finalise_blank_source = cps_finalise_blank_source;
+    newClipSource->mediaSource.get_num_streams = cps_get_num_streams;
+    newClipSource->mediaSource.get_stream_info = cps_get_stream_info;
+    newClipSource->mediaSource.disable_stream = cps_disable_stream;
+    newClipSource->mediaSource.disable_audio = cps_disable_audio;
+    newClipSource->mediaSource.stream_is_disabled = cps_stream_is_disabled;
+    newClipSource->mediaSource.read_frame = cps_read_frame;
+    newClipSource->mediaSource.is_seekable = cps_is_seekable;
+    newClipSource->mediaSource.seek = cps_seek;
+    newClipSource->mediaSource.seek_timecode = cps_seek_timecode;
+    newClipSource->mediaSource.get_length = cps_get_length;
+    newClipSource->mediaSource.get_position = cps_get_position;
+    newClipSource->mediaSource.get_available_length = cps_get_available_length;
+    newClipSource->mediaSource.eof = cps_eof;
+    newClipSource->mediaSource.set_source_name = cps_set_source_name;
+    newClipSource->mediaSource.close = cps_close;
+    newClipSource->mediaSource.get_buffer_state = cps_get_buffer_state;
+    newClipSource->mediaSource.convert_position = cps_convert_position;
     
     *clipSource = newClipSource;
     return 1;
@@ -380,7 +402,7 @@ int cps_create(MediaSource* targetSource, int64_t start, int64_t duration, ClipS
 
 MediaSource* cps_get_media_source(ClipSource* clipSource)
 {
-    return &clipSource->source;
+    return &clipSource->mediaSource;
 }
 
 

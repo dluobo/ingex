@@ -21,8 +21,11 @@
 #include "macros.h"
 
 
+#define MAX_MARK_SELECTIONS     2
+
 #define HAVE_PLAYER_LISTENER(player) \
     (player->listeners.listener != NULL)
+
 
     
 typedef struct MediaPlayerListenerElement
@@ -49,7 +52,6 @@ typedef struct
     UserMark* first;
     UserMark* current;
     UserMark* last;
-    UserMark* currentClipMark;
     int count;
 } UserMarks;
 
@@ -104,6 +106,9 @@ struct MediaPlayer
 
     int clipMarkType;
     
+    /* used in ply_get_position to allow absolute positions to be calculated */
+    int64_t startOffset;
+    
     /* player state */
     MediaPlayerState state;
     MediaPlayerState prevState;
@@ -137,10 +142,14 @@ struct MediaPlayer
     /* count of frames read and accepted */
     int64_t frameCount;
 
-    /* user mark points */
-    UserMarks userMarks;
+    /* user marks */
+    int numMarkSelections;
+    int activeMarkSelection;
+    UserMarks userMarks[MAX_MARK_SELECTIONS];
+    OSDMarksModel* marksModel[MAX_MARK_SELECTIONS];
+    int userMarksTypeMask[MAX_MARK_SELECTIONS];
+    UserMark* currentClipMark;
     pthread_mutex_t userMarksMutex;
-    OSDMarksModel* marksModel;
     
     /* menu handler */
     MenuHandler* menuHandler;
@@ -151,86 +160,133 @@ struct MediaPlayer
 };
 
 
+/* caller must lock the user marks mutex */
 static void _set_current_clip_mark(MediaPlayer* player, UserMark* mark)
 {
     osd_highlight_progress_bar_pointer(msk_get_osd(player->mediaSink), mark != NULL);
     
-    player->userMarks.currentClipMark = mark;
+    player->currentClipMark = mark;
 }
 
 /* caller must lock the user marks mutex */
-static void _clear_marks_model(MediaPlayer* player)
+static void _clear_marks_model(MediaPlayer* player, int markSelection)
 {
-    if (player->marksModel == NULL)
-    {
-        return;
-    }
-    
-    PTHREAD_MUTEX_LOCK(&player->marksModel->marksMutex)
-    memset(player->marksModel->markCounts, 0, player->marksModel->numMarkCounts * sizeof(int));
-    player->marksModel->updated = -1; /* set all bits to 1 */
-    PTHREAD_MUTEX_UNLOCK(&player->marksModel->marksMutex)
+    PTHREAD_MUTEX_LOCK(&player->marksModel[markSelection]->marksMutex)
+    memset(player->marksModel[markSelection]->markCounts, 0, player->marksModel[markSelection]->numMarkCounts * sizeof(int));
+    player->marksModel[markSelection]->updated = -1; /* set all bits to 1 */
+    PTHREAD_MUTEX_UNLOCK(&player->marksModel[markSelection]->marksMutex)
 }
 
 /* caller must lock the user marks mutex */
-static void _add_mark_to_marks_model(MediaPlayer* player, int64_t position)
+static void _add_mark_to_marks_model(MediaPlayer* player, int markSelection, int type, int64_t position)
 {
     int index;
 
-    if (player->marksModel == NULL || player->sourceLength <= 0)
+    if (player->sourceLength <= 0 || position >= player->sourceLength)
     {
         return;
     }
-    
-    PTHREAD_MUTEX_LOCK(&player->marksModel->marksMutex)
-    if (player->marksModel->numMarkCounts > 0)
+
+    if ((type & player->userMarksTypeMask[markSelection]) != 0)
     {
-        index = player->marksModel->numMarkCounts * position / player->sourceLength;
-        if (player->marksModel->markCounts[index] == 0)
+        PTHREAD_MUTEX_LOCK(&player->marksModel[markSelection]->marksMutex)
+        if (player->marksModel[markSelection]->numMarkCounts > 0)
         {
-            player->marksModel->updated = -1; /* set all bits to 1 */
+            index = player->marksModel[markSelection]->numMarkCounts * position / player->sourceLength;
+            if (player->marksModel[markSelection]->markCounts[index] == 0)
+            {
+                player->marksModel[markSelection]->updated = ~0; /* set all bits to 1 */
+            }
+            player->marksModel[markSelection]->markCounts[index]++;
         }
-        player->marksModel->markCounts[index]++;
+        PTHREAD_MUTEX_UNLOCK(&player->marksModel[markSelection]->marksMutex)
     }
-    PTHREAD_MUTEX_UNLOCK(&player->marksModel->marksMutex)
 }
 
 /* caller must lock the user marks mutex */
-static void _remove_mark_from_marks_model(MediaPlayer* player, int64_t position)
+static void _remove_mark_from_marks_model(MediaPlayer* player, int markSelection, int type, int64_t position)
 {
     int index;
 
-    if (player->marksModel == NULL || player->sourceLength <= 0)
+    if (player->sourceLength <= 0 || position >= player->sourceLength)
     {
         return;
     }
     
-    PTHREAD_MUTEX_LOCK(&player->marksModel->marksMutex)
-    if (player->marksModel->numMarkCounts > 0)
+    if ((type & player->userMarksTypeMask[markSelection]) != 0)
     {
-        index = player->marksModel->numMarkCounts * position / player->sourceLength;
-        if (player->marksModel->markCounts[index] == 1)
+        PTHREAD_MUTEX_LOCK(&player->marksModel[markSelection]->marksMutex)
+        if (player->marksModel[markSelection]->numMarkCounts > 0)
         {
-            player->marksModel->updated = -1; /* set all bits to 1 */
+            index = player->marksModel[markSelection]->numMarkCounts * position / player->sourceLength;
+            if (player->marksModel[markSelection]->markCounts[index] == 1)
+            {
+                player->marksModel[markSelection]->updated = -1; /* set all bits to 1 */
+            }
+            if (player->marksModel[markSelection]->markCounts[index] > 0)
+            {
+                player->marksModel[markSelection]->markCounts[index]--;
+            }
         }
-        if (player->marksModel->markCounts[index] > 0)
-        {
-            player->marksModel->markCounts[index]--;
-        }
+        PTHREAD_MUTEX_UNLOCK(&player->marksModel[markSelection]->marksMutex)
     }
-    PTHREAD_MUTEX_UNLOCK(&player->marksModel->marksMutex)
 }
 
 /* caller must lock the user marks mutex */
-static int _find_mark(MediaPlayer* player, int64_t position, UserMark** matchedMark)
+static void update_mark_and_model(MediaPlayer* player, int markSelection, UserMark* mark, int type)
+{
+    int i;
+    int mask;
+    
+    if (mark->type == type)
+    {
+        return;
+    }
+    
+    /* add or remove mark from OSD marks model */
+    
+    int add = type & (mark->type ^ type);
+    int remove = mark->type & (mark->type ^ type);
+    
+    if (add != 0)
+    {
+        mask = 0x00000001;
+        for (i = 0; i < 32; i++)
+        {
+            if ((add & mask) != 0)
+            {
+                _add_mark_to_marks_model(player, markSelection, add & mask, mark->position);
+            }
+            mask <<= 1;
+        }
+    }
+    if (remove != 0)
+    {
+        mask = 0x00000001;
+        for (i = 0; i < 32; i++)
+        {
+            if ((remove & mask) != 0)
+            {
+                _remove_mark_from_marks_model(player, markSelection, remove & mask, mark->position);
+            }
+            mask <<= 1;
+        }
+    }
+
+    /* set the mark type */    
+    mark->type = type;
+}
+
+/* caller must lock the user marks mutex */
+static int _find_mark(MediaPlayer* player, int markSelection, int64_t position, UserMark** matchedMark)
 {
     UserMark* mark;
 
     /* start the search from the current mark, otherwise the first */
-    mark = player->userMarks.current;
+    mark = player->userMarks[markSelection].current;
     if (mark == NULL)
     {
-        mark = player->userMarks.first;
+        mark = player->userMarks[markSelection].first;
     }
     
     /* try search forwards and if neccessary backwards */
@@ -254,15 +310,15 @@ static int _find_mark(MediaPlayer* player, int64_t position, UserMark** matchedM
 }
 
 /* caller must lock the user marks mutex */
-static int _find_next_mark(MediaPlayer* player, int64_t position, UserMark** matchedMark)
+static int _find_next_mark(MediaPlayer* player, int markSelection, int64_t position, UserMark** matchedMark)
 {
     UserMark* mark;
 
     /* start the search from the current mark, otherwise the first */
-    mark = player->userMarks.current;
+    mark = player->userMarks[markSelection].current;
     if (mark == NULL)
     {
-        mark = player->userMarks.first;
+        mark = player->userMarks[markSelection].first;
     }
     
     while (mark != NULL)
@@ -308,15 +364,15 @@ static int _find_next_mark(MediaPlayer* player, int64_t position, UserMark** mat
 }
 
 /* caller must lock the user marks mutex */
-static int _find_prev_mark(MediaPlayer* player, int64_t position, UserMark** matchedMark)
+static int _find_prev_mark(MediaPlayer* player, int markSelection, int64_t position, UserMark** matchedMark)
 {
     UserMark* mark;
 
     /* start the search from the current mark, otherwise the first */
-    mark = player->userMarks.current;
+    mark = player->userMarks[markSelection].current;
     if (mark == NULL)
     {
-        mark = player->userMarks.first;
+        mark = player->userMarks[markSelection].first;
     }
     
     while (mark != NULL)
@@ -365,20 +421,43 @@ static int _find_prev_mark(MediaPlayer* player, int64_t position, UserMark** mat
 static void _update_current_mark(MediaPlayer* player, int64_t position)
 {
     UserMark* currentMark;
+    int i;
     
-    if (_find_mark(player, position, &currentMark))
+    for (i = 0; i < player->numMarkSelections; i++)
     {
-        player->userMarks.current = currentMark;
+        if (_find_mark(player, i, position, &currentMark))
+        {
+            player->userMarks[i].current = currentMark;
+        }
     }
 }
 
-static int64_t find_next_mark(MediaPlayer* player, int64_t currentPosition)
+/* caller must lock the user marks mutex */
+/* only call after calling _update_current_mark */
+static int _get_current_mark_type(MediaPlayer* player, int64_t position)
+{
+    int markType = 0;
+    int i;
+    
+    for (i = 0; i < player->numMarkSelections; i++)
+    {
+        if (player->userMarks[i].current != NULL &&
+            player->userMarks[i].current->position == position)
+        {
+            markType |= player->userMarks[i].current->type;
+        }
+    }
+    
+    return markType;
+}
+
+static int64_t find_next_mark(MediaPlayer* player, int markSelection, int64_t currentPosition)
 {
     int64_t position = -1;
     UserMark* matchedMark;
     
     PTHREAD_MUTEX_LOCK(&player->userMarksMutex)
-    if (_find_next_mark(player, currentPosition, &matchedMark))
+    if (_find_next_mark(player, markSelection, currentPosition, &matchedMark))
     {
         position = matchedMark->position;
     }
@@ -387,13 +466,13 @@ static int64_t find_next_mark(MediaPlayer* player, int64_t currentPosition)
     return position;
 }
 
-static int64_t find_prev_mark(MediaPlayer* player, int64_t currentPosition)
+static int64_t find_prev_mark(MediaPlayer* player, int markSelection, int64_t currentPosition)
 {
     int64_t position = -1;
     UserMark* matchedMark;
     
     PTHREAD_MUTEX_LOCK(&player->userMarksMutex)
-    if (_find_prev_mark(player, currentPosition, &matchedMark))
+    if (_find_prev_mark(player, markSelection, currentPosition, &matchedMark))
     {
         position = matchedMark->position;
     }
@@ -403,7 +482,7 @@ static int64_t find_prev_mark(MediaPlayer* player, int64_t currentPosition)
 }
 
 /* caller must lock the user marks mutex */
-static void __remove_mark(MediaPlayer* player, UserMark* mark)
+static void __remove_mark(MediaPlayer* player, int markSelection, UserMark* mark)
 {
     /* remove from list */    
     if (mark->prev != NULL)
@@ -416,47 +495,46 @@ static void __remove_mark(MediaPlayer* player, UserMark* mark)
     }
     
     /* reset first, current, last if neccessary */
-    if (mark == player->userMarks.first)
+    if (mark == player->userMarks[markSelection].first)
     {
-        player->userMarks.first = mark->next;
+        player->userMarks[markSelection].first = mark->next;
     }
-    if (mark == player->userMarks.current)
+    if (mark == player->userMarks[markSelection].current)
     {
         if (mark->prev != NULL)
         {
-            player->userMarks.current = mark->prev;
+            player->userMarks[markSelection].current = mark->prev;
         }
         else
         {
-            player->userMarks.current = mark->next;
+            player->userMarks[markSelection].current = mark->next;
         }
     }
-    if (mark == player->userMarks.last)
+    if (mark == player->userMarks[markSelection].last)
     {
-        player->userMarks.last = mark->prev;
+        player->userMarks[markSelection].last = mark->prev;
     }
     
     /* reset current clip mark */
-    if (player->userMarks.currentClipMark == mark)
+    if (player->currentClipMark == mark)
     {
         _set_current_clip_mark(player, NULL);
     }
 
 
-    player->userMarks.count--;
-    _remove_mark_from_marks_model(player, mark->position);
+    player->userMarks[markSelection].count--;
     
     free(mark);
 }
 
 /* caller must lock the user marks mutex */
 /* mark is only removed if the resulting type == 0 */
-static void _remove_mark(MediaPlayer* player, int64_t position, int typeMask)
+static void _remove_mark(MediaPlayer* player, int markSelection, int64_t position, int typeMask)
 {
     UserMark* mark = NULL;
     
     /* limit mask to the clip mark if a clip mark is active */
-    if (player->userMarks.currentClipMark != NULL)
+    if (player->currentClipMark != NULL)
     {
         typeMask &= player->clipMarkType;
     }
@@ -466,9 +544,9 @@ static void _remove_mark(MediaPlayer* player, int64_t position, int typeMask)
         return;
     }
     
-    if (_find_mark(player, position, &mark))
+    if (_find_mark(player, markSelection, position, &mark))
     {
-        mark->type &= ~typeMask;
+        update_mark_and_model(player, markSelection, mark, mark->type & ~typeMask);
         
         if ((mark->type & player->clipMarkType) == 0)
         {
@@ -476,17 +554,17 @@ static void _remove_mark(MediaPlayer* player, int64_t position, int typeMask)
             {
                 /* remove the clip mark pair */
                 mark->pairedMark->pairedMark = NULL;
-                mark->pairedMark->type &= ~player->clipMarkType;
+                update_mark_and_model(player, markSelection, mark->pairedMark, mark->pairedMark->type & ~player->clipMarkType);
                 if (mark->pairedMark->type == 0)
                 {
-                    __remove_mark(player, mark->pairedMark);
+                    __remove_mark(player, markSelection, mark->pairedMark);
                 }
                 mark->pairedMark = NULL;
 
                 /* deactivate clip mark (TODO: not neccessary because mark already paired and not active?) */
                 _set_current_clip_mark(player, NULL);
             }
-            else if (mark == player->userMarks.currentClipMark)
+            else if (mark == player->currentClipMark)
             {
                 /* deactivate clip mark */
                 _set_current_clip_mark(player, NULL);
@@ -495,23 +573,23 @@ static void _remove_mark(MediaPlayer* player, int64_t position, int typeMask)
         
         if (mark->type == 0)
         {
-            __remove_mark(player, mark);
+            __remove_mark(player, markSelection, mark);
             mark = NULL;
         }
     }
 }
 
 /* mark is only removed if the resulting type == 0 */
-static void remove_mark(MediaPlayer* player, int64_t position, int typeMask)
+static void remove_mark(MediaPlayer* player, int markSelection, int64_t position, int typeMask)
 {
     PTHREAD_MUTEX_LOCK(&player->userMarksMutex)
-    _remove_mark(player, position, typeMask);
+    _remove_mark(player, markSelection, position, typeMask);
     PTHREAD_MUTEX_UNLOCK(&player->userMarksMutex)
 }
 
 /* caller must lock the user marks mutex */
 /* mark is removed if the resulting type == 0 */  
-static void _add_mark(MediaPlayer* player, int64_t position, int type, int toggle)
+static void _add_mark(MediaPlayer* player, int markSelection, int64_t position, int type, int toggle)
 {
     UserMark* mark;
     UserMark* newMark;
@@ -522,10 +600,10 @@ static void _add_mark(MediaPlayer* player, int64_t position, int type, int toggl
     }
 
     /* find the insertion point */
-    mark = player->userMarks.current;
+    mark = player->userMarks[markSelection].current;
     if (mark == NULL)
     {
-        mark = player->userMarks.first;
+        mark = player->userMarks[markSelection].first;
     }
     while (mark != NULL && mark->position < position)
     {
@@ -544,19 +622,19 @@ static void _add_mark(MediaPlayer* player, int64_t position, int type, int toggl
         /* process clip marks first */
         if ((player->clipMarkType & type) != 0)
         {
-            if (player->userMarks.currentClipMark != NULL)
+            if (player->currentClipMark != NULL)
             {
                 /* busy with a clip mark */
                 
-                if (mark == player->userMarks.currentClipMark)
+                if (mark == player->currentClipMark)
                 {
                     if (toggle)
                     {
                         /* remove the clip mark */
-                        mark->type &= ~(player->clipMarkType);
+                        update_mark_and_model(player, markSelection, mark, mark->type & ~player->clipMarkType);
                         if (mark->type == 0)
                         {
-                            __remove_mark(player, mark);
+                            __remove_mark(player, markSelection, mark);
                             mark = NULL;
                         }
                         
@@ -568,9 +646,9 @@ static void _add_mark(MediaPlayer* player, int64_t position, int type, int toggl
                 else if (mark->pairedMark == NULL)
                 {
                     /* complete the clip mark */
-                    mark->type |= player->clipMarkType & ALL_MARK_TYPE;
-                    player->userMarks.currentClipMark->pairedMark = mark;
-                    mark->pairedMark = player->userMarks.currentClipMark;
+                    update_mark_and_model(player, markSelection, mark, mark->type | (player->clipMarkType & ALL_MARK_TYPE));
+                    player->currentClipMark->pairedMark = mark;
+                    mark->pairedMark = player->currentClipMark;
                     
                     /* done with clip mark */
                     _set_current_clip_mark(player, NULL);
@@ -584,7 +662,7 @@ static void _add_mark(MediaPlayer* player, int64_t position, int type, int toggl
                 if ((mark->type & player->clipMarkType) == 0)
                 {
                     /* start clip mark */
-                    mark->type |= player->clipMarkType & ALL_MARK_TYPE;
+                    update_mark_and_model(player, markSelection, mark, mark->type | (player->clipMarkType & ALL_MARK_TYPE));
                     _set_current_clip_mark(player, mark);
                 }
                 else if (toggle)
@@ -594,18 +672,18 @@ static void _add_mark(MediaPlayer* player, int64_t position, int type, int toggl
                     if (mark->pairedMark != NULL)
                     {
                         mark->pairedMark->pairedMark = NULL;
-                        mark->pairedMark->type &= ~(player->clipMarkType);
+                        update_mark_and_model(player, markSelection, mark, mark->pairedMark->type & ~player->clipMarkType);
                         if (mark->pairedMark->type == 0)
                         {
-                            __remove_mark(player, mark->pairedMark);
+                            __remove_mark(player, markSelection, mark->pairedMark);
                         }
                         mark->pairedMark = NULL;
                     }
 
-                    mark->type &= ~(player->clipMarkType);
+                    update_mark_and_model(player, markSelection, mark, mark->type & ~player->clipMarkType);
                     if (mark->type == 0)
                     {
-                        __remove_mark(player, mark);
+                        __remove_mark(player, markSelection, mark);
                         mark = NULL;
                     }
                 }
@@ -622,17 +700,17 @@ static void _add_mark(MediaPlayer* player, int64_t position, int type, int toggl
         {
             if (toggle)
             {
-                mark->type ^= type & ALL_MARK_TYPE;
+                update_mark_and_model(player, markSelection, mark, mark->type ^ (type & ALL_MARK_TYPE));
             }
             else
             {
-                mark->type |= type & ALL_MARK_TYPE;
+                update_mark_and_model(player, markSelection, mark, mark->type | (type & ALL_MARK_TYPE));
             }
     
             /* remove mark if type == 0 */
             if (mark->type == 0)
             {
-                __remove_mark(player, mark);
+                __remove_mark(player, markSelection, mark);
                 mark = NULL;
             }
         }
@@ -641,8 +719,10 @@ static void _add_mark(MediaPlayer* player, int64_t position, int type, int toggl
     {
         /* new mark */
         CALLOC_OFAIL(newMark, UserMark, 1);
-        newMark->type = type;
+        newMark->type = 0;
         newMark->position = position;
+        
+        update_mark_and_model(player, markSelection, newMark, type);
         
         if (mark != NULL)
         {
@@ -657,7 +737,7 @@ static void _add_mark(MediaPlayer* player, int64_t position, int type, int toggl
                 }
                 else
                 {
-                    player->userMarks.first = newMark;
+                    player->userMarks[markSelection].first = newMark;
                 }
                 newMark->prev = mark->prev;
                 newMark->next = mark;
@@ -672,7 +752,7 @@ static void _add_mark(MediaPlayer* player, int64_t position, int type, int toggl
                 }
                 else
                 {
-                    player->userMarks.last = newMark;
+                    player->userMarks[markSelection].last = newMark;
                 }
                 newMark->next = mark->next;
                 newMark->prev = mark;
@@ -683,36 +763,36 @@ static void _add_mark(MediaPlayer* player, int64_t position, int type, int toggl
         {
             /* append or prepend */
             
-            if (player->userMarks.first == NULL)
+            if (player->userMarks[markSelection].first == NULL)
             {
                 /* new first and last */
-                player->userMarks.first = newMark;
-                player->userMarks.last = newMark;
+                player->userMarks[markSelection].first = newMark;
+                player->userMarks[markSelection].last = newMark;
             }
-            else if (player->userMarks.first->position > position)
+            else if (player->userMarks[markSelection].first->position > position)
             {
                 /* new first */
-                newMark->next = player->userMarks.first;
-                player->userMarks.first = newMark;
-                player->userMarks.first->next->prev = player->userMarks.first;
+                newMark->next = player->userMarks[markSelection].first;
+                player->userMarks[markSelection].first = newMark;
+                player->userMarks[markSelection].first->next->prev = player->userMarks[markSelection].first;
             }
             else
             {
                 /* new last */
-                newMark->prev = player->userMarks.last;
-                player->userMarks.last = newMark;
-                player->userMarks.last->prev->next = player->userMarks.last;
+                newMark->prev = player->userMarks[markSelection].last;
+                player->userMarks[markSelection].last = newMark;
+                player->userMarks[markSelection].last->prev->next = player->userMarks[markSelection].last;
             }
         }
 
         /* handle clip marks */
         if ((player->clipMarkType & type) != 0)
         {
-            if (player->userMarks.currentClipMark != NULL)
+            if (player->currentClipMark != NULL)
             {
                 /* complete the clip mark */
-                player->userMarks.currentClipMark->pairedMark = newMark;
-                newMark->pairedMark = player->userMarks.currentClipMark;
+                player->currentClipMark->pairedMark = newMark;
+                newMark->pairedMark = player->currentClipMark;
                 _set_current_clip_mark(player, NULL);
             }
             else
@@ -722,8 +802,7 @@ static void _add_mark(MediaPlayer* player, int64_t position, int type, int toggl
             }
         }
         
-        player->userMarks.count++;
-        _add_mark_to_marks_model(player, position);
+        player->userMarks[markSelection].count++;
     }
     
     return;
@@ -733,29 +812,38 @@ fail:
 }
 
 /* mark is removed if the resulting type == 0 */  
-static void add_mark(MediaPlayer* player, int64_t position, int type, int toggle)
+static void add_mark(MediaPlayer* player, int markSelection, int64_t position, int type, int toggle)
 {
     PTHREAD_MUTEX_LOCK(&player->userMarksMutex)
-    _add_mark(player, position, type, toggle);
+    _add_mark(player, markSelection, position, type, toggle);
     PTHREAD_MUTEX_UNLOCK(&player->userMarksMutex)
 }
 
 static int64_t _find_clip_mark(MediaPlayer* player, int64_t currentPosition)
 {
     int64_t position = -1;
+    int i;
     
     PTHREAD_MUTEX_LOCK(&player->userMarksMutex)
-    if (player->userMarks.currentClipMark != NULL)
+    if (player->currentClipMark != NULL)
     {
         /* return the current clip mark position */
-        position = player->userMarks.currentClipMark->position;
+        position = player->currentClipMark->position;
     }
-    else if (player->userMarks.current != NULL &&
-        player->userMarks.current->position == currentPosition &&
-        player->userMarks.current->pairedMark != NULL)
+    else
     {
-        /* player is on a clip mark - return the paired clip mark position */
-        position = player->userMarks.current->pairedMark->position;
+        /* check whether the player is on a clip mark */
+        for (i = 0; i < player->numMarkSelections; i++)
+        {
+            if (player->userMarks[i].current != NULL &&
+                player->userMarks[i].current->position == currentPosition &&
+                player->userMarks[i].current->pairedMark != NULL)
+            {
+                /* player is on a clip mark - return the paired clip mark position */
+                position = player->userMarks[i].current->pairedMark->position;
+                break;
+            }
+        }
     }
     PTHREAD_MUTEX_UNLOCK(&player->userMarksMutex)
     
@@ -763,13 +851,13 @@ static int64_t _find_clip_mark(MediaPlayer* player, int64_t currentPosition)
 }
 
 /* caller must lock the user marks mutex */
-static void _free_marks(MediaPlayer* player, int typeMask)
+static void _free_marks(MediaPlayer* player, int markSelection, int typeMask)
 {
     UserMark* mark;
     UserMark* nextMark;
 
     /* don't allow all marks to be cleared when busy with clip mark */    
-    if (player->userMarks.currentClipMark != NULL)
+    if (player->currentClipMark != NULL)
     {
         return;
     }
@@ -777,47 +865,46 @@ static void _free_marks(MediaPlayer* player, int typeMask)
     if ((typeMask & ALL_MARK_TYPE) == ALL_MARK_TYPE)
     {
         /* clear marks */
-        mark = player->userMarks.first;
+        mark = player->userMarks[markSelection].first;
         while (mark != NULL)
         {
             nextMark = mark->next;
             free(mark);
             mark = nextMark;
         }
-        player->userMarks.first = NULL;
-        player->userMarks.current = NULL;
-        player->userMarks.last = NULL;
-        player->userMarks.count = 0;
-        _set_current_clip_mark(player, NULL);
+        player->userMarks[markSelection].first = NULL;
+        player->userMarks[markSelection].current = NULL;
+        player->userMarks[markSelection].last = NULL;
+        player->userMarks[markSelection].count = 0;
         
-        _clear_marks_model(player);        
+        _clear_marks_model(player, markSelection);
     }
     else
     {
         /* go through one by one and remove marks with type not masked */
-        mark = player->userMarks.first;
+        mark = player->userMarks[markSelection].first;
         while (mark != NULL)
         {
             nextMark = mark->next;
 
-            mark->type &= ~typeMask;
+            update_mark_and_model(player, markSelection, mark, mark->type & ~typeMask);
             
             /* handle clip marks */
             if (mark->pairedMark != NULL)
             {
                 /* remove paired clip mark */
                 mark->pairedMark->pairedMark = NULL;
-                mark->pairedMark->type &= ~player->clipMarkType;
+                update_mark_and_model(player, markSelection, mark->pairedMark, mark->pairedMark->type & ~player->clipMarkType);
                 if (mark->pairedMark->type == 0)
                 {
-                    __remove_mark(player, mark->pairedMark);
+                    __remove_mark(player, markSelection, mark->pairedMark);
                 }
                 mark->pairedMark = NULL;
             }
             
             if (mark->type == 0)
             {
-                __remove_mark(player, mark);
+                __remove_mark(player, markSelection, mark);
                 mark = NULL;
             }
             
@@ -827,10 +914,10 @@ static void _free_marks(MediaPlayer* player, int typeMask)
     }
 }
 
-static void free_marks(MediaPlayer* player, int typeMask)
+static void free_marks(MediaPlayer* player, int markSelection, int typeMask)
 {
     PTHREAD_MUTEX_LOCK(&player->userMarksMutex)
-    _free_marks(player, typeMask);
+    _free_marks(player, markSelection, typeMask);
     PTHREAD_MUTEX_UNLOCK(&player->userMarksMutex)
 }
 
@@ -1107,6 +1194,7 @@ static void ply_play_speed_factor(void* data, float factor)
 static void ply_step(void* data, int forward, PlayUnit unit)
 {
     MediaPlayer* player = (MediaPlayer*)data;
+    int64_t offset;
 
     PTHREAD_MUTEX_LOCK(&player->stateMutex)
     
@@ -1117,14 +1205,17 @@ static void ply_step(void* data, int forward, PlayUnit unit)
         
         if (unit == FRAME_PLAY_UNIT || player->sourceLength <= 0)
         {
-            player->state.nextPosition = player->state.nextPosition + 
-                (forward ? 1 : -1);
+            offset = (forward ? 1 : -1);
         }
         else /* PERCENTAGE_PLAY_UNIT */
         {
-            player->state.nextPosition = player->state.nextPosition + 
-                (forward ? player->sourceLength / 100 : - player->sourceLength / 100);
+            offset = (forward ? player->sourceLength / 100 : - player->sourceLength / 100);
+            if (offset == 0)
+            {
+                offset = (forward ? 1 : -1);
+            }
         }
+        player->state.nextPosition = player->state.nextPosition + offset; 
 
         switch_source_info_screen(player);
     }
@@ -1132,18 +1223,29 @@ static void ply_step(void* data, int forward, PlayUnit unit)
     PTHREAD_MUTEX_UNLOCK(&player->stateMutex)
 }
     
+/* TODO: ensure type has only 1 bit position set so that we can assume it elsewhere */
 static void ply_mark_position(void* data, int64_t position, int type, int toggle)
 {
     MediaPlayer* player = (MediaPlayer*)data;
+    int i;
+    int selectionType;
 
     PTHREAD_MUTEX_LOCK(&player->stateMutex)
     
-    add_mark(player, position, type, toggle);
+    for (i = 0; i < player->numMarkSelections; i++)
+    {
+        selectionType = type & player->userMarksTypeMask[i];
+        if (selectionType != 0)
+        {
+            add_mark(player, i, position, selectionType, toggle);
+        }
+    }
     player->state.refreshRequired = 1;
     
     PTHREAD_MUTEX_UNLOCK(&player->stateMutex)
 }
 
+/* TODO: ensure type has only 1 bit position set so that we can assume it elsewhere */
 static void ply_mark(void* data, int type, int toggle)
 {
     MediaPlayer* player = (MediaPlayer*)data;
@@ -1156,10 +1258,42 @@ static void ply_mark(void* data, int type, int toggle)
 static void ply_clear_mark(void* data, int typeMask)
 {
     MediaPlayer* player = (MediaPlayer*)data;
+    int i;
+    int selectionTypeMask;
 
     PTHREAD_MUTEX_LOCK(&player->stateMutex)
     
-    remove_mark(player, player->state.lastFrameDisplayed.position, typeMask);
+    for (i = 0; i < player->numMarkSelections; i++)
+    {
+        selectionTypeMask = typeMask & player->userMarksTypeMask[i];
+        if (selectionTypeMask != 0)
+        {
+            remove_mark(player, i, player->state.lastFrameDisplayed.position, selectionTypeMask);
+        }
+    }
+    player->state.refreshRequired = 1;
+    
+    switch_source_info_screen(player);
+    
+    PTHREAD_MUTEX_UNLOCK(&player->stateMutex)
+}
+
+static void ply_clear_mark_position(void* data, int64_t position, int typeMask)
+{
+    MediaPlayer* player = (MediaPlayer*)data;
+    int i;
+    int selectionTypeMask;
+
+    PTHREAD_MUTEX_LOCK(&player->stateMutex)
+    
+    for (i = 0; i < player->numMarkSelections; i++)
+    {
+        selectionTypeMask = typeMask & player->userMarksTypeMask[i];
+        if (selectionTypeMask != 0)
+        {
+            remove_mark(player, i, position, selectionTypeMask);
+        }
+    }
     player->state.refreshRequired = 1;
     
     switch_source_info_screen(player);
@@ -1170,10 +1304,14 @@ static void ply_clear_mark(void* data, int typeMask)
 static void ply_clear_all_marks(void* data, int typeMask)
 {
     MediaPlayer* player = (MediaPlayer*)data;
+    int i;
 
     PTHREAD_MUTEX_LOCK(&player->stateMutex)
     
-    free_marks(player, typeMask);
+    for (i = 0; i < player->numMarkSelections; i++)
+    {
+        free_marks(player, i, typeMask);
+    }
     player->state.refreshRequired = 1;
     
     switch_source_info_screen(player);
@@ -1190,7 +1328,7 @@ static void ply_seek_next_mark(void* data)
     
     if (!player->state.locked)
     {
-        position = find_next_mark(player, player->state.lastFrameDisplayed.position);
+        position = find_next_mark(player, player->activeMarkSelection, player->state.lastFrameDisplayed.position);
         if (position >= 0)
         {
             player->state.play = 0;
@@ -1212,7 +1350,7 @@ static void ply_seek_prev_mark(void* data)
     
     if (!player->state.locked)
     {
-        position = find_prev_mark(player, player->state.lastFrameDisplayed.position);
+        position = find_prev_mark(player, player->activeMarkSelection, player->state.lastFrameDisplayed.position);
         if (position >= 0)
         {
             player->state.play = 0;
@@ -1247,6 +1385,28 @@ static void ply_seek_clip_mark(void* data)
     PTHREAD_MUTEX_UNLOCK(&player->stateMutex)
 }
  
+static void ply_next_active_mark_selection(void* data)
+{
+    MediaPlayer* player = (MediaPlayer*)data;
+    
+    PTHREAD_MUTEX_LOCK(&player->stateMutex)
+    
+    if (!player->state.locked)
+    {
+        PTHREAD_MUTEX_LOCK(&player->userMarksMutex)
+        
+        player->activeMarkSelection = (player->activeMarkSelection + 1) % player->numMarkSelections;
+        osd_set_active_progress_bar_marks(msk_get_osd(player->mediaSink), player->activeMarkSelection);
+        
+        PTHREAD_MUTEX_UNLOCK(&player->userMarksMutex)
+    }    
+    player->state.refreshRequired = 1;
+    switch_source_info_screen(player);
+    
+    PTHREAD_MUTEX_UNLOCK(&player->stateMutex)
+}
+
+
 static void ply_set_osd_screen(void* data, OSDScreen screen)
 {
     MediaPlayer* player = (MediaPlayer*)data;
@@ -2169,14 +2329,20 @@ void mnh_free(MenuHandler* handler)
 int ply_create_player(MediaSource* mediaSource, MediaSink* mediaSink, 
     int initialLock, int closeAtEnd, int numFFMPEGThreads, int useWorkerThreads, 
     int loop, int showFieldSymbol, const Timecode* startVITC, const Timecode* startLTC, 
-    FILE* bufferStateLogFile, MediaPlayer** player)
+    FILE* bufferStateLogFile, int* markSelectionTypeMasks, int numMarkSelections, MediaPlayer** player)
 {
     MediaPlayer* newPlayer;
     int64_t sourceLength;
+    int i;
     
     if (mediaSource == NULL || mediaSink == NULL)
     {
         ml_log_error("Invalid parameters to ply_create_player\n");
+        return 0;
+    }
+    if (numMarkSelections < 0 || numMarkSelections > MAX_MARK_SELECTIONS)
+    {
+        ml_log_error("Invalid number of mark selections\n");
         return 0;
     }
     
@@ -2185,6 +2351,19 @@ int ply_create_player(MediaSource* mediaSource, MediaSink* mediaSink,
     newPlayer->closeAtEnd = closeAtEnd;
     newPlayer->loop = loop;
     newPlayer->bufferStateLogFile = bufferStateLogFile;
+    if (numMarkSelections == 0)
+    {
+        newPlayer->numMarkSelections = 1;
+        newPlayer->userMarksTypeMask[0] = ALL_MARK_TYPE;
+    }
+    else
+    {
+        newPlayer->numMarkSelections = numMarkSelections;
+        for (i = 0; i < numMarkSelections; i++)
+        {
+            newPlayer->userMarksTypeMask[i] = markSelectionTypeMasks[i];
+        }
+    }
     
     newPlayer->frameInfo.position = -1; /* make sure that first frame at position 0 is not marked as a repeat */
     
@@ -2234,10 +2413,12 @@ int ply_create_player(MediaSource* mediaSource, MediaSink* mediaSink,
     newPlayer->control.mark = ply_mark;
     newPlayer->control.mark_position = ply_mark_position;
     newPlayer->control.clear_mark = ply_clear_mark;
+    newPlayer->control.clear_mark_position= ply_clear_mark_position;
     newPlayer->control.clear_all_marks = ply_clear_all_marks;
     newPlayer->control.seek_next_mark = ply_seek_next_mark;
     newPlayer->control.seek_prev_mark = ply_seek_prev_mark;
     newPlayer->control.seek_clip_mark = ply_seek_clip_mark;
+    newPlayer->control.next_active_mark_selection = ply_next_active_mark_selection;
     newPlayer->control.set_osd_screen = ply_set_osd_screen;
     newPlayer->control.next_osd_screen = ply_next_osd_screen;
     newPlayer->control.set_osd_timecode = ply_set_osd_timecode;
@@ -2310,11 +2491,19 @@ int ply_create_player(MediaSource* mediaSource, MediaSink* mediaSink,
         newPlayer->state.nextPosition = newPlayer->state.lastPosition + 1;
     }
     
-    /* create marks model for OSD (if present) */
+    /* create marks models for OSD (if present) */
     if (msk_get_osd(mediaSink))
     {
-        CHK_OFAIL(osd_create_marks_model(msk_get_osd(mediaSink), &newPlayer->marksModel));
-        osd_set_marks_model(msk_get_osd(mediaSink), 0x01, newPlayer->marksModel);
+        if (newPlayer->numMarkSelections >= 1)
+        {
+            CHK_OFAIL(osd_create_marks_model(msk_get_osd(mediaSink), &newPlayer->marksModel[0]));
+            osd_set_marks_model(msk_get_osd(mediaSink), 0x01, newPlayer->marksModel[0]);
+        }
+        if (newPlayer->numMarkSelections >= 2)
+        {
+            CHK_OFAIL(osd_create_marks_model(msk_get_osd(mediaSink), &newPlayer->marksModel[1]));
+            osd_set_second_marks_model(msk_get_osd(mediaSink), 0x01, newPlayer->marksModel[1]);
+        }
     }
     
     
@@ -2384,6 +2573,7 @@ int ply_start_player(MediaPlayer* player)
     int newFrameRequired;
     int isRepeat;
     int sourceProcessingCompleted = 0;
+    int currentMarkType;
 
     
     /* play frames from media source to media sink */
@@ -2420,7 +2610,7 @@ int ply_start_player(MediaPlayer* player)
         /* finish processing a source if it has completed */
         if (!sourceProcessingCompleted && msc_is_complete(player->mediaSource))
         {
-            sourceProcessingCompleted = msc_post_complete(player->mediaSource, &player->control);
+            sourceProcessingCompleted = msc_post_complete(player->mediaSource, player->mediaSource, &player->control);
         }
         
 
@@ -2632,16 +2822,17 @@ int ply_start_player(MediaPlayer* player)
                 player->frameInfo.position = currentState.nextPosition;
                 player->frameInfo.sourceLength = player->sourceLength;
                 player->frameInfo.availableSourceLength = availableSourceLength;
+                player->frameInfo.startOffset = player->startOffset;
                 player->frameInfo.frameCount = player->frameCount;
                 player->frameInfo.rateControl = rateControl;
                 player->frameInfo.reversePlay = reversePlay;
                 PTHREAD_MUTEX_LOCK(&player->userMarksMutex)
                 _update_current_mark(player, currentState.nextPosition);
-                if (player->userMarks.current != NULL &&
-                    player->userMarks.current->position == currentState.nextPosition)
+                currentMarkType = _get_current_mark_type(player, currentState.nextPosition);
+                if (currentMarkType != 0)
                 {
                     player->frameInfo.isMarked = 1;
-                    player->frameInfo.markType = player->userMarks.current->type;
+                    player->frameInfo.markType = currentMarkType;
                 }
                 PTHREAD_MUTEX_UNLOCK(&player->userMarksMutex)
                 player->frameInfo.isRepeat = isRepeat;
@@ -2839,6 +3030,7 @@ void ply_close_player(MediaPlayer** player)
     MediaPlayerListenerElement* nextEleL;
     MediaSinkStreamInfoElement* eleA;
     MediaSinkStreamInfoElement* nextEleA;
+    int i;
     
     if (*player == NULL)
     {
@@ -2863,7 +3055,10 @@ void ply_close_player(MediaPlayer** player)
     
     mnh_free((*player)->menuHandler);
     
-    free_marks((*player), ALL_MARK_TYPE);
+    for (i = 0; i < (*player)->numMarkSelections; i++)
+    {
+        free_marks((*player), i, ALL_MARK_TYPE);
+    }
     
     eleA = &(*player)->sinkStreamInfo;
     eleA = eleA->next;
@@ -2876,9 +3071,12 @@ void ply_close_player(MediaPlayer** player)
     
     stm_close(&(*player)->connectionMatrix);
     
-    if ((*player)->marksModel != NULL)
+    for (i = 0; i < (*player)->numMarkSelections; i++)
     {
-        osd_free_marks_model(msk_get_osd((*player)->mediaSink), &(*player)->marksModel);
+        if ((*player)->marksModel[i] != NULL)
+        {
+            osd_free_marks_model(msk_get_osd((*player)->mediaSink), &(*player)->marksModel[i]);
+        }
     }
     
 	destroy_mutex(&(*player)->stateMutex);
@@ -2889,38 +3087,109 @@ void ply_close_player(MediaPlayer** player)
 
 int ply_get_marks(MediaPlayer* player, Mark** marks)
 {
-    UserMark* userMark;
+    UserMark* userMark[MAX_MARK_SELECTIONS];
     Mark* markP;
     int count;
+    int i;
+    int haveMarks;
+    int currentUserMark;
     
-    if (player->userMarks.first == NULL)
-    {
-        /* empty list */
-        *marks = NULL;
-        return 0;
-    }
-
+    
     PTHREAD_MUTEX_LOCK(&player->userMarksMutex)
     
-    /* allocate array and copy data */
-    count = player->userMarks.count;
-    CALLOC_OFAIL(*marks, Mark, count);
-    userMark = player->userMarks.first;  
-    markP = *marks;
-    while (userMark != NULL)
+    /* count marks */
+    haveMarks = 0;
+    for (i = 0; i < player->numMarkSelections; i++)
     {
-        markP->position = userMark->position;
-        markP->type = userMark->type;
-        if (userMark->pairedMark != NULL)
+        userMark[i] = player->userMarks[i].first;
+        haveMarks = haveMarks || userMark[i] != NULL;
+    }
+    if (!haveMarks)
+    {
+        *marks = NULL;
+        PTHREAD_MUTEX_UNLOCK(&player->userMarksMutex)
+        return 0;
+    }
+    count = 0;
+    while (1)
+    {
+        /* get next nearest user mark */
+        currentUserMark = -1;
+        for (i = 0; i < player->numMarkSelections; i++)
         {
-            markP->pairedPosition = userMark->pairedMark->position;
+            if (userMark[i] != NULL &&
+                (currentUserMark == -1 || userMark[i]->position < userMark[currentUserMark]->position))
+            {
+                currentUserMark = i;
+            }
         }
-        else
+        if (currentUserMark == -1)
         {
-            markP->pairedPosition = -1;
+            /* no more marks */
+            break;
+        }
+
+        /* advance to past the nearest user mark */
+        for (i = 0; i < player->numMarkSelections; i++)
+        {
+            if (userMark[i] != NULL &&
+                userMark[i]->position == userMark[currentUserMark]->position)
+            {
+                userMark[i] = userMark[i]->next;
+            }
         }
         
-        userMark = userMark->next;
+        count++;
+    }
+    
+    /* allocate array*/
+    CALLOC_OFAIL(*marks, Mark, count);
+    
+    /* merge and copy data */
+    for (i = 0; i < player->numMarkSelections; i++)
+    {
+        userMark[i] = player->userMarks[i].first;
+    }
+    markP = *marks;
+    while (1)
+    {
+        /* get next nearest user mark */
+        currentUserMark = -1;
+        for (i = 0; i < player->numMarkSelections; i++)
+        {
+            if (userMark[i] != NULL &&
+                (currentUserMark == -1 || userMark[i]->position < userMark[currentUserMark]->position))
+            {
+                currentUserMark = i;
+            }
+        }
+        if (currentUserMark == -1)
+        {
+            /* no more marks */
+            break;
+        }
+
+        markP->position = userMark[currentUserMark]->position;
+        markP->type = 0;
+        markP->pairedPosition = -1;
+        
+        /* merge marks at same position and advance past the nearest user mark */
+        for (i = 0; i < player->numMarkSelections; i++)
+        {
+            if (userMark[i] != NULL &&
+                userMark[i]->position == userMark[currentUserMark]->position)
+            {
+                markP->type |= userMark[i]->type;
+                if (userMark[i]->pairedMark != NULL)
+                {
+                    /* there is only 1 possible paired mark at a position */
+                    markP->pairedPosition = userMark[i]->pairedMark->position;
+                }
+
+                userMark[i] = userMark[i]->next;
+            }
+        }
+
         markP++;
     }
 
@@ -2955,4 +3224,8 @@ void ply_enable_clip_marks(MediaPlayer* player, int markType)
     player->clipMarkType = markType;
 }
 
+void ply_set_start_offset(MediaPlayer* player, int64_t offset)
+{
+    player->startOffset = offset;
+}
 

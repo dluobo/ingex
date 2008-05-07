@@ -44,9 +44,15 @@ int dvs_card_is_available()
 #include "dvs_fifo.h"
 
 
+/* use a hack to try correct for AV sync issues found with the DVS SDK version 2.57 */
+#if (DVS_VERSION_MAJOR < 3)
+#define AV_SYNC_HACK
+#warning DVS SDK version is less than 3; applying av sync hack
+#endif
+
 #define MAX_DVS_CARDS               4
 
-#define MAX_DVS_AUDIO_STREAMS       4
+#define MAX_DVS_AUDIO_STREAMS       8
 
 /* we assume that a VITC and LTC are within this maximum of timecode streams */
 #define MAX_TIMECODES               32
@@ -154,8 +160,7 @@ struct DVSSink
     unsigned int videoDataSize;
     unsigned int videoOffset;
     unsigned int audioDataSize;
-    unsigned int audio12Offset;
-    unsigned int audio34Offset;
+    unsigned int audioPairOffset[(MAX_DVS_AUDIO_STREAMS + 1) / 2];
     
     /* data sent to DVS card: A/V buffer and timecodes */
     DVSFifoBuffer fifoBuffer[2];
@@ -438,6 +443,7 @@ static void* get_dvs_state_info_thread(void* arg)
                 /* if frames have been dropped or the fifo is below minimum then repeat the last frame until above minimum */
                 if (numFramesDropped > 0 || sink->numBuffersFilled < MIN_REPEAT_FIFO_BUFFERS)
                 {
+#if defined(AV_SYNC_HACK)                    
                     /* reset the DVS sync if frames have been dropped despite the code below to repeat frames to prevent 
                        the buffer emptying */
                     if (numFramesDropped > 0)
@@ -454,12 +460,15 @@ static void* get_dvs_state_info_thread(void* arg)
                             ml_log_warn("DVS card frame drop - resetting sync to avoid av sync problem\n");
                         }
                     }
+#endif                    
 
                     /* refill the fifo to the minimum level */
 
                     /* mute the audio */
-                    memset(&sink->fifoBuffer[(sink->currentFifoBuffer + 1) % 2].buffer[sink->audio12Offset], 0, sink->audioDataSize);
-                    memset(&sink->fifoBuffer[(sink->currentFifoBuffer + 1) % 2].buffer[sink->audio34Offset], 0, sink->audioDataSize);
+                    for (i = 0; i < sink->numAudioStreams; i += 2)
+                    {
+                        memset(&sink->fifoBuffer[(sink->currentFifoBuffer + 1) % 2].buffer[sink->audioPairOffset[i / 2]], 0, sink->audioDataSize);
+                    }
  
                     int i;
                     for (i = 0; i < MIN_REPEAT_FIFO_BUFFERS - sink->numBuffersFilled; i++)
@@ -476,13 +485,10 @@ static void* get_dvs_state_info_thread(void* arg)
                     }
                 }
 
-                
-#if 1
                 if (sink->numBuffersFilled < MIN_REPEAT_FIFO_BUFFERS - 1)
                 {
-                    printf("*********WARNING: fifo nearing empty\n");
+                    ml_log_warn("DVS fifo nearing empty\n");
                 }
-#endif
 
                 PTHREAD_MUTEX_UNLOCK(&sink->frameInfosMutex);
                 
@@ -894,7 +900,6 @@ static int dvs_receive_stream_frame(void* data, int streamId, unsigned char* buf
 static int dvs_complete_frame(void* data, const FrameInfo* frameInfo)
 {
     DVSSink* sink = (DVSSink*)data;
-    unsigned int offset = sink->audio12Offset;
     int i;
     int vitcCount;
     int ltcCount; 
@@ -993,8 +998,10 @@ static int dvs_complete_frame(void* data, const FrameInfo* frameInfo)
     /* if the frame is a repeat then mute the audio */
     if (frameInfo->isRepeat)
     {
-        memset(&fifoBuffer->buffer[sink->audio12Offset], 0, sink->audioDataSize);
-        memset(&fifoBuffer->buffer[sink->audio34Offset], 0, sink->audioDataSize);
+        for (i = 0; i < sink->numAudioStreams; i += 2)
+        {
+            memset(&fifoBuffer->buffer[sink->audioPairOffset[i / 2]], 0, sink->audioDataSize);
+        }
     }
     else
     {
@@ -1020,7 +1027,7 @@ static int dvs_complete_frame(void* data, const FrameInfo* frameInfo)
                     sink->audioStream[i + 1].data[sink->currentFifoBuffer], 
                     (sink->audioStream[i + 1].streamInfo.bitsPerSample + 7) / 8,
                     frameInfo->reversePlay,
-                    &fifoBuffer->buffer[offset]);
+                    &fifoBuffer->buffer[sink->audioPairOffset[i / 2]]);
             }
             else
             {
@@ -1031,9 +1038,8 @@ static int dvs_complete_frame(void* data, const FrameInfo* frameInfo)
                     NULL,
                     0,
                     frameInfo->reversePlay,
-                    &fifoBuffer->buffer[offset]);
+                    &fifoBuffer->buffer[sink->audioPairOffset[i / 2]]);
             }
-            offset += 0x4000;
         }
     }
 
@@ -1107,10 +1113,12 @@ static int dvs_complete_frame(void* data, const FrameInfo* frameInfo)
         sv_handle* sv = sink->sv;
         sv_fifo_info info;
 
+#if defined(AV_SYNC_HACK)                    
         /* reset the sync mode to ensure we get av sync - without this a 1 field offset can occur */
         sv_info status_info;
         sv_status(sink->sv, &status_info);
         SV_CHK_ORET(sv_sync(sink->sv, status_info.sync));
+#endif        
 
         /* initialise the tick and dropped count */ 
         SV_CHK_ORET(sv_fifo_status(sv, sink->svfifo, &info));
@@ -1281,6 +1289,7 @@ int dvs_open(SDIVITCSource sdiVITCSource, int extraSDIVITCSource, int numBuffers
     int fitVideo, DVSSink** sink)
 {
     DVSSink* newSink;
+    int i;
     
     if (numBuffers > 0 && numBuffers < MIN_NUM_DVS_FIFO_BUFFERS)
     {
@@ -1366,11 +1375,14 @@ int dvs_open(SDIVITCSource sdiVITCSource, int extraSDIVITCSource, int numBuffers
     newSink->videoDataSize = newSink->rasterWidth * newSink->rasterHeight * 2;
     newSink->audioDataSize = 1920 * 2 * 4; /* 48k Hz for 25 fps, 2 channels, 32 bit */
 
-    newSink->audio12Offset = newSink->rasterWidth * newSink->rasterHeight * 2;
-    newSink->audio34Offset = newSink->audio12Offset + 0x4000;
+    newSink->audioPairOffset[0] = newSink->rasterWidth * newSink->rasterHeight * 2;
+    for (i = 2; i < MAX_DVS_AUDIO_STREAMS; i += 2)
+    {
+        newSink->audioPairOffset[i / 2] = newSink->audioPairOffset[(i / 2) - 1] + 0x4000;
+    }
     
-    newSink->fifoBuffer[0].bufferSize = newSink->videoDataSize + 0x8000;
-    newSink->fifoBuffer[1].bufferSize = newSink->videoDataSize + 0x8000;
+    newSink->fifoBuffer[0].bufferSize = newSink->videoDataSize + (int)((MAX_DVS_AUDIO_STREAMS + 1) / 2) * 0x4000;
+    newSink->fifoBuffer[1].bufferSize = newSink->fifoBuffer[0].bufferSize;
     MEM_ALLOC_OFAIL(newSink->fifoBuffer[0].buffer, valloc, unsigned char, newSink->fifoBuffer[0].bufferSize);
     memset(newSink->fifoBuffer[0].buffer, 0, newSink->fifoBuffer[0].bufferSize);
     MEM_ALLOC_OFAIL(newSink->fifoBuffer[1].buffer, valloc, unsigned char, newSink->fifoBuffer[1].bufferSize);
@@ -1424,7 +1436,6 @@ int dvs_open(SDIVITCSource sdiVITCSource, int extraSDIVITCSource, int numBuffers
 
     /* the - 2 below is because the dvs card complained when sending the last frames that
        the fifo has to be started */
-    int i;
     for (i = 0; i < fifo_info.nbuffers - 2; i++)
     {
         display_on_sv_fifo(newSink, &newSink->fifoBuffer[0]);

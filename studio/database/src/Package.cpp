@@ -1,5 +1,5 @@
 /*
- * $Id: Package.cpp,v 1.2 2008/02/06 16:59:06 john_f Exp $
+ * $Id: Package.cpp,v 1.3 2008/05/07 17:13:26 philipn Exp $
  *
  * A MXF/AAF Package
  *
@@ -175,6 +175,11 @@ vector<UserComment> Package::getUserComments(string name)
 vector<UserComment> Package::getUserComments()
 {
     return _userComments;
+}
+
+void Package::clearUserComments()
+{
+    _userComments.clear();
 }
 
 void Package::cloneInPlace(UMID newUID, bool resetLengths)

@@ -6,11 +6,16 @@
 
 #include "mxf_source.h"
 #include "logging.h"
-#include "macros.h"
 
 #include <mxf_reader.h>
 #include <d3_mxf_info_lib.h>
 #include <mxf/mxf_page_file.h>
+
+/* undefine macros from libMXF */
+#undef CHK_ORET
+#undef CHK_OFAIL
+
+#include "macros.h"
 
 
 struct _MXFReaderListenerData
@@ -114,6 +119,12 @@ static char* convert_prog_duration(int64_t duration, char* str)
             (duration % (60 * 60)) / 60,
             (duration % (60 * 60)) % 60);
     }
+    return str;
+}
+
+static char* convert_uint32(uint32_t value, char* str)
+{
+    sprintf(str, "%d", value);
     return str;
 }
 
@@ -439,7 +450,7 @@ static int mxfs_is_complete(void* data)
     return 0;
 }
 
-static int mxfs_post_complete(void* data, MediaControl* mediaControl)
+static int mxfs_post_complete(void* data, MediaSource* rootSource, MediaControl* mediaControl)
 {
     MXFFileSource* source = (MXFFileSource*)data;
     MXFHeaderMetadata* headerMetadata = NULL;
@@ -447,6 +458,7 @@ static int mxfs_post_complete(void* data, MediaControl* mediaControl)
     long timeDiff;
     int result;
     int freeHeaderMetadata = 0;
+    int64_t convertedPosition;
     
     /* only D3 MXF files with option to mark PSE failures or VTR errors require post complete step */
     if (source->donePostComplete ||
@@ -523,7 +535,8 @@ static int mxfs_post_complete(void* data, MediaControl* mediaControl)
                 ml_log_info("Marking %ld PSE failures\n", numFailures);
                 for (i = 0; i < numFailures; i++)
                 {
-                    mc_mark_position(mediaControl, failures[i].position, D3_PSE_FAILURE_MARK_TYPE, 0);
+                    convertedPosition = msc_convert_position(rootSource, failures[i].position, &source->mediaSource);
+                    mc_mark_position(mediaControl, convertedPosition, D3_PSE_FAILURE_MARK_TYPE, 0);
                 }
                 
                 SAFE_FREE(&failures);
@@ -541,7 +554,8 @@ static int mxfs_post_complete(void* data, MediaControl* mediaControl)
                 ml_log_info("Marking %ld D3 VTR errors\n", numErrors);
                 for (i = 0; i < numErrors; i++)
                 {
-                    mc_mark_position(mediaControl, errors[i].position, D3_VTR_ERROR_MARK_TYPE, 0);
+                    convertedPosition = msc_convert_position(rootSource, errors[i].position, &source->mediaSource);
+                    mc_mark_position(mediaControl, convertedPosition, D3_VTR_ERROR_MARK_TYPE, 0);
                 }
                 
                 SAFE_FREE(&errors);
@@ -556,6 +570,17 @@ static int mxfs_post_complete(void* data, MediaControl* mediaControl)
 
     
     return source->donePostComplete;
+}
+
+static void mxfs_set_source_name(void* data, const char* name)
+{
+    MXFFileSource* source = (MXFFileSource*)data;
+
+    int i;
+    for (i = 0; i < source->numStreams; i++)
+    {
+        add_known_source_info(&source->streamData[i].streamInfo, SRC_INFO_NAME, name);    
+    }
 }
 
 static void mxfs_close(void* data)
@@ -591,6 +616,7 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
 {
     MXFFileSource* newSource = NULL;
     MXFFile* mxfFile = NULL;
+    MXFPageFile* mxfPageFile = NULL;
     int i;
     D3MXFInfo d3MXFInfo;
     int haveD3Info = 0;
@@ -613,11 +639,12 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
     
     if (strstr(filename, "%d") != NULL)
     {
-        if (!mxf_page_file_open_read(filename, &mxfFile))
+        if (!mxf_page_file_open_read(filename, &mxfPageFile))
         {
             ml_log_error("Failed to open MXF page file '%s'\n", filename);
             return 0;
         }
+        mxfFile = mxf_page_file_get_file(mxfPageFile);
     }
     else
     {
@@ -687,6 +714,7 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
     newSource->mediaSource.get_position = mxfs_get_position;
     newSource->mediaSource.get_available_length = mxfs_get_available_length;
     newSource->mediaSource.eof = mxfs_eof;
+    newSource->mediaSource.set_source_name = mxfs_set_source_name;
     newSource->mediaSource.close = mxfs_close;
     newSource->mediaSource.data = newSource;
     
@@ -736,6 +764,8 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
                     d3MXFInfo.ltoInfaxData.spoolNo));
                 CHK_OFAIL(add_known_source_info(&newSource->streamData[i].streamInfo, SRC_INFO_D3MXF_D3_SPOOL_NO, 
                     d3MXFInfo.d3InfaxData.spoolNo));
+                CHK_OFAIL(add_known_source_info(&newSource->streamData[i].streamInfo, SRC_INFO_D3MXF_D3_ITEM_NO, 
+                    convert_uint32(d3MXFInfo.d3InfaxData.itemNo, stringBuf)));
                 CHK_OFAIL(add_known_source_info(&newSource->streamData[i].streamInfo, SRC_INFO_D3MXF_PROGRAMME_TITLE, 
                     d3MXFInfo.d3InfaxData.progTitle));
                 CHK_OFAIL(add_known_source_info(&newSource->streamData[i].streamInfo, SRC_INFO_D3MXF_EPISODE_TITLE, 

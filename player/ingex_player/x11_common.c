@@ -111,7 +111,7 @@ void x11wl_close_request(X11WindowListener* listener)
 }
 
 
-int x11c_initialise(X11Common* x11Common, int reviewDuration, OnScreenDisplay* osd)
+int x11c_initialise(X11Common* x11Common, int reviewDuration, OnScreenDisplay* osd, X11PluginWindowInfo *pluginInfo)
 {
     memset(x11Common, 0, sizeof(x11Common));
     
@@ -127,9 +127,20 @@ int x11c_initialise(X11Common* x11Common, int reviewDuration, OnScreenDisplay* o
     x11Common->keyboardInput.set_listener = x11c_set_keyboard_listener;
     x11Common->keyboardInput.unset_listener = x11c_unset_keyboard_listener;
     x11Common->keyboardInput.close = x11c_close_keyboard;
-    
+
+    if (pluginInfo)
+    {
+        x11Common->pluginInfo.pluginDisplay = pluginInfo->pluginDisplay;
+        x11Common->pluginInfo.pluginWindow = pluginInfo->pluginWindow;
+    }
+    else
+    {
+        x11Common->pluginInfo.pluginDisplay = NULL;
+        x11Common->pluginInfo.pluginWindow = 0;
+    }
+
     CHK_ORET(init_mutex(&x11Common->eventMutex));
-    
+
     CHK_ORET(create_joinable_thread(&x11Common->processEventThreadId, process_event_thread, x11Common));
     
     return 1;
@@ -236,11 +247,18 @@ int x11c_open_display(X11Common* x11Common)
     {
         return 1;
     }
-    
-    if ((x11Common->display = XOpenDisplay(NULL)) == NULL)
+
+    if (x11Common->pluginInfo.pluginDisplay != NULL)
     {
-        ml_log_error("Cannot open Display.\n");
-        return 0;
+        x11Common->display = x11Common->pluginInfo.pluginDisplay;
+    }
+    else
+    {
+        if ((x11Common->display = XOpenDisplay(NULL)) == NULL)
+        {
+            ml_log_error("Cannot open Display.\n");
+            return 0;
+        }
     }
     return 1;
 }
@@ -260,7 +278,7 @@ int x11c_get_screen_dimensions(X11Common* x11Common, int* width, int* height)
 }
 
 int x11c_create_window(X11Common* x11Common, unsigned int displayWidth, unsigned int displayHeight,
-    unsigned int imageWidth, unsigned int imageHeight, Window embedWindowId)
+    unsigned int imageWidth, unsigned int imageHeight)
 {
     XSetWindowAttributes x_attr;
     XEvent event;
@@ -291,6 +309,12 @@ int x11c_create_window(X11Common* x11Common, unsigned int displayWidth, unsigned
     x_attr.backing_store = Always;
     x_attr.event_mask = ExposureMask | StructureNotifyMask;
 
+    Window embedWindowId = 0;
+    if (x11Common->pluginInfo.pluginWindow != 0)
+    {
+        embedWindowId = x11Common->pluginInfo.pluginWindow;
+    }
+
     if (embedWindowId)
     {
         /* embedded window should already exist so just use it */
@@ -312,6 +336,9 @@ int x11c_create_window(X11Common* x11Common, unsigned int displayWidth, unsigned
     }
 
     XStoreName(x11Common->display, x11Common->window, x11Common->windowName);
+
+    /* XSelectInput will fail with BadAccess is more than one client
+     * is trying to get ButtonPressMask and a few other event types */
     XSelectInput(x11Common->display, x11Common->window, 
         ExposureMask | StructureNotifyMask | FocusChangeMask | 
         KeyPressMask | KeyReleaseMask |

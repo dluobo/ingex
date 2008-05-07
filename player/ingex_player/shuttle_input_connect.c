@@ -21,7 +21,6 @@
 struct ShuttleConnect
 {
     int reviewDuration;
-    int useQCLockButton;
     ConnectMapping mapping;
     MediaControl* control;
     ShuttleInput* shuttle;
@@ -35,8 +34,9 @@ struct ShuttleConnect
     struct timeval qcSeekNextMarkPressedTime;
     unsigned int maxShuttleSpeed;
     int haveReversed;
-    int playButtonPressed;
-    int pauseButtonPressed;
+    int playPauseButtonPressed;
+    int shuttleWithPlayPause;
+    int jogWithPlayPause;
     MediaControlMode prevModeForShuttle;
     unsigned int prevShuttleSpeed;
     MediaControlMode prevModeForPrevMarkSeek;
@@ -266,10 +266,7 @@ static void qc_listener(void* data, ShuttleEvent* event)
                             }
                             break;
                         case 10:
-                            connect->playButtonPressed = 0;
-                            break;
-                        case 12:
-                            connect->pauseButtonPressed = 0;
+                            connect->playPauseButtonPressed = 0;
                             break;
                         default:
                             break;
@@ -292,10 +289,6 @@ static void qc_listener(void* data, ShuttleEvent* event)
                             break;
                         case 10:
                             mc_select_menu_item_extra(connect->control);
-                            break;
-                        case 12:
-                            mc_pause(connect->control);
-                            connect->pauseButtonPressed = 1;
                             break;
                         case 14:
                             mc_select_menu_item_left(connect->control);
@@ -427,10 +420,14 @@ static void qc_listener(void* data, ShuttleEvent* event)
                             }
                             break;
                         case 10:
-                            connect->playButtonPressed = 0;
-                            break;
-                        case 12:
-                            connect->pauseButtonPressed = 0;
+                            /* toggle play/pause if the button wasn't use in combination with jog/shuttle */
+                            if (!connect->jogWithPlayPause && !connect->shuttleWithPlayPause)
+                            {
+                                mc_toggle_play_pause(connect->control);
+                            }
+                            connect->playPauseButtonPressed = 0;
+                            connect->jogWithPlayPause = 0;
+                            connect->shuttleWithPlayPause = 0;
                             break;
                         case 14:
                             if (connect->prevModeForPrevMarkSeek != MENU_MODE)
@@ -477,14 +474,7 @@ static void qc_listener(void* data, ShuttleEvent* event)
                             mc_next_osd_timecode(connect->control);
                             break;
                         case 3:
-                            if (connect->useQCLockButton)
-                            {
-                                mc_toggle_lock(connect->control);
-                            }
-                            else
-                            {
-                                mc_seek_clip_mark(connect->control);
-                            }
+                            mc_toggle_lock(connect->control);
                             break;
                         case 4:
                             gettimeofday(&connect->qcQuitPressedTime, NULL);
@@ -506,15 +496,13 @@ static void qc_listener(void* data, ShuttleEvent* event)
                             connect->prevModeForClearMarks = mode;
                             break;
                         case 10:
-                            mc_play(connect->control);
-                            connect->playButtonPressed = 1;
+                            connect->playPauseButtonPressed = 1;
                             break;
                         case 11:
-                            mc_review(connect->control, connect->reviewDuration * 25);
+                            mc_seek_clip_mark(connect->control);
                             break;
                         case 12:
-                            mc_pause(connect->control);
-                            connect->pauseButtonPressed = 1;
+                            mc_next_active_mark_selection(connect->control);
                             break;
                         case 13:
                             mc_mark(connect->control, M0_MARK_TYPE, 1);
@@ -534,7 +522,7 @@ static void qc_listener(void* data, ShuttleEvent* event)
             case SH_SHUTTLE_EVENT:
                 assert(event->value.shuttle.speed <= 7);
                 
-                if (connect->playButtonPressed)
+                if (connect->playPauseButtonPressed)
                 {
                     if (event->value.shuttle.clockwise)
                     {
@@ -587,6 +575,7 @@ static void qc_listener(void* data, ShuttleEvent* event)
                 
                 connect->prevModeForShuttle = mode;
                 connect->prevShuttleSpeed = event->value.shuttle.speed;
+                connect->shuttleWithPlayPause = connect->playPauseButtonPressed;
                 
                 break;
                 
@@ -595,14 +584,16 @@ static void qc_listener(void* data, ShuttleEvent* event)
                 {
                     /* step forward */
                     mc_step(connect->control, 1, 
-                        connect->pauseButtonPressed ? PERCENTAGE_PLAY_UNIT : FRAME_PLAY_UNIT);
+                        connect->playPauseButtonPressed ? PERCENTAGE_PLAY_UNIT : FRAME_PLAY_UNIT);
                 }
                 else
                 {
                     /* step backward */
                     mc_step(connect->control, 0, 
-                        connect->pauseButtonPressed ? PERCENTAGE_PLAY_UNIT : FRAME_PLAY_UNIT);
+                        connect->playPauseButtonPressed ? PERCENTAGE_PLAY_UNIT : FRAME_PLAY_UNIT);
                 }
+
+                connect->jogWithPlayPause = connect->playPauseButtonPressed;
                 break;
 
             case SH_PING_EVENT:
@@ -619,7 +610,7 @@ static void qc_listener(void* data, ShuttleEvent* event)
 }
 
 
-int sic_create_shuttle_connect(int reviewDuration, int useQCLockButton, MediaControl* control, 
+int sic_create_shuttle_connect(int reviewDuration, MediaControl* control, 
     ShuttleInput* shuttle, ConnectMapping mapping, ShuttleConnect** connect)
 {
     ShuttleConnect* newConnect;

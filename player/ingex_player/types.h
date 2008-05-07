@@ -7,6 +7,7 @@ typedef enum
 {
     WHITE_COLOUR = 0,
     LIGHT_WHITE_COLOUR,
+    LIGHT_GREY_COLOUR,
     YELLOW_COLOUR,
     CYAN_COLOUR,
     GREEN_COLOUR,
@@ -28,6 +29,7 @@ static const YUVColours g_rec601YUVColours[] =
 {
     {235, 128, 128},    /* WHITE_COLOUR */
     {210, 128, 128},    /* LIGHT_WHITE_COLOUR */
+    {190, 128, 128},    /* LIGHT_GREY_COLOUR */
     {210, 16, 146},     /* YELLOW_COLOUR */
     {169, 166, 16},     /* CYAN_COLOUR */
     {144, 53, 34},      /* GREEN_COLOUR */

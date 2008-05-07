@@ -34,4 +34,35 @@ extern int udp_read_frame_header(int fd, IngexNetworkHeader *p_header);
 
 extern int send_audio_video(int fd, int width, int height, int audio_channels, const uint8_t *video, const uint8_t *audio, int frame_number, int vitc, int ltc, const char *source_name);
 
+// Number of frames in ring buffer - encoded into flags byte
+#define UDP_FRAME_BUFFER_MAX            4
+#define UDP_FRAME_BUFFER_FLAGS_MASK     0x03
+
+typedef struct {
+	int64_t first_time;
+	int64_t last_time;
+	int packets;
+	int header_frame_number;
+	int frame_complete;
+} FrameStats;
+
+typedef struct {
+	int fd;
+	pthread_t udp_reader_thread_id;
+	uint8_t *ring[UDP_FRAME_BUFFER_MAX];
+	FrameStats stats[UDP_FRAME_BUFFER_MAX];
+	pthread_mutex_t m_frame_copy[UDP_FRAME_BUFFER_MAX];
+	int audio_size;
+	int video_size;
+	int ring_audio_offset;
+	int ring_video_offset;
+	int next_frame;
+	int last_header_frame_read;
+} udp_reader_thread_t;
+
+extern int udp_init_reader(int width, int height, udp_reader_thread_t *p_udp_reader);
+extern int udp_shutdown_reader(udp_reader_thread_t *p_udp_reader);
+extern int udp_read_next_frame(udp_reader_thread_t *p_udp_reader, double timeout, IngexNetworkHeader *p_header_out, uint8_t *video_out, uint8_t *audio_out, int *p_total);
+
+
 extern void scale_video420_for_multicast(int in_width, int in_height, int out_width, int out_height, uint8_t *video_frame, uint8_t *scaled_frame);

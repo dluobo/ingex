@@ -607,6 +607,14 @@ static void bms_osd_set_marks_model(void* data, int updateMask, OSDMarksModel* m
     osd_set_marks_model(msk_get_osd(bufSink->targetSink), updateMask, model);
 }
 
+static void bms_osd_set_second_marks_model(void* data, int updateMask, OSDMarksModel* model)
+{
+    BufferedMediaSink* bufSink = (BufferedMediaSink*)data;
+
+    /* bypass the buffer and remove directly from sink */
+    osd_set_second_marks_model(msk_get_osd(bufSink->targetSink), updateMask, model);
+}
+
 static void bms_osd_set_progress_bar_visibility(void* data, int visible)
 {
     BufferedMediaSink* bufSink = (BufferedMediaSink*)data;
@@ -629,6 +637,14 @@ static void bms_osd_highlight_progress_bar_pointer(void* data, int on)
 
     /* bypass the buffer and remove directly from sink */
     osd_highlight_progress_bar_pointer(msk_get_osd(bufSink->targetSink), on);
+}
+
+static void bms_osd_set_active_progress_bar_marks(void* data, int index)
+{
+    BufferedMediaSink* bufSink = (BufferedMediaSink*)data;
+
+    /* bypass the buffer and remove directly from sink */
+    osd_set_active_progress_bar_marks(msk_get_osd(bufSink->targetSink), index);
 }
 
 static void bms_osd_set_label(void* data, int xPos, int yPos, int imageWidth, int imageHeight, 
@@ -712,9 +728,11 @@ int bms_create(MediaSink** targetSink, int size, int dropFrameWhenFull, Buffered
     newBufSink->bufOSD.create_marks_model = bms_osd_create_marks_model;
     newBufSink->bufOSD.free_marks_model = bms_osd_free_marks_model;
     newBufSink->bufOSD.set_marks_model = bms_osd_set_marks_model;
+    newBufSink->bufOSD.set_second_marks_model = bms_osd_set_second_marks_model;
     newBufSink->bufOSD.set_progress_bar_visibility = bms_osd_set_progress_bar_visibility;
     newBufSink->bufOSD.highlight_progress_bar_pointer = bms_osd_highlight_progress_bar_pointer;
     newBufSink->bufOSD.get_position_in_progress_bar = bms_osd_get_position_in_progress_bar;
+    newBufSink->bufOSD.set_active_progress_bar_marks = bms_osd_set_active_progress_bar_marks;
     newBufSink->bufOSD.set_label = bms_osd_set_label;
 
     

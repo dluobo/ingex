@@ -72,11 +72,11 @@ int msc_is_complete(MediaSource* source)
     return 1; /* source if complete by default */
 }
 
-int msc_post_complete(MediaSource* source, MediaControl* mediaControl)
+int msc_post_complete(MediaSource* source, MediaSource* rootSource, MediaControl* mediaControl)
 {
     if (source && source->post_complete)
     {
-        return source->post_complete(source->data, mediaControl);
+        return source->post_complete(source->data, rootSource, mediaControl);
     }
     return 1; /* post complete is successful by default */
 }
@@ -221,6 +221,23 @@ int msc_get_buffer_state(MediaSource* source, int* numBuffers, int* numBuffersFi
         return source->get_buffer_state(source->data, numBuffers, numBuffersFilled);
     }
     return 0;
+}
+
+int64_t msc_convert_position(MediaSource* source, int64_t position, MediaSource* childSource)
+{
+    if (source && source->convert_position)
+    {
+        return source->convert_position(source->data, position, childSource);
+    }
+    return position;
+}
+
+void msc_set_source_name(MediaSource* source, const char* name)
+{
+    if (source && source->set_source_name)
+    {
+        source->set_source_name(source->data, name);
+    }
 }
 
 

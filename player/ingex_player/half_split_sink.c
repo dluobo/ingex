@@ -1005,20 +1005,23 @@ static int hss_complete_frame(void* data, const FrameInfo* frameInfo)
 {
     HalfSplitSink* split = (HalfSplitSink*)data;
 
-    /* resets */
-    split->haveCheckedFirstInputStream = 0;
-    split->haveAcceptedFirstInputStream = 0;
-    split->haveHalfSplitOutputBuffer = 0;
-    split->updateState = 1;
-    
-    if (split->state.currentStream != NULL && split->state.currentStream == split->halfSplitStream)
+    if (split->firstInputStream != NULL)  /* only if there is a video stream */
     {
-        /* send the half split */
-        if (!msk_receive_stream_frame(split->targetSink, split->firstInputStream->streamId, 
-            split->halfSplitOutputBuffer, split->halfSplitInputBufferSize))
+        /* resets */
+        split->haveCheckedFirstInputStream = 0;
+        split->haveAcceptedFirstInputStream = 0;
+        split->haveHalfSplitOutputBuffer = 0;
+        split->updateState = 1;
+        
+        if (split->state.currentStream != NULL && split->state.currentStream == split->halfSplitStream)
         {
-            ml_log_error("Failed to send half split to sink\n");
-            return 0;
+            /* send the half split */
+            if (!msk_receive_stream_frame(split->targetSink, split->firstInputStream->streamId, 
+                split->halfSplitOutputBuffer, split->halfSplitInputBufferSize))
+            {
+                ml_log_error("Failed to send half split to sink\n");
+                return 0;
+            }
         }
     }
     

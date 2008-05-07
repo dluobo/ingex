@@ -1,5 +1,5 @@
 /*
- * $Id: MXFWriter.h,v 1.2 2008/02/06 16:59:11 john_f Exp $
+ * $Id: MXFWriter.h,v 1.3 2008/05/07 17:16:11 philipn Exp $
  *
  * Writes essence data to MXF files
  *
@@ -35,6 +35,9 @@
 // must match declaration in write_avid_mxf.h
 typedef struct _AvidClipWriter AvidClipWriter;
 
+typedef struct _PackageDefinitions PackageDefinitions;
+
+
 namespace prodauto
 {
 
@@ -52,6 +55,8 @@ public:
     SourcePackage* sourcePackage; // sourcePackage is never owned by the OutputPackage
     std::vector<SourcePackage*> filePackages;
     MaterialPackage* materialPackage;
+
+    PackageDefinitions* packageDefinitions;
 };
     
 class MXFTrackWriter
@@ -101,6 +106,7 @@ public:
     void endSampleData(uint32_t trackID, uint32_t numSamples);    
 
     void completeAndSaveToDatabase();
+    void completeAndSaveToDatabase(std::vector<UserComment> userComments, ProjectName projectName);
 
     
     // returns true if the file corresponding to the track was successfully completed
@@ -118,6 +124,7 @@ private:
     OutputPackage* getOutputPackage(SourcePackage* sourcePackage); 
     SourcePackage* getSourcePackage(std::vector<SourcePackage*>& sourcePackages, 
         UMID sourcePackageUID, uint32_t sourceTrackID); 
+    void internalCompleteAndSaveToDatabase(bool update, std::vector<UserComment> userComments, ProjectName projectName);
 
     bool _isComplete;
     std::map<uint32_t, MXFTrackWriter*> _trackWriters;

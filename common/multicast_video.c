@@ -1,6 +1,10 @@
 #include "multicast_video.h"
 #include "YUV_scale_pic.h"
 
+#include <pthread.h>
+#include <sys/time.h>
+#include <unistd.h>
+
 // Define DEBUG_UDP_SEND_RECV to have packets read/written to a file instead of sockets
 // This is useful for testing out-of-order and never-arrives packet reception.
 #ifdef DEBUG_UDP_SEND_RECV
@@ -134,7 +138,7 @@ extern int open_socket_for_streaming(const char *remote, int port)
 #endif
 
 // Packet structure for uncompressed video and audio with timecode transmission:
-//  packet-header       [4] ('I'[1], flags[1], packet_num[2] (little-endian))
+//  packet-header       [4] ('I'[1], flags,frame_num[1], packet_num[2] (little-endian))
 //  packet-data         [PACKET_SIZE - 4]
 //  
 // packet-data contains:
@@ -147,6 +151,271 @@ extern int open_socket_for_streaming(const char *remote, int port)
 #define UDP_FLAG_HEADER	0x80
 #define UDP_FLAG_AUDIO	0x40
 #define UDP_FLAG_VIDEO	0x20
+
+#define PTHREAD_MUTEX_LOCK(x) if (pthread_mutex_lock( x ) != 0 ) fprintf(stderr, "pthread_mutex_lock failed\n");
+#define PTHREAD_MUTEX_UNLOCK(x) if (pthread_mutex_unlock( x ) != 0 ) fprintf(stderr, "pthread_mutex_unlock failed\n");
+
+static void *udp_reader_thread(void *arg);
+
+extern int udp_init_reader(int width, int height, udp_reader_thread_t *p_udp_reader)
+{
+	int res;
+
+	// setup element size and offsets
+	int video_size = width*height*3/2;
+	int audio_size = 1920*2 * 2;
+	int element_size = sizeof(IngexNetworkHeader) + audio_size + video_size;
+	p_udp_reader->audio_size = audio_size;
+	p_udp_reader->video_size = video_size;
+	p_udp_reader->ring_audio_offset = sizeof(IngexNetworkHeader);
+	p_udp_reader->ring_video_offset = p_udp_reader->ring_audio_offset + audio_size;
+
+	// allocate ring buffer
+	int i;
+	for (i = 0; i < UDP_FRAME_BUFFER_MAX; i++) {
+		p_udp_reader->ring[i] = (uint8_t *)malloc(element_size);
+
+		// clear entire frame since packet loss may cause some data to be read uninitialised
+		memset(p_udp_reader->ring[i], 0, element_size);
+		memset(&p_udp_reader->stats[i], 0, sizeof(FrameStats));
+
+		// Initialise mutexes
+		if ((res = pthread_mutex_init(&p_udp_reader->m_frame_copy[i], NULL)) != 0) {
+			fprintf(stderr, "pthread_mutex_init() failed: %s\n", strerror(res));
+			return 0;
+		}
+	}
+
+	// Although frame 0 is not ready at this point, the frame data will not be
+	// read until the FrameStats's frame_complete flag is signalled.
+	p_udp_reader->next_frame = 0;
+
+	// Make sure first frame read succeeds
+	p_udp_reader->last_header_frame_read = -1;
+
+	// create reader thread which will immediately start filling buffers
+	if ((res = pthread_create(&p_udp_reader->udp_reader_thread_id, NULL, udp_reader_thread, p_udp_reader)) != 0) {
+		fprintf(stderr, "Failed to create udp reader thread: %s\n", strerror(res));
+		return 0;
+	}
+
+	return 1;
+}
+
+extern int udp_shutdown_reader(udp_reader_thread_t *p_udp_reader)
+{
+	int res;
+	if ((res = pthread_cancel(p_udp_reader->udp_reader_thread_id)) != 0) {
+		fprintf(stderr, "Failed to cancel udp reader thread: %s\n", strerror(res));
+		return 0;
+	}
+
+	if ((res = pthread_join(p_udp_reader->udp_reader_thread_id, NULL)) != 0) {
+		fprintf(stderr, "pthread_join returned %d: %s\n", res, strerror(res));
+	}
+
+	// free ring buffer
+	int i;
+	for (i = 0; i < UDP_FRAME_BUFFER_MAX; i++) {
+		free(p_udp_reader->ring[i]);
+	}
+
+	return 1;
+}
+
+static int64_t gettimeofday64(void)
+{
+	struct timeval tv;
+	gettimeofday(&tv, NULL);
+	int64_t tod = (int64_t)tv.tv_sec * 1000000 + tv.tv_usec ;
+	return tod;
+}
+
+static void *udp_reader_thread(void *arg)
+{
+	udp_reader_thread_t *p_udp_reader = (udp_reader_thread_t*)arg;
+	int fd = p_udp_reader->fd;
+
+	uint8_t buf[PACKET_SIZE];
+	int packets_read = 0;
+	int total_bytes = 0;
+
+	int audio_size = p_udp_reader->audio_size;
+	int video_size = p_udp_reader->video_size;
+	int packets_per_frame = (int)( (sizeof(IngexNetworkHeader) + audio_size + video_size) / (double)(PACKET_SIZE-4) + 0.999999 );
+
+	/* Read a frame from the network */
+	while (1)
+	{
+		// Block while waiting to read from socket
+#ifdef DEBUG_UDP_SEND_RECV
+		ssize_t bytes_read = read(fd, buf, PACKET_SIZE);
+		char junk[1];
+		read(fd, junk, 1);
+#else
+		ssize_t bytes_read = recv(fd, buf, PACKET_SIZE, 0);
+#endif
+
+		// Check for corrupted packet - should never happen
+		if ((bytes_read != PACKET_SIZE) || (buf[0] != 'I')) {
+			printf("Bad packet: bytes_read=%d (PACKET_SIZE=%d) buf[0]=0x%02x\n", bytes_read, PACKET_SIZE, buf[0]);
+			continue;
+		}
+
+		total_bytes += bytes_read;
+
+		// Packet may not arrive in order, so sort them into a ring buffer of frames
+		// given by the frame_number value.
+
+		uint8_t flags = buf[1];
+		int frame_number = buf[1] & UDP_FRAME_BUFFER_FLAGS_MASK;
+
+		uint16_t packet_num;
+		memcpy(&packet_num, &buf[2], sizeof(packet_num));
+
+		//printf("0x%02x,0x%02x,0x%02x,0x%02x  packets_read=%d frame_number=%2d packet_num=%2d flags=%s%s%s\n", buf[0], buf[1], buf[2], buf[3], packets_read, frame_number, packet_num, (flags & UDP_FLAG_HEADER) ? "H":"", (flags & UDP_FLAG_AUDIO) ? "A":"", (flags & UDP_FLAG_VIDEO) ? "V":"");
+
+		packets_read++;
+
+		FrameStats *p_stats = &p_udp_reader->stats[frame_number];
+		IngexNetworkHeader *p_header = (IngexNetworkHeader *)p_udp_reader->ring[frame_number];
+		uint8_t *audio = p_udp_reader->ring[frame_number] + p_udp_reader->ring_audio_offset;
+		uint8_t *video = p_udp_reader->ring[frame_number] + p_udp_reader->ring_video_offset;
+
+		if (p_stats->packets == 0) {
+			p_stats->first_time = gettimeofday64();
+		}
+
+		// Use mutex to avoid overwriting frame read in main thread
+		PTHREAD_MUTEX_LOCK( &p_udp_reader->m_frame_copy[frame_number] )
+
+		if ((flags & UDP_FLAG_HEADER) && packet_num == 0) {
+			// copy header into structure
+			memcpy(p_header, &buf[4], sizeof(IngexNetworkHeader));
+			video_size = p_header->width * p_header->height * 3 / 2;
+			audio_size = p_header->audio_size;
+
+			// copy audio
+			int audio_chunk_size = PACKET_SIZE - (4 + sizeof(IngexNetworkHeader));
+			if (audio_chunk_size >= 0 && audio_chunk_size <= audio_size)
+				memcpy(audio, &buf[4 + sizeof(IngexNetworkHeader)], audio_chunk_size);
+
+			// update frame stats
+			p_stats->header_frame_number = p_header->frame_number;
+		}
+		else if ((flags & UDP_FLAG_AUDIO)) {
+			// The first portion of audio from the header has already been filled
+			int audio_from_header_size = PACKET_SIZE - (4 + sizeof(IngexNetworkHeader));
+			int audio_chunk_size = PACKET_SIZE - 4;
+
+			// Packets containing only audio data start from packet_num==1
+			// We must skip over the audio which was carried in the header.
+			int audio_pos = audio_from_header_size + (packet_num - 1) * audio_chunk_size;
+			if (audio_pos + audio_chunk_size > audio_size)
+				audio_chunk_size = audio_size - audio_pos;
+
+			if (audio_pos >= 0 && (audio_pos + audio_chunk_size) <= audio_size)
+				memcpy(audio + audio_pos, &buf[4], audio_chunk_size);
+			else
+				printf("Bad memcpy calc: packet_num=%d audio_pos=%d audio_chunk_size=%d audio_size=%d\n", packet_num, audio_pos, audio_chunk_size, audio_size);
+		}
+		else if (flags & UDP_FLAG_VIDEO) {
+			// video packet
+			int video_chunk_size = PACKET_SIZE - 4;
+
+			// packets can arrive out-of-order so
+			// calculate position in video frame for data based on packet_num
+			int first_video_packet = (int)( (sizeof(IngexNetworkHeader) + audio_size) / (double)(PACKET_SIZE-4) + 0.999999 );
+			int video_pos = (packet_num - first_video_packet) * video_chunk_size;
+			if (video_pos + video_chunk_size > video_size)
+				video_chunk_size = video_size - video_pos;
+
+			if (video_pos >= 0 && (video_pos + video_chunk_size) <= video_size)
+				memcpy(video + video_pos, &buf[4], video_chunk_size);
+			else
+				printf("Bad memcpy calc: packet_num=%d video_pos=%d video_chunk_size=%d video_size=%d\n", packet_num, video_pos, video_chunk_size, video_size);
+		}
+
+		PTHREAD_MUTEX_UNLOCK( &p_udp_reader->m_frame_copy[frame_number] )
+
+		p_stats->packets++;
+		if (p_stats->packets == packets_per_frame) {
+			p_stats->last_time = gettimeofday64();
+			p_stats->frame_complete = 1;
+			//printf("packet complete: first=%lld, last=%lld, diff=%lld, packets=%d\n", p_stats->first_time, p_stats->last_time, p_stats->last_time - p_stats->first_time, p_stats->packets);
+		}
+	}
+	return NULL;
+}
+
+static void dump_stats(udp_reader_thread_t *p_udp_reader)
+{
+	int i;
+	for (i = 0; i < UDP_FRAME_BUFFER_MAX; i++) {
+		printf("%2d:%s packets=%2d frame_number=%6d %s\n", i, p_udp_reader->next_frame == i ? "*":"-",
+			p_udp_reader->stats[i].packets,
+			p_udp_reader->stats[i].header_frame_number,
+			p_udp_reader->stats[i].frame_complete ? "*":".");
+	}
+
+}
+
+extern int udp_read_next_frame(udp_reader_thread_t *p_udp_reader, double timeout, IngexNetworkHeader *p_header_out, uint8_t *video_out, uint8_t *audio_out, int *p_total)
+{
+	//printf("\nBefore timed wait (last_header_frame_read=%d)\n", p_udp_reader->last_header_frame_read);
+	//dump_stats(p_udp_reader);
+
+	int frame_number = p_udp_reader->next_frame;
+	FrameStats *p_stats = &p_udp_reader->stats[frame_number];
+
+	if (p_stats->header_frame_number <= p_udp_reader->last_header_frame_read ||
+		! p_stats->frame_complete) {
+		usleep(timeout * 1000000);
+		if (p_stats->header_frame_number <= p_udp_reader->last_header_frame_read ||
+			! p_stats->frame_complete) {
+			// timeout waiting for complete frame
+
+			// process incomplete frame if header and enough audio available
+			if (p_stats->header_frame_number == 0 || p_stats->packets < 5) {
+				// Not enough data for a worthwhile frame
+				*p_total = p_stats->packets;
+				return -1;
+			}
+		}
+	}
+
+	//printf("After\n");
+	//dump_stats(p_udp_reader);
+
+	// Use mutex to guard against data being overwritten during the memcpy
+	PTHREAD_MUTEX_LOCK( &p_udp_reader->m_frame_copy[frame_number] )
+
+	// copy buffered frame out
+	IngexNetworkHeader *p_header = (IngexNetworkHeader *)p_udp_reader->ring[frame_number];
+	uint8_t *audio = p_udp_reader->ring[frame_number] + p_udp_reader->ring_audio_offset;
+	uint8_t *video = p_udp_reader->ring[frame_number] + p_udp_reader->ring_video_offset;
+
+	memcpy(p_header_out, p_header, sizeof(IngexNetworkHeader));
+	memcpy(audio_out, audio, p_udp_reader->audio_size);
+	memcpy(video_out, video, p_udp_reader->video_size);
+
+	*p_total = p_stats->packets;
+
+	PTHREAD_MUTEX_UNLOCK( &p_udp_reader->m_frame_copy[frame_number] )
+
+	// increment next frame indicator
+	p_udp_reader->next_frame++;
+	if (p_udp_reader->next_frame == UDP_FRAME_BUFFER_MAX)
+		p_udp_reader->next_frame = 0;
+
+	p_udp_reader->last_header_frame_read = p_header->frame_number;
+
+	// clear frame we just read
+	memset(p_udp_reader->ring[frame_number], 0, sizeof(FrameStats) + sizeof(IngexNetworkHeader));
+	memset(p_stats, 0, sizeof(FrameStats));
+
+	return 0;
+}
 
 extern int udp_read_frame_audio_video(int fd, double timeout, IngexNetworkHeader *p_header, uint8_t *video, uint8_t *audio, int *p_total)
 {
@@ -288,7 +557,7 @@ extern int udp_read_frame_audio_video(int fd, double timeout, IngexNetworkHeader
 		|| packet_num+1 != packets_read)
 		printf("packets_per_frame=%d packets_read=%d packet_num=%d last_num=%d packets_lost_for_sync=%d header.frame_number=%d\n", p_header->packets_per_frame, packets_read, packet_num, last_packet_num, packets_lost_for_sync, p_header->frame_number);
 
-	*p_total = total_bytes;
+	*p_total = packets_read;
 	return 0;
 }
 
@@ -390,6 +659,11 @@ extern int send_audio_video(int fd, int width, int height, int audio_channels,
 		// packet header is 4 bytes starting with 'I' sync byte
 		buf[0] = 'I';		// sync byte 'I' for ingex
 		buf[1] = 0;			// flags
+
+		// lower bits of buf[1] has frame_number 0 .. 15
+		buf[1] |= (frame_number % UDP_FRAME_BUFFER_MAX) & UDP_FRAME_BUFFER_FLAGS_MASK;
+
+		// packet_num is sent as native endian, 16 bits
 		memcpy(&buf[2], &packet_num, sizeof(packet_num));
 
 		if (packet_num == 0) {

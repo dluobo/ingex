@@ -6,6 +6,7 @@
 
 #include <X11/Xlib.h>
 #include <X11/keysym.h>
+#include <X11/extensions/XTest.h>
 
 #include "emulate_key.h"
 #include "logging.h"
@@ -21,6 +22,8 @@ struct EmulateKey
 
 static int send_key(EmulateKey* emu, int down, int keysym, int modifiers)
 {
+#if 0
+
     XKeyEvent event;
     Window winFocus;
     int revert;
@@ -47,7 +50,16 @@ static int send_key(EmulateKey* emu, int down, int keysym, int modifiers)
     event.same_screen = True;
     
     /* send event */
-    return XSendEvent(event.display, event.window, True, KeyPressMask, (XEvent*)&event) != 0;
+    int result = XSendEvent(event.display, event.window, True, KeyPressMask, (XEvent*)&event);
+
+    fprintf(stderr, "%d\n", event.keycode);
+#else
+
+    int result = XTestFakeKeyEvent(emu->display, XKeysymToKeycode(emu->display, keysym), down ? True : False, CurrentTime);
+    
+#endif
+    
+    return result != 0;
 }
 
 

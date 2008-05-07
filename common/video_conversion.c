@@ -1,5 +1,5 @@
 /*
- * $Id: video_conversion.c,v 1.2 2008/02/06 16:58:51 john_f Exp $
+ * $Id: video_conversion.c,v 1.3 2008/05/07 17:04:17 philipn Exp $
  *
  * MMX optimised video format conversion functions
  *
@@ -31,6 +31,40 @@
 
 #include "video_conversion.h"
 
+
+// Convert UYVY -> Planar YUV 4:2:0 (fourcc=I420 or YV12)
+// U0 Y0 V0 Y1   U2 Y2 V2 Y3   ->   Y0 Y1 Y2... U0 U2... V0 V2...
+// but U and V are skipped every second line
+void uyvy_to_yuv420_nommx(int width, int height, int shift_picture_down, uint8_t *input, uint8_t *output)
+{
+	int i;
+
+	// TODO:
+	// support shift_picture_down arg
+	// by shifting picture down one line
+
+	// Copy Y plane as is
+	for (i = 0; i < width*height; i++)
+	{
+		output[i] = input[ i*2 + 1 ];
+	}
+
+	// Copy U & V planes, downsampling in vertical direction
+	// by simply skipping every second line.
+	// Each U or V plane is 1/4 the size of the Y plane.
+	int i_macropixel = 0;
+	for (i = 0; i < width*height / 4; i++)
+	{
+		output[width*height + i] = input[ i_macropixel*4 ];			// U
+		output[width*height*5/4 + i] = input[ i_macropixel*4 + 2 ];	// V
+
+		// skip every second line
+		if (i_macropixel % (width) == (width - 1))
+			i_macropixel += width/2;
+
+		i_macropixel++;
+	}
+}
 
 #ifdef __MMX__
 
@@ -199,39 +233,11 @@ void uyvy_to_yuv420(int width, int height, int shift_picture_down, uint8_t *inpu
 
 #else		// no MMX
 
-// Convert UYVY -> Planar YUV 4:2:0 (fourcc=I420 or YV12)
-// U0 Y0 V0 Y1   U2 Y2 V2 Y3   ->   Y0 Y1 Y2... U0 U2... V0 V2...
-// but U and V are skipped every second line
 void uyvy_to_yuv420(int width, int height, int shift_picture_down, uint8_t *input, uint8_t *output)
 {
-	int i;
-
-	// TODO:
-	// support shift_picture_down arg
-	// by shifting picture down one line
-
-	// Copy Y plane as is
-	for (i = 0; i < width*height; i++)
-	{
-		output[i] = input[ i*2 + 1 ];
-	}
-
-	// Copy U & V planes, downsampling in vertical direction
-	// by simply skipping every second line.
-	// Each U or V plane is 1/4 the size of the Y plane.
-	int i_macropixel = 0;
-	for (i = 0; i < width*height / 4; i++)
-	{
-		output[width*height + i] = input[ i_macropixel*4 ];			// U
-		output[width*height*5/4 + i] = input[ i_macropixel*4 + 2 ];	// V
-
-		// skip every second line
-		if (i_macropixel % (width) == (width - 1))
-			i_macropixel += width/2;
-
-		i_macropixel++;
-	}
+	uyvy_to_yuv420_nommx(width, height, shift_picture_down, input, output);
 }
+
 #endif		// __MMX__
 
 #ifdef __MMX__

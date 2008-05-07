@@ -453,11 +453,11 @@ static int bmsrc_is_complete(void* data)
     return msc_is_complete(bufSource->targetSource);
 }
 
-static int bmsrc_post_complete(void* data, MediaControl* mediaControl)
+static int bmsrc_post_complete(void* data, MediaSource* rootSource, MediaControl* mediaControl)
 {
     BufferedMediaSource* bufSource = (BufferedMediaSource*)data;
     
-    return msc_post_complete(bufSource->targetSource, mediaControl);
+    return msc_post_complete(bufSource->targetSource, rootSource, mediaControl);
 }
 
 static int bmsrc_get_num_streams(void* data)
@@ -945,6 +945,26 @@ static int bmsrc_get_buffer_state(void* data, int* numBuffers, int* numBuffersFi
     return 1;
 }
 
+static int64_t bmsrc_convert_position(void* data, int64_t position, MediaSource* childSource)
+{
+    BufferedMediaSource* bufSource = (BufferedMediaSource*)data;
+    
+    if (childSource != &bufSource->mediaSource)
+    {
+        return msc_convert_position(bufSource->targetSource, position, childSource);
+    }
+    
+    return position;
+}
+
+static void bmsrc_set_source_name(void* data, const char* name)
+{
+    BufferedMediaSource* bufSource = (BufferedMediaSource*)data;
+    
+    msc_set_source_name(bufSource->targetSource, name);
+}
+
+
 
 int bmsrc_create(MediaSource* targetSource, int size, int blocking, float byteRateLimit,
     BufferedMediaSource** bufSource)
@@ -981,6 +1001,8 @@ int bmsrc_create(MediaSource* targetSource, int size, int blocking, float byteRa
     newBufSource->mediaSource.eof = bmsrc_eof;
     newBufSource->mediaSource.close = bmsrc_close;
     newBufSource->mediaSource.get_buffer_state = bmsrc_get_buffer_state;
+    newBufSource->mediaSource.convert_position = bmsrc_convert_position;
+    newBufSource->mediaSource.set_source_name = bmsrc_set_source_name;
     
     newBufSource->targetSourceListener.data = newBufSource;
     newBufSource->targetSourceListener.accept_frame = bmsrc_accept_frame;

@@ -44,7 +44,7 @@ typedef enum
     NONA_SPLIT_VIDEO_SWITCH = 9
 } VideoSwitchSplit;
 
-int qvs_create_video_switch(MediaSink* sink, VideoSwitchSplit split, int applySplitFilter, int splitSelect,
+int qvs_create_video_switch(MediaSink* sink, VideoSwitchSplit split, int applySplitFilter, int splitSelect, int prescaledSplit,
     VideoSwitchDatabase* database, int masterTimecodeIndex, int masterTimecodeType, int masterTimecodeSubType,
     VideoSwitchSink** swtch);
 

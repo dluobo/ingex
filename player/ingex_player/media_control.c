@@ -116,6 +116,14 @@ void mc_clear_mark(MediaControl* control, int typeMask)
     }
 }
 
+void mc_clear_mark_position(MediaControl* control, int64_t position, int typeMask)
+{
+    if (control && control->clear_mark_position)
+    {
+        control->clear_mark_position(control->data, position, typeMask);
+    }
+}
+
 void mc_clear_all_marks(MediaControl* control, int typeMask)
 {
     if (control && control->clear_all_marks)
@@ -145,6 +153,14 @@ void mc_seek_clip_mark(MediaControl* control)
     if (control && control->seek_clip_mark)
     {
         control->seek_clip_mark(control->data);
+    }
+}
+
+void mc_next_active_mark_selection(MediaControl* control)
+{
+    if (control && control->next_active_mark_selection)
+    {
+        control->next_active_mark_selection(control->data);
     }
 }
 

@@ -49,6 +49,9 @@
 
 #define MAX_INPUTS                  64
 
+#define MAX_PB_MARK_SELECTIONS      2
+
+
 typedef enum
 {
     UNKNOWN_OUTPUT = 0,
@@ -92,6 +95,8 @@ typedef struct
     int numBalls;
     
     int disableAudio;
+    
+    const char* sourceName;
 } InputInfo;
 
 typedef struct
@@ -146,11 +151,14 @@ static const ControlInputHelp g_defaultKeyboardInputHelp[] =
     {"'i'", "Toggle lock"},
     {"'o'", "Display next OSD screen"},
     {"'t'", "Display next timecode"},
+    {"'-'", "Toggle source name display"},
+    {"'+'", "Toggle audio level display"},
     {"'m'", "Set mark (type M0)"},
     {"'c'", "Clear mark"},
     {"'b'", "Clear all marks"},
     {"','", "Seek to previous mark"},
     {"'.'", "Seek to next mark"},
+    {"'/'", "Seek to clip mark"},
     {"'a'", "Review start"},
     {"'z'", "Review end"},
     {"'x'", "Review mark"},
@@ -202,11 +210,13 @@ static const ControlInputHelp g_qcKeyboardInputHelp[] =
     {"'i'", "Toggle lock"},
     {"'o'", "Display next OSD screen"},
     {"'t'", "Display next timecode"},
+    {"'''", "Toggle source name display"},
     {"'m'", "Toggle mark red (type M0)"},
     {"'c'", "Clear mark (except D3 VTR error and PSE failure)"},
     {"'b'", "Clear all marks (except D3 VTR error and PSE failure)"},
     {"','", "Seek to previous mark"},
     {"'.'", "Seek to next mark"},
+    {"'/'", "Seek to clip mark"},
     {"'a'", "Review start"},
     {"'z'", "Review end"},
     {"'x'", "Review mark"},
@@ -239,9 +249,9 @@ static const ControlInputHelp g_qcShuttleInputHelp[] =
     {"7", "Toggle mark blue (type M3)"},
     {"8", "Toggle mark cyan (type M4)"},
     {"9", "Clear mark or clear all marks after a 1.5 second hold (except D3 VTR error and PSE failure)"},
-    {"10", "Play"},
-    {"11", "Review mark"},
-    {"12", "Pause"},
+    {"10", "Toggle play/pause or play/step percentage in combination with shuttle/jog"},
+    {"11", "Seek clip mark"},
+    {"12", "Next active mark bar"},
     {"13", "Toggle mark red (type M0)"},
     {"14", "Seek to previous mark or seek to start after a 1.5 second hold"},
     {"15", "Seek to next mark or seek to end after a 1.5 second hold"},
@@ -277,7 +287,6 @@ static int start_control_threads(Player* player, int reviewDuration)
     {
         result = sic_create_shuttle_connect(
             reviewDuration, 
-            0,
             ply_get_media_control(player->mediaPlayer), 
             player->shuttle, 
             player->connectMapping, 
@@ -820,6 +829,7 @@ static void usage(const char* cmd)
     fprintf(stderr, "  --nona-split             Add a nona (9) split view to the video switch (--video-switch is also set)\n");
     fprintf(stderr, "  --no-split-filter        Don't apply horizontal and vertical filtering to video switch splits\n");
     fprintf(stderr, "  --split-select           Always show the video split and highlight the current selected video stream\n");
+    fprintf(stderr, "  --prescaled-split        Images are already scaled down for video split\n");
     fprintf(stderr, "  --vswitch-db <name>      Video switch database filename\n");
     fprintf(stderr, "  --vswitch-tc <type>.<index> Use the timecode with <index> (starting from 0) stream with specified timecode <type> (default is the first timecode stream)\n");
     fprintf(stderr, "                           Options are:\n");
@@ -883,6 +893,8 @@ static void usage(const char* cmd)
     fprintf(stderr, "                               be less than the number of bytes read from disk\n");
     fprintf(stderr, "  --clip-start <frame>     Set the start of the clip (hh:mm:ss:ff or frame count)\n");
     fprintf(stderr, "  --clip-duration <dur>    Set the clip duration (hh:mm:ss:ff or frame count)\n");
+    fprintf(stderr, "  --start <frame>          Start playing at frame (hh:mm:ss:ff or frame count)\n");
+    fprintf(stderr, "  [--pb-mark-mask <val>]*  32-bit mask for marks to show on the (next) progress bar (decimal or 0x hex)\n");
     fprintf(stderr, "\n");
     fprintf(stderr, "Inputs:\n");
     fprintf(stderr, "  -m, --mxf  <file>        MXF file input\n");
@@ -905,6 +917,7 @@ static void usage(const char* cmd)
     fprintf(stderr, "  --udp-in <address>       UDP network/multicast source (e.g. 239.255.1.1:2000)\n");
 #endif
     fprintf(stderr, "  --disable-audio          Disable audio from the next input\n");
+    fprintf(stderr, "  --src-name <name>        Set the source name (eg. used to label the sources in the split sink)\n");
     fprintf(stderr, "\n");
 }
 
@@ -957,7 +970,7 @@ int main(int argc, const char **argv)
     Rational sourceAspectRatio = {0, 0};
     float scale = 0.0;
     int swScale = 1;
-    unsigned long windowId = 0;
+    X11PluginWindowInfo pluginInfo = {NULL, 0};
     SDIVITCSource sdiVITCSource = VITC_AS_SDI_VITC;
     int loop = 0;
     int extraSDIVITCSource = 0; 
@@ -993,6 +1006,10 @@ int main(int argc, const char **argv)
     int64_t clipStart = -1;
     int64_t clipDuration = -1;
     ClipSource* clipSource = NULL;
+    int prescaledSplit = 0;
+    int64_t startFrame = -1;
+    int markSelectionTypeMasks[MAX_PB_MARK_SELECTIONS];
+    int numMarkSelections = 0;
     
     
     memset(inputs, 0, sizeof(inputs));
@@ -1162,9 +1179,9 @@ int main(int argc, const char **argv)
                 fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
                 return 1;
             }
-            if (sscanf(argv[cmdlnIndex + 1], "0x%lx", &windowId) != 1)
+            if (sscanf(argv[cmdlnIndex + 1], "0x%lx", &pluginInfo.pluginWindow) != 1)
             {
-                if (sscanf(argv[cmdlnIndex + 1], "%lu", &windowId) != 1)
+                if (sscanf(argv[cmdlnIndex + 1], "%lu", &pluginInfo.pluginWindow) != 1)
                 {
                     usage(argv[0]);
                     fprintf(stderr, "Invalid argument for %s\n", argv[cmdlnIndex]);
@@ -1264,6 +1281,11 @@ int main(int argc, const char **argv)
         else if (strcmp(argv[cmdlnIndex], "--split-select") == 0)
         {
             splitSelect = 1;
+            cmdlnIndex += 1;
+        }
+        else if (strcmp(argv[cmdlnIndex], "--prescaled-split") == 0)
+        {
+            prescaledSplit = 1;
             cmdlnIndex += 1;
         }
         else if (strcmp(argv[cmdlnIndex], "--vswitch-db") == 0)
@@ -1658,6 +1680,45 @@ int main(int argc, const char **argv)
             }
             cmdlnIndex += 2;
         }
+        else if (strcmp(argv[cmdlnIndex], "--start") == 0)
+        {
+            if (cmdlnIndex + 1 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            if (!parse_length(argv[cmdlnIndex + 1], &startFrame))
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Invalid argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            cmdlnIndex += 2;
+        }
+        else if (strcmp(argv[cmdlnIndex], "--pb-mark-mask") == 0)
+        {
+            if (cmdlnIndex + 1 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            if (numMarkSelections >= MAX_PB_MARK_SELECTIONS)
+            {
+                fprintf(stderr, "Only %d mark selection masks supported\n", MAX_PB_MARK_SELECTIONS);
+                return 1;
+            }
+            if (sscanf(argv[cmdlnIndex + 1], "0x%x\n", &markSelectionTypeMasks[numMarkSelections]) != 1 &&
+                sscanf(argv[cmdlnIndex + 1], "%d\n", &markSelectionTypeMasks[numMarkSelections]) != 1)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Invalid argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            numMarkSelections++;
+            cmdlnIndex += 2;
+        }
         else if (strcmp(argv[cmdlnIndex], "-m") == 0 ||
             strcmp(argv[cmdlnIndex], "--mxf") == 0)
         {
@@ -1923,6 +1984,17 @@ int main(int argc, const char **argv)
             inputs[numInputs].disableAudio = 1;
             cmdlnIndex++;
         }
+        else if (strcmp(argv[cmdlnIndex], "--src-name") == 0)
+        {
+            if (cmdlnIndex + 1 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            inputs[numInputs].sourceName = argv[cmdlnIndex + 1];
+            cmdlnIndex += 2;
+        }
         else
         {
             usage(argv[0]);
@@ -2108,6 +2180,13 @@ int main(int argc, const char **argv)
         {
             msc_disable_audio(mediaSource);
         }
+        
+        /* set the source name */
+        if (inputs[i].sourceName != NULL)
+        {
+            printf("%s = %s\n", inputs[i].sourceName, inputs[i].filename);
+            msc_set_source_name(mediaSource, inputs[i].sourceName);
+        }
 
         /* add to collection */
         if (!mls_assign_source(multipleSource, &mediaSource))
@@ -2174,7 +2253,7 @@ int main(int argc, const char **argv)
     
     if (qcSessionFilename != NULL)
     {
-        if (!qcs_open(qcSessionFilename, g_player.mediaSource, argc, argv, NULL, &g_player.qcSession))
+        if (!qcs_open(qcSessionFilename, g_player.mediaSource, argc, argv, NULL, restoreMarksFilename, &g_player.qcSession))
         {
             fprintf(stderr, "Failed to open QC session\n");
             goto fail;
@@ -2222,7 +2301,7 @@ int main(int argc, const char **argv)
             g_player.x11WindowListener.close_request = x11_window_close_request;
             
             if (!xvsk_open(reviewDuration, disableX11OSD, &pixelAspectRatio, &monitorAspectRatio,
-                scale, swScale, windowId, &g_player.x11XVDisplaySink))
+                scale, swScale, &pluginInfo, &g_player.x11XVDisplaySink))
             {
                 ml_log_error("Failed to open x11 xv display sink\n");
                 goto fail;
@@ -2244,7 +2323,7 @@ int main(int argc, const char **argv)
             g_player.x11WindowListener.close_request = x11_window_close_request;
             
             if (!xsk_open(reviewDuration, disableX11OSD, &pixelAspectRatio, &monitorAspectRatio,
-                scale, swScale, windowId, &g_player.x11DisplaySink))
+                scale, swScale, &pluginInfo, &g_player.x11DisplaySink))
             {
                 ml_log_error("Failed to open x11 display sink\n");
                 goto fail;
@@ -2276,7 +2355,7 @@ int main(int argc, const char **argv)
             
             if (!dusk_open(reviewDuration, sdiVITCSource, extraSDIVITCSource, dvsBufferSize, 
                 xOutputType == X11_XV_DISPLAY_OUTPUT, disableSDIOSD, disableX11OSD, &pixelAspectRatio, &monitorAspectRatio,
-                scale, swScale, fitVideo, windowId, &g_player.dualSink))
+                scale, swScale, fitVideo, &pluginInfo, &g_player.dualSink))
             {
                 ml_log_error("Failed to open dual X11 and DVS sink\n");
                 goto fail;
@@ -2363,7 +2442,7 @@ int main(int argc, const char **argv)
                 goto fail;
             }
         }
-        if (!qvs_create_video_switch(g_player.mediaSink, videoSwitchSplit, applySplitFilter, splitSelect, 
+        if (!qvs_create_video_switch(g_player.mediaSink, videoSwitchSplit, applySplitFilter, splitSelect, prescaledSplit,
             g_player.videoSwitchDatabase, vswitchTimecodeIndex, vswitchTimecodeType, vswitchTimecodeSubType,
             &videoSwitch))
         {
@@ -2423,7 +2502,8 @@ int main(int argc, const char **argv)
     
     if (!ply_create_player(g_player.mediaSource, g_player.mediaSink, lock, closeAtEnd, 
         numFFMPEGThreads, useWorkerThreads, loop, showFieldSymbol, 
-        &startVITCTimecode, &startLTCTimecode, g_player.bufferStateLogFile, &g_player.mediaPlayer))
+        &startVITCTimecode, &startLTCTimecode, g_player.bufferStateLogFile, 
+        markSelectionTypeMasks, numMarkSelections, &g_player.mediaPlayer))
     {
         ml_log_error("Failed to create media player\n");
         goto fail;
@@ -2433,7 +2513,22 @@ int main(int argc, const char **argv)
     {
         bmsrc_set_media_player(bufferedSource, g_player.mediaPlayer);
     }
+    
+    
+    /* set the start offset for position values returned by the player */
 
+    if (clipSource != NULL)
+    {
+        ply_set_start_offset(g_player.mediaPlayer, clipStart);
+    }
+    
+    
+    /* move to the start frame */
+
+    if (startFrame > 0)
+    {
+        mc_seek(ply_get_media_control(g_player.mediaPlayer), startFrame, SEEK_SET, FRAME_PLAY_UNIT);
+    }
     
     
     /* restore marks from QC session */

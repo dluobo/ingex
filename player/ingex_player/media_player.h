@@ -105,7 +105,7 @@ typedef struct
 int ply_create_player(MediaSource* source, MediaSink* sink, int initialLock, 
     int closeAtEnd, int numFFMPEGThreads, int useWorkerThreads, int loop, int showFieldSymbol, 
     const Timecode* startVITC, const Timecode* startLTC, 
-    FILE* bufferStateLogFile, MediaPlayer** player);
+    FILE* bufferStateLogFile, int* markSelectionTypeMasks, int numMarkSelections, MediaPlayer** player);
 int ply_register_player_listener(MediaPlayer* player, MediaPlayerListener* playerListener);
 MediaControl* ply_get_media_control(MediaPlayer* player);
 int ply_start_player(MediaPlayer* player);
@@ -114,7 +114,7 @@ int ply_get_marks(MediaPlayer* player, Mark** marks);
 MediaSink* ply_get_media_sink(MediaPlayer* player);
 void ply_set_menu_handler(MediaPlayer* player, MenuHandler* handler);
 void ply_enable_clip_marks(MediaPlayer* player, int markType);
-
+void ply_set_start_offset(MediaPlayer* player, int64_t offset);
 
 
 #ifdef __cplusplus

@@ -15,7 +15,7 @@ extern "C"
 typedef struct ShuttleConnect ShuttleConnect;
 
 
-int sic_create_shuttle_connect(int reviewDuration, int useQCLockButton, MediaControl* control, 
+int sic_create_shuttle_connect(int reviewDuration, MediaControl* control, 
     ShuttleInput* shuttle, ConnectMapping mapping, ShuttleConnect** connect);
 void sic_free_shuttle_connect(ShuttleConnect** connect);
 

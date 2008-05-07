@@ -47,6 +47,7 @@ static const char* g_sourceInfoNames[] =
     "Creation date", 
     "LTO spool no.", 
     "D3 spool no.", 
+    "D3 item no.", 
     "Prog title", 
     "Episode title", 
     "Tx date", 
@@ -54,6 +55,8 @@ static const char* g_sourceInfoNames[] =
     "Prog duration", 
     
     "Title",
+    
+    "Name",
     
     "Unknown"
 };
@@ -182,6 +185,42 @@ void clear_stream_info(StreamInfo* streamInfo)
     SAFE_FREE(&streamInfo->sourceInfoValues);
 
     memset(streamInfo, 0, sizeof(StreamInfo));
+}
+
+const char* get_source_info_value(const StreamInfo* streamInfo, const char* name)
+{
+    int i;
+    for (i = 0; i < streamInfo->numSourceInfoValues; i++)
+    {
+       if (strcmp(name, streamInfo->sourceInfoValues[i].name) == 0)
+       {
+           return streamInfo->sourceInfoValues[i].value;
+       }
+    }
+    
+    return NULL;
+}
+
+const char* get_known_source_info_value(const StreamInfo* streamInfo, SourceInfoName name)
+{
+    int i;
+    
+    if (name > sizeof(g_sourceInfoNames) / sizeof(char*))
+    {
+        assert(name <= sizeof(g_sourceInfoNames) / sizeof(char*));
+        ml_log_warn("Unknown name enum %d\n", name);
+        return NULL;
+    }
+    
+    for (i = 0; i < streamInfo->numSourceInfoValues; i++)
+    {
+       if (strcmp(g_sourceInfoNames[name], streamInfo->sourceInfoValues[i].name) == 0)
+       {
+           return streamInfo->sourceInfoValues[i].value;
+       }
+    }
+   
+    return NULL;
 }
 
 

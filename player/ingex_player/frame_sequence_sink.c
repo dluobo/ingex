@@ -307,7 +307,7 @@ static int fss_complete_frame(void* data, const FrameInfo* frameInfo)
     unsigned char* outBufPtr;
     int count;
 
-    if (sequence->streamId >= 0)
+    if (sequence->streamId >= 0)  /* only if there is a video stream */
     {
         /* fill output with black */
         fill_black(sequence->streamInfo.format, sequence->streamInfo.width, sequence->streamInfo.height,

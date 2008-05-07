@@ -56,6 +56,18 @@ struct HTTPAccess
 };
 
 
+static int parse_int64(const char* str, int64_t* value)
+{
+    int64_t result;
+    if (sscanf(str, "%"PRId64, &result) != 1)
+    {
+        return 0;
+    }
+    
+    *value = result;
+    return 1;
+}
+
 static int get_query_value(struct shttpd_arg* arg, const char* name, char* value, int valueSize)
 {
     const char* queryString;
@@ -117,12 +129,14 @@ static void http_player_page(struct shttpd_arg* arg)
 	arg->flags |= SHTTPD_END_OF_OUTPUT;
 }
 
-static void http_player_state(struct shttpd_arg* arg)
+static void http_player_state_xml(struct shttpd_arg* arg)
 {
     HTTPAccess* access = (HTTPAccess*)arg->user_data;
 
     shttpd_printf(arg, "HTTP/1.1 200 OK\r\n");
     shttpd_printf(arg, "Content-type: application/xml\r\n\r\n");
+    
+    PTHREAD_MUTEX_LOCK(&access->playerStateMutex);
     
     shttpd_printf(arg, "<?xml version='1.0'?>\n");
     shttpd_printf(arg, "<player_state>\n");
@@ -133,6 +147,27 @@ static void http_player_state(struct shttpd_arg* arg)
         access->currentFrameInfo.timecodes[0].timecode.frame);
     shttpd_printf(arg, "</player_state>\n");
 
+    PTHREAD_MUTEX_UNLOCK(&access->playerStateMutex);
+    
+	arg->flags |= SHTTPD_END_OF_OUTPUT;
+}
+
+static void http_player_state_txt(struct shttpd_arg* arg)
+{
+    HTTPAccess* access = (HTTPAccess*)arg->user_data;
+
+    shttpd_printf(arg, "HTTP/1.1 200 OK\r\n");
+    shttpd_printf(arg, "Content-type: text/plain\r\n\r\n");
+    
+    PTHREAD_MUTEX_LOCK(&access->playerStateMutex);
+
+    shttpd_printf(arg, "length=%"PRId64"\n", access->currentFrameInfo.sourceLength);    
+    shttpd_printf(arg, "availableLength=%"PRId64"\n", access->currentFrameInfo.availableSourceLength);    
+    shttpd_printf(arg, "position=%"PRId64"\n", access->currentFrameInfo.position);    
+    shttpd_printf(arg, "startOffset=%"PRId64"\n", access->currentFrameInfo.startOffset);    
+
+    PTHREAD_MUTEX_UNLOCK(&access->playerStateMutex);
+    
 	arg->flags |= SHTTPD_END_OF_OUTPUT;
 }
 
@@ -151,7 +186,10 @@ static void http_player_control(struct shttpd_arg* arg)
     int pause = 0;
     float factor;
     int64_t duration;
-    
+    int toggle = 1;
+    int markType = 0;
+    int64_t position = 0;
+    int markTypeMask = 0;
 
 	requestURI = shttpd_get_env(arg, "REQUEST_URI");
 
@@ -178,8 +216,14 @@ static void http_player_control(struct shttpd_arg* arg)
         
         if (get_query_value(arg, "offset", queryValue, sizeof(queryValue)))
         {
-            queryValueCount++;
-            offset = atol(queryValue);
+            if (!parse_int64(queryValue, &offset))
+            {
+                queryOk = 0;
+            }
+            else
+            {
+                queryValueCount++;
+            }
         }
         if (get_query_value(arg, "whence", queryValue, sizeof(queryValue)))
         {
@@ -367,6 +411,78 @@ static void http_player_control(struct shttpd_arg* arg)
     {
         mc_seek_clip_mark(access->control);
     }
+    else if (strcmp("/player/control/mark-position", requestURI) == 0)
+    {
+        queryOk = 1;
+        queryValueCount = 0;
+        
+        if (get_query_value(arg, "position", queryValue, sizeof(queryValue)))
+        {
+            if (!parse_int64(queryValue, &position) ||
+                position < 0)
+            {
+                queryOk = 0;
+            }
+            else
+            {
+                queryValueCount++;
+            }
+        }
+        if (get_query_value(arg, "type", queryValue, sizeof(queryValue)))
+        {
+            queryValueCount++;
+            markType = atoi(queryValue);
+        }
+        if (get_query_value(arg, "toggle", queryValue, sizeof(queryValue)))
+        {
+            queryValueCount++;
+            if (strcmp("true", queryValue) == 0)
+            {
+                toggle = 1;
+            }
+            else if (strcmp("false", queryValue) == 0)
+            {
+                toggle = 0;
+            }
+            else
+            {
+                queryOk = 0;
+            }
+        }
+        
+        if (queryOk && queryValueCount == 3)
+        {
+            mc_mark_position(access->control, position, markType, toggle);
+        }
+    }
+    else if (strcmp("/player/control/clear-mark-position", requestURI) == 0)
+    {
+        queryOk = 1;
+        queryValueCount = 0;
+        
+        if (get_query_value(arg, "position", queryValue, sizeof(queryValue)))
+        {
+            if (!parse_int64(queryValue, &position) ||
+                position < 0)
+            {
+                queryOk = 0;
+            }
+            else
+            {
+                queryValueCount++;
+            }
+        }
+        if (get_query_value(arg, "type", queryValue, sizeof(queryValue)))
+        {
+            queryValueCount++;
+            markTypeMask = atoi(queryValue);
+        }
+        
+        if (queryOk && queryValueCount == 2)
+        {
+            mc_clear_mark_position(access->control, position, markTypeMask);
+        }
+    }
     else if (strcmp("/player/control/next-osd-screen", requestURI) == 0)
     {
         mc_next_osd_screen(access->control);
@@ -382,11 +498,14 @@ static void http_player_control(struct shttpd_arg* arg)
         
         if (get_query_value(arg, "duration", queryValue, sizeof(queryValue)))
         {
-            queryValueCount++;
-            duration = atol(queryValue);
-            if (duration <= 0)
+            if (!parse_int64(queryValue, &duration) ||
+                duration <= 0)
             {
                 queryOk = 0;
+            }
+            else
+            {
+                queryValueCount++;
             }
         }
         
@@ -394,6 +513,10 @@ static void http_player_control(struct shttpd_arg* arg)
         {
             mc_review(access->control, duration);
         }
+    }
+    else if (strcmp("/player/control/next-marks-selection", requestURI) == 0)
+    {
+        mc_next_active_mark_selection(access->control);
     }
     
     shttpd_printf(arg, "HTTP/1.1 200 OK\r\n\r\n");
@@ -487,7 +610,8 @@ int hac_create_http_access(MediaPlayer* player, int port, HTTPAccess** access)
     shttpd_register_uri(newAccess->ctx, "/player.html", &http_player_page, newAccess);
     shttpd_register_uri(newAccess->ctx, "/index.html", &http_player_page, newAccess);
     shttpd_register_uri(newAccess->ctx, "/resources/*", &http_static_content, newAccess);
-    shttpd_register_uri(newAccess->ctx, "/player/state", &http_player_state, newAccess);
+    shttpd_register_uri(newAccess->ctx, "/player/state.xml", &http_player_state_xml, newAccess);
+    shttpd_register_uri(newAccess->ctx, "/player/state.txt", &http_player_state_txt, newAccess);
     shttpd_register_uri(newAccess->ctx, "/player/control/*", &http_player_control, newAccess);
     CHK_OFAIL(shttpd_listen(newAccess->ctx, port, 0));
 

@@ -148,10 +148,12 @@ typedef struct
     int (*create_marks_model)(void* data, OSDMarksModel** model); 
     void (*free_marks_model)(void* data, OSDMarksModel** model); 
     void (*set_marks_model)(void* data, int updateMask, OSDMarksModel* model);
+    void (*set_second_marks_model)(void* data, int updateMask, OSDMarksModel* model);
     
     void (*set_progress_bar_visibility)(void* data, int visible);
     float (*get_position_in_progress_bar)(void* data, int x, int y);
     void (*highlight_progress_bar_pointer)(void* data, int on);
+    void (*set_active_progress_bar_marks)(void* data, int index);
     
     void (*set_label)(void* data, int xPos, int yPos, int imageWidth, int imageHeight, 
         int fontSize, Colour colour, int box, const char* label); 
@@ -197,9 +199,11 @@ void osd_set_mark_display(OnScreenDisplay* osd, const MarkConfigs* markConfigs);
 int osd_create_marks_model(OnScreenDisplay* osd, OSDMarksModel** model); 
 void osd_free_marks_model(OnScreenDisplay* osd, OSDMarksModel** model); 
 void osd_set_marks_model(OnScreenDisplay* osd, int updateMask, OSDMarksModel* model); 
+void osd_set_second_marks_model(OnScreenDisplay* osd, int updateMask, OSDMarksModel* model); 
 void osd_set_progress_bar_visibility(OnScreenDisplay* osd, int visible);
 float osd_get_position_in_progress_bar(OnScreenDisplay* osd, int x, int y);
 void osd_highlight_progress_bar_pointer(OnScreenDisplay* osd, int on);
+void osd_set_active_progress_bar_marks(OnScreenDisplay* osd, int index);
 void osd_set_label(OnScreenDisplay* osd, int xPos, int yPos, int imageWidth, int imageHeight, 
     int fontSize, Colour colour, int box, const char* label); 
 int osd_add_to_image(OnScreenDisplay* osd, const FrameInfo* frameInfo, unsigned char* image, 

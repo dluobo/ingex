@@ -422,6 +422,23 @@ static void dusk_osd_set_marks_model(void* data, int updateMask, OSDMarksModel* 
     osd_set_marks_model(msk_get_osd(dualSink->dvsSink), updateMask << 1, model);
 }
 
+static void dusk_osd_set_second_marks_model(void* data, int updateMask, OSDMarksModel* model)
+{
+    DualSink* dualSink = (DualSink*)data;
+
+    CHK_ORETV(check_dvs_is_open(dualSink));
+    
+    if ((updateMask << 1) >> 1 != updateMask)
+    {
+        ml_log_error("Update mask for setting marks model is too large in the dual sink\n");
+        return;
+    }
+    
+    /* DVS responds to updates masked by updateMask, X11 responds to updates masked by updateMask << 1 */
+    osd_set_second_marks_model(msk_get_osd(dualSink->x11Sink), updateMask, model);
+    osd_set_second_marks_model(msk_get_osd(dualSink->dvsSink), updateMask << 1, model);
+}
+
 static void dusk_osd_set_progress_bar_visibility(void* data, int visible)
 {
     DualSink* dualSink = (DualSink*)data;
@@ -450,6 +467,16 @@ static void dusk_osd_highlight_progress_bar_pointer(void* data, int on)
 
     osd_highlight_progress_bar_pointer(msk_get_osd(dualSink->x11Sink), on);
     osd_highlight_progress_bar_pointer(msk_get_osd(dualSink->dvsSink), on);
+}
+
+static void dusk_osd_set_active_progress_bar_marks(void* data, int index)
+{
+    DualSink* dualSink = (DualSink*)data;
+
+    CHK_ORETV(check_dvs_is_open(dualSink));
+
+    osd_set_active_progress_bar_marks(msk_get_osd(dualSink->x11Sink), index);
+    osd_set_active_progress_bar_marks(msk_get_osd(dualSink->dvsSink), index);
 }
 
 static void dusk_osd_set_label(void* data, int xPos, int yPos, int imageWidth, int imageHeight, 
@@ -731,7 +758,7 @@ fail:
 
 int dusk_open(int reviewDuration, SDIVITCSource sdiVITCSource, int extraSDIVITCSource, int numBuffers, 
     int useXV, int disableSDIOSD, int disableX11OSD, const Rational* pixelAspectRatio, 
-    const Rational* monitorAspectRatio, float scale, int swScale, int fitVideo, unsigned long windowId, DualSink** dualSink)
+    const Rational* monitorAspectRatio, float scale, int swScale, int fitVideo, X11PluginWindowInfo *pluginInfo, DualSink** dualSink)
 {
     DualSink* newDualSink = NULL;
     
@@ -749,14 +776,14 @@ int dusk_open(int reviewDuration, SDIVITCSource sdiVITCSource, int extraSDIVITCS
     {
         /* open buffered X11 XV display sink */    
         CHK_OFAIL(xvsk_open(reviewDuration, disableX11OSD, pixelAspectRatio, monitorAspectRatio, 
-            scale, swScale, windowId, &newDualSink->x11XVDisplaySink));
+            scale, swScale, pluginInfo, &newDualSink->x11XVDisplaySink));
         newDualSink->x11Sink = xvsk_get_media_sink(newDualSink->x11XVDisplaySink);
     }
     else
     {
         /* open buffered X11 display sink */    
         CHK_OFAIL(xsk_open(reviewDuration, disableX11OSD, pixelAspectRatio, monitorAspectRatio, 
-            scale, swScale, windowId, &newDualSink->x11DisplaySink));
+            scale, swScale, pluginInfo, &newDualSink->x11DisplaySink));
         newDualSink->x11Sink = xsk_get_media_sink(newDualSink->x11DisplaySink);
     }
 
@@ -812,9 +839,11 @@ int dusk_open(int reviewDuration, SDIVITCSource sdiVITCSource, int extraSDIVITCS
     newDualSink->dualOSD.set_mark_display = dusk_osd_set_mark_display;
     newDualSink->dualOSD.create_marks_model = dusk_osd_create_marks_model;
     newDualSink->dualOSD.set_marks_model = dusk_osd_set_marks_model;
+    newDualSink->dualOSD.set_second_marks_model = dusk_osd_set_second_marks_model;
     newDualSink->dualOSD.set_progress_bar_visibility = dusk_osd_set_progress_bar_visibility;
     newDualSink->dualOSD.get_position_in_progress_bar = dusk_osd_get_position_in_progress_bar;
     newDualSink->dualOSD.highlight_progress_bar_pointer = dusk_osd_highlight_progress_bar_pointer;
+    newDualSink->dualOSD.set_active_progress_bar_marks = dusk_osd_set_active_progress_bar_marks;
     newDualSink->dualOSD.set_label = dusk_osd_set_label;
 
     newDualSink->x11Info.streamId = -1;

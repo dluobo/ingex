@@ -117,7 +117,7 @@ int msk_receive_stream_frame_const(MediaSink* sink, int streamId, const unsigned
         if (result)
         {
             memcpy(nonconstBuffer, buffer, bufferSize);
-            result = msk_receive_stream_frame(sink->data, streamId, nonconstBuffer, bufferSize);
+            result = msk_receive_stream_frame(sink, streamId, nonconstBuffer, bufferSize);
         }
         return result;
     }

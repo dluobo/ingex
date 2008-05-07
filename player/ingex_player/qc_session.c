@@ -3,6 +3,7 @@
 #include <string.h>
 #include <stdarg.h>
 #include <inttypes.h>
+#include <unistd.h>
 #include <ctype.h>
 #include <assert.h>
 
@@ -32,6 +33,57 @@ typedef char LogLine[QC_LOG_LINE_ELEMENTS][64];
 
 static const char* g_qcSessionPreSuf = "_qcsession_";
 
+
+static char* get_host_name(char* buffer, size_t bufferSize)
+{
+    if (gethostname(buffer, bufferSize - 1) != 0)
+    {
+        // failed
+        buffer[0] = '\0';
+        return buffer;
+    }
+    
+    buffer[bufferSize - 1] = '\0';
+    return buffer;
+}
+
+static char* get_user_name(char* buffer, size_t bufferSize)
+{
+    FILE* cmdStdout = popen("whoami", "r");
+    if (cmdStdout == 0)
+    {
+        // failed
+        buffer[0] = '\0';
+        return buffer;
+    }
+    
+    size_t numRead = fread(buffer, 1, bufferSize - 1, cmdStdout);
+    if (numRead <= 0)
+    {
+        // failed
+        buffer[0] = '\0';
+    }
+    else
+    {
+        buffer[numRead] = '\0';
+        
+        // trim end
+        int i;
+        for (i = numRead - 1; i >= 0; i--)
+        {
+            if (!isspace(buffer[i]))
+            {
+                break;
+            }
+            
+            buffer[i] = '\0';
+        }
+    }
+    
+    pclose(cmdStdout);
+
+    return buffer;
+}
 
 static const char* strip_path(const char* filePath)
 {
@@ -405,7 +457,7 @@ static void qcs_player_closed(void* data)
 
 
 int qcs_open(const char* mxfFilename, MediaSource* source, int argc, const char** argv, 
-    const char* name, QCSession** qcSession)
+    const char* name, const char* loadedSessionFilename, QCSession** qcSession)
 {
     QCSession* newQCSession;
     char timestampStr[MAX_TIMESTAMP_STRING_SIZE];
@@ -415,6 +467,7 @@ int qcs_open(const char* mxfFilename, MediaSource* source, int argc, const char*
     char* lastSep;
     const StreamInfo* streamInfo;
     char metadataBuffer[64];
+    char nameBuffer[256];
 
 
     CALLOC_ORET(newQCSession, QCSession, 1);
@@ -455,10 +508,16 @@ int qcs_open(const char* mxfFilename, MediaSource* source, int argc, const char*
     write_comment(newQCSession, "");
     if (name != NULL)
     {
-        write_comment(newQCSession, "Name: %s", name);
+        write_comment(newQCSession, "Name: '%s'", name);
+    }
+    if (loadedSessionFilename != NULL)
+    {
+        write_comment(newQCSession, "Loaded session: '%s'", loadedSessionFilename);
     }
     get_timestamp_string(timestampStr);
     write_comment(newQCSession, "Started: %s", timestampStr);
+    write_comment(newQCSession, "Username: '%s'", get_user_name(nameBuffer, sizeof(nameBuffer)));
+    write_comment(newQCSession, "Hostname: '%s'", get_host_name(nameBuffer, sizeof(nameBuffer)));
     write_comment_start(newQCSession);
     if (argc > 0)
     {

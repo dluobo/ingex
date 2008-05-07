@@ -275,6 +275,13 @@ static int rfs_eof(void* data)
     return 0;
 }
 
+static void rfs_set_source_name(void* data, const char* name)
+{
+    RawFileSource* source = (RawFileSource*)data;
+
+    add_known_source_info(&source->streamInfo, SRC_INFO_NAME, name);    
+}
+
 static void rfs_close(void* data)
 {
     RawFileSource* source = (RawFileSource*)data;
@@ -353,6 +360,7 @@ int rfs_open(const char* filename, const StreamInfo* streamInfo, MediaSource** s
     newSource->mediaSource.get_position = rfs_get_position;
     newSource->mediaSource.get_available_length = rfs_get_available_length;
     newSource->mediaSource.eof = rfs_eof;
+    newSource->mediaSource.set_source_name = rfs_set_source_name;
     newSource->mediaSource.close = rfs_close;
     
     newSource->streamInfo = *streamInfo;

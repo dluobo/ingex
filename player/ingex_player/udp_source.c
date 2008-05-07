@@ -32,13 +32,12 @@ typedef struct
     int isDisabled;
 } TrackInfo;
 
-#define SOURCE_NAME_SIZE 64
-
 typedef struct
 {
     MediaSource mediaSource;
 
     int socket_fd;
+    udp_reader_thread_t udp_reader;
     uint8_t *video;
     uint8_t *audio;
 
@@ -49,9 +48,7 @@ typedef struct
     
     int prevLastFrame;
 
-    char prevSourceName[SOURCE_NAME_SIZE];
-    char sourceName[SOURCE_NAME_SIZE];
-    int sourceNameUpdate;
+    char sourceName[MULTICAST_SOURCE_NAME_SIZE];
 } UDPSource;
 
 
@@ -129,29 +126,46 @@ static int udp_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceLis
 
     /* Read a frame from the network */
     IngexNetworkHeader header;
-    int total_read = 0;
+    memset(&header, 0, sizeof(header));
+    int packets_read = 0;
+    int bad_frame = 0;
+    double timeout = 0.045;    /* experiment found this worked ok */
 
-    int res = udp_read_frame_audio_video(source->socket_fd, &header, source->video, source->audio, &total_read);
-    if (res == -1)
-        return -2;        /* timeout */
+#ifdef MULTICAST_SINGLE_THREAD
+    int res = udp_read_frame_audio_video(source->socket_fd, timeout, &header, source->video, source->audio, &packets_read);
+    if (res == -1) {
+        printf("udp_read_frame_audio_video() timeout packets_read=%d\n", packets_read);
+        bad_frame = 1;
+    }
+#else
+    int res = udp_read_next_frame(&source->udp_reader, timeout, &header, source->video, source->audio, &packets_read);
+    if (res == -1) {
+        printf("udp_read_next_frame() timeout packets_read=%d\n", packets_read);
+        bad_frame = 1;
+    }
+#endif
 
     source->prevLastFrame = header.frame_number;
     
     /* check for updated source name */
     // TODO: user strcmp to check header.source_name against last name
-	if (strlen(source->sourceName) == 0 ||
-		strncmp(source->sourceName, header.source_name, SOURCE_NAME_SIZE-1) != 0) {
-		nameUpdated = 1;
-		strncpy(source->sourceName, header.source_name, SOURCE_NAME_SIZE-1);
-	}
+    if (! bad_frame)
+    {
+        if (strlen(source->sourceName) == 0 ||
+            strncmp(source->sourceName, header.source_name, MULTICAST_SOURCE_NAME_SIZE-1) != 0) {
+            nameUpdated = 1;
+            strncpy(source->sourceName, header.source_name, MULTICAST_SOURCE_NAME_SIZE-1);
+        }
+    }
 
 
     // Track numbers are hard-coded by setup code in udp_open()
     // 0 - video
     // 1 - audio 1
-    // 2 - timecode
-    // 3 - timecode
-    // 4 - event
+    // 2 - audio 2
+    // 3 - timecode VITC
+    // 4 - timecode LTC
+    // 5 - event
     //
     for (i = 0; i < source->numTracks; i++)
     {
@@ -188,8 +202,17 @@ static int udp_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceLis
             memcpy(buffer, source->video, track->frameSize);
         }
 
-        if (track->streamInfo.type == SOUND_STREAM_TYPE) {
-            memcpy(buffer, source->audio, 1920*2);
+        if (track->streamInfo.type == SOUND_STREAM_TYPE)
+        {
+            if (bad_frame) {
+                /* silence audio when bad frame received */
+                memset(buffer, 0, 1920*2);
+            }
+            else {
+                /* audio 1 is on track i==1, audio 2 is on track i==2 */
+                int channel = i - 1;
+                memcpy(buffer, source->audio + channel * 1920*2, 1920*2);
+            }
         }
 
         if (track->streamInfo.type == TIMECODE_STREAM_TYPE) {
@@ -265,6 +288,17 @@ static int udp_eof(void* data)
     return 0;
 }
 
+static void udp_set_source_name(void* data, const char* name)
+{
+    UDPSource* source = (UDPSource*)data;
+
+    int i;
+    for (i = 0; i < source->numTracks; i++)
+    {
+        add_known_source_info(&source->tracks[i].streamInfo, SRC_INFO_NAME, name);    
+    }
+}
+
 static void udp_close(void* data)
 {
     UDPSource* source = (UDPSource*)data;
@@ -274,6 +308,10 @@ static void udp_close(void* data)
     {
         return;
     }
+
+#ifndef MULTICAST_SINGLE_THREAD
+	udp_shutdown_reader(&source->udp_reader);
+#endif
 
     for (i = 0; i < source->numTracks; i++)
     {
@@ -319,20 +357,25 @@ int udp_open(const char *address, MediaSource** source)
         return 0;
     }
 
-	// Read video parameters from multicast stream
-	IngexNetworkHeader header;
-	if (udp_read_frame_header(fd, &header) == -1)
-	{
+    // Read video parameters from multicast stream
+    IngexNetworkHeader header;
+    if (udp_read_frame_header(fd, &header) == -1)
+    {
         ml_log_error("Failed to read from UDP address %s:%d\n", remote, port);
         return 0;
-	}
+    }
 
     CALLOC_ORET(newSource, UDPSource, 1);
 
     newSource->socket_fd = fd;
+
+#ifndef MULTICAST_SINGLE_THREAD
+    newSource->udp_reader.fd = fd;
+    udp_init_reader(header.width, header.height, &newSource->udp_reader);
+#endif
+
     newSource->prevLastFrame = -1;
-    newSource->sourceNameUpdate = -1;
-    memset(newSource->sourceName, 0, SOURCE_NAME_SIZE);
+    memset(newSource->sourceName, 0, MULTICAST_SOURCE_NAME_SIZE);
 
     char title[FILENAME_MAX];
     sprintf(title, "%s from %s\n", header.source_name, address);
@@ -341,7 +384,7 @@ int udp_open(const char *address, MediaSource** source)
     /* FIXME: can this be done later? */
     /* allocate video and audio buffers for this source */
     newSource->video = malloc(header.width * header.height * 3/2);
-    newSource->audio = malloc(1920*2 * 2);
+    newSource->audio = malloc(header.audio_size);
 
     
     // setup media source
@@ -357,6 +400,7 @@ int udp_open(const char *address, MediaSource** source)
     newSource->mediaSource.get_length = udp_get_length;
     newSource->mediaSource.get_position = udp_get_position;
     newSource->mediaSource.get_available_length = udp_get_available_length;
+    newSource->mediaSource.set_source_name = udp_set_source_name;
     newSource->mediaSource.eof = udp_eof;
     newSource->mediaSource.close = udp_close;
 
@@ -386,6 +430,18 @@ int udp_open(const char *address, MediaSource** source)
     newSource->tracks[newSource->numTracks].streamInfo.numChannels = 1;
     newSource->tracks[newSource->numTracks].streamInfo.bitsPerSample = 16;
     CHK_OFAIL(add_known_source_info(&newSource->tracks[newSource->numTracks].streamInfo, SRC_INFO_TITLE, "UDP Audio 1"));
+    newSource->tracks[newSource->numTracks].frameSize = 2 * 48000 / 25;
+    newSource->numTracks++;
+
+    /* audio track 2 */
+    CHK_OFAIL(initialise_stream_info(&newSource->tracks[newSource->numTracks].streamInfo));
+    newSource->tracks[newSource->numTracks].streamInfo.type = SOUND_STREAM_TYPE;
+    newSource->tracks[newSource->numTracks].streamInfo.format = PCM_FORMAT;
+    newSource->tracks[newSource->numTracks].streamInfo.sourceId = sourceId;
+    newSource->tracks[newSource->numTracks].streamInfo.samplingRate = g_profAudioSamplingRate;
+    newSource->tracks[newSource->numTracks].streamInfo.numChannels = 1;
+    newSource->tracks[newSource->numTracks].streamInfo.bitsPerSample = 16;
+    CHK_OFAIL(add_known_source_info(&newSource->tracks[newSource->numTracks].streamInfo, SRC_INFO_TITLE, "UDP Audio 2"));
     newSource->tracks[newSource->numTracks].frameSize = 2 * 48000 / 25;
     newSource->numTracks++;
 

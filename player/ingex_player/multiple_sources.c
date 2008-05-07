@@ -181,7 +181,7 @@ static int mls_is_complete(void* data)
     return isComplete;
 }
 
-static int mls_post_complete(void* data, MediaControl* mediaControl)
+static int mls_post_complete(void* data, MediaSource* rootSource, MediaControl* mediaControl)
 {
     MultipleMediaSources* multSource = (MultipleMediaSources*)data;
     MediaSourceElement* ele = &multSource->sources;
@@ -191,7 +191,7 @@ static int mls_post_complete(void* data, MediaControl* mediaControl)
     {
         if (ele->isComplete)
         {
-            ele->postComplete = msc_post_complete(ele->source, mediaControl);
+            ele->postComplete = msc_post_complete(ele->source, rootSource, mediaControl);
         }
         result &= ele->isComplete && ele->postComplete;
         ele = ele->next;
@@ -572,6 +572,11 @@ static int mls_get_available_length(void* data, int64_t* length)
     {
         return 0;
     }
+
+    if (multSource->maxLength > 0 && minSrcLength > multSource->maxLength)
+    {
+        minSrcLength = multSource->maxLength;
+    }
     
     *length = minSrcLength;
     return 1;
@@ -604,6 +609,18 @@ static int mls_eof(void* data)
     return eof;
 }
 
+static void mls_set_source_name(void* data, const char* name)
+{
+    MultipleMediaSources* multSource = (MultipleMediaSources*)data;
+    MediaSourceElement* ele = &multSource->sources;
+    while (ele != NULL && ele->source != NULL)
+    {
+        msc_set_source_name(ele->source, name);
+        
+        ele = ele->next;
+    }
+}
+
 static void mls_close(void* data)
 {
     MultipleMediaSources* multSource = (MultipleMediaSources*)data;
@@ -630,6 +647,33 @@ static void mls_close(void* data)
     SAFE_FREE(&multSource);
 }
 
+static int64_t mls_convert_position(void* data, int64_t position, MediaSource* childSource)
+{
+    MultipleMediaSources* multSource = (MultipleMediaSources*)data;
+    MediaSourceElement* ele = &multSource->sources;
+    int64_t returnPosition = position;
+    int64_t childPosition;
+    
+    if (childSource == &multSource->collectiveSource)
+    {
+        return position;
+    }
+    
+    /* we take the position of any child source that deviates from the given position */
+    while (ele != NULL && ele->source != NULL)
+    {
+        childPosition = msc_convert_position(ele->source, position, childSource);
+        if (childPosition != position)
+        {
+            returnPosition = childPosition;
+            break;
+        }
+        
+        ele = ele->next;
+    }
+    
+    return returnPosition;
+}
 
 
 int mls_create(const Rational* aspectRatio, int64_t maxLength, MultipleMediaSources** multSource)
@@ -660,7 +704,9 @@ int mls_create(const Rational* aspectRatio, int64_t maxLength, MultipleMediaSour
     newMultSource->collectiveSource.get_position = mls_get_position;
     newMultSource->collectiveSource.get_available_length = mls_get_available_length;
     newMultSource->collectiveSource.eof = mls_eof;
+    newMultSource->collectiveSource.set_source_name = mls_set_source_name;
     newMultSource->collectiveSource.close = mls_close;
+    newMultSource->collectiveSource.convert_position = mls_convert_position;
     
     *multSource = newMultSource;
     return 1;

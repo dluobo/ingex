@@ -12,6 +12,7 @@ extern overlay g_osdPauseSymbol;
 extern overlay g_osdReversePlaySymbol; 
 extern overlay g_osdFieldSymbol; 
 extern overlay g_osdProgressBarPointer; 
+extern overlay g_osdLongProgressBarPointer; 
 extern overlay g_osdLockSymbol;
 
 extern overlay g_osdPlaySymbolSmall;

@@ -1,5 +1,5 @@
 /*
- * $Id: test_mxfwriter.cpp,v 1.2 2008/02/06 16:59:11 john_f Exp $
+ * $Id: test_mxfwriter.cpp,v 1.3 2008/05/07 17:16:11 philipn Exp $
  *
  * Tests the MXF writer
  *
@@ -60,6 +60,10 @@ using namespace prodauto;
 #define DESTINATION_FILE_PATH       ""
 #define FAILURES_FILE_PATH          ""
 
+static const char* g_defaultRecorderName = "Ingex";
+static const char* g_defaultTapeNumberPrefix = "DPP";
+static const char* g_defaultStartTimecode = "10:00:00:00";
+static int64_t g_defaultStartPosition = 10 * 60 * 60 * 25;
 
 
 
@@ -251,7 +255,9 @@ static void usage(const char* prog)
     fprintf(stderr, "Options:\n");
     fprintf(stderr, "    --dv50 <filename>    Essence file to read and wrap in MXF (default is blank uncompressed)\n");
     fprintf(stderr, "    --old-session\n");
-    fprintf(stderr, "    -r <recorder name>   Recorder name to use to connect to database [\"Ingex\"]\n");
+    fprintf(stderr, "    -r <recorder name>   Recorder name to use to connect to database (default '%s')\n", g_defaultRecorderName);
+    fprintf(stderr, "    -t <prefix>          The tape number prefix (default '%s')\n", g_defaultTapeNumberPrefix);
+    fprintf(stderr, "    -s <timecode>        The start timecode. Format is hh:mm:ss:ff (default '%s')\n", g_defaultStartTimecode);
 }
 
 
@@ -261,9 +267,12 @@ int main(int argc, const char* argv[])
     int k;
     const char* dv50Filename = NULL;
     const char* filenamePrefix = NULL;
-    const char* recorderName = "Ingex";
+    const char* recorderName = g_defaultRecorderName;
     bool oldSession = false;
+    string tapeNumberPrefix = g_defaultTapeNumberPrefix;
+    int64_t startPosition = g_defaultStartPosition;
     int cmdlnIndex = 1;
+    int hour, min, sec, frame;
     
     if (argc < 2)
     {
@@ -290,6 +299,11 @@ int main(int argc, const char* argv[])
             dv50Filename = argv[cmdlnIndex + 1];
             cmdlnIndex += 2;
         }
+        else if (strcmp(argv[cmdlnIndex], "--old-session") == 0)
+        {
+            oldSession = true;
+            cmdlnIndex++;
+        }
         else if (strcmp(argv[cmdlnIndex], "-r") == 0)
         {
             if (cmdlnIndex + 1 >= argc)
@@ -301,10 +315,33 @@ int main(int argc, const char* argv[])
             recorderName = argv[cmdlnIndex + 1];
             cmdlnIndex += 2;
         }
-        else if (strcmp(argv[cmdlnIndex], "--old-session") == 0)
+        else if (strcmp(argv[cmdlnIndex], "-t") == 0)
         {
-            oldSession = true;
-            cmdlnIndex++;
+            if (cmdlnIndex + 1 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing value for argument '%s'\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            tapeNumberPrefix = argv[cmdlnIndex + 1];
+            cmdlnIndex += 2;
+        }
+        else if (strcmp(argv[cmdlnIndex], "-s") == 0)
+        {
+            if (cmdlnIndex + 1 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing value for argument '%s'\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            if (sscanf(argv[cmdlnIndex + 1], "%d:%d:%d:%d", &hour, &min, &sec, &frame) != 4)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Invalid value '%s' for argument '%s'\n", argv[cmdlnIndex + 1], argv[cmdlnIndex]);
+                return 1;
+            }
+            startPosition = hour * 60 * 60 * 25 + min * 60 * 25 + sec * 25 + frame;
+            cmdlnIndex += 2;
         }
         else
         {
@@ -404,7 +441,7 @@ int main(int argc, const char* argv[])
             {
                 SourceConfig* sourceConfig = *iter;
                 
-                sprintf(buf, "DPE%06x", i);
+                sprintf(buf, "%s%06x", tapeNumberPrefix.c_str(), i);
                 
                 sourceConfig->setSourcePackage(buf);
             }
@@ -429,13 +466,6 @@ int main(int argc, const char* argv[])
         }
     }
     
-    // get the start position (ie. time now) for the "recording"
-    Timestamp now = generateTimestampNow();
-    int64_t startPosition = now.hour * 60 * 60 * 25 +
-        now.min * 60 * 25 +
-        now.sec * 25 +
-        now.qmsec * 4 * 25 / 1000;
-        
     for (j = 0; j < NUM_RECORDS; j++)
     {
         printf("** j == %d\n", j);

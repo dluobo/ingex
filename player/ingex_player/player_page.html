@@ -95,7 +95,7 @@
 		try
 		{
 			stateRequest = new XMLHttpRequest();
-			stateRequest.open("GET", "/player/state", false);
+			stateRequest.open("GET", "/player/state.xml", false);
 			stateRequest.onload = handleStateContent;
 			stateRequest.send(null);
 		}

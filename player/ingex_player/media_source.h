@@ -33,7 +33,7 @@ typedef struct
     int (*receive_frame_const)(void* data, int streamId, const unsigned char* buffer, unsigned int bufferSize);
 } MediaSourceListener;
 
-typedef struct
+typedef struct MediaSource
 {
     void* data; /* passed to functions */
 
@@ -41,7 +41,7 @@ typedef struct
     int (*is_complete)(void* data);
     
     /* return 1 if post_complete successful */
-    int (*post_complete)(void* data, MediaControl* mediaControl);
+    int (*post_complete)(void* data, struct MediaSource* rootSource, MediaControl* mediaControl);
     
     /* complete the blank video source stream info */
     int (*finalise_blank_source)(void* data, const StreamInfo* streamInfo);
@@ -75,6 +75,12 @@ typedef struct
     /* buffered source */
     int (*get_buffer_state)(void* data, int* numBuffers, int* numBuffersFilled);
     
+    /* convert a position from a child source */
+    int64_t (*convert_position)(void* data, int64_t position, struct MediaSource* childSource);
+    
+    /* set the source name */
+    void (*set_source_name)(void* data, const char* name);
+    
 } MediaSource;
 
 
@@ -92,7 +98,7 @@ int sdl_receive_frame_const(MediaSourceListener* listener, int streamId, const u
 /* utility functions for calling MediaSource functions */
 
 int msc_is_complete(MediaSource* source);
-int msc_post_complete(MediaSource* source, MediaControl* mediaControl);
+int msc_post_complete(MediaSource* source, MediaSource* rootSource, MediaControl* mediaControl);
 int msc_finalise_blank_source(MediaSource* source, const StreamInfo* streamInfo);
 int msc_get_num_streams(MediaSource* source);
 int msc_get_stream_info(MediaSource* source, int streamIndex, const StreamInfo** streamInfo);
@@ -109,6 +115,8 @@ int msc_get_available_length(MediaSource* source, int64_t* length);
 int msc_eof(MediaSource* source);
 void msc_close(MediaSource* source);
 int msc_get_buffer_state(MediaSource* source, int* numBuffers, int* numBuffersFilled);
+int64_t msc_convert_position(MediaSource* source, int64_t position, MediaSource* childSource);
+void msc_set_source_name(MediaSource* source, const char* name);
 
 
 /* create a new unique id for the source */

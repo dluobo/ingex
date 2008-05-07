@@ -54,6 +54,8 @@
 #define PROGRESS_BAR_TB_HEIGHT          2   // ((PROGRESS_BAR_HEIGHT - PROGRESS_BAR_CENTER_HEIGHT) / 2)
 #define PROGRESS_BAR_CENTER_MARGIN      2
 
+#define PROGRESS_BAR_MARKS_HEIGHT       2
+
 #define PROGRESS_BAR_MARK_HEIGHT        8
 #define PROGRESS_BAR_MARK_OVERLAP       6
 #define PROGRESS_BAR_MARK_WIDTH         4   // <= 32 - see mark overlay
@@ -134,6 +136,7 @@ struct DefaultOnScreenDisplay
     overlay* osdReversePlaySymbol; 
     overlay* osdFieldSymbol; 
     overlay* osdProgressBarPointer; 
+    overlay* osdLongProgressBarPointer; 
     overlay* osdLockSymbol;
     
 
@@ -156,13 +159,18 @@ struct DefaultOnScreenDisplay
     /* progress bar */
     int hideProgressBar;
     overlay progressBarOverlay;
+    overlay progressBarMarkOverlay;
     int64_t lastAvailableSourceLength;
     OSDMarksModel* marksModel; /* not owned by the OSD */
-    overlay progressBarMarkOverlay;
+    OSDMarksModel* secondMarksModel; /* not owned by the OSD */
+    overlay userMarksOverlay;
+    overlay secondUserMarksOverlay;
     int marksUpdateMask;
+    int secondMarksUpdateMask;
     pthread_mutex_t setMarksModelMutex;
     int highlightProgressPointer;
     long highlightProgressPointerTickStart;
+    int activeProgressBarMarks;
 
     /* dropped frame indicator */
     overlay droppedFrameOverlay;
@@ -584,7 +592,9 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
     unsigned char* bufPtr2;
     int availableSourceWidth;
     int haveMarksModel;
+    int haveSecondMarksModel;
     int markOverlayUpdated;
+    int secondMarkOverlayUpdated;
     int markPixelSet;
     int markPixel;
    
@@ -864,7 +874,7 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
             }
             
             /* set first line of overlay */
-            bufPtr = osdd->progressBarMarkOverlay.buff;
+            bufPtr = osdd->userMarksOverlay.buff;
             markPixel = 0x00000000;
             for (i = 0; i < osdd->marksModel->numMarkCounts; i++)
             {
@@ -882,12 +892,12 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
             }
             
             /* copy first line to other lines */
-            bufPtr = osdd->progressBarMarkOverlay.buff;
-            bufPtr2 = bufPtr + osdd->progressBarMarkOverlay.w;
-            for (k = 0; k < osdd->progressBarMarkOverlay.h - 1; k++)
+            bufPtr = osdd->userMarksOverlay.buff;
+            bufPtr2 = bufPtr + osdd->userMarksOverlay.w;
+            for (k = 0; k < osdd->userMarksOverlay.h - 1; k++)
             {
-                memcpy(bufPtr2, bufPtr, osdd->progressBarMarkOverlay.w);
-                bufPtr2 += osdd->progressBarMarkOverlay.w;
+                memcpy(bufPtr2, bufPtr, osdd->userMarksOverlay.w);
+                bufPtr2 += osdd->userMarksOverlay.w;
             }
             
             osdd->marksModel->updated &= ~osdd->marksUpdateMask;
@@ -895,6 +905,58 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
         }
         
         PTHREAD_MUTEX_UNLOCK(&osdd->marksModel->marksMutex)
+    }
+    
+    haveSecondMarksModel = (osdd->secondMarksModel != NULL);
+    secondMarkOverlayUpdated = 0;
+    if (haveSecondMarksModel)
+    {
+        /* update overlay with mark updates */
+        
+        PTHREAD_MUTEX_LOCK(&osdd->secondMarksModel->marksMutex)  /* prevent change in marks */
+        
+        if (osdd->secondMarksModel->updated & osdd->secondMarksUpdateMask)
+        {
+            /* a mark will result in a sequence of set bits with length PROGRESS_BAR_MARK_WIDTH */
+            markPixelSet = 0x00000000;
+            for (i = 0; i < PROGRESS_BAR_MARK_WIDTH; i++)
+            {
+                 markPixelSet <<= 1;
+                 markPixelSet |= 0x1;
+            }
+            
+            /* set first line of overlay */
+            bufPtr = osdd->secondUserMarksOverlay.buff;
+            markPixel = 0x00000000;
+            for (i = 0; i < osdd->secondMarksModel->numMarkCounts; i++)
+            {
+                markPixel >>= 1;
+                markPixel |= (osdd->secondMarksModel->markCounts[i] > 0) ? markPixelSet : 0x0;
+
+                *bufPtr++ = (markPixel ? 255 : 0);
+            }
+            /* leftovers */
+            for (i = 0; i < PROGRESS_BAR_MARK_WIDTH; i++)
+            {
+                markPixel >>= 1;
+
+                *bufPtr++ = (markPixel ? 255 : 0);
+            }
+            
+            /* copy first line to other lines */
+            bufPtr = osdd->secondUserMarksOverlay.buff;
+            bufPtr2 = bufPtr + osdd->secondUserMarksOverlay.w;
+            for (k = 0; k < osdd->secondUserMarksOverlay.h - 1; k++)
+            {
+                memcpy(bufPtr2, bufPtr, osdd->secondUserMarksOverlay.w);
+                bufPtr2 += osdd->secondUserMarksOverlay.w;
+            }
+            
+            osdd->secondMarksModel->updated &= ~osdd->secondMarksUpdateMask;
+            secondMarkOverlayUpdated = 1;
+        }
+        
+        PTHREAD_MUTEX_UNLOCK(&osdd->secondMarksModel->marksMutex)
     }
     
     PTHREAD_MUTEX_UNLOCK(&osdd->setMarksModelMutex)
@@ -916,11 +978,38 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
         
         if (haveMarksModel)
         {
+            if (osdd->activeProgressBarMarks == 0)
+            {
+                if (haveSecondMarksModel)
+                {
+                    txtY = g_rec601YUVColours[ORANGE_COLOUR].Y;
+                    txtU = g_rec601YUVColours[ORANGE_COLOUR].U;
+                    txtV = g_rec601YUVColours[ORANGE_COLOUR].V;
+                }
+                else
+                {
+                    txtY = g_rec601YUVColours[LIGHT_WHITE_COLOUR].Y;
+                    txtU = g_rec601YUVColours[LIGHT_WHITE_COLOUR].U;
+                    txtV = g_rec601YUVColours[LIGHT_WHITE_COLOUR].V;
+                }
+            }
+            else
+            {
+                txtY = g_rec601YUVColours[LIGHT_GREY_COLOUR].Y;
+                txtU = g_rec601YUVColours[LIGHT_GREY_COLOUR].U;
+                txtV = g_rec601YUVColours[LIGHT_GREY_COLOUR].V;
+            }
+            box = 80;
+                
+            xPos = (width - osdd->progressBarMarkOverlay.w) / 2;
+            yPos = timecodeYPos + timecodeHeight + 20 + osdd->progressBarOverlay.h - osdd->progressBarMarkOverlay.h;
+            CHK_ORET(add_overlay(&osdd->progressBarMarkOverlay, &yuvFrame, xPos, yPos, txtY, txtU, txtV, box) == 0);
+            
             if (markOverlayUpdated)
             {
                 /* set colour buffer to NULL, otherwise it doesn't get updated */
                 /* TODO: this could be made more efficient by filling the Cbuff ourselves */
-                osdd->progressBarMarkOverlay.Cbuff = NULL;
+                osdd->userMarksOverlay.Cbuff = NULL;
             }
                 
             txtY = g_rec601YUVColours[RED_COLOUR].Y;
@@ -930,11 +1019,48 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
             
             xPos = (width - osdd->progressBarOverlay.w) / 2 + PROGRESS_BAR_ENDS_WIDTH - PROGRESS_BAR_MARK_WIDTH / 2;
             yPos = timecodeYPos + timecodeHeight + 20 + osdd->progressBarOverlay.h - PROGRESS_BAR_MARK_OVERLAP;
+            CHK_ORET(add_overlay(&osdd->userMarksOverlay, &yuvFrame, xPos, yPos, txtY, txtU, txtV, box) == 0);
+        }
+        
+        if (haveSecondMarksModel)
+        {
+            if (osdd->activeProgressBarMarks == 1)
+            {
+                txtY = g_rec601YUVColours[ORANGE_COLOUR].Y;
+                txtU = g_rec601YUVColours[ORANGE_COLOUR].U;
+                txtV = g_rec601YUVColours[ORANGE_COLOUR].V;
+            }
+            else
+            {
+                txtY = g_rec601YUVColours[LIGHT_GREY_COLOUR].Y;
+                txtU = g_rec601YUVColours[LIGHT_GREY_COLOUR].U;
+                txtV = g_rec601YUVColours[LIGHT_GREY_COLOUR].V;
+            }
+            box = 80;
+                
+            xPos = (width - osdd->progressBarMarkOverlay.w) / 2;
+            yPos = timecodeYPos + timecodeHeight + 20 + osdd->progressBarOverlay.h + 8;
             CHK_ORET(add_overlay(&osdd->progressBarMarkOverlay, &yuvFrame, xPos, yPos, txtY, txtU, txtV, box) == 0);
+            
+            if (secondMarkOverlayUpdated)
+            {
+                /* set colour buffer to NULL, otherwise it doesn't get updated */
+                /* TODO: this could be made more efficient by filling the Cbuff ourselves */
+                osdd->secondUserMarksOverlay.Cbuff = NULL;
+            }
+                
+            txtY = g_rec601YUVColours[RED_COLOUR].Y;
+            txtU = g_rec601YUVColours[RED_COLOUR].U;
+            txtV = g_rec601YUVColours[RED_COLOUR].V;
+            box = 0;
+            
+            xPos = (width - osdd->progressBarOverlay.w) / 2 + PROGRESS_BAR_ENDS_WIDTH - PROGRESS_BAR_MARK_WIDTH / 2;
+            yPos = timecodeYPos + timecodeHeight + 20 + osdd->progressBarOverlay.h + PROGRESS_BAR_MARK_HEIGHT + 4 - PROGRESS_BAR_MARK_OVERLAP;
+            CHK_ORET(add_overlay(&osdd->secondUserMarksOverlay, &yuvFrame, xPos, yPos, txtY, txtU, txtV, box) == 0);
         }
         
         if (osdd->highlightProgressPointer &&
-            ((osdd->halfSecTickCount - osdd->highlightProgressPointerTickStart) / 3) % 2 == 0)
+            (osdd->halfSecTickCount - osdd->highlightProgressPointerTickStart) % 2 == 0)
         {
             txtY = g_rec601YUVColours[LIGHT_WHITE_COLOUR].Y;
             txtU = g_rec601YUVColours[LIGHT_WHITE_COLOUR].U;
@@ -963,7 +1089,14 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
                 frameInfo->position / frameInfo->sourceLength;
         }
         yPos = timecodeYPos + timecodeHeight + 20 - (osdd->osdProgressBarPointer->h - osdd->progressBarOverlay.h) - PROGRESS_BAR_TB_HEIGHT;
-        CHK_ORET(add_overlay(osdd->osdProgressBarPointer, &yuvFrame, xPos, yPos, txtY, txtU, txtV, box) == 0);
+        if (haveSecondMarksModel)
+        {
+            CHK_ORET(add_overlay(osdd->osdLongProgressBarPointer, &yuvFrame, xPos, yPos, txtY, txtU, txtV, box) == 0);
+        }
+        else
+        {
+            CHK_ORET(add_overlay(osdd->osdProgressBarPointer, &yuvFrame, xPos, yPos, txtY, txtU, txtV, box) == 0);
+        }
     }
 
     
@@ -1641,6 +1774,7 @@ static int osdd_initialise(void* data, const StreamInfo* streamInfo, const Ratio
         osdd->osdReversePlaySymbol = &g_osdReversePlaySymbolSmall; 
         osdd->osdFieldSymbol = &g_osdFieldSymbol; 
         osdd->osdProgressBarPointer = &g_osdProgressBarPointer; 
+        osdd->osdLongProgressBarPointer = &g_osdLongProgressBarPointer; 
         osdd->osdLockSymbol = &g_osdLockSymbol;
     }
     else
@@ -1652,6 +1786,7 @@ static int osdd_initialise(void* data, const StreamInfo* streamInfo, const Ratio
         osdd->osdReversePlaySymbol = &g_osdReversePlaySymbol; 
         osdd->osdFieldSymbol = &g_osdFieldSymbol; 
         osdd->osdProgressBarPointer = &g_osdProgressBarPointer; 
+        osdd->osdLongProgressBarPointer = &g_osdLongProgressBarPointer; 
         osdd->osdLockSymbol = &g_osdLockSymbol;
     }
     
@@ -1693,19 +1828,29 @@ static int osdd_initialise(void* data, const StreamInfo* streamInfo, const Ratio
     if (wasInitialised)
     {
         free_overlay(&osdd->progressBarOverlay);
+        free_overlay(&osdd->userMarksOverlay);
         free_overlay(&osdd->progressBarMarkOverlay);
+        free_overlay(&osdd->secondUserMarksOverlay);
     }
 
     osdd->progressBarOverlay.w = get_progress_bar_width(streamInfo->width);
     osdd->progressBarOverlay.h = PROGRESS_BAR_HEIGHT;
-    osdd->progressBarMarkOverlay.w = osdd->progressBarOverlay.w - 2 * PROGRESS_BAR_ENDS_WIDTH + PROGRESS_BAR_MARK_WIDTH;
-    osdd->progressBarMarkOverlay.h = PROGRESS_BAR_MARK_HEIGHT;
+    osdd->progressBarMarkOverlay.w = get_progress_bar_width(streamInfo->width);
+    osdd->progressBarMarkOverlay.h = PROGRESS_BAR_MARKS_HEIGHT;
+    osdd->userMarksOverlay.w = osdd->progressBarOverlay.w - 2 * PROGRESS_BAR_ENDS_WIDTH + PROGRESS_BAR_MARK_WIDTH;
+    osdd->userMarksOverlay.h = PROGRESS_BAR_MARK_HEIGHT;
+    osdd->secondUserMarksOverlay.w = osdd->progressBarMarkOverlay.w - 2 * PROGRESS_BAR_ENDS_WIDTH + PROGRESS_BAR_MARK_WIDTH;
+    osdd->secondUserMarksOverlay.h = PROGRESS_BAR_MARK_HEIGHT;
     if (osdd->videoFormat == UYVY_FORMAT)
     {
         osdd->progressBarOverlay.ssx = 2;
         osdd->progressBarOverlay.ssy = 1;
         osdd->progressBarMarkOverlay.ssx = 2;
         osdd->progressBarMarkOverlay.ssy = 1;
+        osdd->userMarksOverlay.ssx = 2;
+        osdd->userMarksOverlay.ssy = 1;
+        osdd->secondUserMarksOverlay.ssx = 2;
+        osdd->secondUserMarksOverlay.ssy = 1;
     }
     else if (osdd->videoFormat == YUV422_FORMAT)
     {
@@ -1713,6 +1858,10 @@ static int osdd_initialise(void* data, const StreamInfo* streamInfo, const Ratio
         osdd->progressBarOverlay.ssy = 1;
         osdd->progressBarMarkOverlay.ssx = 2;
         osdd->progressBarMarkOverlay.ssy = 1;
+        osdd->userMarksOverlay.ssx = 2;
+        osdd->userMarksOverlay.ssy = 1;
+        osdd->secondUserMarksOverlay.ssx = 2;
+        osdd->secondUserMarksOverlay.ssy = 1;
     }
     else /* YUV420 */
     {
@@ -1720,14 +1869,24 @@ static int osdd_initialise(void* data, const StreamInfo* streamInfo, const Ratio
         osdd->progressBarOverlay.ssy = 2;
         osdd->progressBarMarkOverlay.ssx = 2;
         osdd->progressBarMarkOverlay.ssy = 2;
+        osdd->userMarksOverlay.ssx = 2;
+        osdd->userMarksOverlay.ssy = 2;
+        osdd->secondUserMarksOverlay.ssx = 2;
+        osdd->secondUserMarksOverlay.ssy = 2;
     }
     
     CALLOC_ORET(osdd->progressBarOverlay.buff, unsigned char, 
         osdd->progressBarOverlay.w * osdd->progressBarOverlay.h * 2);
     osdd->progressBarOverlay.Cbuff = NULL;
+    CALLOC_ORET(osdd->userMarksOverlay.buff, unsigned char, 
+        osdd->userMarksOverlay.w * osdd->userMarksOverlay.h * 2);
+    osdd->userMarksOverlay.Cbuff = NULL;
     CALLOC_ORET(osdd->progressBarMarkOverlay.buff, unsigned char, 
         osdd->progressBarMarkOverlay.w * osdd->progressBarMarkOverlay.h * 2);
     osdd->progressBarMarkOverlay.Cbuff = NULL;
+    CALLOC_ORET(osdd->secondUserMarksOverlay.buff, unsigned char, 
+        osdd->secondUserMarksOverlay.w * osdd->secondUserMarksOverlay.h * 2);
+    osdd->secondUserMarksOverlay.Cbuff = NULL;
 
     bufPtr = osdd->progressBarOverlay.buff;
     for (i = 0; i < PROGRESS_BAR_HEIGHT; i++)
@@ -1736,17 +1895,15 @@ static int osdd_initialise(void* data, const StreamInfo* streamInfo, const Ratio
         {
             memset(bufPtr, 255, osdd->progressBarOverlay.w);
         }
-        else if (i < PROGRESS_BAR_TB_HEIGHT + PROGRESS_BAR_CENTER_HEIGHT)
+        else
         {
             memset(bufPtr, 255, PROGRESS_BAR_ENDS_WIDTH);
             memset(bufPtr + osdd->progressBarOverlay.w - PROGRESS_BAR_ENDS_WIDTH, 255, PROGRESS_BAR_ENDS_WIDTH);
         }
-        else
-        {
-            memset(bufPtr, 255, osdd->progressBarOverlay.w);
-        }
         bufPtr += osdd->progressBarOverlay.w;
     }
+    
+    memset(osdd->progressBarMarkOverlay.buff, 255, PROGRESS_BAR_MARKS_HEIGHT * osdd->progressBarMarkOverlay.w);
     
     
     
@@ -1996,6 +2153,16 @@ static void osdd_set_marks_model(void* data, int updateMask, OSDMarksModel* mode
     PTHREAD_MUTEX_UNLOCK(&osdd->setMarksModelMutex)
 }
 
+static void osdd_set_second_marks_model(void* data, int updateMask, OSDMarksModel* model)
+{
+    DefaultOnScreenDisplay* osdd = (DefaultOnScreenDisplay*)data;
+    
+    PTHREAD_MUTEX_LOCK(&osdd->setMarksModelMutex)
+    osdd->secondMarksModel = model;
+    osdd->secondMarksUpdateMask = updateMask;
+    PTHREAD_MUTEX_UNLOCK(&osdd->setMarksModelMutex)
+}
+
 static void osdd_set_progress_bar_visibility(void* data, int visible)
 {
     DefaultOnScreenDisplay* osdd = (DefaultOnScreenDisplay*)data;
@@ -2061,6 +2228,22 @@ static void osdd_highlight_progress_bar_pointer(void* data, int on)
         }
     }
     osdd->highlightProgressPointer = on;
+}
+
+static void osdd_set_active_progress_bar_marks(void* data, int index)
+{
+    DefaultOnScreenDisplay* osdd = (DefaultOnScreenDisplay*)data;
+    
+    PTHREAD_MUTEX_LOCK(&osdd->setMarksModelMutex)
+    if (osdd->secondMarksModel != NULL)
+    {
+        osdd->activeProgressBarMarks = index;
+    }
+    else
+    {
+        osdd->activeProgressBarMarks = 0;
+    }
+    PTHREAD_MUTEX_UNLOCK(&osdd->setMarksModelMutex)
 }
 
 static void osdd_set_label(void* data, int xPos, int yPos, int imageWidth, int imageHeight, 
@@ -2208,7 +2391,9 @@ static void osdd_free(void* data)
     free_overlay(&osdd->audioLevelM96Overlay);
     free_overlay(&osdd->markOverlay);
     free_overlay(&osdd->progressBarOverlay);
+    free_overlay(&osdd->userMarksOverlay);
     free_overlay(&osdd->progressBarMarkOverlay);
+    free_overlay(&osdd->secondUserMarksOverlay);
     
     for (i = 0; i < MAX_OSD_LABELS; i++)
     {
@@ -2448,6 +2633,14 @@ void osd_set_marks_model(OnScreenDisplay* osd, int updateMask, OSDMarksModel* mo
     }
 }
 
+void osd_set_second_marks_model(OnScreenDisplay* osd, int updateMask, OSDMarksModel* model)
+{
+    if (osd && osd->set_second_marks_model)
+    {
+        osd->set_second_marks_model(osd->data, updateMask, model);
+    }
+}
+
 void osd_set_progress_bar_visibility(OnScreenDisplay* osd, int visible)
 {
     if (osd && osd->set_progress_bar_visibility)
@@ -2470,6 +2663,14 @@ void osd_highlight_progress_bar_pointer(OnScreenDisplay* osd, int on)
     if (osd && osd->highlight_progress_bar_pointer)
     {
         osd->highlight_progress_bar_pointer(osd->data, on);
+    }
+}
+
+void osd_set_active_progress_bar_marks(OnScreenDisplay* osd, int index)
+{
+    if (osd && osd->set_active_progress_bar_marks)
+    {
+        osd->set_active_progress_bar_marks(osd->data, index);
     }
 }
 
@@ -2545,8 +2746,10 @@ int osdd_create(OnScreenDisplay** osd)
     newOSDD->osd.create_marks_model = osdd_create_marks_model;
     newOSDD->osd.free_marks_model = osdd_free_marks_model;
     newOSDD->osd.set_marks_model = osdd_set_marks_model;
+    newOSDD->osd.set_second_marks_model = osdd_set_second_marks_model;
     newOSDD->osd.set_progress_bar_visibility = osdd_set_progress_bar_visibility;
     newOSDD->osd.get_position_in_progress_bar = osdd_get_position_in_progress_bar;
+    newOSDD->osd.set_active_progress_bar_marks = osdd_set_active_progress_bar_marks;
     newOSDD->osd.highlight_progress_bar_pointer = osdd_highlight_progress_bar_pointer;
     newOSDD->osd.set_label = osdd_set_label;
     newOSDD->osd.add_to_image = osdd_add_to_image;

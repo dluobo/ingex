@@ -15,7 +15,7 @@ typedef struct QCSession QCSession;
 
 
 int qcs_open(const char* mxfFilename, MediaSource* source, int argc, const char** argv, 
-    const char* name, QCSession** qcSession);
+    const char* name, const char* loadedSessionFilename, QCSession** qcSession);
 int qcs_connect_to_player(QCSession* qcSession, MediaPlayer* player);
 void qcs_write_marks(QCSession* qcSession, int includeAll, int clipMarkType, const MarkConfigs* markConfigs, Mark* marks, int numMarks);
 void qcs_flush(QCSession* qcSession);

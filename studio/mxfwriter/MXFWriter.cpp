@@ -1,5 +1,5 @@
 /*
- * $Id: MXFWriter.cpp,v 1.2 2008/02/06 16:59:11 john_f Exp $
+ * $Id: MXFWriter.cpp,v 1.3 2008/05/07 17:16:10 philipn Exp $
  *
  * Writes essence data to MXF files
  *
@@ -30,11 +30,7 @@
 #include <Utilities.h>
 #include <Logging.h>
 
-
-extern "C"
-{
 #include <write_avid_mxf.h>
-};
 
 
 using namespace std;
@@ -73,7 +69,7 @@ static void convertRational(prodauto::Rational& in, mxfRational& out)
     memcpy(&out, &in, 8);
 }
 
-static string createFilename(string filenamePrefix, bool isPicture, uint32_t trackID, uint32_t inputTrackID)
+static string createFilename(string filenamePrefix, bool isPicture, uint32_t inputTrackID, uint32_t trackNumber)
 {
     stringstream filename;
     
@@ -87,7 +83,7 @@ static string createFilename(string filenamePrefix, bool isPicture, uint32_t tra
     {
         filename << "a";
     }
-    filename << trackID << ".mxf";
+    filename << trackNumber << ".mxf";
     
     return filename.str();
 }
@@ -136,7 +132,7 @@ static string createClipName(string sourceName, int64_t startPosition)
 
 
 OutputPackage::OutputPackage()
-: sourcePackage(0), materialPackage(0)
+: sourcePackage(0), materialPackage(0), packageDefinitions(0)
 {}
 
 OutputPackage::~OutputPackage()
@@ -150,6 +146,11 @@ OutputPackage::~OutputPackage()
         {
             delete *iter;
         }
+    }
+
+    if (packageDefinitions != 0)
+    {
+        free_package_definitions(&packageDefinitions);
     }
     
     if (clipWriter != 0)
@@ -298,7 +299,7 @@ MXFWriter::MXFWriter(MaterialPackage* materialPackage,
             
             // create complete filename
             filename = createFilename(filenamePrefix, sourceTrack->dataDef == PICTURE_DATA_DEFINITION, 
-                sourceTrack->id, trackIndex);
+                trackIndex, materialTrack->number);
             _filenames.insert(pair<UMID, string>(filePackage->uid, filename));
             _filenames2.insert(pair<uint32_t, string>(trackIndex, filename));
             FileEssenceDescriptor* fileDesc = dynamic_cast<FileEssenceDescriptor*>(filePackage->descriptor);
@@ -326,7 +327,6 @@ MXFWriter::MXFWriter(MaterialPackage* materialPackage,
         OutputPackage* outputPackage = *iterOutPackages;
         
         // create the clip writer        
-        PackageDefinitions* packageDefinitions = NULL;
         outputPackage->clipWriter = NULL;
         try
         {
@@ -336,12 +336,12 @@ MXFWriter::MXFWriter(MaterialPackage* materialPackage,
             
             // map to MXF package definitions        
             
-            CHECK_SUCCESS(create_package_definitions(&packageDefinitions));
+            CHECK_SUCCESS(create_package_definitions(&outputPackage->packageDefinitions));
             
             // map the source package
             convertUMID(outputPackage->sourcePackage->uid, umid);
             convertTimestamp(outputPackage->sourcePackage->creationDate, timestamp);
-            CHECK_SUCCESS(create_tape_source_package(packageDefinitions, &umid, 
+            CHECK_SUCCESS(create_tape_source_package(outputPackage->packageDefinitions, &umid, 
                 outputPackage->sourcePackage->name.c_str(), &timestamp));
                 
             // map the source package tracks
@@ -356,7 +356,7 @@ MXFWriter::MXFWriter(MaterialPackage* materialPackage,
 
                 convertUMID(track->sourceClip->sourcePackageUID, umid);
                 convertRational(track->editRate, editRate);
-                CHECK_SUCCESS(create_track(packageDefinitions->tapeSourcePackage, track->id, 
+                CHECK_SUCCESS(create_track(outputPackage->packageDefinitions->tapeSourcePackage, track->id, 
                     track->number, track->name.c_str(), track->dataDef == PICTURE_DATA_DEFINITION,
                     &editRate, &umid, track->sourceClip->sourceTrackID, 
                     track->sourceClip->position, track->sourceClip->length,
@@ -367,7 +367,7 @@ MXFWriter::MXFWriter(MaterialPackage* materialPackage,
             // map the material package
             convertUMID(outputPackage->materialPackage->uid, umid);
             convertTimestamp(outputPackage->materialPackage->creationDate, timestamp);
-            CHECK_SUCCESS(create_material_package(packageDefinitions, &umid, 
+            CHECK_SUCCESS(create_material_package(outputPackage->packageDefinitions, &umid, 
                 outputPackage->materialPackage->name.c_str(), &timestamp));
 
             // map the material package tracks
@@ -381,7 +381,7 @@ MXFWriter::MXFWriter(MaterialPackage* materialPackage,
 
                 convertUMID(track->sourceClip->sourcePackageUID, umid);
                 convertRational(track->editRate, editRate);
-                CHECK_SUCCESS(create_track(packageDefinitions->materialPackage, track->id, 
+                CHECK_SUCCESS(create_track(outputPackage->packageDefinitions->materialPackage, track->id, 
                     track->number, track->name.c_str(), track->dataDef == PICTURE_DATA_DEFINITION,
                     &editRate, &umid, track->sourceClip->sourceTrackID, 
                     track->sourceClip->position, track->sourceClip->length,
@@ -399,7 +399,7 @@ MXFWriter::MXFWriter(MaterialPackage* materialPackage,
                 }
                 
                 // add comment to material package destined for the mxf file
-                CHECK_SUCCESS(add_user_comment(packageDefinitions->materialPackage, 
+                CHECK_SUCCESS(set_user_comment(outputPackage->packageDefinitions, 
                     userComment.name.c_str(), userComment.value.c_str()));
 
                 // add comment to material package destined for the database
@@ -431,7 +431,7 @@ MXFWriter::MXFWriter(MaterialPackage* materialPackage,
                         case UNC_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
-                            CHECK_SUCCESS(create_file_source_package(packageDefinitions, &umid, 
+                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
                                 filePackage->name.c_str(), 
                                 &timestamp, fileDesc->fileLocation.c_str(), 
                                 UncUYVY, &essenceInfo, &mxfFilePackage));
@@ -441,7 +441,7 @@ MXFWriter::MXFWriter(MaterialPackage* materialPackage,
                         case DV25_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
-                            CHECK_SUCCESS(create_file_source_package(packageDefinitions, &umid, 
+                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
                                 filePackage->name.c_str(), 
                                 &timestamp, fileDesc->fileLocation.c_str(), 
                                 DVBased25, &essenceInfo, &mxfFilePackage));
@@ -451,7 +451,7 @@ MXFWriter::MXFWriter(MaterialPackage* materialPackage,
                         case DV50_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
-                            CHECK_SUCCESS(create_file_source_package(packageDefinitions, &umid, 
+                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
                                 filePackage->name.c_str(), 
                                 &timestamp, fileDesc->fileLocation.c_str(), 
                                 DVBased50, &essenceInfo, &mxfFilePackage));
@@ -462,7 +462,7 @@ MXFWriter::MXFWriter(MaterialPackage* materialPackage,
                         {
                             EssenceInfo essenceInfo;
                             essenceInfo.avidMJPEGInfo.resolution = Res21;
-                            CHECK_SUCCESS(create_file_source_package(packageDefinitions, &umid, 
+                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
                                 filePackage->name.c_str(), 
                                 &timestamp, fileDesc->fileLocation.c_str(), 
                                 AvidMJPEG, &essenceInfo, &mxfFilePackage));
@@ -473,7 +473,7 @@ MXFWriter::MXFWriter(MaterialPackage* materialPackage,
                         {
                             EssenceInfo essenceInfo;
                             essenceInfo.avidMJPEGInfo.resolution = Res31;
-                            CHECK_SUCCESS(create_file_source_package(packageDefinitions, &umid, 
+                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
                                 filePackage->name.c_str(), 
                                 &timestamp, fileDesc->fileLocation.c_str(), 
                                 AvidMJPEG, &essenceInfo, &mxfFilePackage));
@@ -484,7 +484,7 @@ MXFWriter::MXFWriter(MaterialPackage* materialPackage,
                         {
                             EssenceInfo essenceInfo;
                             essenceInfo.avidMJPEGInfo.resolution = Res101;
-                            CHECK_SUCCESS(create_file_source_package(packageDefinitions, &umid, 
+                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
                                 filePackage->name.c_str(), 
                                 &timestamp, fileDesc->fileLocation.c_str(), 
                                 AvidMJPEG, &essenceInfo, &mxfFilePackage));
@@ -495,7 +495,7 @@ MXFWriter::MXFWriter(MaterialPackage* materialPackage,
                         {
                             EssenceInfo essenceInfo;
                             essenceInfo.avidMJPEGInfo.resolution = Res151s;
-                            CHECK_SUCCESS(create_file_source_package(packageDefinitions, &umid, 
+                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
                                 filePackage->name.c_str(), 
                                 &timestamp, fileDesc->fileLocation.c_str(), 
                                 AvidMJPEG, &essenceInfo, &mxfFilePackage));
@@ -506,7 +506,7 @@ MXFWriter::MXFWriter(MaterialPackage* materialPackage,
                         {
                             EssenceInfo essenceInfo;
                             essenceInfo.avidMJPEGInfo.resolution = Res201;
-                            CHECK_SUCCESS(create_file_source_package(packageDefinitions, &umid, 
+                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
                                 filePackage->name.c_str(), 
                                 &timestamp, fileDesc->fileLocation.c_str(), 
                                 AvidMJPEG, &essenceInfo, &mxfFilePackage));
@@ -517,7 +517,7 @@ MXFWriter::MXFWriter(MaterialPackage* materialPackage,
                         {
                             EssenceInfo essenceInfo;
                             essenceInfo.avidMJPEGInfo.resolution = Res101m;
-                            CHECK_SUCCESS(create_file_source_package(packageDefinitions, &umid, 
+                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
                                 filePackage->name.c_str(), 
                                 &timestamp, fileDesc->fileLocation.c_str(), 
                                 AvidMJPEG, &essenceInfo, &mxfFilePackage));
@@ -527,7 +527,7 @@ MXFWriter::MXFWriter(MaterialPackage* materialPackage,
                         case IMX30_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
-                            CHECK_SUCCESS(create_file_source_package(packageDefinitions, &umid, 
+                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
                                 filePackage->name.c_str(), 
                                 &timestamp, fileDesc->fileLocation.c_str(), 
                                 IMX30, &essenceInfo, &mxfFilePackage));
@@ -537,7 +537,7 @@ MXFWriter::MXFWriter(MaterialPackage* materialPackage,
                         case IMX40_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
-                            CHECK_SUCCESS(create_file_source_package(packageDefinitions, &umid, 
+                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
                                 filePackage->name.c_str(), 
                                 &timestamp, fileDesc->fileLocation.c_str(), 
                                 IMX40, &essenceInfo, &mxfFilePackage));
@@ -547,7 +547,7 @@ MXFWriter::MXFWriter(MaterialPackage* materialPackage,
                         case IMX50_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
-                            CHECK_SUCCESS(create_file_source_package(packageDefinitions, &umid, 
+                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
                                 filePackage->name.c_str(), 
                                 &timestamp, fileDesc->fileLocation.c_str(), 
                                 IMX50, &essenceInfo, &mxfFilePackage));
@@ -557,7 +557,7 @@ MXFWriter::MXFWriter(MaterialPackage* materialPackage,
                         case DNX36p_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
-                            CHECK_SUCCESS(create_file_source_package(packageDefinitions, &umid, 
+                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
                                 filePackage->name.c_str(), 
                                 &timestamp, fileDesc->fileLocation.c_str(), 
                                 DNxHD1080p36, &essenceInfo, &mxfFilePackage));
@@ -567,7 +567,7 @@ MXFWriter::MXFWriter(MaterialPackage* materialPackage,
                         case DNX120p_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
-                            CHECK_SUCCESS(create_file_source_package(packageDefinitions, &umid, 
+                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
                                 filePackage->name.c_str(), 
                                 &timestamp, fileDesc->fileLocation.c_str(), 
                                 DNxHD1080p120, &essenceInfo, &mxfFilePackage));
@@ -577,7 +577,7 @@ MXFWriter::MXFWriter(MaterialPackage* materialPackage,
                         case DNX185p_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
-                            CHECK_SUCCESS(create_file_source_package(packageDefinitions, &umid, 
+                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
                                 filePackage->name.c_str(), 
                                 &timestamp, fileDesc->fileLocation.c_str(), 
                                 DNxHD1080p185, &essenceInfo, &mxfFilePackage));
@@ -587,7 +587,7 @@ MXFWriter::MXFWriter(MaterialPackage* materialPackage,
                         case DNX120i_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
-                            CHECK_SUCCESS(create_file_source_package(packageDefinitions, &umid, 
+                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
                                 filePackage->name.c_str(), 
                                 &timestamp, fileDesc->fileLocation.c_str(), 
                                 DNxHD1080i120, &essenceInfo, &mxfFilePackage));
@@ -597,7 +597,7 @@ MXFWriter::MXFWriter(MaterialPackage* materialPackage,
                         case DNX185i_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
-                            CHECK_SUCCESS(create_file_source_package(packageDefinitions, &umid, 
+                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
                                 filePackage->name.c_str(), 
                                 &timestamp, fileDesc->fileLocation.c_str(), 
                                 DNxHD1080i185, &essenceInfo, &mxfFilePackage));
@@ -613,7 +613,7 @@ MXFWriter::MXFWriter(MaterialPackage* materialPackage,
                 {
                     EssenceInfo essenceInfo;
                     essenceInfo.pcmInfo.bitsPerSample = audioQuantizationBits;
-                    CHECK_SUCCESS(create_file_source_package(packageDefinitions, &umid, filePackage->name.c_str(), 
+                    CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, filePackage->name.c_str(), 
                         &timestamp, fileDesc->fileLocation.c_str(), 
                         PCM, &essenceInfo, &mxfFilePackage));
                 }
@@ -638,16 +638,13 @@ MXFWriter::MXFWriter(MaterialPackage* materialPackage,
             mxfRational mxfProjectEditRate = {25, 1};
             if (!create_clip_writer(projectName.name.empty() ? 0 : projectName.name.c_str(), 
                 PAL_25i, mxfAspectRatio, mxfProjectEditRate, 0 , 1, 
-                packageDefinitions, &outputPackage->clipWriter))
+                outputPackage->packageDefinitions, &outputPackage->clipWriter))
             {
                 PA_LOGTHROW(MXFWriterException, ("Failed to create clip writer"));
             }
-            
-            free_package_definitions(&packageDefinitions);
         }
         catch (...)
         {
-            free_package_definitions(&packageDefinitions);
             if (outputPackage->clipWriter != NULL)
             {
                 abort_writing(&outputPackage->clipWriter, 1);
@@ -760,7 +757,7 @@ MXFWriter::MXFWriter(RecorderConfig* recorderConfig, uint32_t inputConfigIndex,
             FileEssenceDescriptor* fileDesc = new FileEssenceDescriptor();
             filePackage->descriptor = fileDesc;
             filename = createFilename(filenamePrefix, sourceTrack->dataDef == PICTURE_DATA_DEFINITION, 
-                sourceTrack->id, trackConfig->index);
+                trackConfig->index, trackConfig->number);
             _filenames.insert(pair<UMID, string>(filePackage->uid, filename));
             _filenames2.insert(pair<uint32_t, string>(trackConfig->index, filename));
             fileDesc->fileLocation = createCompleteFilename(creatingFilePath, filename);
@@ -879,7 +876,6 @@ MXFWriter::MXFWriter(RecorderConfig* recorderConfig, uint32_t inputConfigIndex,
         OutputPackage* outputPackage = *iterOutPackages;
         
         // create the clip writer        
-        PackageDefinitions* packageDefinitions = NULL;
         outputPackage->clipWriter = NULL;
         try
         {
@@ -889,12 +885,12 @@ MXFWriter::MXFWriter(RecorderConfig* recorderConfig, uint32_t inputConfigIndex,
             
             // map to MXF package definitions        
             
-            CHECK_SUCCESS(create_package_definitions(&packageDefinitions));
+            CHECK_SUCCESS(create_package_definitions(&outputPackage->packageDefinitions));
             
             // map the source package
             convertUMID(outputPackage->sourcePackage->uid, umid);
             convertTimestamp(outputPackage->sourcePackage->creationDate, timestamp);
-            CHECK_SUCCESS(create_tape_source_package(packageDefinitions, &umid, 
+            CHECK_SUCCESS(create_tape_source_package(outputPackage->packageDefinitions, &umid, 
                 outputPackage->sourcePackage->name.c_str(), &timestamp));
                 
             // map the source package tracks
@@ -909,7 +905,7 @@ MXFWriter::MXFWriter(RecorderConfig* recorderConfig, uint32_t inputConfigIndex,
 
                 convertUMID(track->sourceClip->sourcePackageUID, umid);
                 convertRational(track->editRate, editRate);
-                CHECK_SUCCESS(create_track(packageDefinitions->tapeSourcePackage, track->id, 
+                CHECK_SUCCESS(create_track(outputPackage->packageDefinitions->tapeSourcePackage, track->id, 
                     track->number, track->name.c_str(), track->dataDef == PICTURE_DATA_DEFINITION,
                     &editRate, &umid, track->sourceClip->sourceTrackID, 
                     track->sourceClip->position, track->sourceClip->length,
@@ -920,7 +916,7 @@ MXFWriter::MXFWriter(RecorderConfig* recorderConfig, uint32_t inputConfigIndex,
             // map the material package
             convertUMID(outputPackage->materialPackage->uid, umid);
             convertTimestamp(outputPackage->materialPackage->creationDate, timestamp);
-            CHECK_SUCCESS(create_material_package(packageDefinitions, &umid, 
+            CHECK_SUCCESS(create_material_package(outputPackage->packageDefinitions, &umid, 
                 outputPackage->materialPackage->name.c_str(), &timestamp));
 
             // map the material package tracks
@@ -934,7 +930,7 @@ MXFWriter::MXFWriter(RecorderConfig* recorderConfig, uint32_t inputConfigIndex,
 
                 convertUMID(track->sourceClip->sourcePackageUID, umid);
                 convertRational(track->editRate, editRate);
-                CHECK_SUCCESS(create_track(packageDefinitions->materialPackage, track->id, 
+                CHECK_SUCCESS(create_track(outputPackage->packageDefinitions->materialPackage, track->id, 
                     track->number, track->name.c_str(), track->dataDef == PICTURE_DATA_DEFINITION,
                     &editRate, &umid, track->sourceClip->sourceTrackID, 
                     track->sourceClip->position, track->sourceClip->length,
@@ -952,8 +948,7 @@ MXFWriter::MXFWriter(RecorderConfig* recorderConfig, uint32_t inputConfigIndex,
                 }
                 
                 // add comment to material package destined for the mxf file
-                CHECK_SUCCESS(add_user_comment(packageDefinitions->materialPackage, 
-                    userComment.name.c_str(), userComment.value.c_str()));
+                CHECK_SUCCESS(set_user_comment(outputPackage->packageDefinitions, userComment.name.c_str(), userComment.value.c_str()));
 
                 // add comment to material package destined for the database
                 outputPackage->materialPackage->addUserComment(userComment.name, userComment.value);
@@ -1003,7 +998,7 @@ MXFWriter::MXFWriter(RecorderConfig* recorderConfig, uint32_t inputConfigIndex,
                         case UNC_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
-                            CHECK_SUCCESS(create_file_source_package(packageDefinitions, &umid, 
+                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
                                 filePackage->name.c_str(), 
                                 &timestamp, fileDesc->fileLocation.c_str(), 
                                 UncUYVY, &essenceInfo, &mxfFilePackage));
@@ -1013,7 +1008,7 @@ MXFWriter::MXFWriter(RecorderConfig* recorderConfig, uint32_t inputConfigIndex,
                         case DV25_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
-                            CHECK_SUCCESS(create_file_source_package(packageDefinitions, &umid, 
+                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
                                 filePackage->name.c_str(), 
                                 &timestamp, fileDesc->fileLocation.c_str(), 
                                 DVBased25, &essenceInfo, &mxfFilePackage));
@@ -1023,7 +1018,7 @@ MXFWriter::MXFWriter(RecorderConfig* recorderConfig, uint32_t inputConfigIndex,
                         case DV50_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
-                            CHECK_SUCCESS(create_file_source_package(packageDefinitions, &umid, 
+                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
                                 filePackage->name.c_str(), 
                                 &timestamp, fileDesc->fileLocation.c_str(), 
                                 DVBased50, &essenceInfo, &mxfFilePackage));
@@ -1034,7 +1029,7 @@ MXFWriter::MXFWriter(RecorderConfig* recorderConfig, uint32_t inputConfigIndex,
                         {
                             EssenceInfo essenceInfo;
                             essenceInfo.avidMJPEGInfo.resolution = Res21;
-                            CHECK_SUCCESS(create_file_source_package(packageDefinitions, &umid, 
+                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
                                 filePackage->name.c_str(), 
                                 &timestamp, fileDesc->fileLocation.c_str(), 
                                 AvidMJPEG, &essenceInfo, &mxfFilePackage));
@@ -1045,7 +1040,7 @@ MXFWriter::MXFWriter(RecorderConfig* recorderConfig, uint32_t inputConfigIndex,
                         {
                             EssenceInfo essenceInfo;
                             essenceInfo.avidMJPEGInfo.resolution = Res31;
-                            CHECK_SUCCESS(create_file_source_package(packageDefinitions, &umid, 
+                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
                                 filePackage->name.c_str(), 
                                 &timestamp, fileDesc->fileLocation.c_str(), 
                                 AvidMJPEG, &essenceInfo, &mxfFilePackage));
@@ -1056,7 +1051,7 @@ MXFWriter::MXFWriter(RecorderConfig* recorderConfig, uint32_t inputConfigIndex,
                         {
                             EssenceInfo essenceInfo;
                             essenceInfo.avidMJPEGInfo.resolution = Res101;
-                            CHECK_SUCCESS(create_file_source_package(packageDefinitions, &umid, 
+                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
                                 filePackage->name.c_str(), 
                                 &timestamp, fileDesc->fileLocation.c_str(), 
                                 AvidMJPEG, &essenceInfo, &mxfFilePackage));
@@ -1067,7 +1062,7 @@ MXFWriter::MXFWriter(RecorderConfig* recorderConfig, uint32_t inputConfigIndex,
                         {
                             EssenceInfo essenceInfo;
                             essenceInfo.avidMJPEGInfo.resolution = Res151s;
-                            CHECK_SUCCESS(create_file_source_package(packageDefinitions, &umid, 
+                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
                                 filePackage->name.c_str(), 
                                 &timestamp, fileDesc->fileLocation.c_str(), 
                                 AvidMJPEG, &essenceInfo, &mxfFilePackage));
@@ -1078,7 +1073,7 @@ MXFWriter::MXFWriter(RecorderConfig* recorderConfig, uint32_t inputConfigIndex,
                         {
                             EssenceInfo essenceInfo;
                             essenceInfo.avidMJPEGInfo.resolution = Res201;
-                            CHECK_SUCCESS(create_file_source_package(packageDefinitions, &umid, 
+                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
                                 filePackage->name.c_str(), 
                                 &timestamp, fileDesc->fileLocation.c_str(), 
                                 AvidMJPEG, &essenceInfo, &mxfFilePackage));
@@ -1089,7 +1084,7 @@ MXFWriter::MXFWriter(RecorderConfig* recorderConfig, uint32_t inputConfigIndex,
                         {
                             EssenceInfo essenceInfo;
                             essenceInfo.avidMJPEGInfo.resolution = Res101m;
-                            CHECK_SUCCESS(create_file_source_package(packageDefinitions, &umid, 
+                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
                                 filePackage->name.c_str(), 
                                 &timestamp, fileDesc->fileLocation.c_str(), 
                                 AvidMJPEG, &essenceInfo, &mxfFilePackage));
@@ -1099,7 +1094,7 @@ MXFWriter::MXFWriter(RecorderConfig* recorderConfig, uint32_t inputConfigIndex,
                         case IMX30_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
-                            CHECK_SUCCESS(create_file_source_package(packageDefinitions, &umid, 
+                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
                                 filePackage->name.c_str(), 
                                 &timestamp, fileDesc->fileLocation.c_str(), 
                                 IMX30, &essenceInfo, &mxfFilePackage));
@@ -1109,7 +1104,7 @@ MXFWriter::MXFWriter(RecorderConfig* recorderConfig, uint32_t inputConfigIndex,
                         case IMX40_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
-                            CHECK_SUCCESS(create_file_source_package(packageDefinitions, &umid, 
+                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
                                 filePackage->name.c_str(), 
                                 &timestamp, fileDesc->fileLocation.c_str(), 
                                 IMX40, &essenceInfo, &mxfFilePackage));
@@ -1119,7 +1114,7 @@ MXFWriter::MXFWriter(RecorderConfig* recorderConfig, uint32_t inputConfigIndex,
                         case IMX50_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
-                            CHECK_SUCCESS(create_file_source_package(packageDefinitions, &umid, 
+                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
                                 filePackage->name.c_str(), 
                                 &timestamp, fileDesc->fileLocation.c_str(), 
                                 IMX50, &essenceInfo, &mxfFilePackage));
@@ -1129,7 +1124,7 @@ MXFWriter::MXFWriter(RecorderConfig* recorderConfig, uint32_t inputConfigIndex,
                         case DNX36p_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
-                            CHECK_SUCCESS(create_file_source_package(packageDefinitions, &umid, 
+                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
                                 filePackage->name.c_str(), 
                                 &timestamp, fileDesc->fileLocation.c_str(), 
                                 DNxHD1080p36, &essenceInfo, &mxfFilePackage));
@@ -1139,7 +1134,7 @@ MXFWriter::MXFWriter(RecorderConfig* recorderConfig, uint32_t inputConfigIndex,
                         case DNX120p_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
-                            CHECK_SUCCESS(create_file_source_package(packageDefinitions, &umid, 
+                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
                                 filePackage->name.c_str(), 
                                 &timestamp, fileDesc->fileLocation.c_str(), 
                                 DNxHD1080p120, &essenceInfo, &mxfFilePackage));
@@ -1149,7 +1144,7 @@ MXFWriter::MXFWriter(RecorderConfig* recorderConfig, uint32_t inputConfigIndex,
                         case DNX185p_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
-                            CHECK_SUCCESS(create_file_source_package(packageDefinitions, &umid, 
+                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
                                 filePackage->name.c_str(), 
                                 &timestamp, fileDesc->fileLocation.c_str(), 
                                 DNxHD1080p185, &essenceInfo, &mxfFilePackage));
@@ -1159,7 +1154,7 @@ MXFWriter::MXFWriter(RecorderConfig* recorderConfig, uint32_t inputConfigIndex,
                         case DNX120i_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
-                            CHECK_SUCCESS(create_file_source_package(packageDefinitions, &umid, 
+                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
                                 filePackage->name.c_str(), 
                                 &timestamp, fileDesc->fileLocation.c_str(), 
                                 DNxHD1080i120, &essenceInfo, &mxfFilePackage));
@@ -1169,7 +1164,7 @@ MXFWriter::MXFWriter(RecorderConfig* recorderConfig, uint32_t inputConfigIndex,
                         case DNX185i_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
-                            CHECK_SUCCESS(create_file_source_package(packageDefinitions, &umid, 
+                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
                                 filePackage->name.c_str(), 
                                 &timestamp, fileDesc->fileLocation.c_str(), 
                                 DNxHD1080i185, &essenceInfo, &mxfFilePackage));
@@ -1185,7 +1180,7 @@ MXFWriter::MXFWriter(RecorderConfig* recorderConfig, uint32_t inputConfigIndex,
                 {
                     EssenceInfo essenceInfo;
                     essenceInfo.pcmInfo.bitsPerSample = audioQuantizationBits;
-                    CHECK_SUCCESS(create_file_source_package(packageDefinitions, &umid, filePackage->name.c_str(), 
+                    CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, filePackage->name.c_str(), 
                         &timestamp, fileDesc->fileLocation.c_str(), 
                         PCM, &essenceInfo, &mxfFilePackage));
                 }
@@ -1210,16 +1205,14 @@ MXFWriter::MXFWriter(RecorderConfig* recorderConfig, uint32_t inputConfigIndex,
             mxfRational mxfProjectEditRate = {25, 1};
             if (!create_clip_writer(projectName.name.empty() ? 0 : projectName.name.c_str(), 
                 PAL_25i, mxfAspectRatio, mxfProjectEditRate, 0 , 1, 
-                packageDefinitions, &outputPackage->clipWriter))
+                outputPackage->packageDefinitions, &outputPackage->clipWriter))
             {
                 PA_LOGTHROW(MXFWriterException, ("Failed to create clip writer"));
             }
             
-            free_package_definitions(&packageDefinitions);
         }
         catch (...)
         {
-            free_package_definitions(&packageDefinitions);
             if (outputPackage->clipWriter != NULL)
             {
                 abort_writing(&outputPackage->clipWriter, 1);
@@ -1428,6 +1421,16 @@ void MXFWriter::endSampleData(uint32_t trackID, uint32_t numSamples)
 
 void MXFWriter::completeAndSaveToDatabase()
 {
+    internalCompleteAndSaveToDatabase(false, vector<UserComment>(), ProjectName(""));
+}
+
+void MXFWriter::completeAndSaveToDatabase(vector<UserComment> userComments, ProjectName projectName)
+{
+    internalCompleteAndSaveToDatabase(true, userComments, projectName);
+}
+
+void MXFWriter::internalCompleteAndSaveToDatabase(bool update, vector<UserComment> userComments, ProjectName projectName)
+{
     if (_isComplete)
     {
         PA_LOGTHROW(MXFWriterException, ("Recording already completed"));
@@ -1447,13 +1450,56 @@ void MXFWriter::completeAndSaveToDatabase()
     // save all clips individually
     int numFailed = 0;
     Database* database = Database::getInstance();
+    PackageDefinitions* packageDefinitions = 0;
     vector<OutputPackage*>::const_iterator iter1;
     for (iter1 = _outputPackages.begin(); iter1 != _outputPackages.end(); iter1++)
     {
         OutputPackage* outputPackage = *iter1;
-
+        int result;
+        
         // complete writing the clip
-        if (!complete_writing(&outputPackage->clipWriter))
+        if (update)
+        {
+            // update user comments
+            
+            packageDefinitions = outputPackage->packageDefinitions;
+            clear_user_comments(packageDefinitions);
+            outputPackage->materialPackage->clearUserComments();
+            
+            vector<UserComment>::const_iterator iterUC;
+            for (iterUC = userComments.begin(); iterUC != userComments.end(); iterUC++)
+            {
+                const UserComment& userComment = *iterUC;
+                if (userComment.name.size() == 0)
+                {
+                    PA_LOGTHROW(MXFWriterException, ("Invalid zero length user comment name"));
+                }
+                
+                // add comment to material package destined for the mxf file
+                CHECK_SUCCESS(set_user_comment(packageDefinitions, userComment.name.c_str(), userComment.value.c_str()));
+
+                // add comment to material package destined for the database
+                outputPackage->materialPackage->addUserComment(userComment.name, userComment.value);
+            }
+            
+            // update project name
+            
+            outputPackage->materialPackage->projectName = projectName;
+            vector<SourcePackage*>::const_iterator iter;
+            for (iter = outputPackage->filePackages.begin(); iter != outputPackage->filePackages.end(); iter++)
+            {
+                (*iter)->projectName = projectName;
+            }
+            
+            
+            result = update_and_complete_writing(&outputPackage->clipWriter, packageDefinitions, projectName.name.c_str());
+        }
+        else
+        {
+            result = complete_writing(&outputPackage->clipWriter);
+        }
+
+        if (!result)
         {
             // abort writing
             abort_writing(&outputPackage->clipWriter, 0);

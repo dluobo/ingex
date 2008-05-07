@@ -18,12 +18,21 @@ typedef struct
     
 } X11WindowListener;
 
+/* Store X11 display and window information created by browser and
+ * need by plugin */
+typedef struct
+{
+    Display *pluginDisplay;     /* NULL means open new connection to X server */
+                                /* e.g. when plugin is using fork()+exec() */
+    Window pluginWindow;
+} X11PluginWindowInfo;
 
 typedef struct
 {
     int reviewDuration;
     OnScreenDisplay* osd;
-    
+
+    X11PluginWindowInfo pluginInfo;    /* required when run as a plugin */
     Display* display;
     Window window;
     GC gc;
@@ -62,7 +71,7 @@ typedef struct
 void x11wl_close_request(X11WindowListener* listener);
 
 
-int x11c_initialise(X11Common* x11Common, int reviewDuration, OnScreenDisplay* osd);
+int x11c_initialise(X11Common* x11Common, int reviewDuration, OnScreenDisplay* osd, X11PluginWindowInfo *pluginInfo);
 void x11c_clear(X11Common* x11Common);
 int x11c_reset(X11Common* x11Common);
 
@@ -79,7 +88,7 @@ void x11c_unregister_progress_bar_listener(X11Common* x11Common, ProgressBarInpu
 int x11c_open_display(X11Common* x11Common);
 int x11c_get_screen_dimensions(X11Common* x11Common, int* width, int* height);
 int x11c_create_window(X11Common* x11Common, unsigned int displayWidth, unsigned int displayHeight,
-    unsigned int imageWidth, unsigned int imageHeight, Window embedWindowId);
+    unsigned int imageWidth, unsigned int imageHeight);
 
 void x11c_set_media_control(X11Common* x11Common, ConnectMapping mapping, MediaControl* control);
 void x11c_unset_media_control(X11Common* x11Common);
