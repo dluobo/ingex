@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.4 2008/04/18 16:41:11 john_f Exp $
+# $Id: Makefile,v 1.5 2008/05/09 14:11:09 john_f Exp $
 #
 # Makefile for building ingex server and utilities.
 #
@@ -27,30 +27,13 @@ LIBS=-L../../common -lcommon
 OPT=-O3 -mmmx -msse2
 FLAGS=$(CFLAGS) $(INCLUDES) $(OPT)
 
-# Detect DVS sdk directory in descending order of preference
-ifeq "$(CPU_ARCH)" "x86_64"
-  ARCH1 := "_x86_64"
-  ARCH2 := "-x86_64"
-else
-  ARCH1 := ""
-  ARCH2 := "-x86"
+# dvs_sdk_paths.mk searches for sdk and sets HARDWARE_INCLUDE and HARDWARE_LIB
+# search is overridden by setting DVSSDK
+include ../../common/dvs_sdk_paths.mk
+
+ifndef HARDWARE_INCLUDE
+  $(warning DVSSDK required to build dvs_sdi)
 endif
-
-ifndef DVSSDK
-  CPU_ARCH := $(shell uname -m)
-  TMP_DVSSDK := $(shell for f in $$HOME/sdk2.7p57$(ARCH1)/linux $$HOME/sdk2.7p53$(ARCH1)/linux $$HOME/sdk3.0.0.1/linux$(ARCH2) $$HOME/sdk2.7p48$(ARCH1)/linux $$HOME/sdk2.7p39g$(ARCH1)/linux; do test -d $$f && dirname $$f && break; done)
-  ifneq "$(TMP_DVSSDK)" ""
-    DVSSDK = $(TMP_DVSSDK)
-  else
-    $(warning DVSSDK not set and could not be detected)
-  endif
-endif
-
-
-HARDWARE_INCLUDE=-I$(DVSSDK)/development/header
-#HARDWARE_LIB=-L$(DVSSDK)/linux/lib -ldvsoem
-HARDWARE_LIB=-L$(DVSSDK)/linux-x86/lib -L$(DVSSDK)/linux-x86_64/lib -ldvsoem
-#HARDWARE_LIB=-L$(DVSSDK)/linux-x86_64/lib -ldvsoem
 
 SDI_PROGS=dvs_sdi testgen
 PROGS=$(SDI_PROGS) nexus_save nexus_xv nexus_stats nexus_multicast nexus_set_source
@@ -80,7 +63,7 @@ nexus_save: nexus_save.c nexus_control.h
 endif
 
 nexus_multicast: nexus_multicast.c nexus_control.h
-	gcc -I../../common $(FLAGS) nexus_multicast.c -o nexus_multicast -L../../common -lcommon -L../../common/YUVlib -lYUVlib
+	gcc -I../../common $(FLAGS) nexus_multicast.c -o nexus_multicast -L../../common -lcommon -L../../common/YUVlib -lYUVlib -lpthread
 
 nexus_xv: nexus_xv.c nexus_control.h
 	g++ $(FLAGS) nexus_xv.c -o nexus_xv -L/usr/X11R6/lib -lXv
