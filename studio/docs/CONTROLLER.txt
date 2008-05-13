@@ -1,0 +1,6 @@
+Instructions for building the components needed on a controller machine
+=======================================================================
+
+See the instructions in
+  ingex/studio/ace-tao/Ingexgui/README
+

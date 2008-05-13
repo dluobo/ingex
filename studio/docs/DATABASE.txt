@@ -1,0 +1,52 @@
+Instructions for machine running the database
+=============================================
+
+(see also ingex/studio/database/install/INSTALL.txt)
+
+
+Setup server
+------------
+
+YaST - make sure the following are installed:
+  unixODBC
+  unixODBC-devel
+  psqlODBC
+  postgresql-server
+
+Start the postgres service, which should create an initial database for
+you in "/var/lib/pgsql/data"
+
+root> /etc/init.d/postgresql start
+
+root> cd /var/lib/pgsql/data
+
+Edit the file "pg_hba.conf" and add entries to allow access for the hosts
+which need to access the database, e.g.
+
+  host    all         all    192.168.1.0/24        trust
+
+Edit the file "postgresql.conf" and allow access from required hosts, e.g.
+
+  listen_addresses = '*'
+
+Re-start the postgres service:
+
+root> /etc/init.d/postgresql restart
+
+Make the service start at boot time:
+
+root> chkconfig -a postgresql
+
+
+Create database
+---------------
+
+Now we create the "prodautodb" database.
+
+$workspace represents the directory where the ingex module was checked out from CVS.
+
+ingex> cd $workspace/ingex/studio/database/scripts
+ingex> ./create_bamzooki_user.sh
+ingex> ./create_prodautodb.sh
+ingex> ./add_basic_config.sh
+

@@ -1,22 +1,53 @@
 General
 -------
 
-Install SUSE 10.2 32-bit version with default user "ingex"
+Install SUSE 10.3 32-bit version with default user "ingex"
 
+
+Structure
+---------
+
+The various components of "Ingex Studio" can be split across
+different machines or all run on the same machine.
+
+Separate instructions are provided for the components in the
+following files:
+
+  RECORDER.txt
+  DATABASE.txt
+  CONTROLLER.txt
+  WEBSERVER.txt
+
+
+
+Old instructions which should now be found elsewhere
+----------------------------------------------------
 
 Install from YAST:
   kernel sources
   unixODBC
   unixODBC-devel
   psqlODBC
-  e2fsprogs-devel
+  libuuid1
+  libuuid-devel
   libjpeg-devel
+  fontconfig-devel
+  ncurses-devel
+  xorg-x11-devel
+  perl-DBI
+  perl-DBD-Pg
+  apache2
+  postgresql-server
   (gkrellm)
+  (wireshark)
 
 Install from RPM
   codecs-for-ffmpeg-671-1.i586.rpm
-  ffmpeg-h264-aac-10666-1.i586.rpm
+  ffmpeg-DNxHD-h264-aac-11056-1.i586.rpm
   libodbc++-0.2.4pre3-1.i586.rpm
+
+These can be found here:
+  http://ingex.sourceforge.net/studio/rpms/
 
 
 DVS
@@ -28,10 +59,12 @@ root> cd /usr/src/linux
 root> make oldconfig
 root> make scripts/mod/  (trailing slash important)
 
-get SDK e.g. sdk2.7p64 and untar
+DVS SDKs are available to registered users here:
+  http://www.dvs.de/products/video-boards/centaurus-ii/login-area/video-boards/sdk.html
 
-ingex> cd linux/driver
-ingex> sudo ./mkdev
+get SDK e.g. sdk3.2.1.0.tar.gz and untar
+
+ingex> cd linux-x86/driver
 ingex> ./driver_create
 ingex> sudo ./driver_load
 
@@ -77,15 +110,36 @@ For web server see web/manage/README.txt
 AAF creation (via web server)
 -----------------------------
 
-Get AAFSDK e.g. CVS from SourceForge
-set AAFSDKINSTALL environment variable
+Get AAFSDK e.g.
 
-cd ingex/studio/processing/createaaf
-make
-cp createaaf /srv/ingex/createaaf/
+  cd <dir>
+  wget http://downloads.sourceforge.net/aaf/AAF-src-1.1.2.tar.gz
+  tar xf AAF-src-1.1.2.tar.gz
+  cd AAF-src-1.1.2
+  make install
 
-cd $AAFSDKINSTALL/bin/debug
-cp libcom-api.so /srv/ingex/createaaf/
+Set AAFSDKINSTALL environment variable
+
+  export AAFSDKINSTALL=<dir>/AAF-src-1.1.2/AAFi686LinuxSDK/g++
+
+Now make create_aaf and install
+
+  cd <...>/ingex/studio/processing/createaaf
+  make
+  cp create_aaf /srv/ingex/createaaf/
+
+  cd $AAFSDKINSTALL/bin/debug
+  cp libcom-api.so /srv/ingex/createaaf/
+
+Make sure that the destination directory for AAF files is
+writeable by user www-run
+
+
+FFMPEG
+------
+Install RPMs:
+  codecs-for-ffmpeg-671-1.i586.rpm
+  ffmpeg-DNxHD-h264-aac-11056-1.i586.rpm
 
 
 Player
@@ -110,16 +164,55 @@ sudo make install
 Samba shares
 ------------
 
-1. Install samba and samba-client using Yast (it also installed another two packages as dependencies).
+1. Create a structure such as /video/exports/avid_online/Avid Mediafiles/MXF
+   In the MXF directory, make a suitable symbolic link such as HOST.1 -> /video/mxf_online
+   where HOST is the host (Avid client) you want to index the files.
 
-2. In Yast, Network Services-> Samba Server
+2. Install samba and samba-client using Yast (it also installed another two packages as dependencies).
+
+3. In Yast, Network Services-> Samba Server
 a) enable at boot up
-b) Add /video as an exported filesystem,  Name video; comment "The Video files"
-c) Click 'Edit' to add options to the newly created /video export
-d) in the options page, click 'Add'; enter 'guest ok' as a new option; click OK and enable that option on the box that appears next.
+d) Add /video/exports/avid_online as an exported filesystem, with name avid_online
+e) Do something similar for avid_offline and avid_aaf
+f) Export /video as readonly - this is needed by controller for replay
 
-3. Check samba export is working: in a shell, type smbstatus
+4. Add samba user ingex:
+   root> smbpasswd -a ingex
+
+5. Check samba export is working: in a shell, type smbstatus
+
+Multicast
+---------
+
+Yast->Network Services->Routing->Expert Configuration [x]->Add
+    dest=224.0.0.0 gw=0.0.0.0 netmask=240.0.0.0
+    (select correct network adaptor (e.g. eth0 - check mac address with ifconfig))
+
+Once the Yast steps are run you can check the route is in place by
+running "/sbin/route -n" and looking for the 224.0.0.0 route.
 
 
+ffmpeg and lame manual installation
+-----------------------------------
 
+lame
+
+  wget http://kent.dl.sourceforge.net/sourceforge/lame/lame-3.97.tar.gz
+  tar xf lame-3.97.tar.gz
+  cd lame-3.97
+  ./configure
+  make
+  sudo make install
+
+
+ffmpeg
+
+  tsocks svn checkout svn://svn.mplayerhq.hu/ffmpeg/trunk ffmpeg
+
+  ./configure --enable-mp3lame --enable-pthreads --enable-shared
+  make
+  sudo make install
+
+NB. additional install
+  cp -p ./libavcodec/mpegaudio.h /usr/local/include/ffmpeg/
 

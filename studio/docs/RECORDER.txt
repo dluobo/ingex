@@ -1,0 +1,137 @@
+Instructions for building the components needed on a recorder machine
+=====================================================================
+
+General
+-------
+
+YaST - make sure the following are installed:
+  kernel sources
+  libuuid1
+  libuuid-devel
+  libjpeg-devel
+  fontconfig-devel
+  freetype2-devel
+  unixODBC
+  unixODBC-devel
+  psqlODBC
+
+RPMs - make sure these are installed:
+  codecs-for-ffmpeg-671-1.i586.rpm
+  ffmpeg-DNxHD-h264-aac-11056-1.i586.rpm
+  libodbc++-0.2.4pre3-1.i586.rpm
+
+The RPMs can be found here:
+  http://ingex.sourceforge.net/studio/rpms/
+
+
+DVS card drivers and SDK
+------------------------
+
+NB. You can test a recorder without a DVS card using the "testgen" programme
+in ingex/studio/capture/
+
+First need to configure kernel:
+
+root> cd /usr/src/linux
+root> make oldconfig
+root> make scripts/mod/  (trailing slash important)
+
+DVS SDKs are available to registered users here:
+  http://www.dvs.de/products/video-boards/centaurus-ii/login-area/video-boards/sdk.html
+
+get SDK e.g. sdk3.2.1.0.tar.gz and untar
+
+ingex> cd linux-x86/driver
+ingex> ./driver_create
+ingex> sudo ./driver_load
+
+ingex> export DVSSDK=<location of DVS SDK>
+Also add that line to your ~/.bashrc
+
+ACE/TAO
+-------
+
+See instructions in separate document acetao_linux.html
+
+Database access
+---------------
+
+Create and edit:
+  /etc/unixODBC/odbcinst.ini
+  /etc/unixODBC/odbc.ini
+
+(details in ingex/studio/database/install/INSTALL.txt)
+
+Building the Ingex source code
+------------------------------
+
+Set environment variable "workspace" to the directory where you checked out
+the ingex module.
+
+ingex> cd $workspace/ingex/common
+ingex> make
+
+ingex> cd $workspace/ingex/studio/capture
+ingex> make
+
+If you are not using a DVS card, you can do the following:
+ingex> make testgen nexus_multicast
+
+You should now have the capture programme, "dvs_sdi" (or at least "testgen").
+
+ingex> cd $workspace/ingex/libMXF
+ingex> make
+
+ingex> cd $workspace/ingex/studio/mxfwriter
+ingex> make
+
+ingex> cd $workspace/ingex/studio/common
+ingex> $ACE_ROOT/bin/mwc.pl -type gnuace
+ingex> make
+
+ingex> cd $workspace/ingex/studio/processing/offline
+ingex> $ACE_ROOT/bin/mwc.pl -type gnuace
+ingex> make
+
+ingex> cd $workspace/ingex/studio/ace-tao
+ingex> $ACE_ROOT/bin/mwc.pl -type gnuace
+ingex> make Recorder-target
+ingex> make RecorderClient-target
+
+You should now have the recorder programme:
+  ingex/studio/ace-tao/Recorder/Recorder
+
+
+Samba shares
+------------
+
+1. Create a structure such as /video/exports/avid_online/Avid Mediafiles/MXF
+   In the MXF directory, make a suitable symbolic link such as HOST.1 -> /video/mxf_online
+   where HOST is the host (Avid client) you want to index the files.
+
+2. Install samba and samba-client using Yast (it also installed another two packages as dependencies).
+
+3. In Yast, Network Services-> Samba Server
+a) enable at boot up
+d) Add /video/exports/avid_online as an exported filesystem, with name avid_online
+e) Do something similar for avid_offline and avid_aaf
+f) Export /video as readonly - this is needed by controller for replay
+
+4. Add samba user ingex:
+   root> smbpasswd -a ingex
+
+5. Check samba export is working: in a shell, type smbstatus
+
+
+Multicast
+---------
+
+Yast->Network Services->Routing->Expert Configuration [x]->Add
+    dest=224.0.0.0 gw=0.0.0.0 netmask=240.0.0.0
+    (select correct network adaptor (e.g. eth0 - check mac address with ifconfig))
+
+Once the Yast steps are run you can check the route is in place by
+running "/sbin/route -n" and looking for the 224.0.0.0 route.
+
+
+

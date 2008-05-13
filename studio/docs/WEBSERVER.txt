@@ -1,0 +1,75 @@
+Instructions for building the components needed on a web server machine
+=======================================================================
+
+(see also ingex/studio/web/manage/README.txt
+
+
+Prerequisites
+-------------
+
+YaST - make sure the following are installed
+  perl-DBI
+  perl-DBD-Pg
+  apache2
+  unixODBC
+  unixODBC-devel
+  psqlODBC
+
+CPAN - install the perl Text::Template module
+
+Do the following from a root login shell.  That way you will get helpful
+prompts when configuring proxies etc.
+
+root> perl -MCPAN -e 'install Text::Template'
+
+
+Database access
+---------------
+
+Create and edit:
+  /etc/unixODBC/odbcinst.ini
+  /etc/unixODBC/odbc.ini
+
+(details in ingex/studio/database/install/INSTALL.txt)
+
+
+Installation
+------------
+
+1) edit the configuration file "conf/ingex.conf" to match your system setup
+2) run "sudo install/install.sh" to install the files.
+
+
+AAF file creation
+-----------------
+
+Get AAFSDK e.g.
+
+ingex> cd <dir>
+ingex> wget http://downloads.sourceforge.net/aaf/AAF-src-1.1.2.tar.gz
+ingex> tar xf AAF-src-1.1.2.tar.gz
+ingex> cd AAF-src-1.1.2
+ingex> make install
+
+Set AAFSDKINSTALL environment variable
+
+ingex> export AAFSDKINSTALL=<dir>/AAF-src-1.1.2/AAFi686LinuxSDK/g++
+(and add same setting to your ~/.bashrc file)
+
+Now make create_aaf and install
+
+ingex> cd <...>/ingex/studio/processing/createaaf
+ingex> make
+ingex> cp create_aaf /srv/ingex/createaaf/
+
+ingex> cd $AAFSDKINSTALL/bin/debug
+ingex> cp libcom-api.so /srv/ingex/createaaf/
+
+Make sure that the destination directory for AAF files is
+writeable by user www-run
+
+
+Usage
+-----
+
+Open your web browser to the page http://<host name>/cgi-bin/ingex/index.pl
