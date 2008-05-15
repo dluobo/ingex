@@ -17,6 +17,7 @@ following files:
   DATABASE.txt
   CONTROLLER.txt
   WEBSERVER.txt
+  CORBA_Naming_Service.txt
 
 
 

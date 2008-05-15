@@ -1,0 +1,17 @@
+How to install a CORBA Naming Service
+=====================================
+
+Recorders advertise themselves in the naming service and controllers
+(or RecorderClient) use it to find the recorders.
+
+root> cd ...ingex/studio/scripts
+root> cp Naming_Service /etc/init.d
+
+Now edit /etc/init.d/Naming_Service
+
+Change the ACE_ROOT= line to reflect your ACE_ROOT
+In the NAMING_OPTIONS= line, put the IP address of your machine
+
+root> chkconfig -a Naming_Service
+root> /etc/init.d/Naming_Service start
+
