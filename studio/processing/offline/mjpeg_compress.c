@@ -1,5 +1,5 @@
 /*
- * $Id: mjpeg_compress.c,v 1.2 2008/02/06 16:59:12 john_f Exp $
+ * $Id: mjpeg_compress.c,v 1.3 2008/05/15 15:44:32 john_f Exp $
  *
  * MJPEG encoder.
  *
@@ -186,11 +186,14 @@ extern int mjpeg_compress_init(MJPEGResolutionID id, int width, int height, mjpe
     int jpeg_width = width;
 
     // Single field formats must be subsampled to near half-width
-    // PAL: 288x296
+    // PAL: 288x296 (4:1m) 352x296 (15:1s)
     // NTSC: 288x248
     if (p->single_field) {
         // Image must be subsampled horizontally
-        jpeg_width = ROUND_UP_TO_DCTSIZE(288);
+        if (p->resID == MJPEG_15_1s)
+            jpeg_width = ROUND_UP_TO_DCTSIZE(352);
+        else
+            jpeg_width = ROUND_UP_TO_DCTSIZE(288);
         int c_width = ROUND_UP_TO_DCTSIZE(jpeg_width / 2);
 
         // Allocate space for temp half-width, one field, video buffer,
