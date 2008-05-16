@@ -1,7 +1,7 @@
 #!/usr/bin/perl -wT
 
 #
-# $Id: deletercf.pl,v 1.1 2007/09/11 14:08:46 stuart_hc Exp $
+# $Id: deletercf.pl,v 1.2 2008/05/16 17:00:47 john_f Exp $
 #
 # 
 #
@@ -70,7 +70,10 @@ else
 }
 
 
-my $page = construct_page(get_delete_content($rcf)) or
+my $vrs = load_video_resolutions($dbh) 
+    or return_error_page("failed to load video resolutions: $prodautodb::errstr");
+
+my $page = construct_page(get_delete_content($rcf, $vrs)) or
     return_error_page("failed to fill in content for delete recorder config page");
    
 print header;
@@ -84,11 +87,11 @@ exit(0);
 
 sub get_delete_content
 {
-    my ($rcf) = @_;
+    my ($rcf, $vrs) = @_;
     
     my @pageContent;
 
-    my $rcfHTML = htmlutil::get_recorder_config($rcf);
+    my $rcfHTML = htmlutil::get_recorder_config($rcf, $vrs);
     
     push(@pageContent, h1('Delete recorder configuration'),
         start_form({-method=>'POST', -action=>'deletercf.pl'}),

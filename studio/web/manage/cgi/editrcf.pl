@@ -1,7 +1,7 @@
 #!/usr/bin/perl -wT
 
 #
-# $Id: editrcf.pl,v 1.1 2007/09/11 14:08:46 stuart_hc Exp $
+# $Id: editrcf.pl,v 1.2 2008/05/16 17:00:47 john_f Exp $
 #
 # 
 #
@@ -55,6 +55,9 @@ if (defined param("Cancel"))
 
 my $rcfId = param('id');
 my $errorMessage;
+
+my $vrs = load_video_resolutions($dbh) 
+    or return_error_page("failed to load video resolutions: $prodautodb::errstr");
 
 my $rcf = load_recorder_config($dbh, $rcfId) or
     return_error_page("failed to find recorder config with id=$rcfId from database: $prodautodb::errstr");
@@ -113,7 +116,7 @@ elsif (defined param("Done"))
 }
 
 
-return_edit_page($rcf, $errorMessage);
+return_edit_page($rcf, $vrs, $errorMessage);
 
 
 
@@ -164,9 +167,9 @@ sub validate_params
 
 sub return_edit_page
 {
-    my ($rcf, $errorMessage) = @_;
+    my ($rcf, $vrs, $errorMessage) = @_;
 
-    my $page = construct_page(get_edit_content($rcf, $errorMessage)) or
+    my $page = construct_page(get_edit_content($rcf, $vrs, $errorMessage)) or
         return_error_page("failed to fill in content for edit recorder config page");
        
     print header;
@@ -177,7 +180,7 @@ sub return_edit_page
 
 sub get_edit_content
 {
-    my ($rcf, $errorMessage) = @_;
+    my ($rcf, $vrs, $errorMessage) = @_;
     
     
     my @pageContent;
@@ -291,17 +294,28 @@ sub get_edit_content
     );
     foreach my $rp (sort { $a->{"NAME"} cmp $b->{"NAME"} } (@{ $rcf->{"parameters"} }))
     {
+        my $valueField;
+        if ($rp->{"NAME"} eq "MXF_RESOLUTION" ||
+            $rp->{"NAME"} eq "ENCODE1_RESOLUTION" ||
+            $rp->{"NAME"} eq "ENCODE2_RESOLUTION" ||
+            $rp->{"NAME"} eq "QUAD_RESOLUTION")
+        {
+            $valueField = get_video_resolution_popup("param-$rp->{'ID'}",
+                $vrs, $rp->{"VALUE"});
+        }
+        else
+        {
+            $valueField = textfield(
+                -name => "param-$rp->{'ID'}", 
+                -value => $rp->{"VALUE"},
+                -size => 20,
+                -maxlength => 250,
+            );
+        }
+        
         push(@paramRows,
             Tr({-align=>"left", -valign=>"top"}, 
-                td([
-                    $rp->{"NAME"}, 
-                    textfield(
-                        -name => "param-$rp->{'ID'}", 
-                        -value => $rp->{"VALUE"},
-                        -size => 20,
-                        -maxlength => 250,
-                    ),
-                ]),
+                td([$rp->{"NAME"}, $valueField]),
             )
         );
     }

@@ -1,8 +1,9 @@
 #pageHeader {
-	position:relative;
+	float: left;
 	padding-bottom: 0.5ex;
 	padding-left: 0.5em;
 	border-bottom: 2px solid black;
+	width: 700px;
 }
 
 #titleText {
@@ -27,11 +28,15 @@
 	color: #808080;
 }
 
+#pageBody {
+	clear: both;
+}
+
 #bodyLeft {
-	position:absolute;
+	float: left;
+	padding-top: 10px;
 	padding-left: 0.5em;
-	top: 6ex;
-	width: 7.5em;
+	width: 8.0em;
 	text-align: left;
 	border-right: 1px solid black;
 }
@@ -52,6 +57,7 @@
 
 
 #bodyCentre {
+	padding-top: 10px;
 	margin-left: 8.0em;
 	text-align: left;
 	padding-left: 1em;

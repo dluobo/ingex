@@ -1,5 +1,5 @@
 #
-# $Id: prodautodb.pm,v 1.2 2008/02/06 16:59:14 john_f Exp $
+# $Id: prodautodb.pm,v 1.3 2008/05/16 17:01:04 john_f Exp $
 #
 # 
 #
@@ -46,6 +46,8 @@ BEGIN
         &save_recording_location 
         &update_recording_location 
         &delete_recording_location
+        &load_video_resolutions
+        &load_video_resolution
         &load_source_configs
         &load_source_config
         &save_source_config
@@ -362,6 +364,71 @@ sub delete_recording_location
     
     return 1;
 }
+
+####################################
+#
+# Video resolutions
+#
+####################################
+
+sub load_video_resolutions
+{
+    my ($dbh) = @_;
+    
+    my $vrs;
+    eval
+    {
+        my $sth = $dbh->prepare("
+            SELECT vrn_identifier AS id, 
+                vrn_name AS name
+            FROM VideoResolution
+            ");
+        $sth->execute;
+        
+        $vrs = $sth->fetchall_arrayref({});
+    };
+    if ($@)
+    {
+        $errstr = (defined $dbh->errstr) ? $dbh->errstr : "unknown error";
+        return undef;
+    }
+    
+    return $vrs;    
+}
+
+sub load_video_resolution
+{
+    my ($dbh, $vrnId) = @_;
+    
+    my $localError = "unknown error";
+    my $vrn;
+    eval
+    {
+        my $sth = $dbh->prepare("
+            SELECT vrn_identifier AS id, 
+                vrn_name AS name
+            FROM VideoResolution
+            WHERE
+                vrn_identifier = ?
+            ");
+        $sth->bind_param(1, $vrnId, SQL_INTEGER);
+        $sth->execute;
+        
+        unless ($vrn = $sth->fetchrow_hashref())
+        {
+            $localError = "Failed to load video resolution with id $vrnId";
+            die;
+        }
+    };
+    if ($@)
+    {
+        $errstr = (defined $dbh->errstr) ? $dbh->errstr : $localError;
+        return undef;
+    }
+    
+    return $vrn;    
+}
+
 
 
 ####################################
@@ -2510,37 +2577,6 @@ sub save_proxy
     return $nextPxId;
 }
 
-
-####################################
-#
-# Proxy
-#
-####################################
-
-sub load_video_resolutions
-{
-    my ($dbh) = @_;
-    
-    my $vresIds;
-    eval
-    {
-        my $sth = $dbh->prepare("
-            SELECT vrn_identifier AS id, 
-                vrn_name AS name
-            FROM VideoResolution
-            ");
-        $sth->execute;
-        
-        $vresIds = $sth->fetchall_arrayref({});
-    };
-    if ($@)
-    {
-        $errstr = (defined $dbh->errstr) ? $dbh->errstr : "unknown error";
-        return undef;
-    }
-    
-    return $vresIds;    
-}
 
 
 

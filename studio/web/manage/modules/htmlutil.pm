@@ -1,5 +1,5 @@
 #
-# $Id: htmlutil.pm,v 1.1 2007/09/11 14:08:47 stuart_hc Exp $
+# $Id: htmlutil.pm,v 1.2 2008/05/16 17:01:04 john_f Exp $
 #
 # 
 #
@@ -51,6 +51,7 @@ BEGIN
         &parse_html_source_track
         &get_sources_popup
         &get_source_config
+        &get_video_resolution_popup
         &get_recorder_config_popup
         &get_recorder_config
         &get_proxy_def
@@ -378,10 +379,49 @@ sub get_recorder_config_popup
         -labels => \%labels);
 }
 
+sub get_video_resolution_popup
+{
+    my ($paramId, $vrs, $defaultId) = @_;
+    
+    my $default;
+    my @values;
+    my %labels;
+
+    # not set option
+    push(@values, 0);
+    $labels{0} = "not set (0)";
+
+    foreach my $vrn (@{ $vrs })
+    {
+        my $value = "$vrn->{'ID'}";
+        my $label = "$vrn->{'NAME'} ($value)";
+        push(@values, $value);
+        $labels{$value} = $label;
+
+        if (!defined $default && 
+            defined $defaultId && "$vrn->{'ID'}" eq $defaultId)
+        {
+            $default = $value;
+        }
+    }
+    
+    # no default then is not set
+    if (!defined $default)
+    {
+        $default = 0;
+    }
+    
+    
+    return popup_menu(
+        -name => $paramId, 
+        -default => $default,
+        -values => \@values,
+        -labels => \%labels);
+}
 
 sub get_recorder_config
 {
-    my ($rcf) = @_;
+    my ($rcf, $vrs) = @_;
     
     # stop the warnings about deep recursion
     push(@CGI::Pretty::AS_IS, qw(div table th tr td));
@@ -430,9 +470,31 @@ sub get_recorder_config
     );
     foreach my $rp (sort { $a->{"NAME"} cmp $b->{"NAME"} } (@{ $rcf->{"parameters"} }))
     {
+        my $value = $rp->{"VALUE"};
+        if ($rp->{"NAME"} eq "MXF_RESOLUTION" ||
+            $rp->{"NAME"} eq "ENCODE1_RESOLUTION" ||
+            $rp->{"NAME"} eq "ENCODE2_RESOLUTION" ||
+            $rp->{"NAME"} eq "QUAD_RESOLUTION")
+        {
+            if ($rp->{"VALUE"} == 0)
+            {
+                $value = "not set (0)";
+            }
+            else
+            {
+                foreach my $vrn (@{ $vrs })
+                {
+                    if ($vrn->{"ID"} == $rp->{"VALUE"})
+                    {
+                        $value = "$vrn->{'NAME'} ($value)";
+                        last;
+                    }
+                }
+            }
+        }
         push(@paramRows,
             Tr({-align=>"left", -valign=>"top"}, 
-                td([$rp->{"NAME"}, $rp->{"VALUE"}]),
+                td([$rp->{"NAME"}, $value]),
             )
         );
     }

@@ -1,7 +1,7 @@
 #!/usr/bin/perl -wT
 
 #
-# $Id: recorder.pl,v 1.1 2007/09/11 14:08:46 stuart_hc Exp $
+# $Id: recorder.pl,v 1.2 2008/05/16 17:00:47 john_f Exp $
 #
 # 
 #
@@ -42,6 +42,8 @@ my $dbh = prodautodb::connect(
     or return_error_page("failed to connect to database");
     
     
+my $vrs = load_video_resolutions($dbh) 
+    or return_error_page("failed to load video resolutions: $prodautodb::errstr");
 
 my $recs = load_recorders($dbh) 
     or return_error_page("failed to load recorders: $prodautodb::errstr");
@@ -50,7 +52,7 @@ my $rcfs = load_recorder_configs($dbh)
     or return_error_page("failed to load recorder configs: $prodautodb::errstr");
 
 
-my $page = construct_page(get_page_content($recs, $rcfs)) 
+my $page = construct_page(get_page_content($recs, $rcfs, $vrs)) 
     or return_error_page("failed to fill in content for recorder page");
    
 print header;
@@ -61,7 +63,7 @@ exit(0);
     
 sub get_page_content
 {
-    my ($recs, $rcfs) = @_;
+    my ($recs, $rcfs, $vrs) = @_;
     
     my @pageContent;
     
@@ -144,7 +146,7 @@ sub get_page_content
         (@{ $rcfs })
     )
     {    
-        my $rcfHTML = htmlutil::get_recorder_config($rcf);
+        my $rcfHTML = htmlutil::get_recorder_config($rcf, $vrs);
         
         my $rcfConfig = $rcf->{"config"};
         
