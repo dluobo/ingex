@@ -19,7 +19,7 @@ Edit /etc/samba/smb.conf to enable MediaHarmony features:
         comment = Multiple Avid client access to media files for Windows
         path = /video
         valid users = archive
-        vfs objects = avid_full_audit avid_multi_client
+        vfs objects = avid_full_audit media_harmony
         avid_full_audit:prefix = windows|%u|%I
         avid_full_audit:success = all
         avid_full_audit:failure = all
