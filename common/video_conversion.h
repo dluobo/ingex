@@ -1,5 +1,5 @@
 /*
- * $Id: video_conversion.h,v 1.2 2008/05/07 17:04:17 philipn Exp $
+ * $Id: video_conversion.h,v 1.3 2008/07/08 14:59:20 philipn Exp $
  *
  * MMX optimised video format conversion functions
  *
@@ -40,6 +40,7 @@ void yuv422_to_uyvy(int width, int height, int shift_picture_up, uint8_t *input,
 // The _nommx function is provided for testing and to workaround problem with odd sizes in mmx version
 void uyvy_to_yuv420(int width, int height, int shift_picture_down, uint8_t *input, uint8_t *output);
 void uyvy_to_yuv420_nommx(int width, int height, int shift_picture_down, uint8_t *input, uint8_t *output);
+void uyvy_to_yuv422_nommx(int width, int height, int shift_picture_down, uint8_t *input, uint8_t *output);
 
 void yuv444_to_uyvy(int width, int height, uint8_t *input, uint8_t *output);
 

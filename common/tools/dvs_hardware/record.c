@@ -1,5 +1,5 @@
 /*
- * $Id: record.c,v 1.1 2008/05/07 17:04:21 philipn Exp $
+ * $Id: record.c,v 1.2 2008/07/08 14:59:21 philipn Exp $
  *
  * Record uncompressed SDI video and audio to disk.
  *
@@ -369,7 +369,10 @@ static void * sdi_monitor(void *arg)
 	// allocate ring buffer
 	printf("Allocating memory %d (video+audio size) * %d frames = %"PFi64"\n", element_size, RING_SIZE, (int64_t)element_size * RING_SIZE);
 
-	// sv internals need suitably aligned memory, so use valloc not malloc
+	// sv internals need suitably aligned memory for DMA transfer,
+	// so use valloc not malloc to get memory aligned to PAGESIZE (4096) bytes.
+	// valloc is obsolete so you can use posix_memalign instead, e.g.
+	// if (posix_memalign(&ring, 4096, element_size * RING_SIZE) != 0) ...
 	ring = (uint8_t*)valloc(element_size * RING_SIZE);
 	if (ring == NULL) {
 		fprintf(stderr, "valloc failed\n");

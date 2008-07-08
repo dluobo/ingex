@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.5 2008/04/18 15:54:16 john_f Exp $
+# $Id: Makefile,v 1.6 2008/07/08 14:59:18 philipn Exp $
 #
 # Makefile for building common functions
 #
@@ -24,7 +24,7 @@
 CC=gcc
 OPT=-DNDEBUG -O3 -mmmx -msse2
 INCLUDES=-IYUVlib
-CFLAGS=-Wall -W -g -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE $(OPT) $(INCLUDES)
+CFLAGS=-Wall -W -Wno-unused-parameter -g -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE $(OPT) $(INCLUDES)
 
 HEADERS=$(wildcard *.h)
 CFILES=$(wildcard *.c)

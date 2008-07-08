@@ -1,5 +1,5 @@
 /*
- * $Id: audio_utils.c,v 1.2 2008/04/18 15:54:22 john_f Exp $
+ * $Id: audio_utils.c,v 1.3 2008/07/08 14:59:18 philipn Exp $
  *
  * Write uncompressed audio in WAV format, and update WAV header.
  *
@@ -127,7 +127,7 @@ extern void write_audio(FILE *fp, uint8_t *p, int num_samples, int bits_per_samp
 	}
 }
 
-extern void dvsaudio32_to_16bitmono(int channel, uint8_t *buf32, uint8_t *buf16)
+extern void dvsaudio32_to_16bitmono(int channel, const uint8_t *buf32, uint8_t *buf16)
 {
     int i;
     // A DVS audio buffer contains a mix of two 32bits-per-sample channels

@@ -17,7 +17,7 @@
 * along with this program; if not, write to the Free Software
 * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 */
-	
+
 #include <stdio.h>
 #include <sys/types.h>
 #include <string.h>
@@ -46,6 +46,7 @@ static void usage(void)
 	fprintf(stderr, "\t-t    timeout in decimal seconds for frame read [default 0.045]\n");
 	fprintf(stderr, "\t-l    limit in bytes of the saved video file before program exits\n");
 	fprintf(stderr, "\t-u    update frequency in terms of packets [default 50]\n");
+	fprintf(stderr, "\t-r    read raw packets without interpreting them\n");
 	fprintf(stderr, "\t-q    quiet\n");
 	fprintf(stderr, "\t-v    increase verbosity [default 1]\n");
 	exit(1);
@@ -55,11 +56,11 @@ extern int main(int argc, char *argv[])
 {
 	char				remote[4096], *p, *video_file = "rec.yuv", *audio_file = "rec.wav";
 	FILE				*fp_video = NULL, *fp_audio = NULL;
-	int					c, fd, port, verbose = 1;
+	int					c, fd, port, verbose = 1, raw_read = 0;
 	uint64_t			video_file_limit = UINT64_MAX;
 	double				timeout = 0.045;		// 1/2 frame
 
-	while ((c = getopt(argc, argv, ":qvo:a:t:l:h")) != -1)
+	while ((c = getopt(argc, argv, ":qvro:a:t:l:h")) != -1)
 	{
 		switch(c) {
 		case 'q':
@@ -67,6 +68,9 @@ extern int main(int argc, char *argv[])
 			break;
 		case 'v':
 			verbose++;
+			break;
+		case 'r':
+			raw_read = 1;
 			break;
 		case 'o':
 			video_file = optarg;
@@ -116,6 +120,24 @@ extern int main(int argc, char *argv[])
 	/*** network setup ***/
 	if ((fd = connect_to_multicast_address(remote, port)) == -1) {
 		exit(1);
+	}
+
+	// Raw read from socket, ignoring any structure
+	if (raw_read) {
+		if ((fp_video = fopen(video_file, "wb")) == NULL) {
+			perror("fopen video");
+			exit(1);
+		}
+		while (raw_read) {
+			uint8_t buf[5000];
+			ssize_t bytes_read = recv(fd, buf, PACKET_SIZE, 0);
+			printf("\rRead %d bytes", bytes_read);
+
+			if (fwrite(buf, bytes_read, 1, fp_video) != 1) {
+				perror("fwrite");
+				exit(1);
+			}
+		}
 	}
 
 	// Read video parameters from multicast stream.
@@ -183,7 +205,7 @@ extern int main(int argc, char *argv[])
 		}
 		video_file_size += video_size;
 
-		// reformat audio into interleaved 16bit sample stereo for WAV file 
+		// reformat audio into interleaved 16bit sample stereo for WAV file
 		for (i = 0; i < audio_size; i+=4) {
 			tmp_audio[i + 0] = audio[i/2 + 0];
 			tmp_audio[i + 1] = audio[i/2 + 1];

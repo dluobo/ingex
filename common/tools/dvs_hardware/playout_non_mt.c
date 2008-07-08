@@ -1,5 +1,5 @@
 /*
- * $Id: playout_non_mt.c,v 1.1 2008/05/07 17:04:20 philipn Exp $
+ * $Id: playout_non_mt.c,v 1.2 2008/07/08 14:59:21 philipn Exp $
  *
  * Playout uncompressed video and audio files over SDI.
  *
@@ -237,7 +237,7 @@ static void * sdi_monitor(void *arg)
 	sv_fifo				*poutput;
 	sv_info				status_info;
 	sv_storageinfo		storage_info;
-	printf("card = %d\n", card);
+	printf("card = %ld\n", card);
 
 	SV_CHECK( sv_status( sv, &status_info) );
 
@@ -269,7 +269,7 @@ static void * sdi_monitor(void *arg)
 		{
 			// Display error only when things change
 			if (res != last_res) {
-				fprintf(stderr, "card %d: failed to capture video: (%d) %s\n", card, res,
+				fprintf(stderr, "card %ld: failed to capture video: (%d) %s\n", card, res,
 					res == SV_ERROR_INPUT_VIDEO_NOSIGNAL ? "INPUT_VIDEO_NOSIGNAL" : sv_geterrortext(res));
 				// reset FIFO if error indicates FIFO problem
 				if (res == SV_ERROR_FIFO_PUTBUFFER)
@@ -286,7 +286,7 @@ static void * sdi_monitor(void *arg)
 
 		// Only display OK message once
 		if (res != last_res && res == SV_OK) {
-			fprintf(stderr, "card %d: Video signal OK\n", card);
+			fprintf(stderr, "card %ld: Video signal OK\n", card);
 		}
 
 		last_res = res;

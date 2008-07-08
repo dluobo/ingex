@@ -5,6 +5,9 @@
 #include <sys/time.h>
 #include <unistd.h>
 
+// Define DUMP_STATS to print out stats
+//#define DUMP_STATS  1
+
 // Define DEBUG_UDP_SEND_RECV to have packets read/written to a file instead of sockets
 // This is useful for testing out-of-order and never-arrives packet reception.
 #ifdef DEBUG_UDP_SEND_RECV
@@ -348,6 +351,7 @@ static void *udp_reader_thread(void *arg)
 	return NULL;
 }
 
+#if defined(DUMP_STATS)
 static void dump_stats(udp_reader_thread_t *p_udp_reader)
 {
 	int i;
@@ -359,11 +363,14 @@ static void dump_stats(udp_reader_thread_t *p_udp_reader)
 	}
 
 }
+#endif
 
 extern int udp_read_next_frame(udp_reader_thread_t *p_udp_reader, double timeout, IngexNetworkHeader *p_header_out, uint8_t *video_out, uint8_t *audio_out, int *p_total)
 {
-	//printf("\nBefore timed wait (last_header_frame_read=%d)\n", p_udp_reader->last_header_frame_read);
-	//dump_stats(p_udp_reader);
+#if defined(DUMP_STATS)
+	printf("\nBefore timed wait (last_header_frame_read=%d)\n", p_udp_reader->last_header_frame_read);
+	dump_stats(p_udp_reader);
+#endif
 
 	int frame_number = p_udp_reader->next_frame;
 	FrameStats *p_stats = &p_udp_reader->stats[frame_number];
@@ -384,8 +391,10 @@ extern int udp_read_next_frame(udp_reader_thread_t *p_udp_reader, double timeout
 		}
 	}
 
-	//printf("After\n");
-	//dump_stats(p_udp_reader);
+#if defined(DUMP_STATS)
+	printf("After\n");
+	dump_stats(p_udp_reader);
+#endif
 
 	// Use mutex to guard against data being overwritten during the memcpy
 	PTHREAD_MUTEX_LOCK( &p_udp_reader->m_frame_copy[frame_number] )
@@ -741,6 +750,51 @@ extern void scale_video420_for_multicast(int in_width, int in_height, int out_wi
 	input_frame.V.lineStride = in_width/2;
 	input_frame.V.pixelStride = 1;
 	input_frame.V.buff = video_frame + in_width*in_height * 5/4;
+	
+	output_frame.Y.w = out_width;
+	output_frame.Y.h = out_height;
+	output_frame.Y.lineStride = out_width;
+	output_frame.Y.pixelStride = 1;
+	output_frame.Y.buff = scaled_frame;
+	output_frame.U.w = out_width/2;
+	output_frame.U.h = out_height/2;
+	output_frame.U.lineStride = out_width/2;
+	output_frame.U.pixelStride = 1;
+	output_frame.U.buff = scaled_frame + out_width*out_height;
+	output_frame.V.w = out_width/2;
+	output_frame.V.h = out_height/2;
+	output_frame.V.lineStride = out_width/2;
+	output_frame.V.pixelStride = 1;
+	output_frame.V.buff = scaled_frame + out_width*out_height * 5/4;
+
+	scale_pic(	&input_frame, &output_frame,
+				0, 0, output_frame.Y.w, output_frame.Y.h,
+				0,				// turn off interlace since this is for monitoring
+				1, 1,			// hfil, vfil
+				workspace);
+}
+
+extern void scale_video422_for_multicast(int in_width, int in_height, int out_width, int out_height, uint8_t *video_frame, uint8_t *scaled_frame)
+{
+	YUV_frame input_frame;
+	YUV_frame output_frame;
+	uint8_t workspace[2*in_width*4];
+
+	input_frame.Y.w = in_width;
+	input_frame.Y.h = in_height;
+	input_frame.Y.lineStride = in_width;
+	input_frame.Y.pixelStride = 1;
+	input_frame.Y.buff = video_frame;
+	input_frame.U.w = in_width/2;
+	input_frame.U.h = in_height/2;
+	input_frame.U.lineStride = in_width;
+	input_frame.U.pixelStride = 1;
+	input_frame.U.buff = video_frame + in_width*in_height;
+	input_frame.V.w = in_width/2;
+	input_frame.V.h = in_height/2;
+	input_frame.V.lineStride = in_width;
+	input_frame.V.pixelStride = 1;
+	input_frame.V.buff = video_frame + in_width*in_height * 3/2;
 	
 	output_frame.Y.w = out_width;
 	output_frame.Y.h = out_height;

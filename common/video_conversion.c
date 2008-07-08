@@ -1,5 +1,5 @@
 /*
- * $Id: video_conversion.c,v 1.3 2008/05/07 17:04:17 philipn Exp $
+ * $Id: video_conversion.c,v 1.4 2008/07/08 14:59:20 philipn Exp $
  *
  * MMX optimised video format conversion functions
  *
@@ -61,6 +61,34 @@ void uyvy_to_yuv420_nommx(int width, int height, int shift_picture_down, uint8_t
 		// skip every second line
 		if (i_macropixel % (width) == (width - 1))
 			i_macropixel += width/2;
+
+		i_macropixel++;
+	}
+}
+
+// Convert UYVY -> Planar YUV 4:2:2 (fourcc=YV16)
+// U0 Y0 V0 Y1   U2 Y2 V2 Y3   ->   Y0 Y1 Y2... U0 U2... V0 V2...
+void uyvy_to_yuv422_nommx(int width, int height, int shift_picture_down, uint8_t *input, uint8_t *output)
+{
+	int i;
+
+	// TODO:
+	// support shift_picture_down arg
+	// by shifting picture down one line
+
+	// Copy Y plane as is
+	for (i = 0; i < width*height; i++)
+	{
+		output[i] = input[ i*2 + 1 ];
+	}
+
+	// Copy U & V planes
+	// Each U or V plane is 1/2 the size of the Y plane.
+	int i_macropixel = 0;
+	for (i = 0; i < width*height / 2; i++)
+	{
+		output[width*height + i] = input[ i_macropixel*4 ];			// U
+		output[width*height*3/2 + i] = input[ i_macropixel*4 + 2 ];	// V
 
 		i_macropixel++;
 	}

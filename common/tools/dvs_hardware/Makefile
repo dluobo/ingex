@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.1 2008/05/07 17:04:20 philipn Exp $
+# $Id: Makefile,v 1.2 2008/07/08 14:59:20 philipn Exp $
 #
 # Makefile for building DVS hardware capture & playout tools
 #
@@ -25,41 +25,29 @@ CFLAGS=-Wall -g -DDEBUG -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGEFILE6
 OPT=-O3 -mmmx -msse2
 FLAGS=$(CFLAGS) $(OPT)
 
-ifeq "$(CPU_ARCH)" "x86_64"
-  ARCH1 := "_x86_64"
-  ARCH2 := "-x86_64"
-else
-  ARCH1 := ""
-  ARCH2 := "-x86"
-endif
 
-SDI_PROGS=recplay playout record record_mxf playout_non_mt 
+SDI_PROGS=recplay playout record record_mxf playout_non_mt check_inputs
 PROGS=$(SDI_PROGS)
 
-# Use DVSSDK is set or detect DVS sdk directory by scanning for versions
-# Currently 2.7p57 is preferred over other versions since it the
-# the first to support the Centaurus II board (3.0.0.1 doesn't)
-ifndef DVSSDK
-  CPU_ARCH := $(shell uname -m)
-  TMP_DVSSDK := $(shell for f in $$HOME/sdk2.7p57$(ARCH1)/linux $$HOME/sdk2.7p53$(ARCH1)/linux $$HOME/sdk3.0.0.1/linux$(ARCH2) $$HOME/sdk2.7p48$(ARCH1)/linux $$HOME/sdk2.7p39g$(ARCH1)/linux; do test -d $$f && dirname $$f && break; done)
-  ifneq "$(TMP_DVSSDK)" ""
-    DVSSDK = $(TMP_DVSSDK)
-  else
-    $(warning DVSSDK not set and could not be detected)
-	PROGS=
-  endif
-endif
+# dvs_sdk_paths.mk searches for sdk and sets HARDWARE_INCLUDE and HARDWARE_LIB
+# search is overridden by setting DVSSDK
+include ../../dvs_sdk_paths.mk
 
-HARDWARE_INCLUDE=-I$(DVSSDK)/development/header
-# lib dir may be under linux or linux-x86 or linux-x86_64
-HARDWARE_LIB=-L$(DVSSDK)/linux$(ARCH2)/lib -L$(DVSSDK)/linux/lib -ldvsoem
+ifndef HARDWARE_INCLUDE
+  $(info SDI tools will not be built)
+  PROGS=
+endif
 
 INCLUDE=-I../.. -I.. $(HARDWARE_INCLUDE)
 
 
 .PHONY: all
-all: $(PROGS)
+all: $(PROGS) libdvsoem_dummy.a
 
+libdvsoem_dummy.a: dvsoem_dummy.c
+	gcc $(FLAGS) $(INCLUDE) -c dvsoem_dummy.c
+	ar crv libdvsoem_dummy.a dvsoem_dummy.o
+	
 playout: playout.c
 	g++ $(FLAGS) $(INCLUDE) playout.c $(HARDWARE_LIB) -lpthread -o playout
 
@@ -74,6 +62,9 @@ recplay: recplay.c ../../libcommon.a
 
 playout_non_mt: playout_non_mt.c
 	g++ $(FLAGS) $(INCLUDE) playout_non_mt.c $(HARDWARE_LIB) -lpthread -o playout_non_mt
+
+check_inputs: check_inputs.c
+	g++ $(FLAGS) $(INCLUDE) check_inputs.c $(HARDWARE_LIB) -o check_inputs
 
 clean:
 	rm -f $(PROGS)

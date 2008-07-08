@@ -4,6 +4,8 @@
 
 #include "video_test_signals.h"
 #include "video_conversion_10bits.h"
+#include "video_conversion.h"
+#include "video_burn_in_timecode.h"
 #include "psnr.h"
 
 static void usage_exit(void)
@@ -72,6 +74,24 @@ int main(int argc, char *argv[])
 	uint8_t *frame2 = (uint8_t*)malloc(frame_size);
 	uint8_t *frame10bit = (uint8_t*)malloc(frame_size_10bit);
 	uint8_t *frame10bit2 = (uint8_t*)malloc(frame_size_10bit);
+
+	// colourbars and timecode burning
+	uyvy_color_bars(width, height, frame);
+	burn_mask_uyvy(111222, 90, 90, 720, 576, frame);
+	write_sample("c.uyvy", frame_size, frame);
+	uyvy_to_yuv422_nommx(width, height, 0, frame, frame2);
+	write_sample("c.uyvy.yuv", frame_size, frame2);
+
+	uyvy_to_yuv420_nommx(width, height, 0, frame, frame2);
+	write_sample("c.yuv", 720*576*3/2, frame2);
+
+	burn_mask_yuv420(111222, 90, 90, 720, 576, frame2);
+	write_sample("cb.yuv", 720*576*3/2, frame2);
+
+	uyvy_color_bars(width, height, frame);
+	uyvy_to_yuv422_nommx(width, height, 0, frame, frame2);
+	burn_mask_yuv422(111222, 90, 90, 720, 576, frame2);
+	write_sample("c422.yuv", 720*576*2, frame2);
 
 	// Test creation of "NO VIDEO" uyvy caption frame
 	uyvy_no_video_frame(width, height, frame);

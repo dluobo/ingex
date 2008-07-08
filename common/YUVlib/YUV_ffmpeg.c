@@ -1,3 +1,5 @@
+#ifdef HAVE_FFMPEG
+
 #include "YUV_frame.h"
 #include "YUV_ffmpeg.h"
 
@@ -53,3 +55,5 @@ int YUV_frame_from_AVFrame(YUV_frame* dest,
     dest->V.buff = source->data[2];
     return YUV_OK;
 }
+
+#endif /* defined HAVE_FFMPEG */

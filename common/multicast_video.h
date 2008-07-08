@@ -1,3 +1,6 @@
+#ifndef __MULTICAST_VIDEO_H__
+#define __MULTICAST_VIDEO_H__
+
 #include <stdio.h>
 #include <sys/types.h>
 #include <string.h>
@@ -5,6 +8,11 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+
+#ifdef __cplusplus
+extern "C" 
+{
+#endif
 
 #define MULTICAST_SOURCE_NAME_SIZE 64
 
@@ -66,3 +74,10 @@ extern int udp_read_next_frame(udp_reader_thread_t *p_udp_reader, double timeout
 
 
 extern void scale_video420_for_multicast(int in_width, int in_height, int out_width, int out_height, uint8_t *video_frame, uint8_t *scaled_frame);
+extern void scale_video422_for_multicast(int in_width, int in_height, int out_width, int out_height, uint8_t *video_frame, uint8_t *scaled_frame);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif

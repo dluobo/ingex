@@ -1,7 +1,7 @@
 /*
- * $Id: audio_utils.h,v 1.3 2008/07/08 14:59:18 philipn Exp $
+ * $Id: video_burn_in_timecode.h,v 1.1 2008/07/08 14:59:17 philipn Exp $
  *
- * Write uncompressed audio in WAV format, and update WAV header.
+ * Quick and dirty timecode burning for testing purposes
  *
  * Copyright (C) 2005  Stuart Cunningham <stuart_hc@users.sourceforge.net>
  *
@@ -20,25 +20,21 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
  * 02110-1301, USA.
  */
-
-#ifndef  AUDIO_UTILS_H
-#define AUDIO_UTILS_H
-
-#include <stdio.h>
-#include <inttypes.h>
+ 
+#ifndef __VIDEO_BURN_IN_TIMECODE_H__
+#define __VIDEO_BURN_IN_TIMECODE_H__
 
 #ifdef __cplusplus
-extern "C" {
+extern "C" 
+{
 #endif
 
-extern int writeWavHeader(FILE *fp, int bits_per_sample, int num_ch);
-extern void update_WAV_header(FILE *fp);
-extern void write_audio(FILE *fp, uint8_t *p, int num_samples, int bits_per_sample);
-extern void dvsaudio32_to_16bitmono(int channel, const uint8_t *buf32, uint8_t *buf16);
-extern double calc_audio_peak_power(const unsigned char* p_samples, int num_samples, int byte_alignment, double min_power);
+void burn_mask_yuv420(int frame_number, int x_offset, int y_offset, int frame_width, int frame_height, unsigned char *frame);
+void burn_mask_yuv422(int frame_number, int x_offset, int y_offset, int frame_width, int frame_height, unsigned char *frame);
+void burn_mask_uyvy(int frame_number, int x_offset, int y_offset, int frame_width, int frame_height, unsigned char *frame);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* AUDIO_UTILS_H */
+#endif

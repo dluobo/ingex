@@ -51,6 +51,7 @@ static void usage(void)
 	fprintf(stderr, "\t-i    specify a different input video file [default out.yuv]\n");
 	fprintf(stderr, "\t-a    specify a 48kHz stereo audio wav input file\n");
 	fprintf(stderr, "\t-h    input size is HD 1080i [default input is 720x576]\n");
+	fprintf(stderr, "\t-j    input is 4:2:2 YUV [default input is 4:2:0 YUV]\n");
 	fprintf(stderr, "\t-s x  scale down streamed video by e.g. 2 for 360x288, 3 for 240x192\n");
 	fprintf(stderr, "\t      [default is x1 i.e. 720x576]\n");
 	fprintf(stderr, "\t-d    turn on debugging\n");
@@ -71,10 +72,11 @@ extern int main(int argc, char *argv[])
 	uint64_t			limit = 0;
 	int					scale = 1;
 	int					debug = 0;
+	int					input_422yuv = 0;
 	int					in_width = 720, in_height = 576;
 
 	// letters followed by ':' means the option requires an argument
-	while ((c = getopt(argc, argv, ":dbvi:a:l:s:h")) != -1)
+	while ((c = getopt(argc, argv, ":dbvi:a:l:s:hj")) != -1)
 	{
 		switch(c) {
 		case 'd':
@@ -102,6 +104,9 @@ extern int main(int argc, char *argv[])
 		case 'h':
 			in_width = 1920;
 			in_height = 1080;
+			break;
+		case 'j':
+			input_422yuv = 1;
 			break;
 		case ':':
 			printf("-%c requires an argument\n", optopt);
@@ -137,6 +142,8 @@ extern int main(int argc, char *argv[])
 
 	/* Setup input data */
 	int buf_size = in_width * in_height * 3/2;		// input video size at 4:2:0
+	if (input_422yuv)
+		buf_size = in_width * in_height * 2;		// input video size at 4:2:2
 	int audio_buf_size = 1920*2 * 2;				// 48kHz, 16bit, 2 channels
 	int out_width = in_width;
 	int out_height = in_height;
@@ -248,7 +255,10 @@ extern int main(int argc, char *argv[])
 		}
 
 		if (scale > 1) {
-			scale_video420_for_multicast(in_width, in_height, out_width, out_height, buf, p_video);
+			if (input_422yuv)
+				scale_video422_for_multicast(in_width, in_height, out_width, out_height, buf, p_video);
+			else
+				scale_video420_for_multicast(in_width, in_height, out_width, out_height, buf, p_video);
 		}
 		else {
 			p_video = buf;

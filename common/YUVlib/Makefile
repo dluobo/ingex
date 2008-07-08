@@ -1,9 +1,9 @@
 #
-# $Id: Makefile,v 1.2 2008/02/06 16:58:54 john_f Exp $
+# $Id: Makefile,v 1.3 2008/07/08 14:59:21 philipn Exp $
 #
 # Makefile for building YUVlib
 #
-# Copyright (C) 2005  Stuart Cunningham <stuart_hc@users.sourceforge.net>
+# Copyright (C) 2005-2008 British Broadcasting Corporation.  All Rights Reserved.
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -24,7 +24,22 @@
 CC=gcc
 OPT=-O3 -mmmx -msse2
 INCLUDES=-I/usr/local/include/ffmpeg -I/usr/include/freetype2 -I/usr/include/fontconfig
-CFLAGS=-Wall -W -g -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE $(OPT) $(INCLUDES)
+CFLAGS=-Wall -W -Wno-unused-parameter -g -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE $(OPT) $(INCLUDES)
+
+ifndef DISABLE_FFMPEG
+
+	FFMPEG_INCLUDE_PATH := $(shell for f in /usr/local/include /usr/include; do test -e $$f/ffmpeg && echo $$f && break; test -e $$f/libavcodec && echo $$f && break; done)
+	ifneq "$(FFMPEG_INCLUDE_PATH)" ""
+		CFLAGS += -DHAVE_FFMPEG
+	endif
+	
+	# Check for old-style FFMPEG header locations and if needed add -DFFMPEG_OLD_INCLUDE_PATHS
+	FFMPEG_OLDSTYLE_INCLUDE := $(shell for f in /usr/local/include /usr/include; do test -e $$f/ffmpeg/avcodec.h && echo $$f && break; done)
+	ifneq "$(FFMPEG_OLDSTYLE_INCLUDE)" ""
+		CFLAGS += -DFFMPEG_OLD_INCLUDE_PATHS
+	endif
+
+endif	
 
 HEADERS=$(wildcard, *.h)
 CFILES=$(wildcard *.c)
