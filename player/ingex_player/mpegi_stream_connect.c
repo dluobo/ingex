@@ -39,8 +39,13 @@ void free_mpegi_decoder_resources()
 #else
 
 
+#ifdef FFMPEG_OLD_INCLUDE_PATHS
 #include <ffmpeg/avcodec.h>
 #include <ffmpeg/avformat.h>
+#else
+#include <libavcodec/avcodec.h>
+#include <libavformat/avformat.h>
+#endif
 
 
 /* some large number that we would not exceed */

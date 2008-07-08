@@ -27,6 +27,10 @@
 
 #define __USE_ISOC99    1
 #include <limits.h> /* ULLONG_MAX */
+// Eee PC doesn't define ULLONG_MAX
+#ifndef ULLONG_MAX
+#define ULLONG_MAX 18446744073709551615ULL
+#endif
 
 
 #define TAPEBLOCK                           (512*512)

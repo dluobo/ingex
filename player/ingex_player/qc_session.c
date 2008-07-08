@@ -25,6 +25,7 @@ struct QCSession
     FrameInfo lastFrameInfo;
     int haveFirstFrame;
     int haveEndOfSource;
+    char sessionComments[MAX_SESSION_COMMENTS_SIZE];
     
     int64_t controlTCStartPos;
 };
@@ -33,57 +34,6 @@ typedef char LogLine[QC_LOG_LINE_ELEMENTS][64];
 
 static const char* g_qcSessionPreSuf = "_qcsession_";
 
-
-static char* get_host_name(char* buffer, size_t bufferSize)
-{
-    if (gethostname(buffer, bufferSize - 1) != 0)
-    {
-        // failed
-        buffer[0] = '\0';
-        return buffer;
-    }
-    
-    buffer[bufferSize - 1] = '\0';
-    return buffer;
-}
-
-static char* get_user_name(char* buffer, size_t bufferSize)
-{
-    FILE* cmdStdout = popen("whoami", "r");
-    if (cmdStdout == 0)
-    {
-        // failed
-        buffer[0] = '\0';
-        return buffer;
-    }
-    
-    size_t numRead = fread(buffer, 1, bufferSize - 1, cmdStdout);
-    if (numRead <= 0)
-    {
-        // failed
-        buffer[0] = '\0';
-    }
-    else
-    {
-        buffer[numRead] = '\0';
-        
-        // trim end
-        int i;
-        for (i = numRead - 1; i >= 0; i--)
-        {
-            if (!isspace(buffer[i]))
-            {
-                break;
-            }
-            
-            buffer[i] = '\0';
-        }
-    }
-    
-    pclose(cmdStdout);
-
-    return buffer;
-}
 
 static const char* strip_path(const char* filePath)
 {
@@ -457,7 +407,8 @@ static void qcs_player_closed(void* data)
 
 
 int qcs_open(const char* mxfFilename, MediaSource* source, int argc, const char** argv, 
-    const char* name, const char* loadedSessionFilename, QCSession** qcSession)
+    const char* name, const char* loadedSessionFilename, const char* userName, const char* hostName,
+    QCSession** qcSession)
 {
     QCSession* newQCSession;
     char timestampStr[MAX_TIMESTAMP_STRING_SIZE];
@@ -467,7 +418,6 @@ int qcs_open(const char* mxfFilename, MediaSource* source, int argc, const char*
     char* lastSep;
     const StreamInfo* streamInfo;
     char metadataBuffer[64];
-    char nameBuffer[256];
 
 
     CALLOC_ORET(newQCSession, QCSession, 1);
@@ -516,8 +466,8 @@ int qcs_open(const char* mxfFilename, MediaSource* source, int argc, const char*
     }
     get_timestamp_string(timestampStr);
     write_comment(newQCSession, "Started: %s", timestampStr);
-    write_comment(newQCSession, "Username: '%s'", get_user_name(nameBuffer, sizeof(nameBuffer)));
-    write_comment(newQCSession, "Hostname: '%s'", get_host_name(nameBuffer, sizeof(nameBuffer)));
+    write_comment(newQCSession, "Username: '%s'", (userName == NULL) ? "" : userName);
+    write_comment(newQCSession, "Hostname: '%s'", (hostName == NULL) ? "" : hostName);
     write_comment_start(newQCSession);
     if (argc > 0)
     {
@@ -586,7 +536,7 @@ int qcs_open(const char* mxfFilename, MediaSource* source, int argc, const char*
     return 1;
     
 fail:
-    qcs_close(&newQCSession, NULL, NULL);
+    qcs_close(&newQCSession, NULL, NULL, NULL, 0);
     return 0;
 }
 
@@ -719,10 +669,12 @@ void qcs_flush(QCSession* qcSession)
     fflush(qcSession->sessionFile);
 }
 
-void qcs_close(QCSession** qcSession, const char* sessionScriptName, const char* sessionScriptOptions)
+void qcs_close(QCSession** qcSession, const char* reportDirectory, const char* sessionScriptName, const char* sessionScriptOptions,
+    int reportAccessPort)
 {
     char timestampStr[MAX_TIMESTAMP_STRING_SIZE];
     char scriptCmd[FILENAME_MAX];
+    char reportAccessPortStr[32];
     
     if (*qcSession == NULL)
     {
@@ -739,6 +691,12 @@ void qcs_close(QCSession** qcSession, const char* sessionScriptName, const char*
         strcat(scriptCmd, " --lto \"");
         strcat(scriptCmd, (*qcSession)->ltoDir);
         strcat(scriptCmd, "\"");
+        strcat(scriptCmd, " --report \"");
+        strcat(scriptCmd, reportDirectory);
+        strcat(scriptCmd, "\"");
+        strcat(scriptCmd, " --report-port ");
+        sprintf(reportAccessPortStr, "%d", reportAccessPort);
+        strcat(scriptCmd, reportAccessPortStr);
         if (sessionScriptOptions != NULL)
         {
             strcat(scriptCmd, " ");
@@ -748,9 +706,17 @@ void qcs_close(QCSession** qcSession, const char* sessionScriptName, const char*
 
     
     write_comment((*qcSession), "");
+    write_comment((*qcSession), "");
     get_timestamp_string(timestampStr);
     write_comment((*qcSession), "Ended: %s", timestampStr);
+    
     write_comment((*qcSession), "");
+    write_comment((*qcSession), "");
+    get_timestamp_string(timestampStr);
+    write_comment((*qcSession), "Comments");
+    write_comment((*qcSession), "");
+    fprintf((*qcSession)->sessionFile, "%s\n", (*qcSession)->sessionComments);
+    
     
     if ((*qcSession)->sessionFile != NULL)
     {
@@ -779,7 +745,7 @@ void qcs_close(QCSession** qcSession, const char* sessionScriptName, const char*
 }
 
 
-int qcs_set_marks(MediaControl* control, const char* filename)
+int qcs_restore_session(MediaControl* control, const char* filename, char* sessionComments)
 {
     FILE* qcSessionFile = NULL;
     int state = 0;
@@ -795,6 +761,10 @@ int qcs_set_marks(MediaControl* control, const char* filename)
     char* clipMarkTypeStr;
     char* markTypeStr;
     int64_t count = 0;
+    int commentCount;
+    int c;
+    int haveFirst;
+    
     
     /* open QC session file */
     if ((qcSessionFile = fopen(filename, "rb")) == NULL)
@@ -813,6 +783,12 @@ int qcs_set_marks(MediaControl* control, const char* filename)
                 if (fgets(buffer, 128, qcSessionFile) == NULL)
                 {
                     /* EOF */
+                    done = 1;
+                    break;
+                }
+                
+                if (strncmp("# Ended", buffer, 7) == 0)
+                {
                     done = 1;
                     break;
                 }
@@ -840,6 +816,12 @@ int qcs_set_marks(MediaControl* control, const char* filename)
                 if (fgets(buffer, 128, qcSessionFile) == NULL)
                 {
                     /* EOF */
+                    done = 1;
+                    break;
+                }
+
+                if (strncmp("# Ended", buffer, 7) == 0)
+                {
                     done = 1;
                     break;
                 }
@@ -939,6 +921,51 @@ int qcs_set_marks(MediaControl* control, const char* filename)
                 break;
         }
     }
+    
+    /* parse the comments */
+
+    sessionComments[0] = '\0';
+    
+    while (1)
+    {
+        if (fgets(buffer, 128, qcSessionFile) == NULL)
+        {
+            /* EOF */
+            break;
+        }
+        
+        if (strncmp("# Comments", buffer, 7) == 0)
+        {
+            /* skip the next line */
+            fgets(buffer, 128, qcSessionFile);
+
+            /* the rest is comments (with start and end whitespace trimmed) */
+            commentCount = 0;
+            haveFirst = 0;
+            while (commentCount + 1 < MAX_SESSION_COMMENTS_SIZE &&
+                (c = fgetc(qcSessionFile)) != EOF)
+            {
+                if (haveFirst || !isspace(c))
+                {
+                    sessionComments[commentCount++] = (char)c;
+                    haveFirst = 1;
+                }
+            }
+            if (commentCount > 0)
+            {
+                sessionComments[commentCount] = '\0';
+                commentCount--;
+                while (commentCount >= 0 && isspace(sessionComments[commentCount]))
+                {
+                    sessionComments[commentCount] = '\0';
+                    commentCount--;
+                }
+            }
+            
+            break;
+        }
+    }
+     
                 
     ml_log_info("Set %"PRId64" marks from qc session\n", count);
     
@@ -1022,5 +1049,9 @@ int qcs_extract_timestamp(const char* sessionFilename, int* year, int* month, in
     return 1;
 }
 
-
+void qcs_set_comments(QCSession* qcSession, const char* sessionComments)
+{
+    strncpy(qcSession->sessionComments, sessionComments, sizeof(qcSession->sessionComments) - 1);
+    qcSession->sessionComments[sizeof(qcSession->sessionComments) - 1] = '\0';
+}
 

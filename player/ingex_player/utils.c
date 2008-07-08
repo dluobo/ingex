@@ -7,6 +7,7 @@
 #include <unistd.h>     /* usleep() */
 #include <time.h>
 #include <math.h>
+#include <ctype.h>
 
 #include "utils.h"
 #include "logging.h"
@@ -619,4 +620,56 @@ void strcat_separator(char* path)
         path[len + 1] = '\0';
     }
 }
+
+char* get_host_name(char* buffer, size_t bufferSize)
+{
+    if (gethostname(buffer, bufferSize - 1) != 0)
+    {
+        // failed
+        buffer[0] = '\0';
+        return buffer;
+    }
+    
+    buffer[bufferSize - 1] = '\0';
+    return buffer;
+}
+
+char* get_user_name(char* buffer, size_t bufferSize)
+{
+    FILE* cmdStdout = popen("whoami", "r");
+    if (cmdStdout == 0)
+    {
+        // failed
+        buffer[0] = '\0';
+        return buffer;
+    }
+    
+    size_t numRead = fread(buffer, 1, bufferSize - 1, cmdStdout);
+    if (numRead <= 0)
+    {
+        // failed
+        buffer[0] = '\0';
+    }
+    else
+    {
+        buffer[numRead] = '\0';
+        
+        // trim end
+        int i;
+        for (i = numRead - 1; i >= 0; i--)
+        {
+            if (!isspace(buffer[i]))
+            {
+                break;
+            }
+            
+            buffer[i] = '\0';
+        }
+    }
+    
+    pclose(cmdStdout);
+
+    return buffer;
+}
+
 

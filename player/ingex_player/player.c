@@ -446,7 +446,7 @@ static void cleanup_exit(int res)
             SAFE_FREE(&marks);
             numMarks = 0;
         }
-        qcs_close(&g_player.qcSession, NULL, NULL);
+        qcs_close(&g_player.qcSession, NULL, NULL, NULL, 0);
     }
 
     if (g_player.consoleMonitor != NULL)
@@ -1010,6 +1010,7 @@ int main(int argc, const char **argv)
     int64_t startFrame = -1;
     int markSelectionTypeMasks[MAX_PB_MARK_SELECTIONS];
     int numMarkSelections = 0;
+    char sessionComments[MAX_SESSION_COMMENTS_SIZE];
     
     
     memset(inputs, 0, sizeof(inputs));
@@ -2253,7 +2254,8 @@ int main(int argc, const char **argv)
     
     if (qcSessionFilename != NULL)
     {
-        if (!qcs_open(qcSessionFilename, g_player.mediaSource, argc, argv, NULL, restoreMarksFilename, &g_player.qcSession))
+        if (!qcs_open(qcSessionFilename, g_player.mediaSource, argc, argv, NULL, restoreMarksFilename, 
+            NULL, NULL, &g_player.qcSession))
         {
             fprintf(stderr, "Failed to open QC session\n");
             goto fail;
@@ -2535,9 +2537,13 @@ int main(int argc, const char **argv)
     
     if (restoreMarksFilename != NULL)
     {
-        if (!qcs_set_marks(ply_get_media_control(g_player.mediaPlayer), restoreMarksFilename))
+        if (!qcs_restore_session(ply_get_media_control(g_player.mediaPlayer), restoreMarksFilename, sessionComments))
         {
             ml_log_warn("Failed to restore marks from the QC session file\n");
+        }
+        else if (g_player.qcSession != NULL)
+        {
+            qcs_set_comments(g_player.qcSession, sessionComments);
         }
     }
 

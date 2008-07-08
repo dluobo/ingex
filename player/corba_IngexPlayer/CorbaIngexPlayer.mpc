@@ -43,7 +43,7 @@ project(CorbaIngexPlayerServer): taoserver, naming, messaging, valuetype {
   libs += uuid
   libs += X11 Xv pthread freetype fontconfig
   libs += mp3lame
-  libs += avformat avcodec avutil z
+  libs += avformat avcodec avutil bz2 z
   libs += MXF
   libs += MXFReader
   libs += dvsoem
@@ -77,7 +77,7 @@ project(test_CorbaIngexPlayer): naming, messaging, valuetype {
   
   libs += uuid
   libs += mp3lame
-  libs += avformat avcodec avutil z
+  libs += avformat avcodec avutil bz2 z
   libs += MXF
   libs += MXFReader
   libs += idl

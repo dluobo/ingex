@@ -43,6 +43,9 @@ double calc_audio_peak_power(const unsigned char* p_samples, int num_samples, in
 
 void strcat_separator(char* path);
 
+char* get_host_name(char* buffer, size_t bufferSize);
+char* get_user_name(char* buffer, size_t bufferSize);
+
 
 #ifdef __cplusplus
 }

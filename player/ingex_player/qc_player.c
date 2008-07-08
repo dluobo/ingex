@@ -31,6 +31,7 @@
 #include "qc_lto_access.h"
 #include "qc_lto_extract.h"
 #include "bouncing_ball_source.h"
+#include "qc_http_access.h"
 #include "version.h"
 #include "utils.h"
 #include "logging.h"
@@ -39,6 +40,8 @@
 
 
 #define LOG_CLEAN_PERIOD            30
+
+#define MAX_PB_MARK_SELECTIONS      2
 
 
 typedef enum
@@ -61,6 +64,7 @@ typedef struct
     QCLTOAccess* qcLTOAccess;
     QCLTOExtract* qcLTOExtract;
     FILE* bufferStateLogFile;
+    QCHTTPAccess* qcHTTPAccess;
 
     X11DisplaySink* x11DisplaySink;
     X11XVDisplaySink* x11XVDisplaySink;
@@ -104,6 +108,7 @@ typedef struct
     int markPSEFails;
     int markVTRErrors;
     const char* ltoCacheDirectory;
+    const char* reportDirectory;
     const char* tapeDevice;
     int enableTermKeyboard;
     const char* deleteScriptName;
@@ -113,6 +118,11 @@ typedef struct
     int writeAllMarks;
     int clipMarkType;
     int pbMarkMask[2];
+#if defined(HAVE_SHTTPD)
+    int qcHTTPPort;
+#endif    
+    char userName[256];
+    char hostName[256];
 } Options;
 
 static const Options g_defaultOptions = 
@@ -135,16 +145,22 @@ static const Options g_defaultOptions =
     {{{0,{0},0}},0},
     1,
     1,
-    0,
+    NULL,
+    NULL,
     "/dev/nst0",
     0,
-    0,
-    0,
-    0,
-    0,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
     1,
     M0_MARK_TYPE,
-    {ALL_MARK_TYPE, 0}
+    {ALL_MARK_TYPE, 0},
+#if defined(HAVE_SHTTPD)    
+    9006,
+#endif
+    {0},
+    {0}
 };
 
 typedef struct
@@ -740,6 +756,50 @@ fail:
     return 0;
 }
 
+static int validate_player_quit(MediaPlayer* player, void* data)
+{
+    int result;
+    char sysCmd[256];
+    
+    result = ply_qc_quit_validate(player);
+    if (result == 0)
+    {
+        return 1;
+    }
+    if (result == 1)
+    {
+        /* allow user to quit when the MXF file is incomplete */
+        return 1;
+    }
+    
+    ml_log_info("QC quit validation returned error code %d\n", result);
+    
+    strcpy(sysCmd, "kdialog --error 'Validation Error: ");
+    
+    switch (result)
+    {
+        /* case 1 was dealt with above */
+        case 2:
+            strcat(sysCmd, "Busy with clip mark");
+            break;
+        case 3:
+            strcat(sysCmd, "Programme start and end not set");
+            break;
+        default:
+            ml_log_error("Unknown QC validation error code %d - software update required\n", result);
+            strcat(sysCmd, "Unknown");
+            break;
+    }
+    strcat(sysCmd, "'");
+    
+    if (system(sysCmd) != 0)
+    {
+        ml_log_error("Failed to report QC validation error to user: %s\n", strerror(errno));
+    }
+    
+    return 0;
+}
+
 static int play_d3_mxf_file(QCPlayer* player, int argc, const char** argv, Options* options, 
     char* directory, char* name, char* sessionName)
 {
@@ -748,6 +808,7 @@ static int play_d3_mxf_file(QCPlayer* player, int argc, const char** argv, Optio
     MXFFileSource* mxfSource = NULL;
     BufferedMediaSource* bufferedSource = NULL;
     char filename[FILENAME_MAX];
+    char sessionComments[MAX_SESSION_COMMENTS_SIZE];
     
     
     /* create multiple source source */
@@ -799,7 +860,8 @@ static int play_d3_mxf_file(QCPlayer* player, int argc, const char** argv, Optio
     strcat_separator(filename);
     strcat(filename, name);
     
-    if (!qcs_open(filename, player->mediaSource, argc, argv, name, sessionName, &player->qcSession))
+    if (!qcs_open(filename, player->mediaSource, argc, argv, name, sessionName, 
+        options->userName, options->hostName, &player->qcSession))
     {
         fprintf(stderr, "Failed to open QC session with prefix '%s'\n", filename);
         goto fail;
@@ -845,6 +907,8 @@ static int play_d3_mxf_file(QCPlayer* player, int argc, const char** argv, Optio
 
     ply_enable_clip_marks(player->mediaPlayer, options->clipMarkType);
     
+    ply_set_qc_quit_validator(player->mediaPlayer, validate_player_quit, player);
+    
 
     /* restore the marks from the selected session file */
     
@@ -854,9 +918,13 @@ static int play_d3_mxf_file(QCPlayer* player, int argc, const char** argv, Optio
         strcat_separator(filename);
         strcat(filename, sessionName);
         
-        if (!qcs_set_marks(ply_get_media_control(g_player.mediaPlayer), filename))
+        if (!qcs_restore_session(ply_get_media_control(g_player.mediaPlayer), filename, sessionComments))
         {
             ml_log_warn("Failed to restore marks from the QC session file '%s'\n", filename);
+        }
+        else if (player->qcSession != NULL)
+        {
+            qcs_set_comments(player->qcSession, sessionComments);
         }
     }
 
@@ -911,6 +979,10 @@ static int play_d3_mxf_file(QCPlayer* player, int argc, const char** argv, Optio
         goto fail;
     }
 
+    /* activate user mark set validation */
+    
+    ply_activate_qc_mark_validation(player->mediaPlayer);
+    
     
     /* start playing... */
     
@@ -946,6 +1018,9 @@ static int reset_player(QCPlayer* player, Options* options)
     Mark* marks = NULL;
     int numMarks = 0;
     int result; 
+    int sourceIsComplete;
+    
+    sourceIsComplete = msc_is_complete(player->mediaSource);
     
     msc_close(player->mediaSource);
     player->mediaSource = NULL;
@@ -993,7 +1068,23 @@ static int reset_player(QCPlayer* player, Options* options)
             SAFE_FREE(&marks);
             numMarks = 0;
         }
-        qcs_close(&player->qcSession, options->sessionScriptName, options->sessionScriptOptions);
+        
+        if (sourceIsComplete)
+        {
+#if defined(HAVE_SHTTPD)
+            qcs_close(&player->qcSession, options->reportDirectory, options->sessionScriptName, options->sessionScriptOptions,
+                options->qcHTTPPort);
+#else
+            qcs_close(&player->qcSession, options->reportDirectory, options->sessionScriptName, options->sessionScriptOptions,
+                0);
+#endif
+        }
+        else
+        {
+            /* source is incomplete and therefore the session script is not called */
+            ml_log_warn("Not calling session script because the source is incomplete\n");
+            qcs_close(&player->qcSession, NULL, NULL, NULL, 0);
+        }
     }
     
     result = msk_reset_or_close(player->mediaSink);
@@ -1185,13 +1276,15 @@ static void cleanup_exit(int res)
     
     if (g_player.qcSession != NULL)
     {
-        qcs_close(&g_player.qcSession, NULL, NULL);
+        qcs_close(&g_player.qcSession, NULL, NULL, NULL, 0);
     }
 
     qla_free_qc_lto_access(&g_player.qcLTOAccess);
     
     /* free after qc lto access */
     qce_free_lto_extract(&g_player.qcLTOExtract);
+    
+    qch_free_qc_http_access(&g_player.qcHTTPAccess);
     
     ml_log_file_close();
     
@@ -1254,12 +1347,16 @@ static void input_help()
 
 static void usage(const char* cmd)
 {
+    char nameBuffer[256];
+    memset(nameBuffer, 0, sizeof(nameBuffer));
+    
     fprintf(stderr, "Usage: %s [options] [inputs]\n", cmd);
     fprintf(stderr, "\n");
     fprintf(stderr, "Options: (* means is required)\n");
     fprintf(stderr, "  -h, --help               Display this usage message plus keyboard and shuttle input help\n");
     fprintf(stderr, "  -v, --version            Display the player version\n");
     fprintf(stderr, "* --tape-cache <dir>       The LTO tape cache directory\n");
+    fprintf(stderr, "* --report <dir>           The destination directory for QC and PSE reports\n");
     fprintf(stderr, "  --tape-dev <name>        The tape device filename (default %s)\n", g_defaultOptions.tapeDevice);
     fprintf(stderr, "  --delete-script <name>   The <name> script is called to delete an LTO tape cache directory (delete the directory is the default)\n");
     fprintf(stderr, "  --delete-script-opt <options>   Options string to pass to the delete script before the cache directory name\n");
@@ -1299,8 +1396,12 @@ static void usage(const char* cmd)
     fprintf(stderr, "                                  colour is one of white|yellow|cyan|green|magenta|red|blue|orange\n");
     fprintf(stderr, "  --enable-term-keyb       Enable terminal window keyboard input.\n");
     fprintf(stderr, "  --clip-mark <type>       Clip mark type (default 0x%04x).\n", g_defaultOptions.clipMarkType);
-    fprintf(stderr, "  --pb-mark-mask <val>     32-bit mark type mask to show on the progress bar (decimal or 0x hex) (default 0x%08x)\n", g_defaultOptions.pbMarkMask[0]);
-    fprintf(stderr, "  --pb2-mark-mask <val>    32-bit mark type mask to show on the second progress bar (decimal or 0x hex) (default 0x%08x)\n", g_defaultOptions.pbMarkMask[1]);
+    fprintf(stderr, "  [--pb-mark-mask <val>]*  32-bit mask for marks to show on the (next) progress bar (decimal or 0x hex)\n");
+#if defined(HAVE_SHTTPD)
+    fprintf(stderr, "  --qc-http-access <port>  QC Report access via http <port> (default %d)\n", g_defaultOptions.qcHTTPPort);
+#endif
+    fprintf(stderr, "  --user <name>            User (operator) name set in the QC session (default '%s')\n", get_user_name(nameBuffer, sizeof(nameBuffer)));
+    fprintf(stderr, "  --host <name>            Hostname set in the QC session (default '%s')\n", get_host_name(nameBuffer, sizeof(nameBuffer)));
     fprintf(stderr, "\n");
 }
 
@@ -1319,9 +1420,12 @@ int main(int argc, const char **argv)
     int logRemoveDays = 30;
     const char* bufferStateLogFilename = NULL;
     int i;
+    int numMarkSelections = 0;
 
     memset(&options, 0, sizeof(options)); 
     options = g_defaultOptions;
+    get_user_name(options.userName, sizeof(options.userName));
+    get_host_name(options.hostName, sizeof(options.hostName));
     
     memset(&g_player, 0, sizeof(g_player));
     
@@ -1636,6 +1740,17 @@ int main(int argc, const char **argv)
             options.ltoCacheDirectory = argv[cmdlnIndex + 1];
             cmdlnIndex += 2;
         }
+        else if (strcmp(argv[cmdlnIndex], "--report") == 0)
+        {
+            if (cmdlnIndex + 1 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            options.reportDirectory = argv[cmdlnIndex + 1];
+            cmdlnIndex += 2;
+        }
         else if (strcmp(argv[cmdlnIndex], "--tape-dev") == 0)
         {
             if (cmdlnIndex + 1 >= argc)
@@ -1721,16 +1836,23 @@ int main(int argc, const char **argv)
                 fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
                 return 1;
             }
-            if (sscanf(argv[cmdlnIndex + 1], "0x%x\n", &options.pbMarkMask[0]) != 1 &&
-                sscanf(argv[cmdlnIndex + 1], "%d\n", &options.pbMarkMask[0]) != 1)
+            if (numMarkSelections >= MAX_PB_MARK_SELECTIONS)
+            {
+                fprintf(stderr, "Only %d mark selection masks supported\n", MAX_PB_MARK_SELECTIONS);
+                return 1;
+            }
+            if (sscanf(argv[cmdlnIndex + 1], "0x%x\n", &options.pbMarkMask[numMarkSelections]) != 1 &&
+                sscanf(argv[cmdlnIndex + 1], "%d\n", &options.pbMarkMask[numMarkSelections]) != 1)
             {
                 usage(argv[0]);
                 fprintf(stderr, "Invalid argument for %s\n", argv[cmdlnIndex]);
                 return 1;
             }
+            numMarkSelections++;
             cmdlnIndex += 2;
         }
-        else if (strcmp(argv[cmdlnIndex], "--pb2-mark-mask") == 0)
+#if defined(HAVE_SHTTPD)    
+        else if (strcmp(argv[cmdlnIndex], "--qc-http-access") == 0)
         {
             if (cmdlnIndex + 1 >= argc)
             {
@@ -1738,13 +1860,35 @@ int main(int argc, const char **argv)
                 fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
                 return 1;
             }
-            if (sscanf(argv[cmdlnIndex + 1], "0x%x\n", &options.pbMarkMask[1]) != 1 &&
-                sscanf(argv[cmdlnIndex + 1], "%d\n", &options.pbMarkMask[1]) != 1)
+            if (sscanf(argv[cmdlnIndex + 1], "%d\n", &options.qcHTTPPort) != 1 || options.qcHTTPPort < 0)
             {
                 usage(argv[0]);
                 fprintf(stderr, "Invalid argument for %s\n", argv[cmdlnIndex]);
                 return 1;
             }
+            cmdlnIndex += 2;
+        }
+#endif        
+        else if (strcmp(argv[cmdlnIndex], "--user") == 0)
+        {
+            if (cmdlnIndex + 1 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            strncpy(options.userName, argv[cmdlnIndex + 1], sizeof(options.userName) - 1);
+            cmdlnIndex += 2;
+        }
+        else if (strcmp(argv[cmdlnIndex], "--host") == 0)
+        {
+            if (cmdlnIndex + 1 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            strncpy(options.hostName, argv[cmdlnIndex + 1], sizeof(options.hostName) - 1);
             cmdlnIndex += 2;
         }
         else
@@ -1759,6 +1903,12 @@ int main(int argc, const char **argv)
     {
         usage(argv[0]);
         fprintf(stderr, "Missing cache directory option '--tape-cache'\n");
+        return 1;
+    }
+    if (options.reportDirectory == NULL)
+    {
+        usage(argv[0]);
+        fprintf(stderr, "Missing QC and PSE report directory option '--report'\n");
         return 1;
     }
 
@@ -1922,6 +2072,7 @@ int main(int argc, const char **argv)
         
         fprintf(g_player.bufferStateLogFile, "# Columns: source buffers filled, sink buffers filled\n"); 
     }
+
     
     /* start the control threads */
     
@@ -1930,6 +2081,21 @@ int main(int argc, const char **argv)
         ml_log_error("Failed to create terminal keyboard input\n");
         goto fail;
     }
+
+    
+#if defined(HAVE_SHTTPD)    
+    /* create the qc http access */
+
+    if (options.qcHTTPPort >= 0)
+    {
+        if (!qch_create_qc_http_access(g_player.mediaPlayer, options.qcHTTPPort, options.ltoCacheDirectory,
+            options.reportDirectory, &g_player.qcHTTPAccess))
+        {
+            ml_log_error("Failed to create QC http access\n");
+            goto fail;
+        }
+    }
+#endif    
     
     
     /* start */

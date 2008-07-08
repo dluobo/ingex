@@ -69,7 +69,7 @@ ifdef FFMPEG_INCLUDE_PATH
 FFMPEG_RPM := $(shell rpm -q ffmpeg-h264-aac > /dev/null && echo YES || rpm -q ffmpeg-DNxHD-h264-aac > /dev/null && echo YES)
 FFMPEG_DNXHD := $(shell rpm -q ffmpeg-DNxHD-h264-aac > /dev/null && echo YES)
 ifeq "$(FFMPEG_RPM)" "YES"
-	LIBS += -lavformat -lavcodec -lavutil -lz -lmp3lame -lx264 -la52 -lfaac -lfaad -lm
+	LIBS += -lavformat -lavcodec -lavutil -lz -lbz2 -lmp3lame -lx264 -la52 -lfaac -lfaad -lm
 	ifeq  "$(FFMPEG_DNXHD)" "YES"
 		CFLAGS += -DHAVE_DNXHD
 endif

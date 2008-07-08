@@ -42,7 +42,8 @@
 #if defined(DISABLE_QC_LTO_ACCESS)
 /* For systems without <sys/inotify.h> */
 
-int qla_create_qc_lto_access(const char* cacheDirectory, QCLTOExtract* extract, QCLTOAccess** access)
+int qla_create_qc_lto_access(const char* cacheDirectory, QCLTOExtract* extract, 
+    const char* deleteScriptName, const char* deleteScriptOptions, QCLTOAccess** access)
 {
     return 0;
 }

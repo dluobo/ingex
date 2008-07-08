@@ -18,7 +18,7 @@ $(warning no DVS available - set the DVSSDK or DVS_SDK_INSTALL environment varia
 endif
 
 ifndef DISABLE_FFMPEG
-	FFMPEG_INCLUDE_PATH := $(shell for f in /usr/local/include /usr/include; do test -e $$f/ffmpeg && echo $$f && break; done)
+	FFMPEG_INCLUDE_PATH := $(shell for f in /usr/local/include /usr/include; do test -e $$f/ffmpeg && echo $$f && break; test -e $$f/libavcodec && echo $$f && break; done)
 	ifeq "$(FFMPEG_INCLUDE_PATH)" ""
 $(warning: no FFMPEG library found - DV stream connector not available)
 	endif
@@ -74,6 +74,10 @@ LIBDIRS = -L. -L$(LIBMXF_DIR)/lib -L$(LIBMXF_ARCHIVE_DIR)/info -L$(LIBMXF_READER
 LIBS = -lX11 -lXv -lpthread -lfreetype -lfontconfig -luuid -ld3mxfinfo -lMXFReader -lMXF
 LIB_DEPS = $(LIBMXF_DIR)/lib/libMXF.a $(LIBMXF_ARCHIVE_DIR)/info/libd3mxfinfo.a $(LIBMXF_READER_DIR)/libMXFReader.a
 
+ifdef DISABLE_QC_LTO_ACCESS
+	CFLAGS += -DDISABLE_QC_LTO_ACCESS
+endif
+
 ifdef DVS_PATH
 	INCLUDEDIRS += -I$(DVS_PATH)/include
 	LIBDIRS += -L$(DVS_PATH)/lib -L$(DVS_PATH)/lib64
@@ -100,15 +104,21 @@ endif
 ifdef FFMPEG_INCLUDE_PATH
 
 	CFLAGS += -DHAVE_FFMPEG
-	
+
+	# Check for old-style FFMPEG header locations and if needed add -DFFMPEG_OLD_INCLUDE_PATHS
+	FFMPEG_OLDSTYLE_INCLUDE := $(shell for f in /usr/local/include /usr/include; do test -e $$f/ffmpeg/avcodec.h && echo $$f && break; done)
+	ifneq "$(FFMPEG_OLDSTYLE_INCLUDE)" ""
+		CFLAGS += -DFFMPEG_OLD_INCLUDE_PATHS
+	endif
+
 	# Use the following alternative link line for ffmpeg rpm installed ffmpeg
 	FFMPEG_RPM := $(shell rpm -q ffmpeg-h264-aac > /dev/null && echo YES)
 	FFMPEG_DNXHD_RPM := $(shell rpm -q ffmpeg-DNxHD-h264-aac > /dev/null && echo YES)
 	ifeq "$(FFMPEG_RPM)" "YES"
-		LIBS += -lavformat -lavcodec -lavutil -lz -lmp3lame -lx264 -la52 -lfaac -lfaad -lm
+		LIBS += -lavformat -lavcodec -lavutil -lz -lbz2 -lmp3lame -lx264 -la52 -lfaac -lfaad -lm
 	else
 		ifeq "$(FFMPEG_DNXHD_RPM)" "YES"
-		LIBS += -lavformat -lavcodec -lavutil -lz -lmp3lame -lx264 -la52 -lfaac -lfaad -lm
+		LIBS += -lavformat -lavcodec -lavutil -lz -lbz2 -lmp3lame -lx264 -la52 -lfaac -lfaad -lm
 		CFLAGS += -DHAVE_DNXHD
 		else
 		LIBS += -lavformat -lavcodec -lavutil -lm
@@ -173,7 +183,7 @@ SOURCES = multiple_sources.c dvs_sink.c connection_matrix.c stream_connect.c uti
 	frame_sequence_sink.c qc_lto_extract.c mpegi_stream_connect.c mjpeg_stream_connect.c shared_mem_source.c \
 	udp_source.c audio_sink.c blank_source.c progress_bar_input.c progress_bar_input_connect.c \
 	clapper_source.c sdl_sink.c clip_source.c video_switch_database.c source_event.c \
-	dnxhd_stream_connect.c
+	dnxhd_stream_connect.c qc_http_access.c
 OBJECTS = $(patsubst %.c,.objs/%.o,$(SOURCES))
 DEPENDENCIES = $(patsubst %.c,.deps/%.d,$(SOURCES))
 

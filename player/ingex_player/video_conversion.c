@@ -10,9 +10,6 @@
 #include <mmintrin.h>
 #endif
 
-#include <ffmpeg/avformat.h>
-
-
 #include "video_conversion.h"
 
 
@@ -191,6 +188,7 @@ void uyvy_to_yuv420(int width, int height, uint8_t *input, uint8_t *output)
 }
 #endif
 
+#if defined(HAVE_FFMPEG)
 
 #ifdef __MMX__
 void yuv422_to_uyvy(int width, int height, int shift_picture_up, AVFrame *input, uint8_t *output)
@@ -317,171 +315,6 @@ void yuv422_to_uyvy(int width, int height, int shift_picture_up, AVFrame *input,
 }
 
 #endif
-
-#ifdef __MMX__
-void yuv422_to_uyvy_2(int width, int height, int shift_picture_up, uint8_t *input, uint8_t *output)
-{
-	int i, j, start_line;
-	uint8_t *y, *u, *v;
-
-	y = input;
-	u = input + width*height;
-	v = input + width*height * 3/2;
-	start_line = 0;
-
-	// Shifting picture up one line is necessary when decoding PAL DV50
-	if (shift_picture_up) {
-		// Skip one line of input picture and start one line lower
-		y += width;
-		u += width / 2;
-		v += width / 2;
-		start_line = 1;
-	}
-
-	// Convert to UYVY
-	for (j = start_line; j < height; j++)
-	{
-		for (i = 0; i < width*2; i += 32)
-		{
-            if (i + 32 > width*2)
-            {
-                // can no longer process in 32 byte chunks - revert to basic method below
-                break;
-            }
-            
-			__m64 m0 = *(__m64 *)u;			// load UUUU UUUU(0)
-			__m64 m1 = *(__m64 *)v;			// load VVVV VVVV(0)
-			__m64 m2 = m0;					// copy U for mix op
-			m0 = _mm_unpacklo_pi8(m0, m1);	// mix -> UVUV UVUV(0) (in m0)
-			m2 = _mm_unpackhi_pi8(m2, m1);	// mix -> UVUV UVUV(8) (in m2)
-
-			__m64 m3 = *(__m64 *)y;			// load YYYY YYYY(0)
-			__m64 m5 = *(__m64 *)(y+8);		// load YYYY YYYY(8)
-			__m64 m4 = m0;
-			__m64 m6 = m2;
-			m0 = _mm_unpacklo_pi8(m0, m3);	// mix to UYVY UYVY(0)
-			m4 = _mm_unpackhi_pi8(m4, m3);	// mix to UYVY UYVY(8)
-			m2 = _mm_unpacklo_pi8(m2, m5);	// mix to UYVY UYVY(16)
-			m6 = _mm_unpackhi_pi8(m6, m5);	// mix to UYVY UYVY(24)
-
-			*(__m64 *)(output+0) = m0;
-			*(__m64 *)(output+8) = m4;
-			*(__m64 *)(output+16) = m2;
-			*(__m64 *)(output+24) = m6;
-
-			u += 8;
-			v += 8;
-			y += 16;
-			output += 32;
-		}
-        
-        // process the rest of the line
-        for (; i < width*2; i += 2)
-        {
-			if (i % 4 == 0)
-            {
-				*output++ = *u++;
-            }
-			else
-            {
-				*output++ = *v++;
-            }
-			*output++ = *y++;
-        }
-	}
-    _mm_empty();        // Clear aliased fp register state
-
-	if (shift_picture_up) {
-		// Fill bottom line with one line of black UYVY
-		for (i = 0; i < width*2; i += 4) {
-			*output++ = 0x80;
-			*output++ = 0x10;
-			*output++ = 0x80;
-			*output++ = 0x10;
-		}
-	}
-}
-
-#else 
-
-void yuv422_to_uyvy_2(int width, int height, int shift_picture_up, uint8_t *input, uint8_t *output)
-{
-	int i, j;
-	uint8_t *y, *u, *v;
-	int start_line = 0;
-
-	y = input;
-	u = input + width*height;
-	v = input + width*height * 3 / 2;
-    
-	// Shifting picture up one line is necessary when decoding PAL DV50
-	if (shift_picture_up) 
-    {
-		// Skip one line of input picture and start one line lower
-		start_line = 1;
-        y += width;
-        u += width / 2;
-        v += width / 2;
-	}
-
-	// Convert to UYVY
-	for (j = start_line; j < height; j++) 
-    {
-		for (i = 0; i < width; i++)
-		{
-			if (i % 2 == 0)
-				*output++ = *u++;
-			else
-				*output++ = *v++;
-			*output++ = *y++;
-		}
-	}
-
-	if (shift_picture_up) {
-		// Fill bottom line with one line of black
-		for (i = 0; i < width*2; i += 4) {
-			*output++ = 0x80;
-			*output++ = 0x10;
-			*output++ = 0x80;
-			*output++ = 0x10;
-		}
-	}
-}
-
-#endif
-
-
-
-
-// Convert YUV444 (planar) to UYVY (packed 4:2:2) using naive conversion where
-// alternate UV samples are simply discarded.
-// Used for displaying rawfiles of YUV444 (unlikely to be used with an AVFrame input
-// since few codecs output YUV444).
-void yuv444_to_uyvy(int width, int height, uint8_t *input, uint8_t *output)
-{
-	int i, j;
-	uint8_t *y, *u, *v;
-	y = input;
-	u = y + width * height;
-	v = y + width * height * 2;
-
-	// Convert to UYVY
-	for (j = 0; j < height; j++) {
-		for (i = 0; i < width; i++)
-		{
-			if (i % 2 == 0) {		// even pixels, copy U, Y, V
-				*output++ = *u++;
-				*output++ = *y++;
-				*output++ = *v++;
-			}
-			else {					// odd pixels, copy just Y
-				*output++ = *y++;
-				u++;
-				v++;
-			}
-		}
-	}
-}
 
 /* TODO: an MMX version and improved calculation */
 void yuv4xx_to_uyvy(int width, int height, int shift_picture_up, AVFrame *input, uint8_t *output)
@@ -703,6 +536,173 @@ void yuv4xx_to_yuv4xx(int width, int height, int shift_picture_up, AVFrame *inpu
             memset(vOut, 0x80, width / 4);
         }
     }
+}
+
+#endif /* defined(HAVE_FFMPEG) */
+
+#ifdef __MMX__
+void yuv422_to_uyvy_2(int width, int height, int shift_picture_up, uint8_t *input, uint8_t *output)
+{
+	int i, j, start_line;
+	uint8_t *y, *u, *v;
+
+	y = input;
+	u = input + width*height;
+	v = input + width*height * 3/2;
+	start_line = 0;
+
+	// Shifting picture up one line is necessary when decoding PAL DV50
+	if (shift_picture_up) {
+		// Skip one line of input picture and start one line lower
+		y += width;
+		u += width / 2;
+		v += width / 2;
+		start_line = 1;
+	}
+
+	// Convert to UYVY
+	for (j = start_line; j < height; j++)
+	{
+		for (i = 0; i < width*2; i += 32)
+		{
+            if (i + 32 > width*2)
+            {
+                // can no longer process in 32 byte chunks - revert to basic method below
+                break;
+            }
+            
+			__m64 m0 = *(__m64 *)u;			// load UUUU UUUU(0)
+			__m64 m1 = *(__m64 *)v;			// load VVVV VVVV(0)
+			__m64 m2 = m0;					// copy U for mix op
+			m0 = _mm_unpacklo_pi8(m0, m1);	// mix -> UVUV UVUV(0) (in m0)
+			m2 = _mm_unpackhi_pi8(m2, m1);	// mix -> UVUV UVUV(8) (in m2)
+
+			__m64 m3 = *(__m64 *)y;			// load YYYY YYYY(0)
+			__m64 m5 = *(__m64 *)(y+8);		// load YYYY YYYY(8)
+			__m64 m4 = m0;
+			__m64 m6 = m2;
+			m0 = _mm_unpacklo_pi8(m0, m3);	// mix to UYVY UYVY(0)
+			m4 = _mm_unpackhi_pi8(m4, m3);	// mix to UYVY UYVY(8)
+			m2 = _mm_unpacklo_pi8(m2, m5);	// mix to UYVY UYVY(16)
+			m6 = _mm_unpackhi_pi8(m6, m5);	// mix to UYVY UYVY(24)
+
+			*(__m64 *)(output+0) = m0;
+			*(__m64 *)(output+8) = m4;
+			*(__m64 *)(output+16) = m2;
+			*(__m64 *)(output+24) = m6;
+
+			u += 8;
+			v += 8;
+			y += 16;
+			output += 32;
+		}
+        
+        // process the rest of the line
+        for (; i < width*2; i += 2)
+        {
+			if (i % 4 == 0)
+            {
+				*output++ = *u++;
+            }
+			else
+            {
+				*output++ = *v++;
+            }
+			*output++ = *y++;
+        }
+	}
+    _mm_empty();        // Clear aliased fp register state
+
+	if (shift_picture_up) {
+		// Fill bottom line with one line of black UYVY
+		for (i = 0; i < width*2; i += 4) {
+			*output++ = 0x80;
+			*output++ = 0x10;
+			*output++ = 0x80;
+			*output++ = 0x10;
+		}
+	}
+}
+
+#else 
+
+void yuv422_to_uyvy_2(int width, int height, int shift_picture_up, uint8_t *input, uint8_t *output)
+{
+	int i, j;
+	uint8_t *y, *u, *v;
+	int start_line = 0;
+
+	y = input;
+	u = input + width*height;
+	v = input + width*height * 3 / 2;
+    
+	// Shifting picture up one line is necessary when decoding PAL DV50
+	if (shift_picture_up) 
+    {
+		// Skip one line of input picture and start one line lower
+		start_line = 1;
+        y += width;
+        u += width / 2;
+        v += width / 2;
+	}
+
+	// Convert to UYVY
+	for (j = start_line; j < height; j++) 
+    {
+		for (i = 0; i < width; i++)
+		{
+			if (i % 2 == 0)
+				*output++ = *u++;
+			else
+				*output++ = *v++;
+			*output++ = *y++;
+		}
+	}
+
+	if (shift_picture_up) {
+		// Fill bottom line with one line of black
+		for (i = 0; i < width*2; i += 4) {
+			*output++ = 0x80;
+			*output++ = 0x10;
+			*output++ = 0x80;
+			*output++ = 0x10;
+		}
+	}
+}
+
+#endif
+
+
+
+
+// Convert YUV444 (planar) to UYVY (packed 4:2:2) using naive conversion where
+// alternate UV samples are simply discarded.
+// Used for displaying rawfiles of YUV444 (unlikely to be used with an AVFrame input
+// since few codecs output YUV444).
+void yuv444_to_uyvy(int width, int height, uint8_t *input, uint8_t *output)
+{
+	int i, j;
+	uint8_t *y, *u, *v;
+	y = input;
+	u = y + width * height;
+	v = y + width * height * 2;
+
+	// Convert to UYVY
+	for (j = 0; j < height; j++) {
+		for (i = 0; i < width; i++)
+		{
+			if (i % 2 == 0) {		// even pixels, copy U, Y, V
+				*output++ = *u++;
+				*output++ = *y++;
+				*output++ = *v++;
+			}
+			else {					// odd pixels, copy just Y
+				*output++ = *y++;
+				u++;
+				v++;
+			}
+		}
+	}
 }
 
 

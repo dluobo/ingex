@@ -278,18 +278,27 @@ static int get_timecode_count(DVSSink* sink, TimecodeType type, TimecodeSubType 
 /* TODO: should SV_CHECK exit or just return 0? */
 static int display_on_sv_fifo(DVSSink* sink, DVSFifoBuffer* fifoBuffer)
 {
-    // write frame to sv fifo
     sv_fifo_buffer      *pbuffer;
     sv_handle           *sv = sink->sv;
+    int i;
 
     
     PTHREAD_MUTEX_LOCK(&sink->dvsFifoMutex)
 
-    // Get sv memmory buffer
-    SV_CHK_OFAIL(sv_fifo_getbuffer(sv, sink->svfifo, &pbuffer, NULL, 0));
+    /* Get fifo buffer */
+    SV_CHK_OFAIL(sv_fifo_getbuffer(sv, sink->svfifo, &pbuffer, NULL, SV_FIFO_FLAG_NODMAADDR));
 
-    pbuffer->dma.addr = (char*)fifoBuffer->buffer;
-    pbuffer->dma.size = fifoBuffer->bufferSize;
+    /* set the video and audio data sizes */
+    pbuffer->video[0].size = sink->videoDataSize;
+    pbuffer->audio[0].size = sink->audioDataSize;
+    
+    /* set the video and audio data pointers */
+    pbuffer->video[0].addr = (char*)fifoBuffer->buffer;
+    for (i = 0; i < MAX_DVS_AUDIO_STREAMS; i += 2)
+    {
+        pbuffer->audio[0].addr[i / 2] = (char*)fifoBuffer->buffer + sink->audioPairOffset[i / 2];
+    }
+    
 
     /* set VITC */
     if (sink->palFFMode)

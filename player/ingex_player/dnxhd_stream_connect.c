@@ -30,9 +30,13 @@ int create_dnxhd_connect(MediaSink* sink, int sinkStreamId, int sourceStreamId,
 #else
 
 
+#ifdef FFMPEG_OLD_INCLUDE_PATHS
 #include <ffmpeg/avcodec.h>
 #include <ffmpeg/avformat.h>
-
+#else
+#include <libavcodec/avcodec.h>
+#include <libavformat/avformat.h>
+#endif
 
 
 typedef struct

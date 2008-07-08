@@ -157,6 +157,11 @@ struct MediaPlayer
     
     /* buffer state log file */
     FILE* bufferStateLogFile;
+    
+    /* quality check validation */
+    qc_quit_validator_func qcQuitValidator;
+    void* qcQuitValidatorData;
+    int qcValidateMark;
 };
 
 
@@ -171,10 +176,13 @@ static void _set_current_clip_mark(MediaPlayer* player, UserMark* mark)
 /* caller must lock the user marks mutex */
 static void _clear_marks_model(MediaPlayer* player, int markSelection)
 {
-    PTHREAD_MUTEX_LOCK(&player->marksModel[markSelection]->marksMutex)
-    memset(player->marksModel[markSelection]->markCounts, 0, player->marksModel[markSelection]->numMarkCounts * sizeof(int));
-    player->marksModel[markSelection]->updated = -1; /* set all bits to 1 */
-    PTHREAD_MUTEX_UNLOCK(&player->marksModel[markSelection]->marksMutex)
+    if (player->marksModel[markSelection] != 0)
+    {
+        PTHREAD_MUTEX_LOCK(&player->marksModel[markSelection]->marksMutex)
+        memset(player->marksModel[markSelection]->markCounts, 0, player->marksModel[markSelection]->numMarkCounts * sizeof(int));
+        player->marksModel[markSelection]->updated = -1; /* set all bits to 1 */
+        PTHREAD_MUTEX_UNLOCK(&player->marksModel[markSelection]->marksMutex)
+    }
 }
 
 /* caller must lock the user marks mutex */
@@ -672,7 +680,7 @@ static void _add_mark(MediaPlayer* player, int markSelection, int64_t position, 
                     if (mark->pairedMark != NULL)
                     {
                         mark->pairedMark->pairedMark = NULL;
-                        update_mark_and_model(player, markSelection, mark, mark->pairedMark->type & ~player->clipMarkType);
+                        update_mark_and_model(player, markSelection, mark->pairedMark, mark->pairedMark->type & ~player->clipMarkType);
                         if (mark->pairedMark->type == 0)
                         {
                             __remove_mark(player, markSelection, mark->pairedMark);
@@ -997,15 +1005,22 @@ static void ply_play(void* data)
 static void ply_stop(void* data)
 {
     MediaPlayer* player = (MediaPlayer*)data;
+    int locked = 0;
 
     PTHREAD_MUTEX_LOCK(&player->stateMutex)
-    
-    if (!player->state.locked)
-    {
-        player->state.stop = 1;
-    }
-    
+    locked = player->state.locked;
     PTHREAD_MUTEX_UNLOCK(&player->stateMutex)
+
+    if (!locked)
+    {
+        if (player->qcQuitValidator == NULL ||
+            player->qcQuitValidator(player, player->qcQuitValidatorData))
+        {
+            PTHREAD_MUTEX_LOCK(&player->stateMutex)
+            player->state.stop = 1;
+            PTHREAD_MUTEX_UNLOCK(&player->stateMutex)
+        }
+    }
 }
 
 /* not requiring player->state.locked - use internally only */
@@ -1229,18 +1244,50 @@ static void ply_mark_position(void* data, int64_t position, int type, int toggle
     MediaPlayer* player = (MediaPlayer*)data;
     int i;
     int selectionType;
+    int currentMarkType;
+    int validMark;
 
     PTHREAD_MUTEX_LOCK(&player->stateMutex)
     
-    for (i = 0; i < player->numMarkSelections; i++)
+    /* QC validation checks */
+    validMark = 1;
+    if (player->qcValidateMark)
     {
-        selectionType = type & player->userMarksTypeMask[i];
-        if (selectionType != 0)
+        PTHREAD_MUTEX_LOCK(&player->userMarksMutex)
+        currentMarkType = _get_current_mark_type(player, position);
+        PTHREAD_MUTEX_UNLOCK(&player->userMarksMutex)
+        
+        /* check that historic (M1_MARK_TYPE) or transfer (M2_MARK_TYPE) fault marks are set
+        before any video (M3_MARK_TYPE) and audio fault (M3_MARK_TYPE) marks */
+        if (((type & M3_MARK_TYPE) || (type & M4_MARK_TYPE)) &&
+            !(currentMarkType & M1_MARK_TYPE) && !(currentMarkType & M2_MARK_TYPE))
         {
-            add_mark(player, i, position, selectionType, toggle);
+            validMark = 0;
+        }
+        
+        /* if historic or transfer mark types are being toggled off then also
+        remove video and audio fault marks */
+        if (toggle &&
+            ((type & currentMarkType & M1_MARK_TYPE) ||
+                (type & currentMarkType & M2_MARK_TYPE)))
+        {
+            type |= (currentMarkType & M3_MARK_TYPE); /* results is removal (if present) of video fault mark */
+            type |= (currentMarkType & M4_MARK_TYPE); /* results is removal (if present) of audio fault mark */
         }
     }
-    player->state.refreshRequired = 1;
+    
+    if (validMark)
+    {
+        for (i = 0; i < player->numMarkSelections; i++)
+        {
+            selectionType = type & player->userMarksTypeMask[i];
+            if (selectionType != 0)
+            {
+                add_mark(player, i, position, selectionType, toggle);
+            }
+        }
+        player->state.refreshRequired = 1;
+    }
     
     PTHREAD_MUTEX_UNLOCK(&player->stateMutex)
 }
@@ -3092,7 +3139,7 @@ int ply_get_marks(MediaPlayer* player, Mark** marks)
     int count;
     int i;
     int haveMarks;
-    int currentUserMark;
+    int64_t currentMarkPosition;
     
     
     PTHREAD_MUTEX_LOCK(&player->userMarksMutex)
@@ -3114,16 +3161,16 @@ int ply_get_marks(MediaPlayer* player, Mark** marks)
     while (1)
     {
         /* get next nearest user mark */
-        currentUserMark = -1;
+        currentMarkPosition = -1;
         for (i = 0; i < player->numMarkSelections; i++)
         {
             if (userMark[i] != NULL &&
-                (currentUserMark == -1 || userMark[i]->position < userMark[currentUserMark]->position))
+                (currentMarkPosition == -1 || userMark[i]->position < currentMarkPosition))
             {
-                currentUserMark = i;
+                currentMarkPosition = userMark[i]->position;
             }
         }
-        if (currentUserMark == -1)
+        if (currentMarkPosition == -1)
         {
             /* no more marks */
             break;
@@ -3133,7 +3180,7 @@ int ply_get_marks(MediaPlayer* player, Mark** marks)
         for (i = 0; i < player->numMarkSelections; i++)
         {
             if (userMark[i] != NULL &&
-                userMark[i]->position == userMark[currentUserMark]->position)
+                userMark[i]->position == currentMarkPosition)
             {
                 userMark[i] = userMark[i]->next;
             }
@@ -3154,22 +3201,22 @@ int ply_get_marks(MediaPlayer* player, Mark** marks)
     while (1)
     {
         /* get next nearest user mark */
-        currentUserMark = -1;
+        currentMarkPosition = -1;
         for (i = 0; i < player->numMarkSelections; i++)
         {
             if (userMark[i] != NULL &&
-                (currentUserMark == -1 || userMark[i]->position < userMark[currentUserMark]->position))
+                (currentMarkPosition == -1 || userMark[i]->position < currentMarkPosition))
             {
-                currentUserMark = i;
+                currentMarkPosition = userMark[i]->position;
             }
         }
-        if (currentUserMark == -1)
+        if (currentMarkPosition == -1)
         {
             /* no more marks */
             break;
         }
 
-        markP->position = userMark[currentUserMark]->position;
+        markP->position = currentMarkPosition;
         markP->type = 0;
         markP->pairedPosition = -1;
         
@@ -3177,7 +3224,7 @@ int ply_get_marks(MediaPlayer* player, Mark** marks)
         for (i = 0; i < player->numMarkSelections; i++)
         {
             if (userMark[i] != NULL &&
-                userMark[i]->position == userMark[currentUserMark]->position)
+                userMark[i]->position == currentMarkPosition)
             {
                 markP->type |= userMark[i]->type;
                 if (userMark[i]->pairedMark != NULL)
@@ -3227,5 +3274,71 @@ void ply_enable_clip_marks(MediaPlayer* player, int markType)
 void ply_set_start_offset(MediaPlayer* player, int64_t offset)
 {
     player->startOffset = offset;
+}
+
+void ply_set_qc_quit_validator(MediaPlayer* player, qc_quit_validator_func func, void* data)
+{
+    player->qcQuitValidator = func;
+    player->qcQuitValidatorData = data;
+}
+
+int ply_qc_quit_validate(MediaPlayer* player)
+{
+    int64_t availableSourceLength;
+    int clipMarkBusy = 0;
+    UserMark* mark;
+    int foundClipMark = 0;
+    int i;
+    
+    /* check 1: media source is complete */
+    
+    if (msc_get_available_length(player->mediaSource, &availableSourceLength))
+    {
+        if (availableSourceLength < player->sourceLength)
+        {
+            return 1;
+        }
+    }
+    else
+    {
+        ml_log_warn("Failed to get available source length when doing qc quit validation\n");
+    }
+    
+    
+    /* check 2: clip out-point is set */
+    
+    PTHREAD_MUTEX_LOCK(&player->userMarksMutex)
+    clipMarkBusy = (player->currentClipMark != NULL);
+    PTHREAD_MUTEX_UNLOCK(&player->userMarksMutex)
+    if (clipMarkBusy)        
+    {
+        return 2;
+    }
+    
+    
+    /* check 3: programme start and end are set */
+    
+    PTHREAD_MUTEX_LOCK(&player->userMarksMutex)
+    for (i = 0; i < player->numMarkSelections && !foundClipMark; i++)
+    {
+        mark = player->userMarks[i].first;
+        while (mark != NULL && !foundClipMark)
+        {
+            foundClipMark = (mark->pairedMark != NULL);
+            mark = mark->next;
+        }
+    }
+    PTHREAD_MUTEX_UNLOCK(&player->userMarksMutex)
+    if (!foundClipMark)
+    {
+        return 3;
+    }
+    
+    return 0;
+}
+
+void ply_activate_qc_mark_validation(MediaPlayer* player)
+{
+    player->qcValidateMark = 1;
 }
 

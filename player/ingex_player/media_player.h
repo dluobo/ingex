@@ -117,6 +117,15 @@ void ply_enable_clip_marks(MediaPlayer* player, int markType);
 void ply_set_start_offset(MediaPlayer* player, int64_t offset);
 
 
+/* quality checking */
+typedef int (*qc_quit_validator_func)(MediaPlayer* player, void* data);
+
+void ply_set_qc_quit_validator(MediaPlayer* player, qc_quit_validator_func func, void* data);
+int ply_qc_quit_validate(MediaPlayer* player);
+
+void ply_activate_qc_mark_validation(MediaPlayer* player);
+
+
 #ifdef __cplusplus
 }
 #endif
