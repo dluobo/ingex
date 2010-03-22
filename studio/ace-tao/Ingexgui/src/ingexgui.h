@@ -1,7 +1,7 @@
 /***************************************************************************
- *   $Id: ingexgui.h,v 1.15 2009/10/15 13:33:21 john_f Exp $              *
+ *   $Id: ingexgui.h,v 1.16 2010/03/22 14:52:45 john_f Exp $              *
  *                                                                         *
- *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
+ *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
  *   Author: Matthew Marks                                                 *
  *                                                                         *
@@ -300,6 +300,7 @@ class IngexguiFrame : public wxFrame
 		int mLastNonEtoEPlayerMode;
 		int mLastPlayerModeBeforeRec;
 #endif
+		unsigned int mSnapshotIndex;
 		DECLARE_EVENT_TABLE()
 };
 

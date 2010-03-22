@@ -1,7 +1,7 @@
 /***************************************************************************
- *   $Id: ingexgui.cpp,v 1.21 2009/11/24 15:35:24 john_f Exp $            *
+ *   $Id: ingexgui.cpp,v 1.22 2010/03/22 14:52:14 john_f Exp $            *
  *                                                                         *
- *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
+ *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
  *   Author: Matthew Marks                                                 *
  *                                                                         *
@@ -172,6 +172,7 @@ IMPLEMENT_APP(IngexguiApp)
 /// @return Always true.
 bool IngexguiApp::OnInit()
 {
+	XInitThreads(); //This must be called before any other X lib functions in order for multithreaded X apps (i.e. the player) to work properly.  Otherwise XLockDisplay sometimes doesn't lock, resulting in the player hanging until its window gets an event such as focus or resize
 	IngexguiFrame *frame = new IngexguiFrame(argc, argv);
 
 	frame->Show(true);
@@ -233,7 +234,7 @@ int IngexguiApp::FilterEvent(wxEvent& event)
 IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
 	: wxFrame((wxFrame *)0, wxID_ANY, wxT("ingexgui")/*, wxDefaultPosition, wxDefaultSize, wxDEFAULT_FRAME_STYLE | wxWANTS_CHARS* - this doesn't prevent cursor keys being lost, as hoped */), mStatus(STOPPED), mDescriptionControlHasFocus(false), mFilesModeSelectedTrack(0), mToday(wxDateTime::Today()), mLastPlayerMode(BUTTON_MENU_PlayRecordings)
 #ifndef DISABLE_SHARED_MEM_SOURCE
-, mLastNonEtoEPlayerMode(BUTTON_MENU_PlayRecordings)
+, mLastNonEtoEPlayerMode(BUTTON_MENU_PlayRecordings), mSnapshotIndex(1)
 #endif
 {
 	//logging
@@ -2317,19 +2318,11 @@ void IngexguiFrame::OnJumpToTimecode(wxCommandEvent & WXUNUSED(event))
 void IngexguiFrame::OnTakeSnapshot(wxCommandEvent & WXUNUSED(event))
 {
 	std::string fileName = mPlayer->GetCurrentFileName();
-//wxString name = wxString(fileName.c_str(), *wxConvCurrent);
 	if (!fileName.empty()) {
 		unsigned long offset = mPlayer->GetLatestFrameDisplayed();
-		wxExecute(wxString::Format(wxT("player --exit-at-end --disable-shuttle --raw-out /tmp/ingexgui_screenshot%%d.raw --start %ld --clip-duration 1 -m "), offset) + wxString(fileName.c_str(), *wxConvCurrent), wxEXEC_SYNC);
- 		wxExecute(wxT("dd if=/tmp/ingexgui_screenshot0.raw of=/tmp/ingexgui_screenshot0_trimmed.raw bs=720 skip=32"), wxEXEC_SYNC); //ffmpeg -topcrop doesn't work
-		wxExecute(wxT("ffmpeg -y -f rawvideo -pix_fmt uyvy422 -s 720x574 -i /tmp/ingexgui_screenshot0_trimmed.raw -s 1024x576 /tmp/snapshot.jpg")); //574 as single-pixel black line at bottom (so we're losing one pixel); aspect ratio not quite right
-//cmd.Printf(wxT("--start %ld -m %s"), offset, fileName.c_str());
-//cmd.Printf(wxT("--start %ld -m %s"), offset, wxString(fileName.c_str(), *wxConvCurrent).wc_str(*wxConvCurrent)));
-//		wxExecute(wxString((const char *) printf("player --exit-at-end --disable-shuttle --raw-out /tmp/ingexgui_screenshot%%d.raw --start %ld --clip-duration 1 -m %s\n", offset, fileName.c_str()), *wxConvCurrent));
-//std::string cmd = printf("--start %ld -m %s", offset, filename.c_str());
-//std::cerr << cmd.mb_str(*wxConvCurrent) << "\n";
-//		wxExecute(wxString((const char *) printf("player --exit-at-end --disable-shuttle --raw-out /tmp/ingexgui_screenshot%%d.raw --start %ld --clip-duration 1 -m %s\n", offset, fileName.c_str()), *wxConvCurrent));
-//dd if=/tmp/ingexgui_screenshot0.raw bs=720 skip=32 | ffmpeg -y -f rawvideo -pix_fmt uyvy422 -s 720x574 -i - -s 1024x576 pic.jpg
+		wxExecute(wxString::Format(wxT("player --exit-at-end --disable-shuttle --raw-out /tmp/ingexgui_snapshot%%d.raw --clip-start %ld --clip-duration 1 -m "), offset) + wxString(fileName.c_str(), *wxConvCurrent), wxEXEC_SYNC);
+		//The following command is specific to MJPEG SD formats!  Because the data order is planar, the cropping has to be done at the output stage or the chroma breaks.  This may happen to the already-encoded picture which is unfortunate as the black lines may introduce artifacts.  Cropping at the top is to get rid of the VBI; cropping at the bottom is to get rid of one black line (but an even number of lines must be removed).
+		wxExecute(wxString::Format(wxT("ffmpeg -s 720x592 -f rawvideo -pix_fmt yuv422p -y -i /tmp/ingexgui_snapshot0.raw -s 1024x592 -croptop 16 -cropbottom 2 /tmp/ingexgui_snapshot%03d.jpg"), mSnapshotIndex++));
 	}
 }
 
