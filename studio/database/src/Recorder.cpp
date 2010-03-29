@@ -1,5 +1,5 @@
 /*
- * $Id: Recorder.cpp,v 1.2 2008/02/06 16:59:07 john_f Exp $
+ * $Id: Recorder.cpp,v 1.3 2010/03/29 17:06:52 philipn Exp $
  *
  * Recorder and configuration
  *
@@ -20,6 +20,7 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
  
+#include <cstdio>
 #include <cassert>
 
 #include "Recorder.h"

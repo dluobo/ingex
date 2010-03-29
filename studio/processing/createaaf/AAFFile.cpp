@@ -1,5 +1,5 @@
 /*
- * $Id: AAFFile.cpp,v 1.9 2009/12/04 18:30:16 john_f Exp $
+ * $Id: AAFFile.cpp,v 1.10 2010/03/29 17:06:52 philipn Exp $
  *
  * AAF file for defining clips, multi-camera clips, etc
  *
@@ -22,6 +22,7 @@
  
 #include <cassert>
 #include <cstdlib>
+#include <cstdio>
 
 #define __STDC_FORMAT_MACROS
 #include <inttypes.h>

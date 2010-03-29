@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_multicast.c,v 1.11 2009/10/12 15:11:46 john_f Exp $
+ * $Id: nexus_multicast.c,v 1.12 2010/03/29 17:06:52 philipn Exp $
  *
  * Utility to multicast video frames from dvs_sdi ring buffer to network
  *
@@ -26,6 +26,7 @@
 #include <string.h>
 #include <inttypes.h>
 
+#include <limits.h>
 #include <signal.h>
 #include <unistd.h>
 #include <sys/ipc.h>

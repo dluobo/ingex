@@ -1,5 +1,5 @@
 /*
- * $Id: OPAtomPackageCreator.cpp,v 1.1 2009/10/12 15:54:33 philipn Exp $
+ * $Id: OPAtomPackageCreator.cpp,v 1.2 2010/03/29 17:06:52 philipn Exp $
  *
  * OP-Atom package group creator
  *
@@ -23,6 +23,8 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
  * 02110-1301, USA.
  */
+
+#include <cstdio>
 
 #include "OPAtomPackageCreator.h"
 #include "ProdAutoException.h"

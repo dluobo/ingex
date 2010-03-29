@@ -1,5 +1,5 @@
 /*
- * $Id: Timecode.cpp,v 1.6 2009/11/17 16:29:16 john_f Exp $
+ * $Id: Timecode.cpp,v 1.7 2010/03/29 17:06:52 philipn Exp $
  *
  * Class to hold a Timecode
  *
@@ -22,6 +22,7 @@
  * 02110-1301, USA.
  */
 #include <cstring>
+#include <cstdio>
 #include "Timecode.h"
 
 // constants for 30 fps drop frame

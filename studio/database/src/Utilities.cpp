@@ -1,5 +1,5 @@
 /*
- * $Id: Utilities.cpp,v 1.3 2009/10/12 15:44:56 philipn Exp $
+ * $Id: Utilities.cpp,v 1.4 2010/03/29 17:06:52 philipn Exp $
  *
  * General utilities
  *
@@ -23,6 +23,7 @@
 #include <cstdlib>
 #include <cassert>
 #include <ctime>
+#include <cstdio>
 
 #if defined(_WIN32)
 
