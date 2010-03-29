@@ -1,5 +1,5 @@
 /*
- * $Id: D10MXFOP1AWriter.cpp,v 1.2 2010/02/17 16:04:24 philipn Exp $
+ * $Id: D10MXFOP1AWriter.cpp,v 1.3 2010/03/29 17:03:35 philipn Exp $
  *
  * D10 MXF OP-1A writer
  *
@@ -25,6 +25,7 @@
  */
 
 #include <cstring>
+#include <cstdio>
 
 #include "D10MXFOP1AWriter.h"
 #include "libMXF++/MXFException.h"
@@ -137,6 +138,20 @@ private:
 
 
 
+
+uint32_t D10MXFOP1AWriter::GetContentPackageSize(D10SampleRate sample_rate, uint32_t encoded_picture_size)
+{
+    uint32_t content_package_size;
+    
+    content_package_size = get_kag_aligned_size(mxfKey_extlen + LLEN + SYSTEM_ITEM_METADATA_PACK_SIZE + mxfKey_extlen + LLEN);
+    content_package_size += get_kag_aligned_size(mxfKey_extlen + LLEN + encoded_picture_size);
+    if (sample_rate == D10_SAMPLE_RATE_625_50I)
+        content_package_size += get_kag_aligned_size(mxfKey_extlen + LLEN + 1920 * 4 * 8 + 4);
+    else
+        content_package_size += get_kag_aligned_size(mxfKey_extlen + LLEN + 1602 * 4 * 8 + 4);
+    
+    return content_package_size;
+}
 
 
 D10MXFOP1AWriter::D10MXFOP1AWriter()
@@ -780,6 +795,7 @@ void D10MXFOP1AWriter::CreateFile()
     mIndexSegment->appendDeltaEntry(0, 0, deltaOffset);
     deltaOffset += mAudioItemSize;
     mIndexSegment->setEditUnitByteCount(deltaOffset);
+    MXFPP_ASSERT(deltaOffset == GetContentPackageSize(mSampleRate, mEncodedImageSize));
 
     mIndexSegment->write(mMXFFile, mHeaderPartition, &kag_filler_writer);
 }

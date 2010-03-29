@@ -1,5 +1,5 @@
 /*
- * $Id: D10MXFOP1AWriter.h,v 1.2 2010/02/17 16:04:24 philipn Exp $
+ * $Id: D10MXFOP1AWriter.h,v 1.3 2010/03/29 17:03:35 philipn Exp $
  *
  * D10 MXF OP-1A writer
  *
@@ -53,6 +53,9 @@ public:
         D10_SAMPLE_RATE_625_50I,
         D10_SAMPLE_RATE_525_60I,
     } D10SampleRate;
+
+public:
+    static uint32_t GetContentPackageSize(D10SampleRate sample_rate, uint32_t encoded_picture_size);
 
 public:
     D10MXFOP1AWriter();
