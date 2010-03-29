@@ -1,7 +1,7 @@
 /*
- * $Id: LocalIngexPlayer.cpp,v 1.19 2010/01/12 16:49:23 john_f Exp $
+ * $Id: LocalIngexPlayer.cpp,v 1.20 2010/03/29 16:54:14 philipn Exp $
  *
- * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Copyright (C) 2008-2010 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
  * Modifications: Matthew Marks
  *
@@ -24,6 +24,7 @@
 #include <unistd.h>
 #include <cstring>
 #include <memory>
+#include <cstdio>
 
 #include "LocalIngexPlayer.h"
 #include "Macros.h"
@@ -910,6 +911,7 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
                 }
                 break;
 
+#ifndef DISABLE_SHARED_MEM_SOURCE
                 case SHM_INPUT:
                 {
                     SharedMemSource* shmSource = 0;
@@ -924,6 +926,7 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
                     mediaSource = shms_get_media_source(shmSource);
                 }
                 break;
+#endif
 
                 case UDP_INPUT:
                 {

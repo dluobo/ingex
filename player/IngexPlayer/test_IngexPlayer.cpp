@@ -1,7 +1,7 @@
 /*
- * $Id: test_IngexPlayer.cpp,v 1.12 2009/09/18 16:13:50 philipn Exp $
+ * $Id: test_IngexPlayer.cpp,v 1.13 2010/03/29 16:54:14 philipn Exp $
  *
- * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Copyright (C) 2008-2010 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
  * Modifications: Matthew Marks
  *
@@ -152,7 +152,9 @@ static void usage(const char* cmd)
     fprintf(stderr, "  --raw <file>             Raw input\n");
     fprintf(stderr, "  --dv <file>              Raw DV input\n");
     fprintf(stderr, "  --ffmpeg <file>          FFMPEG input\n");
+#ifndef DISABLE_SHARED_MEM_SOURCE
     fprintf(stderr, "  --shm <name>             Shared memory input\n");
+#endif
     fprintf(stderr, "  --udp <name>             UDP input\n");
     fprintf(stderr, "  --balls                  Balls input\n");
     fprintf(stderr, "  --blank                  Blank input\n");
@@ -263,6 +265,7 @@ int main (int argc, const char** argv)
             input.options.clear();
             cmdlnIndex += 2;
         }
+#ifndef DISABLE_SHARED_MEM_SOURCE
         else if (strcmp(argv[cmdlnIndex], "--shm") == 0)
         {
             if (cmdlnIndex + 1 >= argc)
@@ -277,6 +280,7 @@ int main (int argc, const char** argv)
             input.options.clear();
             cmdlnIndex += 2;
         }
+#endif
         else if (strcmp(argv[cmdlnIndex], "--udp") == 0)
         {
             if (cmdlnIndex + 1 >= argc)

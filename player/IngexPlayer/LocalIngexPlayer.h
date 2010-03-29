@@ -1,5 +1,5 @@
 /*
- * $Id: LocalIngexPlayer.h,v 1.15 2009/10/12 16:06:27 philipn Exp $
+ * $Id: LocalIngexPlayer.h,v 1.16 2010/03/29 16:54:14 philipn Exp $
  *
  * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
@@ -63,7 +63,9 @@ typedef enum
     RAW_INPUT,
     DV_INPUT,
     FFMPEG_INPUT,
+#ifndef DISABLE_SHARED_MEM_SOURCE
     SHM_INPUT,
+#endif
     UDP_INPUT,
     BALLS_INPUT,
     BLANK_INPUT,

@@ -1,9 +1,9 @@
 #
-# $Id: Makefile,v 1.13 2010/01/12 16:50:23 john_f Exp $
+# $Id: Makefile,v 1.14 2010/03/29 16:54:14 philipn Exp $
 #
 # Makefile for building IngexPlayer library
 #
-# Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+# Copyright (C) 2008-2010 British Broadcasting Corporation, All Rights Reserved
 # Author: Philip de Nier
 # Modifications: Matthew Marks
 #
@@ -44,6 +44,13 @@ ifndef DISABLE_FFMPEG
 	FFMPEG_INCLUDE_PATH := $(shell for f in /usr/local/include /usr/include; do test -e $$f/ffmpeg && echo $$f && break; test -e $$f/libavcodec && echo $$f && break; done)
 	ifeq "$(FFMPEG_INCLUDE_PATH)" ""
 $(warning no FFMPEG library found - DV stream connector not available)
+	endif
+endif
+
+ifndef DISABLE_SHARED_MEM_SOURCE
+	TEST_SHM_PATH := $(shell for f in $(COMMON_DIR)/nexus_control.h; do test -e $$f && echo $$f && break; done)
+	ifeq "$(TEST_SHM_PATH)" ""
+$(warning shared memory source disabled)
 	endif
 endif
 
@@ -114,6 +121,9 @@ ifdef HAVE_PORTAUDIO
 	LIBS += -lportaudio
 endif
 
+ifndef TEST_SHM_PATH
+	CFLAGS += -DDISABLE_SHARED_MEM_SOURCE
+endif
 
 CC = g++ -g $(CFLAGS) $(OPT)
 AR_APPEND = ar r
