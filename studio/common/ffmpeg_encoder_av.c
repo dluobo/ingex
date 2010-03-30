@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder_av.c,v 1.10 2010/01/12 17:01:00 john_f Exp $
+ * $Id: ffmpeg_encoder_av.c,v 1.11 2010/03/30 12:13:53 philipn Exp $
  *
  * Encode AV and write to file.
  *
@@ -684,7 +684,11 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, ffmp
     enc->num_audio_streams = num_audio_streams;
 
     /* Allocate the output media context */
+#if LIBAVFORMAT_VERSION_INT > ((52<<16)+(25<<8)+0)
     enc->oc = avformat_alloc_context();
+#else
+    enc->oc = av_alloc_format_context();
+#endif
     if (!enc->oc)
     {
         cleanup(enc);
@@ -973,10 +977,10 @@ extern int ffmpeg_encoder_av_close (ffmpeg_encoder_av_t * in_enc)
     if (!(enc->oc->oformat->flags & AVFMT_NOFILE))
     {
         /* close the output file */
-#ifdef FFMPEG_OLD_INCLUDE_PATHS
-        url_fclose(&enc->oc->pb);
-#else
+#if (LIBAVFORMAT_VERSION_INT >= ((52<<16)+(0<<8)+0))
         url_fclose(enc->oc->pb);
+#else
+        url_fclose(&enc->oc->pb);
 #endif
     }
     cleanup (enc);
