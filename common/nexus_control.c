@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_control.c,v 1.3 2009/10/12 14:39:04 john_f Exp $
+ * $Id: nexus_control.c,v 1.4 2010/03/30 08:07:36 john_f Exp $
  *
  * Module for creating and accessing nexus shared control memory
  *
@@ -41,6 +41,7 @@
 #include <pthread.h>
 #include <sys/shm.h>
 
+#include "time_utils.h"
 #include "nexus_control.h"
 
 extern const char *nexus_capture_format_name(CaptureFormat fmt)
@@ -273,12 +274,6 @@ extern int nexus_disconnect_from_shared_mem(const NexusConnection *p)
         return 0;
     }
     return 1;
-}
-
-static int64_t tv_diff_microsecs(const struct timeval* a, const struct timeval* b)
-{
-    int64_t diff = (b->tv_sec - a->tv_sec) * 1000000 + b->tv_usec - a->tv_usec;
-    return diff;
 }
 
 // Returns 1 if connection ok, 0 otherwise and sets return flags
