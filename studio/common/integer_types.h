@@ -25,8 +25,12 @@ typedef __int64 int64_t;
 
 #else
 
+#ifndef __STDC_FORMAT_MACROS
 #define __STDC_FORMAT_MACROS
+#endif
+#ifndef __STDC_CONSTANT_MACROS
 #define __STDC_CONSTANT_MACROS
+#endif
 #include <inttypes.h>
 
 #endif
