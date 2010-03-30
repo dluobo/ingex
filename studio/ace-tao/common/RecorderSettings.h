@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderSettings.h,v 1.7 2009/10/12 15:05:38 john_f Exp $
+ * $Id: RecorderSettings.h,v 1.8 2010/03/30 07:45:13 john_f Exp $
  *
  * Recorder Configuration.
  *
@@ -51,6 +51,7 @@ struct EncodeParams
 {
     int resolution;
     int file_format;
+    int op;
     Input::EnumType source;
     bool bitc;
     std::string dir;
