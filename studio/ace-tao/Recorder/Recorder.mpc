@@ -25,6 +25,8 @@ project(Recorder): taoserver, naming, messaging, valuetype {
   libs += studiocommon
   libs += MXF
   libs += writeavidmxf
+  libs += MXF++
+  libs += D10MXFOP1AWriter
   libs += mxfwriter
   libs += prodautodb
   libs += idl
@@ -37,6 +39,8 @@ project(Recorder): taoserver, naming, messaging, valuetype {
   libpaths += ../../database/src
   libpaths += ../../../libMXF/examples/writeavidmxf
   libpaths += ../../../libMXF/lib
+  libpaths += ../../../libMXF++/examples/D10MXFOP1AWriter
+  libpaths += ../../../libMXF++/libMXF++
   libpaths += ../IDL
   libpaths += /usr/local/lib
   libpaths += /usr/local/lib64
