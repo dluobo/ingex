@@ -35,23 +35,27 @@ WX_DEFINE_ARRAY_INT(int, ArrayOfInts);
 class DragButtonList : public wxScrolledWindow
 {
 	public:
-		DragButtonList(wxWindow *);
-		prodauto::PlayerInputType SetTracks(ChunkInfo &, std::vector<std::string> &, std::vector<std::string> &);
-		const wxString SetMXFFiles(wxArrayString &, std::vector<std::string> &, std::vector<std::string> &, ProdAuto::MxfTimecode &);
-		void SetEtoE(std::vector<std::string> &, std::vector<std::string> &);
+		DragButtonList(wxWindow *, wxEvtHandler *);
+		prodauto::PlayerInputType SetTracks(ChunkInfo*, std::vector<std::string> &, std::vector<std::string> &);
+		prodauto::PlayerInputType SetMXFFiles(wxArrayString &, std::vector<std::string> &, std::vector<std::string> &, ProdAuto::MxfTimecode &);
+#ifndef DISABLE_SHARED_MEM_SOURCE
+		prodauto::PlayerInputType SetEtoE(std::vector<std::string> &, std::vector<std::string> &);
+#endif
 		void EnableAndSelectTracks(std::vector<bool> *, const unsigned int);
 		void Clear();
-		bool EarlierTrack(bool);
-		bool LaterTrack(bool);
-		void SelectQuadrant(unsigned int source);
+		bool EarlierTrack(const bool);
+		bool LaterTrack(const bool);
+		void SelectQuadrant(const unsigned int source);
+		const wxString GetProjectName();
 //		std::vector<std::string> * GetFiles();
 	private:
-		void UpdateUI(wxUpdateUIEvent&);
+		void OnUpdateUI(wxUpdateUIEvent&);
 		void OnRadioButton(wxCommandEvent& event);
 		void Select(unsigned int);
-		wxBoxSizer * mSizer;
 		ArrayOfInts mEnableStates;
 		unsigned int mSelected;
+		wxString mProjectName;
+		wxEvtHandler* mButtonEvtHandler;
 	DECLARE_EVENT_TABLE();
 };
 

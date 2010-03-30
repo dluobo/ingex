@@ -1,7 +1,7 @@
 /***************************************************************************
- *   $Id: controller.cpp,v 1.10 2009/09/18 16:10:15 john_f Exp $          *
+ *   $Id: controller.cpp,v 1.11 2010/03/30 07:47:52 john_f Exp $          *
  *                                                                         *
- *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
+ *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
  *   Author: Matthew Marks                                                 *
  *                                                                         *
@@ -166,9 +166,9 @@ void Controller::Stop(const ProdAuto::MxfTimecode & stopTimecode, const ProdAuto
 	mPostroll = postroll;
 	mDescription = description;
 	mLocators = locators; 
-	mPendingCommand = STOP; //act on it later or detect if it is superceded while retrying
 	if (mReconnecting) { //can't send a command now
 //std::cerr << "Stop while reconnecting: setting timecode undefined" << std::endl;
+		mPendingCommand = STOP; //act on it later or detect if it is superceded while retrying
 		mStopTimecode.undefined = true; //the requested frame might not be available by the time we reconnect
 		mMutex.Unlock();
 	}

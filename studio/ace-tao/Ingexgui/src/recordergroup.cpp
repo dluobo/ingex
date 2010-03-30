@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: recordergroup.cpp,v 1.9 2009/09/18 16:10:16 john_f Exp $       *
+ *   $Id: recordergroup.cpp,v 1.10 2010/03/30 07:47:52 john_f Exp $       *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -49,9 +49,6 @@ END_EVENT_TABLE()
 /// @param doc The saved state.  Pointer merely saved; not used until controller events are received.
 RecorderGroupCtrl::RecorderGroupCtrl(wxWindow * parent, wxWindowID id, const wxPoint & pos, const wxSize & size, int& argc, char** argv, const wxXmlDocument * doc) : wxListBox(parent, id, pos, size, 0, 0, wxLB_MULTIPLE), mEnabledForInput(true), mPreroll(InvalidMxfDuration), mDoc(doc), mChunking(NOT_CHUNKING)
 {
-	SetNextHandler(parent);
-	Insert(wxT(""), 0); //make sure something's in the control...
-	SetMinSize(GetEffectiveMinSize()); //...so that it won't shrink if Comms doesn't start up or there are no recorders initially
 	mComms = new Comms(this, argc, argv);
 }
 
@@ -64,29 +61,14 @@ RecorderGroupCtrl::~RecorderGroupCtrl()
 /// Stops clicks on the control to prevent recorders being selected which might disappear.
 void RecorderGroupCtrl::StartGettingRecorders()
 {
-	wxString dummy;
-	if (mComms->GetStatus(dummy)) { //started properly
+	if (mComms->GetStatus()) { //started properly
 		if (IsEmpty()) {
 			//show that something's happening
 			Insert(wxT("Getting list..."), 0); //this will be removed when the list has been obtained
 		}
-		EnableForInput(false);
 		mComms->StartGettingRecorders(wxEVT_RECORDERGROUP_MESSAGE, ENABLE_REFRESH); //threaded, so won't hang app; sends the given event when it's finished
 	}
-	else {
-		EnableForInput(false);
-	}
-}
-
-/// Enables or disables the control for input, by sending an event to the parent
-/// @param enable The requested state
-void RecorderGroupCtrl::EnableForInput(const bool enable)
-{
-	if (mEnabledForInput != enable) {
-		mEnabledForInput = enable;
-		wxCommandEvent event(wxEVT_RECORDERGROUP_MESSAGE, enable ? ENABLE_REFRESH : DISABLE_REFRESH);
-		GetNextHandler()->AddPendingEvent(event);
-	}
+	mEnabledForInput = false;
 }
 
 /// Responds to Comms finishing obtaining a list of recorders.
@@ -94,7 +76,6 @@ void RecorderGroupCtrl::EnableForInput(const bool enable)
 /// @param event The command event.
 void RecorderGroupCtrl::OnListRefreshed(wxCommandEvent & WXUNUSED(event))
 {
-	EnableForInput();
 	//Remove all the recorders which aren't connected/connecting (and the holding message plus maybe initial padding entry if present)
 	for (unsigned int i = 0; i < GetCount(); i++) {
 		if (!GetController(i)) {
@@ -102,28 +83,31 @@ void RecorderGroupCtrl::OnListRefreshed(wxCommandEvent & WXUNUSED(event))
 		}
 	}
 	wxString errMsg;
-	if (mComms->GetStatus(errMsg)) { //OK
-		wxArrayString names;
-		mComms->GetRecorderList(names);
-		//Put in any recorders not listed, in alphabetical order
-		for (size_t j = 0; j < names.GetCount(); j++) {
-			unsigned int k = 0;
-			do {
-				if (k == GetCount() || GetName(k).Cmp(names[j]) > 0) { //reached end of list, or gone past this recorder, so recorder not listed
-					//add to list
-					Insert(names[j], k);
-					break;
-				}
-				if (GetName(k) == names[j]) { //recorder already listed
-					break;
-				}
-				k++;
-			} while (true);
+	if (mComms->GetStatus(&errMsg)) { //Comms is alive
+		mEnabledForInput = true;
+		if (errMsg.IsEmpty()) {
+			wxArrayString names;
+			mComms->GetRecorderList(names);
+			//Put in any recorders not listed, in alphabetical order
+			for (size_t j = 0; j < names.GetCount(); j++) {
+				unsigned int k = 0;
+				do {
+					if (k == GetCount() || GetName(k).Cmp(names[j]) > 0) { //reached end of list, or gone past this recorder, so recorder not listed
+						//add to list
+						Insert(names[j], k);
+						break;
+					}
+					if (GetName(k) == names[j]) { //recorder already listed
+						break;
+					}
+					k++;
+				} while (true);
+			}
 		}
-	}
-	else { //CORBA prob
-		wxMessageDialog dlg(this, wxT("Failed to get list of recorders:\n") + errMsg, wxT("Comms problem"), wxICON_ERROR | wxOK); //NB not using wxMessageBox because (in GTK) it doesn't stop the parent window from being selected, so it can end up hidden, making the app appear to have hanged
-		dlg.ShowModal();
+		else { //CORBA prob
+			wxMessageDialog dlg(this, wxT("Failed to get list of recorders:\n") + errMsg, wxT("Comms problem"), wxICON_ERROR | wxOK);
+			dlg.ShowModal();
+		}
 	}
 }
 
@@ -556,7 +540,7 @@ void RecorderGroupCtrl::OnTimeposEvent(wxCommandEvent & event)
 /// @param startTimecode First frame in recording after preroll period.
 void RecorderGroupCtrl::RecordAll(const ProdAuto::MxfTimecode startTimecode)
 {
-	EnableForInput(false); //don't want recorders being removed/added while recording
+	mEnabledForInput = false; //don't want recorders being removed/added while recording
 	mStartTimecode = startTimecode;
 	//Ask for all the enable states
 	for (unsigned int i = 0; i < GetCount(); i++) {
@@ -598,7 +582,7 @@ void RecorderGroupCtrl::Stop(const ProdAuto::MxfTimecode & stopTimecode, const w
 		}
 	}
 	mCurrentDescription = description;
-	EnableForInput(); //do it here for safety (in case we get no response)
+	mEnabledForInput = true; //do it here for safety (in case we get no response)
 }
 
 /// Make a chunk: go into chunking mode, and issue a stop command to all recorders with a fixed postroll to make sure their stop times are all in the future.

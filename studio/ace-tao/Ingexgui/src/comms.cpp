@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2006-2008 British Broadcasting Corporation              *
+ *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -35,7 +35,7 @@ Comms::Comms(wxWindow * parent, int& argc, char** argv)
 : wxThread(wxTHREAD_JOINABLE), mParent(parent), mNameService(CosNaming::NamingContext::_nil()), mOK(true), mErrMsg(wxT("Not Initialised")) //joinable thread means we can terminate it in order to be able to delete mCondition safely
 {
 	if (argc < 3) {
-		wxMessageDialog dlg(mParent, wxT("To connect to recorders requires nameserver details on the command line, such as \"-ORBDefaultInitRef corbaloc:iiop:192.168.1.123:8888\"."), wxT("Comms problem"), wxICON_EXCLAMATION | wxOK); //NB not using wxMessageBox because (in GTK) it doesn't stop the parent window from being selected, so it can end up hidden, making the app appear to have hanged
+		wxMessageDialog dlg(mParent, wxT("To connect to recorders requires nameserver details on the command line, such as \"-ORBDefaultInitRef corbaloc:iiop:192.168.1.123:8888\"."), wxT("Comms problem"), wxICON_EXCLAMATION | wxOK);
 		dlg.ShowModal();
 		mOK = false;
 	}
@@ -171,10 +171,10 @@ void Comms::StartGettingRecorders(WXTYPE eventType, int id)
 /// Indicates whether the object is happy.
 /// @param errMsg This will return empty unless there is a problem, whereupon it will contain a description of the error.
 /// @return True if OK.
-bool Comms::GetStatus(wxString & errMsg)
+bool Comms::GetStatus(wxString* errMsg)
 {
 	wxMutexLocker lock(mMutex);
-	errMsg = mErrMsg;
+	if (errMsg) *errMsg = mErrMsg;
 	return mOK;
 }
 
@@ -336,22 +336,22 @@ wxThread::ExitCode Comms::Entry()
 	
 			mNameService = inc;
 		}
-		mOK = !CORBA::is_nil(mNameService);
+		bool ok = !CORBA::is_nil(mNameService);
 
 		CORBA::Object_var obj; //_var deallocates automatically on deletion
 // try to resolve the object using the naming service
-		if(mOK)
+		if(ok)
 		{
 			wxString msg;
 			obj = ResolveObject(name, msg);
 			mMutex.Lock();
 			mErrMsg = msg;
 			mMutex.Unlock();
-			mOK = !CORBA::is_nil(obj.in());
+			ok = !CORBA::is_nil(obj.in());
 		}
 
 	// prepare return value
-		if(mOK)
+		if(ok)
 		{
 		// object resolved
 //			ACE_DEBUG(( LM_INFO, "CorbaMisc::ResolveObject() - successful\n" ));
@@ -365,7 +365,7 @@ wxThread::ExitCode Comms::Entry()
 
 // narrow the object reference
 		CosNaming::NamingContext_var gnc;
-		if(mOK)
+		if(ok)
 		{
 			try
 			{
@@ -380,18 +380,18 @@ wxThread::ExitCode Comms::Entry()
 				mErrMsg = wxT("Exception during narrow: ") + wxString(e._name(), *wxConvCurrent);
 				mErrMsg += wxT("\nTry again.");
 				mMutex.Unlock();
-				mOK = false;
+				ok = false;
 			}
 			if(CORBA::is_nil(gnc))
 			{
 			// object could not be narrowed to a naming context
-				mOK = false;
+				ok = false;
 			}
 		}
 
 		CosNaming::BindingIterator_var it;
 		CosNaming::BindingList_var bl;
-		if(mOK)
+		if(ok)
 		{
 			try
 			{
@@ -405,14 +405,14 @@ wxThread::ExitCode Comms::Entry()
 				mErrMsg = wxT("Exception during list: ") + wxString(e._name(), *wxConvCurrent);
 				mErrMsg += wxT("\nTry again.");
 				mMutex.Unlock();
-				mOK = false;
+				ok = false;
 			}
 		}
 	
 		// If we get this far, we have successfully done an initial list
 		CORBA::ULong i;
 		mRecorderList.Clear();
-		if(mOK)
+		if(ok)
 		{
 			for (i=0; i<bl->length(); i++)
 			{
@@ -424,7 +424,7 @@ wxThread::ExitCode Comms::Entry()
 	
 		// We now have to see if there was an iterator for further items
 	
-		if (mOK && !CORBA::is_nil(it))
+		if (ok && !CORBA::is_nil(it))
 		{
 			try
 			{

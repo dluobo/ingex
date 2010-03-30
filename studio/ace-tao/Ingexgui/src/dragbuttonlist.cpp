@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: dragbuttonlist.cpp,v 1.11 2009/11/24 15:35:24 john_f Exp $      *
+ *   $Id: dragbuttonlist.cpp,v 1.12 2010/03/30 07:47:52 john_f Exp $      *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -28,93 +28,97 @@
 
 BEGIN_EVENT_TABLE(DragButtonList, wxScrolledWindow)
 	EVT_RADIOBUTTON(wxID_ANY, DragButtonList::OnRadioButton)
-	EVT_UPDATE_UI(wxID_ANY, DragButtonList::UpdateUI)
+	EVT_UPDATE_UI(wxID_ANY, DragButtonList::OnUpdateUI)
 END_EVENT_TABLE()
 
 /// @param parent The parent window.
-DragButtonList::DragButtonList(wxWindow * parent)
-: wxScrolledWindow(parent)
+/// @param buttonEvtHandler Where to send events for button pushes.
+DragButtonList::DragButtonList(wxWindow* parent, wxEvtHandler* buttonEvtHandler)
+: wxScrolledWindow(parent), mButtonEvtHandler(buttonEvtHandler)
 {
-	mSizer = new wxBoxSizer(wxVERTICAL);
-	SetSizer(mSizer);
+	SetSizer(new wxBoxSizer(wxVERTICAL));
 }
 
 /// Updates the radio button enable and selected states
-void DragButtonList::UpdateUI(wxUpdateUIEvent& event)
+void DragButtonList::OnUpdateUI(wxUpdateUIEvent& event)
 {
 	if (event.GetId() > wxID_HIGHEST && event.GetId() <= (int) mEnableStates.GetCount() + wxID_HIGHEST) {
 		event.Enable(mEnableStates[event.GetId() - wxID_HIGHEST - 1]);
 	}
-	if (event.GetId() == (int) mSelected + wxID_HIGHEST + 1) {
+	if (event.GetId() == (int) mSelected + wxID_HIGHEST + 1) { //the selected button
 		((wxRadioButton *) event.GetEventObject())->SetValue(true); //toggles the others automatically
 	}
 }
 
-/// Notes the selection when a new button is pressed
+/// Notes the selection when a new button is pressed, and passes the event to the handler expecting to receive it
 void DragButtonList::OnRadioButton(wxCommandEvent& event)
 {
 	mSelected = event.GetId() - wxID_HIGHEST - 1;
 	event.SetId(mSelected);
-	event.Skip(); //pass to the parent to select the source
+	mButtonEvtHandler->AddPendingEvent(event);
 }
 
 /// Replaces current state with a new column of video track radio buttons, one for each track with a video file, and with a quad split button at the top.
 /// Returns information about the new state.
 /// Single track buttons are labelled with the track name and have a tool tip showing the associated filename.
 /// All buttons are disabled.
-/// @param chunkInfo The file names, the track names and the track types.  Gets all info from here rather than examining the files themselves, because they may not be available yet
+/// @param chunkInfo The file names, the track names and the track types.  Gets all info from here rather than examining the files themselves, because they may not be available yet.  Checks for null pointer.
 /// @param fileNames Returns the file name associated with each video track which has a file, with the audio filenames at the end.
 /// @param trackNames Returns corresponding names of tracks.
 /// @return The input type.
-prodauto::PlayerInputType DragButtonList::SetTracks(ChunkInfo & chunkInfo, std::vector<std::string> & fileNames, std::vector<std::string> & trackNames)
+prodauto::PlayerInputType DragButtonList::SetTracks(ChunkInfo* chunkInfo, std::vector<std::string> & fileNames, std::vector<std::string> & trackNames)
 {
-	mSizer->Clear(true); //delete all buttons
-	mEnableStates.Clear();
+	Clear();
 	fileNames.clear();
 	trackNames.clear();
-	wxRadioButton * quadSplit = new wxRadioButton(this, wxID_HIGHEST + 1, wxT("Quad Split")); //the quad split is always the first video track (id = 0)
-	quadSplit->SetToolTip(wxT("Up to the first four successfully opened files"));
-	mSizer->Add(quadSplit, -1, wxEXPAND);
-	mEnableStates.Add(false); //enable later if any files successfully loaded
-	mSelected = 0;
-	std::vector<std::string> audioFileNames;
 	prodauto::PlayerInputType inputType = prodauto::MXF_INPUT;
-	if (chunkInfo.GetFiles()->GetCount()) { //this chunk has files associated
-		wxString name;
-		for (size_t i = 0; i < chunkInfo.GetFiles()->GetCount(); i++) { //recorder loop
-			wxArrayString uniqueNames;
-			for (size_t j = 0; j < (*chunkInfo.GetFiles())[i]->length(); j++) { //file loop
-				name = wxString((*chunkInfo.GetFiles())[i][j].in(), *wxConvCurrent);
-				bool duplicated = (wxNOT_FOUND != uniqueNames.Index(name));
-				if (!duplicated) {
-					uniqueNames.Add(name);
-				}
-				if (ProdAuto::VIDEO == chunkInfo.GetTracks()[i][j].type && !name.IsEmpty()) {
+	if (chunkInfo) {
+		wxRadioButton * quadSplit = new wxRadioButton(this, wxID_HIGHEST + 1, wxT("Quad Split")); //the quad split is always the first video track (id = 0)
+		quadSplit->SetToolTip(wxT("Up to the first four successfully opened files"));
+		GetSizer()->Add(quadSplit, -1, wxEXPAND);
+		mEnableStates.Add(false); //enable later if any files successfully loaded
+		std::vector<std::string> audioFileNames;
+		if (chunkInfo->GetFiles()->GetCount()) { //this chunk has files associated
+			wxString name;
+			for (size_t i = 0; i < chunkInfo->GetFiles()->GetCount(); i++) { //recorder loop
+				wxArrayString uniqueNames;
+				for (size_t j = 0; j < (*chunkInfo->GetFiles())[i]->length(); j++) { //file loop
+					name = wxString((*chunkInfo->GetFiles())[i][j].in(), *wxConvCurrent);
+					bool duplicated = (wxNOT_FOUND != uniqueNames.Index(name));
 					if (!duplicated) {
-						fileNames.push_back((*chunkInfo.GetFiles())[i][j].in());
+						uniqueNames.Add(name);
 					}
-					wxRadioButton * rb = new wxRadioButton(this, fileNames.size() + wxID_HIGHEST + 1, wxString(chunkInfo.GetTracks()[i][j].src.package_name, *wxConvCurrent)); //ID corresponds to file index
-					rb->SetToolTip(name);
-					mSizer->Add(rb, -1, wxEXPAND);
-					mEnableStates.Add(false); //we don't know whether the player can open this file yet
-					trackNames.push_back(chunkInfo.GetTracks()[i][j].src.package_name.in());
-				}
-				else if (ProdAuto::AUDIO == chunkInfo.GetTracks()[i][j].type && !name.IsEmpty() && !duplicated) {
-					audioFileNames.push_back((*chunkInfo.GetFiles())[i][j].in());
+					if (ProdAuto::VIDEO == chunkInfo->GetTracks()[i][j].type && !name.IsEmpty()) {
+						if (!duplicated) {
+							fileNames.push_back((*chunkInfo->GetFiles())[i][j].in());
+						}
+						wxRadioButton * rb = new wxRadioButton(this, fileNames.size() + wxID_HIGHEST + 1, wxString(chunkInfo->GetTracks()[i][j].src.package_name, *wxConvCurrent)); //ID corresponds to file index
+						rb->SetToolTip(name);
+						GetSizer()->Add(rb, -1, wxEXPAND);
+						mEnableStates.Add(false); //we don't know whether the player can open this file yet
+						trackNames.push_back(chunkInfo->GetTracks()[i][j].src.package_name.in());
+					}
+					else if (ProdAuto::AUDIO == chunkInfo->GetTracks()[i][j].type && !name.IsEmpty() && !duplicated) {
+						audioFileNames.push_back((*chunkInfo->GetFiles())[i][j].in());
+					}
 				}
 			}
+			if (fileNames.size()) {
+				wxString extn = wxString(fileNames[0].c_str(), *wxConvCurrent).Right(4);
+				if (!extn.CmpNoCase(wxT(".mov"))) {
+					inputType = prodauto::FFMPEG_INPUT;
+				}
+				else if (!extn.CmpNoCase(wxT(".dv"))) {
+					inputType = prodauto::DV_INPUT;
+				}
+			}
+
 		}
-		if (!name.Right(4).CmpNoCase(wxT(".mov"))) {
-			inputType = prodauto::FFMPEG_INPUT;
+		Layout();
+		//add audio files at the end
+		for (size_t i = 0; i < audioFileNames.size(); i++) {
+			fileNames.push_back(audioFileNames.at(i));
 		}
-		else if (!name.Right(3).CmpNoCase(wxT(".dv"))) {
-			inputType = prodauto::DV_INPUT;
-		}
-	}
-	Layout();
-	//add audio files at the end
-	for (size_t i = 0; i < audioFileNames.size(); i++) {
-		fileNames.push_back(audioFileNames.at(i));
 	}
 	return inputType;
 }
@@ -128,20 +132,18 @@ prodauto::PlayerInputType DragButtonList::SetTracks(ChunkInfo & chunkInfo, std::
 /// @param fileNames Returns the file name associated with each video file, with the audio filenames at the end.
 /// @param trackNames Returns corresponding Clip Track Strings.
 /// @param editRate Returns an edit rate
-/// @return Project name if possible to get.
-const wxString DragButtonList::SetMXFFiles(wxArrayString & paths, std::vector<std::string> & fileNames, std::vector<std::string> & trackNames, ProdAuto::MxfTimecode & editRate)
+/// @return The input type.
+prodauto::PlayerInputType DragButtonList::SetMXFFiles(wxArrayString & paths, std::vector<std::string> & fileNames, std::vector<std::string> & trackNames, ProdAuto::MxfTimecode & editRate)
 {
-	mSizer->Clear(true); //delete all buttons
-	mEnableStates.Clear();
+	Clear();
 	fileNames.clear();
 	trackNames.clear();
 	wxRadioButton * quadSplit = new wxRadioButton(this, wxID_HIGHEST + 1, wxT("Quad Split")); //the quad split is always the first video track (id = 0)
 	quadSplit->SetToolTip(wxT("Up to the first four successfully opened files"));
-	mSizer->Add(quadSplit, -1, wxEXPAND);
+	GetSizer()->Add(quadSplit, -1, wxEXPAND);
 	mEnableStates.Add(false); //enable later if any files successfully loaded
-	mSelected = 0;
 	std::vector<std::string> audioFileNames;
-	wxString projName;
+	mProjectName.Clear();
 	AvidMXFInfo info;
 	editRate.undefined = true;
 	editRate.samples = 0;
@@ -152,16 +154,16 @@ const wxString DragButtonList::SetMXFFiles(wxArrayString & paths, std::vector<st
 				fileNames.push_back(path);
 				wxRadioButton * rb = new wxRadioButton(this, fileNames.size() + wxID_HIGHEST + 1, wxString(info.tracksString, *wxConvCurrent)); //ID corresponds to file index
 				rb->SetToolTip(paths[i]);
-				mSizer->Add(rb, -1, wxEXPAND);
+				GetSizer()->Add(rb, -1, wxEXPAND);
 				mEnableStates.Add(false); //we don't know whether the player can open this file yet
 				trackNames.push_back(info.tracksString);
 				wxString p = wxString(info.projectName, *wxConvCurrent);
-				if (info.projectName && p != projName) {
-					if (projName.Length()) {
-						projName = wxT("<Various projects>");
+				if (info.projectName && p != mProjectName) {
+					if (mProjectName.Length()) {
+						mProjectName = wxT("<Various projects>");
 					}
 					else {
-						projName = p;
+						mProjectName = p;
 					}
 				}
 				editRate.edit_rate.numerator = info.editRate.numerator;
@@ -179,7 +181,13 @@ const wxString DragButtonList::SetMXFFiles(wxArrayString & paths, std::vector<st
 	for (size_t i = 0; i < audioFileNames.size(); i++) {
 		fileNames.push_back(audioFileNames.at(i));
 	}
-	return projName;
+	return prodauto::MXF_INPUT;
+}
+
+/// Returns the project name generated from the last call to SetMXFFiles()
+const wxString DragButtonList::GetProjectName()
+{
+	return mProjectName;
 }
 
 /// Alternative to SetTracks for E to E mode.
@@ -188,19 +196,19 @@ const wxString DragButtonList::SetMXFFiles(wxArrayString & paths, std::vector<st
 /// All buttons are disabled.
 /// @param sources Returns the source name associated with each source.
 /// @param names Returns corresponding displayed names.
+/// @return The input type.
 
 #define N_SOURCES 4
 
-void DragButtonList::SetEtoE(std::vector<std::string> & sources, std::vector<std::string> & names)
+#ifndef DISABLE_SHARED_MEM_SOURCE
+prodauto::PlayerInputType DragButtonList::SetEtoE(std::vector<std::string> & sources, std::vector<std::string> & names)
 {
-	mSizer->Clear(true); //delete all buttons
-	mEnableStates.Clear();
+	Clear();
 	sources.clear();
 	names.clear();
 	wxRadioButton * quadSplit = new wxRadioButton(this, wxID_HIGHEST + 1, wxT("Quad Split")); //the quad split is always the first video source (id = 0)
-	mSizer->Add(quadSplit, -1, wxEXPAND);
+	GetSizer()->Add(quadSplit, -1, wxEXPAND);
 	mEnableStates.Add(false); //enable later if any sources successfully opened
-	mSelected = 0;
 	char source[3];
 	mEnableStates.SetCount(sources.size() + 1);
 	wxString name;
@@ -210,34 +218,35 @@ void DragButtonList::SetEtoE(std::vector<std::string> & sources, std::vector<std
 		name.Printf(wxT("Live %d"), i + 1);
 		names.push_back((const char *) name.mb_str(*wxConvCurrent));
 		wxRadioButton * rb = new wxRadioButton(this, sources.size() + wxID_HIGHEST + 1, name);
-		mSizer->Add(rb, -1, wxEXPAND);
+		GetSizer()->Add(rb, -1, wxEXPAND);
 		mEnableStates.Add(false); //we don't know whether the player can open this source yet
 	}
 	Layout();
+	return prodauto::SHM_INPUT;
 }
+#endif
 
-
-/// Enables/disables and selects the track select buttons.
+/// Enables/disables and selects the track select buttons.  Does nothing if no buttons.
 /// COMMENTED OUT: Hides the quad split button if there is only one track enabled.
 /// @param enables Enable state of each button.
 /// @param selected The button to select.
 void DragButtonList::EnableAndSelectTracks(std::vector<bool> * enables, const unsigned int selected)
 {
-	bool someOK = false;
-	for (size_t i = 0; i < enables->size(); i++) {
-		if (i >= mEnableStates.GetCount() - 1) { //sanity check
-			break;
+	if (mEnableStates.GetCount()) {
+		bool someOK = false;
+		for (size_t i = 0; i < enables->size(); i++) {
+			if (i >= mEnableStates.GetCount() - 1) { //sanity check
+				break;
+			}
+			mEnableStates[i + 1] = enables->at(i); //shifted down one by quad split
+			someOK |= enables->at(i);
 		}
-		mEnableStates[i + 1] = enables->at(i); //shifted down one by quad split
-		someOK |= enables->at(i);
-	}
-	if (selected < mEnableStates.GetCount()) { //sanity check
-		mSelected = selected;
-	}
-	if (mEnableStates.GetCount()) { //sanity check
+		if (selected < mEnableStates.GetCount()) { //sanity check
+			mSelected = selected;
+		}
 //		if (enables->size() < 2) {
 //			//no point in having a quad split if only one track to show
-//			mSizer->GetItem((size_t) 0)->GetWindow()->Hide(); ... this will need updating to reflect MVC philosophy
+//			GetSizer()->GetItem((size_t) 0)->GetWindow()->Hide(); ... this will need updating to reflect MVC philosophy
 //		}
 //		else {
 //			//enable quad split if any files OK
@@ -249,7 +258,7 @@ void DragButtonList::EnableAndSelectTracks(std::vector<bool> * enables, const un
 /// Removes all buttons.
 void DragButtonList::Clear()
 {
-	mSizer->Clear(true); //delete all buttons
+	GetSizer()->Clear(true); //delete all buttons
 	mEnableStates.Clear();
 	mSelected = 0;
 }
@@ -257,7 +266,7 @@ void DragButtonList::Clear()
 /// Determines whether there are selectable tracks before the current one, or selects the next earlier track.
 /// @param select True to select (if possible).
 /// @return If select is false, true if there are earlier selectable tracks than that currently selected.  If select is true, true if a new track was selected.
-bool DragButtonList::EarlierTrack(bool select)
+bool DragButtonList::EarlierTrack(const bool select)
 {
 	int previous;
 	for (previous = mSelected - 1; previous > -1; previous--) {
@@ -275,7 +284,7 @@ bool DragButtonList::EarlierTrack(bool select)
 /// Determines whether there are selectable tracks after the current one, or selects the next track.
 /// @param select True to select (if possible).
 /// @return If select is false, true if there are later selectable tracks than that currently selected.  If select is true, true if a new track was selected.
-bool DragButtonList::LaterTrack(bool select)
+bool DragButtonList::LaterTrack(const bool select)
 {
 	unsigned int next;
 	for (next = mSelected + 1; next < mEnableStates.GetCount(); next++) {
@@ -293,7 +302,7 @@ bool DragButtonList::LaterTrack(bool select)
 /// If the quad split is displayed, switches source to that corresponding to the quadrant value given (if it is available).
 /// If an individual source is displayed, switches to the quad split (thus providing toggling behaviour).
 /// @param source The quadrant (1-4).
-void DragButtonList::SelectQuadrant(unsigned int source)
+void DragButtonList::SelectQuadrant(const unsigned int source)
 {
 	if (0 == mSelected && source && source < mEnableStates.GetCount()) { //showing quad split; sanity check
 		//show individual source
@@ -310,7 +319,7 @@ void DragButtonList::Select(unsigned int source)
 {
 	mSelected = source;
 	wxCommandEvent event(wxEVT_COMMAND_RADIOBUTTON_SELECTED, mSelected);
-	GetParent()->AddPendingEvent(event); //Don't want to go through this class's event handler as no point and it will change the ID
+	mButtonEvtHandler->AddPendingEvent(event); //Don't want to go through this class's event handler as no point and it will change the ID
 }
 
 //drag drop experiment

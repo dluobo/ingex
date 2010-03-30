@@ -45,8 +45,8 @@ class TickTreeCtrl : public wxTreeCtrl
 {
 	public:
 		TickTreeCtrl(wxWindow *, wxWindowID, const wxPoint& = wxDefaultPosition, const wxSize& = wxDefaultSize, const wxString & = wxT(""));
-		bool AddRecorder(const wxString &, ProdAuto::TrackList_var, ProdAuto::TrackStatusList_var, bool, wxXmlDocument &);
-		bool RemoveRecorder(const wxString &);
+		void AddRecorder(const wxString &, ProdAuto::TrackList_var, ProdAuto::TrackStatusList_var, bool, wxXmlDocument &);
+		void RemoveRecorder(const wxString &);
 
 		void Clear();
 		void EnableChanges(bool = true);
@@ -55,6 +55,7 @@ class TickTreeCtrl : public wxTreeCtrl
 		bool SomeEnabled();
 		bool IsRecording();
 		bool AllRecording();
+		bool UsingTapeIds();
 		bool TapeIdsOK();
 		bool HasRecorders();
 		bool IsUnknown();
@@ -89,7 +90,6 @@ class TickTreeCtrl : public wxTreeCtrl
 		const wxString RetrieveMessage(const wxTreeItemId item);
 		void RemoveMessage(const wxTreeItemId item);
 		void SetNodeState(const wxTreeItemId, const TickTreeCtrl::state, const bool = false, const wxString & = wxT(""));
-		bool UsingTapeIds();
 		void SetSignalPresentStatus(const wxTreeItemId, const bool);
 		bool mEnableChanges;
 		wxXmlNode * mTapeIdsNode;

@@ -35,7 +35,7 @@ public:
 	Comms(wxWindow*, int&, char**);
 	~Comms();
 	void StartGettingRecorders(WXTYPE, int);
-	bool GetStatus(wxString & errMsg);
+	bool GetStatus(wxString* errMsg = 0);
 	void GetRecorderList(wxArrayString& list);
 	wxString SelectRecorder(wxString, ::ProdAuto::Recorder_var &);
 private:

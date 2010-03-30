@@ -75,8 +75,7 @@ TickTreeCtrl::TickTreeCtrl(wxWindow * parent, wxWindowID id, const wxPoint& pos,
 /// @param trackStatusList Whether each track is recording or not.
 /// @param routerRecorder True if this recorder is a router recorder - all tracks (should be only one anyway) will be regarded as router tracks and tape IDs will not be used.
 /// @param doc XML document object for tape ID information.
-/// @return True if there are any packages names anywhere which can have tape IDs (i.e. not router recorder package names).
-bool TickTreeCtrl::AddRecorder(const wxString & name, ProdAuto::TrackList_var trackList, ProdAuto::TrackStatusList_var trackStatusList, bool routerRecorder, wxXmlDocument & doc)
+void TickTreeCtrl::AddRecorder(const wxString & name, ProdAuto::TrackList_var trackList, ProdAuto::TrackStatusList_var trackStatusList, bool routerRecorder, wxXmlDocument & doc)
 {
 	Enable();
 	//make recorder root node
@@ -131,18 +130,13 @@ bool TickTreeCtrl::AddRecorder(const wxString & name, ProdAuto::TrackList_var tr
 		wxCommandEvent guiEvent(wxEVT_TREE_MESSAGE, wxID_ANY);
 		guiEvent.SetString(name);
 		AddPendingEvent(guiEvent);
-		return true; //obviously using some tape IDs
-	}
-	else {
-		return UsingTapeIds();
 	}
 }
 
 /// Removes a recorder from the tree.
 /// Updates overall tree state and sends a notification event.
 /// @param recorderName The name of the recorder to remove.
-/// @return True if there are any packages names anywhere which can have tape IDs (i.e. not router recorder package names).
-bool TickTreeCtrl::RemoveRecorder(const wxString & recorderName)
+void TickTreeCtrl::RemoveRecorder(const wxString & recorderName)
 {
 	wxTreeItemId recorder = FindRecorder(recorderName);
 	if (recorder.IsOk()) {
@@ -156,7 +150,6 @@ bool TickTreeCtrl::RemoveRecorder(const wxString & recorderName)
 			ReportState(GetFirstChild(GetRootItem(), dummyCookie)); //any recorder-level ID will do
 		}
 	}
-	return UsingTapeIds();
 }
 
 /// Finds the root node of a recorder by recorder name.

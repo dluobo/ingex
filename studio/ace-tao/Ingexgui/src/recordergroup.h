@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: recordergroup.h,v 1.7 2009/09/18 16:10:16 john_f Exp $         *
+ *   $Id: recordergroup.h,v 1.8 2010/03/30 07:47:52 john_f Exp $         *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -50,15 +50,16 @@ class RecorderGroupCtrl : public wxListBox
 		void Record(const wxString &, const CORBA::BooleanSeq &);
 		void Stop(const ProdAuto::MxfTimecode &, const wxString &, const ProdAuto::LocatorSeq &);
 		void ChunkStop(const ProdAuto::MxfTimecode &, const wxString &, const ProdAuto::LocatorSeq &);
-		void EnableForInput(const bool = true);
+		void EnableForInput(bool state = true) { mEnabledForInput = state; };
+		bool IsEnabledForInput() { return mEnabledForInput; };
 		void SetProjectNames(const wxSortedArrayString &);
 		const wxSortedArrayString & GetProjectNames();
 		void SetCurrentProjectName(const wxString &);
 		const wxString & GetCurrentProjectName();
 		const wxString & GetCurrentDescription();
 		void Deselect(unsigned int);
+		const wxString& GetTimecodeRecorder() { return mTimecodeRecorder; };
 		enum RecorderGroupCtrlEventType {
-			DISABLE_REFRESH,
 			ENABLE_REFRESH,
 			NEW_RECORDER,
 			REMOVE_RECORDER,

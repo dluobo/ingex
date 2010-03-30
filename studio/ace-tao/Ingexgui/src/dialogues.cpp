@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: dialogues.cpp,v 1.11 2009/09/18 16:10:15 john_f Exp $           *
+ *   $Id: dialogues.cpp,v 1.12 2010/03/30 07:47:52 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -291,7 +291,7 @@ void SetProjectDlg::EnterName(const wxString & msg, const wxString & caption, in
 			break;
 		}
 		else {
-			wxMessageDialog dlg(this, wxT("There is already a project named \"") + mProjectList->GetString(mProjectList->FindString( name)) + wxT("\"."), wxT("Name Clash"), wxICON_HAND | wxOK); //prints existing project name (may have case differences)  (NB not using wxMessageBox because (in GTK) it doesn't stop the parent window from being selected, so it can end up hidden, making the app appear to have hanged)
+			wxMessageDialog dlg(this, wxT("There is already a project named \"") + mProjectList->GetString(mProjectList->FindString( name)) + wxT("\"."), wxT("Name Clash"), wxICON_HAND | wxOK); //prints existing project name (may have case differences)
 			dlg.ShowModal();
 		}
 	}
@@ -1689,10 +1689,9 @@ static const int Alignments[N_ALIGNMENTS] = {
 
 /// Sets up dialogue.
 /// @param parent Parent window.
-/// @param chunkButton The "chunk now" button, for manipulating the label and tooltip.
 /// @param savedState The XML document for retrieving and saving settings.
 /// Chunking occurs in two ways: manually, when the "chunk now" button in the main frame is pressed, or automatically, when enabled in this dialogue.
-/// The "chunk now" button should only be enabled while recording.  When pressed, it calls IngexguiFrame::OnChunk(), which disables the button to prevent another chunk being asked for while the previous chunking cycle is still in progress, and calls ChunkingDlg::RunFrom() with no arguments, which stops any pending automatic chunking trigger and resets the button label.  A chunking cycle is then initiated by calling RecorderGroupCtrl::ChunkStop() with the current timecode and recording details.  See later in this description for what happens when this method is called.
+/// The "chunk now" button should only be enabled while recording.  When pressed, it calls IngexguiFrame::OnChunk(), which calls ChunkingDlg::RunFrom() with no arguments.  This stops any pending automatic chunking trigger and resets the button label, and disables the button to prevent another chunk being asked for while the previous chunking cycle is still in progress.  A manual chunking cycle is then initiated by calling RecorderGroupCtrl::ChunkStop() with the current timecode and recording details.  See later in this description for what happens when this method is called.
 /// Automatic chunking is set up at the start of recording, when ChunkingDlg::RunFrom() is called, with the start timecode, and a chunking postroll value determined by the RecorderGroup object (about half a second if all recorders can manage this).  If automatic chunking is enabled in the dialogue, the trigger timecode for the start of the next chunk is worked out.
 /// This is either the start time plus the chunk length, or, if alignment is enabled in the dialogue and the function call, the next alignment point (or the one after that, if it's less than half a minute away).
 /// The "chunk now" button label is set to the time difference if an alignment was calculated (otherwise it's already showing the chunk length, which is the correct value) and a repeating countdown tick timer of a second's duration is started, which decrements the countdown value on the button until it reaches zero.  (It is not used to trigger generation of the next chunk, as a timer cannot be relied upon to do this with frame accuracy.)
@@ -1706,7 +1705,7 @@ static const int Alignments[N_ALIGNMENTS] = {
 /// When recorders report that they are recording, the mode causes a RecorderGroupCtrl::CHUNK_START rather than a RecorderGroupCtrl::RECORDING event to be generated.  This prevents the main frame from calling Timepos::Record(), which would otherwise start the position display counting from zero and generate incorrect positions in the recording list, and also prevents EventList::AddEvent() from being called to append a start entry to the recording list (as the chunk boundary entry performs this function).
 /// Instead, ChunkingDlg::RunFrom() is called with the timecode from the event and the align argument false, to start counting down exactly one chunk length to the next chunk point (if automatic chunking is enabled) - regardless of whether the chunk had been intiated manually or automatically.  The chunking button is also enabled in case it had been pressed by the user, which would have been disabled it.  The cycle thus begins again.
 /// The mode is set back to RecorderGroupCtrl::NOT_CHUNKING when RecorderGroupCtrl::Stop() is called as a result of the user pressing the stop button. ChunkingDlg::RunFrom() with no arguments is called when the frame mode changes from recording, to stop any pending automatic chunking trigger and reset the countdown display on the "chunk now" button.
-ChunkingDlg::ChunkingDlg(wxWindow * parent, wxButton * chunkButton, Timepos * timepos, wxXmlDocument & savedState) : wxDialog(parent, wxID_ANY, wxT("Chunking")), mChunkButton(chunkButton), mTimepos(timepos), mSavedState(savedState), mRecording(false)
+ChunkingDlg::ChunkingDlg(wxWindow * parent, Timepos * timepos, wxXmlDocument & savedState) : wxDialog(parent, wxID_ANY, wxT("Chunking")), mTimepos(timepos), mSavedState(savedState), mCanChunk(false)
 {
 	const wxChar* alignmentLabels[N_ALIGNMENTS] = {
 		wxT("None"),
@@ -1787,7 +1786,7 @@ int ChunkingDlg::ShowModal()
 /// Responds to chunking enable button being toggled by starting/stopping chunking if recording, and updating the button label.
 void ChunkingDlg::OnEnable(wxCommandEvent & WXUNUSED(event))
 {
-	if (mRecording) {
+	if (mCanChunk) {
 		if (mEnableButton->GetValue()) {
 			//start chunk countdown from now
 			ProdAuto::MxfTimecode currentTimecode;
@@ -1797,10 +1796,9 @@ void ChunkingDlg::OnEnable(wxCommandEvent & WXUNUSED(event))
 		else {
 			//stop chunk countdown
 			RunFrom();
-			mRecording = true; //calling RunFrom() will clear mRecording
+			mCanChunk = true; //calling RunFrom() will clear mCanChunk
 		}
 	}
-	SetCountdownLabel();
 }
 
 /// Responds to chunking size being changed by resetting the countdown counter and updating the label on the chunking button if not currently counting down.
@@ -1826,11 +1824,11 @@ void ChunkingDlg::OnChangeChunkAlignment(wxCommandEvent & WXUNUSED(event))
 void ChunkingDlg::RunFrom(const ProdAuto::MxfTimecode & startTimecode, const ProdAuto::MxfDuration & postroll, const bool align)
 {
 	Reset();
-	mRecording = !startTimecode.undefined && startTimecode.edit_rate.denominator; //latter a sanity check
+	mCanChunk = !startTimecode.undefined && startTimecode.edit_rate.denominator; //latter a sanity check
 	if (!postroll.undefined) {
 		mPostroll = postroll;
 	}
-	if (mRecording) {
+	if (mCanChunk) {
 		if (mEnableButton->GetValue()) {
 			//calculate when to chunk to frame accuracy
 			ProdAuto::MxfTimecode triggerTimecode = startTimecode;
@@ -1844,7 +1842,6 @@ void ChunkingDlg::RunFrom(const ProdAuto::MxfTimecode & startTimecode, const Pro
 				//we now know the time to the next chunk
 				mCountdown = (triggerTimecode.samples - startTimecode.samples) / (triggerTimecode.edit_rate.numerator / triggerTimecode.edit_rate.denominator);
 				mCountdownTimer->Start(1000); //countdown in seconds - this is only for the button label
-				SetCountdownLabel();
 			}
 			else {
 				mCountdownTimer->Start(1000); //countdown in seconds - this is only for the button label
@@ -1870,7 +1867,6 @@ void ChunkingDlg::OnTimer(wxTimerEvent & WXUNUSED(event))
 	if (mCountdown) {
 		mCountdown--;
 	}
-	SetCountdownLabel();
 }
 
 /// Resets the countdown to the full chunk size.
@@ -1884,26 +1880,42 @@ void ChunkingDlg::Reset()
 		mCountdownTimer->Stop();
 		mCountdownTimer->Start();
 	}
-	SetCountdownLabel();
 }
 
-/// Updates the label on the chunking button to the current countdown value, or dashes if automatic chunking is not enabled.
-void ChunkingDlg::SetCountdownLabel()
+/// Returns the label for the chunking button.
+const wxString ChunkingDlg::GetChunkButtonLabel()
 {
+	wxString label;
 	if (mEnableButton->GetValue()) {
 		if (mChunkAlignment && !mCountdownTimer->IsRunning()) { //don't know when the next chunk is going to be because that can only be determined when we start recording
-			mChunkButton->SetLabel(wxT("Chunk ???:??"));
-			mChunkButton->SetToolTip(wxT("Automatic chunking is enabled, aligned with timecode"));
+			label = wxT("Chunk ???:??");
 		}
 		else {
-			mChunkButton->SetLabel(wxString::Format(wxT("Chunk %d:%02d"), mCountdown / 60, mCountdown % 60));
-			mChunkButton->SetToolTip(wxT("Automatic chunking is enabled"));
+			label = wxString::Format(wxT("Chunk %d:%02d"), mCountdown / 60, mCountdown % 60);
 		}
 	}
 	else {
-		mChunkButton->SetLabel(wxT("Chunk ---:--"));
-		mChunkButton->SetToolTip(wxT("Automatic chunking is disabled"));
+		label = wxT("Chunk ---:--");
 	}
+	return label;
+}
+
+/// Returns the tooltip for the chunking button.
+const wxString ChunkingDlg::GetChunkButtonToolTip()
+{
+	wxString tooltip;
+	if (mEnableButton->GetValue()) {
+		if (mChunkAlignment && !mCountdownTimer->IsRunning()) { //don't know when the next chunk is going to be because that can only be determined when we start recording
+			tooltip = wxT("Automatic chunking is enabled, aligned with timecode");
+		}
+		else {
+			tooltip = wxT("Automatic chunking is enabled");
+		}
+	}
+	else {
+		tooltip = wxT("Automatic chunking is disabled");
+	}
+	return tooltip;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

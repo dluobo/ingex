@@ -1,7 +1,7 @@
 /***************************************************************************
- *   $Id: recordbutton.cpp,v 1.5 2009/02/26 19:17:10 john_f Exp $            *
+ *   $Id: recordbutton.cpp,v 1.6 2010/03/30 07:47:52 john_f Exp $            *
  *                                                                         *
- *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
+ *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
  *   Author: Matthew Marks                                                 *
  *                                                                         *
@@ -30,7 +30,7 @@ END_EVENT_TABLE()
 
 /// @param parent The parent window.
 /// @param id The button's window ID.
-RecordButton::RecordButton(wxWindow * parent, wxWindowID id, const wxString & label) : wxButton(parent, id, label), mLabel(label)
+RecordButton::RecordButton(wxWindow * parent, wxWindowID id, const wxString & label) : wxButton(parent, id, label), mLabel(label), mEnabled(true)
 {
 	SetNextHandler(parent);
 	mInitialColour = GetBackgroundColour(); //on some machines disabling doesn't grey out the button
@@ -42,67 +42,72 @@ RecordButton::RecordButton(wxWindow * parent, wxWindowID id, const wxString & la
 /// @param event The mouse event.
 void RecordButton::OnLMouseDown(wxMouseEvent & event)
 {
-	if (mClickable) {
+	if (mEnabled) {
 		//act on the click
 		event.Skip();
 	}
 }
 
-/// Prevents the button being clicked.
+/// Makes the button clickable or not.
+/// In record and pending states, this doesn't affect the appearance of the button.  In normal state, it is greyed out if disabled.
+/// @param state True to enable.
+bool RecordButton::Enable(bool state)
+{
+	mEnabled = state;
+	if (wxColour(wxT("RED")) != GetBackgroundColour() && !mTimer->IsRunning()) { //in normal state
+		wxButton::Enable(mEnabled);
+		SetBackgroundColour(mEnabled ? wxColour(0xB0, 0x00, 0x00) : mInitialColour); //dull red or greyed out
+	}
+	return mEnabled;
+}
+
 void RecordButton::Disable()
 {
-//std::cerr << "disable" << std::endl;
 	Enable(false);
 }
 
-/// Makes the button clickable or not.
-/// If enabled, the button is dull red; if disabled, greyed out.
-/// @param state True to enable.
-/// @return Not much use.
-bool RecordButton::Enable(bool state)
-{
-	wxButton::SetLabel(mLabel);
-	mTimer->Stop();
-	if (state) {
-//std::cerr << "enable true" << std::endl;
-		SetBackgroundColour(wxColour(0xB0, 0x00, 0x00)); //dull red
-	}
-	else {
-//std::cerr << "enable false" << std::endl;
-		SetBackgroundColour(mInitialColour);
-	}
-	mClickable = true; //let the underlying button handle this
-	return wxButton::Enable(state); //logic of return value is a bit broken
-}
-
-/// Changes the label displayed on the button (except in recording state)
+/// Changes the label displayed on the button if in normal state.  If in recording/pending state, remembers it for when the state changes to normal
 /// @param label The label to be displayed on the button
 void RecordButton::SetLabel(const wxString & label)
 {
 	mLabel = label;
-	if (wxColour(wxT("RED")) != GetBackgroundColour()) {
+	if (wxColour(wxT("RED")) != GetBackgroundColour() && !mTimer->IsRunning()) { //in normal state
 		wxButton::SetLabel(mLabel);
 	}
 }
 
+/// Puts the button into the normal (non recording or pending) state.
+void RecordButton::Normal() {
+	if (wxColour(wxT("RED")) == GetBackgroundColour() || mTimer->IsRunning()) { //not already in normal state
+//std::cerr << "normal" << std::endl;
+		wxButton::Enable(mEnabled); //can be greyed out or not
+		SetLabel(mLabel);
+		SetBackgroundColour(mEnabled ? wxColour(0xB0, 0x00, 0x00) : mInitialColour); //dull red or greyed out
+		mTimer->Stop();
+	}
+}
+
+
 /// Puts the button into the bright red textless and disabled "record" state.
 void RecordButton::Record() {
+	if (wxColour(wxT("RED")) != GetBackgroundColour() || mTimer->IsRunning()) { //not already in record state
 //std::cerr << "record" << std::endl;
-	wxButton::Enable(); //so it's not greyed out
-	mClickable = false;
-	SetLabel(wxT(""));
-	SetBackgroundColour(wxColour(wxT("RED")));
-	mTimer->Stop();
+		wxButton::Enable(); //so it's not greyed out
+		SetLabel(wxT(""));
+		SetBackgroundColour(wxColour(wxT("RED")));
+		mTimer->Stop();
+	}
 }
 
 /// Puts the button into the flashing bright red textless and disabled "pending" state.
 void RecordButton::Pending() {
+	if (!mTimer->IsRunning()) { //not already in pending mode
 //std::cerr << "pending" << std::endl;
-	wxButton::Enable(); //so it's not greyed out
-	mClickable = false; //so it doesn't respond to mouse clicks
-	wxButton::SetLabel(wxT(""));
-	SetBackgroundColour(wxColour(wxT("RED")));
-	mTimer->Start(125);
+		wxButton::Enable(); //so it's not greyed out
+		wxButton::SetLabel(wxT(""));
+		SetBackgroundColour(wxColour(wxT("RED")));
+		mTimer->Start(125); //for flashing
+	}
 }
 
 /// Responds to flash timer events by toggling colour
@@ -120,5 +125,5 @@ void RecordButton::OnTimer(wxTimerEvent & WXUNUSED(event)) {
 
 /// Returns true if the button is clickable
 bool RecordButton::IsEnabled() {
-	return mClickable && wxButton::IsEnabled();
+	return mEnabled;
 }

@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: eventlist.h,v 1.7 2010/01/12 17:04:15 john_f Exp $             *
+ *   $Id: eventlist.h,v 1.8 2010/03/30 07:47:52 john_f Exp $             *
  *                                                                         *
  *   Copyright (C) 2009 British Broadcasting Corporation                   *
  *   - all rights reserved.                                                *
@@ -96,11 +96,11 @@ class EventList : public wxListView, wxThread //used wxListCtrl for a while beca
 			PROBLEM
 		};
 		void AddEvent(EventType, ProdAuto::MxfTimecode *, const int64_t = 0, const wxString & = wxT(""), const size_t = 0);
-		void AddRecorderData(RecorderData * data);
+		void AddRecorderData(RecorderData * data, bool = true);
 		void DeleteCuePoint();
 		void Select(const long, const bool = false);
 		void SelectPrevTake(const bool);
-		void SelectAdjacentEvent(const bool, const bool = false);
+		void SelectAdjacentEvent(const bool);
 		void SelectNextTake();
 		void SelectLastTake();
 		void CanEdit(const bool);
@@ -110,12 +110,10 @@ class EventList : public wxListView, wxThread //used wxListCtrl for a while beca
 		bool InLastTake();
 		bool AtBottom();
 		bool SelectedChunkHasChanged();
-		bool SelectedEventHasChanged();
 		ProdAuto::MxfTimecode SetCurrentProjectName(const wxString &);
-		bool HasChunkBefore();
-		bool HasChunkAfter();
 		ProdAuto::LocatorSeq GetLocators();
 		ChunkInfo * GetCurrentChunkInfo();
+		int GetCurrentCuePoint();
 		int64_t GetCurrentChunkStartPosition();
 		void Clear();
 		bool JumpToTimecode(const ProdAuto::MxfTimecode &, int64_t &);
@@ -124,6 +122,7 @@ class EventList : public wxListView, wxThread //used wxListCtrl for a while beca
 		void OnEventBeginEdit(wxListEvent&);
 		void OnEventEndEdit(wxListEvent&);
 		void OnRestoreListLabel(wxCommandEvent&);
+		void OnEventSelection(wxListEvent&);
 		void ClearSavedData();
 		const wxString GetCdata(wxXmlNode *);
 		ProdAuto::MxfTimecode Load();
@@ -133,7 +132,7 @@ class EventList : public wxListView, wxThread //used wxListCtrl for a while beca
 		ChunkInfoArray mChunkInfoArray;
 		bool mCanEdit;
 		long mCurrentChunkInfo;
-		long mCurrentSelectedEvent;
+		long mBlockEventItem;
 		wxMutex mMutex;
 		wxString mProjectName;
 		unsigned int mRecordingNodeCount;

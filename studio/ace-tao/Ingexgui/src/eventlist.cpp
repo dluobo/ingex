@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: eventlist.cpp,v 1.9 2010/01/12 17:04:15 john_f Exp $           *
+ *   $Id: eventlist.cpp,v 1.10 2010/03/30 07:47:52 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2009 British Broadcasting Corporation                   *
  *   - all rights reserved.                                                *
@@ -33,7 +33,7 @@
 #define ROOT_NODE_NAME wxT("IngexguiEvents")
 
 BEGIN_EVENT_TABLE( EventList, wxListView )
-//	EVT_LIST_ITEM_SELECTED( wxID_ANY, EventList::OnEventSelection )
+	EVT_LIST_ITEM_SELECTED( wxID_ANY, EventList::OnEventSelection )
 //	EVT_LIST_ITEM_ACTIVATED( wxID_ANY, EventList::OnEventActivated )
 	EVT_LIST_BEGIN_LABEL_EDIT( wxID_ANY, EventList::OnEventBeginEdit )
 	EVT_LIST_END_LABEL_EDIT( wxID_ANY, EventList::OnEventEndEdit )
@@ -44,7 +44,7 @@ const wxString TypeLabels[] = {wxT(""), wxT("Start"), wxT("Cue"), wxT("Chunk Sta
 
 EventList::EventList(wxWindow * parent, wxWindowID id, const wxPoint & pos, const wxSize & size, bool loadEventFiles) :
 wxListView(parent, id, pos, size, wxLC_REPORT|wxLC_SINGLE_SEL|wxSUNKEN_BORDER|wxLC_EDIT_LABELS/*|wxALWAYS_SHOW_SB*/), //ALWAYS_SHOW_SB results in a disabled scrollbar on GTK (wx 2.8))
-mCurrentChunkInfo(-1), mCurrentSelectedEvent(-1), mRecordingNodeCount(0), mChunking(false), mRunThread(false), mSyncThread(false), mLoadEventFiles(loadEventFiles)
+mCurrentChunkInfo(-1), mBlockEventItem(-1), mRecordingNodeCount(0), mChunking(false), mRunThread(false), mSyncThread(false), mLoadEventFiles(loadEventFiles)
 {
 	//set up the columns
 	wxListItem itemCol;
@@ -74,18 +74,41 @@ mCurrentChunkInfo(-1), mCurrentSelectedEvent(-1), mRecordingNodeCount(0), mChunk
 	wxThread::Run();
 }
 
+/// Responds to the selected item being changed, either by the user or programmatically.
+/// Lets the event through unless the selection matches a value flagged for blocking, in which case the flag is reset.
+void EventList::OnEventSelection(wxListEvent& event)
+{
+	if (GetFirstSelected() == mBlockEventItem) {
+		mBlockEventItem = -1;
+	}
+	else {
+		event.Skip();
+	}
+}
+
 /// Returns the chunk info of the currently selected chunk, if any
 ChunkInfo * EventList::GetCurrentChunkInfo()
 {
 	ChunkInfo * currentChunk = 0;
 	long selected = GetFirstSelected();
-	if (-1 < selected) { //something's selected
+	if (-1 < selected && mChunkInfoArray.GetCount()) { //something's selected and has associated chunk info
 		wxListItem item;
 		item.SetId(selected);
 		GetItem(item); //the chunk info index is in this item's data
 		currentChunk = &mChunkInfoArray.Item(item.GetData());
 	}
 	return currentChunk;
+}
+
+/// Returns the currently-selected cue point of the current chunk (0 if none)
+int EventList::GetCurrentCuePoint()
+{
+	int cuePoint = 0;
+	ChunkInfo * currentChunk;
+	if ((currentChunk = GetCurrentChunkInfo())) {
+		cuePoint = GetFirstSelected() - currentChunk->GetStartIndex();
+	}
+	return cuePoint;
 }
 
 /// Returns the position in frames from the start of the selected recording of the start of the selected chunk
@@ -98,34 +121,6 @@ int64_t EventList::GetCurrentChunkStartPosition()
 	else {
 		return 0;
 	}
-}
-
-/// returns true if the currently selected chunk follows on from an earlier chunk in the same recording
-bool EventList::HasChunkBefore()
-{
-	bool hasChunkBefore = false;
-	long selected = GetFirstSelected();
-	if (-1 < selected) { //something's selected
-		wxListItem item;
-		item.SetId(selected);
-		GetItem(item); //the chunk info index is in this item's data
-		hasChunkBefore = mChunkInfoArray.Item(item.GetData()).HasChunkBefore();
-	}
-	return hasChunkBefore;
-}
-
-/// returns true if the currently selected chunk has a chunk following it in the same recording
-bool EventList::HasChunkAfter()
-{
-	bool hasChunkAfter = false;
-	long selected = GetFirstSelected();
-	if (-1 < selected) { //something's selected
-		wxListItem item;
-		item.SetId(selected);
-		GetItem(item); //the chunk info index is in this item's data
-		hasChunkAfter = mChunkInfoArray.Item(item.GetData()).HasChunkAfter();
-	}
-	return hasChunkAfter;
 }
 
 /// Responds to an attempt to edit in the event list.
@@ -193,7 +188,7 @@ void EventList::Clear()
 	DeleteAllItems();
 	mChunkInfoArray.Empty();
 	mCurrentChunkInfo = -1;
-	mCurrentSelectedEvent = -1;
+	mBlockEventItem = -1;
 	ClearSavedData();
 }
 
@@ -211,54 +206,55 @@ bool EventList::SelectedChunkHasChanged()
 	return hasChanged;
 }
 
-/// Returns true if the selected event has changed since the last time this function was called.
-bool EventList::SelectedEventHasChanged()
-{
-	bool hasChanged = GetFirstSelected() != mCurrentSelectedEvent;
-	mCurrentSelectedEvent = GetFirstSelected();
-	return hasChanged;
-}
-
 /// Selects the given item
 /// @param item The item to select.
-/// @param doNotFlag Do not flag the change for SelectedEventHasChanged() if not already changed
-void EventList::Select(const long item, const bool doNotFlag)
+/// @param blockEvent Do not generate a selection event if selection changes.
+void EventList::Select(const long item, const bool blockEvent)
 {
-	if (doNotFlag && GetFirstSelected() == mCurrentSelectedEvent) {
-		mCurrentSelectedEvent = item;
+	if (GetFirstSelected() != item) {
+		if (blockEvent) mBlockEventItem = item;
+		wxListView::Select(item);
 	}
-	wxListView::Select(item);
 }
 
-/// Moves to the start event of the current take or the start of the previous take.
-/// Generates a select event if new event selected.
+/// Moves to the start of the current take or the start of the previous take, if at the start of a take.
+/// Generates a select event if a change in the recording or recording position results.  Do not use GetSelection() on this event because it might not work.  Use GetFirstSelected() on this object instead.
 /// @param withinTake True to move to the start of the current take rather than the previous take; assumed to be at the start event of a take if this is false
-void EventList::SelectPrevTake(const bool withinTake) {
+void EventList::SelectPrevTake(const bool withinTake)
+{
+	bool continueBackwards = !withinTake; //if at the start of a take, move back to the previous take
 	wxListItem item;
-	if (withinTake) {
-		item.SetId(GetFirstSelected());
-	}
-	else {
-		item.SetId(GetFirstSelected() - 1);
-	}
-	while (item.GetId() > 0) {
-		GetItem(item);
-		if (item.GetText() == TypeLabels[START]) { //found the start of the recording
-			break;
+	item.SetId(GetFirstSelected());
+	if (item.GetId() >= 0) { //something's selected
+		GetItem(item); //the chunk info index is in this item's data
+		size_t chunk = item.GetData(); //the currently selected chunk
+		while (chunk) { //not the first chunk
+			if (!mChunkInfoArray.Item(chunk).HasChunkBefore()) { //the start of a take
+				if (continueBackwards) {
+					continueBackwards = false; //have gone back the extra take
+				}
+				else {
+					break;
+				}
+			}
+			chunk--;
 		}
-		item.SetId(item.GetId() - 1);
-	}
-	if (item.GetId() > -1) {
-		Select(item.GetId());
-		EnsureVisible(GetFirstSelected());
+		if ((int) mChunkInfoArray.Item(chunk).GetStartIndex() != GetFirstSelected()) { //moving position in the list
+			Select(mChunkInfoArray.Item(chunk).GetStartIndex()); //will generate an event
+			EnsureVisible(GetFirstSelected());
+		}
+		else if (withinTake) { //moving position in the recording but not moving position in the list
+			//simulate selecting the start of the recording - NB no way I can see of setting the selection value of the event
+			wxListEvent event(wxEVT_COMMAND_LIST_ITEM_SELECTED);
+			GetParent()->AddPendingEvent(event);
+		}
 	}
 }
 
 /// Moves up or down the event list by one item, if possible.
 /// Generates a select event if new event selected.
 /// @param down True to move downwards; false to move upwards.
-/// @param doNotFlag Do not flag the change for SelectedEventHasChanged() if not already changed
-void EventList::SelectAdjacentEvent(const bool down, const bool doNotFlag) {
+void EventList::SelectAdjacentEvent(const bool down) {
 	long selected = GetFirstSelected();
 	if (-1 == selected) {
 		//nothing selected
@@ -272,9 +268,6 @@ void EventList::SelectAdjacentEvent(const bool down, const bool doNotFlag) {
 		//not the last item
 		Select(++selected); //select next item down
 	}
-	if (doNotFlag && selected != mCurrentSelectedEvent) {
-		mCurrentSelectedEvent = selected;
-	}
 	EnsureVisible(selected); //scroll if necessary
 }
 
@@ -284,31 +277,31 @@ void EventList::SelectNextTake()
 {
 	wxListItem item;
 	item.SetId(GetFirstSelected());
-	while (item.GetId() < GetItemCount() - 1) {
-		item.SetId(item.GetId() + 1);
-		GetItem(item);
-		if (item.GetText() == TypeLabels[START]) { //found the start of the next recording
-			break;
+	if (item.GetId() >= 0) { //something's selected
+		size_t chunk = item.GetData(); //the currently selected chunk
+		while (1) {
+			if (++chunk == mChunkInfoArray.GetCount()) { //the last chunk
+				Select(GetItemCount() - 1); //go to the end of it
+				break;
+			}
+			else if (!mChunkInfoArray.Item(chunk).HasChunkBefore()) { //we've found a new take
+				Select(mChunkInfoArray.Item(chunk).GetStartIndex()); //go to the beginning of it
+				break;
+			}
 		}
+		EnsureVisible(GetFirstSelected());
 	}
-	Select(item.GetId());
-	EnsureVisible(GetFirstSelected());
 }
 
 /// Moves to the start of the last take, if possible.
 /// Generates a select event if new event selected.
 void EventList::SelectLastTake() {
-	wxListItem item;
-	item.SetId(GetItemCount());
-	while (item.GetId()) {
-		item.SetId(item.GetId() - 1);
-		GetItem(item);
-		if (item.GetText() == TypeLabels[START]) { //found the start of the last recording
-			break;
+	size_t chunk = mChunkInfoArray.GetCount();
+	if (chunk) {
+		while (chunk--) { //not gone past the beginning
+			if (!mChunkInfoArray.Item(chunk).HasChunkBefore()) break; //abort at a start event
 		}
-	}
-	if (GetItemCount()) {
-		Select(item.GetId());
+		Select(mChunkInfoArray.Item(chunk).GetStartIndex());
 		EnsureVisible(GetFirstSelected());
 	}
 }
@@ -326,7 +319,10 @@ bool EventList::LatestChunkCuePointIsSelected() {
 		wxListItem item;
 		item.SetId(GetFirstSelected());
 		GetItem(item); //the chunk info index is in this item's data
-		isCuePoint = item.GetData() == mChunkInfoArray.GetCount() - 1 && item.GetText() == TypeLabels[CUE];
+		isCuePoint =
+		 item.GetData() == mChunkInfoArray.GetCount() - 1 //in the latest chunk
+		 && GetFirstSelected() > (int) mChunkInfoArray.Item(item.GetData()).GetStartIndex() //not at the start
+		 && GetFirstSelected() <= (int) mChunkInfoArray.Item(item.GetData()).GetStartIndex() + (int) mChunkInfoArray.Item(item.GetData()).GetCuePointFrames().size(); //not at any stop point
 	}
 	return isCuePoint;
 }
@@ -345,7 +341,7 @@ bool EventList::AtStartOfTake()
 		wxListItem item;
 		item.SetId(GetFirstSelected());
 		GetItem(item);
-		atStartOfTake = item.GetText() == TypeLabels[START];
+		atStartOfTake = (GetFirstSelected() == (int) mChunkInfoArray.Item(item.GetData()).GetStartIndex()) && (!mChunkInfoArray.Item(item.GetData()).HasChunkBefore()); //start of a chunk selected and chunk is the firs in a recording
 	}
 	return atStartOfTake;
 }
@@ -355,16 +351,16 @@ bool EventList::InLastTake()
 {
 	bool inLastTake = false;
 	if (-1 < GetFirstSelected()) {
-		inLastTake = true;
+		inLastTake = true; //unless we find a subsequent take
 		wxListItem item;
-		item.SetId(GetFirstSelected() + 1);
-		while (item.GetId() < GetItemCount()) {
-			GetItem(item);
-			if (item.GetText() == TypeLabels[START]) { //there's another take
+		item.SetId(GetFirstSelected());
+		GetItem(item);
+		size_t chunk = item.GetData();
+		while (++chunk < mChunkInfoArray.GetCount()) { //not reached the end
+			if (!mChunkInfoArray.Item(chunk).HasChunkBefore()) { //start event - there's another event after the selected one
 				inLastTake = false;
 				break;
 			}
-			item.SetId(item.GetId() + 1);
 		}
 	}
 	return inLastTake;
@@ -382,7 +378,7 @@ bool EventList::AtBottom()
 /// Updates the other controls and the player.
 /// @param type The event type: START, CUE, CHUNK, STOP or [PROBLEM]-not fully implemented.
 /// @param timecode Timecode of the event, for START and optionally STOP and CHUNK events (for STOP and CHUNK events, assumed to be frame-accurate, unlike frameCount).
-/// @param frameCount The position in frames, for CUE, STOP and CHUNK events. (For STOP and CHUNK events, if timecode supplied, used to work out the number of days; otherwise, used as the frame-accurate length unless zero, which indicates unknown).
+/// @param frameCount The position in frames, for CUE, STOP and CHUNK events. (For STOP and CHUNK events, if timecode supplied, used to work out the number of days; otherwise, used as the frame-accurate length unless zero, which indicates unknown).  If a negative value supplied for START events, doesn't select the event
 /// @param description A description to display for events other than START (which uses the project name).
 /// @param colourIndex The colour of a CUE event.
 void EventList::AddEvent(EventType type, ProdAuto::MxfTimecode * timecode, const int64_t frameCount, const wxString & description, const size_t colourIndex)
@@ -404,7 +400,7 @@ void EventList::AddEvent(EventType type, ProdAuto::MxfTimecode * timecode, const
 		return;
 	}
 	wxString dummy;
-	int64_t position = frameCount;
+	int64_t position = frameCount == -1 ? 0 : frameCount;
 	ProdAuto::MxfTimecode tc = InvalidMxfTimecode;
 	wxFont font(EVENT_FONT_SIZE, wxFONTFAMILY_DEFAULT, wxFONTFLAG_UNDERLINED, wxFONTFLAG_UNDERLINED);
 	switch (type) {
@@ -520,9 +516,9 @@ void EventList::AddEvent(EventType type, ProdAuto::MxfTimecode * timecode, const
 	item.SetId(GetItemCount()); //will insert at end
 	item.SetData(mChunkInfoArray.GetCount() - 1); //the index of the chunk info for this chunk
 	InsertItem(item); //insert (at end)
-	EnsureVisible(item.GetId()); //scroll down if necessary
-	if (START == type) {
+	if (START == type && frameCount > -1) {
 		Select(item.GetId());
+		EnsureVisible(item.GetId()); //scroll down if necessary
 	}
 #ifndef __WIN32__
 	SetColumnWidth(0, wxLIST_AUTOSIZE);
@@ -569,9 +565,9 @@ void EventList::AddEvent(EventType type, ProdAuto::MxfTimecode * timecode, const
 #endif
 	}
 
-	if (-1 == GetFirstSelected()) { //First item to be put in the list
-		Select(0);
-	}
+//	if (-1 == GetFirstSelected()) { //First item to be put in the list
+//		Select(0);
+//	}
 }
 
 /// Generates a new ChunkInfo object and Recording XML node for a new recording or chunk
@@ -586,30 +582,32 @@ void EventList::NewChunkInfo(ProdAuto::MxfTimecode * timecode, int64_t position)
 		mRecordingNode->AddProperty(wxT("StartTime"), wxString::Format(wxT("%d"), timecode->samples));
 	}
 	mMutex.Unlock();
-	if (mChunking && mChunkInfoArray.GetCount()) mChunkInfoArray.Item(mChunkInfoArray.GetCount() - 1).HasChunkAfter(); //latter check a sanity check
+	if (mChunking && mChunkInfoArray.GetCount()) mChunkInfoArray.Item(mChunkInfoArray.GetCount() - 1).SetHasChunkAfter(); //latter check a sanity check
 	ChunkInfo * info = new ChunkInfo(GetItemCount(), mProjectName, *timecode, position, mChunking); //this will be the index of the current event; deleted by mChunkInfoArray (object array)
 	mChunkInfoArray.Add(info);
 }
 
-/// Returns the timecode of the start of the latest chunk
+/// Returns the timecode of the start of the latest take
 ProdAuto::MxfTimecode EventList::GetStartTimecode()
 {
 	ProdAuto::MxfTimecode startTimecode = InvalidMxfTimecode;
-	wxListItem startItem;
-	startItem.SetId(GetItemCount());
-	while (startItem.GetId()) {
-		startItem.SetId(startItem.GetId() - 1);
-		GetItem(startItem);
-		if (startItem.GetText() == TypeLabels[START]) {
-			startTimecode = mChunkInfoArray.Item(startItem.GetData()).GetStartTimecode();
-			break;
+
+	size_t chunk = mChunkInfoArray.GetCount();
+	if (chunk) {
+		while (chunk--) { //not gone past the beginning
+			if (!mChunkInfoArray.Item(chunk).HasChunkBefore()) { //start event
+				startTimecode = mChunkInfoArray.Item(chunk).GetStartTimecode();
+				break;
+			}
 		}
 	}
 	return startTimecode;
 }
 
 /// Adds track and file list data to the latest chunk info.
-void EventList::AddRecorderData(RecorderData * data)
+/// @param data Track and file lists for a recorder.
+/// @param reload Reload the player (to update with new recording details) if it is showing the latest chunk
+void EventList::AddRecorderData(RecorderData * data, bool reload)
 {
 	if (mChunkInfoArray.GetCount() > mChunking ? 1 : 0) { //sanity check
 		mChunkInfoArray.Item(mChunkInfoArray.GetCount() - (mChunking ? 2 : 1)).AddRecorder(data->GetTrackList(), data->GetFileList());
@@ -628,6 +626,13 @@ void EventList::AddRecorderData(RecorderData * data)
 		mRunThread = true; //in case thread is busy so misses the signal
 		mCondition->Signal();
 		mMutex.Unlock();
+	}
+	//Send an event to reload the player if this programme is selected
+	if (InLastTake() && reload) {
+		//simulate selecting the start of the recording - NB no way I can see of setting the selection value of the event
+		wxListEvent event(wxEVT_COMMAND_LIST_ITEM_SELECTED);
+		event.SetExtraLong(1); //signals a forced reload
+		GetParent()->AddPendingEvent(event);
 	}
 }
 
@@ -839,7 +844,7 @@ ProdAuto::MxfTimecode EventList::Load()
 						timecode.undefined = true;
 					}
 				}
-				AddEvent(START, &timecode);
+				AddEvent(START, &timecode, -1); //doesn't select this event
 				//add cue points to the event list
 				for (size_t j = 0; j < cuePointNodes.size(); j++) {
 					if (cuePointNodes[j]
@@ -923,12 +928,13 @@ ProdAuto::MxfTimecode EventList::Load()
 								}
 							}
 							RecorderData data(trackList, fileList);
-							AddRecorderData(&data);
+							AddRecorderData(&data, false);
 						} //there are file nodes
 					} //recorder node present
 				} //recorder node loop
 			} //recording node present
 		} //recording node loop
+		SelectLastTake(); //not done earlier while recordings were being added
 	} //root node
 	return timecode;
 }

@@ -1,7 +1,7 @@
 /***************************************************************************
- *   $Id: recordbutton.h,v 1.5 2009/02/26 19:17:10 john_f Exp $            *
+ *   $Id: recordbutton.h,v 1.6 2010/03/30 07:47:52 john_f Exp $            *
  *                                                                         *
- *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
+ *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
  *   Author: Matthew Marks                                                 *
  *                                                                         *
@@ -36,14 +36,15 @@ public:
 	virtual void SetLabel(const wxString &);
 	void Record();
 	void Pending();
+	void Normal();
 	bool IsEnabled();
 private:
 	void OnTimer(wxTimerEvent &);
 	void OnLMouseDown(wxMouseEvent &);
-	bool mClickable;
 	wxColour mInitialColour;
 	wxTimer * mTimer;
 	wxString mLabel;
+	bool mEnabled;
 	DECLARE_EVENT_TABLE()
 };
 

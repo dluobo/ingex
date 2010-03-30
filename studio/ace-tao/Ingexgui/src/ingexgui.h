@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: ingexgui.h,v 1.16 2010/03/22 14:52:45 john_f Exp $              *
+ *   $Id: ingexgui.h,v 1.17 2010/03/30 07:47:52 john_f Exp $              *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -60,7 +60,6 @@ static const ProdAuto::MxfTimecode InvalidMxfTimecode = { {0, 0}, 0, true};
 static const ProdAuto::MxfDuration InvalidMxfDuration = { {0, 0}, 0, true};
 
 class TickTreeCtrl;
-class DragButtonList;
 namespace ingex {
 	class JogShuttle;
 }
@@ -76,15 +75,15 @@ IngexguiApp : public wxApp
 
 class Timepos;
 class Player;
-class RecordButton;
 class HelpDlg;
 class RecorderGroupCtrl;
 class CuePointsDlg;
 class TestModeDlg;
 class ChunkingDlg;
 class SelectRecDlg;
-class wxToggleButton;
 class EventList;
+class ChunkInfo;
+class PlayerControl;
 
 /// As the stock text ctrl but passes on focus set and kill events
 class MyTextCtrl : public wxTextCtrl
@@ -92,7 +91,7 @@ class MyTextCtrl : public wxTextCtrl
 	public:
 		MyTextCtrl(wxWindow * parent, wxWindowID id, const wxString & value = wxT(""), const wxPoint & pos = wxDefaultPosition, const wxSize & size = wxDefaultSize, long style = 0) : wxTextCtrl(parent, id, value, pos, size, style) {};
 	private:
-		void OnFocus(wxFocusEvent & event) { GetParent()->AddPendingEvent(event); };
+		void OnFocus(wxFocusEvent & event) { event.Skip(); GetParent()->AddPendingEvent(event); };
 
 		DECLARE_EVENT_TABLE()
 };
@@ -109,18 +108,15 @@ class IngexguiFrame : public wxFrame
 		MENU_SetRolls,
 		MENU_SetCues,
 		MENU_SetProjectName,
-		MENU_Record,
 		MENU_MarkCue,
-		MENU_Stop,
 		MENU_PrevTrack,
 		MENU_NextTrack,
 		MENU_StepBackwards,
 		MENU_StepForwards,
-		MENU_Mute,
 		MENU_Up,
 		MENU_Down,
-		MENU_PrevTake,
-		MENU_NextTake,
+		BUTTON_MENU_PrevTake,
+		BUTTON_MENU_NextTake,
 		MENU_FirstTake,
 		MENU_LastTake,
 		MENU_JumpToTimecode,
@@ -148,17 +144,17 @@ class IngexguiFrame : public wxFrame
 		MENU_PlayerAbsoluteTimecode,
 		MENU_PlayerRelativeTimecode,
 		MENU_PlayerNoOSD,
-		MENU_PlayerMuteAudio,
+		MENU_Mute,
 		MENU_PlayerAudioFollowsVideo,
 		MENU_Chunking,
 		MENU_TestMode,
-		BUTTON_MENU_PlayRecordings,
+		MENU_PlayRecordings,
 #ifndef DISABLE_SHARED_MEM_SOURCE
-		BUTTON_MENU_EtoE,
+		MENU_EtoE,
 #endif
-		BUTTON_MENU_PlayFiles,
-		BUTTON_Record,
-		BUTTON_Stop,
+		MENU_PlayFiles,
+		BUTTON_MENU_Record,
+		BUTTON_MENU_Stop,
 		BUTTON_Cue,
 		BUTTON_Chunk,
 		TIMER_Refresh,
@@ -167,13 +163,16 @@ class IngexguiFrame : public wxFrame
 		BUTTON_ClearDescription,
 		CHOICE_RecorderSelector,
 		CHECKLIST_Tracks,
-		BUTTON_PrevTake,
-		BUTTON_NextTake,
 		BUTTON_DeleteCue,
 		TEXTCTRL_Description,
 		TREE,
 		BUTTON_JumpToTimecode,
 		BUTTON_TakeSnapshot,
+		PLAY_PROJECT_NAME,
+		BITMAP_StatusCtrl,
+		BITMAP_Alert,
+		NOTEBOOK,
+		TIMECODE_BOX,
 	};
 	private:
 	enum Stat
@@ -186,6 +185,7 @@ class IngexguiFrame : public wxFrame
 		PAUSED,
 		PLAYING_BACKWARDS,
 	};
+		void OnUpdateUI(wxUpdateUIEvent&);
 		void OnClose(wxCloseEvent&);
 		void OnHelp(wxCommandEvent&);
 		void OnAbout(wxCommandEvent&);
@@ -200,13 +200,6 @@ class IngexguiFrame : public wxFrame
 		void OnCue(wxCommandEvent&);
 		void OnChunkButton(wxCommandEvent&);
 		void OnClearLog(wxCommandEvent&);
-		void OnPlayerOSDChange(wxCommandEvent&);
-#ifdef HAVE_DVS
-		void OnPlayerSDIOSDChange(wxCommandEvent&);
-#endif
-		void OnPlayerOutputTypeChange(wxCommandEvent&);
-		void OnPlayerAudioFollowsVideo(wxCommandEvent& WXUNUSED(event));
-		void OnPlayerMuteAudio(wxCommandEvent& WXUNUSED(event));
 		void OnQuit(wxCommandEvent&);
 		void OnEventSelection(wxListEvent&);
 		void OnEventActivated(wxListEvent&);
@@ -219,88 +212,50 @@ class IngexguiFrame : public wxFrame
 		void OnTimeposEvent(wxCommandEvent&);
 		void OnTestDlgEvent(wxCommandEvent&);
 		void OnTreeEvent(wxCommandEvent&);
-		void OnPlaybackTrackSelect(wxCommandEvent&);
 		void OnShortcut(wxCommandEvent&);
-		void OnPlayerDisable(wxCommandEvent&);
-		void OnPlayerOpenFile(wxCommandEvent&);
 		void OnClearDescription(wxCommandEvent&);
-		void OnDescriptionChange(wxCommandEvent&);
 		void OnDescriptionEnterKey(wxCommandEvent&);
 		void OnFocusGot(wxFocusEvent&);
 		void OnFocusLost(wxFocusEvent&);
 		void OnTestMode(wxCommandEvent&);
-		void OnPlayerMode(wxCommandEvent&);
+		void OnPlayerCommand(wxCommandEvent&);
 		void OnJogShuttleEvent(wxCommandEvent&);
-		void OnPrevTake(wxCommandEvent&);
-		void OnNextTake(wxCommandEvent&);
 
-		void UpdatePlayerAndEventControls(bool = false, bool = false, bool = false);
-		void UpdateTextShortcutStates();
 		void SetStatus(Stat);
 		ProdAuto::MxfDuration SetRoll(const wxChar *, int, const ProdAuto::MxfDuration &, wxStaticBoxSizer *);
 		void ClearLog();
-		void ResetToDisconnected();
 		void Log(const wxString &);
 		void SetProjectName();
 		bool IsRecording();
-		void EnableButtonReliably(wxControl *, bool = true);
-		void CanEditCues(const bool);
 		void EtoE();
-		void EnablePlayer(const bool = true);
+		bool OperationAllowed(const int, bool* = 0);
 
-		wxStaticBitmap * mStatusCtrl, * mAlertCtrl;
+		Player * mPlayer;
 		RecorderGroupCtrl * mRecorderGroup;
-		wxButton * mRecorderListRefreshButton;
-		wxButton * mTapeIdButton;
-		wxButton * mStopButton, * mCueButton, * mChunkButton;
-		RecordButton * mRecordButton;
 		EventList * mEventList;
-		wxNotebook * mNotebook;
-		wxButton * mDescClearButton;
 		TickTreeCtrl * mTree;
 		wxStaticText * mRecProjectNameCtrl;
 		wxBoxSizer * mPlaybackPageSizer;
 		wxStaticBoxSizer * mPlayProjectNameBox;
 		wxStaticText * mPlayProjectNameCtrl;
 		MyTextCtrl * mDescriptionCtrl;
-		wxButton * mPrevTakeButton, * mNextTakeButton;
-		wxButton * mJumpToTimecodeButton;
-		wxButton * mSnapshotButton;
-		wxButton * mDeleteCueButton;
-		DragButtonList * mPlaybackTrackSelector;
 		HelpDlg * mHelpDlg;
 		CuePointsDlg * mCuePointsDlg;
 		TestModeDlg * mTestModeDlg;
 		ChunkingDlg * mChunkingDlg;
-		SelectRecDlg * mSelectRecDlg;
-		wxStaticBoxSizer * mTimecodeBox;
-		wxToggleButton * mPlayRecordingsButton;
-		wxToggleButton * mPlayFilesButton;
-#ifndef DISABLE_SHARED_MEM_SOURCE
-		wxToggleButton * mEtoEButton;
-#endif
 		Stat mStatus;
 		long mEditRateNumerator, mEditRateDenominator;
 		Timepos * mTimepos;
-		Player * mPlayer;
 		wxXmlDocument mSavedState;
 		wxString mSavedStateFilename;
 		bool mDescriptionControlHasFocus;
 		wxLogStream * mLogStream;
-		wxArrayString mFileModeMxfFiles;
-		unsigned int mFilesModeSelectedTrack;
-		wxString mFileModeMovFile;
-		int64_t mFileModeFrameOffset;
-		int64_t mRecordingModeFrameOffset;
 		ingex::JogShuttle * mJogShuttle;
 		JSListener * mJSListener;
+		bool mTextFieldHasFocus;
 		wxDateTime mToday;
-		int mLastPlayerMode;
-#ifndef DISABLE_SHARED_MEM_SOURCE
-		int mLastNonEtoEPlayerMode;
-		int mLastPlayerModeBeforeRec;
-#endif
 		unsigned int mSnapshotIndex;
+		wxMenu *mMenuShortcuts;
 		DECLARE_EVENT_TABLE()
 };
 
