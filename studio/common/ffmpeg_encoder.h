@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder.h,v 1.6 2009/09/18 16:25:20 philipn Exp $
+ * $Id: ffmpeg_encoder.h,v 1.7 2010/03/30 07:55:57 john_f Exp $
  *
  * Encode uncompressed video to DV frames using libavcodec
  *
@@ -65,11 +65,11 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init(ffmpeg_encoder_resolution_t res, i
 * Input            : in_dv  - ffmpeg_encoder_t object returned by ffmpeg_encoder_init
 *                  : p_video - pointer to one frame of 4:2:2 video data
 *                  : int32_t - frame number for DV frame header
-* Return           : 0 if operation is successful
+* Return           : compressed size (bytes) if operation is successful
 *                  : -1 if operation failed
 *                   NOTE: expects an SD VIDEO frames in planar 4:2:2 format
 */
-extern int ffmpeg_encoder_encode (ffmpeg_encoder_t * in_encoder, uint8_t * p_video, uint8_t * * pp_enc_video);
+extern int ffmpeg_encoder_encode (ffmpeg_encoder_t * in_encoder, const uint8_t * p_video, uint8_t * * pp_enc_video);
 
 /*
 * encode audio

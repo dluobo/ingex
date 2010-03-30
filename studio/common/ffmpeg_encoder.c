@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder.c,v 1.8 2009/10/12 16:21:52 john_f Exp $
+ * $Id: ffmpeg_encoder.c,v 1.9 2010/03/30 07:55:57 john_f Exp $
  *
  * Encode uncompressed video to DV using libavcodec
  *
@@ -490,7 +490,7 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init(ffmpeg_encoder_resolution_t res, i
     return (ffmpeg_encoder_t *) encoder;
 }
 
-extern int ffmpeg_encoder_encode(ffmpeg_encoder_t * in_encoder, uint8_t * p_video, uint8_t * * pp_enc_video)
+extern int ffmpeg_encoder_encode(ffmpeg_encoder_t * in_encoder, const uint8_t * p_video, uint8_t * * pp_enc_video)
 {
     internal_ffmpeg_encoder_t * encoder = (internal_ffmpeg_encoder_t *)in_encoder;
     if (!encoder)
@@ -501,7 +501,7 @@ extern int ffmpeg_encoder_encode(ffmpeg_encoder_t * in_encoder, uint8_t * p_vide
     if (encoder->padtop)
     {
         /* set pointers in tmpFrame to point to planes in p_video */
-        avpicture_fill(encoder->tmpFrame, p_video,
+        avpicture_fill(encoder->tmpFrame, (uint8_t*)p_video,
             encoder->codec_context->pix_fmt,
             720, 576);
 
@@ -529,7 +529,7 @@ extern int ffmpeg_encoder_encode(ffmpeg_encoder_t * in_encoder, uint8_t * p_vide
                     NULL, NULL, NULL);
 
         // Input image goes into tmpFrame
-        avpicture_fill((AVPicture*)encoder->tmpFrame, p_video,
+        avpicture_fill((AVPicture*)encoder->tmpFrame, (uint8_t*)p_video,
             encoder->codec_context->pix_fmt,
             encoder->input_width, encoder->input_height);
 
@@ -547,7 +547,7 @@ extern int ffmpeg_encoder_encode(ffmpeg_encoder_t * in_encoder, uint8_t * p_vide
     else
     {
         /* set pointers in inputFrame to point to planes in p_video */
-        avpicture_fill((AVPicture*)encoder->inputFrame, p_video,
+        avpicture_fill((AVPicture*)encoder->inputFrame, (uint8_t*)p_video,
             encoder->codec_context->pix_fmt,
             encoder->codec_context->width, encoder->codec_context->height);
     }
