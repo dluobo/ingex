@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorder.cpp,v 1.12 2009/10/12 15:16:16 john_f Exp $
+ * $Id: IngexRecorder.cpp,v 1.13 2010/03/30 07:53:07 john_f Exp $
  *
  * Class to manage an individual recording.
  *
@@ -417,6 +417,7 @@ void IngexRecorder::Setup(
                     
                     tp.p_opt->resolution = it->resolution;
                     tp.p_opt->file_format = it->file_format;
+                    tp.p_opt->op = it->op;
                     tp.p_opt->bitc = it->bitc;
                     tp.p_opt->dir = it->dir;
 
@@ -435,6 +436,7 @@ void IngexRecorder::Setup(
             tp.p_opt->quad = true;
             tp.p_opt->resolution = it->resolution;
             tp.p_opt->file_format = it->file_format;
+            tp.p_opt->op = it->op;
             tp.p_opt->bitc = it->bitc;
             tp.p_opt->dir = it->dir;
 

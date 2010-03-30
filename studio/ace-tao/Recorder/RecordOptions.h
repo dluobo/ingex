@@ -1,5 +1,5 @@
 /*
- * $Id: RecordOptions.h,v 1.6 2009/03/19 17:54:48 john_f Exp $
+ * $Id: RecordOptions.h,v 1.7 2010/03/30 07:52:35 john_f Exp $
  *
  * Class for channel-specific (i.e. thread-specific) recording data.
  *
@@ -49,6 +49,7 @@ public:
 
     int resolution;
     int file_format;
+    int op;
     std::string dir;
     bool bitc; ///< True for burnt-in timecode
 
