@@ -1,5 +1,5 @@
 /*
- * $Id: recorder_functions.cpp,v 1.30 2010/01/14 15:38:11 john_f Exp $
+ * $Id: recorder_functions.cpp,v 1.31 2010/03/30 07:51:03 john_f Exp $
  *
  * Functions which execute in recording threads.
  *
@@ -52,6 +52,7 @@
 
 // prodauto mxfwriter
 #include "MXFOPAtomWriter.h"
+#include "MXFOP1AWriter.h"
 #include "MXFWriterException.h"
 
 #include <ace/Thread.h>
@@ -261,6 +262,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     // Get encode settings for this thread
     int resolution = p_opt->resolution;
     int file_format = p_opt->file_format;
+    int op = p_opt->op;
 
     // For DVD resolution we override the file format
     if (resolution == DVD_MATERIAL_RESOLUTION)
@@ -744,7 +746,27 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     switch (file_format)
     {
     case MXF_FILE_FORMAT_TYPE:
-        package_creator = new prodauto::OPAtomPackageCreator(true);
+        if (op == OPERATIONAL_PATTERN_1A)
+        {
+            if (resolution != IMX30_MATERIAL_RESOLUTION &&
+                resolution != IMX40_MATERIAL_RESOLUTION &&
+                resolution != IMX50_MATERIAL_RESOLUTION)
+            {
+                ACE_DEBUG((LM_ERROR, ACE_TEXT("Resolution %C not supported for MXF OP-1A format\n"), resolution_name.c_str()));
+                p_rec->NoteFailure();
+
+                ACE_DEBUG((LM_WARNING, ACE_TEXT("Warning: Ignoring OP-1A config and using MXF OP-Atom instead\n")));
+                package_creator = new prodauto::OPAtomPackageCreator(true);
+            }
+            else
+            {
+                package_creator = new prodauto::OP1APackageCreator(true);
+            }
+        }
+        else
+        {
+            package_creator = new prodauto::OPAtomPackageCreator(true);
+        }
         break;
     case MOV_FILE_FORMAT_TYPE:
     case MPG_FILE_FORMAT_TYPE:
@@ -966,7 +988,27 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
 
         try
         {
-            prodauto::MXFOPAtomWriter * p = new prodauto::MXFOPAtomWriter();
+            prodauto::MXFWriter * p;
+            if (op == OPERATIONAL_PATTERN_1A)
+            {
+                if (resolution != IMX30_MATERIAL_RESOLUTION &&
+                    resolution != IMX40_MATERIAL_RESOLUTION &&
+                    resolution != IMX50_MATERIAL_RESOLUTION)
+                {
+                    // only IMX is currently supported for MXF OP-1A
+                    // error and warning message done previously
+                    // revert to MXF OP-Atom
+                    p = new prodauto::MXFOPAtomWriter();
+                }
+                else
+                {
+                    p = new prodauto::MXFOP1AWriter();
+                }
+            }
+            else
+            {
+                p = new prodauto::MXFOPAtomWriter();
+            }
             p->SetCreatingDirectory(creating_path.str());
             p->SetDestinationDirectory(destination_path.str());
             p->SetFailureDirectory(failures_path.str());
@@ -1026,7 +1068,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     }
 
     AudioMixer mixer;
-    if (0 && MP3_MATERIAL_RESOLUTION == resolution)
+    if (1 && MP3_MATERIAL_RESOLUTION == resolution)
     {
         // special for The Bottom Line
         mixer.SetMix(AudioMixer::CH12L3R);
