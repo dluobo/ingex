@@ -1,5 +1,5 @@
 /*
- * $Id: PackageGroup.cpp,v 1.2 2009/10/22 13:53:09 john_f Exp $
+ * $Id: PackageGroup.cpp,v 1.3 2010/03/30 08:15:49 john_f Exp $
  *
  * Package group
  *
@@ -258,6 +258,38 @@ void PackageGroup::RelocateFile(string target_directory)
     }
     
     UpdateFileLocation(to);
+}
+
+void PackageGroup::DeleteFile(uint32_t mp_track_id)
+{
+    string filename = GetFileLocation(mp_track_id);
+
+    if (filename.empty())
+        return;
+    
+    if (remove(filename.c_str()) != 0) {
+        PA_LOGTHROW(ProdAutoException, ("Failed to delete file '%s': %s\n",
+                                         filename.c_str(), strerror(errno)));
+    }
+    
+    UpdateFileLocation(mp_track_id, "");
+}
+
+void PackageGroup::DeleteFile()
+{
+    PA_ASSERT(mOP == OPERATIONAL_PATTERN_1A);
+    
+    string filename = GetFileLocation();
+    
+    if (filename.empty())
+        return;
+    
+    if (remove(filename.c_str()) != 0) {
+        PA_LOGTHROW(ProdAutoException, ("Failed to delete file '%s': %s\n",
+                                         filename.c_str(), strerror(errno)));
+    }
+    
+    UpdateFileLocation("");
 }
 
 PackageGroup* PackageGroup::Clone()

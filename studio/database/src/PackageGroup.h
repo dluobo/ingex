@@ -1,5 +1,5 @@
 /*
- * $Id: PackageGroup.h,v 1.2 2009/10/22 13:53:09 john_f Exp $
+ * $Id: PackageGroup.h,v 1.3 2010/03/30 08:15:51 john_f Exp $
  *
  * Package group
  *
@@ -71,6 +71,8 @@ public:
     std::string CreateFileLocation(std::string directory, std::string file_path);
     void RelocateFile(uint32_t mp_track_id, std::string target_directory);
     void RelocateFile(std::string target_directory); // use for OP-1A only
+    void DeleteFile(uint32_t mp_track_id);
+    void DeleteFile(); // use for OP-1A only
     
     PackageGroup* Clone();
     
