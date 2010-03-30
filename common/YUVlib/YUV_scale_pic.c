@@ -1,5 +1,5 @@
 /*
- * $Id: YUV_scale_pic.c,v 1.3 2009/09/18 15:07:24 philipn Exp $
+ * $Id: YUV_scale_pic.c,v 1.4 2010/03/30 08:20:17 john_f Exp $
  *
  *
  *
@@ -39,7 +39,7 @@ static inline int min(int a, int b)
 }
 
 // Copy a line, scaling down by 256
-static void h_scale_copy(uint32_t* srcLine, BYTE* dstLine,
+static void h_scale_copy(const uint32_t* srcLine, BYTE* dstLine,
                          const int outStride, const int w)
 {
     int     i;
@@ -52,7 +52,7 @@ static void h_scale_copy(uint32_t* srcLine, BYTE* dstLine,
 }
 
 // Scale a line with no filtering
-static void h_sub_alias(BYTE* srcLine, BYTE* dstLine,
+static void h_sub_alias(const BYTE* srcLine, BYTE* dstLine,
                         const int inStride, const int outStride,
                         const int xup, const int xdown, const int w,
                         uint32_t* work)
@@ -90,7 +90,7 @@ static void h_sub_alias(BYTE* srcLine, BYTE* dstLine,
 }
 
 // Same as above, but scales input by 256
-static void h_sub_scale_alias(BYTE* srcLine, uint32_t* dstLine,
+static void h_sub_scale_alias(const BYTE* srcLine, uint32_t* dstLine,
                               const int inStride,
                               int xup, int xdown, const int w)
 {
@@ -125,7 +125,7 @@ static void h_sub_scale_alias(BYTE* srcLine, uint32_t* dstLine,
 }
 
 // Scale a line with interpolation
-static void h_sub_scale_interp(BYTE* srcLine, uint32_t* dstLine,
+static void h_sub_scale_interp(const BYTE* srcLine, uint32_t* dstLine,
                                const int inStride,
                                int xup, int xdown, const int w)
 {
@@ -160,7 +160,7 @@ static void h_sub_scale_interp(BYTE* srcLine, uint32_t* dstLine,
 }
 
 // Scale a line with averaging
-static void h_sub_scale_ave(BYTE* srcLine, uint32_t* dstLine,
+static void h_sub_scale_ave(const BYTE* srcLine, uint32_t* dstLine,
                             const int inStride,
                             int xup, int xdown, const int w)
 {
@@ -238,7 +238,7 @@ static void h_sub_scale_ave(BYTE* srcLine, uint32_t* dstLine,
     }
 }
 
-static void h_sub_interp(BYTE* srcLine, BYTE* dstLine,
+static void h_sub_interp(const BYTE* srcLine, BYTE* dstLine,
                          const int inStride, const int outStride,
                          const int xup, const int xdown, const int w,
                          uint32_t* work)
@@ -247,7 +247,7 @@ static void h_sub_interp(BYTE* srcLine, BYTE* dstLine,
     h_scale_copy(work, dstLine, outStride, w);
 }
 
-static void h_sub_ave(BYTE* srcLine, BYTE* dstLine,
+static void h_sub_ave(const BYTE* srcLine, BYTE* dstLine,
                       const int inStride, const int outStride,
                       const int xup, const int xdown, const int w,
                       uint32_t* work)
@@ -256,10 +256,10 @@ static void h_sub_ave(BYTE* srcLine, BYTE* dstLine,
     h_scale_copy(work, dstLine, outStride, w);
 }
 
-typedef void sub_line_proc2(BYTE*, BYTE*, const int, const int,
+typedef void sub_line_proc2(const BYTE*, BYTE*, const int, const int,
                             int, int, const int, uint32_t*);
 
-static void v_sub_alias(component* inFrame, component* outFrame,
+static void v_sub_alias(const component* inFrame, component* outFrame,
                         const int hfil, int xup, int xdown,
                         int yup, int ydown, int yoff, uint32_t** work)
 {
@@ -361,14 +361,14 @@ static void split_line(uint32_t* acc, uint32_t* inp, BYTE* dstLine,
     }
 }
 
-typedef void sub_line_proc1(BYTE*, uint32_t*, const int, int, int, const int);
+typedef void sub_line_proc1(const BYTE*, uint32_t*, const int, int, int, const int);
 
-static void v_sub_interp(component* inFrame, component* outFrame,
+static void v_sub_interp(const component* inFrame, component* outFrame,
                          const int hfil, int xup, int xdown,
                          int yup, int ydown, int yoff, uint32_t** work)
 {
-    BYTE*   inBuff = inFrame->buff;
-    BYTE*   outBuff = outFrame->buff;
+    const BYTE* inBuff = inFrame->buff;
+    BYTE*       outBuff = outFrame->buff;
     int     j;
     int     err;
     int     A, B;
@@ -411,12 +411,12 @@ static void v_sub_interp(component* inFrame, component* outFrame,
     }
 }
 
-static void v_sub_ave(component* inFrame, component* outFrame,
+static void v_sub_ave(const component* inFrame, component* outFrame,
                       const int hfil, int xup, int xdown,
                       int yup, int ydown, int yoff, uint32_t** work)
 {
-    BYTE*   inBuff = inFrame->buff;
-    BYTE*   outBuff = outFrame->buff;
+    const BYTE* inBuff = inFrame->buff;
+    BYTE*       outBuff = outFrame->buff;
     int     j;
     int     err;
     uint32_t    scale;
@@ -464,7 +464,7 @@ static void v_sub_ave(component* inFrame, component* outFrame,
     }
 }
 
-static void scale_comp(component* inFrame, component* outFrame,
+static void scale_comp(const component* inFrame, component* outFrame,
                        const int hfil, const int vfil,
                        int xup, int xdown, int yup, int ydown,
                        int yoff, uint32_t** work)
@@ -480,7 +480,7 @@ static void scale_comp(component* inFrame, component* outFrame,
                   yup, ydown, yoff, work);
 }
 
-int resize_pic(YUV_frame* in_frame, YUV_frame* out_frame,
+int resize_pic(const YUV_frame* in_frame, YUV_frame* out_frame,
                int x, int y, int xup, int xdown, int yup, int ydown,
                int intlc, int hfil, int vfil, void* workSpace)
 {
@@ -564,7 +564,7 @@ int resize_pic(YUV_frame* in_frame, YUV_frame* out_frame,
     return YUV_OK;
 }
 
-int scale_pic(YUV_frame* in_frame, YUV_frame* out_frame,
+int scale_pic(const YUV_frame* in_frame, YUV_frame* out_frame,
               int x, int y, int w, int h,
               int intlc, int hfil, int vfil, void* workSpace)
 {

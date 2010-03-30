@@ -1,5 +1,5 @@
 /*
- * $Id: YUV_frame.h,v 1.5 2009/09/18 15:07:24 philipn Exp $
+ * $Id: YUV_frame.h,v 1.6 2010/03/30 08:20:17 john_f Exp $
  *
  *
  *
@@ -94,8 +94,8 @@ extern void YUV_709(float R, float G, float B, BYTE* Y, BYTE* U, BYTE* V);
 // Extract first or second field of a frame.
 // field_no (0 or 1) selects the even/top or odd/bottom field.
 // No data copying is done, the output points to the same storage as the input.
-void extract_field(component* in_frame, component* out_field, int field_no);
-void extract_YUV_field(YUV_frame* in_frame, YUV_frame* out_field, int field_no);
+void extract_field(const component* in_frame, component* out_field, int field_no);
+void extract_YUV_field(const YUV_frame* in_frame, YUV_frame* out_field, int field_no);
 
 #ifdef __cplusplus
 }

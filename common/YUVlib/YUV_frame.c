@@ -1,5 +1,5 @@
 /*
- * $Id: YUV_frame.c,v 1.5 2009/09/18 15:07:24 philipn Exp $
+ * $Id: YUV_frame.c,v 1.6 2010/03/30 08:20:17 john_f Exp $
  *
  *
  *
@@ -208,7 +208,7 @@ extern void YUV_709(float R, float G, float B, BYTE* Y, BYTE* U, BYTE* V)
     *V = 128+((112.0*( (0.7874*R)-(0.7152*G)-(0.0722*B))/0.7874)+0.5);
 }
 
-void extract_field(component* in_frame, component* out_field, int field_no)
+void extract_field(const component* in_frame, component* out_field, int field_no)
 {
     *out_field = *in_frame;
     if (field_no == 0)
@@ -221,7 +221,7 @@ void extract_field(component* in_frame, component* out_field, int field_no)
     out_field->lineStride = out_field->lineStride * 2;
 }
 
-void extract_YUV_field(YUV_frame* in_frame, YUV_frame* out_field, int field_no)
+void extract_YUV_field(const YUV_frame* in_frame, YUV_frame* out_field, int field_no)
 {
     extract_field(&in_frame->Y, &out_field->Y, field_no);
     extract_field(&in_frame->U, &out_field->U, field_no);
