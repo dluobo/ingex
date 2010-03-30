@@ -1,5 +1,5 @@
 /*
- * $Id: dvsoem_dummy.c,v 1.10 2010/01/14 14:04:46 john_f Exp $
+ * $Id: dvsoem_dummy.c,v 1.11 2010/03/30 08:11:07 john_f Exp $
  *
  * Implement a debug-only DVS hardware library for testing.
  *
@@ -25,13 +25,15 @@
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <time.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 
-#include "../../video_burn_in_timecode.h"
-#include "../../video_test_signals.h"
-#include "../../audio_utils.h"
+#include "video_burn_in_timecode.h"
+#include "video_test_signals.h"
+#include "audio_utils.h"
+#include "time_utils.h"
 
 #include "dummy_include/dvs_clib.h"
 #include "dummy_include/dvs_fifo.h"
@@ -67,6 +69,7 @@ typedef struct {
     int videomode;
     int frame_size;
     int frame_count;
+    int timecode;
     int dropped;
     int source_input_frames;
     DvsTcQuality tc_quality;
@@ -107,11 +110,6 @@ typedef struct {
     unsigned char   colour[4];
 } bar_colour_t;
 
-static int64_t tv_diff_microsecs(const struct timeval* a, const struct timeval* b)
-{
-    int64_t diff = (b->tv_sec - a->tv_sec) * 1000000 + b->tv_usec - a->tv_usec;
-    return diff;
-}
 
 static void setup_source_buf(DvsCard * dvs)
 {
@@ -332,9 +330,10 @@ int sv_fifo_putbuffer(sv_handle * sv, sv_fifo * pfifo, sv_fifo_buffer * pbuffer,
     int source_offset = dvs->frame_count % dvs->source_input_frames;
     memcpy(pbuffer->dma.addr, dvs->source_dmabuf + source_offset * dvs->frame_size, dvs->frame_size);
 
-    // Update timecodes
+    // Update frame count and timecodes
     dvs->frame_count++;
-    int dvs_tc = int_to_dvs_tc(dvs->frame_count);
+    dvs->timecode++;
+    int dvs_tc = int_to_dvs_tc(dvs->timecode);
     pbuffer->timecode.vitc_tc = (dvs->tc_quality == DvsTcLTC) ? 0 : dvs_tc;
     pbuffer->timecode.vitc_tc2 = (dvs->tc_quality == DvsTcLTC) ? 0 : dvs_tc;
     pbuffer->timecode.ltc_tc = (dvs->tc_quality == DvsTcVITC) ? 0 : dvs_tc;
@@ -382,19 +381,20 @@ int sv_fifo_putbuffer(sv_handle * sv, sv_fifo * pfifo, sv_fifo_buffer * pbuffer,
     dvs->fifo_buffer.audio[0].size = num_samples * 2 * 4;
 
     // Burn timecode in video at x,y offset 40,40
-    burn_mask_uyvy(dvs->frame_count, 40, 40, dvs->width, dvs->height, (unsigned char *)pbuffer->dma.addr);
+    burn_mask_uyvy(dvs->timecode, 40, 40, dvs->width, dvs->height, (unsigned char *)pbuffer->dma.addr);
 
     // Update hardware values
     pbuffer->control.tick = dvs->frame_count * 2;
-    struct timeval now_time;
-    gettimeofday(&now_time, NULL);
-    pbuffer->control.clock_high = now_time.tv_sec;
-    pbuffer->control.clock_low = now_time.tv_usec;
+    int64_t currenttime = gettimeofday64();
+    pbuffer->control.clock_high = currenttime / 0x100000000;
+    pbuffer->control.clock_low = currenttime % 0x100000000;
 
     // Simulate typical behaviour of capture fifo by sleeping until next
     // expected frame boundary. The simulated hardware clock is the system
     // clock, with frames captured at every 40000 (for PAL) microsecond
     // boundary since the initialisation of dvs->start_time.
+    struct timeval now_time;
+    gettimeofday(&now_time, NULL);
     int64_t diff = tv_diff_microsecs(&dvs->start_time, &now_time);
     int64_t expected_diff = (int64_t)dvs->frame_count * dvs->frame_rate_denom * 1000000 / dvs->frame_rate_numer;
     if (expected_diff > diff) {
@@ -410,10 +410,12 @@ int sv_fifo_putbuffer(sv_handle * sv, sv_fifo * pfifo, sv_fifo_buffer * pbuffer,
 
     return SV_OK;
 }
+
 int sv_fifo_stop(sv_handle * sv, sv_fifo * pfifo, int flags)
 {
     return SV_OK;
 }
+
 int sv_fifo_status(sv_handle * sv, sv_fifo * pfifo, sv_fifo_info * pinfo)
 {
     DvsCard *dvs = (DvsCard*)sv;
@@ -468,6 +470,13 @@ int sv_option_get(sv_handle * sv, int code, int *val)
 }
 int sv_currenttime(sv_handle * sv, int brecord, int *ptick, uint32 *pclockhigh, uint32 *pclocklow)
 {
+    DvsCard * dvs = (DvsCard *)sv;
+    *ptick = dvs->frame_count * 2;
+
+    int64_t currenttime = gettimeofday64();
+    *pclockhigh = currenttime / 0x100000000;
+    *pclocklow = currenttime % 0x100000000;
+
     return SV_OK;
 }
 int sv_version_status( sv_handle * sv, sv_version * version, int versionsize, int deviceid, int moduleid, int spare)
@@ -568,6 +577,7 @@ int sv_openex(sv_handle ** psv, char * setup, int openprogram, int opentype, int
         dvs->card = card;
         dvs->channel = channel;
         dvs->frame_count = 0;
+        dvs->timecode = 0;
         dvs->start_time.tv_sec = 0;
         dvs->start_time.tv_usec = 0;
         dvs->dropped = 0;
@@ -578,6 +588,15 @@ int sv_openex(sv_handle ** psv, char * setup, int openprogram, int opentype, int
         dvs->frame_rate_numer = 25;
         dvs->frame_rate_denom = 1;
         dvs->videomode = SV_MODE_PAL;
+
+        // Set initial timecode from time-of-day
+        struct timeval tod_tv;
+        gettimeofday(&tod_tv, NULL);
+        time_t tod_time = tod_tv.tv_sec;
+        struct tm tod_tm;
+        localtime_r(&tod_time, &tod_tm);
+        int secs = tod_tm.tm_hour * 60 * 60 + tod_tm.tm_min * 60 + tod_tm.tm_sec;
+        dvs->timecode = secs * dvs->frame_rate_numer / dvs->frame_rate_denom;
 
         // Setup source audio/video
         setup_source_buf(dvs);
