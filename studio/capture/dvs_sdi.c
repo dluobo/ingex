@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.c,v 1.29 2010/01/14 14:09:33 john_f Exp $
+ * $Id: dvs_sdi.c,v 1.30 2010/03/30 08:13:47 john_f Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -67,6 +67,7 @@ extern "C"
 #include "video_conversion.h"
 #include "video_test_signals.h"
 #include "avsync_analysis.h"
+#include "time_utils.h"
 
 //#define MAX_CHANNELS 8  (defined in nexus_control.h)
 // each DVS card can have 2 channels, so 4 cards gives 8 channels
@@ -159,15 +160,6 @@ static uint8_t *no_video_secondary_frame = NULL;    // captioned black frame say
 #ifndef SV_AUDIOAESROUTING_4_4
 #define SV_AUDIOAESROUTING_4_4      3
 #endif
-
-// Returns time-of-day as microseconds
-static int64_t gettimeofday64(void)
-{
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    int64_t tod = (int64_t)tv.tv_sec * 1000000 + tv.tv_usec ;
-    return tod;
-}
 
 static void timestamp_decode(int64_t timestamp, int * year, int * month, int * day, int * hour, int * minute, int * sec, int * microsec)
 {
@@ -692,7 +684,7 @@ static int derive_timecode_from_master(int64_t tod_rec, int64_t *p_diff_to_maste
 static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_from_video_loss)
 {
     sv_fifo_buffer      *pbuffer;
-    sv_fifo_bufferinfo  bufferinfo;
+    //sv_fifo_bufferinfo  bufferinfo;
     int                 get_res;
     int                 put_res;
     int                 ring_len = p_control->ringlen;
@@ -784,7 +776,7 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
     /*
     Call sv_fifo_putbuffer().
     This performs the DMA transfer of the frame and then releases the buffer back to the fifo.
-    It also fills in our bufferinfo structure.
+    (It also fills in our bufferinfo structure. No longer used)
     */
 
     if (DEBUG_TIMING)
@@ -795,7 +787,8 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
     // reception of a SIGUSR1 can sometimes cause this to fail
     // If it fails we should restart fifo.
     //logTF("chan %d: calling sv_fifo_putbuffer()...\n", chan);
-    put_res = sv_fifo_putbuffer(sv, poutput, pbuffer, &bufferinfo);
+    //put_res = sv_fifo_putbuffer(sv, poutput, pbuffer, &bufferinfo);
+    put_res = sv_fifo_putbuffer(sv, poutput, pbuffer, NULL);
 
     if (DEBUG_TIMING && SV_OK == status_res)
     {
@@ -827,7 +820,7 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
 
     // Get current time-of-day time and this chan's current hw clock.
     int current_tick;
-    // Note DVS type unint32 rather than uint32_t
+    // Note DVS type uint32 rather than uint32_t
     uint32 h_clock;
     uint32 l_clock;
     SV_CHECK( sv_currenttime(sv, SV_CURRENTTIME_CURRENT, &current_tick, &h_clock, &l_clock) );
@@ -840,11 +833,16 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
     // I found that as well, except for the 10th or 11th frame (when the FIFO
     // first wraps round?), when it jumps back in time a lot. Using pbuffer
     // means I don't have to pass a sv_fifo_bufferinfo to putbuffer.
+    // Comment from John:
+    // Have changed code to use pbuffer->control.clock_high/low.
+
     int64_t cur_clock = h_clock * INT64_C(0x100000000) + l_clock;
-    int64_t rec_clock = bufferinfo.clock_high * INT64_C(0x100000000) + (unsigned)bufferinfo.clock_low;
+    //int64_t rec_clock = bufferinfo.clock_high * INT64_C(0x100000000) + (unsigned)bufferinfo.clock_low;
+    int64_t rec_clock = pbuffer->control.clock_high * INT64_C(0x100000000) + (unsigned int)pbuffer->control.clock_low;
     int64_t clock_diff = cur_clock - rec_clock;
     // The frame was captured clock_diff ago
     int64_t tod_rec = tod - clock_diff;
+    //logTF("tod = %"PRId64", cur_clock = %"PRId64", rec_clock = %"PRId64" microseconds\n", tod, cur_clock, rec_clock);
 
     if (video_format == Format422PlanarYUV || video_format == Format422PlanarYUVShifted)
     {
