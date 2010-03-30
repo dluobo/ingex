@@ -1,5 +1,5 @@
 /*
- * $Id: MXFOP1AWriter.h,v 1.1 2010/03/30 08:30:21 john_f Exp $
+ * $Id: MXFOP1AWriter.h,v 1.2 2010/03/30 08:38:04 john_f Exp $
  *
  * MXF OP-1A writer
  *
