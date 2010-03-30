@@ -361,7 +361,11 @@ extern mpegts_encoder_t *mpegts_encoder_init (const char *filename, int width, i
 	}
 
 	/* Allocate the output media context */
+#if LIBAVFORMAT_VERSION_INT > ((52<<16)+(25<<8)+0)
+	mpegts->oc = avformat_alloc_context();
+#else
 	mpegts->oc = av_alloc_format_context();
+#endif
 	if (!mpegts->oc)
 	{
 		cleanup(mpegts);
