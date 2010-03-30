@@ -1,9 +1,9 @@
 /*
- * $Id: player.c,v 1.23 2010/02/12 14:00:06 philipn Exp $
+ * $Id: player.c,v 1.24 2010/03/30 08:26:07 john_f Exp $
  *
  *
  *
- * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Copyright (C) 2008-2010 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
  * Modifications: Matthew Marks
  *
@@ -938,7 +938,9 @@ int main(int argc, const char **argv)
     MultipleMediaSources* multipleSource = NULL;
     BufferedMediaSource* bufferedSource = NULL;
     MXFFileSource* mxfSource = NULL;
+#if !defined(DISABLE_SHARED_MEM_SOURCE)
     SharedMemSource* shmSource = NULL;
+#endif
     TimecodeType shmDefaultTimecodeType = UNKNOWN_TIMECODE_TYPE;
     TimecodeSubType shmDefaultTimecodeSubType = NO_TIMECODE_SUBTYPE;
     int disableSDIOSD = 0;
@@ -2327,6 +2329,7 @@ int main(int argc, const char **argv)
                 numVTRErrorSources++;
                 break;
 
+#if !defined(DISABLE_SHARED_MEM_SOURCE)
             case SHM_INPUT:
                 if (!shms_open(inputs[i].shmSourceName, timeout, &shmSource))
                 {
@@ -2336,7 +2339,7 @@ int main(int argc, const char **argv)
                 shms_get_default_timecode(shmSource, &shmDefaultTimecodeType, &shmDefaultTimecodeSubType);
                 mediaSource = shms_get_media_source(shmSource);
                 break;
-
+#endif
             case UDP_INPUT:
                 if (!udp_open(inputs[i].filename, &mediaSource))
                 {
