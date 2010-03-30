@@ -1,5 +1,6 @@
 #include "multicast_video.h"
 #include "YUV_scale_pic.h"
+#include "time_utils.h"
 
 #include <pthread.h>
 #include <sys/time.h>
@@ -333,17 +334,6 @@ extern int udp_shutdown_reader(udp_reader_thread_t *p_udp_reader)
 	}
 
 	return 1;
-}
-
-static int64_t gettimeofday64(void)
-{
-#if TESTING_FLAG
-	printf("Inside multicast_video: gettimeofday64\n");
-#endif
-	struct timeval tv;
-	gettimeofday(&tv, NULL);
-	int64_t tod = (int64_t)tv.tv_sec * 1000000 + tv.tv_usec ;
-	return tod;
 }
 
 static void *udp_reader_thread(void *arg)
@@ -876,17 +866,17 @@ extern void scale_video420_for_multicast(int in_width, int in_height, int out_wi
 	input_frame.Y.h = in_height;
 	input_frame.Y.lineStride = in_width;
 	input_frame.Y.pixelStride = 1;
-	input_frame.Y.buff = video_frame;
+	input_frame.Y.buff = (uint8_t*)video_frame;
 	input_frame.U.w = in_width/2;
 	input_frame.U.h = in_height/2;
 	input_frame.U.lineStride = in_width/2;
 	input_frame.U.pixelStride = 1;
-	input_frame.U.buff = video_frame + in_width*in_height;
+	input_frame.U.buff = (uint8_t*)video_frame + in_width*in_height;
 	input_frame.V.w = in_width/2;
 	input_frame.V.h = in_height/2;
 	input_frame.V.lineStride = in_width/2;
 	input_frame.V.pixelStride = 1;
-	input_frame.V.buff = video_frame + in_width*in_height * 5/4;
+	input_frame.V.buff = (uint8_t*)video_frame + in_width*in_height * 5/4;
 	
 	output_frame.Y.w = out_width;
 	output_frame.Y.h = out_height;
@@ -924,17 +914,17 @@ extern void scale_video422_for_multicast(int in_width, int in_height, int out_wi
 	input_frame.Y.h = in_height;
 	input_frame.Y.lineStride = in_width;
 	input_frame.Y.pixelStride = 1;
-	input_frame.Y.buff = video_frame;
+	input_frame.Y.buff = (uint8_t*)video_frame;
 	input_frame.U.w = in_width/2;
 	input_frame.U.h = in_height/2;
 	input_frame.U.lineStride = in_width;
 	input_frame.U.pixelStride = 1;
-	input_frame.U.buff = video_frame + in_width*in_height;
+	input_frame.U.buff = (uint8_t*)video_frame + in_width*in_height;
 	input_frame.V.w = in_width/2;
 	input_frame.V.h = in_height/2;
 	input_frame.V.lineStride = in_width;
 	input_frame.V.pixelStride = 1;
-	input_frame.V.buff = video_frame + in_width*in_height * 3/2;
+	input_frame.V.buff = (uint8_t*)video_frame + in_width*in_height * 3/2;
 	
 	output_frame.Y.w = out_width;
 	output_frame.Y.h = out_height;
