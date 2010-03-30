@@ -1,5 +1,5 @@
 /*
- * $Id: test_mxfwriter.cpp,v 1.10 2009/10/12 15:52:10 philipn Exp $
+ * $Id: test_mxfwriter.cpp,v 1.11 2010/03/30 09:03:33 john_f Exp $
  *
  * Tests the MXF writer
  *
@@ -31,10 +31,12 @@
 
 
 #include "MXFOPAtomWriter.h"
+#include "MXFOP1AWriter.h"
 #include "MXFWriterException.h"
 #include "MXFUtils.h"
 
 #include <OPAtomPackageCreator.h>
+#include <OP1APackageCreator.h>
 #include <Database.h>
 #include <Recorder.h>
 #include <Utilities.h>
@@ -98,6 +100,7 @@ typedef struct
 
 typedef struct
 {
+    bool isOP1A;
     int64_t startPosition;
     string creatingFilePath;
     string destinationFilePath;
@@ -110,6 +113,7 @@ typedef struct
     bool isPALProject;
     string dv50Filename;
     string mjpeg21Filename;
+    string imx50Filename;
     uint32_t umidGenOffset;
 } RecordData;
 
@@ -334,6 +338,30 @@ static void* start_record_routine(void* data)
         free(mjpegState.buffer);
         fclose(file);
     }
+    else if (record_data->imx50Filename.size() > 0)
+    {
+        // IMX-50 input
+        resolutionId = IMX50_MATERIAL_RESOLUTION;
+        videoFrame1Size = (record_data->isPALProject ? 250000 : 208541);
+        FILE* file;
+        if ((file = fopen(record_data->imx50Filename.c_str(), "r")) == NULL)
+        {
+            perror("fopen");
+            pthread_exit((void *) 0);
+            return NULL;
+        }
+        if (fread(videoData1, videoFrame1Size, 1, file) != 1)
+        {
+            fprintf(stderr, "Failed to read IMX-50 frame\n");
+            fclose(file);
+            pthread_exit((void *) 0);
+            return NULL;
+        }
+        fclose(file);
+        // second frame is a duplicate of the first
+        videoFrame2Size = videoFrame1Size;
+        memcpy(videoData2, videoData1, videoFrame2Size);
+    }
     else
     {
         // dummy essence data
@@ -373,30 +401,42 @@ static void* start_record_routine(void* data)
         SourceConfig *source_config = input_config->trackConfigs[0]->sourceConfig;
         PA_ASSERT(source_config);
 
-        OPAtomPackageCreator package_group(record_data->isPALProject);
-        package_group.SetStartPosition(record_data->startPosition);
-        package_group.SetUserComments(record_data->userComments);
-        package_group.SetProjectName(record_data->projectName);
-        package_group.SetFileLocationPrefix(record_data->filenamePrefix);
-        if (!record_data->dv50Filename.empty())
-            package_group.SetVideoResolutionID(DV50_MATERIAL_RESOLUTION);
-        else if (!record_data->mjpeg21Filename.empty())
-            package_group.SetVideoResolutionID(MJPEG21_MATERIAL_RESOLUTION);
+        auto_ptr<RecorderPackageCreator> package_group;
+        if (record_data->isOP1A)
+            package_group.reset(new OP1APackageCreator(record_data->isPALProject));
         else
-            package_group.SetVideoResolutionID(UNC_MATERIAL_RESOLUTION);
+            package_group.reset(new OPAtomPackageCreator(record_data->isPALProject));
+        
+        package_group->SetStartPosition(record_data->startPosition);
+        package_group->SetUserComments(record_data->userComments);
+        package_group->SetProjectName(record_data->projectName);
+        package_group->SetFileLocationPrefix(record_data->filenamePrefix);
+        if (!record_data->dv50Filename.empty())
+            package_group->SetVideoResolutionID(DV50_MATERIAL_RESOLUTION);
+        else if (!record_data->mjpeg21Filename.empty())
+            package_group->SetVideoResolutionID(MJPEG21_MATERIAL_RESOLUTION);
+        else if (!record_data->imx50Filename.empty())
+            package_group->SetVideoResolutionID(IMX50_MATERIAL_RESOLUTION);
+        else
+            package_group->SetVideoResolutionID(UNC_MATERIAL_RESOLUTION);
         
         vector<bool> enabled_tracks;
         enabled_tracks.assign(source_config->trackConfigs.size(), true);
         
-        package_group.CreatePackageGroup(source_config, enabled_tracks, record_data->umidGenOffset);
+        package_group->CreatePackageGroup(source_config, enabled_tracks, record_data->umidGenOffset);
 
 
-        auto_ptr<MXFOPAtomWriter> writer(new MXFOPAtomWriter());
+        auto_ptr<MXFWriter> writer;
+        if (record_data->isOP1A)
+            writer.reset(new MXFOP1AWriter());
+        else
+            writer.reset(new MXFOPAtomWriter());
+        
         writer->SetCreatingDirectory(record_data->creatingFilePath);
         writer->SetDestinationDirectory(record_data->destinationFilePath);
         writer->SetFailureDirectory(record_data->failuresFilePath);
         
-        writer->PrepareToWrite(&package_group, false);
+        writer->PrepareToWrite(package_group.get(), false);
 
         size_t i;
         
@@ -468,8 +508,10 @@ static void usage(const char* prog)
     fprintf(stderr, "    -h | --help            Show this usage message and exit\n");
     fprintf(stderr, "    --dv50 <filename>      DV50 essence file to read and wrap in MXF (default is blank uncompressed)\n");
     fprintf(stderr, "    --mjpeg21 <filename>   MJPEG 2:1 essence file to read and wrap in MXF (default is blank uncompressed)\n");
+    fprintf(stderr, "    --imx50 <filename>     IMX-50 essence file to read and wrap in MXF (default is blank uncompressed)\n");
     fprintf(stderr, "    --old-session\n");
     fprintf(stderr, "    --ntsc                 NTSC project (default is PAL)\n");
+    fprintf(stderr, "    --op1a                 MXF OP-1A (default is OP-Atom)\n");
     fprintf(stderr, "    -r <recorder name>     Recorder name to use to connect to database (default '%s')\n", g_defaultRecorderName);
     fprintf(stderr, "    -t <prefix>            The tape number prefix (default '%s')\n", g_defaultTapeNumberPrefix);
     fprintf(stderr, "    -s <timecode>          The start timecode. Format is hh:mm:ss:ff (default '%s')\n", g_defaultStartTimecode);
@@ -482,6 +524,7 @@ int main(int argc, const char* argv[])
     int k;
     const char* dv50Filename = NULL;
     const char* mjpeg21Filename = NULL;
+    const char* imx50Filename = NULL;
     const char* filenamePrefix = NULL;
     const char* recorderName = g_defaultRecorderName;
     bool oldSession = false;
@@ -493,6 +536,7 @@ int main(int argc, const char* argv[])
     int startPosSec = 0;
     int startPosFrame = 0;
     bool isPALProject = true;
+    bool isOP1A = false;
 
     
     if (argc < 2)
@@ -547,6 +591,17 @@ int main(int argc, const char* argv[])
             mjpeg21Filename = argv[cmdlnIndex + 1];
             cmdlnIndex += 2;
         }
+        else if (strcmp(argv[cmdlnIndex], "--imx50") == 0)
+        {
+            if (cmdlnIndex + 1 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing value for argument '%s'\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            imx50Filename = argv[cmdlnIndex + 1];
+            cmdlnIndex += 2;
+        }
         else if (strcmp(argv[cmdlnIndex], "--old-session") == 0)
         {
             oldSession = true;
@@ -555,6 +610,11 @@ int main(int argc, const char* argv[])
         else if (strcmp(argv[cmdlnIndex], "--ntsc") == 0)
         {
             isPALProject = false;
+            cmdlnIndex++;
+        }
+        else if (strcmp(argv[cmdlnIndex], "--op1a") == 0)
+        {
+            isOP1A = true;
             cmdlnIndex++;
         }
         else if (strcmp(argv[cmdlnIndex], "-r") == 0)
@@ -748,6 +808,7 @@ int main(int argc, const char* argv[])
                 stringstream prefix;
                 prefix << filenamePrefix << "_" << i; 
                 
+                record_data[i].isOP1A = isOP1A;
                 record_data[i].startPosition = startPosition;
                 record_data[i].creatingFilePath = CREATING_FILE_PATH;
                 record_data[i].destinationFilePath = DESTINATION_FILE_PATH;
@@ -776,6 +837,10 @@ int main(int argc, const char* argv[])
                 else if (mjpeg21Filename != NULL)
                 {
                     record_data[i].mjpeg21Filename = mjpeg21Filename;
+                }
+                else if (imx50Filename != NULL)
+                {
+                    record_data[i].imx50Filename = imx50Filename;
                 }
                 
                 if (pthread_create(&thread[i], &attr, start_record_routine, (void *)(&record_data[i])))
