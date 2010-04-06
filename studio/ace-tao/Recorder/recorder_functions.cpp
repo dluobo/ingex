@@ -1,5 +1,5 @@
 /*
- * $Id: recorder_functions.cpp,v 1.31 2010/03/30 07:51:03 john_f Exp $
+ * $Id: recorder_functions.cpp,v 1.32 2010/04/06 10:46:47 john_f Exp $
  *
  * Functions which execute in recording threads.
  *
@@ -1293,6 +1293,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                 NexusFrameData * nfd = IngexShm::Instance()->pFrameData(channel_i, frame[channel_i]);
                 p_frame_number = &(nfd->frame_number);
 
+                bool copy = false;
                 if (mp_trk->dataDef == PICTURE_DATA_DEFINITION)
                 {
                     if (use_primary_video)
@@ -1312,12 +1313,18 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                     // Mono audio buffers not yet available
                     p = a[hw.track - 1];
                     size = audio_samples_per_frame * 2;
+                    
+                    // Audio not in shared memory buffer so we need to copy for multi-threaded encode
+                    if (mt_encoder)
+                    {
+                        copy = true;
+                    }
                 }
                 
                 /*
                 ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C thread %d Track %d data %@\n"), src_name.c_str(), p_opt->index, i, p));
                 */
-                ef.Track(i).Init(p, size, false, false, false, *p_frame_number, p_frame_number);
+                ef.Track(i).Init(p, size, copy, false, false, *p_frame_number, p_frame_number);
             }
 
             // Timecode value from first track (usually video)
