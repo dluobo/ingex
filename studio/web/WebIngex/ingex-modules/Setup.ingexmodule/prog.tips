@@ -1,0 +1,6 @@
+{
+	'progAboutCallout':		{
+								'html':'<h1>Programmes</h1><p>This is used to manage the programme titles that can be associated with new recordings. Each programme is associated with a particular series. These settings are not a prerequisite of setting up the recorder and will be utilised in later revisions of the software which incorporate logging features.</p>',
+								'sticky':'true'
+							}
+}

@@ -47,16 +47,16 @@ sub build_javascript
 	my @javaScript;
 	my $js;
 
-	if($js = getJS('/srv/www/cgi-bin/ingex-modules/Material.ingexmodule/UserSettings.js')){
+	if($js = getJS($ingexConfig{'WEB_ROOT'}.'/cgi-bin/ingex-modules/Material.ingexmodule/UserSettings.js')){
 		push(@javaScript, $js);
 	}
-	if($js = getJS('/srv/www/cgi-bin/ingex-modules/Material.ingexmodule/Ajax.js')){
+	if($js = getJS($ingexConfig{'WEB_ROOT'}.'/cgi-bin/ingex-modules/Material.ingexmodule/Ajax.js')){
 		push(@javaScript, $js);
 	}
-	if($js = getJS('/srv/www/cgi-bin/ingex-modules/Material.ingexmodule/Net.js')){
+	if($js = getJS($ingexConfig{'WEB_ROOT'}.'/cgi-bin/ingex-modules/Material.ingexmodule/Net.js')){
 		push(@javaScript, $js);
 	}
-	if($js = getJS('/srv/www/cgi-bin/ingex-modules/Material.ingexmodule/ModJavascript.js')){
+	if($js = getJS($ingexConfig{'WEB_ROOT'}.'/cgi-bin/ingex-modules/Material.ingexmodule/ModJavascript.js')){
 		push(@javaScript, $js);
 	}
 

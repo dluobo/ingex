@@ -1,0 +1,10 @@
+{
+	'createscfAboutCallout':{
+								'html':'<h1>Source Group Definitions</h1><p>Ingex source groups are collections of tracks representing the physical SDI video/audio streams that enter the Ingex PC. Source groups are a required element of the recorder settings. The default configuration will initialise four source groups named VT1 to VT4, each consisting of one video and 4 mono audio tracks.</p><p>This panel allows the various source groups to be managed so that the Ingex configuration reflects the physical setup of your incoming signals.</p>',
+								'sticky':'true'
+							},
+	'createscfCreateCallout':'Create a new source group',
+	'createscfNameCallout':'View the group parameters',
+	'createscfEditCallout':'Edit the configuration details',
+	'createscfDelCallout':'Delete this configuration'
+}

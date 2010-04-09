@@ -1,4 +1,4 @@
-# $Id: README.txt,v 1.2 2009/11/06 12:02:08 john_f Exp $
+# $Id: README.txt,v 1.3 2010/04/09 10:51:33 john_f Exp $
 # Copyright (C) 2008-9 British Broadcasting Corporation
 # All rights reserved
 # Author: Rowan de Pomerai <rdepom@users.sourceforge.net>
@@ -24,11 +24,19 @@ Installation
 Requirements:
 * Apache2 web server, with static html documents in /srv/www/htdocs and cgi in /srv/www/cgi-bin
 * Perl CGI, CGI::Pretty, DBI, PostgreSQL DBD modules
+* Ext API
 
 CGI and CGI::Pretty should already be present as part of perl. perl-DBI and perl-DBD-Pg can be installed using YaST.
 
 1) edit the configuration file "ingex-config/WebIngex.conf" to match your system setup, including the IP address of your database server.
 2) run "sudo ./install.sh" to install the files.
+3) download and install the Ext API:
+	mkdir /tmp/extinstall
+	cd /tmp/extinstall
+	wget http://www.extjs.com/deploy/ext-3.1.0.zip
+	sudo unzip ext-3.1.0.zip 
+	sudo mkdir /srv/www/htdocs/ingex/ext
+	sudo mv ext-3.1.0/* /srv/www/htdocs/ingex/ext
 
 Updating
 --------

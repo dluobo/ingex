@@ -46,6 +46,7 @@ sub get_page_content
 	if(defined param("Message")) {
 		push(@pageContent, p(param("Message")));
 	}
+	push(@pageContent, p({-id=>"tipCallout"},'Tip'));
 	
 	return join("",@pageContent);
 }

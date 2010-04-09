@@ -59,6 +59,8 @@ sub get_page_content
     
     my @pageContent;
     
+    push (@pageContent, p({-id=>"projAboutCallout", -class=>"infoBox"}, "Info"));
+    
     push(@pageContent, h1('Projects'));
 
     push(@pageContent, p(a({-href=>"javascript:getContentWithVars('createproj','type=recloc')"}, "Create new")));

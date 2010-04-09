@@ -1,0 +1,7 @@
+{
+	'reclocAboutCallout':	{
+								'html':'<h1>Recording Locations</h1><p>This section is used to manage labels for the physical recording locations around a studio installation. These locations are associated with source groups and also appears in the metadata of recorded MXF files.</p>',
+								'sticky':'true'
+							},
+	'reclocCreateCallout':'Specify a new physical location'
+}

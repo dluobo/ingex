@@ -182,9 +182,10 @@ sub get_create_content
     push(@tableRows,  
         Tr({-class=>"simpleTable", -align=>"left", -valign=>"top"}, [
             td([div({-class=>"propHeading1"}, "Recorder:"), $rec->{"NAME"}]),
-            td([div({-class=>"propHeading1"}, "Name:"), textfield("name")]),
+            td([div({-class=>"propHeading1"}, "Name:"), textfield({-id=>"creatercfNameCallout", -name=>"name"})]),
             td([div({-class=>"propHeading1"}, "# Inputs:"), 
                 textfield(
+                	-id=>"creatercfNumInputsCallout",
                     -name => "numinputs", 
                     -default => get_num_inputs($rcfs), 
                     -override => 1
@@ -192,6 +193,7 @@ sub get_create_content
             ]),
             td([div({-class=>"propHeading1"}, "# Tracks per inputs:"), 
                 textfield(
+                	-id=>"creatercfNumTracksCallout",
                     -name => "numtracks", 
                     -default => get_num_tracks($rcfs),
                     -override => 1

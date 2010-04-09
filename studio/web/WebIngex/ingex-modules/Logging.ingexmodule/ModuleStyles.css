@@ -18,13 +18,6 @@
  * 02110-1301, USA.
  */
 
-body {
-	overflow-x: hidden;
-}
-
-.contentPane {
-	overflow-x: auto;
-}
 
 #logging h1 {
 	margin: 0px;

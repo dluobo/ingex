@@ -88,7 +88,7 @@ sub return_create_recloc_page
     my $page = get_create_recloc_content($errorMessage) or
         return_error_page("failed to fill in content for create recording location config page");
        
-    print header;
+   	print header;
     print $page;
     
     exit(0);
@@ -100,7 +100,7 @@ sub get_create_recloc_content
     
     
     my @pageContent;
-    
+
     push(@pageContent, h1('Create new recording location'));
 
     if (defined $message)
@@ -112,7 +112,7 @@ sub get_create_recloc_content
 
     push(@pageContent, hidden('type', 'recloc'));
 
-    push(@pageContent, p('Name', textfield('name')));
+    push(@pageContent, p('Name', textfield({-id=>"reclocNameCallout", -name=>"name"})));
 
     push(@pageContent, submit({-onclick=>"whichPressed=this.name", -name=>"Create"}), span(' '), submit({-onclick=>"whichPressed=this.name", -name=>"Cancel"}));
 

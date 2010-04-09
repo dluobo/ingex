@@ -60,6 +60,8 @@ sub get_page_content
     
     my @pageContent;
     
+    push(@pageContent, p({-id=>"seriesAboutCallout", -class=>"infoBox"}, "Info"));
+    
     push(@pageContent, h1('Series'));
 
     push(@pageContent, p(a({-href=>"javascript:getContent('createseries')"}, "Create new")));

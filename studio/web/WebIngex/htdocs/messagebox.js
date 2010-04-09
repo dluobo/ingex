@@ -25,61 +25,72 @@
  
 // show a small 'waiting' messagebox with loading ticker 
 function show_wait_messagebox(title, message){
-	$('message_overlay').innerHTML = 	"<div id=\"background\"></div>" +
-										"	<div id=\"message\" class=\"message\">" +
-	 									"		<div id=\"content\" class=\"content\">" +
-	 									"			<h4><center>" + title + "</center></h4>" +
-	 									"			<br>" +
-	 									"			<div id=\"text_scroll\"  class=\"text_scroll\">" + message +
-	 									"				<div id=\"load_indicator\" class=\"load_indicator\"></div>" +
-	 									"			</div>" +
-	 									"		</div>" +
-	 									"		<right><span class=\"close\" onclick='hide_messagebox()' onMouseOver=\"this.style.cursor='pointer'\"> close</span></right>" +
-	 									"	</div>";
-	 
- 	$('message_overlay').style.visibility = 'visible';
- 	$('message').style.visibility = 'visible';
+	if($('ie6iframe')){		// running on ie 6
+		$('ie6message_overlay').innerHTML = "	<div id=\"ie6message\" class=\"ie6message\">" +
+	 										"		<div id=\"content\" class=\"content\">" +
+	 										"			<h4><center>" + title + "</center></h4>" +
+	 										"			<br>" +
+	 										"			<div id=\"text_scroll\"  class=\"text_scroll\">" + message +
+	 										"				<div id=\"load_indicator\" class=\"load_indicator\"></div>" +
+	 										"			</div>" +
+	 										"		</div>" +
+	 										"		<right><div class=\"links\"><a class=\"close\" href='javascript:hide_messagebox()' onMouseOver=\"this.style.cursor='pointer'\"> close</a></div></right>";
+	 	$('ie6iframe').style.visibility = 'visible';
+	 	$('ie6message_overlay').style.visibility = 'visible';								
+	}
+	else{
+		$('message_overlay').innerHTML =	"<div id=\"background\"></div>" +
+											"	<div id=\"message\" class=\"message\">" +
+		 									"		<div id=\"content\" class=\"content\">" +
+		 									"			<h4><center>" + title + "</center></h4>" +
+		 									"			<br>" +
+		 									"			<div id=\"text_scroll\"  class=\"text_scroll\">" + message +
+		 									"				<div id=\"load_indicator\" class=\"load_indicator\"></div>" +
+		 									"			</div>" +
+		 									"		</div>" +
+		 									"		<right><div class=\"links\"><a class=\"close\" href='javascript:hide_messagebox()' onMouseOver=\"this.style.cursor='pointer'\"> close</a></div></right>" +
+		 									"	</div>";
+		$('message_overlay').style.visibility = 'visible';
+	 	$('message').style.visibility = 'visible';	
+	}
 }
  
  
 // show a fixed messagebox with scrollable message
 function show_static_messagebox(title, message){
-//	$('message_overlay').innerHTML = 	"<div class=\"background\"></div>" +
-//										"	<div id=\"message\" class=\"message\">" +
-//	 									"		<div id=\"content\" class=\"content\">" +
-//	 									"			<h4><center>" + title + "</center></h4>" +
-//	 									"			<br><div id=\"aaf_filename\"  class=\"text_scroll\">" + message + "</div>" +
-//	 									"		</div>" +
-//	 									"		<right><span class=\"close\" onclick='hide_messagebox();' onMouseOver=\"this.style.cursor='pointer'\"> close</span></right>" +
-//	 									"	</div>";
-	
-	$('message_overlay').innerHTML = 	"<div id=\"background\"></div>" +
-	"	<div id=\"message\" class=\"message\">" +
-		"		<div id=\"content\" class=\"content\">" +
-		"			<h4><center>" + title + "</center></h4>" +
-		"			<br><div id=\"aaf_filename\"  class=\"text_scroll\">" + message + "</div>" +
-		"		</div>" +
-		"		<right><span class=\"close\" onclick='hide_messagebox()' onMouseOver=\"this.style.cursor='pointer'\"> close</span></right>" +
-		"	</div>";
-	
-	
-//	$('message_overlay').innerHTML = 	"<div id=\"background\"></div>" +
-//	"	<div id=\"message\" class=\"message_big\">" +
-//		"		<div id=\"content\" class=\"content\">" +
-//		"			<h4><center>" + title + "</center></h4>" +
-//		"			<br>" + message +
-//		"			<div id=\"load_indicator\" class=\"load_indicator\"></div>" +
-//		"		</div>" +
-//		"		<right><span class=\"close\" onclick='hide_messagebox()' onMouseOver=\"this.style.cursor='pointer'\"> close</span></right>" +
-//		"	</div>";
-	
- 	$('message_overlay').style.visibility = 'visible';
- 	$('message').style.visibility = 'visible';
+	if($('ie6iframe')){		// running on ie 6
+		$('ie6message_overlay').innerHTML = 	"	<div id=\"ie6message\" class=\"ie6message\">" +
+												"		<div id=\"content\" class=\"content\">" +
+												"			<h4><center>" + title + "</center></h4>" +
+												"			<br><div id=\"aaf_filename\"  class=\"text_scroll\">" + message + "</div>" +
+												"		</div>" +
+												"		<right><div class=\"links\"><a class=\"close\" href='javascript:hide_messagebox()' onMouseOver=\"this.style.cursor='pointer'\"> close</a></div></right>";
+	 	$('ie6iframe').style.visibility = 'visible';	
+	 	$('ie6message_overlay').style.visibility = 'visible';							
+	}
+	else{
+		$('message_overlay').innerHTML = 	"<div id=\"background\"></div>" +
+											"	<div id=\"message\" class=\"message\">" +
+											"		<div id=\"content\" class=\"content\">" +
+											"			<h4><center>" + title + "</center></h4>" +
+											"			<br><div id=\"aaf_filename\"  class=\"text_scroll\">" + message + "</div>" +
+											"		</div>" +
+											"		<right><div class=\"links\"><a class=\"close\" href='javascript:hide_messagebox()' onMouseOver=\"this.style.cursor='pointer'\"> close</a></div></right>" +
+											"	</div>";
+		$('message_overlay').style.visibility = 'visible';
+	 	$('message').style.visibility = 'visible';	
+	}
 }
  
  
 // hide the messagebox
 function hide_messagebox(){
- 	$('message_overlay').style.visibility = 'hidden';
- 	$('message').style.visibility = 'hidden';
+	if($('ie6iframe')){		// running on ie 6
+		$('ie6iframe').style.visibility = 'hidden';
+		$('ie6message_overlay').style.visibility = 'hidden';
+	}
+ 	else{ 
+ 		$('message_overlay').style.visibility = 'hidden';
+ 		$('message').style.visibility = 'hidden';
+ 	}
 }

@@ -60,10 +60,11 @@ sub get_page_content
     
     my @pageContent;
     
+    push (@pageContent, p({-id=>"multicamcfAboutCallout", -class=>"infoBox"}, "Info"));
+    
     push(@pageContent, h1("Multi-camera clip definitions"));
 
-    
-    push(@pageContent, p(a({-href=>"javascript:getContent('createmccf')"}, "Create new")));
+    push(@pageContent, p(a({-id=>"multicamcfCreateCallout", -href=>"javascript:getContent('createmccf')"}, "Create new")));
     
     
     # list of multi-cam configs
@@ -73,17 +74,29 @@ sub get_page_content
     my $mccfIndex = 0;
     my $mccf;
     
-    foreach $mccf (@{$$mccfs})
-    {    
-        $mccfConfig = $mccf->{"config"};
-        
-        push(@mccfList, 
-            li(a({-href=>"javascript:show('RecorderConfig-$mccfIndex',true)"}, $mccfConfig->{"NAME"})));
-            
-       $mccfIndex++;
-    }
-
-    push(@pageContent, ul(@mccfList)); 
+   	my @tableRows;
+	push(@tableRows, 
+		Tr({-class=>"simpleTable", -align=>'left', -valign=>'top'}, [
+	    	th(['Name'])
+	 	]));
+    
+    	my $i=0;
+	    foreach $mccf (@{$$mccfs})
+	    {    
+	    	$i++;
+	        $mccfConfig = $mccf->{"config"};
+	        
+	        push(@tableRows, 
+                Tr({-class=>"simpleTable", -align=>'left', -valign=>'top'}, [
+                   		td([a({-id=>"multicamcfNameCallout_$i", -href=>"javascript:show('RecorderConfig-$mccfIndex',true)"}, $mccfConfig->{"NAME"})])
+                ])
+	    	);
+             
+	       $mccfIndex++;
+	    }
+	
+	    
+	push(@pageContent, table({-border=>0, -cellspacing=>3,-cellpadding=>3}, @tableRows));
 
     
     # each multi-cam config
@@ -98,8 +111,8 @@ sub get_page_content
         push(@pageContent, div({-id=>"RecorderConfig-$mccfIndex",-class=>"hidden simpleBlock"},
             h2($mccf->{"config"}->{"NAME"}),
             p(
-                small(a({-class=>"simpleButton",-href=>"javascript:getContentWithVars('editmccf','id=$mccf->{'config'}->{'ID'}')"}, "Edit")),
-                small(a({-class=>"simpleButton",-href=>"javascript:getContentWithVars('deletemccf','id=$mccf->{'config'}->{'ID'}')"}, "Delete")),
+                small(a({-id=>"multicamcfEditCallout", -class=>"simpleButton",-href=>"javascript:getContentWithVars('editmccf','id=$mccf->{'config'}->{'ID'}')"}, "Edit")),
+                small(a({-id=>"multicamcfDelCallout", -class=>"simpleButton",-href=>"javascript:getContentWithVars('deletemccf','id=$mccf->{'config'}->{'ID'}')"}, "Delete")),
                 ), 
             $mccfHTML));
 

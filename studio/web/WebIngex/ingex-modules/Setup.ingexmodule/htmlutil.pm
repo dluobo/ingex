@@ -42,6 +42,7 @@ BEGIN
         &get_source_config
         &get_video_resolution_popup
         &get_video_wrapping_popup
+        &get_op_popup
         &get_recorder_config_popup
         &get_recorder_config
         &get_proxy_def
@@ -273,6 +274,7 @@ sub get_video_resolution_popup
     
     
     return popup_menu(
+    	-id => "recorder_ENCODE_RESOLUTION",
         -name => $paramId, 
         -default => $default,
         -values => \@values,
@@ -313,6 +315,48 @@ sub get_video_wrapping_popup
     
     
     return popup_menu(
+    	-id => "recorder_ENCODE_WRAPPING",
+        -name => $paramId, 
+        -default => $default,
+        -values => \@values,
+        -labels => \%labels);
+}
+
+sub get_op_popup
+{
+	my ($paramId, $ops, $defaultId) = @_;
+    
+    my $default;
+    my @values;
+    my %labels;
+
+    # not set option
+    push(@values, 0);
+    $labels{0} = "not set (0)";
+
+    foreach my $op (@{ $ops })
+    {
+        my $value = "$op->{'ID'}";
+        my $label = "$op->{'NAME'} ($value)";
+        push(@values, $value);
+        $labels{$value} = $label;
+
+        if (!defined $default && 
+            defined $defaultId && "$op->{'ID'}" eq $defaultId)
+        {
+            $default = $value;
+        }
+    }
+    
+    # no default then is not set
+    if (!defined $default)
+    {
+        $default = 0;
+    }
+    
+    
+    return popup_menu(
+    	-id => "recorder_ENCODE_OP",
         -name => $paramId, 
         -default => $default,
         -values => \@values,
@@ -321,7 +365,7 @@ sub get_video_wrapping_popup
 
 sub get_recorder_config
 {
-    my ($rcf, $vrs, $fmts) = @_;
+    my ($rcf, $vrs, $fmts, $ops) = @_;
     
     # stop the warnings about deep recursion
     push(@CGI::Pretty::AS_IS, qw(div table th tr td));
@@ -406,6 +450,26 @@ sub get_recorder_config
                     if ($fmt->{"ID"} == $rp->{"VALUE"})
                     {
                         $value = "$fmt->{'NAME'} ($value)";
+                        last;
+                    }
+                }
+            }
+        }
+        elsif ($rp->{"NAME"} eq "MXF_OP" ||
+            $rp->{"NAME"} =~ /ENCODE(\d*)_OP/ ||
+            $rp->{"NAME"} eq "QUAD_OP")
+        {
+        	if ($rp->{"VALUE"} == 0)
+            {
+                $value = "not set (0)";
+            }
+            else
+            {
+                foreach my $op (@{ $ops })
+                {
+                    if ($op->{"ID"} == $rp->{"VALUE"})
+                    {
+                        $value = "$op->{'NAME'} ($value)";
                         last;
                     }
                 }

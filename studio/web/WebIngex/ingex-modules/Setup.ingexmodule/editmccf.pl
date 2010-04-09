@@ -211,9 +211,12 @@ sub get_edit_content
             );
         }
 
+		my $trackTip;
+		if(scalar @trackRows == 1){$trackTip = "editmccfVTrackCallout"} # index 1 - video track
+		else{$trackTip = "editmccfATrackCallout_".(scalar @trackRows -1)} # audio track
 
         push(@trackRows, 
-            Tr({-align=>"left", -valign=>"top"}, [
+            Tr({-id=>"$trackTip", -align=>"left", -valign=>"top"}, [
                 td([div($track->{"config"}->{"INDEX"},
                         hidden(
                             get_html_param_id([ "track", "index" ], [ $track->{"config"}->{"ID"} ]), 
@@ -238,7 +241,11 @@ sub get_edit_content
     push(@topRows,  
         Tr({-class=>"simpleTable", -align=>"left", -valign=>"top"}, [
             td([div({-class=>"propHeading1"}, "Name:"), 
-                textfield("name", $mccf->{"config"}->{"NAME"})]
+                textfield(
+                	-id=>"editmccfNameCallout",
+                	-name=>"name", 
+                	-value=>$mccf->{"config"}->{"NAME"}
+                )]
             ),
         ]),
         Tr({-class=>"simpleTable", -align=>"left", -valign=>"top"}, [

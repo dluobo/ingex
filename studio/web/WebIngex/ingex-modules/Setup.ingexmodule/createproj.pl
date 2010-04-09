@@ -103,7 +103,7 @@ sub get_content
     
     push(@pageContent, start_form({-id=>"ingexForm", -action=>"javascript:sendForm('ingexForm','createproj')"}));
 
-    push(@pageContent, p('Name', textfield('name')));
+    push(@pageContent, p('Name', textfield({-id=>"projnameCreateCallout", -name=>"name"})));
 
     push(@pageContent, submit({-onclick=>"whichPressed=this.name", -name=>"Create"}), span(' '), submit({-onclick=>"whichPressed=this.name", -name=>"Cancel"}));
 

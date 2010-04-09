@@ -1,0 +1,13 @@
+{
+	'recorderAboutCallout':{
+								'html':'<h1>Recorders</h1><p>This is where the recorders running on the Ingex PC are configured. Each recorder is given a unique name (such as \'Ingex\' or \'Ingex-HD\') and can have multiple configurations associated with it for different purposes. The active configuration for a recorder can be switched independently by clicking the \'Edit\' button next to the recorder name.</p><p>This panel allows the recorders names and each of their configurations to be managed. By default, three recorders are set up:</p><p><ol><li><b>Ingex:</b> Has two configurations - one for MXF format and one Quicktime. Each configuration mimics four VT machines, utilising all four available video inputs.</li><li><b>Ingex-HD:</b> Likewise, configured to apparently operate as four VT recorders in HD using either MXF or Quicktime formats. However, your hardware is unlikely to be able to run more than two HD inputs and this limit will be applied by the HD settings already contained in the <a href=\'/srv/www/cgi-bin/ingex-config/WebIngex.conf\'>WebIngex.conf</a> file.</li><li><b>Ingex-Router:</b> This is configured to record from a \'Router Recorder\', which logs the timing of cuts between sources as a recording is in progress. From this an edit list can be created automatically.</li></ol></p>',
+								'sticky':'true'
+							},
+	'recorderCreateconfigCallout':'Create a new configuration preset for this recorder.',
+	'recorderCreateCallout':'Create configurations for a completely new recorder. You need to do this when adding a new physical recorder to your Ingex setup, or if you want a convenient way of keeping different configurations for different situations.',
+	'recorderManageCallout':'Change the name or active configuration of this recorder',
+	'recorderDeleteCallout':'Delete this recorder and it\'s configurations',
+	'recorderViewConfigCallout':'View the configuration parameters',
+	'recorderEditConfigCallout':'Edit the configuration details',
+	'recorderDeleteConfigCallout':'Delete this configuration'
+}

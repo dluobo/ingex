@@ -24,6 +24,7 @@ This is a sample Ingex module to show you how to construct your own. It contains
 	index.pl - [required] a welcome page for your module
 	menu.inc.html - [required] the menu code for your module - an HTML unordered list usually
 	page1.pl - [optional] a sample page for your module
+	page1.tips - [optional] a json separated list of dom element id/tip pairs, which attaches tooltips to referenced elements 
 	javascript.js - [optional] any javascript functions you wish to define for use in your module
 	styles.css - [optional] any css styles you wish to define for use in your module
 

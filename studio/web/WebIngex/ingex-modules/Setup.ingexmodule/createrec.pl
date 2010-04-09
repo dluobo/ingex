@@ -99,7 +99,7 @@ sub get_create_content
     
     push(@pageContent, start_form({-id=>"ingexForm", -action=>"javascript:sendForm('ingexForm','createrec')"}));
 
-    push(@pageContent, p("Name", textfield("name")));
+    push(@pageContent, p({-id=>"createrecNameCallout", -name=>"Name"}, textfield("name")));
 
     push(@pageContent, submit({-onclick=>"whichPressed=this.name", -name=>"Create"}), span(" "), submit({-onclick=>"whichPressed=this.name", -name=>"Cancel"}));
 

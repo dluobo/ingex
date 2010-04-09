@@ -1,0 +1,5 @@
+{
+	'editmccfNameCallout':'Unique name for this multicam group',
+	'editmccfVTrackCallout':'<h1>Video track</h1><p><b>Clip track num: </b>Enter an numeric identifier for this track that will appear in the editor.</p><p><b>Selectors: </b>Select the video sources that make up the multicam group, eg. VT1 to 4</p>',
+	'editmccfATrackCallout':'<h1>Audio track</h1><p><b>Clip track num: </b>Enter an numeric identifier for this track that will appear in the editor.</p><p><b>Selectors: </b>Select the audio sources that are part of this track.</p>',
+}

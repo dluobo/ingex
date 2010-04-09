@@ -60,6 +60,9 @@ my $vrs = load_video_resolutions($dbh)
 my $fmts = load_file_formats($dbh)
 	or return_error_page("failed to load file formats: $prodautodb::errstr");
 
+my $ops = load_ops($dbh)
+	or return_error_page("failed to load operational patterns: $prodautodb::errstr");
+
 my $rcf = load_recorder_config($dbh, $rcfId) or
     return_error_page("failed to find recorder config with id=$rcfId from database: $prodautodb::errstr");
 
@@ -117,7 +120,7 @@ elsif (defined param("Done"))
 }
 
 
-return_edit_page($rcf, $vrs, $fmts, $errorMessage);
+return_edit_page($rcf, $vrs, $fmts, $ops, $errorMessage);
 
 
 
@@ -168,9 +171,9 @@ sub validate_params
 
 sub return_edit_page
 {
-    my ($rcf, $vrs, $fmts, $errorMessage) = @_;
+    my ($rcf, $vrs, $fmts, $ops, $errorMessage) = @_;
 
-    my $page = get_edit_content($rcf, $vrs, $fmts, $errorMessage) or
+    my $page = get_edit_content($rcf, $vrs, $fmts, $ops, $errorMessage) or
         return_error_page("failed to fill in content for edit recorder config page");
        
     print header;
@@ -181,7 +184,7 @@ sub return_edit_page
 
 sub get_edit_content
 {
-    my ($rcf, $vrs, $fmts, $errorMessage) = @_;
+    my ($rcf, $vrs, $fmts, $ops, $errorMessage) = @_;
     
     
     my @pageContent;
@@ -209,14 +212,20 @@ sub get_edit_content
         Tr({-class=>"simpleTable", -align=>'left', -valign=>'top'}, [
             td([
                 div({-class=>"propHeading1"}, 'Name:'), 
-                textfield('name', $rcf->{'config'}->{'NAME'})
+                textfield({
+                	-id=>"creatercfNameCallout",
+                	-name=>'name', 
+                	-value=>$rcf->{'config'}->{'NAME'}
+                })
             ]),
         ])
     );
 
     my @inputRows;
+    my $i=0;
     foreach my $input (@{ $rcf->{'inputs'} })
     {
+    	$i++;
         push(@inputRows, 
             Tr({-class=>"simpleTable", -align=>'left', -valign=>'top'}, [
                 td([div({-class=>"propHeading2"}, 'Index:'), 
@@ -230,10 +239,11 @@ sub get_edit_content
             ]),
             Tr({-class=>"simpleTable", -align=>'left', -valign=>'top'}, [
                 td([div({-class=>"propHeading2"}, 'Name:'), 
-                    textfield(
-                        get_html_param_id([ "input", "name" ], [ $input->{'config'}->{'ID'} ]),
-                        $input->{'config'}->{'NAME'}
-                    ),
+                    textfield({
+                    	id=>"creatercfInpNameCallout_$i",
+                        name=>get_html_param_id([ "input", "name" ], [ $input->{'config'}->{'ID'} ]),
+                        value=>$input->{'config'}->{'NAME'}
+    				}),
                 ]),
             ]),
         );
@@ -273,7 +283,7 @@ sub get_edit_content
         push(@inputRows,  
             Tr({-class=>"simpleTable", -align=>'left', -valign=>'top'}, [
                 td([div({-class=>"propHeading2"}, 'Tracks:'), 
-                    table({-class=>"borderTable"}, @trackRows),
+                    table({-id=>"creatercfTracksCallout_$i", -class=>"borderTable"}, @trackRows),
                 ]),
             ]),
         );
@@ -310,9 +320,17 @@ sub get_edit_content
         	$valueField = get_video_wrapping_popup("param-$rp->{'ID'}",
                 $fmts, $rp->{"VALUE"});
         }
+        elsif ($rp->{"NAME"} eq "MXF_OP" ||
+            $rp->{"NAME"} =~ /ENCODE(\d*)_OP/ ||
+            $rp->{"NAME"} eq "QUAD_OP")
+        {
+        	$valueField = get_op_popup("param-$rp->{'ID'}",
+                $ops, $rp->{"VALUE"});
+        }
         else
         {
             $valueField = textfield(
+            	-id => "recorder_$rp->{'NAME'}",
                 -name => "param-$rp->{'ID'}", 
                 -value => $rp->{"VALUE"},
                 -size => 20,

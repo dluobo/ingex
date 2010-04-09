@@ -1,5 +1,5 @@
 #!/bin/sh
-# $Id: install.sh,v 1.4 2009/11/06 11:54:19 john_f Exp $
+# $Id: install.sh,v 1.5 2010/04/09 10:51:33 john_f Exp $
 #
 # Copyright (C) 2008-9  British Broadcasting Corporation
 # All rights reserved
@@ -42,11 +42,29 @@ find $install_root/cgi-bin/ingex-config -type f -exec chmod 444 {} \; || exit 1
 # Add exectue permissions to the Perl files
 find $install_root/cgi-bin/ingex-modules -name "*.pl" -exec chmod 555 {} \;
 find $install_root/cgi-bin/ingex-config -name "*.pl" -exec chmod 555 {} \;
-# Make config files writable by the web server by changing their ownership (SuSE SPECIFIC!!!)
+# Make config files writable by the web server by changing their ownership
+# SuSE SPECIFIC!!!
+RESULT=`id wwwrun 2>/dev/null`
+if [ "$?" -eq "0" ]
+then
+echo "SuSE-based configuration detected"
 find $install_root/cgi-bin/ingex-modules -name "*.conf" -exec chown wwwrun:www {} \;
 find $install_root/cgi-bin/ingex-modules -name "*.conf" -exec chmod 664 {} \;
 find $install_root/cgi-bin/ingex-config -name "*.conf" -exec chown wwwrun:www {} \;
 find $install_root/cgi-bin/ingex-config -name "*.conf" -exec chmod 664 {} \;
+
+# Debian/Ubuntu
+else
+	RESULT=`id www-data 2>/dev/null`
+	if [ "$?" -eq "0" ]
+	then
+	echo "Debian-based configuration detected"
+	find $install_root/cgi-bin/ingex-modules -name "*.conf" -exec chown www-data:www-data {} \;
+	find $install_root/cgi-bin/ingex-modules -name "*.conf" -exec chmod 664 {} \;
+	find $install_root/cgi-bin/ingex-config -name "*.conf" -exec chown www-data:www-data {} \;
+	find $install_root/cgi-bin/ingex-config -name "*.conf" -exec chmod 664 {} \;
+	fi
+fi
 
 # Create the directory for the HTDocs
 mkdir -p $install_root/htdocs/ingex || exit 1

@@ -1,0 +1,10 @@
+{
+	'multicamcfAboutCallout':{
+								'html':'<h1>MultiCam Groups</h1><p>Multicam clips can be used to group video sources that are capturing the same scene simultaneously, enabling quick synchronisation in post production.</p><p>Currently there are no means to define which multicam group will be used to group sources when creating the AAF or Apple XML file. Instead, all groups that match the recorded content and timecode ranges defined here will be included.</p>',
+								'sticky':'true'
+							},
+	'multicamcfCreateCallout':'Create a new multicam grouping of sources',
+	'multicamcfNameCallout':'View the group parameters',
+	'multicamcfEditCallout':'Edit the configuration details',
+	'multicamcfDelCallout':'Delete this configuration'
+}

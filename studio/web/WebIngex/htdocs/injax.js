@@ -21,6 +21,8 @@
 /*
  * Injax : A simple javascript library of AJAX functions and similar
  */
+var tipsData = {};
+var currentTips = new Array();
 
 /// Simple convenience function to add some syntactic sugar to retrieving DOM elements by ID
 /// @param id The ID of the element to get
@@ -302,7 +304,7 @@ function drawError (elementName,url,error,message)
 /// You may also specify a loaderFunction.
 /// This function will try to display and hide a loadingBox element, to indicate to the user
 /// that a request is taking place. You will probably want to implement such a box by specifying a DOM element in Injax config.
-/// @param elementName the name of the element whose contents will be replaced with the result of the request
+/// @param elementName the name of the element whose contents will be replaced with the result of the request OR a reference to a callback function, which will be called with the result
 /// @param urlToGet the url to make a request to
 /// @param vars a URL-encoded string of variables (GET data)
 /// @param postString a POST-encoded string of variables (setting this non-null automatically selects a POST-type request)
@@ -352,7 +354,17 @@ function getElementWithVars(elementName,urlToGet,vars,postString,loaderFunction,
 		if(xmlHttp.readyState==4)
 		{
 			if (xmlHttp.status == 200) {
-				$(elementName).innerHTML=xmlHttp.responseText;
+				
+				if(typeof elementName == "string"){
+					// a dom element to update
+					$(elementName).innerHTML=xmlHttp.responseText;
+					initTips(urlToGet);
+				}
+				else{
+					// a callback function
+					elementName(xmlHttp.responseText);
+				}
+				
 				if(loaderFunction != null){
 					if(injax.customCallLoader){
 						injax.customCallLoader(loaderFunction);
@@ -653,4 +665,112 @@ window.onunload = function() {
 			window.open('','insolewindow').close();
 		}
 	}
+}
+
+
+/*
+ * initialise tooltip popups for page
+ */
+function initTips(pageUrl){
+	var split = pageUrl.split("/");
+	page = split[split.length-1];
+	page = /[^.]*/.exec(page) + ".tips";
+	mod = split[split.length-2];
+	fname = "../../cgi-bin/ingex-modules/"+mod+"/"+page;
+	
+	Ext.onReady(function(){
+		// hide any existing tips
+		closeTips();
+		// clear references to these tips
+		currentTips = new Array();
+		
+		// download tips
+		var url = "/cgi-bin/ingex-config/getTips.pl";
+		var vars = "filename=" + fname;
+		getElementWithVars(__tipsCallback,url,vars,null,null,false,true);
+	});
+}
+
+/*
+ * callback function
+ */
+function __tipsCallback(tipsData){
+	if(tipsData == ""){return;}
+		try{
+			tips = eval('(' + tipsData + ')'); 
+		}
+		catch(e){
+			jsonParseException(e);
+			return;
+		}
+		
+		for (key in tips){
+			var tip = tips[key];
+			if(tip.sticky){
+				__newTip(key, tip.html, false);
+			}
+			else{
+				__newTip(key, tip, true);
+			}
+		} 
+		
+		Ext.QuickTips.init();	
+}
+
+function __newTip(Target, Tip, AutoHide) {
+
+	// apply to target dom
+	if(document.getElementById(Target)){
+
+		currentTips.push(new Ext.ToolTip({
+			target: 		Target,
+			anchor: 		'left',
+			html: 			Tip,
+			autoHide: 		AutoHide,
+			closable: 		!AutoHide
+		}));
+	}
+	
+	// see if the element should apply to multiple iterrations of this dom
+	for(i=1; true; i++){
+		if(document.getElementById(Target + "_" + i) == null){break;}
+		
+		target = document.getElementById(Target + "_" + i);
+		
+		currentTips.push(new Ext.ToolTip({
+			target: 		target,
+			anchor: 		'left',
+			html: 			Tip,
+			autoHide: 		AutoHide,
+			closable: 		!AutoHide
+		}));
+	}	
+}
+
+/*
+ * close all tooltips
+ */
+function closeTips(){
+	for (i=0; i<currentTips.length; i++){
+		tip = currentTips[i];
+		tip.hide();
+	}
+}
+
+/*
+ * set tooltip data for a page
+ * these tips will be initialised when the page is loaded
+ * 'page' must be in the form /module_name/page.pl
+ */
+function setTipData(page, json){
+	tipsData[page] = json;
+} 
+
+/*
+ * an error occurred when parsing json response
+ */ 
+function jsonParseException(e){
+	//error parsing data
+	var message = 'JSON parse error - invalid response from server';
+	insole.error("Exception thrown:   Name: "+e.name+"   Message: "+e.message);
 }

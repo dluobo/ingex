@@ -1,4 +1,4 @@
-# $Id: ingexconfig.pm,v 1.3 2009/11/06 12:01:10 john_f Exp $
+# $Id: ingexconfig.pm,v 1.4 2010/04/09 10:51:33 john_f Exp $
 # Copyright (C) 2008-9 British Broadcasting Corporation
 # All rights reserved
 # Author: Philip de Nier <philipn@users.sourceforge.net>
@@ -22,7 +22,6 @@ package ingexconfig;
 
 use strict;
 use File::Temp qw(mktemp tempfile); 
-
 
 ####################################
 #
@@ -50,9 +49,53 @@ BEGIN
 ####################################
 
 our %ingexConfig;
-
-load_config("/srv/www/cgi-bin/ingex-config/WebIngex.conf");
+$ingexConfig{'WEB_ROOT'} = get_webroot();
+load_config($ingexConfig{'WEB_ROOT'}."/cgi-bin/ingex-config/WebIngex.conf");
 untaint();
+
+
+####################################
+#
+# Get web root for ingex
+#
+####################################
+
+sub get_webroot
+{
+	# stored in ingex.conf, which can either be found in ~ or /etc
+	my $confFile;
+	my $webroot;
+	
+	my $fname = "~/ingex.conf";
+	-s $fname
+		or $fname = "/etc/ingex.conf";
+	if(-s $fname){
+		open($confFile, "<", $fname) or die "Failed to open ingex.conf file: $!";
+		
+		while (my $line = <$confFile>) 
+    	{
+	        chomp($line);
+	        $line =~ s/#.*//;
+	        $line =~ s/^\s+//;
+	        $line =~ s/\s+$//;
+	        if (length $line > 0)
+	        {
+	            my ($key,$value) = split(/\s*=\s*/, $line, 2);
+	            if(uc $key eq "WEB_ROOT"){
+	            	$value =~ s/"//g;
+            		$webroot = $value;
+	            	last;
+	            }
+	        }
+    	}
+	}
+	else{
+		# no conf file found - use default suse location
+		$webroot = "/srv/www";
+	}
+	
+	return $webroot;
+}
 
 
 ####################################
@@ -64,7 +107,7 @@ untaint();
 sub load_config
 {
     my ($configFilename) = @_;
-    
+
     my $configFile;
     open($configFile, "<", "$configFilename") or die "Failed to open config file: $!";
     
@@ -149,6 +192,8 @@ sub untaint
 {
 	 # untaint values
         # TODO: do a better job with matching
+        ($ingexConfig{"WEB_ROOT"}) = ($ingexConfig{"WEB_ROOT"} =~ /(.*)/)
+            if ($ingexConfig{"WEB_ROOT"});
         ($ingexConfig{"db_host"}) = ($ingexConfig{"db_host"} =~ /(.*)/)
             if ($ingexConfig{"db_host"});
         ($ingexConfig{"db_name"}) = ($ingexConfig{"db_name"} =~ /(.*)/)

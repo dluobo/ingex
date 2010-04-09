@@ -24,6 +24,8 @@ use strict;
 use lib ".";
 use lib "../../ingex-config";
 
+use ingexconfig;
+
 my $retval = "";
 
 $retval = build_javascript();
@@ -38,17 +40,9 @@ sub build_javascript
 	my @javaScript;
 	my $js;
 	
-	# if($js = getJS('/srv/www/cgi-bin/ingex-modules/Logging.ingexmodule/ext.js')){
-	#		push(@javaScript, $js);
-	# }
-	
-	if($js = getJS('/srv/www/cgi-bin/ingex-modules/Logging.ingexmodule/ModuleJavascript.js')){
+	if($js = getJS($ingexConfig{'WEB_ROOT'}.'/cgi-bin/ingex-modules/Logging.ingexmodule/ModuleJavascript.js')){
 		push(@javaScript, $js);
 	}
-	
-	# if($js = getJS('/srv/www/cgi-bin/ingex-modules/Logging.ingexmodule/ext-all.js')){
-	# 		push(@javaScript, $js);
-	# 	}
 	
 	return join("\n\n",@javaScript);
 }

@@ -58,7 +58,7 @@
 			<a href="javascript:showOSHDetails();"><img id="oshIcon" class="oshIcon" src="img/overall_unknown.gif" alt="Overall System Health" title="No monitoring data available" alt="No monitoring data available"/></a>
 			<div id="numInputs" class="numInputs"><p id="numInputsText">...</p></div>
 			<div id="loadingBox">Loading...</div>
-			<div id="options">
+			<div id="options" class="links">
 				<a href="javascript:getTab('index',true,true,true)">Home</a>
 				 |
 				<span id='pauseOption'><a href="javascript:pauseMonitoring()">Pause Monitoring</a>
@@ -73,11 +73,15 @@
 			<!--End Menu -->
 			
 			<!---include message box overlay html--->
-			<div id="fixme">
-				<div id="message_overlay" class="message_overlay">
-				</div>
-			</div>
+			<!--[if IE 6]>										<!-- This is IE6 -->
+				<iframe id="ie6iframe" frameborder="0"></iframe>
+				<div id="ie6message_overlay"></div>
+			<![endif]-->	
+			<!--[if !IE 6]>-->									<!-- This is another browser -->
+				<div id="message_overlay" class="message_overlay"></div>
+			<!--<![endif]-->
 			<!---End message box--->
+
 		</div>		
 		<!-- End Header -->
 		<div id="pageBody">
@@ -86,8 +90,6 @@
 				<div id="consoleOutput" class="consoleOutput"></div>
 			</div>
 			<div id="insoleSpecial" class="insoleSpecial"></div>
-			
-			
 			
 			<!-- Content -->
 			<div id="contentPane" class="contentPane">

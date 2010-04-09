@@ -1,0 +1,13 @@
+{
+	'setupAboutCallout':{
+								'html':'<h1>Ingex Setup</h1><p>The setup options are used to change the configuration of Ingex recorders. These options are divided into different categories, which can be selected using the menu on the left. Each category has been populated with data from a default Ingex configuration to get you started.</p>',
+								'sticky':'true'
+							},
+	'genCallout':'Identifiers for physical recording locations',
+	'projCallout':'Names of current productions',
+	'seriesCallout':'Names of current series',
+	'progCallout':'Names of current programmes',
+	'sourceCallout':'Camera/audio source definitions',
+	'recCallout':'Setup Ingex recorders and encoder settings',
+	'multiCallout':'Configure multicam groupings'
+}

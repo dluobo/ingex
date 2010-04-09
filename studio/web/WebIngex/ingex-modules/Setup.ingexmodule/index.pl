@@ -40,7 +40,15 @@ exit(0);
 
 sub get_page_content
 {
-    return p("Welcome");
+	my @content;
+	
+	push (@content, p({-id=>"setupAboutCallout", -class=>"infoBox"}, "Info"));
+	push (@content, h1("Setup"));
+	push (@content, p("<< Select a setup category from the menu"));
+	#push (@content, p({-class => 'warningText'}, "Setup incomplete! Please fill out compulsory sections"));
+#	push (@content, "<div class=\'displayOptions\'><h5>Display Options:</h5> <a href=\'javascript:toggleTC()\'>Toggle timecode frame display</a><br><a href=\'javascript:toggleHelp()\'>Hide contextual help items</a></div>");
+	
+    return join("", @content);
 }
 
 

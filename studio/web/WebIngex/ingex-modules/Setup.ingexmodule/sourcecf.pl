@@ -59,10 +59,12 @@ sub get_page_content
     
     my @pageContent;
     
+    push(@pageContent, p({-id=>"createscfAboutCallout", -class=>"infoBox"}, "Info"));
+    
     push(@pageContent, h1("Source group definitions"));
 
     
-    push(@pageContent, p(a({-href=>"javascript:getContent('createscf')"}, "Create new")));
+    push(@pageContent, p(a({-id=>"createscfCreateCallout", -href=>"javascript:getContent('createscf')"}, "Create new")));
     
     
     # list of source configs
@@ -71,23 +73,33 @@ sub get_page_content
     my $scfConfig;
     my $scfIndex = 0;
     my $scf;
-    
-    foreach $scf (@{$$scfs})
-    {    
-        $scfConfig = $scf->{"config"};
-        
-        push(@scfList, 
-            li(a({-href=>"javascript:show('SourceConfig-$scfIndex',true)"}, $scfConfig->{"NAME"})));
-            
-       $scfIndex++;
-    }
 
-    push(@pageContent, ul(@scfList)); 
+	my @tableRows;
+		push(@tableRows, 
+	        Tr({-class=>"simpleTable", -align=>'left', -valign=>'top'}, [
+	           th(['Name'])
+	        ]));
+    
+	    foreach $scf (@{$$scfs})
+	    {    
+	        $scfConfig = $scf->{"config"};
+	        
+	        push(@tableRows, 
+                Tr({-class=>"simpleTable", -align=>'left', -valign=>'top'}, [
+                   		td([a({-id=>"createscfNameCallout_".($scfIndex+1), -href=>"javascript:show('SourceConfig-$scfIndex',true)"}, $scfConfig->{"NAME"})])
+                ])
+            );
+                
+	       $scfIndex++;
+	    }
+
+    push(@pageContent, table({-border=>0, -cellspacing=>3,-cellpadding=>3}, @tableRows));
 
     
     # each source config
     
     $scfIndex = 0;
+    
     foreach $scf (@{$$scfs})
     {    
         my $scfHTML = htmlutil::get_source_config($scf);
@@ -97,8 +109,8 @@ sub get_page_content
         push(@pageContent, div({-id=>"SourceConfig-$scfIndex",-class=>"hidden simpleBlock"},
             h2($scf->{"config"}->{"NAME"}),
             p(
-                small(a({-class=>"simpleButton",-href=>"javascript:getContentWithVars('editscf','id=$scf->{'config'}->{'ID'}')"}, "Edit")),
-                small(a({-class=>"simpleButton",-href=>"javascript:getContentWithVars('deletescf','id=$scf->{'config'}->{'ID'}')"}, "Delete")),
+                small(a({-id=>"createscfEditCallout_".($scfIndex+1), -class=>"simpleButton",-href=>"javascript:getContentWithVars('editscf','id=$scf->{'config'}->{'ID'}')"}, "Edit")),
+                small(a({-id=>"createscfDelCallout_".($scfIndex+1), -class=>"simpleButton",-href=>"javascript:getContentWithVars('deletescf','id=$scf->{'config'}->{'ID'}')"}, "Delete")),
             ), 
             $scfHTML));
 

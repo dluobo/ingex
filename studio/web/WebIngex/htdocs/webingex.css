@@ -33,9 +33,25 @@ body {
 	margin: 0px;
 }
 
+/* Apply only to browsers better than IE6 */
+html > body {
+	min-width: 1000px;
+}
+
 a:link, a:visited, a:active, a:hover{
 	text-decoration: none;
+	
+	color: #3366CC;
 	color: #226;
+}
+
+.links{	
+	font-size: small;
+}
+
+.links a:hover{
+	cursor: pointer;
+	text-decoration:underline; 
 }
 
 img {
@@ -115,10 +131,22 @@ img {
 	color: green;
 }
 
+.warningText {
+	background: #ffbbbb;
+	padding:5px;
+	padding-left: 40px;
+	padding-top: 10px;
+	padding-bottom: 10px;
+	border: 1px solid red;
+	background-image: url('img/setup/dialog-warning.png');
+	background-repeat: no-repeat;
+	background-position: 5px 5px;
+}
+
 /* Specific Elements */
 
 #pageHeader {
-	border-bottom: 2px solid black;
+	border-bottom: 1px solid #777;
 	height: 50px;
 	top: 0px;
 	left: 8px;
@@ -134,6 +162,7 @@ img {
 body > #pageHeader {
 /*	position: absolute;*/
 	position: fixed;
+	min-width: 992px;
 }
 
 .logo{
@@ -230,17 +259,19 @@ body > #pageHeader {
 
 #menu {
 	position: absolute;
-/*	position: fixed;*/
 	padding: 10px;
 	width: 150px;
 	text-align: left;
-	border-right: 1px solid black;
-	border-bottom: 1px solid black;
-	border-left: 1px solid black;
+	border: 1px solid #777;
 	background-color: #eee;
-	top:57px;
+	top:65px;
 /*	left: 8px;*/
 	display: none;
+}
+
+/* Apply only to browsers better than IE6 */
+html > body #menu {
+	position: fixed;
 }
 
 #menu ul {

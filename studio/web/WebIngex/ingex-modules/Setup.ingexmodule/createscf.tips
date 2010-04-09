@@ -1,0 +1,10 @@
+{
+	'createscfAboutCallout':{
+								'html':'<h1>Create Source Group</h1><p>More general information about this module bal alka alk slak sj ioeufw ufn iweufn i uieow ewfniuew nuifen ifun eiu...</p>',
+								'sticky':'true'
+							},
+	'createscfNameCallout':'Enter a name for the source group',
+	'createscfTypeCallout':'Is the source from a live camera or tape?',
+	'createscfReclocCallout':'Physical location recording is taking place',
+	'createscfTapenumCallout':'Enter a unique tape ID'
+}

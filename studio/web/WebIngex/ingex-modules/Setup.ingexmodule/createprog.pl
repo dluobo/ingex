@@ -108,7 +108,7 @@ sub get_content
     
     push(@pageContent, start_form({-id=>"ingexForm", -action=>"javascript:sendForm('ingexForm','createprog')"}));
 
-    push(@pageContent, p('Name', textfield('name')));
+    push(@pageContent, p('Name', textfield({-id=>"progNameCallout", -name=>"name"})));
 
     my @values;
     my %labels;
@@ -121,6 +121,7 @@ sub get_content
     }
     
    push(@pageContent, p('Series', popup_menu(
+   		-id=>"progSeriesCallout",
         -name=>'series',
         -default=>$default,
         -values=>\@values,

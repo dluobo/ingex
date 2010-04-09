@@ -51,6 +51,7 @@ my $json = decode_json($jsonStr);
 # set correct export path from json parameters
 my $fnPrefix = $json->{"Root"}->[0]->{"ApplicationSettings"}->[0]->{"FnamePrefix"};
 my $dir = $json->{"Root"}->[0]->{"ApplicationSettings"}->[0]->{"ExportDir"};
+
 my $prefix = get_path($dir, $fnPrefix);
 $json->{"Root"}->[0]->{"ApplicationSettings"}->[0]->{"Prefix"} = $prefix;
 
@@ -86,11 +87,17 @@ unlink($filename);	# clean up
 #
 sub get_path {
 	my ( $dir, $fnprefix ) = @_;
-
+	
 	my $exportDir = get_avid_aaf_export_dir($dir);
-	my ($filenamePrefix) = $fnprefix =~ /^\s*(.*\S)\s*$/;
-	$filenamePrefix =~ s/\"/\\\"/g;
-
+	my $filenamePrefix;
+	if ($fnprefix eq ""){
+		$filenamePrefix = "";
+	}
+	else{
+		($filenamePrefix) = $fnprefix =~ /^\s*(.*\S)\s*$/;
+		$filenamePrefix =~ s/\"/\\\"/g;
+	}
+	
 	my $prefix;
 	if ( !$exportDir || $exportDir =~ /\/$/ ) {
 		$prefix = join( "", $exportDir, $filenamePrefix );

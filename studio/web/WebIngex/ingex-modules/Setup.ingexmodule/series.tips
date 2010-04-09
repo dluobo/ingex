@@ -1,0 +1,6 @@
+{
+	'seriesAboutCallout':		{
+								'html':'<h1>Series</h1><p>This is used to manage the series names that can be associated with new recordings. These settings are not a prerequisite of setting up the recorder and will be utilised in later revisions of the software which incorporate logging features.</p>',
+								'sticky':'true'
+							}
+}

@@ -1,0 +1,11 @@
+{
+	'createscfAboutCallout':{
+								'html':'<h1>Create Source Group</h1><p>More general information about this module bal alka alk slak sj ioeufw ufn iweufn i uieow ewfniuew nuifen ifun eiu...</p>',
+								'sticky':'true'
+							},
+	'editscfNameCallout':'Enter a name for the source group',
+	'editscfTypeCallout':'Is the source from a live camera or tape?',
+	'editscfReclocCallout':'Physical location recording is taking place',
+	'editscfTapenumCallout':'Enter a unique tape ID',
+	'editscfTracksCallout':'Enter labels to identify each video and audio track associated with this source group, such as V1, A1, A2...'
+}

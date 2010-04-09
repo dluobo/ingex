@@ -24,6 +24,8 @@ use strict;
 use lib ".";
 use lib "../../ingex-config";
 
+use ingexconfig;
+
 my $retval = "";
 
 $retval = build_javascript();
@@ -38,18 +40,18 @@ sub build_javascript
 	my @javaScript;
 	my $js;
 	
-	if($js = getJS('/srv/www/cgi-bin/ingex-modules/Status.ingexmodule/ModuleJavascript.js')){
+	if($js = getJS($ingexConfig{'WEB_ROOT'}.'/cgi-bin/ingex-modules/Status.ingexmodule/ModuleJavascript.js')){
 		push(@javaScript, $js);
 	}
 	
-	my $dirtoget="/srv/www/cgi-bin/ingex-modules/Status.ingexmodule/monitors/";
+	my $dirtoget=$ingexConfig{'WEB_ROOT'}."/cgi-bin/ingex-modules/Status.ingexmodule/monitors/";
 	opendir(MONITORS, $dirtoget) or die("Cannot open monitors directory");
 	my @thefiles= readdir(MONITORS);
 	closedir(MONITORS);
 	
 	foreach $f (@thefiles) {
 		if(substr($f, -3) eq ".js"){
-			if($js = getJS('/srv/www/cgi-bin/ingex-modules/Status.ingexmodule/monitors/'.$f)){
+			if($js = getJS($ingexConfig{'WEB_ROOT'}.'/cgi-bin/ingex-modules/Status.ingexmodule/monitors/'.$f)){
 				push(@javaScript, $js);
 			}
 		}

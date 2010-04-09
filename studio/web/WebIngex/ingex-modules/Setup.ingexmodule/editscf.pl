@@ -218,13 +218,18 @@ sub get_edit_content
     push(@topRows,  
         Tr({-class=>"simpleTable", -align=>'left', -valign=>'top'}, [
             td([div({-class=>"propHeading1"}, 'Name:'), 
-            textfield('name', $scf->{"config"}->{'NAME'})]),
+            textfield({
+            	-id=>"editscfNameCallout",
+            	-name=>'name', 
+            	-value=>$scf->{"config"}->{'NAME'}
+            })]),
         ]));
 
     push(@topRows,  
         Tr({-class=>"simpleTable", -align=>'left', -valign=>'top'}, [
             td([div({-class=>"propHeading1"}, 'Type:'), 
                 popup_menu(
+                	-id=>"editscfTypeCallout",
                     -name=>'type',
                     -values=>[$db::sourceType{"LiveRecording"}, $db::sourceType{"Tape"}],
                     -default=>$scf->{"config"}->{'TYPE_ID'},
@@ -243,6 +248,7 @@ sub get_edit_content
         Tr({-class=>"simpleTable", -align=>'left', -valign=>'top'}, [
             td([div({-class=>"propHeading1"}, 'Location:'), 
                 popup_menu(
+                	-id=>"editscfReclocCallout",
                     -name=>'recloc',
                     -default=>$scf->{"config"}->{'LOCATION_ID'},
                     -values=>\@values,
@@ -252,7 +258,12 @@ sub get_edit_content
     push(@topRows,  
         Tr({-class=>"simpleTable", -align=>'left', -valign=>'top'}, [
             td([div({-class=>"propHeading1"}, 'Tape number:'), 
-                textfield('tapenum', $scf->{"config"}->{'SPOOL'})]),
+                textfield({
+                	-id=>"editscfTapenumCallout", 
+                	-name=>'tapenum', 
+                	-value=>$scf->{"config"}->{'SPOOL'}
+                })
+           	]),
         ]));
 
         
@@ -276,7 +287,7 @@ sub get_edit_content
     push(@topRows,
         Tr({-class=>"simpleTable", -align=>'left', -valign=>'top'}, [
            td([div({-class=>"propHeading1"}, 'Tracks:'), 
-            table({-class=>"borderTable"}, @trackRows)]),
+            table({-id=>'editscfTracksCallout', -class=>"borderTable"}, @trackRows)]),
         ]));
 
 

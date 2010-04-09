@@ -32,12 +32,15 @@
 .container {
 	clear: left;
 	width: 1000px;
-	height: 300px;
+	height: 320px;
+	border:1px solid #777777;
 }
 
 .container2 {
+	clear: left;
 	width: 1000px;
-	height: 300px;
+	height: 320px;
+	border:1px solid #777777;
 }
 
 .tree {
@@ -59,7 +62,7 @@
 	top: 0;
 	float: right;
 	width: 200px;
-	height: 300px;
+	height: 298px;
 }
 
 .preview {
@@ -87,7 +90,7 @@
 	font-family: Verdana, Arial, Helvetica, sans-serif;
 	font-size: small;
 	width: 1000px;
-	border: 1px solid black;
+	border:1px solid #777777;
 	padding: 5px;
 	background-color: #f6f6f6;
 }
@@ -96,7 +99,7 @@
 	font-family: Verdana, Arial, Helvetica, sans-serif;
 	font-size: small;
 	width: 1000px;
-	border: 1px solid black;
+	border:1px solid #777777;
 	padding: 5px;
 	background-color: #f6f6f6;
 }
@@ -104,6 +107,7 @@
 .status_bar_src {
 	width: 1000px;
 	height: 20px;
+	clear:left;
 	border: none;
 	padding: 0px;
 	background-color: #feffaf;
@@ -112,6 +116,7 @@
 .status_bar_dest {
 	width: 1000px;
 	height: 20px;
+	clear:left;
 	border: none;
 	padding: 0px;
 	background-color: #feffaf;
@@ -129,7 +134,7 @@
 
 /* tabular style form layout */
 fieldset.table {
-	border: 1px solid black;
+	border:1px solid #777777;
 	float: left;
 	clear: left;
 	width: 100%;
@@ -194,7 +199,7 @@ fieldset.table .item {
 }
 
 fieldset.table input.item {
-	border: 1px solid black;
+	border:1px solid #777777;
 	width: 150px;
 }
 
@@ -204,13 +209,13 @@ fieldset.table select.item {
 }
 
 fieldset.table .wide_item {
-	border: 1px solid black;
+	border:1px solid #777777;
 	float: left;
 	width: 250px;
 }
 
 fieldset.table .short_item {
-	border: 1px solid black;
+	border:1px solid #777777;
 	float: left;
 	width: 100px;
 }
@@ -229,19 +234,19 @@ fieldset .centre_container {
 
 /* specific form element formatting */
 .time_in {
-	border: 1px solid black;
+	border:1px solid #777777;
 	width: 25px;
 }
 
 .period_in {
-	border: 1px;
+	border:1px solid #777777;
 	margin-right: 5px;
 	width: 100px;
 	float: left;
 }
 
 .day_in {
-	border: 1px;
+	border:1px solid #777777;
 	width: 100px;
 }
 
@@ -251,7 +256,7 @@ fieldset .centre_container {
 }
 
 .datetime {
-	border: 1px;
+	border:1px solid #777777;
 	width: 270px;
 }
 
@@ -268,7 +273,7 @@ fieldset .centre_container {
 
 .track_link_A {
 	background-color: #ff5555;
-	border: 1px;
+	border:1px solid #777777;
 	margin-top: 2px;
 	margin-bottom: 2px;
 	width: 150px;
@@ -276,7 +281,7 @@ fieldset .centre_container {
 
 .track_link_V {
 	background-color: #55ff55;
-	border: 1px;
+	border:1px solid #777777;
 	margin-top: 2px;
 	margin-bottom: 2px;
 	width: 150px;

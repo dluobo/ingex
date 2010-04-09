@@ -60,11 +60,12 @@ sub get_page_content
     
     my @pageContent;
     
+    push (@pageContent, p({-id=>"reclocAboutCallout", -class=>"infoBox"}, "Info"));
+    
     push(@pageContent, h1('Recording Location'));
 
-    push(@pageContent, p(a({-href=>"javascript:getContentWithVars('creategcf','type=recloc')"}, "Create new")));
+    push(@pageContent, p(a({-id=>"reclocCreateCallout", -href=>"javascript:getContentWithVars('creategcf','type=recloc');"}, "Create new")));
     
- 
     my @tableRows;
     push(@tableRows, 
         Tr({-class=>"simpleTable", -align=>'left', -valign=>'top'}, [

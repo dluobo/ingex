@@ -51,45 +51,19 @@ var dndMode = true;
 var multiResSelected = false;
 var currentFormat = 0;			// current video format
 var selectionFormat = 0;			// format of currently selected packages
+var renderedExt;
 
 var onLoad_Material = function() {
 	checkJSLoaded(function(){
-		init();
+		Ext.onReady(function(){
+			init();
+		});	
 	});	
 }
 
 // initialise
 loaderFunctions.Material = onLoad_Material;
 
-
-// ext override, necessary for ext multiselect tree
-Ext.override(Ext.tree.TreeDropZone, { 
-	 completeDrop : function(de) { 
-	 	var ns = de.dropNode, p = de.point, t = de.target; 
-	 	if(!Ext.isArray(ns)) { 
-	 		ns = [ns]; 
-	 	} 
-	 	var n, node, ins = false; 
-	 	if (p != 'append') { 
-	 		ins = true; node = (p == 'above') ? t : t.nextSibling; 
-	 	} 
-	 	for(var i = 0, len = ns.length; i < len; i++) { 
-			n = ns[i];
-		 			 
-			if (ins) { 
-				t.parentNode.insertBefore(n, node); 
-			} 
-			else { t.appendChild(n); 
-			} 
-			if(Ext.enableFx && this.tree.hlDrop) { 
-				n.ui.highlight(); 
-			} 
-	 	}
-		ns[0].ui.focus(); 
-		t.ui.endDrop(); 
-		this.tree.fireEvent("nodedrop", de);
-	} 
-}); 
 
 // ext override, to modify timeout value
 Ext.tree.TreeLoader.override({
@@ -116,7 +90,7 @@ Ext.tree.TreeLoader.override({
 }); 
 	
 // set ext spacer image to a local file instead of remote url
-Ext.BLANK_IMAGE_URL = "/ingex/ext/resources/images/default/tree/s.gif";
+Ext.BLANK_IMAGE_URL = "../ingex/ext/resources/images/default/tree/s.gif";
 
 
 /*
@@ -124,7 +98,7 @@ Ext.BLANK_IMAGE_URL = "/ingex/ext/resources/images/default/tree/s.gif";
  */
 function init() {
 	//have ext components already been loaded?
-	var renderedExt = false;
+	renderedExt = false;
 	if($('tree').innerHTML){renderedExt = true;}
 	
 	//test for drag and drop mode
@@ -221,7 +195,8 @@ function init() {
 		// source materials tree
 		tree = new Ext.tree.MultiSelColumnTree({
 			width: 800,
-			height: 300,
+			height: 298,
+			border: false,
 			rootVisible: true,
 			useArrows:true,
 			autoScroll: true,
@@ -252,7 +227,8 @@ function init() {
 			// destination materials tree
 			dropBox = new Ext.tree.MultiSelColumnTree({
 				width: 800,
-				height: 300,
+				height: 298,
+				border: false,
 				rootVisible: true,
 				useArrows:true,
 				autoScroll: true,
@@ -355,7 +331,7 @@ function materialClicked(node, e, elId){
 		}
 	}
 	
-	if(singleNode && node.attributes.leaf){
+	if(singleNode && node && node.attributes.leaf){
 		noSelectedItems = 1;	//only 1 node selected
 		
 		//check is materials node
@@ -411,9 +387,11 @@ function materialClicked(node, e, elId){
 		if(elId == 'src'){
 			var size = 0;
 			
-			for(var i in selectedSrcNodes){
-				if(selectedSrcNodes[i].attributes){
-					size += countPath(selectedSrcNodes[i], elId);
+			if(selectedSrcNodes[0]){
+				for(var i in selectedSrcNodes){
+					if(selectedSrcNodes[i].attributes){
+						size += countPath(selectedSrcNodes[i], elId);
+					}
 				}
 			}
 			
@@ -634,6 +612,7 @@ function areNodesValid(nodes){
  * also updates node count for destination tree
  */
 function copyNodesAndPaths(nodes){
+	if(debug){alert('have '+nodes.length+' nodes');}
 	
 	if(!areNodesValid(nodes)){
 		show_static_messagebox("Invalid Selection", "The package selection should contain only one video format. Select the desired format from the search options.");
@@ -916,7 +895,6 @@ function loadComplete(){
 	var fnameprefix = $('fnameprefix').value;
 	var longsuffix = $('longsuffix').checked.toString().toUpperCase();
 	var editpath = $('editpath').value;
-//	var dirsource = $('dirsource').value;
 	var dirsource = ''; 	
 	
 	var json = 	{"Root": 
@@ -1172,10 +1150,11 @@ function getToTime(){
    * display selected source materials size
    */
  function setSrcPkgSize(size){
- 	if(debug){alert('setsrcpkgsize');}
  		//show size of selected folder
 	 	if(selectedSrcNodes.length == 1){	//only one node selected
-	 		$('status_bar_src').innerHTML = selectedSrcNodes[0].attributes.name + ' selected, containing ' + size + ' material items';
+	 		if(selectedSrcNodes[0]){
+		 		$('status_bar_src').innerHTML = selectedSrcNodes[0].attributes.name + ' selected, containing ' + size + ' material items';
+	 		}
 	 	}
 	 	else{	//multiple folders
 	 		$('status_bar_src').innerHTML = 'Multiple items selected, containing ' + size + ' material items';
@@ -1294,15 +1273,13 @@ function getToTime(){
  		
  		//set aaf export options to saved defaults
 		$('format').value = json.FCP;
-//		$('dircut').checked = (json.DirCut === 'true');
-//		$('dirsource').value = json.DirSource;					//database storage of director's cut has replaced file storage
-		$('dircut').checked = (json.DirDB === 'true');			
+		$('dircut').checked = (json.DirCut === 'true');
 		$('dircutaudio').checked = (json.AudioEdit === 'true');
 		$('exportdir').selectedIndex = json.ExportDir;
 		$('fnameprefix').value = json.FnamePrefix;
 		$('longsuffix').checked = (json.long_suffix === 'true');
 		$('editpath').value = json.EditPath;
-
+//		$('dirsource').value = json.DirSource;					//database storage of director's cut has replaced file storage	
  	}
  	
  }

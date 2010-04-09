@@ -24,6 +24,8 @@ use strict;
 use lib ".";
 use lib "../../ingex-config";
 
+use ingexconfig;
+
 my $retval = "";
 
 $retval = build_css();
@@ -38,18 +40,18 @@ sub build_css
 	my @allCSS;
 	my $css;
 	
-	if($css = getCSS('/srv/www/cgi-bin/ingex-modules/Status.ingexmodule/ModuleStyles.css')){
+	if($css = getCSS($ingexConfig{'WEB_ROOT'}.'/cgi-bin/ingex-modules/Status.ingexmodule/ModuleStyles.css')){
 		push(@allCSS, $css);
 	}
 	
-	my $dirtoget="/srv/www/cgi-bin/ingex-modules/Status.ingexmodule/monitors/";
-	opendir(MONITORS, $dirtoget) or die("Cannot open monitors directory");
+	my $dirtoget = $ingexConfig{'WEB_ROOT'}.'/cgi-bin/ingex-modules/Status.ingexmodule/monitors/';
+	opendir(MONITORS, $dirtoget) or die("Cannot open monitors directory $dirtoget $!");
 	my @thefiles= readdir(MONITORS);
 	closedir(MONITORS);
 	
 	foreach $f (@thefiles) {
 		if(substr($f, -4) eq ".css"){
-			if($css = getCSS('/srv/www/cgi-bin/ingex-modules/Status.ingexmodule/monitors/'.$f)){
+			if($css = getCSS($ingexConfig{'WEB_ROOT'}.'/cgi-bin/ingex-modules/Status.ingexmodule/monitors/'.$f)){
 				push(@allCSS, $css);
 			}
 		}

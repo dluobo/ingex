@@ -142,7 +142,6 @@ sub getAAFConfig
 	my $longSuffix = $ingexConfig{"long_suffix"};
 	my $editPath = $ingexConfig{"edit_path"};
 	my $directorsCut = $ingexConfig{"directors_cut"};
-	my $directorsSource = $ingexConfig{"directors_cut_source"};
 	my $audioEdit = $ingexConfig{"audio_edit"};
 	
 	my %results = 	(
@@ -152,7 +151,6 @@ sub getAAFConfig
 						'LongSuffix' => $longSuffix,
 						'EditPath' => $editPath,
 						'DirCut' => $directorsCut,
-						'DirSource' => $directorsSource,
 						'AudioEdit' => $audioEdit
 					);
 	

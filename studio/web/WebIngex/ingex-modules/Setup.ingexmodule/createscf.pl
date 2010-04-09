@@ -53,7 +53,7 @@ my $recLocs = prodautodb::load_recording_locations($dbh)
 my $errorMessage;
 
 
-if (defined param("Create"))
+if (defined param("Next >>"))
 {
     if (!($errorMessage = validate_params()))
     {
@@ -157,6 +157,8 @@ sub get_create_content
     
     my @pageContent;
     
+    push(@pageContent, p({-id=>"createscfAboutCallout", -class=>"infoBox"}, "Info"));
+    
     push(@pageContent, h1("Create new source group definition"));
 
     if (defined $message)
@@ -166,12 +168,13 @@ sub get_create_content
     
     push(@pageContent, start_form({-id=>"ingexForm", -action=>"javascript:sendForm('ingexForm','createscf')"}));
 
-    push(@pageContent, p("Name", textfield("name")));
+    push(@pageContent, p("Name", textfield({-id=>"createscfNameCallout", -name=>"name"})));
 
     push(@pageContent, 
         p(
             "Type", 
             popup_menu(
+            	-id=>"createscfTypeCallout",
                 -name=>"type",
                 -values=>[
                     $db::sourceType{"LiveRecording"}, 
@@ -197,6 +200,7 @@ sub get_create_content
         p(
             "Recording location", 
             popup_menu(
+            	-id=>"createscfReclocCallout",
                 -name=>"recloc",
                 -values=>\@values,
                 -labels=>\%labels
@@ -204,7 +208,7 @@ sub get_create_content
         )
     );
 
-    push(@pageContent, p("Tape number", textfield("tapenum")));
+    push(@pageContent, p("Tape number", textfield({-id=>"createscfTapenumCallout", -name=>"tapenum"})));
 
     push(@pageContent, 
         p(
@@ -227,8 +231,8 @@ sub get_create_content
     );
 
     push(@pageContent, 
-        submit({-onclick=>"whichPressed=this.name", -name=>"Create"}), 
-        submit({-onclick=>"whichPressed=this.name", -name=>"Cancel"})
+        submit({-onclick=>"whichPressed=this.name", -name=>"Cancel"}),
+        submit({-onclick=>"whichPressed=this.name", -name=>"Next >>"})
     );
 
     push(@pageContent, end_form);

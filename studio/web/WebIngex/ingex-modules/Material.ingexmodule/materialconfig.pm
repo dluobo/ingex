@@ -22,7 +22,7 @@ use strict;
 use lib '../../ingex-config/';
 use ingexconfig;
 
-
+materialconfig::load_config();
 
 ####################################
 #
@@ -46,7 +46,6 @@ BEGIN
 
 
 
-materialconfig::load_config();
 
 
 ####################################
@@ -57,7 +56,7 @@ materialconfig::load_config();
 
 sub load_config
 {
-    ingexconfig::load_config("/srv/www/cgi-bin/ingex-modules/Material.ingexmodule/material.conf");
+    ingexconfig::load_config($ingexConfig{'WEB_ROOT'}."/cgi-bin/ingex-modules/Material.ingexmodule/material.conf");
 
 				($ingexConfig{"create_aaf_dir"}) = ($ingexConfig{"create_aaf_dir"} =~ /(.*)/)
 	                if ($ingexConfig{"create_aaf_dir"});
@@ -74,6 +73,8 @@ sub load_config
 	            ($ingexConfig{"max_material_rows"}) = ($ingexConfig{"max_material_rows"} =~ /(.*)/)
 	                if ($ingexConfig{"max_material_rows"});
 	            ($ingexConfig{"drag_drop"}) = ($ingexConfig{"drag_drop"} =~ /(.*)/)
+	                if ($ingexConfig{"drag_drop"});
+	            ($ingexConfig{"directors_cut"}) = ($ingexConfig{"directors_cut"} =~ /(.*)/)
 	                if ($ingexConfig{"drag_drop"});
 } 
 

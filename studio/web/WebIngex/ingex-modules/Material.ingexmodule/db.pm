@@ -994,10 +994,8 @@ sub prepare_exttree_json
 						comments    => $materialRow->{"comments"} || "",
 						description => $materialRow->{"descript"} || "",
 						vresid 		=> $materialRow->{"vresid"} || "",
-
 						uiProvider => 'Ext.tree.ColumnNodeUI',
 						leaf       => 'true',
-						cls        => 'styles.css',
 						iconCls    => 'video'
 					}
 				);

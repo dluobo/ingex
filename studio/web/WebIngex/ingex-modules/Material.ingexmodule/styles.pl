@@ -24,6 +24,8 @@ use strict;
 use lib ".";
 use lib "../../ingex-config";
 
+use ingexconfig;
+
 my $retval = "";
 
 $retval = build_css();
@@ -37,7 +39,7 @@ sub build_css {
 	my @allCSS;
 	my $css;
 
-	if ($css = getCSS('/srv/www/cgi-bin/ingex-modules/Material.ingexmodule/ModStyles.css') )
+	if ($css = getCSS($ingexConfig{'WEB_ROOT'}.'/cgi-bin/ingex-modules/Material.ingexmodule/ModStyles.css') )
 	{
 		push( @allCSS, $css );
 	}

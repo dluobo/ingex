@@ -56,6 +56,7 @@ BEGIN
         &load_video_resolutions
         &load_video_resolution
         &load_file_formats
+        &load_ops
 		&load_nodes
 		&load_node
 		&save_node
@@ -260,6 +261,38 @@ sub load_file_formats
     }
     
     return $fmts;    
+}
+
+
+####################################
+#
+# Operational Patterns
+#
+####################################
+
+sub load_ops
+{
+    my ($dbh) = @_;
+    
+    my $ops;
+    eval
+    {
+        my $sth = $dbh->prepare("
+            SELECT opp_identifier AS id, 
+                opp_name AS name
+            FROM OperationalPattern
+            ");
+        $sth->execute;
+        
+        $ops = $sth->fetchall_arrayref({});
+    };
+    if ($@)
+    {
+        $errstr = (defined $dbh->errstr) ? $dbh->errstr : "unknown error";
+        return undef;
+    }
+    
+    return $ops;    
 }
 
 

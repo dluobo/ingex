@@ -1,0 +1,16 @@
+{
+	'creatercfNameCallout':'A descriptive name for this configuration, eg. <i>one_SD_input</i> or simply <i>Default</i>',
+	'creatercfTracksCallout':'<h1>Track Source Selection</h1><p>Specifies video and audio tracks for an input. There are two columns:</p><p><b>Source: </b>Click on the drop down menu for the first track (i.e. Index 1) where it shows \'not connected\'. The sources available will be displayed. Complete the table selecting a video source for the first track and then audio sources for the remaining tracks, 2 to 5. Unwanted audio tracks can be left as \'not connected\'.</p><p><b>Clip Track Number: </b>This column also needs to be filled in, starting from 1 for each type of track (eg. in a 5 track setup, the video track has the number 1; then the audio tracks - 2 to 5 - are numbered upwards from 1 to 4). (These numbers control the order of display of the tracks in the editor\'s timeline.)</p>',
+	'creatercfInpNameCallout':'Name for the input eg. <i>input 1</i> (this does not need to be changed)',
+	
+	'recorderEditConfigCallout':'Edit the configuration details',
+	'recorderDeleteConfigCallout':'Delete this configuration',
+	'recorder_COPY_COMMAND':'Here, the location of the transfer client script (which is called by the recorder to initiate transfers) is entered. See section 4.5.2 for more details. Typical setting is /home/ingex/ap-workspace/ingex/studio/processing/media_transfer/xferclient.pl',
+	'recorder_ENCODE1_BITC':'Enable encode 1 Burnt In Time Code. If true, this will burn in the linear time code on the files created by ENCODE1.',
+	'recorder_ENCODE1_COPY_DEST':'Used by the transfer process if one is active. The directory where the output from ENCODE1 will be copied by the transfer process.',
+	'recorder_ENCODE1_COPY_PRIORITY':'Used when a transfer process is running. Determines which ENCODE output files will be copied first by the transfer process. Can be any integer >=1, the lower the value, the higher the priority.',
+	'recorder_ENCODE1_DIR':'Directory where output from ENCODE1 will be initially saved. It is important that you ensure there is enough space available on the target drive; the Ingex GUI will not warn if the destination becomes full.',
+	'recorder_ENCODE_RESOLUTION':'Select the required video encoding format.',
+	'recorder_ENCODE_WRAPPING':'Sets the wrapper. 1:Raw 2:MXF 3:Quicktime (.mov) 4:MPEG program stream.',
+	'recorder_IMAGE_ASPECT':'Sets the aspect ratio – format: LENGTH/HEIGHT, e.g. 16/9.',
+}

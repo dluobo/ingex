@@ -59,6 +59,8 @@ sub get_page_content
     my ($progs) = @_;
     
     my @pageContent;
+
+	push (@pageContent, p({-id=>"progAboutCallout", -class=>"infoBox"}, "Info"));
     
     push(@pageContent, h1('Programmes'));
 

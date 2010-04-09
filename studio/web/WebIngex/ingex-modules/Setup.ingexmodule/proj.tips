@@ -1,0 +1,6 @@
+{
+	'projAboutCallout':		{
+								'html':'<h1>Project Names</h1><p>Here, the various Project names active on an Ingex system can be managed. Projects are the primary method of organisation for material captured by Ingex. It is up to the operator how Projects are used to manage material but generally, a Project will encompass all material relating to a series or feature. While new projects can be added from the Ingex Controller, they cannot be deleted from there. For safety, deletion of projects must be done here.</p>',
+								'sticky':'true'
+							}
+}
