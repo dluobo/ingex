@@ -1,0 +1,28 @@
+<div id="m_text" class="m_text">
+<h2>[% title %]</h2>
+<br />
+
+<h4>Material Actions: <!--- TODO: make these pluggable for future expansion - should be loaded from array/refer to functions --->
+</h4>
+<div class="links">
+<ol>
+	<li>> <a href="javascript:deleteClicked('[% id %]')"
+		onMouseOver="this.style.cursor='pointer'">delete</a></li>
+	<li>> <a href="javascript:deleteAllClicked('[% id %]')"
+		onMouseOver="this.style.cursor='pointer'">delete all</a></li>
+	<!---span onclick='copyToExtMedia("[% id %]")' onMouseOver="this.style.cursor='pointer'">> copy to external media</span><br/>--->
+</ol>
+</div>
+<br />
+
+<div id='package_[% id %]' style='visibility: hidden;'>
+<h4>Tracks:</h4>
+<div id='tracks_[% id %]'></div>
+<br />
+<h4>Description:</h4>
+<div id="meta_description_[% id %]"></div>
+<br />
+<h4>Comments:</h4>
+<div id="meta_comments_[% id %]"></div>
+</div>
+</div>

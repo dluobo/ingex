@@ -1,0 +1,204 @@
+<body>
+
+<h1>Material Browser</h1>
+
+<div class="materials_browser">
+
+<div class="filter_container">
+
+<h3>1) Clip Selection - <i>select required clips</i></h3>
+
+
+
+
+<!---		EXAMPLE TEMPLATE FOR LAYING OUT FORM ELEMENTS
+								<fieldset class="table">
+								<legend>Time Range</legend>
+									<ol>
+										<li>
+											<label for="item1">
+											fewfew
+											</label>
+											<div id="item1" class="item">
+												regvre
+											</div>
+										</li>
+									</ol>
+								</fieldset>	--->
+
+
+
+<fieldset class="table"><legend>Filter Options</legend>
+<ol>
+	<li><label for="proj_name"> Project Name </label> <select
+		id="proj_name" name="proj_name" class="item" default="0">
+		[% proj_opts %]
+	</select></li>
+
+	<li><label for="search_text"> Search Terms </label> <input
+		type="text" id="search_text" class="item" /></li>
+
+	<li><label for="v_res"> Video Resolution </label> <select
+		id="v_res" class="item" default="8" />
+		[% fmt_opts %]
+	</select></li>
+</ol>
+</fieldset>
+
+<fieldset class="table"><legend>Time Range</legend>
+<ol>
+	<li><label for="dummy"> <input type="radio"
+		name="time_type" id="all_time_radio" value="all"
+		onclick="allTimesSet()" checked="checked" /> All times </label>
+	<div id="dummy" class="var_container"></div>
+	</li>
+
+	<li><label for="dummy2"> <input type="radio"
+		name="time_type" id="time_period_radio" value="range"
+		onclick="dayFilterSet()" /> Time range: </label>
+	<div id="dummy2" class="var_container"></div>
+	</li>
+
+	<li><label for="range_in" class="label_r"> Period </label> <select
+		id="range_in" class="item" disabled="true">
+		<option value="1">last 10 minutes</option>
+		<option value="2">last 20 minutes</option>
+		<option value="3">morning (00:00 - 11:59)</option>
+		<option value="4">afternoon (12:00 - 23:59)</option>
+		<option value="5">all day</option>
+		<option value="6">2 days</option>
+	</select></li>
+
+	<li><label for="day_in" class="label_r"> Day </label> <select
+		id="day_in" class="item" disabled="true">
+		<option value="1">today</option>
+		<option value="2">yesterday</option>
+		<option value="3">2 days ago</option>
+		<option value="4">3 days ago</option>
+	</select></li>
+
+
+	<li><label for="dummy3"> <input type="radio"
+		name="time_type" id="time_range_radio" value="period"
+		onclick="dateFilterSet()" /> Within the period: </label> <!--- Verification error --->
+	<div id="time_range_err" class="time_range_err">* Timecode must
+	be in the format hh:mm:ss:ff</div>
+	<div id="dummy3" class="var_container"></div>
+	</li>
+
+
+	<li><label for="datetime_from" class="label_r"> From </label>
+	<div id="datetime_from" class="var_container">
+	<div class="var_container">
+	<div id="from_cal"></div>
+	<!--- Ext calendar popup ---></div>
+	<div id="from_time" class="var_container"><input type="textbox"
+		name="hh_from" id="hh_from" class="time_in" size="2" value="00"
+		disabled="true" />:<input type="textbox" id="mm_from" class="time_in"
+		size="2" value="00" disabled="true" />:<input type="textbox"
+		id="ss_from" class="time_in" size="2" value="00" disabled="true" />:<input
+		type="textbox" id="ff_from" class="time_in" size="2" value="00"
+		disabled="true" /></div>
+	<div class="var_container">[hh:mm:ss:ff]</div>
+
+
+	</div>
+	</li>
+	<li><label for="datetime_to" class="label_r"> To </label>
+	<div id="datetime_to" class="var_container">
+	<div class="var_container">
+	<div id="to_cal"></div>
+	<!--- Ext calendar popup ---></div>
+	<div id="to_time" class="var_container"><input type="textbox"
+		id="hh_to" class="time_in" size="2" value="00" disabled="true">:<input
+		type="textbox" id="mm_to" class="time_in" size="2" value="00"
+		disabled="true">:<input type="textbox" id="ss_to"
+		class="time_in" size="2" value="00" disabled="true">:<input
+		type="textbox" id="ff_to" class="time_in" size="2" value="00"
+		disabled="true"></div>
+	<div class="var_container">[hh:mm:ss:ff]</div>
+	</div>
+	</li>
+</ol>
+</fieldset>
+
+<fieldset class="noborder"><!--- Submit --->
+<div class="var_container"><input type="button" value="Load Clips"
+	onclick="submitFilter()" /></div>
+<div class="var_container"><!--- Search matches --->
+<div nane='filter_matches' id='filter_matches' class="filter_matches"></div>
+</div>
+</fieldset>
+
+</div>
+
+
+
+<div class="export_container">
+<h3>2) Output - <i>create package</i></h3>
+<fieldset class="table"><legend>Export Options</legend>
+<ol>
+	<li><label for="format"> Format </label> <select id="format"
+		class="item" onchange="updateEnabledOpts()">
+		<option value="avid">Avid</option>
+		<option value="fcp">Final Cut Pro</option>
+	</select></li>
+
+	<li><label for="editpath"> Editing directory path </label> <input
+		type="text" id="editpath" class="item" />
+	<div class="var_container">FCP only</div>
+	</li>
+</ol>
+</fieldset>
+
+<fieldset class="table"><legend>Director's cut</legend>
+<ol>
+	<li><input type="checkbox" id="dircut"
+		onclick="updateEnabledOpts()" /> Add director's cut</li>
+
+	<li><input type="checkbox" id="dircutaudio"
+		onchange="updateEnabledOpts()" /> Add audio edits</li>
+</ol>
+</fieldset>
+
+
+<fieldset class="table"><legend>Output</legend>
+<ol>
+	<li><label for="fnameprefix"> Filename prefix </label> <input
+		id="fnameprefix" type="text" class="item" />
+	<div class="var_container"><input type="checkbox" id="longsuffix">
+	Long suffix</div>
+	</li>
+
+	<li><label for="exportdir"> Destination directory </label> <select
+		id="exportdir" default="[% defaultSendTo %]" class="item">
+		[% dest_directories %]
+	</select></li>
+</ol>
+</fieldset>
+
+<fieldset class="noborder">
+<div class="var_container"><input type="button"
+	value="Create Package" onclick="packageAAF()" /></div>
+<div class="var_container"><input type="checkbox" id="save" />
+Save these options as local defaults</div>
+
+</fieldset>
+</div>
+
+
+
+
+<div class="container">
+<div id="tree" class="tree"></div>
+<div id="metadata" class="metadata">[% id = "src" %] [% title =
+"Source Details" %] [% INCLUDE package_details.html %]</div>
+<div id="status_bar_src" class="status_bar_src"></div>
+</div>
+
+</div>
+
+[% INCLUDE footer.html %]
+
+</body>
+
