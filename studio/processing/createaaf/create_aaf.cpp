@@ -1,5 +1,5 @@
 /*
- * $Id: create_aaf.cpp,v 1.17 2009/11/17 16:01:12 john_f Exp $
+ * $Id: create_aaf.cpp,v 1.18 2010/04/09 09:55:25 john_f Exp $
  *
  * Creates AAF files with clips extracted from the database
  *
@@ -1231,7 +1231,7 @@ int main(int argc, const char* argv[])
     
                 if (createAAFGroup)
                 {
-                    editorsFile->addClip(topPackage, material.packages);                
+                    editorsFile->addClip(topPackage, material.packages);
                 }
 
                 totalClips++;
@@ -1259,6 +1259,8 @@ int main(int argc, const char* argv[])
                     MaterialPackageSet materialPackages;
                     materialPackages.insert(topPackage1);
 
+                    // camera sources as strings
+                    set<string> camSources;
                     int64_t startTimecode = 0;
                     Date startDate;
                     int64_t endTimecode = 0;
@@ -1281,6 +1283,11 @@ int main(int argc, const char* argv[])
                         {
                             materialPackages.insert(topPackage2);
                             donePackages.insert(topPackage2);
+
+                            // get camera source name and store
+                            int pos = topPackage2->name.find_first_of('.', 0);
+                            string cam = topPackage2->name.substr(0, pos);
+							camSources.insert(cam);
                         }
                     }
 
@@ -1311,6 +1318,27 @@ int main(int argc, const char* argv[])
                         else if (includeMCCutsSequence)
                         {
                             sequence = getDirectorsCuts(database, mcClipDef, startDate, startTimecode, endDate, endTimecode);
+                        }
+
+                        // Cut Check
+                        // check camera cuts are valid (ie. do not point to non-existent camera sources)
+                        // remove any invalid cuts
+                        vector<CutInfo>::iterator it;
+                        it = sequence.begin();
+                        while(it != sequence.end()){
+                        	CutInfo next_cut = *it;
+
+							set<string>::iterator itMatch;
+                            itMatch = camSources.find(next_cut.source);
+
+                            // check this is one of the recorded camera sources
+                            if (itMatch!=camSources.end()){
+                            	++it;
+                            }
+                            else{
+                            	// cut is invalid - remove
+                            	sequence.erase(it);
+                            }
                         }
 
                         if (!fcpxml && !createAAFGroupOnly)
