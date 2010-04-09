@@ -1083,6 +1083,73 @@ INSERT INTO UserCommentColour (ucc_identifier, ucc_name) VALUES (7, 'Magenta');
 INSERT INTO UserCommentColour (ucc_identifier, ucc_name) VALUES (8, 'Black');
 
 
+-- defaultrecorderparameters
+
+INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
+    VALUES (1, 'IMAGE_ASPECT', '16/9', 1);
+INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
+    VALUES (2, 'COPY_COMMAND', '', 1);
+    
+INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
+    VALUES (10, 'ENCODE1_RESOLUTION', '4', 1);
+INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
+    VALUES (11, 'ENCODE1_WRAPPING', '2', 1);
+INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
+    VALUES (50, 'ENCODE1_OP', '1', 1);
+INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
+    VALUES (12, 'ENCODE1_BITC', 'false', 1);
+INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
+    VALUES (13, 'ENCODE1_DIR', '/video/mxf_online/', 1);
+INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
+    VALUES (14, 'ENCODE1_COPY_DEST', '/store/mxf_online/', 1);
+INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
+    VALUES (15, 'ENCODE1_COPY_PRIORITY', '3', 1);
+    
+INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
+    VALUES (20, 'ENCODE2_RESOLUTION', '8', 1);
+INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
+    VALUES (21, 'ENCODE2_WRAPPING', '2', 1);
+INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
+    VALUES (51, 'ENCODE2_OP', '1', 1);
+INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
+    VALUES (22, 'ENCODE2_BITC', 'false', 1);
+INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
+    VALUES (23, 'ENCODE2_DIR', '/video/mxf_offline/', 1);
+INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
+    VALUES (24, 'ENCODE2_COPY_DEST', '/store/mxf_offline/', 1);
+INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
+    VALUES (25, 'ENCODE2_COPY_PRIORITY', '2', 1);
+    
+INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
+    VALUES (30, 'ENCODE3_RESOLUTION', '21', 1);
+INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
+    VALUES (31, 'ENCODE3_WRAPPING', '3', 1);
+INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
+    VALUES (52, 'ENCODE3_OP', '1', 1);
+INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
+    VALUES (32, 'ENCODE3_BITC', 'false', 1);
+INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
+    VALUES (33, 'ENCODE3_DIR', '/video/browse/', 1);
+INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
+    VALUES (34, 'ENCODE3_COPY_DEST', '/store/browse/', 1);
+INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
+    VALUES (35, 'ENCODE3_COPY_PRIORITY', '1', 1);
+    
+INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
+    VALUES (40, 'QUAD_RESOLUTION', '0', 1);
+INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
+    VALUES (41, 'QUAD_WRAPPING', '1', 1);
+INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
+    VALUES (53, 'QUAD_OP', '1', 1);
+INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
+    VALUES (42, 'QUAD_BITC', 'true', 1);
+INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
+    VALUES (43, 'QUAD_DIR', '/video/browse/', 1);
+INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
+    VALUES (44, 'QUAD_COPY_DEST', '', 1);
+INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
+    VALUES (45, 'QUAD_COPY_PRIORITY', '3', 1);
+
 
 -- extensible enumerations
 
