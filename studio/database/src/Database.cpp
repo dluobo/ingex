@@ -1,5 +1,5 @@
 /*
- * $Id: Database.cpp,v 1.13 2009/10/12 15:44:54 philipn Exp $
+ * $Id: Database.cpp,v 1.14 2010/04/22 08:39:29 john_f Exp $
  *
  * Provides access to the data in the database
  *
@@ -146,6 +146,7 @@ const char* const LOAD_RECORDER_INPUT_TRACK_CONFIG_SQL =
     FROM RecorderInputTrackConfig \
     WHERE \
         rtc_recorder_input_id = $1 \
+    ORDER BY rtc_index \
 ";
 
 const char* const INSERT_RECORDER_STMT = "insert recorder";
@@ -334,6 +335,7 @@ const char* const LOAD_SOURCE_TRACK_CONFIG_SQL =
     FROM SourceTrackConfig \
     WHERE \
         sct_source_id = $1 \
+    ORDER BY sct_track_id \
 ";
 
 
