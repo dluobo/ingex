@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorder.h,v 1.10 2009/09/18 16:14:13 john_f Exp $
+ * $Id: IngexRecorder.h,v 1.11 2010/04/22 08:35:26 john_f Exp $
  *
  * Class to manage an individual recording.
  *
@@ -189,7 +189,15 @@ private:
 // Per-channel data
 // Enables
     std::vector<bool> mChannelEnable;
+    ACE_Thread_Mutex mTrackEnableMutex;
     std::vector<bool> mTrackEnable;
+
+public:
+    bool TrackEnable(unsigned int i)
+    {
+        ACE_Guard<ACE_Thread_Mutex> guard(mTrackEnableMutex);
+        return mTrackEnable[i];
+    }
 
 public:
 // MXF filenames
