@@ -1,5 +1,5 @@
 /*
- * $Id: recorder_functions.cpp,v 1.32 2010/04/06 10:46:47 john_f Exp $
+ * $Id: recorder_functions.cpp,v 1.33 2010/04/22 08:43:08 john_f Exp $
  *
  * Functions which execute in recording threads.
  *
@@ -183,11 +183,23 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         sc = ritc->sourceConfig;
     }
 
-    // Set track enables
-    unsigned int track_offset = channel_i * (1 + IngexShm::Instance()->AudioTracksPerChannel());
+    /*
+    Set track enables.
+    Note that number of tracks the recorder presents to controller depends on what
+    is present in shared memory.  The number of tracks in the RecorderConfig and
+    SourceConfig may be greater.
+    */
+    unsigned int n_tracks = 1 + IngexShm::Instance()->AudioTracksPerChannel();
+    unsigned int track_offset = channel_i * n_tracks;
     for (unsigned int i = 0; i < sc->trackConfigs.size(); ++i)
     {
-        track_enables.push_back(p_rec->mTrackEnable[track_offset + i]);
+        bool enabled = false;
+        if (i < n_tracks)
+        {
+            enabled = p_rec->TrackEnable(track_offset + i);
+        }
+        ACE_DEBUG((LM_DEBUG, ACE_TEXT("sc %s trk %d %s\n"), sc->name.c_str(), i, enabled ? "enabled" : "not enabled"));
+        track_enables.push_back(enabled);
     }
 
 
