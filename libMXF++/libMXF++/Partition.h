@@ -1,5 +1,5 @@
 /*
- * $Id: Partition.h,v 1.2 2010/02/12 13:52:49 philipn Exp $
+ * $Id: Partition.h,v 1.3 2010/06/02 11:03:29 philipn Exp $
  *
  * 
  *
@@ -43,13 +43,14 @@ class Partition;
 class KAGFillerWriter : public FillerWriter
 {
 public:
-    KAGFillerWriter(Partition* partition);
+    KAGFillerWriter(Partition* partition, uint32_t allocSpace = 0);
     virtual ~KAGFillerWriter();
 
     virtual void write(File* file);
     
 private:
     Partition* _partition;
+    uint32_t _allocSpace;
 };
 
 class PositionFillerWriter : public FillerWriter
@@ -113,6 +114,7 @@ public:
     void write(File* file);
     
     void fillToKag(File* file);
+    void allocateSpaceToKag(File* file, uint32_t size);
 
     
     ::MXFPartition* getCPartition() const { return _cPartition; }

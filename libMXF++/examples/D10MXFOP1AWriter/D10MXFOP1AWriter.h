@@ -1,5 +1,5 @@
 /*
- * $Id: D10MXFOP1AWriter.h,v 1.3 2010/03/29 17:03:35 philipn Exp $
+ * $Id: D10MXFOP1AWriter.h,v 1.4 2010/06/02 11:03:29 philipn Exp $
  *
  * D10 MXF OP-1A writer
  *
@@ -71,6 +71,12 @@ public:
     void SetBitRate(D10BitRate rate, uint32_t encoded_picture_size);    // default D10_BIT_RATE_50, 250000
     void SetMaterialPackageUID(mxfUMID uid);                            // default generated
     void SetFileSourcePackageUID(mxfUMID uid);                          // default generated
+    void SetProductInfo(std::string company_name, std::string product_name, std::string version, mxfUUID product_uid);
+                                                                        // default see source
+    
+    mxfpp::DataModel* CreateDataModel();
+    mxfpp::HeaderMetadata* CreateHeaderMetadata();
+    void ReserveHeaderMetadataSpace(uint32_t min_bytes);
     
     bool CreateFile(std::string filename);
     bool CreateFile(mxfpp::File **file);
@@ -98,6 +104,8 @@ public:
     
     
     // file info
+    mxfpp::HeaderMetadata* GetHeaderMetadata() const { return mHeaderMetadata; }
+    mxfpp::DataModel* GetDataModel() const { return mDataModel; }
     int64_t GetDuration() const { return mDuration; }
     int64_t GetFileSize() const;
     mxfUMID GetMaterialPackageUID() const { return mMaterialPackageUID; }
@@ -128,6 +136,11 @@ private:
     uint32_t mEncodedImageSize;
     uint32_t mMaxEncodedImageSize;
     uint32_t mAES3DataSize;
+    uint32_t mReserveMinBytes;
+    std::string mCompanyName;
+    std::string mProductName;
+    std::string mVersionString;
+    mxfUUID mProductUID;
 
     uint32_t mSystemItemSize;
     uint32_t mVideoItemSize;
@@ -143,6 +156,7 @@ private:
     mxfpp::IndexTableSegment *mIndexSegment;
     mxfpp::Partition *mHeaderPartition;
     int64_t mHeaderMetadataStartPos;
+    int64_t mHeaderMetadataEndPos;
     std::vector<SetWithDuration*> mSetsWithDuration;
     
     D10ContentPackageInt mContentPackage;

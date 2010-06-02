@@ -1,5 +1,5 @@
 /*
- * $Id: TaggedValue.cpp,v 1.2 2009/10/23 09:05:21 philipn Exp $
+ * $Id: TaggedValue.cpp,v 1.3 2010/06/02 11:03:29 philipn Exp $
  *
  * Copyright (C) 2009  British Broadcasting Corporation.
  * All Rights Reserved.
@@ -158,5 +158,36 @@ string TaggedValue::getStringValue()
 void TaggedValue::setName(string value)
 {
     setStringItem(&MXF_ITEM_K(TaggedValue, Name), value);
+}
+
+void TaggedValue::setStringValue(string value)
+{
+    ByteArray indirectVal = {0, 0};
+    mxfUTF16Char *utf16Val = 0;
+    size_t utf16ValSize;
+    try
+    {
+        utf16ValSize = mbstowcs(NULL, value.c_str(), 0);
+        MXFPP_CHECK(utf16ValSize != (size_t)(-1));
+        utf16ValSize += 1;
+        utf16Val = new wchar_t[utf16ValSize];
+        mbstowcs(utf16Val, value.c_str(), utf16ValSize);
+        
+        indirectVal.length = sizeof(g_prefix_be) + utf16ValSize * mxfUTF16Char_extlen;
+        indirectVal.data = new uint8_t[indirectVal.length];
+        memcpy(indirectVal.data, g_prefix_be, sizeof(g_prefix_be));
+        mxf_set_utf16string(utf16Val, &indirectVal.data[sizeof(g_prefix_be)]);
+       
+        setRawBytesItem(&MXF_ITEM_K(TaggedValue, Value), indirectVal);
+        
+        delete [] utf16Val;
+        delete [] indirectVal.data;
+    }
+    catch (...)
+    {
+        delete [] utf16Val;
+        delete [] indirectVal.data;
+        throw;
+    }
 }
 

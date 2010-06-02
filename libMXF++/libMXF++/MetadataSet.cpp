@@ -1,5 +1,5 @@
 /*
- * $Id: MetadataSet.cpp,v 1.2 2009/04/16 17:52:49 john_f Exp $
+ * $Id: MetadataSet.cpp,v 1.3 2010/06/02 11:03:29 philipn Exp $
  *
  * 
  *
@@ -810,7 +810,31 @@ void MetadataSet::setStringItem(const mxfKey* itemKey, string value)
         throw;
     }
 }
- 
+
+void MetadataSet::setFixedSizeStringItem(const mxfKey* itemKey, string value, uint16_t size)
+{
+    mxfUTF16Char* utf16Val = 0;
+    size_t utf16ValSize;
+    try
+    {
+        utf16ValSize = mbstowcs(NULL, value.c_str(), 0);
+        MXFPP_CHECK(utf16ValSize != (size_t)(-1));
+        utf16ValSize += 1;
+        utf16Val = new wchar_t[utf16ValSize];
+        mbstowcs(utf16Val, value.c_str(), utf16ValSize);
+       
+        MXFPP_CHECK(mxf_set_fixed_size_utf16string_item(_cMetadataSet, itemKey, utf16Val, size));
+       
+        delete [] utf16Val;
+        utf16Val = 0;
+    }
+    catch (...)
+    {
+        delete [] utf16Val;
+        throw;
+    }
+}
+
 void MetadataSet::setStrongRefItem(const mxfKey* itemKey, MetadataSet* value)
 {
     MXFPP_CHECK(value->getCMetadataSet() != 0);
@@ -1237,6 +1261,13 @@ void MetadataSet::appendWeakRefArrayItem(const mxfKey* itemKey, MetadataSet* val
     MXFPP_CHECK(mxf_add_array_item_weakref(_cMetadataSet, itemKey, value->getCMetadataSet()));
 }
 
+
+void MetadataSet::removeItem(const mxfKey* itemKey)
+{
+    MXFMetadataItem* item;
+    MXFPP_CHECK(mxf_remove_item(_cMetadataSet, itemKey, &item));
+    mxf_free_item(&item);
+}
 
 void MetadataSet::attachAvidAttribute(string name, string value)
 {

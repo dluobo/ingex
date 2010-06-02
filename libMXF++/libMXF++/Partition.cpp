@@ -1,5 +1,5 @@
 /*
- * $Id: Partition.cpp,v 1.2 2010/02/12 13:52:49 philipn Exp $
+ * $Id: Partition.cpp,v 1.3 2010/06/02 11:03:29 philipn Exp $
  *
  * 
  *
@@ -27,8 +27,8 @@ using namespace std;
 using namespace mxfpp;
 
 
-KAGFillerWriter::KAGFillerWriter(Partition* partition)
-: _partition(partition)
+KAGFillerWriter::KAGFillerWriter(Partition* partition, uint32_t allocSpace)
+: _partition(partition), _allocSpace(allocSpace)
 {}
 
 KAGFillerWriter::~KAGFillerWriter()
@@ -36,7 +36,7 @@ KAGFillerWriter::~KAGFillerWriter()
 
 void KAGFillerWriter::write(File* file)
 {
-    _partition->fillToKag(file);
+    _partition->allocateSpaceToKag(file, _allocSpace);
 }
 
 
@@ -281,4 +281,15 @@ void Partition::fillToKag(File* file)
     }
 }
 
+void Partition::allocateSpaceToKag(File* file, uint32_t size)
+{
+    if (_cPartition->kagSize > 0)
+    {
+        MXFPP_CHECK(mxf_allocate_space_to_kag(file->getCFile(), _cPartition, size));
+    }
+    else
+    {
+        MXFPP_CHECK(mxf_allocate_space(file->getCFile(), size));
+    }
+}
 

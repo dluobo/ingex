@@ -1,5 +1,5 @@
 /*
- * $Id: ArchiveMXFExtensionsDataModel.h,v 1.1 2009/02/02 05:14:33 stuart_hc Exp $
+ * $Id: ArchiveMXFExtensionsDataModel.h,v 1.2 2010/06/02 11:03:29 philipn Exp $
  *
  * 
  *
@@ -229,11 +229,6 @@ MXF_SET_DEFINITION(InterchangeObject, D3P_D3ReplayErrorFramework,
         0
     );
     
-
-    
-MXF_SET_DEFINITION(GenericDescriptor, TapeDescriptor, 
-    MXF_LABEL(0x06, 0x0e, 0x2b, 0x34, 0x02, 0x53, 0x01, 0x01, 0x0d, 0x01, 0x01, 0x01, 0x01, 0x01, 0x2e, 0x00)
-);
 
 
 

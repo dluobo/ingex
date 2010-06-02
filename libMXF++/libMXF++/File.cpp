@@ -1,5 +1,5 @@
 /*
- * $Id: File.cpp,v 1.4 2010/02/17 16:04:24 philipn Exp $
+ * $Id: File.cpp,v 1.5 2010/06/02 11:03:29 philipn Exp $
  *
  * 
  *
@@ -272,6 +272,11 @@ void File::writeBatchHeader(uint32_t len, uint32_t eleLen)
 void File::writeArrayHeader(uint32_t len, uint32_t eleLen)
 {
     MXFPP_CHECK(mxf_write_array_header(_cFile, len, eleLen));
+}
+
+void File::writeZeros(uint32_t len)
+{
+    MXFPP_CHECK(mxf_write_zeros(_cFile, len));
 }
 
 void File::fillToPosition(uint64_t position)

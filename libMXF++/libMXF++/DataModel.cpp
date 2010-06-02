@@ -1,5 +1,5 @@
 /*
- * $Id: DataModel.cpp,v 1.2 2009/10/22 16:36:37 philipn Exp $
+ * $Id: DataModel.cpp,v 1.3 2010/06/02 11:03:29 philipn Exp $
  *
  * 
  *
@@ -73,7 +73,6 @@ DataModel::~DataModel()
 {
     mxf_free_data_model(&_cDataModel);
 }
-    
 
 void DataModel::finalise()
 {

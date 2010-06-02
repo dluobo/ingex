@@ -1,5 +1,5 @@
 /*
- * $Id: TaggedValue.h,v 1.2 2009/10/23 09:05:21 philipn Exp $
+ * $Id: TaggedValue.h,v 1.3 2010/06/02 11:03:29 philipn Exp $
  *
  * Copyright (C) 2009  British Broadcasting Corporation.
  * All Rights Reserved.
@@ -53,7 +53,7 @@ public:
 
    // setters
    void setName(std::string value);
-   //void setStringValue(std::string value);
+   void setStringValue(std::string value);
 
 protected:
     TaggedValue(mxfpp::HeaderMetadata *header_metadata, ::MXFMetadataSet* c_metadata_set);

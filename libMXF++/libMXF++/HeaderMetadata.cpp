@@ -1,5 +1,5 @@
 /*
- * $Id: HeaderMetadata.cpp,v 1.3 2009/06/18 11:58:08 philipn Exp $
+ * $Id: HeaderMetadata.cpp,v 1.4 2010/06/02 11:03:29 philipn Exp $
  *
  * 
  *
@@ -51,6 +51,9 @@ bool HeaderMetadata::isHeaderMetadata(const mxfKey* key)
 
 HeaderMetadata::HeaderMetadata(DataModel* dataModel)
 {
+    _initGenerationUID = false;
+    _generationUID = g_Null_UUID;
+    
     initialiseObjectFactory();
     MXFPP_CHECK(mxf_create_header_metadata(&_cHeaderMetadata, dataModel->getCDataModel()));
 }
@@ -84,6 +87,17 @@ string HeaderMetadata::getPlatform()
 }
 
 
+void HeaderMetadata::enableGenerationUIDInit(mxfUUID generationUID)
+{
+    _initGenerationUID = true;
+    _generationUID = generationUID;
+}
+
+void HeaderMetadata::disableGenerationUIDInit()
+{
+    _initGenerationUID = false;
+}
+
 void HeaderMetadata::registerObjectFactory(const mxfKey* key, AbsMetadataSetFactory* factory)
 {
     pair<map<mxfKey, AbsMetadataSetFactory*>::iterator, bool> result = 
@@ -94,6 +108,11 @@ void HeaderMetadata::registerObjectFactory(const mxfKey* key, AbsMetadataSetFact
         _objectFactory.erase(result.first);
         _objectFactory.insert(pair<mxfKey, AbsMetadataSetFactory*>(*key, factory));
     }
+}
+
+void HeaderMetadata::registerPrimerEntry(const mxfUID* itemKey, mxfLocalTag newTag, mxfLocalTag* assignedTag)
+{
+    MXFPP_CHECK(mxf_register_primer_entry(_cHeaderMetadata->primerPack, itemKey, newTag, assignedTag));
 }
 
 void HeaderMetadata::read(File* file, Partition* partition, const mxfKey* key, 
@@ -130,6 +149,14 @@ Preface* HeaderMetadata::getPreface()
 void HeaderMetadata::add(MetadataSet* set)
 {
     _objectDirectory.insert(pair<mxfUUID, MetadataSet*>(set->getCMetadataSet()->instanceUID, set));
+    if (_initGenerationUID)
+    {
+        InterchangeObjectBase *interchangeObject = dynamic_cast<InterchangeObjectBase*>(set);
+        if (interchangeObject && !dynamic_cast<IdentificationBase*>(set))
+        {
+            interchangeObject->setGenerationUID(_generationUID);
+        }
+    }
 }
 
 MetadataSet* HeaderMetadata::wrap(::MXFMetadataSet* cMetadataSet)

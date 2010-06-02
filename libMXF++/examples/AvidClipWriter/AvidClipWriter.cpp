@@ -1,5 +1,5 @@
 /*
- * $Id: AvidClipWriter.cpp,v 1.4 2009/11/24 15:18:58 john_f Exp $
+ * $Id: AvidClipWriter.cpp,v 1.5 2010/06/02 11:03:29 philipn Exp $
  *
  * 
  *
@@ -646,7 +646,7 @@ void AvidClipWriter::prepareToWrite()
         preface->setRationalItem(&MXF_ITEM_K(Preface, ProjectEditRate), _projectEditRate);
         preface->setUMIDItem(&MXF_ITEM_K(Preface, MasterMobID), materialPackageUID);
         preface->setUMIDItem(&MXF_ITEM_K(Preface, EssenceFileMobID), trackData->fileSourcePackageUID);
-        preface->appendULArrayItem(&MXF_ITEM_K(Preface, DMSchemes), MXF_DM_L(DMS1));
+        preface->appendULArrayItem(&MXF_ITEM_K(Preface, DMSchemes), MXF_DM_L(LegacyDMS1));
         
         // Preface - Dictionary
         trackData->headerMetadata->createDefaultDictionary(preface);

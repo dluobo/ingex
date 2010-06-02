@@ -1,5 +1,5 @@
 /*
- * $Id: MetadataSet.h,v 1.2 2009/10/22 16:36:37 philipn Exp $
+ * $Id: MetadataSet.h,v 1.3 2010/06/02 11:03:29 philipn Exp $
  *
  * 
  *
@@ -185,6 +185,7 @@ public:
     void setProductVersionItem(const mxfKey* itemKey, mxfProductVersion value); 
     void setRGBALayoutComponentItem(const mxfKey* itemKey, mxfRGBALayoutComponent value); 
     void setStringItem(const mxfKey* itemKey, std::string value); 
+    void setFixedSizeStringItem(const mxfKey* itemKey, std::string value, uint16_t size); 
     void setStrongRefItem(const mxfKey* itemKey, MetadataSet* value); 
     void setWeakRefItem(const mxfKey* itemKey, MetadataSet* value); 
     
@@ -235,6 +236,9 @@ public:
 
     void appendStrongRefArrayItem(const mxfKey* itemKey, MetadataSet* value); 
     void appendWeakRefArrayItem(const mxfKey* itemKey, MetadataSet* value); 
+    
+    
+    void removeItem(const mxfKey* itemKey);
     
 
     // Avid extensions

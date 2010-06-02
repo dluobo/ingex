@@ -1,5 +1,5 @@
 /*
- * $Id: HeaderMetadata.h,v 1.1 2009/02/02 05:14:33 stuart_hc Exp $
+ * $Id: HeaderMetadata.h,v 1.2 2010/06/02 11:03:29 philipn Exp $
  *
  * 
  *
@@ -50,7 +50,14 @@ public:
     static mxfProductVersion getToolkitVersion();
     static std::string getPlatform();
     
+    
+    void enableGenerationUIDInit(mxfUUID generationUID);
+    void disableGenerationUIDInit();
+    
+    
     void registerObjectFactory(const mxfKey* key, AbsMetadataSetFactory* factory);
+    
+    void registerPrimerEntry(const mxfUID* itemKey, mxfLocalTag newTag, mxfLocalTag* assignedTag);
     
     
     virtual void read(File* file, Partition* partition, const mxfKey* key, uint8_t llen, uint64_t len);
@@ -78,6 +85,9 @@ private:
     ::MXFHeaderMetadata* _cHeaderMetadata;
     std::map<mxfUUID, MetadataSet*> _objectDirectory;
     bool _busyDestructing;
+    
+    bool _initGenerationUID;
+    mxfUUID _generationUID;
 };
 
 
