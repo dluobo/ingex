@@ -1,5 +1,5 @@
 /*
- * $Id: routerloggerApp.cpp,v 1.11 2009/10/12 15:59:10 john_f Exp $
+ * $Id: routerloggerApp.cpp,v 1.12 2010/06/02 13:09:53 john_f Exp $
  *
  * Router recorder application class.
  *
@@ -42,20 +42,33 @@
 #include <sstream>
 
 const char * const USAGE =
-    "Usage: Routerlogger.exe [-v] [-r <router port>] [-s]"
-    "[[-t <timecode port>] [-u] | [-l]]"
-    " [-n <name>] [-c <mc_clip_def_name>] [-f <db file>]"
-    " [-d <name> -p <number>] [-m <MixerOut dest>]"
-    " [-a <nameserver>]"
-    " [-o <timecode adjustment in frames>]"
-    " <CORBA options>\n"
-    "    -s  router on TCP socket, router port in format host:port\n"
-    "    -u  timecode reader on TCP socket, timecode port in format host:port\n"
-    "    -l  take timecode from shared memory\n"
-    "    example CORBA options: -ORBDefaultInitRef corbaloc:iiop:192.168.1.1:8888\n"
-    "    example nameserver: corbaloc:iiop:192.168.1.1:8888/NameService\n";
+    "Usage: Routerlogger [-v] \\\n"
+    "  [--dbhost <db_host>] [--dbname <db_name>] [--dbuser <db_user>] [--dbpass <db_password>] \\\n"
+    "  [-r <router port>] [-s] \\\n"
+    "  [[-t <timecode port>] [-u] | [-l]] \\\n"
+    "  [-n <name>] [-c <mc_clip_def_name>] [-f <db file>] \\\n"
+    "  [-d <name> -p <number>] [-m <MixerOut dest>] \\\n"
+    "  [-a <nameserver>] \\\n"
+    "  [-o <timecode adjustment in frames>] \\\n"
+    "  <CORBA options>\n"
+    "Info:\n"
+    "  -s  router on TCP socket, router port in format host:port \\\n"
+    "  -u  timecode reader on TCP socket, timecode port in format host:port \\\n"
+    "  -l  take timecode from shared memory \\\n"
+    "Example CORBA options:\n"
+    "  -ORBDefaultInitRef corbaloc:iiop:192.168.1.1:8888\n"
+    "Example nameserver:\n"
+    "  -a corbaloc:iiop:192.168.1.1:8888/NameService\n"
+    "\n";
 
-const char * const OPTS = "vr:st:ulin:c:f:a:d:p:m:o:";
+namespace
+{
+void exit_usage()
+{
+    fprintf(stderr, USAGE);
+    exit(0);
+}
+}
 
 
 
@@ -107,9 +120,6 @@ bool routerloggerApp::Init(int argc, char * argv[])
         ACE_ERROR_RETURN((LM_ERROR, ACE_TEXT (USAGE)), 0);
     }
 
-    // get command line args
-    ACE_Get_Opt cmd_opts (argc, argv, OPTS);
-
 
     std::string db_file; // We'll add a default name later if none supplied
 
@@ -118,129 +128,199 @@ bool routerloggerApp::Init(int argc, char * argv[])
     std::string tc_port;
     Transport::EnumType  tc_transport = Transport::SERIAL;
     bool tc_from_shm = false;
-    //ShmTimecodeReader::TcEnum tc_mode = ShmTimecodeReader::LTC;
 
     unsigned int debug_level = 2; // need level 3 for LM_DEBUG messages
 
-    // Database parameters
-    // TODO: Get from command line as for recorder
-    const std::string db_host = "localhost";
-    const std::string db_name = "prodautodb";
-    const std::string db_username = "bamzooki";
-    const std::string db_password = "bamzooki";
+    // Database parameter defaults
+    std::string db_host = "localhost";
+    std::string db_name = "prodautodb";
+    std::string db_username;
+    std::string db_password;
 
-    int option;
-    while ((option = cmd_opts ()) != EOF)
+// Now that InitOrb has consumed its arguments, check for
+// other command line arguments.
+    for (int argindex = 1; argindex < argc; ++argindex)
     {
-        //ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("option %d\n"), option ));
-        switch (option)
+        if (strcmp(argv[argindex], "-h") == 0 ||
+            strcmp(argv[argindex], "--help") == 0)
         {
-        case 'v':
-            // verbose
+            exit_usage();
+        }
+        else if (strcmp(argv[argindex], "-v") == 0 ||
+            strcmp(argv[argindex], "--verbose") == 0)
+        {
             ++debug_level;
-            break;
-
-        case 'r':
+        }
+        else if (strcmp(argv[argindex], "-r") == 0)
+        {
             // router port
-            router_port = ACE_TEXT_ALWAYS_CHAR( cmd_opts.opt_arg() );
-            break;
-                
-        case 's':
+            if (++argindex < argc)
+            {
+                router_port = ACE_TEXT_ALWAYS_CHAR( argv[argindex] );
+            }
+            else
+            {
+                exit_usage();
+            }
+        }
+        else if (strcmp(argv[argindex], "-s") == 0)
+        {
             router_transport = Transport::TCP;
-            break;
-        
-        case 't':
+        }
+        else if (strcmp(argv[argindex], "-t") == 0)
+        {
             // timecode reader port
-            tc_port = ACE_TEXT_ALWAYS_CHAR( cmd_opts.opt_arg() );
-            break;
-
-        case 'u':
+            tc_port = ACE_TEXT_ALWAYS_CHAR( argv[argindex] );
+        }
+        else if (strcmp(argv[argindex], "-u") == 0)
+        {
             tc_transport = Transport::TCP;
-            break;
-
-        case 'l':
+        }
+        else if (strcmp(argv[argindex], "-l") == 0)
+        {
             tc_from_shm = true;
-            //tc_mode = ShmTimecodeReader::LTC;
-            break;
-        
-        case 'n':
+        }
+        else if (strcmp(argv[argindex], "-n") == 0)
+        {
+            if (++argindex < argc)
             {
                 ServantInfo * servant_info = new ServantInfo();
                 mServantInfo.push_back(servant_info);
+                mServantInfo.back()->name = ACE_TEXT_ALWAYS_CHAR( argv[argindex] );
             }
-            mServantInfo.back()->name = ACE_TEXT_ALWAYS_CHAR( cmd_opts.opt_arg() );
-            break;
-
-        case 'c':
+            else
+            {
+                exit_usage();
+            }
+        }
+        else if (strcmp(argv[argindex], "-c") == 0)
+        {
             // multi-cam clip def name
-            if (!mServantInfo.empty())
+            if (++argindex < argc && !mServantInfo.empty())
             {
-                mServantInfo.back()->mc_clip_name = ACE_TEXT_ALWAYS_CHAR( cmd_opts.opt_arg() );
+                mServantInfo.back()->mc_clip_name = ACE_TEXT_ALWAYS_CHAR( argv[argindex] );
             }
-            break;
-    
-        case 'f':
+            else
+            {
+                exit_usage();
+            }
+        }
+        else if (strcmp(argv[argindex], "-f") == 0)
+        {
             // cuts database filename
-            if (!mServantInfo.empty())
+            if (++argindex < argc && !mServantInfo.empty())
             {
-                mServantInfo.back()->db_file = ACE_TEXT_ALWAYS_CHAR( cmd_opts.opt_arg() );
+                mServantInfo.back()->db_file = ACE_TEXT_ALWAYS_CHAR( argv[argindex] );
             }
-            break;
-    
-        case 'a':
+            else
+            {
+                exit_usage();
+            }
+        }
+        else if (strcmp(argv[argindex], "-a") == 0)
+        {
             // nameserver
-            if (!mServantInfo.empty())
+            if (++argindex < argc && !mServantInfo.empty())
             {
-                mServantInfo.back()->name_server = ACE_TEXT_ALWAYS_CHAR( cmd_opts.opt_arg() );
+                mServantInfo.back()->name_server = argv[argindex];
             }
-            break;
-    
-        case 'd':
-            // Router destination name
-            if (!mServantInfo.empty())
+            else
             {
-                RouterDestination * rd = new RouterDestination(ACE_TEXT_ALWAYS_CHAR(cmd_opts.opt_arg()), 0);
+                exit_usage();
+            }
+        }
+        else if (strcmp(argv[argindex], "-d") == 0)
+        {
+            // Router destination name
+            if (++argindex < argc && !mServantInfo.empty())
+            {
+                RouterDestination * rd = new RouterDestination(argv[argindex], 0);
                 mServantInfo.back()->destinations.push_back(rd);
             }
-            break;
-
-        case 'p':
+            else
+            {
+                exit_usage();
+            }
+        }
+        else if (strcmp(argv[argindex], "-p") == 0)
+        {
             // Router destination number
-            if (!mServantInfo.empty() && !mServantInfo.back()->destinations.empty())
+            if (++argindex < argc && !mServantInfo.empty() && !mServantInfo.back()->destinations.empty())
             {
-                mServantInfo.back()->destinations.back()->output_number = ACE_OS::atoi(cmd_opts.opt_arg());
+                mServantInfo.back()->destinations.back()->output_number = ACE_OS::atoi(argv[argindex]);
             }
-            break;
-
-        case 'm':
+            else
+            {
+                exit_usage();
+            }
+        }
+        else if (strcmp(argv[argindex], "-m") == 0)
+        {
             // Router destination to record
-            if (!mServantInfo.empty())
+            if (++argindex < argc && !mServantInfo.empty())
             {
-                mServantInfo.back()->mix_dest = ACE_OS::atoi( cmd_opts.opt_arg() );
+                mServantInfo.back()->mix_dest = ACE_OS::atoi(argv[argindex]);
             }
-            break;
-
-        case 'h':
-            ACE_ERROR_RETURN
-                ((LM_ERROR, ACE_TEXT (USAGE)), 0);  // help 
-            break;
-
-        case 'o':
+            else
+            {
+                exit_usage();
+            }
+        }
+        else if (strcmp(argv[argindex], "-o") == 0)
+        {
             // Timecode offset
-            mTcAdjust = ACE_OS::atoi( cmd_opts.opt_arg() );
-            break;
-
-        case ':':
-            ACE_ERROR_RETURN
-                ((LM_ERROR, ACE_TEXT ("-%c requires an argument\n"), cmd_opts.opt_opt()), 0);
-            break;
-
-        default:
-            ACE_ERROR_RETURN
-                ((LM_ERROR, ACE_TEXT ("Parse Error.\n")), 0);
-            //ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("other args\n") ));
-            break;
-
+            if (++argindex < argc)
+            {
+                mTcAdjust = ACE_OS::atoi(argv[argindex]);
+            }
+            else
+            {
+                exit_usage();
+            }
+        }
+        else if (strcmp(argv[argindex], "--dbhost") == 0)
+        {
+            if (++argindex < argc)
+            {
+                db_host = argv[argindex];
+            }
+            else
+            {
+                exit_usage();
+            }
+        }
+        else if (strcmp(argv[argindex], "--dbname") == 0)
+        {
+            if (++argindex < argc)
+            {
+                db_name = argv[argindex];
+            }
+            else
+            {
+                exit_usage();
+            }
+        }
+        else if (strcmp(argv[argindex], "--dbuser") == 0)
+        {
+            if (++argindex < argc)
+            {
+                db_username = argv[argindex];
+            }
+            else
+            {
+                exit_usage();
+            }
+        }
+        else if (strcmp(argv[argindex], "--dbpass") == 0)
+        {
+            if (++argindex < argc)
+            {
+                db_password = argv[argindex];
+            }
+            else
+            {
+                exit_usage();
+            }
         }
     }
 
@@ -446,7 +526,7 @@ void routerloggerApp::Clean()
 
 std::string routerloggerApp::Timecode()
 {
-    ::Timecode tc(mpTcReader->Timecode().c_str());
+    Ingex::Timecode tc(mpTcReader->Timecode().c_str(), pa_EDIT_RATE.numerator, pa_EDIT_RATE.denominator, DROP_FRAME);
     tc += mTcAdjust;
     return std::string(tc.Text());
 }

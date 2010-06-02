@@ -1,5 +1,5 @@
 #
-# $Id: Makefile.non_mwc,v 1.3 2009/04/16 17:58:27 john_f Exp $
+# $Id: Makefile.non_mwc,v 1.4 2010/06/02 13:09:53 john_f Exp $
 #
 # Makefile for setting up ace-tao build by running mwc.pl and for building non-mwc directories
 #
@@ -42,6 +42,12 @@ Ingexgui/Makefile:
 	(cd Ingexgui && ./configure)
 
 .PHONY: clean
-clean:
+clean: GNUmakefile
 	$(MAKE) -C Ingexgui $@
 	$(MAKE) -f GNUmakefile $@
+
+.PHONY: realclean
+realclean: clean
+	@rm GNUmakefile
+	@rm -Rf IDL/Generated
+

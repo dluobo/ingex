@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorderImpl.cpp,v 1.16 2009/12/17 16:46:58 john_f Exp $
+ * $Id: IngexRecorderImpl.cpp,v 1.17 2010/06/02 13:09:53 john_f Exp $
  *
  * Servant class for Recorder.
  *
@@ -284,13 +284,8 @@ char * IngexRecorderImpl::RecordingFormat (
     // The IngexGUI controller invokes the Tracks operation
     // when it connects to a recorder.
 
-    // Get latest parameters from shared memory
-    const unsigned int max_inputs = IngexShm::Instance()->Channels();
-    const unsigned int max_tracks_per_input = 1 + IngexShm::Instance()->AudioTracksPerChannel();
-
-    // Update tracks accordingly
-    UpdateFromDatabase(max_inputs, max_tracks_per_input);
-
+    // Get current capture buffer and database settings
+    this->UpdateConfig();
 
     return RecorderImpl::Tracks();
 }
@@ -302,30 +297,7 @@ char * IngexRecorderImpl::RecordingFormat (
     ::CORBA::SystemException
   )
 {
-    ProdAuto::Rational edit_rate;
-    edit_rate.numerator = IngexShm::Instance()->FrameRateNumerator();
-    edit_rate.denominator = IngexShm::Instance()->FrameRateDenominator();
-
-    // Set timecode mode
-    /*
-    RecorderSettings * settings = RecorderSettings::Instance();
-    if (settings)
-    {
-        switch (settings->timecode_mode)
-        {
-        case LTC_PARAMETER_VALUE:
-            IngexShm::Instance()->TcMode(IngexShm::LTC);
-            break;
-        case VITC_PARAMETER_VALUE:
-            IngexShm::Instance()->TcMode(IngexShm::VITC);
-            break;
-        default:
-            ACE_DEBUG((LM_ERROR, ACE_TEXT("Unexpected timecode mode\n")));
-            break;
-        }
-    }
-    */
-
+    // Update member with current timecode and status
 #if 1
     // Alternative to method below
     for (unsigned int i = 0; i < mTracks->length(); ++i)
@@ -334,36 +306,40 @@ char * IngexRecorderImpl::RecordingFormat (
         HardwareTrack hw_trk = mTrackMap[track.id];
 
         bool signal_present = IngexShm::Instance()->SignalPresent(hw_trk.channel);
-        framecount_t timecode = IngexShm::Instance()->CurrentTimecode(hw_trk.channel);
+        Ingex::Timecode timecode = IngexShm::Instance()->CurrentTimecode(hw_trk.channel);
 
         // We can rely on mTracksStatus->length() == mTracks->length()
         ProdAuto::TrackStatus & ts = mTracksStatus->operator[](i);
 
         ts.signal_present = signal_present;
-        if (timecode >= 0)
+        
+        ts.timecode.undefined = 0;
+        ts.timecode.samples = timecode.FramesSinceMidnight();
+        ts.timecode.edit_rate.numerator = timecode.FrameRateNumerator();
+        ts.timecode.edit_rate.denominator = timecode.FrameRateDenominator();
+        ts.timecode.drop_frame = timecode.DropFrame();
+
+        ACE_DEBUG((LM_DEBUG, ACE_TEXT("Track %d: edit_rate %d/%d\n"), i, ts.timecode.edit_rate.numerator, ts.timecode.edit_rate.denominator));
+
+        // Update filenames
+        if (mpIngexRecorder)
         {
-            ts.timecode.undefined = 0;
-            ts.timecode.samples = timecode;
-            ts.timecode.edit_rate = edit_rate;
+            ts.filename = CORBA::string_dup(mpIngexRecorder->mFileNames[i].c_str());
         }
         else
         {
-            ts.timecode.undefined = 1;
-            ts.timecode.samples = 0;
+            ts.filename =  CORBA::string_dup("");
         }
-        ACE_DEBUG((LM_DEBUG, ACE_TEXT("Track %d: edit_rate %d/%d\n"), i, ts.timecode.edit_rate.numerator, ts.timecode.edit_rate.denominator));
     }
 #else
     // Below we are relying on hardware order to get same order of tracks in
     // TracksStatus() as we have in Tracks().  It would be preferable to use
     // the order of Tracks directly to allow freedom to present Tracks in a
     // different order without need to change TracksStatus code.
-
-    // Update member with current timecode and status
     for (unsigned int channel_i = 0; channel_i < IngexShm::Instance()->Channels(); ++channel_i)
     {
         bool signal = IngexShm::Instance()->SignalPresent(channel_i);
-        framecount_t timecode = IngexShm::Instance()->CurrentTimecode(channel_i);
+        Ingex::Timecode timecode = IngexShm::Instance()->CurrentTimecode(channel_i);
 
         // We know each input has mMaxTracksPerInput, see comments
         // in RecorderImpl::UpdateSources()
@@ -375,17 +351,10 @@ char * IngexRecorderImpl::RecordingFormat (
                 ProdAuto::TrackStatus & ts = mTracksStatus->operator[](track_i);
 
                 ts.signal_present = signal;
-                if (timecode >= 0)
-                {
-                    ts.timecode.undefined = 0;
-                    ts.timecode.samples = timecode;
-                    ts.timecode.edit_rate = edit_rate;
-                }
-                else
-                {
-                    ts.timecode.undefined = 1;
-                    ts.timecode.samples = 0;
-                }
+
+                ts.timecode.undefined = 0;
+                ts.timecode.samples = timecode;
+                ts.timecode.edit_rate = edit_rate;
             }
         }
     }
@@ -407,28 +376,19 @@ char * IngexRecorderImpl::RecordingFormat (
     ::CORBA::SystemException
   )
 {
-    // Set timecode parameters
-    ProdAuto::Rational edit_rate;
-    edit_rate.numerator = IngexShm::Instance()->FrameRateNumerator();
-    edit_rate.denominator = IngexShm::Instance()->FrameRateDenominator();
-    if (edit_rate.denominator > 0)
-    {
-        mFps = edit_rate.numerator / edit_rate.denominator;
-        if (edit_rate.numerator % edit_rate.denominator)
-        {
-            mDf = true;
-            mFps += 1;
-        }
-        else
-        {
-            mDf = false;
-        }
-    }
-
-    Timecode start_tc(start_timecode.undefined ? 0 : start_timecode.samples, mFps, mDf);
     framecount_t pre = (pre_roll.undefined ? 0 : pre_roll.samples);
-    ACE_DEBUG((LM_INFO, ACE_TEXT("IngexRecorderImpl::Start(), tc %C, pre-roll %d, time %C\n"),
-        start_tc.Text(), pre, DateTime::Timecode().c_str()));
+    Ingex::Timecode start_tc; // initialises to null
+    if (start_timecode.undefined)
+    {
+        ACE_DEBUG((LM_INFO, ACE_TEXT("IngexRecorderImpl::Start(), immediate, pre-roll %d, time %C\n"),
+            pre, DateTime::Timecode().c_str()));
+    }
+    else
+    {
+        start_tc = Ingex::Timecode(start_timecode.samples, start_timecode.edit_rate.numerator, start_timecode.edit_rate.denominator, false);
+        ACE_DEBUG((LM_INFO, ACE_TEXT("IngexRecorderImpl::Start(), tc %C, pre-roll %d, time %C\n"),
+            start_tc.Text(), pre, DateTime::Timecode().c_str()));
+    }
 
     bool ok = true;
 
@@ -436,7 +396,7 @@ char * IngexRecorderImpl::RecordingFormat (
     if (mRecording)
     {
         // Immediate stop
-        DoStop(-1, 0);
+        DoStop(Ingex::Timecode(), 0);
     }
 
     // Clear previous monitoring data for enabled channels
@@ -528,7 +488,7 @@ char * IngexRecorderImpl::RecordingFormat (
     // Check that project name is loaded.
     // Only load if necessary to avoid delay of 
     // database access.
-    if (mProjectName.name.compare(project) != 0)
+    if (mProjectName.name != project)
     {
         prodauto::Database * db = 0;
         try
@@ -551,35 +511,19 @@ char * IngexRecorderImpl::RecordingFormat (
     // Set-up callback for completion of recording
     mpIngexRecorder->SetCompletionCallback(&recording_completed);
 
-    // Determine start timecode or crash-record
-    framecount_t start;
-    bool crash;
-    if (start_timecode.undefined)
-    {
-        start = 0;
-        crash = true;
-    }
-    else
-    {
-        start = start_timecode.samples;
-        crash = false;
-    }
-
     // Check for start timecode.
     // This may modify the channel_enable array.
     ok = ok && mpIngexRecorder->CheckStartTimecode(
         track_enables,
-        start,
-        pre_roll.undefined ? 0 : pre_roll.samples,
-        crash);
+        start_tc,
+        pre_roll.undefined ? 0 : pre_roll.samples);
 
     // Set return value for actual start timecode
     start_timecode.undefined = false;
-    //start_timecode.edit_rate = mEditRate;
-    start_timecode.samples = start;
+    start_timecode.samples = start_tc.FramesSinceMidnight();
 
     // Setup IngexRecorder
-    mpIngexRecorder->Setup(start, mProjectName);
+    mpIngexRecorder->Setup(start_tc, mProjectName);
 
     // Start
     if (!test_only)
@@ -631,16 +575,25 @@ char * IngexRecorderImpl::RecordingFormat (
     ::CORBA::SystemException
   )
 {
-    Timecode stop_tc(mxf_stop_timecode.undefined ? 0 : mxf_stop_timecode.samples, mFps, mDf);
-    framecount_t post = (mxf_post_roll.undefined ? 0 : mxf_post_roll.samples);
-    ACE_DEBUG((LM_INFO, ACE_TEXT("IngexRecorderImpl::Stop(), tc %C, post-roll %d, time %C\n"),
-        stop_tc.Text(), post, DateTime::Timecode().c_str()));
-
-    // Translate parameters.
-    framecount_t stop_timecode = (mxf_stop_timecode.undefined ? -1 : mxf_stop_timecode.samples);
+    /*
+    ACE_DEBUG((LM_INFO, ACE_TEXT("IngexRecorderImpl::Stop(), samples %d, fps_num %d, fps_den %d\n"),
+        mxf_stop_timecode.samples,
+        mxf_stop_timecode.edit_rate.numerator,  mxf_stop_timecode.edit_rate.denominator));
+    */
 
     framecount_t post_roll = (mxf_post_roll.undefined ? 0 : mxf_post_roll.samples);
-
+    Ingex::Timecode stop_tc; // initialised to null
+    if (mxf_stop_timecode.undefined)
+    {
+        ACE_DEBUG((LM_INFO, ACE_TEXT("IngexRecorderImpl::Stop(), immediate, post-roll %d, time %C\n"),
+            post_roll, DateTime::Timecode().c_str()));
+    }
+    else
+    {
+        stop_tc = Ingex::Timecode(mxf_stop_timecode.samples, mxf_stop_timecode.edit_rate.numerator,  mxf_stop_timecode.edit_rate.denominator, false);
+        ACE_DEBUG((LM_INFO, ACE_TEXT("IngexRecorderImpl::Stop(), tc %C, post-roll %d, time %C\n"),
+            stop_tc.Text(), post_roll, DateTime::Timecode().c_str()));
+    }
 
     // Create out parameter
     files = new ::CORBA::StringSeq;
@@ -662,14 +615,14 @@ char * IngexRecorderImpl::RecordingFormat (
     // Tell recorder when to stop.
     if (mpIngexRecorder)
     {
-        mpIngexRecorder->Stop(stop_timecode, post_roll,
+        mpIngexRecorder->Stop(stop_tc, post_roll,
             description,
             locs);
 
         // Return the expected "out time"
         mxf_stop_timecode.undefined = false;
         //mxf_stop_timecode.edit_rate = mEditRate;
-        mxf_stop_timecode.samples = stop_timecode;
+        mxf_stop_timecode.samples = stop_tc.FramesSinceMidnight();
 
         // Return the filenames
         for (CORBA::ULong track_i = 0; track_i < mTracks->length(); ++track_i)
@@ -705,7 +658,7 @@ char * IngexRecorderImpl::RecordingFormat (
 /**
 Simplified Stop without returning filenames etc.
 */
-void IngexRecorderImpl::DoStop(framecount_t timecode, framecount_t post_roll)
+void IngexRecorderImpl::DoStop(Ingex::Timecode timecode, framecount_t post_roll)
 {
     // Tell recorder when to stop.
     std::vector<Locator> locs;
@@ -737,7 +690,14 @@ void IngexRecorderImpl::UpdateConfig (
     const unsigned int max_inputs = IngexShm::Instance()->Channels();
     const unsigned int max_tracks_per_input = 1 + IngexShm::Instance()->AudioTracksPerChannel();
 
-    UpdateFromDatabase(max_inputs, max_tracks_per_input);
+    prodauto::Rational edit_rate;
+    edit_rate.numerator = IngexShm::Instance()->FrameRateNumerator();
+    edit_rate.denominator = IngexShm::Instance()->FrameRateDenominator();
+
+    RecorderImpl::EditRate(edit_rate);
+    RecorderImpl::DropFrame(IngexShm::Instance()->CurrentTimecode(0).DropFrame());
+
+    RecorderImpl::UpdateFromDatabase(max_inputs, max_tracks_per_input);
 }
 
 void IngexRecorderImpl::NotifyCompletion(IngexRecorder * rec)

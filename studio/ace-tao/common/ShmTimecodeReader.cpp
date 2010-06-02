@@ -1,5 +1,5 @@
 /*
- * $Id: ShmTimecodeReader.cpp,v 1.3 2009/10/12 15:06:30 john_f Exp $
+ * $Id: ShmTimecodeReader.cpp,v 1.4 2010/06/02 13:09:53 john_f Exp $
  *
  * Timecode reader using Ingex shared memory as source.
  *
@@ -61,16 +61,7 @@ std::string ShmTimecodeReader::Timecode()
 
     if (IngexShm::Instance()->Channels())
     {
-        int rate_numerator = IngexShm::Instance()->FrameRateNumerator();
-        int rate_denominator = IngexShm::Instance()->FrameRateDenominator();
-
-        bool df = rate_numerator % rate_denominator;
-        int fps = rate_numerator / rate_denominator + (df ? 1 : 0);
-
-        int frames = IngexShm::Instance()->CurrentTimecode(0); // using first channel
-
-        ::Timecode tc(frames, fps, df);
-
+        Ingex::Timecode tc = IngexShm::Instance()->CurrentTimecode(0); // using first channel
         timecode = tc.Text();
     }
     return timecode;

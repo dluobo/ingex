@@ -1,5 +1,5 @@
 /*
- * $Id: IngexShm.cpp,v 1.3 2009/10/12 15:05:38 john_f Exp $
+ * $Id: IngexShm.cpp,v 1.4 2010/06/02 13:09:53 john_f Exp $
  *
  * Interface for reading audio/video data from shared memory.
  *
@@ -184,37 +184,27 @@ void IngexShm::Attach()
 }
 
 
-int32_t IngexShm::Timecode(unsigned int channel, unsigned int frame)
+Ingex::Timecode IngexShm::Timecode(unsigned int channel, unsigned int frame)
 {
-    //ACE_DEBUG((LM_DEBUG, ACE_TEXT("Timecode(%d, %d)\n"), channel, frame));
-    /*
-    NexusTimecode nexus_tc_type;
-    switch (mTcMode)
+    if (mpControl && channel < mChannels)
     {
-    case LTC:
-        nexus_tc_type = NexusTC_LTC;
-        break;
-    case VITC:
-    default:
-        nexus_tc_type = NexusTC_VITC;
-        break;
+        return nexus_timecode(mpControl, mRing, channel, frame, NexusTC_DEFAULT);
     }
-    */
-    
-    // Could check (channel < mChannels) first.
-    return (int32_t)nexus_tc(mpControl, mRing, channel, frame, NexusTC_DEFAULT);
+    else
+    {
+        return Ingex::Timecode(0, 1, 1, false);  // should perhaps have a null/undefined timecode
+    }
 }
 
-int32_t IngexShm::CurrentTimecode(unsigned int channel)
+Ingex::Timecode IngexShm::CurrentTimecode(unsigned int channel)
 {
-    // Could check (channel < mChannels) first.
     return Timecode(channel, LastFrame(channel));
 }
 
 
 std::string IngexShm::SourceName(unsigned int channel_i)
 {
-    if (channel_i < mChannels)
+    if (mpControl && channel_i < mChannels)
     {
         return mpControl->channel[channel_i].source_name;
     }
@@ -230,6 +220,46 @@ void IngexShm::SourceName(unsigned int channel_i, const std::string & name)
     {
         nexus_set_source_name(mpControl, channel_i, name.c_str());
     }
+}
+
+Ingex::VideoRaster::EnumType IngexShm::PrimaryVideoRaster()
+{
+    Ingex::VideoRaster::EnumType raster = Ingex::VideoRaster::NONE;
+    if (mpControl)
+    {
+        raster = mpControl->pri_video_raster;
+    }
+    return raster;
+}
+
+Ingex::VideoRaster::EnumType IngexShm::SecondaryVideoRaster()
+{
+    Ingex::VideoRaster::EnumType raster = Ingex::VideoRaster::NONE;
+    if (mpControl)
+    {
+        raster = mpControl->sec_video_raster;
+    }
+    return raster;
+}
+
+Ingex::PixelFormat::EnumType IngexShm::PrimaryPixelFormat()
+{
+    Ingex::PixelFormat::EnumType format = Ingex::PixelFormat::NONE;
+    if (mpControl)
+    {
+        format = mpControl->pri_pixel_format;
+    }
+    return format;
+}
+
+Ingex::PixelFormat::EnumType IngexShm::SecondaryPixelFormat()
+{
+    Ingex::PixelFormat::EnumType format = Ingex::PixelFormat::NONE;
+    if (mpControl)
+    {
+        format = mpControl->sec_pixel_format;
+    }
+    return format;
 }
 
 void IngexShm::GetFrameRate(int & numerator, int & denominator)

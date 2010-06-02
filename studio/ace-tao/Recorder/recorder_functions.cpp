@@ -1,5 +1,5 @@
 /*
- * $Id: recorder_functions.cpp,v 1.33 2010/04/22 08:43:08 john_f Exp $
+ * $Id: recorder_functions.cpp,v 1.34 2010/06/02 13:09:53 john_f Exp $
  *
  * Functions which execute in recording threads.
  *
@@ -33,6 +33,7 @@
 #include "audio_utils.h"
 #include "ffmpeg_encoder.h"
 #include "ffmpeg_encoder_av.h"
+#include "ffmpeg_resolutions.h"
 #include "mjpeg_compress.h"
 #include "tc_overlay.h"
 #include "EncodeFrameBuffer.h"
@@ -235,8 +236,6 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
 
     // Convenience variables
     const int ring_length = IngexShm::Instance()->RingLength();
-    const int fps = p_impl->Fps();
-    const bool df = p_impl->Df();
 
     // Recording starts from start_frame.
     //int start_frame = p_rec->mStartFrame[channel_i];
@@ -246,16 +245,37 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         start_frame[i] = p_rec->mStartFrame[i];
     }
 
-    // Get frame rate in use
-    int frame_rate_numerator;
-    int frame_rate_denominator;
-    IngexShm::Instance()->GetFrameRate(frame_rate_numerator, frame_rate_denominator);
-    const prodauto::Rational FRAME_RATE (frame_rate_numerator, frame_rate_denominator);
+    // Get video parameters of capture buffers
+    Ingex::VideoRaster::EnumType primary_video_raster = IngexShm::Instance()->PrimaryVideoRaster();
+    Ingex::VideoRaster::EnumType secondary_video_raster = IngexShm::Instance()->SecondaryVideoRaster();
+    Ingex::PixelFormat::EnumType primary_pixel_format = IngexShm::Instance()->PrimaryPixelFormat();
+    Ingex::PixelFormat::EnumType secondary_pixel_format = IngexShm::Instance()->SecondaryPixelFormat();
+    int primary_width;
+    int primary_height;
+    int secondary_width;
+    int secondary_height;
+    int primary_frame_rate_numerator;
+    int primary_frame_rate_denominator;
+    int secondary_frame_rate_numerator;
+    int secondary_frame_rate_denominator;
+    Ingex::Interlace::EnumType primary_interlace;
+    Ingex::Interlace::EnumType secondary_interlace;
+    Ingex::VideoRaster::GetInfo(primary_video_raster,
+        primary_width, primary_height,
+        primary_frame_rate_numerator, primary_frame_rate_denominator, primary_interlace);
+    Ingex::VideoRaster::GetInfo(secondary_video_raster,
+        secondary_width, secondary_height,
+        secondary_frame_rate_numerator, secondary_frame_rate_denominator, secondary_interlace);
+    // Assume primary and secondary frame rates are the same
+    const prodauto::Rational FRAME_RATE (primary_frame_rate_numerator, primary_frame_rate_denominator);
+    const bool is_pal = (prodauto::g_palEditRate == FRAME_RATE);
+
+
 
     // Start timecode passed as metadata to MXFWriter
-    int start_tc = p_rec->mStartTimecode;
+    Ingex::Timecode start_timecode = p_rec->mStartTimecode;
+    int start_tc = start_timecode.FramesSinceMidnight();
     int64_t start_position = start_tc;
-    Timecode start_timecode(start_tc, fps, df);
 
 #if 0
     // What if we add some days to start_position?
@@ -272,24 +292,14 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     const bool browse_mp3 = true;
 
     // Get encode settings for this thread
-    int resolution = p_opt->resolution;
-    int file_format = p_opt->file_format;
-    int op = p_opt->op;
+    MaterialResolution::EnumType resolution = MaterialResolution::EnumType(p_opt->resolution);
+    FileFormat::EnumType file_format;
+    OperationalPattern::EnumType op;
+    MaterialResolution::GetInfo(resolution, file_format, op);
+    std::string resolution_name = MaterialResolution::Name(resolution);
 
-    // For DVD resolution we override the file format
-    if (resolution == DVD_MATERIAL_RESOLUTION)
-    {
-        file_format = MPG_FILE_FORMAT_TYPE;
-    }
-
-    bool mxf = (MXF_FILE_FORMAT_TYPE == file_format);
+    bool mxf = (FileFormat::MXF == file_format);
     bool raw = !mxf;
-
-    // video resolution name
-    std::string resolution_name = DatabaseEnums::Instance()->ResolutionName(resolution);
-
-    // file format name
-    std::string file_format_name = DatabaseEnums::Instance()->FileFormatName(file_format);
 
     // Encode parameters
     prodauto::Rational image_aspect = settings->image_aspect;
@@ -303,11 +313,11 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     bool bitc = p_opt->bitc;
 
     ACE_DEBUG((LM_INFO,
-        ACE_TEXT("start_record_thread(%C thread %d, start_tc=%C %C %C %C)\n"),
+        ACE_TEXT("start_record_thread(%C thread %d, start_tc=%C %C%C)\n"),
         src_name.c_str(),  p_opt->index,
         start_timecode.Text(),
-        file_format_name.c_str(), resolution_name.c_str(),
-        (bitc ? "with BITC" : "")));
+        resolution_name.c_str(),
+        (bitc ? " with BITC" : "")));
 
     // Note the recording location
     long location_id = 0;
@@ -326,181 +336,110 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         
     // Set some flags based on encoding type
 
-    // Initialising these to defaults which you will get for unsupported
-    // resolution/file_format combinations.
-    ffmpeg_encoder_resolution_t    ff_res    = FF_ENCODER_RESOLUTION_IMX30;
-    ffmpeg_encoder_av_resolution_t ff_av_res = FF_ENCODER_RESOLUTION_MPEG4_MOV;
-
     // Initialising these just to avoid compiler warnings
     MJPEGResolutionID mjpeg_res = MJPEG_20_1;
-    enum {PIXFMT_420, PIXFMT_422, PIXFMT_UYVY} pix_fmt = PIXFMT_422;
     enum {ENCODER_UNC, ENCODER_FFMPEG, ENCODER_FFMPEG_AV, ENCODER_MJPEG} encoder = ENCODER_UNC;
-
-    // For checking of codec/capture compatibility
-    enum {SD_422, SD_422_SHIFTED, SD_420, SD_420_SHIFTED, HD_422, ANY_422, ANY_UYVY} codec_input_format = SD_422;
 
     std::string filename_extension;
     bool mt_possible = false;
     switch (resolution)
     {
     // DV formats
-    case DV25_MATERIAL_RESOLUTION:
-        pix_fmt = PIXFMT_420;
-        codec_input_format = SD_420_SHIFTED;
+    case MaterialResolution::DV25_RAW:
+    case MaterialResolution::DV25_MXF_ATOM:
+    case MaterialResolution::DV25_MOV:
         encoder = ENCODER_FFMPEG;
-        ff_res = FF_ENCODER_RESOLUTION_DV25;
-        ff_av_res = FF_ENCODER_RESOLUTION_DV25_MOV;
         filename_extension = ".dv";
         break;
-    case DV50_MATERIAL_RESOLUTION:
-        pix_fmt = PIXFMT_422;
-        codec_input_format = SD_422_SHIFTED;
+    case MaterialResolution::DV50_RAW:
+    case MaterialResolution::DV50_MXF_ATOM:
+    case MaterialResolution::DV50_MOV:
         encoder = ENCODER_FFMPEG;
-        ff_res = FF_ENCODER_RESOLUTION_DV50;
-        ff_av_res = FF_ENCODER_RESOLUTION_DV50_MOV;
         filename_extension = ".dv";
         break;
     // DV HD format
-    case DVCPROHD_MATERIAL_RESOLUTION:
-        pix_fmt = PIXFMT_422;
-        codec_input_format = HD_422;
+    case MaterialResolution::DV100_RAW:
+    case MaterialResolution::DV100_MXF_ATOM:
+    case MaterialResolution::DV100_MOV:
         encoder = ENCODER_FFMPEG;
-        ff_res = FF_ENCODER_RESOLUTION_DV100_1080i50; // temporarily assuming not 720p
-        ff_av_res = FF_ENCODER_RESOLUTION_DV100_MOV;
         filename_extension = ".dv";
         break;
     // MJPEG formats
-    case MJPEG21_MATERIAL_RESOLUTION:
-        pix_fmt = PIXFMT_422;
-        codec_input_format = SD_422;
+    case MaterialResolution::MJPEG21_MXF_ATOM:
         encoder = ENCODER_MJPEG;
         mjpeg_res = MJPEG_2_1;
         break;
-    case MJPEG31_MATERIAL_RESOLUTION:
-        pix_fmt = PIXFMT_422;
-        codec_input_format = SD_422;
+    case MaterialResolution::MJPEG31_MXF_ATOM:
         encoder = ENCODER_MJPEG;
         mjpeg_res = MJPEG_3_1;
         break;
-    case MJPEG101_MATERIAL_RESOLUTION:
-        pix_fmt = PIXFMT_422;
-        encoder = ENCODER_MJPEG;
+    case MaterialResolution::MJPEG101_MXF_ATOM:
         mjpeg_res = MJPEG_10_1;
         break;
-    case MJPEG151S_MATERIAL_RESOLUTION:
-        pix_fmt = PIXFMT_422;
-        codec_input_format = SD_422;
+    case MaterialResolution::MJPEG151S_MXF_ATOM:
         encoder = ENCODER_MJPEG;
         mjpeg_res = MJPEG_15_1s;
         break;
-    case MJPEG201_MATERIAL_RESOLUTION:
-        pix_fmt = PIXFMT_422;
-        codec_input_format = SD_422;
+    case MaterialResolution::MJPEG201_MXF_ATOM:
         encoder = ENCODER_MJPEG;
         mjpeg_res = MJPEG_20_1;
         break;
-    case MJPEG101M_MATERIAL_RESOLUTION:
+    case MaterialResolution::MJPEG101M_MXF_ATOM:
         encoder = ENCODER_MJPEG;
-        pix_fmt = PIXFMT_422;
-        codec_input_format = SD_422;
         mjpeg_res = MJPEG_10_1m;
         break;
     // IMX formats
-    case IMX30_MATERIAL_RESOLUTION:
-        pix_fmt = PIXFMT_422;
-        codec_input_format = SD_422;
+    case MaterialResolution::IMX30_MXF_ATOM:
+    case MaterialResolution::IMX30_MXF_1A:
+    case MaterialResolution::IMX40_MXF_ATOM:
+    case MaterialResolution::IMX40_MXF_1A:
+    case MaterialResolution::IMX50_MXF_ATOM:
+    case MaterialResolution::IMX50_MXF_1A:
         encoder = ENCODER_FFMPEG;
-        ff_res = FF_ENCODER_RESOLUTION_IMX30;
-        filename_extension = ".m2v";
-        break;
-    case IMX40_MATERIAL_RESOLUTION:
-        pix_fmt = PIXFMT_422;
-        codec_input_format = SD_422;
-        encoder = ENCODER_FFMPEG;
-        ff_res = FF_ENCODER_RESOLUTION_IMX40;
-        filename_extension = ".m2v";
-        break;
-    case IMX50_MATERIAL_RESOLUTION:
-        pix_fmt = PIXFMT_422;
-        codec_input_format = SD_422;
-        encoder = ENCODER_FFMPEG;
-        ff_res = FF_ENCODER_RESOLUTION_IMX50;
         filename_extension = ".m2v";
         break;
     // DNxHD formats
-    case DNX36p_MATERIAL_RESOLUTION:
-        pix_fmt = PIXFMT_422;
-        codec_input_format = HD_422;
+    case MaterialResolution::DNX36P_MXF_ATOM:
         encoder = ENCODER_FFMPEG;
-        ff_res = FF_ENCODER_RESOLUTION_DNX36p;
         break;
-    case DNX120p_MATERIAL_RESOLUTION:
-        pix_fmt = PIXFMT_422;
-        codec_input_format = HD_422;
+    case MaterialResolution::DNX120P_MXF_ATOM:
         encoder = ENCODER_FFMPEG;
-        ff_res = FF_ENCODER_RESOLUTION_DNX120p;
         mt_possible = true;
         break;
-    case DNX185p_MATERIAL_RESOLUTION:
-        pix_fmt = PIXFMT_422;
-        codec_input_format = HD_422;
+    case MaterialResolution::DNX185P_MXF_ATOM:
         encoder = ENCODER_FFMPEG;
-        ff_res = FF_ENCODER_RESOLUTION_DNX185p;
         mt_possible = true;
         break;
-    case DNX120i_MATERIAL_RESOLUTION:
-        pix_fmt = PIXFMT_422;
-        codec_input_format = HD_422;
+    case MaterialResolution::DNX120I_MXF_ATOM:
         encoder = ENCODER_FFMPEG;
-        ff_res = FF_ENCODER_RESOLUTION_DNX120i;
         mt_possible = true;
         break;
-    case DNX185i_MATERIAL_RESOLUTION:
-        pix_fmt = PIXFMT_422;
-        codec_input_format = HD_422;
+    case MaterialResolution::DNX185I_MXF_ATOM:
         encoder = ENCODER_FFMPEG;
-        ff_res = FF_ENCODER_RESOLUTION_DNX185i;
         mt_possible = true;
-        break;
-    // H264
-    case DMIH264_MATERIAL_RESOLUTION:
-        pix_fmt = PIXFMT_420;
-        codec_input_format = ANY_422;
-        encoder = ENCODER_FFMPEG;
-        ff_res = FF_ENCODER_RESOLUTION_DMIH264;
-        filename_extension = ".h264";
         break;
     // Browse formats
-    case DVD_MATERIAL_RESOLUTION:
-        pix_fmt = PIXFMT_420;
-        codec_input_format = SD_420;
+    case MaterialResolution::DVD:
         encoder = ENCODER_FFMPEG_AV;
-        ff_av_res = FF_ENCODER_RESOLUTION_DVD;
         mxf = false;
         raw = false;
         filename_extension = ".mpg";
         break;
-    case MPEG4_MATERIAL_RESOLUTION:
-        pix_fmt = PIXFMT_420;
-        codec_input_format = SD_420;
+    case MaterialResolution::MPEG4_MOV:
         encoder = ENCODER_FFMPEG_AV;
-        ff_av_res = FF_ENCODER_RESOLUTION_MPEG4_MOV;
         mxf = false;
         raw = false;
         filename_extension = ".mp4";
         break;
-    case MP3_MATERIAL_RESOLUTION:
-        pix_fmt = PIXFMT_422;
-        codec_input_format = ANY_422;
+    case MaterialResolution::MP3:
         mxf = false;
         raw = false;
         browse_audio = true;
         filename_extension = ".mp3";
         break;
     // Uncompressed
-    case UNC_MATERIAL_RESOLUTION:
-        pix_fmt = PIXFMT_UYVY;
-        codec_input_format = ANY_UYVY;
+    case MaterialResolution::UNC_RAW:
+    case MaterialResolution::UNC_MXF_ATOM:
         encoder = ENCODER_UNC;
         filename_extension = ".yuv";
         break;
@@ -511,152 +450,59 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
 
     // Check which capture buffer has suitable format
     bool use_primary_video = true;
-    switch (codec_input_format)
+    if (MaterialResolution::CheckVideoFormat(resolution, primary_video_raster, primary_pixel_format))
     {
-    case SD_422:
-        if (IngexShm::Instance()->PrimaryCaptureFormat() == Format422PlanarYUV
-            && IngexShm::Instance()->PrimaryWidth() == 720)
-        {
-            use_primary_video = true;
-        }
-        else if (IngexShm::Instance()->SecondaryCaptureFormat() == Format422PlanarYUV
-            && IngexShm::Instance()->SecondaryWidth() == 720)
-        {
-            use_primary_video = false;
-        }
-        else
-        {
-            ACE_DEBUG((LM_ERROR, ACE_TEXT("Incompatible capture format for %C\n"), resolution_name.c_str()));
-            p_rec->NoteFailure();
-        }
-        break;
-
-    case SD_422_SHIFTED:
-        if (IngexShm::Instance()->PrimaryCaptureFormat() == Format422PlanarYUVShifted
-            && IngexShm::Instance()->PrimaryWidth() == 720)
-        {
-            use_primary_video = true;
-        }
-        else if (IngexShm::Instance()->SecondaryCaptureFormat() == Format422PlanarYUVShifted
-            && IngexShm::Instance()->SecondaryWidth() == 720)
-        {
-            use_primary_video = false;
-        }
-        else
-        {
-            ACE_DEBUG((LM_ERROR, ACE_TEXT("Incompatible capture format for %C\n"), resolution_name.c_str()));
-            p_rec->NoteFailure();
-        }
-        break;
-
-    case SD_420:
-        if (IngexShm::Instance()->PrimaryCaptureFormat() == Format420PlanarYUV
-            && IngexShm::Instance()->PrimaryWidth() == 720)
-        {
-            use_primary_video = true;
-        }
-        else if (IngexShm::Instance()->SecondaryCaptureFormat() == Format420PlanarYUV
-            && IngexShm::Instance()->SecondaryWidth() == 720)
-        {
-            use_primary_video = false;
-        }
-        else
-        {
-            ACE_DEBUG((LM_ERROR, ACE_TEXT("Incompatible capture format for %C\n"), resolution_name.c_str()));
-            p_rec->NoteFailure();
-        }
-        break;
-
-    case SD_420_SHIFTED:
-        if (IngexShm::Instance()->PrimaryCaptureFormat() == Format420PlanarYUVShifted
-            && IngexShm::Instance()->PrimaryWidth() == 720)
-        {
-            use_primary_video = true;
-        }
-        else if (IngexShm::Instance()->SecondaryCaptureFormat() == Format420PlanarYUVShifted
-            && IngexShm::Instance()->SecondaryWidth() == 720)
-        {
-            use_primary_video = false;
-        }
-        else
-        {
-            ACE_DEBUG((LM_ERROR, ACE_TEXT("Incompatible capture format for %C\n"), resolution_name.c_str()));
-            p_rec->NoteFailure();
-        }
-        break;
-
-    case HD_422:
-        if (IngexShm::Instance()->PrimaryCaptureFormat() == Format422PlanarYUV
-            && IngexShm::Instance()->PrimaryWidth() > 720)
-        {
-            use_primary_video = true;
-        }
-        else if (IngexShm::Instance()->SecondaryCaptureFormat() == Format422PlanarYUV
-            && IngexShm::Instance()->SecondaryWidth() > 720)
-        {
-            use_primary_video = false;
-        }
-        else
-        {
-            ACE_DEBUG((LM_ERROR, ACE_TEXT("Incompatible capture format for %C\n"), resolution_name.c_str()));
-            p_rec->NoteFailure();
-        }
-        break;
-
-    case ANY_422:
-        if (IngexShm::Instance()->PrimaryCaptureFormat() == Format422PlanarYUV)
-        {
-            use_primary_video = true;
-        }
-        else if (IngexShm::Instance()->SecondaryCaptureFormat() == Format422PlanarYUV)
-        {
-            use_primary_video = false;
-        }
-        else
-        {
-            ACE_DEBUG((LM_ERROR, ACE_TEXT("Incompatible capture format for %C\n"), resolution_name.c_str()));
-            p_rec->NoteFailure();
-        }
-        break;
-
-    case ANY_UYVY:
-        if (IngexShm::Instance()->PrimaryCaptureFormat() == Format422UYVY)
-        {
-            use_primary_video = true;
-        }
-        else if (IngexShm::Instance()->SecondaryCaptureFormat() == Format422UYVY)
-        {
-            use_primary_video = false;
-        }
-        else
-        {
-            ACE_DEBUG((LM_ERROR, ACE_TEXT("Incompatible capture format for %C\n"), resolution_name.c_str()));
-            p_rec->NoteFailure();
-        }
-        break;
-
-    default:
+        // Primary buffer is suitable
+        ACE_DEBUG((LM_DEBUG, ACE_TEXT("Using primary buffer for %C\n"), resolution_name.c_str()));
         use_primary_video = true;
-        break;
     }
-    
-    // Image parameters
-    int WIDTH = 0;
-    int HEIGHT = 0;
-    if (use_primary_video)
+    else if (MaterialResolution::CheckVideoFormat(resolution, secondary_video_raster, secondary_pixel_format))
     {
-        WIDTH = IngexShm::Instance()->PrimaryWidth();
-        HEIGHT = IngexShm::Instance()->PrimaryHeight();
+        // Secondary buffer is suitable
+        ACE_DEBUG((LM_DEBUG, ACE_TEXT("Using secondary buffer for %C\n"), resolution_name.c_str()));
+        use_primary_video = false;
     }
     else
     {
-        WIDTH = IngexShm::Instance()->SecondaryWidth();
-        HEIGHT = IngexShm::Instance()->SecondaryHeight();
+        ACE_DEBUG((LM_ERROR, ACE_TEXT("Capture format(s) not suitable for %C\n"), resolution_name.c_str()));
+        p_rec->NoteFailure();
     }
-    //const bool INTERLACE = IngexShm::Instance()->Interlace();
-    //const int SIZE_420 = WIDTH * HEIGHT * 3/2;
-    //const int SIZE_422 = WIDTH * HEIGHT * 2;
-    const int VIDEO_SIZE = (pix_fmt == PIXFMT_420 ? WIDTH * HEIGHT * 3/2 : WIDTH * HEIGHT * 2);
+
+    // Set image parameters
+    int WIDTH = 0;
+    int HEIGHT = 0;
+    Ingex::PixelFormat::EnumType pixel_format = Ingex::PixelFormat::NONE;
+    Ingex::VideoRaster::EnumType raster = Ingex::VideoRaster::NONE;
+    if (use_primary_video)
+    {
+        raster = primary_video_raster;
+        WIDTH = primary_width;
+        HEIGHT = primary_height;
+        pixel_format = primary_pixel_format;
+    }
+    else
+    {
+        raster = secondary_video_raster;
+        WIDTH = secondary_width;
+        HEIGHT = secondary_height;
+        pixel_format = secondary_pixel_format;
+    }
+
+    int VIDEO_SIZE;
+    switch (pixel_format)
+    {
+    case Ingex::PixelFormat::YUV_PLANAR_420_MPEG:
+    case Ingex::PixelFormat::YUV_PLANAR_420_DV:
+    case Ingex::PixelFormat::YUV_PLANAR_411:
+        VIDEO_SIZE = WIDTH * HEIGHT * 3 / 2;
+        break;
+    case Ingex::PixelFormat::UYVY_422:
+    case Ingex::PixelFormat::YUV_PLANAR_422:
+    default:
+        VIDEO_SIZE = WIDTH * HEIGHT * 2;
+        break;
+    }
+
     // burnt-in timecode settings
     unsigned int tc_xoffset;
     unsigned int tc_yoffset;
@@ -689,18 +535,17 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         ACE_DEBUG((LM_WARNING, ACE_TEXT("Warning: SourcePackage has fewer tracks than SourcConfig!\n")));
     }
 
-    // Override file name extension for non-raw formats
+    // Override file name extension for MXF or MOV wrapping
     switch (file_format)
     {
-    case MXF_FILE_FORMAT_TYPE:
+    case FileFormat::MXF:
         filename_extension = ".mxf";
         break;
-    case MOV_FILE_FORMAT_TYPE:
+    case FileFormat::MOV:
         encoder = ENCODER_FFMPEG_AV;
         filename_extension = ".mov";
         raw = false;
         break;
-    case RAW_FILE_FORMAT_TYPE:
     default:
         break;
     }
@@ -755,38 +600,14 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     
     prodauto::RecorderPackageCreator *package_creator;
     
-    switch (file_format)
+    switch (op)
     {
-    case MXF_FILE_FORMAT_TYPE:
-        if (op == OPERATIONAL_PATTERN_1A)
-        {
-            if (resolution != IMX30_MATERIAL_RESOLUTION &&
-                resolution != IMX40_MATERIAL_RESOLUTION &&
-                resolution != IMX50_MATERIAL_RESOLUTION)
-            {
-                ACE_DEBUG((LM_ERROR, ACE_TEXT("Resolution %C not supported for MXF OP-1A format\n"), resolution_name.c_str()));
-                p_rec->NoteFailure();
-
-                ACE_DEBUG((LM_WARNING, ACE_TEXT("Warning: Ignoring OP-1A config and using MXF OP-Atom instead\n")));
-                package_creator = new prodauto::OPAtomPackageCreator(true);
-            }
-            else
-            {
-                package_creator = new prodauto::OP1APackageCreator(true);
-            }
-        }
-        else
-        {
-            package_creator = new prodauto::OPAtomPackageCreator(true);
-        }
+    case OperationalPattern::OP_1A:
+        package_creator = new prodauto::OP1APackageCreator(is_pal);
         break;
-    case MOV_FILE_FORMAT_TYPE:
-    case MPG_FILE_FORMAT_TYPE:
-        package_creator = new prodauto::OP1APackageCreator(true);
-        break;
-    case RAW_FILE_FORMAT_TYPE:
+    case OperationalPattern::OP_ATOM:
     default:
-        package_creator = new prodauto::OPAtomPackageCreator(true);
+        package_creator = new prodauto::OPAtomPackageCreator(is_pal);
         break;
     }
     
@@ -855,6 +676,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     // Directories
     const std::string & mxf_subdir_creating = settings->mxf_subdir_creating;
     const std::string & mxf_subdir_failures = settings->mxf_subdir_failures;
+    const std::string & mxf_subdir_metadata = settings->mxf_subdir_metadata;
 
     // Raw files
     std::vector<FILE *> fp_raw;
@@ -901,7 +723,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             ACE_Guard<ACE_Thread_Mutex> guard(avcodec_mutex);
 
             // Initialise ffmpeg audio encoder
-            ffmpeg_audio_encoder = ffmpeg_encoder_init(FF_ENCODER_RESOLUTION_MP3, 0);
+            ffmpeg_audio_encoder = ffmpeg_encoder_init(MaterialResolution::MP3, raster, 0);
             if (!ffmpeg_audio_encoder)
             {
                 ACE_DEBUG((LM_ERROR, ACE_TEXT("%C: ffmpeg audio encoder init failed.\n"), src_name.c_str()));
@@ -924,14 +746,14 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         if (MT_ENABLE && mt_possible)
         {
             mt_encoder = new MtEncoder(&avcodec_mutex);
-            mt_encoder->Init(ff_res, ffmpeg_threads);
+            mt_encoder->Init(resolution, raster, ffmpeg_threads);
         }
         else
         {
             // Prevent "insufficient thread locking around avcodec_open/close()"
             ACE_Guard<ACE_Thread_Mutex> guard(avcodec_mutex);
 
-            ffmpeg_encoder = ffmpeg_encoder_init(ff_res, ffmpeg_threads);
+            ffmpeg_encoder = ffmpeg_encoder_init(resolution, raster, ffmpeg_threads);
             if (!ffmpeg_encoder)
             {
                 ACE_DEBUG((LM_ERROR, ACE_TEXT("%C: ffmpeg encoder init failed.\n"), src_name.c_str()));
@@ -966,11 +788,11 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         // and also "format not registered".
         ACE_Guard<ACE_Thread_Mutex> guard(avcodec_mutex);
 
-        switch (ff_av_res)
+        switch (resolution)
         {
-        case FF_ENCODER_RESOLUTION_DV25_MOV:
-        case FF_ENCODER_RESOLUTION_DV50_MOV:
-        case FF_ENCODER_RESOLUTION_DV100_MOV:
+        case MaterialResolution::DV25_MOV:
+        case MaterialResolution::DV50_MOV:
+        case MaterialResolution::DV100_MOV:
             ff_av_num_audio_streams = num_audio_tracks;
             ff_av_audio_channels_per_stream = 1;
             break;
@@ -979,7 +801,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             ff_av_audio_channels_per_stream = 2;
             break;
         }
-        enc_av = ffmpeg_encoder_av_init(package_creator->GetFileLocation().c_str(), ff_av_res,
+        enc_av = ffmpeg_encoder_av_init(package_creator->GetFileLocation().c_str(), resolution,
             wide_aspect, start_tc, ffmpeg_threads, ff_av_num_audio_streams, ff_av_audio_channels_per_stream);
         if (!enc_av)
         {
@@ -1001,21 +823,9 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         try
         {
             prodauto::MXFWriter * p;
-            if (op == OPERATIONAL_PATTERN_1A)
+            if (op == OperationalPattern::OP_1A)
             {
-                if (resolution != IMX30_MATERIAL_RESOLUTION &&
-                    resolution != IMX40_MATERIAL_RESOLUTION &&
-                    resolution != IMX50_MATERIAL_RESOLUTION)
-                {
-                    // only IMX is currently supported for MXF OP-1A
-                    // error and warning message done previously
-                    // revert to MXF OP-Atom
-                    p = new prodauto::MXFOPAtomWriter();
-                }
-                else
-                {
-                    p = new prodauto::MXFOP1AWriter();
-                }
+                p = new prodauto::MXFOP1AWriter();
             }
             else
             {
@@ -1080,7 +890,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     }
 
     AudioMixer mixer;
-    if (1 && MP3_MATERIAL_RESOLUTION == resolution)
+    if (1 && MaterialResolution::MP3 == resolution)
     {
         // special for The Bottom Line
         mixer.SetMix(AudioMixer::CH12L3R);
@@ -1097,17 +907,26 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
 
     YUV_frame quad_frame;
     uint8_t * quad_workspace = 0;
-    formats format = I420;
+    formats format = YV16;
     if (quad_video)
     {
-        switch (pix_fmt)
+        switch (pixel_format)
         {
-        case PIXFMT_422:
+        case Ingex::PixelFormat::YUV_PLANAR_422:
             format = YV16;
             break;
-        case PIXFMT_420:
-        default:
+        case Ingex::PixelFormat::YUV_PLANAR_420_MPEG:
+        case Ingex::PixelFormat::YUV_PLANAR_420_DV:
             format = I420;
+            break;
+        case Ingex::PixelFormat::YUV_PLANAR_411:
+            format = Y41B;
+            break;
+        case Ingex::PixelFormat::UYVY_422:
+            format = UYVY;
+            break;
+        case Ingex::PixelFormat::NONE:
+            // error
             break;
         }
         alloc_YUV_frame(&quad_frame, WIDTH, HEIGHT, format);
@@ -1141,7 +960,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     // Initialise last_tc which will be used to check for timecode discontinuities.
     // Timecode value from first track (usually video).
     HardwareTrack tc_hw = p_impl->TrackHwMap(mp_stc_dbids[0]);
-    framecount_t last_tc = IngexShm::Instance()->Timecode(tc_hw.channel, lastcoded[tc_hw.channel]);
+    framecount_t last_tc = IngexShm::Instance()->Timecode(tc_hw.channel, lastcoded[tc_hw.channel]).FramesSinceMidnight();
     //framecount_t initial_tc = last_tc + 1;
 
     // Update Record info
@@ -1188,6 +1007,11 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                 {
                     ACE_DEBUG((LM_ERROR, ACE_TEXT("%C thread %d Shared memory lost - stopping recording!\n"),
                         src_name.c_str(),  p_opt->index));
+                    p_rec->NoteFailure();
+                    for (unsigned int i = 0; i < package_creator->GetMaterialPackage()->tracks.size(); ++i)
+                    {
+                        p_impl->NoteRecError(mp_stc_dbids[i]);
+                    }
                     finished_record = true;
                 }
             }
@@ -1268,7 +1092,12 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
 
             // Need to set this for each captured frame because the number
             // varies in NTSC.
-            int audio_samples_per_frame = 1920;
+            int audio_samples_per_frame = IngexShm::Instance()->NumAudioSamples(channel_i, frame[channel_i]);
+            // Guard against garbage data
+            if (audio_samples_per_frame < 0 || audio_samples_per_frame > 1920)
+            {
+                audio_samples_per_frame = 1920;
+            }
 
             // Until we have mono audio buffers in IngexShm, demultiplex the audio.
             // Buffers for audio de-interleaving
@@ -1340,7 +1169,8 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             }
 
             // Timecode value from first track (usually video)
-            framecount_t tc_i = IngexShm::Instance()->Timecode(tc_hw.channel, frame[tc_hw.channel]);
+            Ingex::Timecode timecode_i = IngexShm::Instance()->Timecode(tc_hw.channel, frame[tc_hw.channel]);
+            framecount_t tc_i = timecode_i.FramesSinceMidnight();
 
             // Check for timecode irregularities
             framecount_t tc_diff = tc_i - (last_tc + 1); // difference from expected value
@@ -1352,7 +1182,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                     p_opt->index,
                     tc_diff,
                     frame[tc_hw.channel],
-                    Timecode(tc_i, fps, df).Text()));
+                    timecode_i.Text()));
             }
 
             // Make quad split
@@ -1437,26 +1267,36 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             if (bitc && p_inp_video)
             {
                 tc_overlay_setup(tco, tc_i);
-                if (pix_fmt == PIXFMT_420)
+
+                // Need to copy video as can't overwrite shared memory
+                switch (pixel_format)
                 {
-                    // 420
-                    // Need to copy video as can't overwrite shared memory
-                    memcpy(tc_overlay_buffer, p_inp_video, VIDEO_SIZE);
-                    uint8_t * p_y = tc_overlay_buffer;
-                    uint8_t * p_u = p_y + WIDTH * HEIGHT;
-                    uint8_t * p_v = p_u + WIDTH * HEIGHT / 4;
-                    tc_overlay_apply(tco, p_y, p_u, p_v, WIDTH, HEIGHT, tc_xoffset, tc_yoffset, TC420);
+                case Ingex::PixelFormat::YUV_PLANAR_420_MPEG:
+                case Ingex::PixelFormat::YUV_PLANAR_420_DV:
+                case Ingex::PixelFormat::YUV_PLANAR_411:
+                    {
+                        // 420
+                        memcpy(tc_overlay_buffer, p_inp_video, VIDEO_SIZE);
+                        uint8_t * p_y = tc_overlay_buffer;
+                        uint8_t * p_u = p_y + WIDTH * HEIGHT;
+                        uint8_t * p_v = p_u + WIDTH * HEIGHT / 4;
+                        tc_overlay_apply(tco, p_y, p_u, p_v, WIDTH, HEIGHT, tc_xoffset, tc_yoffset, TC420);
+                    }
+                    break;
+                case Ingex::PixelFormat::YUV_PLANAR_422:
+                case Ingex::PixelFormat::UYVY_422:
+                default:
+                    {
+                        // 422
+                        memcpy(tc_overlay_buffer, p_inp_video, VIDEO_SIZE);
+                        uint8_t * p_y = tc_overlay_buffer;
+                        uint8_t * p_u = p_y + WIDTH * HEIGHT;
+                        uint8_t * p_v = p_u + WIDTH * HEIGHT / 2;
+                        tc_overlay_apply(tco, p_y, p_u, p_v, WIDTH, HEIGHT, tc_xoffset, tc_yoffset, TC422);
+                    }
+                    break;
                 }
-                else
-                {
-                    // 422
-                    // Need to copy video as can't overwrite shared memory
-                    memcpy(tc_overlay_buffer, p_inp_video, VIDEO_SIZE);
-                    uint8_t * p_y = tc_overlay_buffer;
-                    uint8_t * p_u = p_y + WIDTH * HEIGHT;
-                    uint8_t * p_v = p_u + WIDTH * HEIGHT / 2;
-                    tc_overlay_apply(tco, p_y, p_u, p_v, WIDTH, HEIGHT, tc_xoffset, tc_yoffset, TC422);
-                }
+
                 // Source for encoding is now the timecode overlay buffer
                 p_inp_video = tc_overlay_buffer;
                 ef.Track(0).Init(p_inp_video, VIDEO_SIZE, false, false, false, 0, 0);
@@ -1887,14 +1727,37 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     try
     {
         if (mxf || (SAVE_PACKAGE_DATA && ENCODER_FFMPEG_AV == encoder && !quad_video))
+        {
             package_creator->SaveToDatabase();
-        
-        ACE_DEBUG((LM_DEBUG, ACE_TEXT("Saved package group '%C' to database\n"), package_creator->GetMaterialPackage()->name.c_str()));
+            ACE_DEBUG((LM_DEBUG, ACE_TEXT("Saved package group '%C' to database\n"), package_creator->GetMaterialPackage()->name.c_str()));
+        }
     }
     catch (const prodauto::DBException & dbe)
     {
         ACE_DEBUG((LM_ERROR, ACE_TEXT("Database Exception: %C\n"), dbe.getMessage().c_str()));
     }
+    
+    // Store recording metadata to file
+    try
+    {
+        if (mxf || (SAVE_PACKAGE_DATA && ENCODER_FFMPEG_AV == encoder && !quad_video))
+        {
+            std::ostringstream metadata_filename;
+            metadata_filename << p_opt->dir << PATH_SEPARATOR <<
+                                 mxf_subdir_metadata << PATH_SEPARATOR <<
+                                 p_opt->file_ident << ".xml";
+
+            package_creator->SaveToFile(metadata_filename.str());
+            ACE_DEBUG((LM_DEBUG, ACE_TEXT("Saved package group '%C' to metadata file '%C'\n"),
+                                          package_creator->GetMaterialPackage()->name.c_str(),
+                                          metadata_filename.str().c_str()));
+        }
+    }
+    catch (const prodauto::ProdAutoException & e)
+    {
+        ACE_DEBUG((LM_ERROR, ACE_TEXT("Metadata file save exception: %C\n"), e.getMessage().c_str()));
+    }
+    
     
     // Store updated filenames for each track but only for first encoding (index == 0)
     if (p_opt->index == 0)

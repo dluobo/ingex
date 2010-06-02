@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_save.c,v 1.11 2009/10/12 15:11:46 john_f Exp $
+ * $Id: nexus_save.c,v 1.12 2010/06/02 13:10:46 john_f Exp $
  *
  * Utility to store video frames from dvs_sdi ring buffer to disk files
  *
@@ -41,7 +41,8 @@
 #include "nexus_control.h"
 
 #ifdef USE_FFMPEG
-#include "../common/ffmpeg_encoder.h"
+#include "ffmpeg_encoder.h"
+#include "MaterialResolution.h"
 #endif
 
 
@@ -89,7 +90,7 @@ extern int main(int argc, char *argv[])
     char            *video_file = NULL, *audio_file = NULL;
     FILE            *outfp = NULL, *audiofp = NULL;
 #ifdef USE_FFMPEG
-    ffmpeg_encoder_resolution_t     res = (ffmpeg_encoder_resolution_t)-1;
+    MaterialResolution::EnumType res = MaterialResolution::NONE;
 #endif
 
     int n;
@@ -137,36 +138,58 @@ extern int main(int argc, char *argv[])
 #ifdef USE_FFMPEG
         else if (strcmp(argv[n], "-r") == 0)
         {
-            if (strcmp(argv[n+1], "JPEG") == 0)
-                res = FF_ENCODER_RESOLUTION_JPEG;
             if (strcmp(argv[n+1], "DV25") == 0)
-                res = FF_ENCODER_RESOLUTION_DV25;
+            {
+                res = MaterialResolution::DV25_RAW;
+            }
             if (strcmp(argv[n+1], "DV50") == 0)
-                res = FF_ENCODER_RESOLUTION_DV50;
+            {
+                res = MaterialResolution::DV50_RAW;
+            }
             if (strcmp(argv[n+1], "IMX30") == 0)
-                res = FF_ENCODER_RESOLUTION_IMX30;
+            {
+                res = MaterialResolution::IMX30_MXF_ATOM;
+            }
             if (strcmp(argv[n+1], "IMX40") == 0)
-                res = FF_ENCODER_RESOLUTION_IMX40;
+            {
+                res = MaterialResolution::IMX40_MXF_ATOM;
+            }
             if (strcmp(argv[n+1], "IMX50") == 0)
-                res = FF_ENCODER_RESOLUTION_IMX50;
+            {
+                res = MaterialResolution::IMX50_MXF_ATOM;
+            }
             if (strcmp(argv[n+1], "DNX36p") == 0)
-                res = FF_ENCODER_RESOLUTION_DNX36p;
+            {
+                res = MaterialResolution::DNX36P_MXF_ATOM;
+            }
             if (strcmp(argv[n+1], "DNX120p") == 0)
-                res = FF_ENCODER_RESOLUTION_DNX120p;
+            {
+                res = MaterialResolution::DNX120P_MXF_ATOM;
+            }
             if (strcmp(argv[n+1], "DNX185p") == 0)
-                res = FF_ENCODER_RESOLUTION_DNX185p;
+            {
+                res = MaterialResolution::DNX185P_MXF_ATOM;
+            }
             if (strcmp(argv[n+1], "DNX120i") == 0)
-                res = FF_ENCODER_RESOLUTION_DNX120i;
+            {
+                res = MaterialResolution::DNX120I_MXF_ATOM;
+            }
             if (strcmp(argv[n+1], "DNX185i") == 0)
-                res = FF_ENCODER_RESOLUTION_DNX185i;
+            {
+                res = MaterialResolution::DNX185I_MXF_ATOM;
+            }
             if (strcmp(argv[n+1], "DV100_1080i50") == 0)
-                res = FF_ENCODER_RESOLUTION_DV100_1080i50;
+            {
+                res = MaterialResolution::DV100_RAW;
+            }
             if (strcmp(argv[n+1], "DV100_720p50") == 0)
-                res = FF_ENCODER_RESOLUTION_DV100_720p50;
-            if (strcmp(argv[n+1], "DMIH264") == 0)
-                res = FF_ENCODER_RESOLUTION_DMIH264;
-            if (res == -1)
+            {
+                res = MaterialResolution::DV100_RAW;
+            }
+            if (res == MaterialResolution::NONE)
+            {
                 usage_exit();
+            }
             n++;
         }
 #endif
@@ -279,51 +302,48 @@ extern int main(int argc, char *argv[])
         }
 
 #ifdef USE_FFMPEG
-    ffmpeg_encoder_t *ffmpeg_encoder = NULL;
-    if (res != -1) {
-        // Initialise ffmpeg encoder
-        if ((ffmpeg_encoder = ffmpeg_encoder_init(res, opt_num_threads)) == NULL) {
-            fprintf(stderr, "ffmpeg encoder init failed\n");
-            return 1;
-        }
-    }
-
-    // Check that video buffer is compatible
+    // Get the video raster and check that video buffer is compatible
+    Ingex::VideoRaster::EnumType raster = Ingex::VideoRaster::NONE;
     switch (res) {
-    case FF_ENCODER_RESOLUTION_JPEG:
-    case FF_ENCODER_RESOLUTION_DV50:
-    case FF_ENCODER_RESOLUTION_IMX30:
-    case FF_ENCODER_RESOLUTION_IMX40:
-    case FF_ENCODER_RESOLUTION_IMX50:
-    case FF_ENCODER_RESOLUTION_DNX36p:
-    case FF_ENCODER_RESOLUTION_DNX120p:
-    case FF_ENCODER_RESOLUTION_DNX185p:
-    case FF_ENCODER_RESOLUTION_DNX120i:
-    case FF_ENCODER_RESOLUTION_DNX185i:
-    case FF_ENCODER_RESOLUTION_DV100_1080i50:
-    case FF_ENCODER_RESOLUTION_DV100_720p50:
+    case MaterialResolution::DV50_RAW:
+    case MaterialResolution::IMX30_MXF_ATOM:
+    case MaterialResolution::IMX40_MXF_ATOM:
+    case MaterialResolution::IMX50_MXF_ATOM:
+    case MaterialResolution::DNX36P_MXF_ATOM:
+    case MaterialResolution::DNX120P_MXF_ATOM:
+    case MaterialResolution::DNX185P_MXF_ATOM:
+    case MaterialResolution::DNX120I_MXF_ATOM:
+    case MaterialResolution::DNX185I_MXF_ATOM:
+    case MaterialResolution::DV100_RAW:
         if (pctl->pri_video_format != Format422PlanarYUV) {
             fprintf(stderr, "specified encoder resolution requires primary format of Format422PlanarYUV\n");
             return 1;
         }
+        raster = pctl->pri_video_raster;
         break;
-    case FF_ENCODER_RESOLUTION_DMIH264:
-        if (pctl->sec_video_format != Format420PlanarYUV) {
-            fprintf(stderr, "specified encoder resolution requires secondary format of Format420PlanarYUV\n");
-            return 1;
-        }
-    case FF_ENCODER_RESOLUTION_DV25:
+    case MaterialResolution::DV25_RAW:
         if (pctl->sec_video_format != Format420PlanarYUVShifted) {
             fprintf(stderr, "specified encoder resolution requires secondary format of Format420PlanarYUVShifted\n");
             return 1;
         }
         video_offset = pctl->sec_video_offset;
+        raster = pctl->sec_video_raster;
         break;
     default:
         fprintf(stderr, "unsupported encoder resolution\n");
         return 1;
         break;
     }
+    
+    ffmpeg_encoder_t *ffmpeg_encoder = NULL;
+    if (res != MaterialResolution::NONE) {
+        // Initialise ffmpeg encoder
+        if ((ffmpeg_encoder = ffmpeg_encoder_init(res, raster, opt_num_threads)) == NULL) {
+            fprintf(stderr, "ffmpeg encoder init failed\n");
+            return 1;
+        }
+    }
+
 #endif
 
     int retval = 0;
@@ -437,3 +457,4 @@ finish:
         fclose(audiofp);
     return retval;
 }
+

@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorderImpl.h,v 1.7 2009/09/18 16:11:55 john_f Exp $
+ * $Id: IngexRecorderImpl.h,v 1.8 2010/06/02 13:09:53 john_f Exp $
  *
  * Servant class for Recorder.
  *
@@ -28,7 +28,7 @@
 #include <vector>
 #include <string>
 
-
+#include "Timecode.h"
 #include "RecorderImpl.h"
 #include "CopyManager.h"
 #include "recorder_types.h" // for framecount_t
@@ -144,12 +144,9 @@ public:
 // methods
     void GetGlobals(int & ffmpeg_threads);
 
-    int Fps() { return mFps; }
-    bool Df() { return mDf; }
-  
 private:
 // methods
-	void DoStop(framecount_t timecode, framecount_t post_roll);
+	void DoStop(Ingex::Timecode timecode, framecount_t post_roll);
     void UpdateShmSourceNames();
     void StartCopying(unsigned int index);
     int TranslateLocatorColour(ProdAuto::LocatorColour::EnumType e);
@@ -164,10 +161,6 @@ private:
     CopyManager mCopyManager;
     std::string mHostname;
     prodauto::ProjectName mProjectName;
-
-    //ProdAuto::Rational mEditRate;
-    int mFps;
-    bool mDf;
 
 // static instance pointer
 	static IngexRecorderImpl * mInstance;

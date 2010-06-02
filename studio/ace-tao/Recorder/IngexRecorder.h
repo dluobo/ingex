@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorder.h,v 1.11 2010/04/22 08:35:26 john_f Exp $
+ * $Id: IngexRecorder.h,v 1.12 2010/06/02 13:09:53 john_f Exp $
  *
  * Class to manage an individual recording.
  *
@@ -44,6 +44,7 @@ const char * const QUAD_NAME = "quad";
 // Path separator.  It would be different for Windows.
 const char PATH_SEPARATOR = '/';
 const char * const CREATING_SUBDIR = "Creating";
+const char * const METADATA_SUBDIR = "xml";
 
 
 // This interval ensures that timecode found during CheckStartTimecode() is still
@@ -102,16 +103,15 @@ public:
 
     bool CheckStartTimecode(
                 const std::vector<bool> & track_enables,
-                framecount_t & start_timecode,
-                framecount_t pre_roll,
-                bool crash_record);
+                Ingex::Timecode & start_timecode,
+                framecount_t pre_roll);
 
-    void Setup( framecount_t start_timecode,
+    void Setup(Ingex::Timecode start_timecode,
                 const prodauto::ProjectName & project_name);
 
     bool Start(void);
 
-    bool Stop(framecount_t & stop_timecode,
+    bool Stop(Ingex::Timecode & stop_timecode,
                 framecount_t post_roll,
                 const char * description,
                 const std::vector<Locator> & locs);
@@ -138,7 +138,7 @@ public:
         return mDroppedFrames;
     }
 
-    framecount_t OutTime();
+    Ingex::Timecode OutTime();
 
     framecount_t TargetDuration()
     {
@@ -167,9 +167,7 @@ private:
 // Per-recording data
 private:
     std::string mName;
-    framecount_t mStartTimecode;
-    int mFps;
-    bool mDf;
+    Ingex::Timecode mStartTimecode;
 
     // These are used to write metadata file on completion of recording
     char mVideoPath[FILENAME_MAX];

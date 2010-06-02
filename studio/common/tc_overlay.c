@@ -1,5 +1,5 @@
 /*
- * $Id: tc_overlay.c,v 1.4 2009/01/29 07:36:59 stuart_hc Exp $
+ * $Id: tc_overlay.c,v 1.5 2010/06/02 13:10:46 john_f Exp $
  *
  * Create burnt-in timecode.
  *
@@ -414,9 +414,9 @@ static void setup_colon(int x_pos, unsigned char *p)
 
 extern tc_overlay_t * tc_overlay_init()
 {
-    internal_tc_overlay_t * tco = malloc(sizeof(internal_tc_overlay_t));
+    internal_tc_overlay_t * tco = (internal_tc_overlay_t *)malloc(sizeof(internal_tc_overlay_t));
 
-    tco->tc_mask = malloc(tc_width * tc_height);
+    tco->tc_mask = (uint8_t *)malloc(tc_width * tc_height);
     if (tco->tc_mask)
     {
         memset(tco->tc_mask, 0, tc_width * tc_height);

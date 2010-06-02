@@ -1,7 +1,7 @@
 Summary: FFmpeg library with DNxHD(VC-3) DVCPRO-HD H.264 AAC MP3 A52(AC-3) codecs
 Name: ffmpeg-DNxHD-h264-aac
 Version: 0.5
-Release: 3
+Release: 4
 License: GPL
 Group: System Environment/Daemons
 Source: ffmpeg-%{version}.tar.bz2
@@ -10,6 +10,11 @@ Patch1: ffmpeg_default_bitrate.patch
 Patch2: ffmpeg_tref_quicktime.patch
 Patch3: ffmpeg-DVCPROHD-0.5.patch
 Patch4: ffmpeg_quicktime_DVCPRO-HD.patch
+Patch5: ffmpeg-0.5-nonlinear-quant.patch
+Patch6: ffmpeg-0.5-dnxhd-interlaced-parse.patch
+Patch7: ffmpeg-0.5-archive-mxf.patch
+Patch8: ffmpeg-0.5-dnxhd-avid-nitris.patch
+Patch9: ffmpeg-0.5-dnxhd-sst.patch
 Url: http://www.ffmpeg.org/download.html
 BuildRoot: %{_tmppath}/%{name}-root
 BuildRequires: autoconf nasm
@@ -22,6 +27,10 @@ Tarball taken from http://www.ffmpeg.org/releases/ffmpeg-0.5.tar.bz2
 Patched to support:
   - DVCPRO-HD (SMPTE SMPTE 370M) support (1080i50, 1080i60, 720p60)
   - Writing of timecode track in Quicktime wrapped files (.mov)
+  - MPEG-2 non-linear quantizer for 2 <= qscale <= 31
+  - Various DNxHD fixes
+  - Avid Nitris decoder compatibility
+  - Ingex Archive MXF file support
 
 %prep
 rm -rf $RPM_BUILD_ROOT
@@ -35,6 +44,11 @@ rm -rf $RPM_BUILD_ROOT
 %patch2
 %patch3
 %patch4
+%patch5
+%patch6
+%patch7
+%patch8
+%patch9
 
 %build
 ./configure --prefix=/usr --enable-pthreads --disable-demuxer=ogg --enable-swscale --enable-libx264 --enable-libmp3lame --enable-gpl --enable-libfaac --enable-libfaad
@@ -62,6 +76,14 @@ rm -rf $RPM_BUILD_ROOT
 /usr/share/
 
 %changelog
+* Mon May 10 2010 Philip de Nier 0.5-4
+- Added patch implementing MPEG-2 non-linear quantizer (qscale >= 2) to fix
+  CBR failure for complex pictures
+- Added patch fixing interlaced DNxHD parsing
+- Added Ingex Archive MXF patch
+- Added patch fixing SST field in DNxHD bitstream
+- Added patch to support Avid Nitris decoder
+
 * Mon Mar 16 2009 Stuart Cunningham <stuart_hc@users.sourceforge.net> 0.5
 - Update to official 0.5 release (branched from revision 17727)
 - Restore DVCPRO-HD support using revised Dan Maas patch

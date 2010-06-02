@@ -1,5 +1,5 @@
 /*
- * $Id: SimplerouterloggerImpl.cpp,v 1.14 2009/09/18 16:22:17 john_f Exp $
+ * $Id: SimplerouterloggerImpl.cpp,v 1.15 2010/06/02 13:09:53 john_f Exp $
  *
  * Servant class for RouterRecorder.
  *
@@ -108,19 +108,21 @@ bool SimplerouterloggerImpl::Init(const std::string & name, const std::string & 
 
     // Setup pre-roll
     mMaxPreRoll.undefined = false;
-    mMaxPreRoll.edit_rate = EDIT_RATE;
+    mMaxPreRoll.edit_rate = PA_EDIT_RATE;
     // Pre-roll is really zero but gui will use lowest when controlling
     // more than one recorder so we make it 10.
     mMaxPreRoll.samples = 10;
 
     // Setup post-roll
     mMaxPostRoll.undefined = true; // no limit to post-roll
-    mMaxPostRoll.edit_rate = EDIT_RATE;
+    mMaxPostRoll.edit_rate = PA_EDIT_RATE;
     mMaxPostRoll.samples = 0;
 
     // Base class initialisation
     RecorderImpl::Init(name);
-    ok = ok && UpdateFromDatabase(max_inputs, max_tracks_per_input);
+    RecorderImpl::EditRate(pa_EDIT_RATE);
+    RecorderImpl::DropFrame(DROP_FRAME);
+    ok = ok && RecorderImpl::UpdateFromDatabase(max_inputs, max_tracks_per_input);
 
     // Setup format reply
     mFormat = "*ROUTER*";
@@ -235,7 +237,7 @@ bool SimplerouterloggerImpl::Init(const std::string & name, const std::string & 
     ::CORBA::SystemException
   )
 {
-    return EDIT_RATE;
+    return PA_EDIT_RATE;
 }
 
 ::ProdAuto::TrackStatusList * SimplerouterloggerImpl::TracksStatus (
@@ -246,13 +248,14 @@ bool SimplerouterloggerImpl::Init(const std::string & name, const std::string & 
   )
 {
     std::string tc_string = routerloggerApp::Instance()->Timecode();
-    Timecode tc(tc_string.c_str());
+    Ingex::Timecode tc(tc_string.c_str(), pa_EDIT_RATE.numerator, pa_EDIT_RATE.denominator, DROP_FRAME);
 
     ProdAuto::TrackStatus & ts = mTracksStatus->operator[](0);
     ts.timecode.samples = tc.FramesSinceMidnight();
     ts.timecode.undefined = 0;
-    ts.timecode.edit_rate.numerator = tc.EditRateNumerator();
-    ts.timecode.edit_rate.denominator = tc.EditRateDenominator();
+    ts.timecode.edit_rate.numerator = tc.FrameRateNumerator();
+    ts.timecode.edit_rate.denominator = tc.FrameRateDenominator();
+    ts.timecode.drop_frame = tc.DropFrame();
 
     //ACE_DEBUG((LM_DEBUG, ACE_TEXT("TracksStatus - timecode %C\n"), tc.Text()));
 
@@ -304,16 +307,16 @@ bool SimplerouterloggerImpl::Init(const std::string & name, const std::string & 
     }
 
     // Calculate start timecode
-    Timecode tc;
+    Ingex::Timecode tc;
     if (start_timecode.undefined)
     {
         // Start now
-        tc = routerloggerApp::Instance()->Timecode().c_str();
+        tc = Ingex::Timecode(routerloggerApp::Instance()->Timecode().c_str(), pa_EDIT_RATE.numerator, pa_EDIT_RATE.denominator, DROP_FRAME);
     }
     else
     {
         // Start at start - pre-roll
-        tc = start_timecode.samples - pre_roll.samples;
+        tc = Ingex::Timecode(start_timecode.samples - pre_roll.samples, pa_EDIT_RATE.numerator, pa_EDIT_RATE.denominator, DROP_FRAME);
     }
 
     // Generate filename for the recording
@@ -349,8 +352,9 @@ bool SimplerouterloggerImpl::Init(const std::string & name, const std::string & 
 
     // Return start timecode
     start_timecode.undefined = false; 
-    start_timecode.edit_rate.numerator = tc.EditRateNumerator();
-    start_timecode.edit_rate.denominator = tc.EditRateDenominator();
+    start_timecode.edit_rate.numerator = tc.FrameRateNumerator();
+    start_timecode.edit_rate.denominator = tc.FrameRateDenominator();
+    start_timecode.drop_frame = tc.DropFrame();
     start_timecode.samples = tc.FramesSinceMidnight();
 
     // Return
@@ -384,10 +388,11 @@ bool SimplerouterloggerImpl::Init(const std::string & name, const std::string & 
 
     // Return stop timecode
     // (otherwise with stop now it would be left as zero)
-    Timecode tc = routerloggerApp::Instance()->Timecode().c_str();
+    Ingex::Timecode tc(routerloggerApp::Instance()->Timecode().c_str(), pa_EDIT_RATE.numerator, pa_EDIT_RATE.denominator, DROP_FRAME);
     mxf_stop_timecode.undefined = false; 
-    mxf_stop_timecode.edit_rate.numerator = tc.EditRateNumerator();
-    mxf_stop_timecode.edit_rate.denominator = tc.EditRateDenominator();
+    mxf_stop_timecode.edit_rate.numerator = tc.FrameRateNumerator();
+    mxf_stop_timecode.edit_rate.denominator = tc.FrameRateDenominator();
+    mxf_stop_timecode.drop_frame = tc.DropFrame();
     mxf_stop_timecode.samples = tc.FramesSinceMidnight();
 
     // Create out parameter to return (dummy) filename
@@ -413,7 +418,9 @@ void SimplerouterloggerImpl::UpdateConfig (
     ::CORBA::SystemException
   )
 {
-    UpdateFromDatabase(max_inputs, max_tracks_per_input);
+    RecorderImpl::EditRate(pa_EDIT_RATE);
+    RecorderImpl::DropFrame(DROP_FRAME);
+    RecorderImpl::UpdateFromDatabase(max_inputs, max_tracks_per_input);
 }
 
 ::ProdAuto::TrackList * SimplerouterloggerImpl::Tracks (
@@ -441,7 +448,7 @@ void SimplerouterloggerImpl::SetRouterPort(std::string rp)
 }
 
 
-void SimplerouterloggerImpl::StartSaving(const Timecode & tc, const std::string & filename)
+void SimplerouterloggerImpl::StartSaving(const Ingex::Timecode & tc, const std::string & filename)
 {
 #if 0
     unsigned int src_index = mpRouter->CurrentSrc(mMixDestination);
@@ -597,7 +604,7 @@ void SimplerouterloggerImpl::StartSaving(const Timecode & tc, const std::string 
         mc_cut->mcSelectorIndex = mLastSelectorIndex;
         mc_cut->cutDate = date;
         mc_cut->position = tc.FramesSinceMidnight();
-        mc_cut->editRate = prodauto::g_palEditRate;
+        mc_cut->editRate = pa_EDIT_RATE;
 
         // Save to database
         try
@@ -719,11 +726,12 @@ void SimplerouterloggerImpl::Observe(unsigned int src, unsigned int dest)
                 {
                     std::auto_ptr<prodauto::MCCut> mc_cut(new prodauto::MCCut);
 
+                    Ingex::Timecode timecode (tc.c_str(), pa_EDIT_RATE.numerator, pa_EDIT_RATE.denominator, DROP_FRAME);
                     mc_cut->mcTrackId = mMcTrackId;
                     mc_cut->mcSelectorIndex = mc_selector_index;
                     mc_cut->cutDate = date;
-                    mc_cut->position = Timecode(tc.c_str()).FramesSinceMidnight();
-                    mc_cut->editRate = prodauto::g_palEditRate;
+                    mc_cut->position = timecode.FramesSinceMidnight();
+                    mc_cut->editRate = pa_EDIT_RATE;
 
                     // Write to database
                     try

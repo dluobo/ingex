@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderImpl.h,v 1.13 2009/12/17 16:47:15 john_f Exp $
+ * $Id: RecorderImpl.h,v 1.14 2010/06/02 13:09:53 john_f Exp $
  *
  * Base class for Recorder servant.
  *
@@ -180,10 +180,16 @@ protected:
     std::map<std::string, std::string> mTapeMap;
 // methods
     bool UpdateFromDatabase(unsigned int max_inputs, unsigned int max_tracks_per_input);
+    void EditRate(prodauto::Rational edit_rate) { mEditRate = edit_rate; }
+    void DropFrame(bool df) { mDropFrame = df; }
 
 private:
 // methods
     bool SetSourcePackages();
+
+// data
+    prodauto::Rational mEditRate;
+    bool mDropFrame;
 
 // friend function
     friend ACE_THR_FUNC_RETURN start_record_thread(void *p_arg);

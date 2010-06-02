@@ -1,5 +1,5 @@
 /*
- * $Id: SimplerouterloggerImpl.h,v 1.11 2009/09/18 16:22:17 john_f Exp $
+ * $Id: SimplerouterloggerImpl.h,v 1.12 2010/06/02 13:09:53 john_f Exp $
  *
  * Servant class for RouterRecorder.
  *
@@ -38,7 +38,11 @@
 #include "Timecode.h"
 #include "CopyManager.h"
 
-const ProdAuto::Rational EDIT_RATE = { 25 , 1 }; // Assume 25 fps
+// Assume 25 fps
+const prodauto::Rational pa_EDIT_RATE (25, 1);
+const ProdAuto::Rational PA_EDIT_RATE = { 25, 1 };
+const bool DROP_FRAME = false;
+
 
 class Vt
 {
@@ -156,7 +160,7 @@ public:
 
 private:
     // Methods
-    void StartSaving(const Timecode & tc, const std::string & filename);
+    void StartSaving(const Ingex::Timecode & tc, const std::string & filename);
     void StopSaving();
     void StartCopying(unsigned int index);
     void StopCopying(unsigned int index);

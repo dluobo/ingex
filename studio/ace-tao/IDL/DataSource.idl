@@ -1,5 +1,5 @@
 /*
- * $Id: DataSource.idl,v 1.1 2007/09/11 14:08:21 stuart_hc Exp $
+ * $Id: DataSource.idl,v 1.2 2010/06/02 13:09:53 john_f Exp $
  *
  * An interface which can supply status messages.
  *
@@ -44,8 +44,6 @@ module ProdAuto
 
         ConnectionState AddStatusClient(in StatusClient client);        
         void RemoveStatusClient(in StatusClient client);
-
-        string ReturnStatus(in string name); ///< Pull a particular status value.
     };
 };
 

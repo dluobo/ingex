@@ -12,12 +12,14 @@ project(routerlogger): taoserver, naming, messaging, valuetype {
   }
 
   libs += pqxx
-  libs += prodautodb
   libs += common
+  libs += studiocommon
+  libs += prodautodb
   libs += acetaocommon
   libs += idl
 
   libpaths += ../../../common
+  libpaths += ../../common
   libpaths += ../common
   libpaths += ../IDL
   libpaths += ../../database/src

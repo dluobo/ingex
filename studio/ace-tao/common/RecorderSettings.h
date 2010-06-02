@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderSettings.h,v 1.8 2010/03/30 07:45:13 john_f Exp $
+ * $Id: RecorderSettings.h,v 1.9 2010/06/02 13:09:53 john_f Exp $
  *
  * Recorder Configuration.
  *
@@ -30,18 +30,6 @@
 
 #include "Database.h"
 
-// NB. Wrapping enum type not used, file_format integer used instead.
-namespace Wrapping
-{
-    enum EnumType { NONE, MXF, MOV };
-}
-
-// NB. Coding enum type not used, resolution integer used instead.
-namespace Coding
-{
-    enum EnumType { UNCOMPRESSED, DV25, DV50, MJPEG21, MJPEG31, MJPEG101, MJPEG101M, MJPEG151S, MJPEG201, MPEG2 };
-}
-
 namespace Input
 {
     enum EnumType { NORMAL, QUAD };
@@ -50,8 +38,6 @@ namespace Input
 struct EncodeParams
 {
     int resolution;
-    int file_format;
-    int op;
     Input::EnumType source;
     bool bitc;
     std::string dir;

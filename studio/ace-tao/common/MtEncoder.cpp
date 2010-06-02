@@ -1,5 +1,5 @@
 /*
- * $Id: MtEncoder.cpp,v 1.4 2010/01/14 14:07:50 john_f Exp $
+ * $Id: MtEncoder.cpp,v 1.5 2010/06/02 13:09:53 john_f Exp $
  *
  * Video encoder using multiple threads.
  *
@@ -40,9 +40,10 @@ MtEncoder::~MtEncoder()
     wait();
 }
 
-void MtEncoder::Init(ffmpeg_encoder_resolution_t res, int num_threads)
+void MtEncoder::Init(MaterialResolution::EnumType res, Ingex::VideoRaster::EnumType raster, int num_threads)
 {
     mRes = res;
+    mRaster = raster;
     if (num_threads < 1)
     {
         num_threads = DEFAULT_NUM_THREADS;
@@ -78,7 +79,7 @@ int MtEncoder::svc()
         // Prevent "insufficient thread locking around avcodec_open/close()"
         ACE_Guard<ACE_Thread_Mutex> guard(*mpAvcodecMutex);
 
-        enc = ffmpeg_encoder_init(mRes, 1);
+        enc = ffmpeg_encoder_init(mRes, mRaster, 1);
     }
 
     while (!mShutdown)

@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderImpl.cpp,v 1.14 2010/01/12 16:54:12 john_f Exp $
+ * $Id: RecorderImpl.cpp,v 1.15 2010/06/02 13:09:53 john_f Exp $
  *
  * Base class for Recorder servant.
  *
@@ -40,7 +40,7 @@
 
 // Implementation skeleton constructor
 RecorderImpl::RecorderImpl (void)
-: mFormat("Ingex recorder")
+: mFormat("Ingex recorder"), mEditRate(prodauto::g_nullRational), mDropFrame(false)
 {
     mTracks = new ProdAuto::TrackList;
     mTracksStatus = new ProdAuto::TrackStatusList;
@@ -54,17 +54,9 @@ void RecorderImpl::Init(const std::string & name)
     // Save name
     mName = name;
 
-    // Set maximum number of tracks for this particular implementation,
-    // e.g. as determined from capture cards installed in the machine.
-    //mMaxInputs = max_inputs;
-    //mMaxTracksPerInput = max_tracks_per_input;
-
     // Read enumeration names from database.
     // Do it now to avoid any delay when first used.
     DatabaseEnums::Instance();
-
-    // Update tracks and settings from database
-    //bool ok = UpdateFromDatabase(max_inputs, max_tracks_per_input);
 }
 
 // Implementation skeleton destructor
@@ -93,9 +85,6 @@ char * RecorderImpl::RecordingFormat (
 {
     // (The IngexGUI controller invokes the Tracks operation
     // when it connects to a recorder.)
-
-    // Update from database
-    //UpdateFromDatabase();
 
     // Make a copy of tracks to return
     ProdAuto::TrackList_var tracks = mTracks;
@@ -400,12 +389,12 @@ bool RecorderImpl::SetSourcePackages()
                         if (mTapeMap.find(sc->name) != mTapeMap.end())
                         {
                             // We have a corresponding tape name.
-                            sc->setSourcePackage(mTapeMap[sc->name]);
+                            sc->setSourcePackage(mTapeMap[sc->name], mEditRate, mDropFrame);
                         }
                         else
                         {
                             // No corresponding tape name, use source name and date
-                            sc->setSessionSourcePackage();
+                            sc->setSessionSourcePackage(mEditRate, mDropFrame);
                         }
                     }
                 } // tracks
@@ -421,21 +410,6 @@ bool RecorderImpl::SetSourcePackages()
 }
 
 
-
-/**
-Means of externally forcing a re-reading of config from database.
-*/
-/*
-void RecorderImpl::UpdateConfig (
-    
-  )
-  throw (
-    ::CORBA::SystemException
-  )
-{
-    //UpdateFromDatabase();  Needs to be done in derived class
-}
-*/
 
 /**
 Update tracks and settings from database.

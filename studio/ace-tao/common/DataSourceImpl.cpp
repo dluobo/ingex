@@ -1,5 +1,5 @@
 /*
- * $Id: DataSourceImpl.cpp,v 1.2 2008/09/03 13:43:33 john_f Exp $
+ * $Id: DataSourceImpl.cpp,v 1.3 2010/06/02 13:09:53 john_f Exp $
  *
  * Implementation of DataSource for use in servant.
  *
@@ -59,17 +59,6 @@ void DataSourceImpl::RemoveStatusClient (
 {
   // Add your implementation here
     mStatusDist.RemoveClient(client);
-}
-
-char * DataSourceImpl::ReturnStatus (
-    const char * name
-  )
-  throw (
-    ::CORBA::SystemException
-  )
-{
-  // Add your implementation here
-	return CORBA::string_dup("");
 }
 
 

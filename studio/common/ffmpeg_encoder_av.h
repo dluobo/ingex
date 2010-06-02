@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder_av.h,v 1.4 2009/04/16 18:00:17 john_f Exp $
+ * $Id: ffmpeg_encoder_av.h,v 1.5 2010/06/02 13:10:46 john_f Exp $
  *
  * Encode AV and write to file.
  *
@@ -27,19 +27,13 @@
 
 #include "integer_types.h"
 #include "ffmpeg_defs.h"
+#include "MaterialResolution.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 typedef void ffmpeg_encoder_av_t;
-typedef enum {
-    FF_ENCODER_RESOLUTION_DVD,
-    FF_ENCODER_RESOLUTION_MPEG4_MOV,
-    FF_ENCODER_RESOLUTION_DV25_MOV,
-    FF_ENCODER_RESOLUTION_DV50_MOV,
-    FF_ENCODER_RESOLUTION_DV100_MOV
-} ffmpeg_encoder_av_resolution_t;
 
 /*
 * ffmpeg_encoder_av_init : Creates an encoder for the specified format and returns a pointer to it.
@@ -47,7 +41,7 @@ typedef enum {
 * Return           : Pointer to ffmpeg_encoder_av_t object if successful
 *                    NULL if a problem occurred
 */
-extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, ffmpeg_encoder_av_resolution_t res, int wide_aspect, int64_t start_tc, int num_threads,
+extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, MaterialResolution::EnumType res, int wide_aspect, int64_t start_tc, int num_threads,
                                                      int num_audio_streams, int num_audio_channels_per_stream);
 
 /*
@@ -75,3 +69,4 @@ extern int ffmpeg_encoder_av_close (ffmpeg_encoder_av_t * in_enc);
 #endif
 
 #endif //#ifndef  ffmpeg_encoder_av_h
+

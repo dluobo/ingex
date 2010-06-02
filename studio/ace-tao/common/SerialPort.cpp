@@ -1,5 +1,5 @@
 /*
- * $Id: SerialPort.cpp,v 1.4 2009/09/18 15:54:38 john_f Exp $
+ * $Id: SerialPort.cpp,v 1.5 2010/06/02 13:09:53 john_f Exp $
  *
  * Serial communication port.
  *
@@ -49,12 +49,14 @@ void SerialPort::BaudRate(int baud_rate)
 int SerialPort::Send(const void * buf, size_t n, const ACE_Time_Value * timeout)
 {
     // NB. ACE_DEV_IO coes not support timeout
+    (void)timeout;
     return mSerialDevice.send(buf, n);
 }
 
 int SerialPort::Recv(void * buf, size_t n, const ACE_Time_Value * timeout)
 {
     // NB. ACE_DEV_IO coes not support timeout
+    (void)timeout;
     return mSerialDevice.recv(buf, n);
 }
 

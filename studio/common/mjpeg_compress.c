@@ -1,5 +1,5 @@
 /*
- * $Id: mjpeg_compress.c,v 1.4 2009/02/26 19:28:07 john_f Exp $
+ * $Id: mjpeg_compress.c,v 1.5 2010/06/02 13:10:46 john_f Exp $
  *
  * MJPEG encoder.
  *
@@ -239,7 +239,7 @@ extern int mjpeg_compress_init(MJPEGResolutionID id, int width, int height, mjpe
 
     // Setup customized destination manager which simply writes to
     // a large memory buffer
-    uint8_t *picture_pair = malloc(OUTPUT_BUF_SIZE);
+    uint8_t *picture_pair = (uint8_t *)malloc(OUTPUT_BUF_SIZE);
     jpeg_custom_dest(&p->cinfo, p->resID, picture_pair);
 
     int jpeg_width = width;
@@ -259,9 +259,9 @@ extern int mjpeg_compress_init(MJPEGResolutionID id, int width, int height, mjpe
         // rounding up to nearest DCTSIZE (i.e. multiple of 8)
         int y_size = jpeg_width * p->src_height / 2;
         int c_size = c_width * p->src_height / 2;
-        p->half_y = malloc(y_size);
-        p->half_u = malloc(c_size);
-        p->half_v = malloc(c_size);
+        p->half_y = (unsigned char *)malloc(y_size);
+        p->half_u = (unsigned char *)malloc(c_size);
+        p->half_v = (unsigned char *)malloc(c_size);
 
         // Clear unused space at end of lines to black
         memset(p->half_y, 0x10, y_size);
@@ -269,7 +269,7 @@ extern int mjpeg_compress_init(MJPEGResolutionID id, int width, int height, mjpe
         memset(p->half_v, 0x80, c_size);
 
         // Also allocate a temp workspace for YUV scale_pic
-        p->workspace = malloc(width * 4);
+        p->workspace = (unsigned char *)malloc(width * 4);
     }
 
     p->cinfo.image_width = jpeg_width;
@@ -280,9 +280,9 @@ extern int mjpeg_compress_init(MJPEGResolutionID id, int width, int height, mjpe
     for (i = 0; i < 8; i++) {
         int line_width = ROUND_UP_TO_DCTSIZE(jpeg_width);
         int color_width = ROUND_UP_TO_DCTSIZE(jpeg_width / 2);
-        p->black_y[i] = malloc(line_width);
-        p->black_u[i] = malloc(color_width);
-        p->black_v[i] = malloc(color_width);
+        p->black_y[i] = (JSAMPROW)malloc(line_width);
+        p->black_u[i] = (JSAMPROW)malloc(color_width);
+        p->black_v[i] = (JSAMPROW)malloc(color_width);
 
         int x;
         for (x = 0; x < line_width; x++) {

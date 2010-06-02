@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder.h,v 1.7 2010/03/30 07:55:57 john_f Exp $
+ * $Id: ffmpeg_encoder.h,v 1.8 2010/06/02 13:10:46 john_f Exp $
  *
  * Encode uncompressed video to DV frames using libavcodec
  *
@@ -27,38 +27,18 @@
 
 #include "integer_types.h"
 #include "ffmpeg_defs.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "MaterialResolution.h"
 
 typedef void ffmpeg_encoder_t;
-typedef enum {
-    FF_ENCODER_RESOLUTION_DV25,
-    FF_ENCODER_RESOLUTION_DV50,
-    FF_ENCODER_RESOLUTION_DV100_1080i50,
-    FF_ENCODER_RESOLUTION_DV100_720p50,
-    FF_ENCODER_RESOLUTION_IMX30,
-    FF_ENCODER_RESOLUTION_IMX40,
-    FF_ENCODER_RESOLUTION_IMX50,
-    FF_ENCODER_RESOLUTION_DNX36p,
-    FF_ENCODER_RESOLUTION_DNX120p,
-    FF_ENCODER_RESOLUTION_DNX185p,
-    FF_ENCODER_RESOLUTION_DNX120i,
-    FF_ENCODER_RESOLUTION_DNX185i,
-    FF_ENCODER_RESOLUTION_DMIH264,
-    FF_ENCODER_RESOLUTION_JPEG,
-    FF_ENCODER_RESOLUTION_MP3
-} ffmpeg_encoder_resolution_t;
 
 
 /*
 * ffmpeg_encoder_init : Creates a format context for an avcodec
-* Input            : 
+* Input            : width and height refer to input picture
 * Return           : Pointer to object if successful
 *                    NULL if a problem occurred
 */
-extern ffmpeg_encoder_t * ffmpeg_encoder_init(ffmpeg_encoder_resolution_t res, int num_threads);
+extern ffmpeg_encoder_t * ffmpeg_encoder_init(MaterialResolution::EnumType res, Ingex::VideoRaster::EnumType raster, int num_threads);
 
 /*
 * ffmpeg_encoder_video : Encodes the input video
@@ -85,9 +65,6 @@ extern int ffmpeg_encoder_encode_audio (ffmpeg_encoder_t * in_encoder, int num_s
 */
 extern int ffmpeg_encoder_close (ffmpeg_encoder_t * in_encoder);
 
-#ifdef __cplusplus
-}
-#endif
 
 #endif /* FFMPEG_ENCODER_H */
 

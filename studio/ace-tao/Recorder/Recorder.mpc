@@ -20,6 +20,7 @@ project(Recorder): taoserver, naming, messaging, valuetype {
   libs += uuid
   libs += pqxx
   libs += common
+  libs += prodautodb
   libs += acetaocommon
   libs += YUVlib
   libs += studiocommon
@@ -28,7 +29,6 @@ project(Recorder): taoserver, naming, messaging, valuetype {
   libs += MXF++
   libs += D10MXFOP1AWriter
   libs += mxfwriter
-  libs += prodautodb
   libs += idl
   libpaths += ../common
   libpaths += ../../common

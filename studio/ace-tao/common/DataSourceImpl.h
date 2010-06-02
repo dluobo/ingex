@@ -1,5 +1,5 @@
 /*
- * $Id: DataSourceImpl.h,v 1.1 2007/09/11 14:08:32 stuart_hc Exp $
+ * $Id: DataSourceImpl.h,v 1.2 2010/06/02 13:09:53 john_f Exp $
  *
  * Implementation of DataSource for use in servant.
  *
@@ -56,14 +56,6 @@ public:
       ::CORBA::SystemException
     );
   
-  virtual
-  char * ReturnStatus (
-      const char * name
-    )
-    throw (
-      ::CORBA::SystemException
-    );
-
 protected:
     StatusDistributor mStatusDist;
 };

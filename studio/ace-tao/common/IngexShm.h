@@ -1,5 +1,5 @@
 /*
- * $Id: IngexShm.h,v 1.3 2009/10/12 15:05:38 john_f Exp $
+ * $Id: IngexShm.h,v 1.4 2010/06/02 13:09:53 john_f Exp $
  *
  * Interface for reading audio/video data from shared memory.
  *
@@ -32,7 +32,7 @@
 #include <errno.h>
 
 //#include <ace/Log_Msg.h>
-#include "integer_types.h"
+//#include "integer_types.h"
 
 #include "nexus_control.h"
 
@@ -83,13 +83,18 @@ public:
     void TcMode(TcEnum mode) { mTcMode = mode; }
     */
 
+    Ingex::VideoRaster::EnumType PrimaryVideoRaster();
+    Ingex::VideoRaster::EnumType SecondaryVideoRaster();
+    Ingex::PixelFormat::EnumType PrimaryPixelFormat();
+    Ingex::PixelFormat::EnumType SecondaryPixelFormat();
+
     int FrameRateNumerator() { if (mpControl) return mpControl->frame_rate_numer; else return 0; }
     int FrameRateDenominator() { if (mpControl) return mpControl->frame_rate_denom; else return 0; }
     void GetFrameRate(int & numerator, int & denominator);
     void GetFrameRate(int & fps, bool & df);
 
-    int32_t Timecode(unsigned int channel, unsigned int frame);
-    int32_t CurrentTimecode(unsigned int channel);
+    Ingex::Timecode Timecode(unsigned int channel, unsigned int frame);
+    Ingex::Timecode CurrentTimecode(unsigned int channel);
 
     bool SignalPresent(unsigned int channel)
     {
@@ -145,6 +150,11 @@ public:
     int32_t * pAudio78(unsigned int channel, unsigned int frame)
     {
         return (int32_t *)nexus_audio78(mpControl, mRing, channel, frame);
+    }
+
+    int NumAudioSamples(unsigned int channel, unsigned int frame)
+    {
+        return nexus_num_aud_samp(mpControl, mRing, channel, frame);
     }
 
     CaptureFormat PrimaryCaptureFormat()

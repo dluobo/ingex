@@ -1,5 +1,5 @@
 /*
- * $Id: recorder_monitor.cpp,v 1.1 2008/09/16 11:40:39 stuart_hc Exp $
+ * $Id: recorder_monitor.cpp,v 1.2 2010/06/02 13:09:53 john_f Exp $
  *
  * Recorder monitor demo.
  *
@@ -50,8 +50,8 @@ extern "C" void sigint_handler (int)
 void http_handler ()
 {
     rec_manager->Update();
-    const std::vector<TrackInfo> & track_infos = rec_manager->TrackInfos();
 
+    //const std::vector<TrackInfo> & track_infos = rec_manager->TrackInfos();
     // Use track_infos to construct HTTP response
 }
 

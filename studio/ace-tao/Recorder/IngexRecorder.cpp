@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorder.cpp,v 1.13 2010/03/30 07:53:07 john_f Exp $
+ * $Id: IngexRecorder.cpp,v 1.14 2010/06/02 13:09:53 john_f Exp $
  *
  * Class to manage an individual recording.
  *
@@ -40,6 +40,7 @@
 #include "Timecode.h"
 #include "DateTime.h"
 #include "FileUtils.h"
+#include "MaterialResolution.h"
 
 #include <DBException.h>
 
@@ -75,12 +76,6 @@ IngexRecorder::IngexRecorder(IngexRecorderImpl * impl, unsigned int index)
     {
         mChannelEnable.push_back(false);
     }
-
-    if (mpImpl)
-    {
-        mFps = mpImpl->Fps();
-        mDf = mpImpl->Df();
-    }
 }
 
 /**
@@ -102,16 +97,23 @@ Prepare for a recording.  Search for target timecode and set some of the RecordO
 This should be called before IngexRecorder::Setup().
 */
 bool IngexRecorder::CheckStartTimecode(
-                //std::vector<bool> & channel_enables,
                 const std::vector<bool> & track_enables,
-                framecount_t & start_timecode,
-                framecount_t pre_roll,
-                bool crash_record)
+                Ingex::Timecode & start_timecode,
+                framecount_t pre_roll)
 {
-    ACE_DEBUG((LM_DEBUG, ACE_TEXT("IngexRecorder::CheckStartTimecode()\n")));
+    bool crash_record;
+    if (start_timecode.IsNull())
+    {
+        crash_record = true;
+        ACE_DEBUG((LM_DEBUG, ACE_TEXT("IngexRecorder::CheckStartTimecode() %C\n"), "crash-record"));
+    }
+    else
+    {
+        crash_record = false;
+        ACE_DEBUG((LM_DEBUG, ACE_TEXT("IngexRecorder::CheckStartTimecode() %C\n"), start_timecode.Text()));
+    }
 
     // Set up channel enables
-#if 1
     for (unsigned int i = 0; mpImpl && i < mpImpl->mTracks->length() && i < track_enables.size(); ++i)
     {
         ProdAuto::Track & track = mpImpl->mTracks->operator[](i);
@@ -123,60 +125,51 @@ bool IngexRecorder::CheckStartTimecode(
             mChannelEnable[hw_trk.channel] = true;
         }
     }
-#else
-    mChannelEnable = channel_enables;
-#endif
 
     // Store track enables for use by recorder_functions
     mTrackEnable = track_enables;
 
     unsigned int n_channels = IngexShm::Instance()->Channels();
 
-    framecount_t target_tc;
+    Ingex::Timecode target_tc;
 
     // If crash record, search across all channels for the minimum current (lastframe) timecode
     if (crash_record)
     {
-        //int tc[MAX_CHANNELS];
-        struct { int framecount; bool valid; } tc[MAX_CHANNELS];
-        for (unsigned int i = 0; i < MAX_CHANNELS; ++i)
-        {
-            tc[i].valid = false;
-        }
+        Ingex::Timecode tc[MAX_CHANNELS];
 
         ACE_DEBUG((LM_DEBUG, ACE_TEXT("Crash record:\n")));
         for (unsigned int channel_i = 0; channel_i < mChannelEnable.size(); channel_i++)
         {
             if (mChannelEnable[channel_i] && IngexShm::Instance()->SignalPresent(channel_i))
             {
-                tc[channel_i].framecount = IngexShm::Instance()->CurrentTimecode(channel_i);
-                tc[channel_i].valid = true;
+                tc[channel_i] = IngexShm::Instance()->CurrentTimecode(channel_i);
 
                 ACE_DEBUG((LM_DEBUG, ACE_TEXT("    tc[%d]=%C\n"),
-                    channel_i, Timecode(tc[channel_i].framecount, mFps, mDf).Text()));
+                    channel_i, tc[channel_i].Text()));
             }
         }
 
-        int max_tc = 0;
-        int min_tc = INT_MAX;
-        bool tc_valid = false;
+        Ingex::Timecode min_tc;
         for (unsigned int channel_i = 0; channel_i < n_channels; channel_i++)
         {
-            if (tc[channel_i].valid)
+            if (!tc[channel_i].IsNull())
             {
-                max_tc = max(max_tc, tc[channel_i].framecount);
-                min_tc = min(min_tc, tc[channel_i].framecount);
-                tc_valid = true;
+                if (min_tc.IsNull() || tc[channel_i].FramesSinceMidnight() < min_tc.FramesSinceMidnight())
+                {
+                    min_tc = tc[channel_i];
+                }
             }
         }
 
-        if (!tc_valid)
+        if (min_tc.IsNull())
         {
             ACE_DEBUG((LM_ERROR, ACE_TEXT("    No channels enabled!\n")));
         }
-
-        target_tc = min_tc;
-        //target_tc = tc[1]; // just for testing
+        else
+        {
+            target_tc = min_tc;
+        }
     }
     else
     {
@@ -184,10 +177,6 @@ bool IngexRecorder::CheckStartTimecode(
     }
 
     // Include pre-roll
-    if (target_tc < pre_roll)
-    {
-        target_tc += 24 * 60 * 60 * 25;
-    }
     target_tc -= pre_roll;
 
     // NB. Should be keeping target_tc and pre-roll separate in case of discontinuous timecode.
@@ -214,7 +203,7 @@ bool IngexRecorder::CheckStartTimecode(
     }
 
     // Search for desired timecode across all target sources
-    ACE_DEBUG((LM_DEBUG, ACE_TEXT("Searching for timecode %C\n"), Timecode(target_tc, mFps, mDf).Text()));
+    ACE_DEBUG((LM_DEBUG, ACE_TEXT("Searching for timecode %C\n"), target_tc.Text()));
     for (unsigned int channel_i = 0; channel_i < n_channels; channel_i++)
     {
         if (! mChannelEnable[channel_i])
@@ -226,15 +215,15 @@ bool IngexRecorder::CheckStartTimecode(
         int lastframe = IngexShm::Instance()->LastFrame(channel_i);
 
         bool found_target = false;
-        int first_tc_seen = 0;
-        int last_tc_seen = 0;
+        Ingex::Timecode first_tc_seen;
+        Ingex::Timecode last_tc_seen;
 
         // Find target timecode.
         for (unsigned int i = 0; !found_target && i < search_limit; ++i)
         {
             // read timecode value
             int frame = lastframe - i;
-            int tc = IngexShm::Instance()->Timecode(channel_i, frame);
+            Ingex::Timecode tc = IngexShm::Instance()->Timecode(channel_i, frame);
 
             if (i == 0)
             {
@@ -242,24 +231,25 @@ bool IngexRecorder::CheckStartTimecode(
             }
             last_tc_seen = tc;
 
-            if (tc == target_tc)
+            int diff = target_tc.FramesSinceMidnight() - tc.FramesSinceMidnight();
+            if (diff == 0)
             {
                 mStartFrame[channel_i] = lastframe - i;
                 found_target = true;
 
                 ACE_DEBUG((LM_DEBUG, ACE_TEXT("Found channel%d lf=%6d lf-i=%8d tc=%C\n"),
-                    channel_i, lastframe, lastframe - i, Timecode(tc, mFps, mDf).Text()));
+                    channel_i, lastframe, lastframe - i, tc.Text()));
             }
-            else if (i == 0 && target_tc > tc && target_tc - tc < 5)
+            else if (i == 0 && diff < 0 && diff > 5)
             {
                 // Target is slightly in the future.  We predict the start frame.
-                mStartFrame[channel_i] = frame + target_tc - tc;
+                mStartFrame[channel_i] = frame + diff;
                 found_target = true;
 
                 ACE_DEBUG((LM_WARNING, ACE_TEXT("Target timecode in future for channel[%d]: target=%C, most_recent=%C\n"),
                     channel_i,
-                    Timecode(target_tc, mFps, mDf).Text(),
-                    Timecode(first_tc_seen, mFps, mDf).Text()
+                    target_tc.Text(),
+                    first_tc_seen.Text()
                     ));
             }
         }
@@ -268,9 +258,9 @@ bool IngexRecorder::CheckStartTimecode(
         {
             ACE_DEBUG((LM_ERROR, "channel[%d] Target tc %C not found, buffer %C - %C\n",
                 channel_i,
-                Timecode(target_tc, mFps, mDf).Text(),
-                Timecode(last_tc_seen, mFps, mDf).Text(),
-                Timecode(first_tc_seen, mFps, mDf).Text()
+                target_tc.Text(),
+                last_tc_seen.Text(),
+                first_tc_seen.Text()
             ));
 
             if (IngexShm::Instance()->SignalPresent(channel_i))
@@ -308,7 +298,7 @@ bool IngexRecorder::CheckStartTimecode(
 Final preparation for recording.
 */
 void IngexRecorder::Setup(
-                framecount_t start_timecode,
+                Ingex::Timecode start_timecode,
                 const prodauto::ProjectName & project_name)
 {
     ACE_DEBUG((LM_DEBUG, ACE_TEXT("IngexRecorder::Setup()\n")));
@@ -375,25 +365,32 @@ void IngexRecorder::Setup(
 
         FileUtils::CreatePath(it->dir);
 
-        if (it->file_format == MXF_FILE_FORMAT_TYPE)
+        FileFormat::EnumType format;
+        OperationalPattern::EnumType pattern;
+        MaterialResolution::GetInfo(MaterialResolution::EnumType(it->resolution), format, pattern);
+
+        if (FileFormat::MXF == format)
         {
-            // Make Creating and Failures subdirs for MXF
+            // Make Creating, Failures and Metadata subdirs for MXF
             std::ostringstream creating_path;
             creating_path << it->dir << PATH_SEPARATOR << settings->mxf_subdir_creating;
             FileUtils::CreatePath(creating_path.str());
             std::ostringstream failures_path;
             failures_path << it->dir << PATH_SEPARATOR << settings->mxf_subdir_failures;
             FileUtils::CreatePath(failures_path.str());
-            //std::ostringstream metadata_path;
-            //metadata_path << it->dir << PATH_SEPARATOR << settings->mxf_subdir_metadata;
-            //FileUtils::CreatePath(metadata_path.str());
+            std::ostringstream metadata_path;
+            metadata_path << it->dir << PATH_SEPARATOR << settings->mxf_subdir_metadata;
+            FileUtils::CreatePath(metadata_path.str());
         }
         else
         {
-            // Make Creating subdir for other formats
+            // Make Creating and Metadata subdir for other formats
             std::ostringstream creating_path;
             creating_path << it->dir << PATH_SEPARATOR << CREATING_SUBDIR;
             FileUtils::CreatePath(creating_path.str());
+            std::ostringstream metadata_path;
+            metadata_path << it->dir << PATH_SEPARATOR << METADATA_SUBDIR;
+            FileUtils::CreatePath(metadata_path.str());
         }
     }
 
@@ -416,8 +413,6 @@ void IngexRecorder::Setup(
                     tp.p_opt->index = encoding_i;
                     
                     tp.p_opt->resolution = it->resolution;
-                    tp.p_opt->file_format = it->file_format;
-                    tp.p_opt->op = it->op;
                     tp.p_opt->bitc = it->bitc;
                     tp.p_opt->dir = it->dir;
 
@@ -435,8 +430,6 @@ void IngexRecorder::Setup(
             tp.p_opt->index = encoding_i;
             tp.p_opt->quad = true;
             tp.p_opt->resolution = it->resolution;
-            tp.p_opt->file_format = it->file_format;
-            tp.p_opt->op = it->op;
             tp.p_opt->bitc = it->bitc;
             tp.p_opt->dir = it->dir;
 
@@ -463,9 +456,8 @@ void IngexRecorder::Setup(
 #endif
 
     // Create and store filenames based on source, target timecode and date.
-    ::Timecode tc(start_timecode, mFps, mDf);
     std::string date = DateTime::DateNoSeparators();
-    const char * tcode = tc.TextNoSeparators();
+    std::string tcode = start_timecode.TextNoSeparators();
 
     // We also include project name to help with copying to project-based
     // directories on a file-server.
@@ -552,19 +544,19 @@ bool IngexRecorder::Start()
 }
 
 
-bool IngexRecorder::Stop( framecount_t & stop_timecode,
+bool IngexRecorder::Stop(Ingex::Timecode & stop_timecode,
                 framecount_t post_roll,
                 const char * description,
                 const std::vector<Locator> & locs)
 {
-    if (stop_timecode < 0)
+    if (stop_timecode.IsNull())
     {
         ACE_DEBUG((LM_DEBUG, ACE_TEXT("IngexRecorder::Stop(\"now\")\n")));
     }
     else
     {
         ACE_DEBUG((LM_DEBUG, ACE_TEXT("IngexRecorder::Stop(%C, %d)\n"),
-            Timecode(stop_timecode, mFps, mDf).Text(), post_roll));
+            stop_timecode.Text(), post_roll));
     }
 
     // Store description
@@ -577,7 +569,7 @@ bool IngexRecorder::Stop( framecount_t & stop_timecode,
     // Store locators
     for (std::vector<Locator>::const_iterator it = locs.begin(); it != locs.end(); ++it)
     {
-        int64_t position = it->timecode - mStartTimecode;
+        int64_t position = it->timecode - mStartTimecode.FramesSinceMidnight();
         mUserComments.push_back(
             prodauto::UserComment(POSITIONED_COMMENT_NAME, it->comment, position, it->colour));
     }
@@ -589,7 +581,7 @@ bool IngexRecorder::Stop( framecount_t & stop_timecode,
     //post_roll = 0;  //tmp test
 
     framecount_t capture_length = 0;
-    if (stop_timecode < 0)
+    if (stop_timecode.IsNull())
     {
         // Stop timecode is "now".
         // Find longest current recorded duration and add post_roll.
@@ -614,7 +606,7 @@ bool IngexRecorder::Stop( framecount_t & stop_timecode,
     else
     {
         // Calculate capture length.
-        capture_length = stop_timecode - mStartTimecode + post_roll;
+        capture_length = stop_timecode.FramesSinceMidnight() - mStartTimecode.FramesSinceMidnight() + post_roll;
     }
 
     // Return the expected "out time" of the recording
@@ -638,17 +630,16 @@ bool IngexRecorder::Stop( framecount_t & stop_timecode,
     return true;
 }
 
-framecount_t IngexRecorder::OutTime()
+Ingex::Timecode IngexRecorder::OutTime()
 {
+    Ingex::Timecode out;
     framecount_t d = TargetDuration();
     if (d > 0)
     {
-        return mStartTimecode + d;
+        out = mStartTimecode;
+        out += d;
     }
-    else
-    {
-        return d;
-    }
+    return out;
 }
 
 

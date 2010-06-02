@@ -1,5 +1,5 @@
 /*
- * $Id: MtEncoder.h,v 1.3 2010/01/12 16:57:27 john_f Exp $
+ * $Id: MtEncoder.h,v 1.4 2010/06/02 13:09:53 john_f Exp $
  *
  * Video encoder using multiple threads.
  *
@@ -27,6 +27,7 @@
 
 #include <ace/Task.h>
 
+#include "VideoRaster.h"
 #include "ffmpeg_encoder.h"
 
 class EncodeFrameBuffer;
@@ -37,14 +38,15 @@ public:
     MtEncoder(ACE_Thread_Mutex * ff_mutex);
     virtual ~MtEncoder();
 
-    void Init(ffmpeg_encoder_resolution_t res, int num_threads);
+    void Init(MaterialResolution::EnumType res, Ingex::VideoRaster::EnumType raster, int num_threads);
     void Encode(EncodeFrameTrack & eft);
     void Close();
     virtual int svc();
 
 private:
     ACE_Thread_Mutex * mpAvcodecMutex; // For AVCodec init
-    ffmpeg_encoder_resolution_t mRes;
+    MaterialResolution::EnumType mRes;
+    Ingex::VideoRaster::EnumType mRaster;
     int mNumThreads;
     int mShutdown;
 };
