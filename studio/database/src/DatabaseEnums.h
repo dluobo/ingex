@@ -1,5 +1,5 @@
 /*
- * $Id: DatabaseEnums.h,v 1.8 2009/10/12 15:44:54 philipn Exp $
+ * $Id: DatabaseEnums.h,v 1.9 2010/06/02 13:04:26 john_f Exp $
  *
  * Defines enumerated data values matching those in the database
  *
@@ -31,41 +31,10 @@
 #define SOUND_DATA_DEFINITION               2
 #define SOUND_DATA_DEFINITION_NAME          "Audio"
 
-#define OPERATIONAL_PATTERN_ATOM            1
-#define OPERATIONAL_PATTERN_1A              2
-
-#define RAW_FILE_FORMAT_TYPE                1
-#define MXF_FILE_FORMAT_TYPE                2
-#define MOV_FILE_FORMAT_TYPE                3
-#define MPG_FILE_FORMAT_TYPE                4
-
 #define FILE_ESSENCE_DESC_TYPE              1
 #define TAPE_ESSENCE_DESC_TYPE              2
 #define LIVE_ESSENCE_DESC_TYPE              3
 
-#define UNC_MATERIAL_RESOLUTION             1
-#define DV25_MATERIAL_RESOLUTION            2
-#define DV50_MATERIAL_RESOLUTION            3
-#define MJPEG21_MATERIAL_RESOLUTION         4
-#define MJPEG31_MATERIAL_RESOLUTION         5
-#define MJPEG101_MATERIAL_RESOLUTION        6
-#define MJPEG151S_MATERIAL_RESOLUTION       7
-#define MJPEG201_MATERIAL_RESOLUTION        8
-#define MJPEG101M_MATERIAL_RESOLUTION       9
-#define IMX30_MATERIAL_RESOLUTION           10
-#define IMX40_MATERIAL_RESOLUTION           11
-#define IMX50_MATERIAL_RESOLUTION           12
-#define DNX36p_MATERIAL_RESOLUTION          13
-#define DNX120p_MATERIAL_RESOLUTION         14
-#define DNX185p_MATERIAL_RESOLUTION         15
-#define DNX120i_MATERIAL_RESOLUTION         16
-#define DNX185i_MATERIAL_RESOLUTION         17
-#define DMIH264_MATERIAL_RESOLUTION         18
-#define DVCPROHD_MATERIAL_RESOLUTION        19
-#define DVD_MATERIAL_RESOLUTION             20
-#define MPEG4_MATERIAL_RESOLUTION           21
-#define MP3_MATERIAL_RESOLUTION             22
-#define CUTS_MATERIAL_RESOLUTION            50
 
 // Debatable whether source config should have a type.
 #define TAPE_SOURCE_CONFIG_TYPE             1
