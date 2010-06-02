@@ -1,5 +1,5 @@
 /*
- * $Id: Timecode.idl,v 1.1 2007/09/11 14:08:22 stuart_hc Exp $
+ * $Id: Timecode.idl,v 1.2 2010/06/02 13:08:58 john_f Exp $
  *
  * Timecode structure definitions.
  *
@@ -65,8 +65,9 @@ module ProdAuto
     {
         Rational edit_rate;
         long samples;
+        boolean drop_frame; ///< Hint to use drop-frame when displaying as SMPTE timecode
 
-        boolean undefined; ///< True for an invalid or unavailable timecode.
+        boolean undefined; ///< True for an invalid or unavailable timecode
     };
 };
 
