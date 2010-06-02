@@ -1,5 +1,5 @@
 /*
- * $Id: test_ffmpeg_encoder_av.c,v 1.1 2010/02/12 17:18:20 john_f Exp $
+ * $Id: test_ffmpeg_encoder_av.cpp,v 1.1 2010/06/02 10:38:05 john_f Exp $
  *
  * Test ffmpeg encoder av
  *
@@ -30,12 +30,20 @@
 #include <errno.h>
 #include <inttypes.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifdef FFMPEG_OLD_INCLUDE_PATHS
 #include <ffmpeg/avcodec.h>
 #include <ffmpeg/swscale.h>
 #else
 #include <libavcodec/avcodec.h>
 #include <libswscale/swscale.h>
+#endif
+
+#ifdef __cplusplus
+}
 #endif
 
 #include "ffmpeg_encoder_av.h"
@@ -88,20 +96,22 @@ static void convert_audio_samples(unsigned char *input, int num_samples, int byt
 }
 
 static int require_conversion(VideoFormat input_video_format, int input_width, int input_height,
-                              ffmpeg_encoder_av_resolution_t output_format)
+                              MaterialResolution::EnumType output_format)
 {
     switch (output_format)
     {
-        case FF_ENCODER_RESOLUTION_DVD:
+        case MaterialResolution::DVD:
             return input_video_format != YUV420_VIDEO_FORMAT || input_width != 720 || input_height != 576;
-        case FF_ENCODER_RESOLUTION_MPEG4_MOV:
+        case MaterialResolution::MPEG4_MOV:
             return input_video_format != YUV420_VIDEO_FORMAT || input_width != 720 || input_height != 576;
-        case FF_ENCODER_RESOLUTION_DV25_MOV:
+        case MaterialResolution::DV25_MOV:
             return input_video_format != YUV420_VIDEO_FORMAT || input_width != 720 || input_height != 576;
-        case FF_ENCODER_RESOLUTION_DV50_MOV:
+        case MaterialResolution::DV50_MOV:
             return input_video_format != YUV422_VIDEO_FORMAT || input_width != 720 || input_height != 576;
-        case FF_ENCODER_RESOLUTION_DV100_MOV:
+        case MaterialResolution::DV100_MOV:
             return input_video_format != YUV422_VIDEO_FORMAT || input_width != 1920 || input_height != 1080;
+        default:
+            return 0;
     }
     
     return 0; /* for the compiler */
@@ -110,7 +120,7 @@ static int require_conversion(VideoFormat input_video_format, int input_width, i
 static void convert_video(struct SwsContext **convert_context,
                           VideoFormat input_video_format, unsigned char *video_input_buffer,
                           int input_width, int input_height,
-                          ffmpeg_encoder_av_resolution_t output_format, unsigned char *video_output_buffer,
+                          MaterialResolution::EnumType output_format, unsigned char *video_output_buffer,
                           int output_width, int output_height)
 {
     AVPicture input_pict, output_pict;
@@ -131,20 +141,22 @@ static void convert_video(struct SwsContext **convert_context,
     
     switch (output_format)
     {
-        case FF_ENCODER_RESOLUTION_DVD:
+        case MaterialResolution::DVD:
             output_pix_fmt = PIX_FMT_YUV420P;
             break;
-        case FF_ENCODER_RESOLUTION_MPEG4_MOV:
+        case MaterialResolution::MPEG4_MOV:
             output_pix_fmt = PIX_FMT_YUV420P;
             break;
-        case FF_ENCODER_RESOLUTION_DV25_MOV:
+        case MaterialResolution::DV25_MOV:
             output_pix_fmt = PIX_FMT_YUV420P;
             break;
-        case FF_ENCODER_RESOLUTION_DV50_MOV:
+        case MaterialResolution::DV50_MOV:
             output_pix_fmt = PIX_FMT_YUV422P;
             break;
-        case FF_ENCODER_RESOLUTION_DV100_MOV:
+        case MaterialResolution::DV100_MOV:
             output_pix_fmt = PIX_FMT_YUV422P;
+            break;
+        default:
             break;
     }
     
@@ -185,7 +197,7 @@ static void usage(const char *cmd)
 
 int main(int argc, const char **argv)
 {
-    ffmpeg_encoder_av_resolution_t output_format = FF_ENCODER_RESOLUTION_DV25_MOV;
+    MaterialResolution::EnumType output_format = MaterialResolution::NONE;
     int start = 0;
     int hour, min, sec, frame;
     int notwide = 0;
@@ -225,15 +237,15 @@ int main(int argc, const char **argv)
                 return 1;
             }
             if (strcmp(argv[cmdln_index + 1], "DVD") == 0) {
-                output_format = FF_ENCODER_RESOLUTION_DVD;
+                output_format = MaterialResolution::DVD;
             } else if (strcmp(argv[cmdln_index + 1], "MPEG4MOV") == 0) {
-                output_format = FF_ENCODER_RESOLUTION_MPEG4_MOV;
+                output_format = MaterialResolution::MPEG4_MOV;
             } else if (strcmp(argv[cmdln_index + 1], "DV25MOV") == 0) {
-                output_format = FF_ENCODER_RESOLUTION_DV25_MOV;
+                output_format = MaterialResolution::DV25_MOV;
             } else if (strcmp(argv[cmdln_index + 1], "DV50MOV") == 0) {
-                output_format = FF_ENCODER_RESOLUTION_DV50_MOV;
+                output_format = MaterialResolution::DV50_MOV;
             } else if (strcmp(argv[cmdln_index + 1], "DV100MOV") == 0) {
-                output_format = FF_ENCODER_RESOLUTION_DV100_MOV;
+                output_format = MaterialResolution::DV100_MOV;
             } else {
                 usage(argv[0]);
                 fprintf(stderr, "Unknown format '%s'\n", argv[cmdln_index + 1]);
@@ -383,16 +395,18 @@ int main(int argc, const char **argv)
     if (input_width == 0) {
         switch (output_format)
         {
-            case FF_ENCODER_RESOLUTION_DVD:
-            case FF_ENCODER_RESOLUTION_MPEG4_MOV:
-            case FF_ENCODER_RESOLUTION_DV25_MOV:
-            case FF_ENCODER_RESOLUTION_DV50_MOV:
+            case MaterialResolution::DVD:
+            case MaterialResolution::MPEG4_MOV:
+            case MaterialResolution::DV25_MOV:
+            case MaterialResolution::DV50_MOV:
                 input_width = 720;
                 input_height = 576;
                 break;
-            case FF_ENCODER_RESOLUTION_DV100_MOV:
+            case MaterialResolution::DV100_MOV:
                 input_width = 1920;
                 input_height = 1080;
+                break;
+            default:
                 break;
         }
     }
@@ -410,31 +424,35 @@ int main(int argc, const char **argv)
 
     switch (output_format)
     {
-        case FF_ENCODER_RESOLUTION_DVD:
-        case FF_ENCODER_RESOLUTION_MPEG4_MOV:
-        case FF_ENCODER_RESOLUTION_DV25_MOV:
-        case FF_ENCODER_RESOLUTION_DV50_MOV:
+        case MaterialResolution::DVD:
+        case MaterialResolution::MPEG4_MOV:
+        case MaterialResolution::DV25_MOV:
+        case MaterialResolution::DV50_MOV:
             output_width = 720;
             output_height = 576;
             break;
-        case FF_ENCODER_RESOLUTION_DV100_MOV:
+        case MaterialResolution::DV100_MOV:
             output_width = 1920;
             output_height = 1080;
+            break;
+        default:
             break;
     }
 
     if (num_ffmpeg_threads < 0) {
         switch (output_format)
         {
-            case FF_ENCODER_RESOLUTION_DVD:
-            case FF_ENCODER_RESOLUTION_MPEG4_MOV:
+            case MaterialResolution::DVD:
+            case MaterialResolution::MPEG4_MOV:
                 /* num_ffmpeg_threads > 1 was found to cause a seg fault for ffmpeg v0.5 */
                 num_ffmpeg_threads = 0;
                 break;
-            case FF_ENCODER_RESOLUTION_DV25_MOV:
-            case FF_ENCODER_RESOLUTION_DV50_MOV:
-            case FF_ENCODER_RESOLUTION_DV100_MOV:
+            case MaterialResolution::DV25_MOV:
+            case MaterialResolution::DV50_MOV:
+            case MaterialResolution::DV100_MOV:
                 num_ffmpeg_threads = 4;
+                break;
+            default:
                 break;
         }
     }
@@ -460,13 +478,13 @@ int main(int argc, const char **argv)
     
     /* allocate buffers */
     
-    video_input_buffer = malloc(video_input_frame_size + FF_INPUT_BUFFER_PADDING_SIZE);
-    audio_input_buffer = malloc(1920 * nch * bytes_per_sample);
+    video_input_buffer = (unsigned char *)malloc(video_input_frame_size + FF_INPUT_BUFFER_PADDING_SIZE);
+    audio_input_buffer = (unsigned char *)malloc(1920 * nch * bytes_per_sample);
     audio_16bit = (short*)malloc(1920 * nch * sizeof(short));
     
     require_video_conversion = require_conversion(input_video_format, input_width, input_height, output_format);
     if (require_video_conversion)
-        video_conversion_buffer = malloc(output_width * output_height * 2 + FF_INPUT_BUFFER_PADDING_SIZE);
+        video_conversion_buffer = (unsigned char *)malloc(output_width * output_height * 2 + FF_INPUT_BUFFER_PADDING_SIZE);
 
     
     /* init encoder */

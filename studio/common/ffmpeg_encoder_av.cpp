@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder_av.c,v 1.11 2010/03/30 12:13:53 philipn Exp $
+ * $Id: ffmpeg_encoder_av.cpp,v 1.1 2010/06/02 10:38:05 john_f Exp $
  *
  * Encode AV and write to file.
  *
@@ -29,6 +29,13 @@ This file is based on ffmpeg/output_example.c from the ffmpeg source tree.
 #include <string.h>
 #include <stdlib.h>
 
+#define __STDC_CONSTANT_MACROS
+#include <inttypes.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifdef FFMPEG_OLD_INCLUDE_PATHS
 #include <ffmpeg/avcodec.h>
 #include <ffmpeg/avformat.h>
@@ -37,6 +44,10 @@ This file is based on ffmpeg/output_example.c from the ffmpeg source tree.
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 #include <libswscale/swscale.h>
+#endif
+
+#ifdef __cplusplus
+}
 #endif
 
 #include "ffmpeg_encoder_av.h"
@@ -162,7 +173,7 @@ static int init_video_dvd(internal_ffmpeg_encoder_t * enc)
     if (!(enc->oc->oformat->flags & AVFMT_RAWPICTURE))
     {
         enc->video_outbuf_size = 550000;
-        enc->video_outbuf = malloc(enc->video_outbuf_size);
+        enc->video_outbuf = (uint8_t *)malloc(enc->video_outbuf_size);
     }
 
     return 0;
@@ -230,14 +241,14 @@ static int init_video_mpeg4(internal_ffmpeg_encoder_t * enc)
     {
         // not sure what size is appropriate for mp4
         enc->video_outbuf_size = 550000;
-        enc->video_outbuf = malloc(enc->video_outbuf_size);
+        enc->video_outbuf = (uint8_t *)malloc(enc->video_outbuf_size);
     }
 
     return 0;
 }
 
 /* initialise video stream for DV encoding */
-static int init_video_dv(internal_ffmpeg_encoder_t * enc, ffmpeg_encoder_av_resolution_t res, int64_t start_tc)
+static int init_video_dv(internal_ffmpeg_encoder_t * enc, MaterialResolution::EnumType res, int64_t start_tc)
 {
     AVCodecContext * codec_context = enc->video_st->codec;
 
@@ -251,25 +262,25 @@ static int init_video_dv(internal_ffmpeg_encoder_t * enc, ffmpeg_encoder_av_reso
 
     switch (res)
     {
-    case FF_ENCODER_RESOLUTION_DV25_MOV:
+    case MaterialResolution::DV25_MOV:
         codec_context->pix_fmt = PIX_FMT_YUV420P;
         encoded_frame_size = 144000;
         top_field_first = 0;
         break;
-    case FF_ENCODER_RESOLUTION_DV50_MOV:
+    case MaterialResolution::DV50_MOV:
         codec_context->pix_fmt = PIX_FMT_YUV422P;
         encoded_frame_size = 288000;
         top_field_first = 0;
         break;
-    case FF_ENCODER_RESOLUTION_DV100_MOV:
+    case MaterialResolution::DV100_MOV:
         codec_context->pix_fmt = PIX_FMT_YUV422P;
         enc->scale_image = 1;
         enc->input_width = 1920;
         enc->input_height = 1080;
         width = 1440;                       // coded width (input scaled horizontally from 1920)
         height = 1080;
-        enc->tmpFrame = av_mallocz(sizeof(AVPicture));
-        enc->inputBuffer = av_mallocz(width * height * 2);
+        enc->tmpFrame = (AVPicture *)av_mallocz(sizeof(AVPicture));
+        enc->inputBuffer = (uint8_t *)av_mallocz(width * height * 2);
         encoded_frame_size = 576000;        // SMPTE 370M spec
         top_field_first = 1;
         break;
@@ -324,7 +335,7 @@ static int init_video_dv(internal_ffmpeg_encoder_t * enc, ffmpeg_encoder_av_reso
     if (!(enc->oc->oformat->flags & AVFMT_RAWPICTURE))
     {
         enc->video_outbuf_size = encoded_frame_size;
-        enc->video_outbuf = malloc(enc->video_outbuf_size);
+        enc->video_outbuf = (uint8_t *)malloc(enc->video_outbuf_size);
     }
 
     return 0;
@@ -420,12 +431,10 @@ static int init_audio_mp3(audio_encoder_t * aenc)
 {
     AVCodecContext * codec_context = aenc->audio_st->codec;
 
-    /* We use mp3 codec rather than default */
-    const int codec_id = CODEC_ID_MP3;
-    const int kbit_rate = 96;
-
-    codec_context->codec_id = codec_id;
+    codec_context->codec_id = CODEC_ID_MP3;
     codec_context->codec_type = CODEC_TYPE_AUDIO;
+
+    const int kbit_rate = 96;
 
     /* find the audio encoder */
     AVCodec * codec = avcodec_find_encoder(codec_context->codec_id);
@@ -616,7 +625,7 @@ static int write_audio_frame(internal_ffmpeg_encoder_t * enc, int stream_i, shor
 
 
 
-extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, ffmpeg_encoder_av_resolution_t res, int wide_aspect, int64_t start_tc, int num_threads,
+extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, MaterialResolution::EnumType res, int wide_aspect, int64_t start_tc, int num_threads,
                                                      int num_audio_streams, int num_audio_channels_per_stream)
 {
     internal_ffmpeg_encoder_t * enc;
@@ -625,15 +634,15 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, ffmp
 
     switch (res)
     {
-    case FF_ENCODER_RESOLUTION_DVD:
+    case MaterialResolution::DVD:
         fmt_name = "dvd";
         break;
-    case FF_ENCODER_RESOLUTION_MPEG4_MOV:
+    case MaterialResolution::MPEG4_MOV:
         fmt_name = "mov";
         break;
-    case FF_ENCODER_RESOLUTION_DV25_MOV:
-    case FF_ENCODER_RESOLUTION_DV50_MOV:
-    case FF_ENCODER_RESOLUTION_DV100_MOV:
+    case MaterialResolution::DV25_MOV:
+    case MaterialResolution::DV50_MOV:
+    case MaterialResolution::DV100_MOV:
         fmt_name = "mov";
         break;
     default:
@@ -665,7 +674,7 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, ffmp
     }
 
     /* Allocate encoder object and set all members to zero */
-    enc = av_mallocz (sizeof(internal_ffmpeg_encoder_t));
+    enc = (internal_ffmpeg_encoder_t *)av_mallocz (sizeof(internal_ffmpeg_encoder_t));
     if (!enc)
     {
         fprintf (stderr, "Could not allocate encoder object\n");
@@ -676,7 +685,7 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, ffmp
     int i;
     for (i = 0; i < num_audio_streams; ++i)
     {
-        enc->audio_encoder[i] = av_mallocz (sizeof(audio_encoder_t));
+        enc->audio_encoder[i] = (audio_encoder_t *)av_mallocz (sizeof(audio_encoder_t));
     }
 
 
@@ -700,7 +709,7 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, ffmp
     /* Set parameters for output media context*/
     switch (res)
     {
-    case FF_ENCODER_RESOLUTION_DVD:
+    case MaterialResolution::DVD:
         enc->oc->packet_size = 2048;
         enc->oc->mux_rate = 10080000;
         enc->oc->preload = (int) (0.5 * AV_TIME_BASE); /* 500 ms */
@@ -713,7 +722,7 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, ffmp
 
     /* Set aspect ratio for video stream */
     AVRational sar;
-    if (FF_ENCODER_RESOLUTION_DV100_MOV == res)
+    if (MaterialResolution::DV100_MOV == res)
     {
         sar.num = 4;
         sar.den = 3;
@@ -766,15 +775,15 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, ffmp
     /* Initialise video codec */
     switch (res)
     {
-    case FF_ENCODER_RESOLUTION_DVD:
+    case MaterialResolution::DVD:
         init_video_dvd(enc);
         break;
-    case FF_ENCODER_RESOLUTION_MPEG4_MOV:
+    case MaterialResolution::MPEG4_MOV:
         init_video_mpeg4(enc);
         break;
-    case FF_ENCODER_RESOLUTION_DV25_MOV:
-    case FF_ENCODER_RESOLUTION_DV50_MOV:
-    case FF_ENCODER_RESOLUTION_DV100_MOV:
+    case MaterialResolution::DV25_MOV:
+    case MaterialResolution::DV50_MOV:
+    case MaterialResolution::DV100_MOV:
         init_video_dv(enc, res, start_tc);
         break;
     default:
@@ -802,15 +811,15 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, ffmp
         aenc->num_audio_channels = num_audio_channels_per_stream;
         switch (res)
         {
-        case FF_ENCODER_RESOLUTION_DVD:
+        case MaterialResolution::DVD:
             init_audio_dvd(aenc);
             break;
-        case FF_ENCODER_RESOLUTION_MPEG4_MOV:
+        case MaterialResolution::MPEG4_MOV:
             init_audio_mp3(aenc);
             break;
-        case FF_ENCODER_RESOLUTION_DV25_MOV:
-        case FF_ENCODER_RESOLUTION_DV50_MOV:
-        case FF_ENCODER_RESOLUTION_DV100_MOV:
+        case MaterialResolution::DV25_MOV:
+        case MaterialResolution::DV50_MOV:
+        case MaterialResolution::DV100_MOV:
             init_audio_pcm(aenc);
             break;
         default:
@@ -818,10 +827,10 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, ffmp
         }
 
         /* allocate audio input buffer */
-        aenc->audio_inbuf = av_malloc(aenc->audio_inbuf_size);
+        aenc->audio_inbuf = (short *)av_malloc(aenc->audio_inbuf_size);
 
         /* allocate audio (coded) output buffer */
-        aenc->audio_outbuf = av_malloc(aenc->audio_outbuf_size);
+        aenc->audio_outbuf = (uint8_t *)av_malloc(aenc->audio_outbuf_size);
     }
 
     // Setup ffmpeg threads if specified
