@@ -1,0 +1,135 @@
+--- /home/philipn/work/ffmpeg/ffmpeg-0.5/libavformat/mxfdec.c	2009-02-08 05:12:30.000000000 +0000
++++ libavformat/mxfdec.c	2010-04-15 11:13:49.000000000 +0100
+@@ -91,11 +91,13 @@
+     UID essence_container_ul;
+     UID essence_codec_ul;
+     AVRational sample_rate;
++    AVRational audio_sampling_rate;
+     AVRational aspect_ratio;
+     int width;
+     int height;
+     int channels;
+     int bits_per_sample;
++    int component_depth;
+     UID *sub_descriptors_refs;
+     int sub_descriptors_count;
+     int linked_track_id;
+@@ -573,8 +575,8 @@
+         descriptor->aspect_ratio.den = get_be32(pb);
+         break;
+     case 0x3D03:
+-        descriptor->sample_rate.num = get_be32(pb);
+-        descriptor->sample_rate.den = get_be32(pb);
++        descriptor->audio_sampling_rate.num = get_be32(pb);
++        descriptor->audio_sampling_rate.den = get_be32(pb);
+         break;
+     case 0x3D06: /* SoundEssenceCompression */
+         get_buffer(pb, descriptor->essence_codec_ul, 16);
+@@ -588,6 +590,13 @@
+     case 0x3401:
+         mxf_read_pixel_layout(pb, descriptor);
+         break;
++    case 0x3301:
++        descriptor->component_depth = get_be32(pb);
++        break;
++    case 0x3001:
++        descriptor->sample_rate.num = get_be32(pb);
++        descriptor->sample_rate.den = get_be32(pb);
++        break;
+     default:
+         /* Private uid used by SONY C0023S01.mxf */
+         if (IS_KLV_KEY(uid, mxf_sony_mpeg4_extradata)) {
+@@ -643,8 +652,10 @@
+ 
+ static const MXFCodecUL mxf_essence_container_uls[] = {
+     // video essence container uls
+-    { { 0x06,0x0E,0x2B,0x34,0x04,0x01,0x01,0x02,0x0D,0x01,0x03,0x01,0x02,0x04,0x60,0x01 }, 14, CODEC_ID_MPEG2VIDEO }, /* MPEG-ES Frame wrapped */
+-    { { 0x06,0x0E,0x2B,0x34,0x04,0x01,0x01,0x01,0x0D,0x01,0x03,0x01,0x02,0x02,0x41,0x01 }, 14,    CODEC_ID_DVVIDEO }, /* DV 625 25mbps */
++    { { 0x06,0x0E,0x2B,0x34,0x04,0x01,0x01,0x02,0x0D,0x01,0x03,0x01,0x02,0x04,0x60,0x01 }, 14, CODEC_ID_MPEG2VIDEO  }, /* MPEG-ES Frame wrapped */
++    { { 0x06,0x0E,0x2B,0x34,0x04,0x01,0x01,0x01,0x0D,0x01,0x03,0x01,0x02,0x02,0x41,0x01 }, 14,    CODEC_ID_DVVIDEO  }, /* DV 625 25mbps */
++    { { 0x06,0x0E,0x2B,0x34,0x04,0x01,0x01,0x01,0x0D,0x01,0x03,0x01,0x02,0x05,0x00,0x00 }, 14,    CODEC_ID_RAWVIDEO }, /* Uncompressed Picture */
++    
+     // sound essence container uls
+     { { 0x06,0x0E,0x2B,0x34,0x04,0x01,0x01,0x01,0x0D,0x01,0x03,0x01,0x02,0x06,0x01,0x00 }, 14, CODEC_ID_PCM_S16LE }, /* BWF Frame wrapped */
+     { { 0x06,0x0E,0x2B,0x34,0x04,0x01,0x01,0x02,0x0D,0x01,0x03,0x01,0x02,0x04,0x40,0x01 }, 14,       CODEC_ID_MP2 }, /* MPEG-ES Frame wrapped, 0x40 ??? stream id */
+@@ -687,8 +698,8 @@
+         }
+ 
+         if (!(material_track->sequence = mxf_resolve_strong_ref(mxf, &material_track->sequence_ref, Sequence))) {
+-            av_log(mxf->fc, AV_LOG_ERROR, "could not resolve material track sequence strong ref\n");
+-            return -1;
++            av_log(mxf->fc, AV_LOG_WARNING, "could not resolve material track sequence strong ref\n");
++            continue;
+         }
+ 
+         /* TODO: handle multiple source clips */
+@@ -800,31 +811,50 @@
+                 st->codec->codec_id = container_ul->id;
+             st->codec->width = descriptor->width;
+             st->codec->height = descriptor->height;
+-            st->codec->bits_per_coded_sample = descriptor->bits_per_sample; /* Uncompressed */
+             st->need_parsing = AVSTREAM_PARSE_HEADERS;
++            if (st->codec->codec_id == CODEC_ID_RAWVIDEO) {
++                if (descriptor->aspect_ratio.num > 0 && descriptor->aspect_ratio.den > 0) {
++                    if (descriptor->sample_rate.num == 25 && descriptor->sample_rate.den == 1) {
++                        if (descriptor->aspect_ratio.num == 4 && descriptor->aspect_ratio.den == 3)
++                            st->codec->sample_aspect_ratio = (AVRational){59, 54};
++                        else if (descriptor->aspect_ratio.num == 16 && descriptor->aspect_ratio.den == 9)
++                            st->codec->sample_aspect_ratio = (AVRational){118, 81};
++                    }
++                    else if (descriptor->sample_rate.num == 30000 && descriptor->sample_rate.den == 1001) {
++                        if (descriptor->aspect_ratio.num == 4 && descriptor->aspect_ratio.den == 3)
++                            st->codec->sample_aspect_ratio = (AVRational){10, 11};
++                        else if (descriptor->aspect_ratio.num == 16 && descriptor->aspect_ratio.den == 9)
++                            st->codec->sample_aspect_ratio = (AVRational){40, 33};
++                    }
++                }
++                if (descriptor->component_depth == 8) {
++                    st->codec->bits_per_raw_sample = 8;
++                    st->codec->pix_fmt = PIX_FMT_UYVY422;
++                }
++            }
+         } else if (st->codec->codec_type == CODEC_TYPE_AUDIO) {
+             container_ul = mxf_get_codec_ul(mxf_essence_container_uls, essence_container_ul);
+             if (st->codec->codec_id == CODEC_ID_NONE)
+                 st->codec->codec_id = container_ul->id;
+             st->codec->channels = descriptor->channels;
+             st->codec->bits_per_coded_sample = descriptor->bits_per_sample;
+-            st->codec->sample_rate = descriptor->sample_rate.num / descriptor->sample_rate.den;
++            st->codec->sample_rate = descriptor->audio_sampling_rate.num / descriptor->audio_sampling_rate.den;
+             /* TODO: implement CODEC_ID_RAWAUDIO */
+             if (st->codec->codec_id == CODEC_ID_PCM_S16LE) {
+-                if (descriptor->bits_per_sample == 24)
+-                    st->codec->codec_id = CODEC_ID_PCM_S24LE;
+-                else if (descriptor->bits_per_sample == 32)
++                if (descriptor->bits_per_sample > 24)
+                     st->codec->codec_id = CODEC_ID_PCM_S32LE;
++                else if (descriptor->bits_per_sample > 16)
++                    st->codec->codec_id = CODEC_ID_PCM_S24LE;
+             } else if (st->codec->codec_id == CODEC_ID_PCM_S16BE) {
+-                if (descriptor->bits_per_sample == 24)
+-                    st->codec->codec_id = CODEC_ID_PCM_S24BE;
+-                else if (descriptor->bits_per_sample == 32)
++                if (descriptor->bits_per_sample > 24)
+                     st->codec->codec_id = CODEC_ID_PCM_S32BE;
++                else if (descriptor->bits_per_sample > 16)
++                    st->codec->codec_id = CODEC_ID_PCM_S24BE;
+             } else if (st->codec->codec_id == CODEC_ID_MP2) {
+                 st->need_parsing = AVSTREAM_PARSE_FULL;
+             }
+         }
+-        if (st->codec->codec_type != CODEC_TYPE_DATA && (*essence_container_ul)[15] > 0x01) {
++        if (st->codec->codec_type != CODEC_TYPE_DATA && ((*essence_container_ul)[15] & 0x03) > 0x01) {
+             av_log(mxf->fc, AV_LOG_WARNING, "only frame wrapped mappings are correctly supported\n");
+             st->need_parsing = AVSTREAM_PARSE_FULL;
+         }
+--- /home/philipn/work/ffmpeg/ffmpeg-0.5/libavformat/mxf.c	2009-02-08 05:12:30.000000000 +0000
++++ libavformat/mxf.c	2010-04-15 10:55:58.000000000 +0100
+@@ -40,6 +40,7 @@
+     { { 0x06,0x0E,0x2B,0x34,0x04,0x01,0x01,0x01,0x04,0x01,0x02,0x02,0x02,0x01,0x02,0x00 }, 13,    CODEC_ID_DVVIDEO }, /* DV25 IEC PAL */
+     { { 0x06,0x0E,0x2B,0x34,0x04,0x01,0x01,0x07,0x04,0x01,0x02,0x02,0x03,0x01,0x01,0x00 }, 14,   CODEC_ID_JPEG2000 }, /* JPEG2000 Codestream */
+     { { 0x06,0x0E,0x2B,0x34,0x04,0x01,0x01,0x01,0x04,0x01,0x02,0x01,0x7F,0x00,0x00,0x00 }, 13,   CODEC_ID_RAWVIDEO }, /* Uncompressed */
++    { { 0x06,0x0E,0x2B,0x34,0x04,0x01,0x01,0x0A,0x04,0x01,0x02,0x01,0x01,0x02,0x01,0x01 }, 16,   CODEC_ID_RAWVIDEO }, /* Uncompressed, 8-bit, interleaved, UYVY 4:2:2 */
+     { { 0x06,0x0E,0x2B,0x34,0x04,0x01,0x01,0x01,0x04,0x01,0x02,0x02,0x03,0x02,0x00,0x00 }, 14,      CODEC_ID_DNXHD }, /* SMPTE VC-3/DNxHD */
+     /* SoundEssenceCompression */
+     { { 0x06,0x0E,0x2B,0x34,0x04,0x01,0x01,0x01,0x04,0x02,0x02,0x01,0x00,0x00,0x00,0x00 }, 13,  CODEC_ID_PCM_S16LE }, /* Uncompressed */

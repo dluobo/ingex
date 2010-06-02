@@ -1,0 +1,11 @@
+--- libavcodec/dnxhdenc.c	2009-01-13 23:44:16.000000000 +0000
++++ ../ffmpeg-0.5-modified/libavcodec/dnxhdenc.c	2010-05-05 17:59:01.000000000 +0100
+@@ -246,7 +246,7 @@
+     AV_WB16(buf + 0x1d, avctx->height); // NAL
+ 
+     buf[0x21] = 0x38; // FIXME 8 bit per comp
+-    buf[0x22] = 0x88 + (ctx->frame.interlaced_frame<<2);
++    buf[0x22] = 0x88 + (ctx->interlaced<<2);
+     AV_WB32(buf + 0x28, ctx->cid); // CID
+     buf[0x2c] = ctx->interlaced ? 0 : 0x80;
+ 

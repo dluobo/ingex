@@ -1,0 +1,60 @@
+--- libavcodec/dnxhdenc.c	2009-01-13 23:44:16.000000000 +0000
++++ ../ffmpeg-0.5-modified/libavcodec/dnxhdenc.c	2010-05-05 18:52:20.000000000 +0100
+@@ -146,7 +146,7 @@
+     if (ctx->m.avctx->mb_decision != FF_MB_DECISION_RD)
+         CHECKED_ALLOCZ(ctx->mb_cmp, ctx->m.mb_num*sizeof(RCCMPEntry));
+ 
+-    ctx->frame_bits = (ctx->cid_table->coding_unit_size - 640 - 4) * 8;
++    ctx->frame_bits = (ctx->cid_table->coding_unit_size - 640 - 4 - ctx->min_padding) * 8;
+     ctx->qscale = 1;
+     ctx->lambda = 2<<LAMBDA_FRAC_BITS; // qscale 2
+     return 0;
+@@ -159,6 +159,7 @@
+     DNXHDEncContext *ctx = avctx->priv_data;
+     int i, index;
+ 
++    avctx->qmax = 1024;
+     ctx->cid = ff_dnxhd_find_cid(avctx);
+     if (!ctx->cid || avctx->pix_fmt != PIX_FMT_YUV422P) {
+         av_log(avctx, AV_LOG_ERROR, "video parameters incompatible with DNxHD\n");
+@@ -191,6 +192,10 @@
+         ctx->m.mb_height /= 2;
+     }
+ 
++    // Avid Nitris hardware decoder was found to require a minimum amount of padding in the coding unit payload
++    if (avctx->flags2 & CODEC_FLAG2_AVID_COMPAT)
++        ctx->min_padding = 1600;
++
+     ctx->m.mb_num = ctx->m.mb_height * ctx->m.mb_width;
+ 
+     if (avctx->intra_quant_bias != FF_DEFAULT_QUANT_BIAS)
+--- libavcodec/dnxhdenc.h	2008-12-12 00:19:14.000000000 +0000
++++ ../ffmpeg-0.5-modified/libavcodec/dnxhdenc.h	2010-05-05 18:09:29.000000000 +0100
+@@ -53,6 +53,7 @@
+     unsigned dct_uv_offset;
+     int interlaced;
+     int cur_field;
++    unsigned min_padding;
+ 
+     DECLARE_ALIGNED_16(DCTELEM, blocks[8][64]);
+ 
+--- libavcodec/avcodec.h	2009-02-26 23:47:32.000000000 +0000
++++ ../ffmpeg-0.5-modified/libavcodec/avcodec.h	2010-05-05 18:11:47.000000000 +0100
+@@ -501,6 +501,7 @@
+ #define CODEC_FLAG2_CHUNKS        0x00008000 ///< Input bitstream might be truncated at a packet boundaries instead of only at frame boundaries.
+ #define CODEC_FLAG2_NON_LINEAR_QUANT 0x00010000 ///< Use MPEG-2 nonlinear quantizer.
+ #define CODEC_FLAG2_BIT_RESERVOIR 0x00020000 ///< Use a bit reservoir when encoding if possible
++#define CODEC_FLAG2_AVID_COMPAT   0x00040000 ///< DNxHD set minimum coding unit padding for Avid Nitris decoder compatibility
+ 
+ /* Unsupported options :
+  *              Syntax Arithmetic coding (SAC)
+--- libavcodec/options.c	2009-02-26 23:47:32.000000000 +0000
++++ ../ffmpeg-0.5-modified/libavcodec/options.c	2010-05-05 18:12:49.000000000 +0100
+@@ -394,6 +394,7 @@
+ {"rc_max_vbv_use", NULL, OFFSET(rc_max_available_vbv_use), FF_OPT_TYPE_FLOAT, 1.0/3, 0.0, FLT_MAX, V|E},
+ {"rc_min_vbv_use", NULL, OFFSET(rc_min_vbv_overflow_use),  FF_OPT_TYPE_FLOAT, 3,     0.0, FLT_MAX, V|E},
+ {"ticks_per_frame", NULL, OFFSET(ticks_per_frame), FF_OPT_TYPE_INT, 1, 1, INT_MAX, A|V|E|D},
++{"avidc", "encode dnxhd with avid nitris compatibility", 0, FF_OPT_TYPE_CONST, CODEC_FLAG2_AVID_COMPAT, INT_MIN, INT_MAX, V|E, "flags2"},
+ {NULL},
+ };
+ 
