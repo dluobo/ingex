@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # Stop the Ingex processes listed here
-PROCESSES="player Recorder nexus_multicast nexus_web sys_info_web dvs_sdi xferserver.pl"
+PROCESSES="player Recorder nexus_multicast nexus_web sys_info_web dvs_sdi dvs_dummy xferserver.pl"
 
 # Also kill the PIDs that are in the file named here
 KONSOLE_PIDS="/tmp/ingexPIDs.txt"
@@ -49,3 +49,4 @@ fi
 
 
 echo "All Ingex processes stopped."
+
