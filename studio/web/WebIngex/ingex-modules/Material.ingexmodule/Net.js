@@ -106,6 +106,16 @@ function createAAF(jsonText){
 
 
 /*
+ * call create_pdf script
+ */
+function createPDF(jsonText){
+	var dataUrl = '../cgi-bin/ingex-modules/Material.ingexmodule/createPDFLog.pl';
+	var params = 'jsonIn=' + jsonText;
+ 	ajaxRequest(dataUrl, "POST", params, createPDFCallback);	
+}
+
+
+/*
  * load aaf export options from server
  */
 function loadExportOptions(){
@@ -252,6 +262,41 @@ function createAAFCallback(data){
 	    show_static_messagebox("Error", message);
 	}
 	
+}
+
+
+/*
+ * callback for createPDF script
+ */
+function createPDFCallback(data){
+
+	//all good
+	if (data.match('^ok~')){
+		try{
+			var json = eval('(' + data.substring(3) + ')'); 
+	
+			var message = '';
+			message += "Download PDF file: " + fileLink(json.filename) + "<BR>";
+			
+			show_static_messagebox("Created Log Sheet", message);
+		}
+		catch(e){
+			jsonParseException(e);
+			return;
+		}
+	}
+	
+	//error
+	else if (data.match('^err~')){
+		var errorText = data.substring(4);
+		show_static_messagebox("Error Creating Log Sheet", errorText);
+	}
+	
+	//nothing or garbage received
+	else {	
+		var message = 'Communications error - invalid response from server';
+	    show_static_messagebox("Error", message);
+	}
 }
 
 

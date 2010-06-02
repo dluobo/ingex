@@ -74,6 +74,8 @@ sub load_config
 	                if ($ingexConfig{"max_material_rows"});
 	            ($ingexConfig{"drag_drop"}) = ($ingexConfig{"drag_drop"} =~ /(.*)/)
 	                if ($ingexConfig{"drag_drop"});
+	            ($ingexConfig{"default_res"}) = ($ingexConfig{"default_res"} =~ /(.*)/)
+	                if ($ingexConfig{"default_res"});
 	            ($ingexConfig{"directors_cut"}) = ($ingexConfig{"directors_cut"} =~ /(.*)/)
 	                if ($ingexConfig{"drag_drop"});
 } 

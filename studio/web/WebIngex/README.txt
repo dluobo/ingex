@@ -1,4 +1,4 @@
-# $Id: README.txt,v 1.3 2010/04/09 10:51:33 john_f Exp $
+# $Id: README.txt,v 1.4 2010/06/02 10:57:33 john_f Exp $
 # Copyright (C) 2008-9 British Broadcasting Corporation
 # All rights reserved
 # Author: Rowan de Pomerai <rdepom@users.sourceforge.net>
@@ -24,6 +24,7 @@ Installation
 Requirements:
 * Apache2 web server, with static html documents in /srv/www/htdocs and cgi in /srv/www/cgi-bin
 * Perl CGI, CGI::Pretty, DBI, PostgreSQL DBD modules
+* Perl JSON::XS, common::sense, XML::Simple modules
 * Ext API
 
 CGI and CGI::Pretty should already be present as part of perl. perl-DBI and perl-DBD-Pg can be installed using YaST.
@@ -34,9 +35,9 @@ CGI and CGI::Pretty should already be present as part of perl. perl-DBI and perl
 	mkdir /tmp/extinstall
 	cd /tmp/extinstall
 	wget http://www.extjs.com/deploy/ext-3.1.0.zip
-	sudo unzip ext-3.1.0.zip 
-	sudo mkdir /srv/www/htdocs/ingex/ext
-	sudo mv ext-3.1.0/* /srv/www/htdocs/ingex/ext
+	unzip ext-3.1.0.zip 
+	[remove /srv/www/htdocs/ingex/ext directory if it already exists]
+	sudo mv ext-3.1.0 /srv/www/htdocs/ingex/ext
 
 Updating
 --------

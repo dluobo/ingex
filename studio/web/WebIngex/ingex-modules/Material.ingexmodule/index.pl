@@ -61,6 +61,9 @@ exit(0);
 # Generates a tree/grid browser using ext components
 #
 sub get_main_browser {
+	# get default video format
+	my $fmt_default = $ingexConfig{"default_res"};
+	
 	# get video resolution formats
 	my $vresIds = prodautodb::load_video_resolutions($dbh)
 	  	or return_error_page(
@@ -70,11 +73,12 @@ sub get_main_browser {
 	my $val      = "";
 	my $name     = "";
 	my $fmt_opts = "<OPTION value='-1'>[any resolution]</OPTION>";
-
+	
 	foreach my $vres ( @{$vresIds} ) {
 		$val      = $vres->{'ID'};
 		$name     = $vres->{'NAME'};
-		$fmt_opts = $fmt_opts . "<OPTION value='$val'>$name</OPTION>";
+		$fmt_opts = ($fmt_default == $val) ? 
+			$fmt_opts."<OPTION SELECTED='SELECTED' value='$val'>$name</OPTION>" : $fmt_opts."<OPTION value='$val'>$name</OPTION>";
 	}
 
 	# get project names

@@ -114,7 +114,7 @@ function init() {
 	userSettings = new UserSettings(document);
 	
 	// select default format
-	$('v_res').options[8].selected = true;
+	// $('v_res').options[8].selected = true;
 
 	if(!renderedExt){	// ensure only initialised once
 		// from and to date pickers
@@ -757,7 +757,7 @@ function packageAAF(){
 		return;
 	}
 	
-	show_wait_messagebox("Packaging AAF", "Please wait...");
+	show_wait_messagebox("Packaging Materials", "Please wait...");
 	leafNodes = [];
 	
 	if(dndMode){getLeaves(dbRootNode);}	//drag/drop - load only nodes that have been dragged into selction tree
@@ -889,6 +889,8 @@ function loadComplete(){
 	var fcp;
 	if (format == 'fcp') {fcp = "TRUE";}
 		else {fcp = "FALSE";}
+	if (format == 'pdf') {pdf = "TRUE";}
+		else {pdf = "FALSE";}
 	var dircut = $('dircut').checked.toString().toUpperCase();
 	var dircutaudio = $('dircutaudio').checked.toString().toUpperCase();
 	var exportdir = $('exportdir').value;
@@ -897,21 +899,41 @@ function loadComplete(){
 	var editpath = $('editpath').value;
 	var dirsource = ''; 	
 	
-	var json = 	{"Root": 
-					[{
-						"ApplicationSettings": 
-							[{"FnamePrefix": fnameprefix, "ExportDir": exportdir, "FCP": fcp, "LongSuffix": longsuffix, "EditPath": editpath, "DirCut": dircut, "DirSource": dirsource, "AudioEdit": dircutaudio}],
-						"ClipSettings": clipPkg,
-						"RunSettings":
-							[{"GroupOnly": "TRUE", "Group": "TRUE", "MultiCam": "TRUE", "NTSC":"FALSE", "Verbose":"FALSE", "DNS":"", "User":"", "Password":""}]
-					}]
-				};
-					
-	var jsonText = JSON.stringify(json);
+	// pdf log sheet mode
+	if(pdf == "TRUE"){
+		var json = 	{"Root": 
+						[{
+							"ApplicationSettings": 
+								[{"PDF": pdf}],
+							"ClipSettings": clipPkg
+						}]
+					};
+		
+		var jsonText = JSON.stringify(json);
+		saveDefaultExportSettings(json.Root[0].ApplicationSettings[0]);
+		createPDF(jsonText);	// call script to create the PDF
+	}
 	
-	if(saveOpts);
-	saveDefaultExportSettings(json.Root[0].ApplicationSettings[0]);
-	createAAF(jsonText);	// call script to create the package
+	// aaf for fcp package mode
+	else{
+		var json = 	{"Root": 
+						[{
+							"ApplicationSettings": 
+								[{"FnamePrefix": fnameprefix, "ExportDir": exportdir, "FCP": fcp, "LongSuffix": longsuffix, "EditPath": editpath, "DirCut": dircut, "DirSource": dirsource, "AudioEdit": dircutaudio}],
+							"ClipSettings": clipPkg,
+							"RunSettings":
+								[{"GroupOnly": "TRUE", "Group": "TRUE", "MultiCam": "TRUE", "NTSC":"FALSE", "Verbose":"FALSE", "DNS":"", "User":"", "Password":""}]
+						}]
+					};
+					
+					
+		var jsonText = JSON.stringify(json);
+		
+		if(saveOpts);
+		saveDefaultExportSettings(json.Root[0].ApplicationSettings[0]);
+		createAAF(jsonText);	// call script to create the package
+	}
+					
 }
 
 
