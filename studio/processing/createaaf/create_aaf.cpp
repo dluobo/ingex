@@ -1,5 +1,5 @@
 /*
- * $Id: create_aaf.cpp,v 1.18 2010/04/09 09:55:25 john_f Exp $
+ * $Id: create_aaf.cpp,v 1.19 2010/06/02 12:59:07 john_f Exp $
  *
  * Creates AAF files with clips extracted from the database
  *
@@ -37,6 +37,7 @@
 
 #include <Database.h>
 #include <MCClipDef.h>
+#include <MaterialResolution.h>
 #include <Utilities.h>
 #include <DBException.h>
 #include <Timecode.h>
@@ -458,7 +459,7 @@ static void usage(const char* cmd)
     fprintf(stderr, "  -v, --verbose                  Print status messages\n");
     fprintf(stderr, "  -p, --prefix <filepath>        Filename prefix used for output files (default '%s')\n", g_filenamePrefix);
     fprintf(stderr, "  -r --resolution <id>           Video resolution identifier as listed in the database\n"); 
-    fprintf(stderr, "                                     (default is %d for DV-50)\n", DV50_MATERIAL_RESOLUTION);
+    fprintf(stderr, "                                     (default is %d for DV-50)\n", MaterialResolution::DV50_MXF_ATOM);
     fprintf(stderr, "  -g, --group                    Create AAF file with all clips included\n");
     fprintf(stderr, "  -o, --grouponly                Only create AAF file with all clips included\n");
     fprintf(stderr, "      --no-ts-suffix             Don't use a timestamp for a group only file\n");
@@ -514,7 +515,7 @@ int main(int argc, const char* argv[])
     string suffix;
     string projName;
     vector<string> filenames;
-    int videoResolutionID = DV50_MATERIAL_RESOLUTION;
+    int videoResolutionID = MaterialResolution::DV50_MXF_ATOM;
     bool verbose = false;
     bool noTSSuffix = false;
     string mcCutsFilename;
@@ -1097,7 +1098,7 @@ int main(int argc, const char* argv[])
             MaterialPackage* topPackage = *iter1;
         
             // check operational pattern
-            if (!fcpxml && topPackage->op != OPERATIONAL_PATTERN_ATOM)
+            if (!fcpxml && topPackage->op != OperationalPattern::OP_ATOM)
             {
                 packagesToErase.push_back(topPackage);
                 continue;

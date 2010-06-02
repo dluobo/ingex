@@ -1,5 +1,5 @@
 /*
- * $Id: PackageGroup.cpp,v 1.3 2010/03/30 08:15:49 john_f Exp $
+ * $Id: PackageGroup.cpp,v 1.4 2010/06/02 13:04:40 john_f Exp $
  *
  * Package group
  *
@@ -27,8 +27,11 @@
 #include <stdio.h>
 #include <errno.h>
 
+#include <XMLWriter.h>
+
 #include "PackageGroup.h"
 #include "Database.h"
+#include "MaterialResolution.h"
 #include "Utilities.h"
 #include "ProdAutoException.h"
 #include "Logging.h"
@@ -120,12 +123,28 @@ void PackageGroup::UpdateAllFileLocations(string prefix)
 
 SourcePackage* PackageGroup::GetFileSourcePackage()
 {
-    PA_ASSERT(mOP == OPERATIONAL_PATTERN_1A);
+    PA_ASSERT(mOP == OperationalPattern::OP_1A);
 
     if (mFileSourcePackages.size() != 1)
         return 0;
     
     return mFileSourcePackages[0];
+}
+
+MaterialResolution::EnumType PackageGroup::GetMaterialResolution()
+{
+    FileEssenceDescriptor *file_descriptor;
+    size_t i;
+    for (i = 0; i < mFileSourcePackages.size(); i++) {
+        file_descriptor = dynamic_cast<FileEssenceDescriptor*>(mFileSourcePackages[i]->descriptor);
+        if (file_descriptor->videoResolutionID != 0) {
+            PA_ASSERT(file_descriptor->videoResolutionID > 0 &&
+                      file_descriptor->videoResolutionID < MaterialResolution::END);
+            return static_cast<MaterialResolution::EnumType>(file_descriptor->videoResolutionID);
+        }
+    }
+    
+    return MaterialResolution::NONE;
 }
 
 bool PackageGroup::HaveFileSourcePackage(uint32_t mp_track_id)
@@ -192,7 +211,7 @@ string PackageGroup::GetFileLocation(uint32_t mp_track_id)
 
 string PackageGroup::GetFileLocation()
 {
-    PA_ASSERT(mOP == OPERATIONAL_PATTERN_1A);
+    PA_ASSERT(mOP == OperationalPattern::OP_1A);
 
     SourcePackage *fsp = mFileSourcePackages[0];
     
@@ -244,7 +263,7 @@ void PackageGroup::RelocateFile(uint32_t mp_track_id, string target_directory)
 
 void PackageGroup::RelocateFile(string target_directory)
 {
-    PA_ASSERT(mOP == OPERATIONAL_PATTERN_1A);
+    PA_ASSERT(mOP == OperationalPattern::OP_1A);
     
     string from = GetFileLocation();
     string to = CreateFileLocation(target_directory, from);
@@ -277,7 +296,7 @@ void PackageGroup::DeleteFile(uint32_t mp_track_id)
 
 void PackageGroup::DeleteFile()
 {
-    PA_ASSERT(mOP == OPERATIONAL_PATTERN_1A);
+    PA_ASSERT(mOP == OperationalPattern::OP_1A);
     
     string filename = GetFileLocation();
     
@@ -325,6 +344,37 @@ void PackageGroup::SaveToDatabase()
     transaction->commit();
 }
 
+void PackageGroup::SaveToFile(string filename)
+{
+    FILE *xml_file = fopen(filename.c_str(), "wb");
+    if (!xml_file)
+        PA_LOGTHROW(ProdAutoException, ("Failed to open MXF file '%s': %s\n", filename.c_str(), strerror(errno)));
+    
+    
+    PackageXMLWriter writer(xml_file);
+    writer.WriteDocumentStart();
+    
+    writer.WriteElementStart("PackageGroup");
+    writer.DeclareDefaultNamespace();
+    writer.WriteBoolAttribute("isPALProject", mPALProject);
+    writer.WriteOPAttribute("op", mOP);
+    writer.WriteRationalAttribute("projectEditRate", mProjectEditRate);
+    
+    if (mMaterialPackage)
+        mMaterialPackage->toXML(&writer);
+    
+    size_t i;
+    for (i = 0; i < mFileSourcePackages.size(); i++)
+        mFileSourcePackages[i]->toXML(&writer);
+    
+    if (mTapeSourcePackage)
+        mTapeSourcePackage->toXML(&writer);
+    
+    writer.WriteElementEnd();
+    
+    writer.WriteDocumentEnd();
+}
+
 void PackageGroup::SetMaterialPackage(MaterialPackage *material_package)
 {
     if (mMaterialPackage)
@@ -334,7 +384,7 @@ void PackageGroup::SetMaterialPackage(MaterialPackage *material_package)
 
 void PackageGroup::AppendFileSourcePackage(SourcePackage *file_source_package)
 {
-    if (mOP == OPERATIONAL_PATTERN_1A)
+    if (mOP == OperationalPattern::OP_1A)
         ClearFileSourcePackages();
     mFileSourcePackages.push_back(file_source_package);
 }

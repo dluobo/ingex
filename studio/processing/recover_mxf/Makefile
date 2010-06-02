@@ -2,6 +2,8 @@ INSTALL_DIR ?= /usr/local
 
 INGEX_DIR = ../../..
 
+COMMON_DIR = $(INGEX_DIR)/common
+STUDIOCOMMON_DIR = $(INGEX_DIR)/studio/common
 LIBMXF_DIR = $(INGEX_DIR)/libMXF
 LIBMXFPP_DIR = $(INGEX_DIR)/libMXF++
 DATABASE_DIR = $(INGEX_DIR)/studio/database/src
@@ -16,6 +18,8 @@ CFLAGS = -g -Wall -Wundef -W -Werror  -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE
 COMPILE = $(CC) $(CFLAGS)
 
 INCLUDES = -I. \
+		   -I$(COMMON_DIR) \
+		   -I$(STUDIOCOMMON_DIR) \
 		   -I$(LIBMXFPP_DIR) \
 		   -I$(LIBMXF_DIR)/lib/include \
 		   -I$(DATABASE_DIR) \
@@ -27,10 +31,12 @@ LIB_DIRS = -L$(LIBMXFPP_DIR)/libMXF++ \
 		   -L$(LIBMXF_DIR)/lib \
 		   -L$(LIBMXF_DIR)/examples/writeavidmxf \
 		   -L$(DATABASE_DIR) \
+		   -L$(COMMON_DIR) \
+		   -L$(STUDIOCOMMON_DIR) \
 		   -L$(INGEXMXFINFO_DIR) \
 		   -L$(MXFWRITER_DIR) \
 		   -L$(OPATOMREADER_DIR) 
-LIBS = -lOPAtomReader -lingexmxfinfo -lmxfwriter -lprodautodb -lpq -lpqxx -lMXF++ -lwriteavidmxf -lMXF -luuid -lpthread
+LIBS = -lOPAtomReader -lingexmxfinfo -lmxfwriter -lprodautodb -lcommon -lstudiocommon -lpq -lpqxx -lMXF++ -lwriteavidmxf -lMXF -luuid -lpthread
 
 
 SOURCES = $(wildcard *.cpp)

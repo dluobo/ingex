@@ -1,5 +1,5 @@
 /*
- * $Id: Recorder.cpp,v 1.3 2010/03/29 17:06:52 philipn Exp $
+ * $Id: Recorder.cpp,v 1.4 2010/06/02 13:04:40 john_f Exp $
  *
  * Recorder and configuration
  *
@@ -213,11 +213,11 @@ bool RecorderConfig::getBoolParam(string name, bool defaultValue)
         return defaultValue;
     }
 
-    if ((*iter).second.value.compare("true") == 0)
+    if ((*iter).second.value == "true")
     {
         return true;
     }
-    else if ((*iter).second.value.compare("false") == 0)
+    else if ((*iter).second.value == "false")
     {
         return false;
     }

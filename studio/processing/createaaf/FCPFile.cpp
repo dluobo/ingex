@@ -1,5 +1,5 @@
 /*
- * $Id: FCPFile.cpp,v 1.6 2009/09/18 17:05:47 philipn Exp $
+ * $Id: FCPFile.cpp,v 1.7 2010/06/02 12:59:07 john_f Exp $
  *
  * Final Cut Pro XML file for defining clips, multi-camera clips, etc
  *
@@ -326,7 +326,7 @@ void FCPFile::addClip(MaterialPackage* materialPackage, PackageSet& packages)
     DOMElement * scElem = _doc->createElement(Xml("source"));
     DOMElement * frElem = _doc->createElement(Xml("frame"));
     st_time = getStartTime(topPackage, packages, g_palEditRate); //start frames from midnite
-    Timecode tc(st_time);  //returns true time code
+    Ingex::Timecode tc(st_time, g_palEditRate.numerator, g_palEditRate.denominator, false);  //returns true time code
     
     tcElem->appendChild(_doc->createTextNode(Xml(tc.Text())));
     dfElem->appendChild(_doc->createTextNode(Xml(_df.c_str())));
@@ -1400,7 +1400,7 @@ bool FCPFile::addMCClipInternal(MCClipDef* itmcP, MaterialPackageSet& materialPa
                                 MclipidElem->setAttribute(Xml("id"), Xml(idname_ss.str().c_str()));
                             }
                             st_time = getStartTime(topPackage1, packages, g_palEditRate);
-                            Timecode tc(st_time);
+                            Ingex::Timecode tc(st_time, g_palEditRate.numerator, g_palEditRate.denominator, false);
                             if (track->dataDef == PICTURE_DATA_DEFINITION) //VIDEO
                             { 
                                 Mclip2Elem->setAttribute(Xml("id"), Xml(topPackage1->name.c_str()));    

@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderPackageCreator.h,v 1.1 2009/10/12 15:54:33 philipn Exp $
+ * $Id: RecorderPackageCreator.h,v 1.2 2010/06/02 13:04:40 john_f Exp $
  *
  * Recorder package group creator
  *
@@ -33,6 +33,7 @@
 
 #include "PackageGroup.h"
 #include "SourceConfig.h"
+#include "MaterialResolution.h"
 
 #define DISABLED_MATERIAL_TRACK_ID      0
 #define FIRST_MATERIAL_TRACK_ID         1
@@ -44,7 +45,7 @@ namespace prodauto
 class RecorderPackageCreator : public PackageGroup
 {
 public:
-    RecorderPackageCreator(bool is_pal_project, int op);
+    RecorderPackageCreator(bool is_pal_project, OperationalPattern::EnumType op);
     virtual ~RecorderPackageCreator();
 
     // settings

@@ -1,5 +1,5 @@
 /*
- * $Id: test.cpp,v 1.9 2009/10/12 15:44:56 philipn Exp $
+ * $Id: test.cpp,v 1.10 2010/06/02 13:04:40 john_f Exp $
  *
  * Tests the database library
  *
@@ -28,6 +28,7 @@
 #include <memory>
 
 #include <Database.h>
+#include <MaterialResolution.h>
 #include <Utilities.h>
 #include <DBException.h>
 
@@ -200,7 +201,7 @@ static void test_source_config()
         // try loading it back        
         auto_ptr<SourceConfig> sourceConfig(database->loadSourceConfig(sourceConfigInDB->getID()));
 
-        CHECK(sourceConfig->name.compare("TestIngex") == 0);
+        CHECK(sourceConfig->name == "TestIngex");
         CHECK(sourceConfig->type = LIVE_SOURCE_CONFIG_TYPE);
         CHECK(sourceConfig->recordingLocation == 1);
         CHECK(sourceConfig->trackConfigs.size() == 2);
@@ -209,14 +210,14 @@ static void test_source_config()
         SourceTrackConfig* trackConfig = (*trackIter++);
         CHECK(trackConfig->id == 1);        
         CHECK(trackConfig->number == 2);        
-        CHECK(trackConfig->name.compare("IsoX") == 0);        
+        CHECK(trackConfig->name == "IsoX");        
         CHECK(trackConfig->dataDef == PICTURE_DATA_DEFINITION);        
         CHECK(trackConfig->editRate == g_palEditRate);        
         CHECK(trackConfig->length == 120 * 60 * 60 * 25);        
         trackConfig = (*trackIter++);
         CHECK(trackConfig->id == 2);        
         CHECK(trackConfig->number == 3);        
-        CHECK(trackConfig->name.compare("MicY") == 0);        
+        CHECK(trackConfig->name == "MicY");        
         CHECK(trackConfig->dataDef == SOUND_DATA_DEFINITION);        
         CHECK(trackConfig->editRate == g_palEditRate);        
         CHECK(trackConfig->length == 120 * 60 * 60 * 25);        
@@ -330,7 +331,7 @@ static void test_recorder()
         // try loading it back        
         auto_ptr<Recorder> recorder(database->loadRecorder(recorderInDB->name));
 
-        CHECK(recorder->name.compare("TestIngex") == 0);
+        CHECK(recorder->name == "TestIngex");
         CHECK(recorder->getAllConfigs().size() == 2);
         CHECK(recorder->hasConfig());
 
@@ -340,9 +341,9 @@ static void test_recorder()
             confIter++;
         }
         RecorderConfig* recorderConfig = *confIter;
-        CHECK(recorderConfig->name.compare("TestIngexConfig2") == 0);
+        CHECK(recorderConfig->name == "TestIngexConfig2");
 
-        CHECK(recorderConfig->getStringParam("string param", "").compare("string value") == 0);
+        CHECK(recorderConfig->getStringParam("string param", "") == "string value");
         CHECK(recorderConfig->getStringParam("not string param", "").length() == 0);
         CHECK(recorderConfig->getIntParam("int param", 1) == 1);
         CHECK(recorderConfig->getIntParam("not int param", 0) == 0);
@@ -355,12 +356,12 @@ static void test_recorder()
         CHECK(recorderConfig->recorderInputConfigs.size() == 1);
 
         recorderConfig = recorder->getConfig();
-        CHECK(recorderConfig->name.compare("TestIngexConfig1") == 0);
+        CHECK(recorderConfig->name == "TestIngexConfig1");
         CHECK(recorderConfig->recorderInputConfigs.size() == 1);
         
         RecorderInputConfig* inputConfig = recorderConfig->recorderInputConfigs.back();
         CHECK(inputConfig->index == 1);        
-        CHECK(inputConfig->name.compare("SDI Input A") == 0);
+        CHECK(inputConfig->name == "SDI Input A");
         CHECK(inputConfig->trackConfigs.size() == 2);
         
         vector<RecorderInputTrackConfig*>::const_iterator trackIter = inputConfig->trackConfigs.begin();
@@ -437,12 +438,12 @@ static void test_source_session()
         recorderInDB = auto_ptr<Recorder>(create_recorder(sourceConfigInDB->getID()));
 
         // create old style using session start timestamp
-        sourceConfigInDB->setSessionSourcePackage();
+        sourceConfigInDB->setSessionSourcePackage(g_palEditRate);
         CHECK(sourceConfigInDB->getSourcePackage() != 0);
         database->deletePackage(sourceConfigInDB->getSourcePackage());
             
         // create new style
-        sourceConfigInDB->setSourcePackage("xxx123456");
+        sourceConfigInDB->setSourcePackage("xxx123456", g_palEditRate);
         CHECK(sourceConfigInDB->getSourcePackage() != 0);
         database->deletePackage(sourceConfigInDB->getSourcePackage());
 
@@ -519,7 +520,7 @@ static void test_editorial()
         vector<Series*>::iterator iter;
         for (iter = allSeries.get().begin(); iter != allSeries.get().end(); iter++)
         {
-            if ((*iter)->name.compare("Test series") == 0)
+            if ((*iter)->name == "Test series")
             {
                 series = auto_ptr<Series>(*iter);
                 allSeries.get().erase(iter);
@@ -544,7 +545,7 @@ static void test_editorial()
             throw "No programme loaded from series";
         }
         programme = *series->getProgrammes().begin();
-        CHECK(programme->name.compare("Test programme") == 0);
+        CHECK(programme->name == "Test programme");
         
         
         // test creating item and saving
@@ -594,19 +595,19 @@ static void test_editorial()
             throw "Failed to load items from programme";
         }
         iterItem = programme->getItems().begin();
-        CHECK((*iterItem)->description.compare("Test item 1") == 0);
+        CHECK((*iterItem)->description == "Test item 1");
         CHECK((*iterItem)->scriptSectionRefs.size() == 3);
         vector<string>::const_iterator refIter = (*iterItem)->scriptSectionRefs.begin();
-        CHECK((*refIter++).compare("sequence 7") == 0);
-        CHECK((*refIter++).compare("sequence11}") == 0);
-        CHECK((*refIter++).compare("sequence 19 \"") == 0);
-        CHECK((*(++iterItem))->description.compare("Test item 2") == 0);
+        CHECK((*refIter++) == "sequence 7");
+        CHECK((*refIter++) == "sequence11}");
+        CHECK((*refIter++) == "sequence 19 \"");
+        CHECK((*(++iterItem))->description == "Test item 2");
         CHECK((*iterItem)->scriptSectionRefs.size() == 0);
-        CHECK((*(++iterItem))->description.compare("Test item 3") == 0);
+        CHECK((*(++iterItem))->description == "Test item 3");
         CHECK((*iterItem)->scriptSectionRefs.size() == 1);
-        CHECK((*(*iterItem)->scriptSectionRefs.begin()).compare("}") == 0);
-        CHECK((*(++iterItem))->description.compare("Test item 4") == 0);
-        CHECK((*(++iterItem))->description.compare("Test item 5") == 0);
+        CHECK((*(*iterItem)->scriptSectionRefs.begin()) == "}");
+        CHECK((*(++iterItem))->description == "Test item 4");
+        CHECK((*(++iterItem))->description == "Test item 5");
 
         Item* item = *programme->getItems().begin();
         
@@ -632,7 +633,7 @@ static void test_editorial()
         }
         take = *item->getTakes().begin();
         CHECK(take->number == 1);
-        CHECK(take->comment.compare("An excellent take according to the director") == 0);
+        CHECK(take->comment == "An excellent take according to the director");
         CHECK(take->result == GOOD_TAKE_RESULT);
         CHECK(take->editRate == g_palEditRate);
         CHECK(take->length == 100);
@@ -685,8 +686,8 @@ static SourcePackage* create_source_package(UMID uid, Timestamp now,
     FileEssenceDescriptor* fDesc = new FileEssenceDescriptor();
     sourcePackage->descriptor = fDesc;
     fDesc->fileLocation = "file:///media";
-    fDesc->fileFormat = MXF_FILE_FORMAT_TYPE;
-    fDesc->videoResolutionID = UNC_MATERIAL_RESOLUTION;
+    fDesc->fileFormat = FileFormat::MXF;
+    fDesc->videoResolutionID = MaterialResolution::UNC_MXF_ATOM;
     fDesc->imageAspectRatio.numerator = 16;
     fDesc->imageAspectRatio.denominator = 9;
     //fDesc->audioQuantizationBits = 16;
@@ -726,7 +727,7 @@ static MaterialPackage* create_material_package(UMID uid, Timestamp now)
     materialPackage->name = "Test material package";
     materialPackage->creationDate = now;
     materialPackage->projectName = create_project_name(g_testProjectName);
-    materialPackage->op = OPERATIONAL_PATTERN_ATOM;
+    materialPackage->op = OperationalPattern::OP_ATOM;
     
     track = new Track();
     materialPackage->tracks.push_back(track);
@@ -769,15 +770,15 @@ static void test_package()
 
         SourcePackage* sourcePackage;
         CHECK((sourcePackage = dynamic_cast<SourcePackage*>(package1.get())) != 0);
-        CHECK(sourcePackage->name.compare("Test package") == 0);
+        CHECK(sourcePackage->name == "Test package");
         CHECK(sourcePackage->creationDate == now);
 
         FileEssenceDescriptor* fileDescriptor;
         CHECK(sourcePackage->descriptor != 0);
         CHECK((fileDescriptor = dynamic_cast<FileEssenceDescriptor*>(sourcePackage->descriptor)) != 0);
-        CHECK(fileDescriptor->fileLocation.compare("file:///media") == 0);
-        CHECK(fileDescriptor->fileFormat == MXF_FILE_FORMAT_TYPE);
-        CHECK(fileDescriptor->videoResolutionID == UNC_MATERIAL_RESOLUTION);        
+        CHECK(fileDescriptor->fileLocation == "file:///media");
+        CHECK(fileDescriptor->fileFormat == FileFormat::MXF);
+        CHECK(fileDescriptor->videoResolutionID == MaterialResolution::UNC_MXF_ATOM);        
         CHECK(fileDescriptor->imageAspectRatio.numerator == 16);        
         CHECK(fileDescriptor->imageAspectRatio.denominator == 9);        
         //CHECK(fileDescriptor->audioQuantizationBits == 16);        
@@ -787,7 +788,7 @@ static void test_package()
         track = sourcePackage->tracks.back();
         CHECK(track->id == 1);
         CHECK(track->number = 2);
-        CHECK(track->name.compare("V2") == 0);
+        CHECK(track->name == "V2");
         CHECK(track->dataDef == PICTURE_DATA_DEFINITION);
         CHECK(track->editRate == g_palEditRate);
         
@@ -801,10 +802,10 @@ static void test_package()
         // get the tagged values
         vector<UserComment> userComments = sourcePackageInDB->getUserComments("testname1");
         CHECK(userComments.size() == 2);
-        CHECK(((*userComments.begin()).value.compare("testvalue1") == 0 &&
-                (*(++userComments.begin())).value.compare("testvalue2") == 0) ||
-            ((*userComments.begin()).value.compare("testvalue2") == 0 && 
-                (*(++userComments.begin())).value.compare("testvalue1") == 0));
+        CHECK(((*userComments.begin()).value == "testvalue1" &&
+                (*(++userComments.begin())).value == "testvalue2") ||
+            ((*userComments.begin()).value == "testvalue2" && 
+                (*(++userComments.begin())).value == "testvalue1"));
         CHECK(((*userComments.begin()).position == 0 &&
                 (*(++userComments.begin())).position == -1) ||
             ((*userComments.begin()).position == -1 &&
@@ -815,12 +816,12 @@ static void test_package()
                 (*(++userComments.begin())).colour == 1));
         userComments = sourcePackageInDB->getUserComments("testname2");
         CHECK(userComments.size() == 1);
-        CHECK((*userComments.begin()).value.compare("testvalue1") == 0);
+        CHECK((*userComments.begin()).value == "testvalue1");
         CHECK((*userComments.begin()).position == 100);
         CHECK((*userComments.begin()).colour == 2);
         userComments = sourcePackageInDB->getUserComments("testname3");
         CHECK(userComments.size() == 1);
-        CHECK((*userComments.begin()).value.compare("testvalue3") == 0);
+        CHECK((*userComments.begin()).value == "testvalue3");
         CHECK((*userComments.begin()).position == 200);
         CHECK((*userComments.begin()).colour == 3);
 
@@ -832,7 +833,7 @@ static void test_package()
         MaterialHolder material;
         database->loadMaterial("testname", "testvalue", &material.topPackages, &material.packages);
         CHECK(material.topPackages.size() == 1);
-        CHECK((*material.topPackages.begin())->op == OPERATIONAL_PATTERN_ATOM);
+        CHECK((*material.topPackages.begin())->op == OperationalPattern::OP_ATOM);
         
         
         // load a source reference
@@ -848,7 +849,7 @@ static void test_package()
         // test live recording locations
         map<long, string> locations = database->loadLiveRecordingLocations();
         CHECK(locations.find(1) != locations.end());
-        CHECK((*locations.find(1)).second.compare("Unspecified") == 0);
+        CHECK((*locations.find(1)).second == "Unspecified");
         
         
         // clean up
@@ -925,7 +926,7 @@ static void test_transcode()
 
         
         // test modifying transcode
-        existTranscode->targetVideoResolution = MJPEG201_MATERIAL_RESOLUTION;
+        existTranscode->targetVideoResolution = MaterialResolution::MJPEG201_MXF_ATOM;
         existTranscode->status = TRANSCODE_STATUS_STARTED;
         database->saveTranscode(existTranscode);
 
@@ -936,7 +937,7 @@ static void test_transcode()
         auto_ptr<Transcode> transcode(new Transcode());
         transcode->sourceMaterialPackageDbId = materialPackageInDB->getDatabaseID(); 
         transcode->destMaterialPackageDbId = 0; // none
-        transcode->targetVideoResolution = MJPEG201_MATERIAL_RESOLUTION;
+        transcode->targetVideoResolution = MaterialResolution::MJPEG201_MXF_ATOM;
         transcode->status = TRANSCODE_STATUS_NOTSTARTED;
         database->saveTranscode(transcode.get());
 

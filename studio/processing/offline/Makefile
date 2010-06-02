@@ -1,4 +1,4 @@
-# $Id: Makefile,v 1.8 2009/09/18 17:05:47 philipn Exp $
+# $Id: Makefile,v 1.9 2010/06/02 12:59:07 john_f Exp $
 #
 DATABASELIB_DIR = ../../database/src
 LIBMXF_DIR = ../../../libMXF
@@ -12,7 +12,7 @@ YUVLIB_DIR = $(COMMON_DIR)/YUVlib
 
 CC = gcc
 CFLAGS = -g -Wall -Wundef -W -Wno-unused-parameter -O3 -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS
-INCLUDES = -I. -I$(STUDIOCOMMON_DIR) -I$(YUVLIB_DIR) -I/usr/local/include -I$(LIBMXF_DIR)/lib/include -I$(WRITEAVIDMXF_DIR) -I$(MXFREADER_DIR) -I$(DATABASELIB_DIR) -I$(MXFWRITER_DIR) -I/usr/local/include/ffmpeg/
+INCLUDES = -I. -I$(COMMON_DIR) -I$(STUDIOCOMMON_DIR) -I$(YUVLIB_DIR) -I/usr/local/include -I$(LIBMXF_DIR)/lib/include -I$(WRITEAVIDMXF_DIR) -I$(MXFREADER_DIR) -I$(DATABASELIB_DIR) -I$(MXFWRITER_DIR) -I/usr/local/include/ffmpeg/
 
 # Check for old-style FFMPEG header locations and if needed add -DFFMPEG_OLD_INCLUDE_PATHS
 FFMPEG_OLDSTYLE_INCLUDE := $(shell for f in /usr/local/include /usr/include; do test -e $$f/ffmpeg/avcodec.h && echo $$f && break; done)
@@ -42,7 +42,8 @@ DEPENDENCIES += C_DEPENDENCIES
 FFMPEG_LIBS = -lavformat -lavcodec -lavutil -lz -lbz2 -lmp3lame -lx264 -lfaac -lfaad -lm
 
 TRANSCODE_LIBS = -ljpeg $(FFMPEG_LIBS) -L$(STUDIOCOMMON_DIR) -lstudiocommon -L$(YUVLIB_DIR) -lYUVlib \
-	-L$(DATABASELIB_DIR) -lprodautodb -L$(MXFWRITER_DIR) -lmxfwriter -L$(WRITEAVIDMXF_DIR) -lwriteavidmxf \
+	-L$(DATABASELIB_DIR) -lprodautodb -L$(COMMON_DIR) -lcommon -L$(STUDIOCOMMON_DIR) -lstudiocommon \
+	-L$(MXFWRITER_DIR) -lmxfwriter -L$(WRITEAVIDMXF_DIR) -lwriteavidmxf \
 	-L$(MXFREADER_DIR) -lMXFReader -L$(LIBMXF_DIR)/lib -lMXF -lpq -lpqxx -luuid -lpthread 
 
 YUV422TOMJPEG_LIBS = -L$(STUDIOCOMMON_DIR) -lstudiocommon -L$(YUVLIB_DIR) -lYUVlib \
@@ -81,10 +82,10 @@ transcode_avid_mxf: libmxfwriter.a transcode_avid_mxf.o
 	$(CPP_COMPILE) transcode_avid_mxf.o $(TRANSCODE_LIBS) -o $@
 
 yuv422_to_mjpeg: yuv422_to_mjpeg.c
-	$(CC) -g yuv422_to_mjpeg.c $(INCLUDES) $(YUV422TOMJPEG_LIBS) -o $@
+	$(CPP_COMPILE) -g yuv422_to_mjpeg.c $(INCLUDES) $(YUV422TOMJPEG_LIBS) -o $@
 
 yuv422_to_mjpeg_threaded: yuv422_to_mjpeg.c
-	$(CC) -g yuv422_to_mjpeg.c -DBUILD_USING_MJPEG_THREADED_API $(INCLUDES) $(YUV422TOMJPEG_LIBS) -o $@
+	$(CPP_COMPILE) -g yuv422_to_mjpeg.c -DBUILD_USING_MJPEG_THREADED_API $(INCLUDES) $(YUV422TOMJPEG_LIBS) -o $@
 
 
 	

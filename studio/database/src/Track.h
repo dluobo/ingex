@@ -1,5 +1,5 @@
 /*
- * $Id: Track.h,v 1.3 2009/10/22 13:53:09 john_f Exp $
+ * $Id: Track.h,v 1.4 2010/06/02 13:04:40 john_f Exp $
  *
  * A Track in a Package
  *
@@ -30,6 +30,7 @@
 #include "DatabaseObject.h"
 #include "DataTypes.h"
 #include "SourceClip.h"
+#include "PackageXMLWriter.h"
 
 
 
@@ -46,6 +47,7 @@ public:
 
     virtual void cloneInPlace(bool resetLengths);
     Track* clone();
+    void toXML(PackageXMLWriter *xml_writer);
     
     uint32_t id;
     uint32_t number;

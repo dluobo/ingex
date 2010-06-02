@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.2 2008/11/06 11:33:38 john_f Exp $
+# $Id: Makefile,v 1.3 2010/06/02 12:59:07 john_f Exp $
 #
 # Makefile for building Ingex media processing tools
 #
@@ -26,9 +26,15 @@ all:
 	$(MAKE) -C offline
 	$(MAKE) -C media_transfer
 	$(MAKE) -C createaaf
+	$(MAKE) -C recover_mxf
+	$(MAKE) -C import_cuts
+	$(MAKE) -C deletepkg
 
 .PHONY: clean
 clean:
 	$(MAKE) -C offline $@
 	$(MAKE) -C media_transfer $@
 	$(MAKE) -C createaaf $@
+	$(MAKE) -C recover_mxf $@
+	$(MAKE) -C import_cuts $@
+	$(MAKE) -C deletepkg $@

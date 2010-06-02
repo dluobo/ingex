@@ -1,5 +1,5 @@
 /*
- * $Id: SourceConfig.h,v 1.1 2007/09/11 14:08:39 stuart_hc Exp $
+ * $Id: SourceConfig.h,v 1.2 2010/06/02 13:04:40 john_f Exp $
  *
  * Live recording or tape Source configuration
  *
@@ -61,8 +61,8 @@ public:
     
     SourceTrackConfig* getTrackConfig(uint32_t id);
 
-    void setSessionSourcePackage();
-    void setSourcePackage(std::string name);
+    void setSessionSourcePackage(const Rational &editRate, bool dropFrameFlag = false);
+    void setSourcePackage(std::string name, const Rational &editRate, bool dropFrameFlag = false);
     SourcePackage* getSourcePackage();    
     
     std::string name;

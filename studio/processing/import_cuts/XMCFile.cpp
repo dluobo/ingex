@@ -1,5 +1,5 @@
 /*
- * $Id: XMCFile.cpp,v 1.1 2009/10/12 18:47:10 john_f Exp $
+ * $Id: XMCFile.cpp,v 1.2 2010/06/02 12:59:07 john_f Exp $
  *
  * Parse Multi-Camera cuts file.
  *
@@ -120,9 +120,9 @@ int XMCFile::ParseDataDefAttr(const DOMElement *element, string attr_name)
     
     attr_str = ParseStringAttr(element, attr_name);
     
-    if (attr_str.compare(PICTURE_DATA_DEFINITION_NAME) == 0)
+    if (attr_str == PICTURE_DATA_DEFINITION_NAME)
         return PICTURE_DATA_DEFINITION;
-    else if (attr_str.compare(SOUND_DATA_DEFINITION_NAME) == 0)
+    else if (attr_str == SOUND_DATA_DEFINITION_NAME)
         return SOUND_DATA_DEFINITION;
     else
         throw ICException("Invalid data definition name: %s", attr_str.c_str());

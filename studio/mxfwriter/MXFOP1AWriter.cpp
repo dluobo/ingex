@@ -1,5 +1,5 @@
 /*
- * $Id: MXFOP1AWriter.cpp,v 1.1 2010/03/30 08:38:04 john_f Exp $
+ * $Id: MXFOP1AWriter.cpp,v 1.2 2010/06/02 13:01:21 john_f Exp $
  *
  * MXF OP-1A writer
  *
@@ -32,6 +32,7 @@
 
 #include "MXFOP1AWriter.h"
 #include "MXFWriterException.h"
+#include "MaterialResolution.h"
 
 #include <Logging.h>
 #include <Utilities.h>
@@ -68,6 +69,7 @@ public:
         memset(mAudio, 0, sizeof(mAudio));
         memset(mAudioSet, false, sizeof(mAudioSet));
         mNumAudioTracks = 0;
+        mNumNullAvidAudioTracks = 0;
     }
     
     virtual ~D10MXFOP1AContentPackage()
@@ -85,7 +87,7 @@ public:
             return false;
         
         uint32_t i;
-        for (i = 0; i < mNumAudioTracks; i++) {
+        for (i = 0; i < mNumAudioTracks - mNumNullAvidAudioTracks; i++) {
             if (!mAudioSet[i])
                 return false;
         }
@@ -146,6 +148,7 @@ public:
     unsigned char *mAudio[8];
     bool mAudioSet[8];
     uint32_t mNumAudioTracks;
+    uint32_t mNumNullAvidAudioTracks;
 };
 
 };
@@ -189,7 +192,10 @@ MXFOP1AWriter::~MXFOP1AWriter()
 
 void MXFOP1AWriter::PrepareToWrite(PackageGroup *package_group, bool take_ownership)
 {
-    PA_ASSERT(package_group->GetOP() == OPERATIONAL_PATTERN_1A);
+    PA_ASSERT(package_group->GetOP() == OperationalPattern::OP_1A);
+    PA_ASSERT(package_group->GetMaterialResolution() == MaterialResolution::IMX30_MXF_1A ||
+              package_group->GetMaterialResolution() == MaterialResolution::IMX40_MXF_1A ||
+              package_group->GetMaterialResolution() == MaterialResolution::IMX50_MXF_1A);
     
     ResetWriter();
     
@@ -221,6 +227,20 @@ void MXFOP1AWriter::PrepareToWrite(PackageGroup *package_group, bool take_owners
     }
     
     
+    // Avid (Media Composer 3.0) doesn't support 2 audio channels (it only shows channel 1) for MPEG 30/40/50
+    // and therefore we add 2 channels of silence
+    
+    if (mContentPackage->mNumAudioTracks == 2) {
+        Logging::warning("Adding 2 channels of silence to support Avid import\n");
+        int i;
+        for (i = 0; i < 2; i++) {
+            mContentPackage->mAudioTrackId[mContentPackage->mNumAudioTracks] = (uint32_t)(-1);
+            mContentPackage->mNumAudioTracks++;
+            mContentPackage->mNumNullAvidAudioTracks++;
+        }
+    }
+    
+    
     // get start timecode
     
     int64_t start_timecode = 0;
@@ -248,19 +268,19 @@ void MXFOP1AWriter::PrepareToWrite(PackageGroup *package_group, bool take_owners
     mD10Writer->SetStartTimecode(start_timecode, false);
     switch (file_descriptor->videoResolutionID)
     {
-        case IMX30_MATERIAL_RESOLUTION:
+        case MaterialResolution::IMX30_MXF_1A:
             if (package_group->IsPALProject())
                 mD10Writer->SetBitRate(D10MXFOP1AWriter::D10_BIT_RATE_30, 150000);
             else
                 mD10Writer->SetBitRate(D10MXFOP1AWriter::D10_BIT_RATE_30, 125125);
             break;
-        case IMX40_MATERIAL_RESOLUTION:
+        case MaterialResolution::IMX40_MXF_1A:
             if (package_group->IsPALProject())
                 mD10Writer->SetBitRate(D10MXFOP1AWriter::D10_BIT_RATE_40, 200000);
             else
                 mD10Writer->SetBitRate(D10MXFOP1AWriter::D10_BIT_RATE_40, 166833);
             break;
-        case IMX50_MATERIAL_RESOLUTION:
+        case MaterialResolution::IMX50_MXF_1A:
             if (package_group->IsPALProject())
                 mD10Writer->SetBitRate(D10MXFOP1AWriter::D10_BIT_RATE_50, 250000);
             else
@@ -279,19 +299,19 @@ void MXFOP1AWriter::PrepareToWrite(PackageGroup *package_group, bool take_owners
     
     switch (file_descriptor->videoResolutionID)
     {
-        case IMX30_MATERIAL_RESOLUTION:
+        case MaterialResolution::IMX30_MXF_1A:
             if (package_group->IsPALProject())
                 mContentPackage->mVideoSize = 150000;
             else
                 mContentPackage->mVideoSize = 125125;
             break;
-        case IMX40_MATERIAL_RESOLUTION:
+        case MaterialResolution::IMX40_MXF_1A:
             if (package_group->IsPALProject())
                 mContentPackage->mVideoSize = 200000;
             else
                 mContentPackage->mVideoSize = 166833;
             break;
-        case IMX50_MATERIAL_RESOLUTION:
+        case MaterialResolution::IMX50_MXF_1A:
             if (package_group->IsPALProject())
                 mContentPackage->mVideoSize = 250000;
             else
@@ -310,8 +330,10 @@ void MXFOP1AWriter::PrepareToWrite(PackageGroup *package_group, bool take_owners
             mContentPackage->mAudioAllocatedSize = bytes_per_sample * 1602;
         
         uint32_t i;
-        for (i = 0; i < mContentPackage->mNumAudioTracks; i++)
+        for (i = 0; i < mContentPackage->mNumAudioTracks; i++) {
             mContentPackage->mAudio[i] = new unsigned char[mContentPackage->mAudioAllocatedSize];
+            memset(mContentPackage->mAudio[i], 0, mContentPackage->mAudioAllocatedSize);
+        }
     }
 }
 

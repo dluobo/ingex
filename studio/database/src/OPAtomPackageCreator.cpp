@@ -1,5 +1,5 @@
 /*
- * $Id: OPAtomPackageCreator.cpp,v 1.2 2010/03/29 17:06:52 philipn Exp $
+ * $Id: OPAtomPackageCreator.cpp,v 1.3 2010/06/02 13:04:40 john_f Exp $
  *
  * OP-Atom package group creator
  *
@@ -50,7 +50,7 @@ string OPAtomPackageCreator::CreateFileLocation(string prefix, string suffix,
 
 
 OPAtomPackageCreator::OPAtomPackageCreator(bool is_pal_project)
-: RecorderPackageCreator(is_pal_project, OPERATIONAL_PATTERN_ATOM)
+: RecorderPackageCreator(is_pal_project, OperationalPattern::OP_ATOM)
 {
 }
 
@@ -74,7 +74,7 @@ void OPAtomPackageCreator::CreatePackageGroup(SourceConfig *source_config, vecto
     mMaterialPackage->name = GetClipName();
     mMaterialPackage->creationDate = creation_date;
     mMaterialPackage->projectName = mProjectName;
-    mMaterialPackage->op = OPERATIONAL_PATTERN_ATOM;
+    mMaterialPackage->op = OperationalPattern::OP_ATOM;
     mMaterialPackage->addUserComments(mUserComments);
     mMaterialPackage->addUserComment(AVID_UC_SOURCE_NAME, source_config->name, STATIC_COMMENT_POSITION, 0);
     

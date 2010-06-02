@@ -1,5 +1,5 @@
 /*
- * $Id: Track.cpp,v 1.4 2009/10/22 13:53:09 john_f Exp $
+ * $Id: Track.cpp,v 1.5 2010/06/02 13:04:40 john_f Exp $
  *
  * A Track in a Package
  *
@@ -106,5 +106,29 @@ Track* Track::clone()
     return clonedTrack;
 }
 
-
+void Track::toXML(PackageXMLWriter *xml_writer)
+{
+    xml_writer->WriteElementStart("Track");
+    xml_writer->WriteUInt32Attribute("id", id);
+    xml_writer->WriteUInt32Attribute("number", number);
+    xml_writer->WriteAttribute("name", name);
+    xml_writer->WriteRationalAttribute("editRate", editRate);
+    xml_writer->WriteInt64Attribute("origin", origin);
+    switch (dataDef)
+    {
+        case PICTURE_DATA_DEFINITION:
+            xml_writer->WriteAttribute("dataDef", "Picture");
+            break;
+        case SOUND_DATA_DEFINITION:
+            xml_writer->WriteAttribute("dataDef", "Sound");
+            break;
+        default:
+            PA_ASSERT(false);
+    }
+    
+    if (sourceClip)
+        sourceClip->toXML(xml_writer);
+    
+    xml_writer->WriteElementEnd();
+}
 

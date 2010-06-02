@@ -1,5 +1,5 @@
 /*
- * $Id: Package.cpp,v 1.7 2009/10/22 13:53:09 john_f Exp $
+ * $Id: Package.cpp,v 1.8 2010/06/02 13:04:40 john_f Exp $
  *
  * A MXF/AAF Package
  *
@@ -24,7 +24,9 @@
 #include <sstream>
 
 #include "Package.h"
+#include "MaterialResolution.h"
 #include "Utilities.h"
+#include "ProdAutoException.h"
 #include "Logging.h"
 
 
@@ -154,9 +156,11 @@ void Package::addUserComment(string name, string value, int64_t position, int co
     for (iter = _userComments.begin(); iter != _userComments.end(); iter++)
     {
         UserComment userComment = *iter;
-        if (userComment.name.compare(name) == 0 && userComment.value.compare(value) == 0)
+        if (userComment.name == name && userComment.value == value &&
+            (position == STATIC_COMMENT_POSITION ||
+                (position == userComment.position && colour == userComment.colour)))
         {
-            return; // already have tagged value
+            return; // already have tagged value or comment marker
         }
     }
     
@@ -171,7 +175,7 @@ vector<UserComment> Package::getUserComments(string name)
     for (iter = _userComments.begin(); iter != _userComments.end(); iter++)
     {
         UserComment& userComment = *iter;
-        if (name.compare(userComment.name) == 0)
+        if (name == userComment.name)
         {
             result.push_back(userComment);
         }
@@ -227,6 +231,41 @@ void Package::clone(Package *clonedPackage)
     }
 }
 
+void Package::toXML(PackageXMLWriter *xml_writer)
+{
+    xml_writer->WriteUMIDAttribute("uid", uid);
+    xml_writer->WriteAttribute("name", name);
+    xml_writer->WriteTimestampAttribute("creationDate", creationDate);
+    xml_writer->WriteAttribute("projectName", projectName.name);
+    
+    if (!_userComments.empty()) {
+        xml_writer->WriteElementStart("UserComments");
+        
+        size_t i;
+        for (i = 0; i < _userComments.size(); i++) {
+            xml_writer->WriteElementStart("UserComment");
+            xml_writer->WriteAttribute("name", _userComments[i].name);
+            xml_writer->WriteAttribute("value", _userComments[i].value);
+            if (_userComments[i].position != STATIC_COMMENT_POSITION) {
+                xml_writer->WriteInt64Attribute("position", _userComments[i].position);
+                xml_writer->WriteColourAttribute("colour", _userComments[i].colour);
+            }
+            xml_writer->WriteElementEnd();
+        }
+        
+        xml_writer->WriteElementEnd();
+    }
+    
+    if (!tracks.empty()) {
+        xml_writer->WriteElementStart("Tracks");
+        
+        size_t i;
+        for (i = 0; i < tracks.size(); i++)
+            tracks[i]->toXML(xml_writer);
+
+        xml_writer->WriteElementEnd();
+    }
+}
 
 
 
@@ -244,11 +283,11 @@ string MaterialPackage::toString()
     stringstream packageStr;
     
     packageStr << "Material Package" << endl;
-    if (op == OPERATIONAL_PATTERN_ATOM)
+    if (op == OperationalPattern::OP_ATOM)
     {
         packageStr << "OP-Atom" << endl;
     }
-    else if (op == OPERATIONAL_PATTERN_1A)
+    else if (op == OperationalPattern::OP_1A)
     {
         packageStr << "OP-1A" << endl;
     }
@@ -262,14 +301,26 @@ Package* MaterialPackage::clone()
     MaterialPackage *clonedPackage = new MaterialPackage();
     
     Package::clone(clonedPackage);
+
+    clonedPackage->op = op;
     
     return clonedPackage;
+}
+
+void MaterialPackage::toXML(PackageXMLWriter *xml_writer)
+{
+    xml_writer->WriteElementStart("MaterialPackage");
+    xml_writer->WriteOPAttribute("op", op);
+    
+    Package::toXML(xml_writer);
+    
+    xml_writer->WriteElementEnd();
 }
 
 
 
 SourcePackage::SourcePackage()
-: Package(), descriptor(0)
+: Package(), descriptor(0), dropFrameFlag(false)
 {}
 
 SourcePackage::~SourcePackage()
@@ -302,6 +353,7 @@ string SourcePackage::toString()
     }
     else if (descriptor->getType() == TAPE_ESSENCE_DESC_TYPE)
     {
+        packageStr << "Drop frame = " << (dropFrameFlag ? "true" : "false") << endl;
         TapeEssenceDescriptor* tapeDesc = dynamic_cast<TapeEssenceDescriptor*>(descriptor);
         packageStr << "Tape essence descriptor:" << endl;
         packageStr << "Spool number = " << tapeDesc->spoolNumber << endl;
@@ -339,8 +391,34 @@ Package* SourcePackage::clone()
     {
         clonedPackage->descriptor = descriptor->clone();
     }
+    clonedPackage->dropFrameFlag = dropFrameFlag;
     
     return clonedPackage;
+}
+
+void SourcePackage::toXML(PackageXMLWriter *xml_writer)
+{
+    xml_writer->WriteElementStart("SourcePackage");
+    switch (descriptor->getType())
+    {
+        case FILE_ESSENCE_DESC_TYPE:
+            xml_writer->WriteAttribute("type", "File");
+            break;
+        case TAPE_ESSENCE_DESC_TYPE:
+            xml_writer->WriteAttribute("type", "Tape");
+            break;
+        case LIVE_ESSENCE_DESC_TYPE:
+            xml_writer->WriteAttribute("type", "Live");
+            break;
+        default:
+            PA_ASSERT(false);
+    }
+    
+    Package::toXML(xml_writer);
+    
+    descriptor->toXML(xml_writer);
+    
+    xml_writer->WriteElementEnd();
 }
 
 
@@ -368,6 +446,35 @@ EssenceDescriptor* FileEssenceDescriptor::clone()
     return clonedDescriptor;
 }
 
+void FileEssenceDescriptor::toXML(PackageXMLWriter *xml_writer)
+{
+    string file_format_name;
+    
+    xml_writer->WriteElementStart("FileEssenceDescriptor");
+    xml_writer->WriteAttribute("fileLocation", fileLocation);
+    xml_writer->WriteIntAttribute("fileFormat", fileFormat);
+    if (fileFormat >= 0 && fileFormat < FileFormat::END) {
+        FileFormat::GetInfo((FileFormat::EnumType)fileFormat, file_format_name);
+        xml_writer->WriteAttribute("fileFormatName", file_format_name);
+    } else {
+        Logging::warning("Unknown name for file format %d\n", fileFormat);
+    }
+    if (videoResolutionID != 0) {
+        xml_writer->WriteIntAttribute("videoResolutionID", videoResolutionID);
+        if (videoResolutionID >= 0 && videoResolutionID < MaterialResolution::END) {
+            xml_writer->WriteAttribute("videoResolutionName",
+                                       MaterialResolution::Name((MaterialResolution::EnumType)videoResolutionID));
+        } else {
+            Logging::warning("Unknown name for video resolution %d\n", videoResolutionID);
+        }
+        xml_writer->WriteRationalAttribute("imageAspectRatio", imageAspectRatio);
+    } else {
+        xml_writer->WriteUInt32Attribute("audioQuantizationBits", audioQuantizationBits);
+    }
+    xml_writer->WriteElementEnd();
+}
+
+
 
 TapeEssenceDescriptor::TapeEssenceDescriptor()
 : EssenceDescriptor()
@@ -380,6 +487,13 @@ EssenceDescriptor* TapeEssenceDescriptor::clone()
     clonedDescriptor->spoolNumber = spoolNumber;
     
     return clonedDescriptor;
+}
+
+void TapeEssenceDescriptor::toXML(PackageXMLWriter *xml_writer)
+{
+    xml_writer->WriteElementStart("TapeEssenceDescriptor");
+    xml_writer->WriteAttribute("spoolNumber", spoolNumber);
+    xml_writer->WriteElementEnd();
 }
 
 
@@ -396,7 +510,10 @@ EssenceDescriptor* LiveEssenceDescriptor::clone()
     return clonedDescriptor;
 }
 
-
-
-
+void LiveEssenceDescriptor::toXML(PackageXMLWriter *xml_writer)
+{
+    xml_writer->WriteElementStart("LiveEssenceDescriptor");
+    xml_writer->WriteIntAttribute("recordingLocation", recordingLocation);
+    xml_writer->WriteElementEnd();
+}
 

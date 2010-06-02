@@ -1,5 +1,5 @@
 /*
- * $Id: Package.h,v 1.8 2009/10/22 13:53:09 john_f Exp $
+ * $Id: Package.h,v 1.9 2010/06/02 13:04:40 john_f Exp $
  *
  * A MXF/AAF Package
  *
@@ -32,6 +32,7 @@
 #include "DataTypes.h"
 #include "Track.h"
 #include "DatabaseEnums.h"
+#include "PackageXMLWriter.h"
 
 
 // standard names for Avid user comments (tagged values)
@@ -111,6 +112,9 @@ public:
     virtual void cloneInPlace(UMID newUID, bool resetLengths);
     virtual Package* clone() = 0;
     
+    virtual void toXML(PackageXMLWriter *xml_writer);
+
+
     UMID uid;
     std::string name;
     Timestamp creationDate;
@@ -138,6 +142,9 @@ public:
 
     virtual Package* clone();
     
+    virtual void toXML(PackageXMLWriter *xml_writer);
+
+
     int op;
 };
 
@@ -151,6 +158,7 @@ public:
     
     virtual int getType() = 0;
     virtual EssenceDescriptor* clone() = 0;
+    virtual void toXML(PackageXMLWriter *xml_writer) = 0;
 };
 
 class SourcePackage : public Package
@@ -165,10 +173,13 @@ public:
 
     virtual void cloneInPlace(UMID newUID, bool resetLengths);
     virtual Package* clone();
+
+    virtual void toXML(PackageXMLWriter *xml_writer);
     
     
     EssenceDescriptor* descriptor;
     std::string sourceConfigName; // file SourcePackage only
+    bool dropFrameFlag; // only relevant for tape source package
 };
 
 
@@ -180,6 +191,7 @@ public:
     
     virtual int getType() { return FILE_ESSENCE_DESC_TYPE; };
     virtual EssenceDescriptor* clone();
+    virtual void toXML(PackageXMLWriter *xml_writer);
     
     std::string fileLocation;
     int fileFormat;
@@ -195,6 +207,7 @@ public:
     
     virtual int getType() { return TAPE_ESSENCE_DESC_TYPE; };
     virtual EssenceDescriptor* clone();
+    virtual void toXML(PackageXMLWriter *xml_writer);
     
     std::string spoolNumber;
 };
@@ -206,6 +219,7 @@ public:
     
     virtual int getType() { return LIVE_ESSENCE_DESC_TYPE; };
     virtual EssenceDescriptor* clone();
+    virtual void toXML(PackageXMLWriter *xml_writer);
     
     long recordingLocation;
 };

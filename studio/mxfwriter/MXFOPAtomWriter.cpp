@@ -1,5 +1,5 @@
 /*
- * $Id: MXFOPAtomWriter.cpp,v 1.3 2009/12/04 18:28:34 john_f Exp $
+ * $Id: MXFOPAtomWriter.cpp,v 1.4 2010/06/02 13:01:21 john_f Exp $
  *
  * MXF OP-Atom writer
  *
@@ -31,6 +31,7 @@
 
 #include "MXFOPAtomWriter.h"
 #include "MXFWriterException.h"
+#include "MaterialResolution.h"
 
 #include <Logging.h>
 #include <Utilities.h>
@@ -105,7 +106,7 @@ MXFOPAtomWriter::~MXFOPAtomWriter()
 
 void MXFOPAtomWriter::PrepareToWrite(PackageGroup *package_group, bool take_ownership)
 {
-    PA_ASSERT(package_group->GetOP() == OPERATIONAL_PATTERN_ATOM);
+    PA_ASSERT(package_group->GetOP() == OperationalPattern::OP_ATOM);
     
     ResetWriter();
     
@@ -124,8 +125,12 @@ void MXFOPAtomWriter::PrepareToWrite(PackageGroup *package_group, bool take_owne
         project_edit_rate = (mxfRational){30000, 1001};
     }
     
+    bool drop_frame_flag = false;
+    if (mPackageGroup->GetTapeSourcePackage())
+        drop_frame_flag = mPackageGroup->GetTapeSourcePackage()->dropFrameFlag;
+    
     CHECK(create_clip_writer(mPackageGroup->GetMaterialPackage()->projectName.name.c_str(), project_format,
-                             project_edit_rate, false, false, mPackageDefinitions, &mClipWriter));
+                             project_edit_rate, drop_frame_flag, false, mPackageDefinitions, &mClipWriter));
 
     // update the file locations in the prodauto file source packages
     MXFListIterator mp_track_iter;
@@ -355,70 +360,67 @@ void MXFOPAtomWriter::CreatePackageDefinitions()
             
             switch (descriptor->videoResolutionID)
             {
-                case UNC_MATERIAL_RESOLUTION:
+                case MaterialResolution::UNC_MXF_ATOM:
                     essence_type = UncUYVY;
                     break;
-                case DV25_MATERIAL_RESOLUTION:
+                case MaterialResolution::DV25_MXF_ATOM:
                     essence_type = IECDV25;
                     break;
-                case DV50_MATERIAL_RESOLUTION:
+                case MaterialResolution::DV50_MXF_ATOM:
                     essence_type = DVBased50;
                     break;
-                case DVCPROHD_MATERIAL_RESOLUTION:
+                case MaterialResolution::DV100_MXF_ATOM:
                     essence_type = DV1080i50;
                     break;
-                case MJPEG21_MATERIAL_RESOLUTION:
+                case MaterialResolution::MJPEG21_MXF_ATOM:
                     essence_info.mjpegResolution = Res21;
                     essence_type = AvidMJPEG;
                     break;
-                case MJPEG31_MATERIAL_RESOLUTION:
+                case MaterialResolution::MJPEG31_MXF_ATOM:
                     essence_info.mjpegResolution = Res31;
                     essence_type = AvidMJPEG;
                     break;
-                case MJPEG101_MATERIAL_RESOLUTION:
+                case MaterialResolution::MJPEG101_MXF_ATOM:
                     essence_info.mjpegResolution = Res101;
                     essence_type = AvidMJPEG;
                     break;
-                case MJPEG151S_MATERIAL_RESOLUTION:
+                case MaterialResolution::MJPEG151S_MXF_ATOM:
                     essence_info.mjpegResolution = Res151s;
                     essence_type = AvidMJPEG;
                     break;
-                case MJPEG201_MATERIAL_RESOLUTION:
+                case MaterialResolution::MJPEG201_MXF_ATOM:
                     essence_info.mjpegResolution = Res201;
                     essence_type = AvidMJPEG;
                     break;
-                case MJPEG101M_MATERIAL_RESOLUTION:
+                case MaterialResolution::MJPEG101M_MXF_ATOM:
                     essence_info.mjpegResolution = Res101m;
                     essence_type = AvidMJPEG;
                     break;
-                case IMX30_MATERIAL_RESOLUTION:
-                    PA_ASSERT(mPackageGroup->IsPALProject()); // NTSC not yet supported
-                    essence_info.imxFrameSize = 150000; // max PAL frame size
+                case MaterialResolution::IMX30_MXF_ATOM:
+                    essence_info.imxFrameSize = mPackageGroup->IsPALProject() ? 150000 : 125125;
                     essence_type = IMX30;
                     break;
-                case IMX40_MATERIAL_RESOLUTION:
-                    PA_ASSERT(mPackageGroup->IsPALProject()); // NTSC not yet supported
-                    essence_info.imxFrameSize = 200000; // max PAL frame size
+                case MaterialResolution::IMX40_MXF_ATOM:
+                    essence_info.imxFrameSize = mPackageGroup->IsPALProject() ? 200000 : 166833;
                     essence_type = IMX40;
                     break;
-                case IMX50_MATERIAL_RESOLUTION:
-                    PA_ASSERT(mPackageGroup->IsPALProject()); // NTSC not yet supported
-                    essence_info.imxFrameSize = 250000; // max PAL frame size
+                case MaterialResolution::IMX50_MXF_ATOM:
+                    essence_info.imxFrameSize = mPackageGroup->IsPALProject() ? 250000 : 208541;
                     essence_type = IMX50;
                     break;
-                case DNX36p_MATERIAL_RESOLUTION:
+                case MaterialResolution::DNX36P_MXF_ATOM:
                     essence_type = DNxHD1080p36;
                     break;
-                case DNX120p_MATERIAL_RESOLUTION:
+                case MaterialResolution::DNX120P_MXF_ATOM:
                     essence_type = DNxHD1080p120;
                     break;
-                case DNX185p_MATERIAL_RESOLUTION:
+                case MaterialResolution::DNX185P_MXF_ATOM:
                     essence_type = DNxHD1080p185;
                     break;
-                case DNX120i_MATERIAL_RESOLUTION:
+                case MaterialResolution::DNX120I_MXF_ATOM:
                     essence_type = DNxHD1080i120;
                     break;
-                case DNX185i_MATERIAL_RESOLUTION:
+                case MaterialResolution::DNX185I_MXF_ATOM:
                     essence_type = DNxHD1080i185;
                     break;
 

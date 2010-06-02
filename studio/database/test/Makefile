@@ -1,8 +1,10 @@
+COMMON_DIR = ../../../common
+STUDIOCOMMON_DIR = ../../common
 DATABASELIB_DIR = ../src
 
 CC = g++
 CFLAGS = -g -Wall -Wundef -W -Wno-unused-parameter -Werror
-INCLUDES = -I. -I$(DATABASELIB_DIR)
+INCLUDES = -I. -I$(COMMON_DIR) -I$(STUDIOCOMMON_DIR) -I$(DATABASELIB_DIR)
 
 COMPILE = $(CC) $(CFLAGS) $(INCLUDES)
 
@@ -20,7 +22,7 @@ $(DATABASELIB_DIR)/libprodautodb.a:
 
 
 test: $(DATABASELIB_DIR)/libprodautodb.a $(OBJECTS)
-	$(CC) $(OBJECTS) -L$(DATABASELIB_DIR) -lprodautodb -luuid -lpq -lpqxx -lpthread -o $@
+	$(CC) $(OBJECTS) -L$(DATABASELIB_DIR) -L$(COMMON_DIR) -L$(STUDIOCOMMON_DIR) -lprodautodb -lcommon -lstudiocommon -luuid -lpq -lpqxx -lpthread -o $@
 
 	
 .deps/%.d : %.cpp

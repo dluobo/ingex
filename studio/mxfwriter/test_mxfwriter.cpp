@@ -1,5 +1,5 @@
 /*
- * $Id: test_mxfwriter.cpp,v 1.11 2010/03/30 09:03:33 john_f Exp $
+ * $Id: test_mxfwriter.cpp,v 1.12 2010/06/02 13:01:21 john_f Exp $
  *
  * Tests the MXF writer
  *
@@ -34,6 +34,7 @@
 #include "MXFOP1AWriter.h"
 #include "MXFWriterException.h"
 #include "MXFUtils.h"
+#include "MaterialResolution.h"
 
 #include <OPAtomPackageCreator.h>
 #include <OP1APackageCreator.h>
@@ -260,7 +261,16 @@ static void* start_record_routine(void* data)
     if (record_data->dv50Filename.size() > 0)
     {
         // dv50 input
-        resolutionId = DV50_MATERIAL_RESOLUTION;
+        if (record_data->isOP1A)
+        {
+            fprintf(stderr, "DV50 OP1A not supported\n");
+            pthread_exit((void *) 0);
+            return NULL;
+        }
+        else
+        {
+            resolutionId = MaterialResolution::DV50_MXF_ATOM;
+        }
         videoFrame1Size = (record_data->isPALProject ? 288000 : 240000);
         FILE* file;
         if ((file = fopen(record_data->dv50Filename.c_str(), "r")) == NULL)
@@ -284,7 +294,16 @@ static void* start_record_routine(void* data)
     else if (record_data->mjpeg21Filename.size() > 0)
     {
         // MJPEG 2:1 input
-        resolutionId = MJPEG21_MATERIAL_RESOLUTION;
+        if (record_data->isOP1A)
+        {
+            fprintf(stderr, "MJPEG 2:1 OP1A not supported\n");
+            pthread_exit((void *) 0);
+            return NULL;
+        }
+        else
+        {
+            resolutionId = MaterialResolution::MJPEG21_MXF_ATOM;
+        }
         FILE* file;
         if ((file = fopen(record_data->mjpeg21Filename.c_str(), "r")) == NULL)
         {
@@ -341,7 +360,14 @@ static void* start_record_routine(void* data)
     else if (record_data->imx50Filename.size() > 0)
     {
         // IMX-50 input
-        resolutionId = IMX50_MATERIAL_RESOLUTION;
+        if (record_data->isOP1A)
+        {
+            resolutionId = MaterialResolution::IMX50_MXF_1A;
+        }
+        else
+        {
+            resolutionId = MaterialResolution::IMX50_MXF_ATOM;
+        }
         videoFrame1Size = (record_data->isPALProject ? 250000 : 208541);
         FILE* file;
         if ((file = fopen(record_data->imx50Filename.c_str(), "r")) == NULL)
@@ -365,7 +391,16 @@ static void* start_record_routine(void* data)
     else
     {
         // dummy essence data
-        resolutionId = UNC_MATERIAL_RESOLUTION;
+        if (record_data->isOP1A)
+        {
+            fprintf(stderr, "Uncompressed OP1A not supported\n");
+            pthread_exit((void *) 0);
+            return NULL;
+        }
+        else
+        {
+            resolutionId = MaterialResolution::UNC_MXF_ATOM;
+        }
         videoFrame1Size = (record_data->isPALProject ? 720 * 576 * 2 : 720 * 480 * 2);
         memset(videoData1, 0, videoFrame1Size);
         videoFrame2Size = videoFrame1Size;
@@ -412,13 +447,55 @@ static void* start_record_routine(void* data)
         package_group->SetProjectName(record_data->projectName);
         package_group->SetFileLocationPrefix(record_data->filenamePrefix);
         if (!record_data->dv50Filename.empty())
-            package_group->SetVideoResolutionID(DV50_MATERIAL_RESOLUTION);
+        {
+            if (record_data->isOP1A)
+            {
+                fprintf(stderr, "DV50 OP1A not supported.");
+                pthread_exit((void *) 0);
+                return NULL;
+            }
+            else
+            {
+                package_group->SetVideoResolutionID(MaterialResolution::DV50_MXF_ATOM);
+            }
+        }
         else if (!record_data->mjpeg21Filename.empty())
-            package_group->SetVideoResolutionID(MJPEG21_MATERIAL_RESOLUTION);
+        {
+            if (record_data->isOP1A)
+            {
+                fprintf(stderr, "DV50 OP1A not supported.");
+                pthread_exit((void *) 0);
+                return NULL;
+            }
+            else
+            {
+                package_group->SetVideoResolutionID(MaterialResolution::MJPEG21_MXF_ATOM);
+            }
+        }
         else if (!record_data->imx50Filename.empty())
-            package_group->SetVideoResolutionID(IMX50_MATERIAL_RESOLUTION);
+        {
+            if (record_data->isOP1A)
+            {
+                package_group->SetVideoResolutionID(MaterialResolution::IMX50_MXF_1A);
+            }
+            else
+            {
+                package_group->SetVideoResolutionID(MaterialResolution::IMX50_MXF_ATOM);
+            }
+        }
         else
-            package_group->SetVideoResolutionID(UNC_MATERIAL_RESOLUTION);
+        {
+            if (record_data->isOP1A)
+            {
+                fprintf(stderr, "Uncompressed OP1A not supported.");
+                pthread_exit((void *) 0);
+                return NULL;
+            }
+            else
+            {
+                package_group->SetVideoResolutionID(MaterialResolution::UNC_MXF_ATOM);
+            }
+        }
         
         vector<bool> enabled_tracks;
         enabled_tracks.assign(source_config->trackConfigs.size(), true);
@@ -748,7 +825,7 @@ int main(int argc, const char* argv[])
                 string sourcePackageName = sourceConfig->name;
                 sourcePackageName += " - " + getDateString(now);
                 
-                sourceConfig->setSourcePackage(sourcePackageName);
+                sourceConfig->setSourcePackage(sourcePackageName, g_palEditRate);
             }
         }
         else
@@ -765,7 +842,7 @@ int main(int argc, const char* argv[])
                 
                 sprintf(buf, "%s%06x", tapeNumberPrefix.c_str(), i);
                 
-                sourceConfig->setSourcePackage(buf);
+                sourceConfig->setSourcePackage(buf, g_palEditRate);
             }
         }
     }

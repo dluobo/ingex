@@ -1,5 +1,5 @@
 /*
- * $Id: IngexMXFInfo.cpp,v 1.3 2009/12/17 16:59:41 john_f Exp $
+ * $Id: IngexMXFInfo.cpp,v 1.4 2010/06/02 13:01:45 john_f Exp $
  *
  * Extract information from Ingex MXF files.
  *
@@ -43,6 +43,7 @@
 #include <mxf/mxf_avid.h>
 
 #include <Package.h>
+#include <MaterialResolution.h>
 #include <Logging.h>
 #include <ProdAutoException.h>
 
@@ -96,63 +97,63 @@ typedef struct
     int ingex_resolution_id;
 } ECLabelToIngexResolutionMap;
 
-static const ECLabelToIngexResolutionMap EC_LABEL_RESOLUTION_MAP[] =
+static const ECLabelToIngexResolutionMap EC_LABEL_RESOLUTION_ATOM_MAP[] =
 {
-    {MXF_EC_L(D10_50_625_50_defined_template),      IMX50_MATERIAL_RESOLUTION},
-    {MXF_EC_L(D10_50_625_50_extended_template),     IMX50_MATERIAL_RESOLUTION},
-    {MXF_EC_L(D10_50_625_50_picture_only),          IMX50_MATERIAL_RESOLUTION},
-    {MXF_EC_L(D10_50_525_60_defined_template),      IMX50_MATERIAL_RESOLUTION},
-    {MXF_EC_L(D10_50_525_60_extended_template),     IMX50_MATERIAL_RESOLUTION},
-    {MXF_EC_L(D10_50_525_60_picture_only),          IMX50_MATERIAL_RESOLUTION},
+    {MXF_EC_L(D10_50_625_50_defined_template),      MaterialResolution::IMX50_MXF_ATOM},
+    {MXF_EC_L(D10_50_625_50_extended_template),     MaterialResolution::IMX50_MXF_ATOM},
+    {MXF_EC_L(D10_50_625_50_picture_only),          MaterialResolution::IMX50_MXF_ATOM},
+    {MXF_EC_L(D10_50_525_60_defined_template),      MaterialResolution::IMX50_MXF_ATOM},
+    {MXF_EC_L(D10_50_525_60_extended_template),     MaterialResolution::IMX50_MXF_ATOM},
+    {MXF_EC_L(D10_50_525_60_picture_only),          MaterialResolution::IMX50_MXF_ATOM},
     
-    {MXF_EC_L(D10_40_625_50_defined_template),      IMX40_MATERIAL_RESOLUTION},
-    {MXF_EC_L(D10_40_625_50_extended_template),     IMX40_MATERIAL_RESOLUTION},
-    {MXF_EC_L(D10_40_625_50_picture_only),          IMX40_MATERIAL_RESOLUTION},
-    {MXF_EC_L(D10_40_525_60_defined_template),      IMX40_MATERIAL_RESOLUTION},
-    {MXF_EC_L(D10_40_525_60_extended_template),     IMX40_MATERIAL_RESOLUTION},
-    {MXF_EC_L(D10_40_525_60_picture_only),          IMX40_MATERIAL_RESOLUTION},
+    {MXF_EC_L(D10_40_625_50_defined_template),      MaterialResolution::IMX40_MXF_ATOM},
+    {MXF_EC_L(D10_40_625_50_extended_template),     MaterialResolution::IMX40_MXF_ATOM},
+    {MXF_EC_L(D10_40_625_50_picture_only),          MaterialResolution::IMX40_MXF_ATOM},
+    {MXF_EC_L(D10_40_525_60_defined_template),      MaterialResolution::IMX40_MXF_ATOM},
+    {MXF_EC_L(D10_40_525_60_extended_template),     MaterialResolution::IMX40_MXF_ATOM},
+    {MXF_EC_L(D10_40_525_60_picture_only),          MaterialResolution::IMX40_MXF_ATOM},
 
-    {MXF_EC_L(D10_30_625_50_defined_template),      IMX30_MATERIAL_RESOLUTION},
-    {MXF_EC_L(D10_30_625_50_extended_template),     IMX30_MATERIAL_RESOLUTION},
-    {MXF_EC_L(D10_30_625_50_picture_only),          IMX30_MATERIAL_RESOLUTION},
-    {MXF_EC_L(D10_30_525_60_defined_template),      IMX30_MATERIAL_RESOLUTION},
-    {MXF_EC_L(D10_30_525_60_extended_template),     IMX30_MATERIAL_RESOLUTION},
-    {MXF_EC_L(D10_30_525_60_picture_only),          IMX30_MATERIAL_RESOLUTION},
+    {MXF_EC_L(D10_30_625_50_defined_template),      MaterialResolution::IMX30_MXF_ATOM},
+    {MXF_EC_L(D10_30_625_50_extended_template),     MaterialResolution::IMX30_MXF_ATOM},
+    {MXF_EC_L(D10_30_625_50_picture_only),          MaterialResolution::IMX30_MXF_ATOM},
+    {MXF_EC_L(D10_30_525_60_defined_template),      MaterialResolution::IMX30_MXF_ATOM},
+    {MXF_EC_L(D10_30_525_60_extended_template),     MaterialResolution::IMX30_MXF_ATOM},
+    {MXF_EC_L(D10_30_525_60_picture_only),          MaterialResolution::IMX30_MXF_ATOM},
 
-    {MXF_EC_L(IECDV_25_525_60_ClipWrapped),         DV25_MATERIAL_RESOLUTION},
-    {MXF_EC_L(IECDV_25_525_60_FrameWrapped),        DV25_MATERIAL_RESOLUTION},
-    {MXF_EC_L(IECDV_25_625_50_ClipWrapped),         DV25_MATERIAL_RESOLUTION},
-    {MXF_EC_L(IECDV_25_625_50_FrameWrapped),        DV25_MATERIAL_RESOLUTION},
-    {MXF_EC_L(DVBased_25_525_60_ClipWrapped),       DV25_MATERIAL_RESOLUTION},
-    {MXF_EC_L(DVBased_25_525_60_FrameWrapped),      DV25_MATERIAL_RESOLUTION},
-    {MXF_EC_L(DVBased_25_625_50_ClipWrapped),       DV25_MATERIAL_RESOLUTION},
-    {MXF_EC_L(DVBased_25_625_50_FrameWrapped),      DV25_MATERIAL_RESOLUTION},
+    {MXF_EC_L(IECDV_25_525_60_ClipWrapped),         MaterialResolution::DV25_MXF_ATOM},
+    {MXF_EC_L(IECDV_25_525_60_FrameWrapped),        MaterialResolution::DV25_MXF_ATOM},
+    {MXF_EC_L(IECDV_25_625_50_ClipWrapped),         MaterialResolution::DV25_MXF_ATOM},
+    {MXF_EC_L(IECDV_25_625_50_FrameWrapped),        MaterialResolution::DV25_MXF_ATOM},
+    {MXF_EC_L(DVBased_25_525_60_ClipWrapped),       MaterialResolution::DV25_MXF_ATOM},
+    {MXF_EC_L(DVBased_25_525_60_FrameWrapped),      MaterialResolution::DV25_MXF_ATOM},
+    {MXF_EC_L(DVBased_25_625_50_ClipWrapped),       MaterialResolution::DV25_MXF_ATOM},
+    {MXF_EC_L(DVBased_25_625_50_FrameWrapped),      MaterialResolution::DV25_MXF_ATOM},
 
-    {MXF_EC_L(DVBased_50_525_60_ClipWrapped),       DV50_MATERIAL_RESOLUTION},
-    {MXF_EC_L(DVBased_50_525_60_FrameWrapped),      DV50_MATERIAL_RESOLUTION},
-    {MXF_EC_L(DVBased_50_625_50_ClipWrapped),       DV50_MATERIAL_RESOLUTION},
-    {MXF_EC_L(DVBased_50_625_50_FrameWrapped),      DV50_MATERIAL_RESOLUTION},
+    {MXF_EC_L(DVBased_50_525_60_ClipWrapped),       MaterialResolution::DV50_MXF_ATOM},
+    {MXF_EC_L(DVBased_50_525_60_FrameWrapped),      MaterialResolution::DV50_MXF_ATOM},
+    {MXF_EC_L(DVBased_50_625_50_ClipWrapped),       MaterialResolution::DV50_MXF_ATOM},
+    {MXF_EC_L(DVBased_50_625_50_FrameWrapped),      MaterialResolution::DV50_MXF_ATOM},
 
-    {MXF_EC_L(DV720p50ClipWrapped),                 DVCPROHD_MATERIAL_RESOLUTION},
-    {MXF_EC_L(DV1080i50ClipWrapped),                DVCPROHD_MATERIAL_RESOLUTION},
+    {MXF_EC_L(DV720p50ClipWrapped),                 MaterialResolution::DV100_MXF_ATOM},
+    {MXF_EC_L(DV1080i50ClipWrapped),                MaterialResolution::DV100_MXF_ATOM},
     
-    {MXF_EC_L(HD_Unc_1080_50i_422_ClipWrapped),     UNC_MATERIAL_RESOLUTION},
-    {MXF_EC_L(SD_Unc_625_50i_422_135_ClipWrapped),  UNC_MATERIAL_RESOLUTION},
+    {MXF_EC_L(HD_Unc_1080_50i_422_ClipWrapped),     MaterialResolution::UNC_MXF_ATOM},
+    {MXF_EC_L(SD_Unc_625_50i_422_135_ClipWrapped),  MaterialResolution::UNC_MXF_ATOM},
     
-    {MXF_EC_L(DNxHD1080i185ClipWrapped),            DNX185i_MATERIAL_RESOLUTION},
+    {MXF_EC_L(DNxHD1080i185ClipWrapped),            MaterialResolution::DNX185I_MXF_ATOM},
     
-    {MXF_EC_L(DNxHD1080p185ClipWrapped),            DNX185p_MATERIAL_RESOLUTION},
-    {MXF_EC_L(DNxHD720p185ClipWrapped),             DNX185p_MATERIAL_RESOLUTION},
+    {MXF_EC_L(DNxHD1080p185ClipWrapped),            MaterialResolution::DNX185P_MXF_ATOM},
+    {MXF_EC_L(DNxHD720p185ClipWrapped),             MaterialResolution::DNX185P_MXF_ATOM},
     
-    {MXF_EC_L(DNxHD1080i120ClipWrapped),            DNX120i_MATERIAL_RESOLUTION},
+    {MXF_EC_L(DNxHD1080i120ClipWrapped),            MaterialResolution::DNX120I_MXF_ATOM},
     
-    {MXF_EC_L(DNxHD1080p120ClipWrapped),            DNX120p_MATERIAL_RESOLUTION},
-    {MXF_EC_L(DNxHD720p120ClipWrapped),             DNX120p_MATERIAL_RESOLUTION},
+    {MXF_EC_L(DNxHD1080p120ClipWrapped),            MaterialResolution::DNX120P_MXF_ATOM},
+    {MXF_EC_L(DNxHD720p120ClipWrapped),             MaterialResolution::DNX120P_MXF_ATOM},
     
-    {MXF_EC_L(DNxHD1080p36ClipWrapped),             DNX36p_MATERIAL_RESOLUTION},
+    {MXF_EC_L(DNxHD1080p36ClipWrapped),             MaterialResolution::DNX36P_MXF_ATOM},
 };
 
-#define EC_LABEL_RESOLUTION_MAP_SIZE    (sizeof(EC_LABEL_RESOLUTION_MAP) / sizeof(ECLabelToIngexResolutionMap))
+#define EC_LABEL_RESOLUTION_ATOM_MAP_SIZE    (sizeof(EC_LABEL_RESOLUTION_ATOM_MAP) / sizeof(ECLabelToIngexResolutionMap))
 
 
 typedef struct
@@ -161,28 +162,28 @@ typedef struct
     int ingex_resolution_id;
 } CompLabelToIngexResolutionMap;
 
-static const CompLabelToIngexResolutionMap COMP_LABEL_RESOLUTION_MAP[] =
+static const CompLabelToIngexResolutionMap COMP_LABEL_RESOLUTION_ATOM_MAP[] =
 {
-    {MXF_CMDEF_L(AvidMJPEG21_PAL),                     MJPEG21_MATERIAL_RESOLUTION},
-    {MXF_CMDEF_L(AvidMJPEG21_NTSC),                    MJPEG21_MATERIAL_RESOLUTION},
+    {MXF_CMDEF_L(AvidMJPEG21_PAL),                     MaterialResolution::MJPEG21_MXF_ATOM},
+    {MXF_CMDEF_L(AvidMJPEG21_NTSC),                    MaterialResolution::MJPEG21_MXF_ATOM},
     
-    {MXF_CMDEF_L(AvidMJPEG31_PAL),                     MJPEG31_MATERIAL_RESOLUTION},
-    {MXF_CMDEF_L(AvidMJPEG31_NTSC),                    MJPEG31_MATERIAL_RESOLUTION},
+    {MXF_CMDEF_L(AvidMJPEG31_PAL),                     MaterialResolution::MJPEG31_MXF_ATOM},
+    {MXF_CMDEF_L(AvidMJPEG31_NTSC),                    MaterialResolution::MJPEG31_MXF_ATOM},
     
-    {MXF_CMDEF_L(AvidMJPEG101_PAL),                    MJPEG101_MATERIAL_RESOLUTION},
-    {MXF_CMDEF_L(AvidMJPEG101_NTSC),                   MJPEG101_MATERIAL_RESOLUTION},
+    {MXF_CMDEF_L(AvidMJPEG101_PAL),                    MaterialResolution::MJPEG101_MXF_ATOM},
+    {MXF_CMDEF_L(AvidMJPEG101_NTSC),                   MaterialResolution::MJPEG101_MXF_ATOM},
     
-    {MXF_CMDEF_L(AvidMJPEG101m_PAL),                   MJPEG101M_MATERIAL_RESOLUTION},
-    {MXF_CMDEF_L(AvidMJPEG101m_NTSC),                  MJPEG101M_MATERIAL_RESOLUTION},
+    {MXF_CMDEF_L(AvidMJPEG101m_PAL),                   MaterialResolution::MJPEG101M_MXF_ATOM},
+    {MXF_CMDEF_L(AvidMJPEG101m_NTSC),                  MaterialResolution::MJPEG101M_MXF_ATOM},
     
-    {MXF_CMDEF_L(AvidMJPEG151s_PAL),                   MJPEG151S_MATERIAL_RESOLUTION},
-    {MXF_CMDEF_L(AvidMJPEG151s_NTSC),                  MJPEG151S_MATERIAL_RESOLUTION},
+    {MXF_CMDEF_L(AvidMJPEG151s_PAL),                   MaterialResolution::MJPEG151S_MXF_ATOM},
+    {MXF_CMDEF_L(AvidMJPEG151s_NTSC),                  MaterialResolution::MJPEG151S_MXF_ATOM},
     
-    {MXF_CMDEF_L(AvidMJPEG201_PAL),                    MJPEG201_MATERIAL_RESOLUTION},
-    {MXF_CMDEF_L(AvidMJPEG201_NTSC),                   MJPEG201_MATERIAL_RESOLUTION},
+    {MXF_CMDEF_L(AvidMJPEG201_PAL),                    MaterialResolution::MJPEG201_MXF_ATOM},
+    {MXF_CMDEF_L(AvidMJPEG201_NTSC),                   MaterialResolution::MJPEG201_MXF_ATOM},
 };
 
-#define COMP_LABEL_RESOLUTION_MAP_SIZE  (sizeof(COMP_LABEL_RESOLUTION_MAP) / sizeof(CompLabelToIngexResolutionMap))
+#define COMP_LABEL_RESOLUTION_ATOM_MAP_SIZE  (sizeof(COMP_LABEL_RESOLUTION_ATOM_MAP) / sizeof(CompLabelToIngexResolutionMap))
 
 
 typedef struct
@@ -191,17 +192,17 @@ typedef struct
     int ingex_resolution_id;
 } ResolutionMap;
 
-static const ResolutionMap RESOLUTION_MAP[] =
+static const ResolutionMap RESOLUTION_ATOM_MAP[] =
 {
-    {g_AvidMJPEG21_ResolutionID,                    MJPEG21_MATERIAL_RESOLUTION},
-    {g_AvidMJPEG31_ResolutionID,                    MJPEG31_MATERIAL_RESOLUTION},
-    {g_AvidMJPEG101_ResolutionID,                   MJPEG101_MATERIAL_RESOLUTION},
-    {g_AvidMJPEG101m_ResolutionID,                  MJPEG101M_MATERIAL_RESOLUTION},
-    {g_AvidMJPEG151s_ResolutionID,                  MJPEG151S_MATERIAL_RESOLUTION},
-    {g_AvidMJPEG201_ResolutionID,                   MJPEG201_MATERIAL_RESOLUTION},
+    {g_AvidMJPEG21_ResolutionID,                    MaterialResolution::MJPEG21_MXF_ATOM},
+    {g_AvidMJPEG31_ResolutionID,                    MaterialResolution::MJPEG31_MXF_ATOM},
+    {g_AvidMJPEG101_ResolutionID,                   MaterialResolution::MJPEG101_MXF_ATOM},
+    {g_AvidMJPEG101m_ResolutionID,                  MaterialResolution::MJPEG101M_MXF_ATOM},
+    {g_AvidMJPEG151s_ResolutionID,                  MaterialResolution::MJPEG151S_MXF_ATOM},
+    {g_AvidMJPEG201_ResolutionID,                   MaterialResolution::MJPEG201_MXF_ATOM},
 };
 
-#define RESOLUTION_MAP_SIZE     (sizeof(RESOLUTION_MAP) / sizeof(ResolutionMap))
+#define RESOLUTION_ATOM_MAP_SIZE     (sizeof(RESOLUTION_ATOM_MAP) / sizeof(ResolutionMap))
 
 
 
@@ -397,7 +398,7 @@ IngexMXFInfo::IngexMXFInfo(string filename, mxfUL *essence_container_label, Head
         else
             throw UNKNOWN_PROJECT_EDIT_RATE;
         
-        _package_group = new prodauto::PackageGroup(is_pal_project, OPERATIONAL_PATTERN_ATOM);
+        _package_group = new prodauto::PackageGroup(is_pal_project, OperationalPattern::OP_ATOM);
         
         
         // extract package info
@@ -588,7 +589,7 @@ void IngexMXFInfo::extractMaterialPackageInfo(MaterialPackage *mxf_package)
     int color;
     
     // op atom
-    _package_group->GetMaterialPackage()->op = OPERATIONAL_PATTERN_ATOM;
+    _package_group->GetMaterialPackage()->op = OperationalPattern::OP_ATOM;
     
     // extract positioned user comments from the DM event track
     
@@ -656,7 +657,7 @@ void IngexMXFInfo::extractFileSourcePackageInfo(SourcePackage *mxf_package, mxfU
     getCurrentFileSourcePackage()->descriptor = descriptor;
     
     descriptor->fileLocation = _filename;
-    descriptor->fileFormat = MXF_FILE_FORMAT_TYPE;
+    descriptor->fileFormat = FileFormat::MXF;
     
     vector<prodauto::UserComment> source_comments =
         _package_group->GetMaterialPackage()->getUserComments(AVID_UC_SOURCE_NAME);
@@ -749,22 +750,22 @@ int IngexMXFInfo::getVideoResolutionId(mxfUL *container_label, mxfUL *picture_es
 
     if (mxf_equals_ul_mod_regver(container_label, &MXF_EC_L(AvidMJPEGClipWrapped))) {
         if (avid_resolution_id >= 0) {
-            for (i = 0; i < RESOLUTION_MAP_SIZE; i++) {
-                if (avid_resolution_id == RESOLUTION_MAP[i].avid_resolution_id)
-                    return RESOLUTION_MAP[i].ingex_resolution_id;
+            for (i = 0; i < RESOLUTION_ATOM_MAP_SIZE; i++) {
+                if (avid_resolution_id == RESOLUTION_ATOM_MAP[i].avid_resolution_id)
+                    return RESOLUTION_ATOM_MAP[i].ingex_resolution_id;
             }
         }
 
-        for (i = 0; i < COMP_LABEL_RESOLUTION_MAP_SIZE; i++) {
-            if (mxf_equals_ul(picture_essence_coding, &COMP_LABEL_RESOLUTION_MAP[i].compression_label))
-                return COMP_LABEL_RESOLUTION_MAP[i].ingex_resolution_id;
+        for (i = 0; i < COMP_LABEL_RESOLUTION_ATOM_MAP_SIZE; i++) {
+            if (mxf_equals_ul(picture_essence_coding, &COMP_LABEL_RESOLUTION_ATOM_MAP[i].compression_label))
+                return COMP_LABEL_RESOLUTION_ATOM_MAP[i].ingex_resolution_id;
         }
     } else {
         // Note: using mxf_equals_ul_mod_regver function below because the Avid labels sometimes have a
         // different registry version byte
-        for (i = 0; i < EC_LABEL_RESOLUTION_MAP_SIZE; i++) {
-            if (mxf_equals_ul_mod_regver(container_label, &EC_LABEL_RESOLUTION_MAP[i].container_label))
-                return EC_LABEL_RESOLUTION_MAP[i].ingex_resolution_id;
+        for (i = 0; i < EC_LABEL_RESOLUTION_ATOM_MAP_SIZE; i++) {
+            if (mxf_equals_ul_mod_regver(container_label, &EC_LABEL_RESOLUTION_ATOM_MAP[i].container_label))
+                return EC_LABEL_RESOLUTION_ATOM_MAP[i].ingex_resolution_id;
         }
     }
 

@@ -1,5 +1,5 @@
 /*
- * $Id: SourceConfig.cpp,v 1.5 2009/10/12 15:44:56 philipn Exp $
+ * $Id: SourceConfig.cpp,v 1.6 2010/06/02 13:04:40 john_f Exp $
  *
  * Live recording or tape Source configuration
  *
@@ -70,23 +70,23 @@ SourceTrackConfig* SourceConfig::getTrackConfig(uint32_t id)
     return 0;
 }
 
-void SourceConfig::setSessionSourcePackage()
+void SourceConfig::setSessionSourcePackage(const Rational &editRate, bool dropFrameFlag)
 {
     string sourcePackageName = name;
     sourcePackageName += " - " + getDateString(generateDateNow());
 
-    setSourcePackage(sourcePackageName);
+    setSourcePackage(sourcePackageName, editRate, dropFrameFlag);
 }
 
-void SourceConfig::setSourcePackage(string name)
+void SourceConfig::setSourcePackage(string name, const Rational &editRate, bool dropFrameFlag)
 {
-    if (_sourcePackage != 0 && _sourcePackage->name.compare(name) == 0)
+    if (_sourcePackage != 0 && _sourcePackage->name == name)
     {
         // current source package has the required name
         return;
     }
     
-    if (_sourcePackage != 0 && _sourcePackage->name.compare(name) != 0)
+    if (_sourcePackage != 0 && _sourcePackage->name != name)
     {
         // delete the existing package with a different name
         delete _sourcePackage;
@@ -108,6 +108,10 @@ void SourceConfig::setSourcePackage(string name)
     {
         // got it
         transaction->commit();
+        
+        // TODO: drop frame flag should be stored in the database
+        //       force the drop frame flag here
+        _sourcePackage->dropFrameFlag = dropFrameFlag;
         return;
     }
 
@@ -129,6 +133,7 @@ void SourceConfig::setSourcePackage(string name)
         newSourcePackage->descriptor = liveEssDesc;
         liveEssDesc->recordingLocation = recordingLocation;
     }
+    newSourcePackage->dropFrameFlag = dropFrameFlag;
     
     
     // create source package tracks
@@ -145,12 +150,12 @@ void SourceConfig::setSourcePackage(string name)
         track->number = sourceTrackConfig->number;
         track->name = sourceTrackConfig->name;
         track->dataDef = sourceTrackConfig->dataDef;
-        track->editRate = sourceTrackConfig->editRate;
+        track->editRate = editRate;
         track->sourceClip = new SourceClip();
         
         track->sourceClip->sourcePackageUID = g_nullUMID;
         track->sourceClip->sourceTrackID = 0;
-        track->sourceClip->length = sourceTrackConfig->length;
+        track->sourceClip->length = (int64_t)120 * 60 * 60 * editRate.numerator / editRate.denominator;
         track->sourceClip->position = 0;
     }
         

@@ -1,5 +1,5 @@
 /*
- * $Id: PackageGroup.h,v 1.3 2010/03/30 08:15:51 john_f Exp $
+ * $Id: PackageGroup.h,v 1.4 2010/06/02 13:04:40 john_f Exp $
  *
  * Package group
  *
@@ -30,6 +30,7 @@
 #include <vector>
 
 #include "Package.h"
+#include "MaterialResolution.h"
 
 
 namespace prodauto
@@ -61,6 +62,8 @@ public:
     SourcePackage* GetFileSourcePackage(); // use for OP-1A only
     SourcePackage* GetTapeSourcePackage() { return mTapeSourcePackage; }
     
+    MaterialResolution::EnumType GetMaterialResolution();
+    
     bool HaveFileSourcePackage(uint32_t mp_track_id);
     SourcePackage* GetFileSourcePackage(uint32_t mp_track_id);
     Track* GetFileSourceTrack(uint32_t mp_track_id);
@@ -77,6 +80,8 @@ public:
     PackageGroup* Clone();
     
     void SaveToDatabase();
+    
+    void SaveToFile(std::string filename);
     
 public:
     void SetMaterialPackage(MaterialPackage *material_package);

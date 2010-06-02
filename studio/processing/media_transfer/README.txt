@@ -1,4 +1,5 @@
 COPYING MATERIAL TO A SERVER
+----------------------------
 
 Each recorder's COPY_COMMAND should point to xferclient.pl, with ENCODE1_DEST, ENCODE2_DEST etc pointing to directories on the server(s).
 
@@ -12,7 +13,9 @@ Alternatively, FTP can be used to transfer material - see xferserver.pl for comm
 
 (The present scheme does not use media_transfer.pl.)
 
+
 AUTOMATICALLY GENERATING SAMBA EXPORTS FOR AVID
+-----------------------------------------------
 
 export_for_avidd.pl needs to be run as a system service:
 
@@ -20,7 +23,20 @@ export_for_avidd.pl needs to be run as a system service:
 
 2) sudo /sbin/chkconfig -a export_for_avidd
 
+The export_for_avid.pl script sets up links in the samba shares.
+If your client is unable to follow these links, try the following
+options in /etc/samba/smb.conf
+
+[global]
+
+...
+
+	wide links = Yes
+	unix extensions = No
+
+
 AUTOMATICALLY IMPORTING MXF AND CUT DATA INTO SERVER DATABASE
+-------------------------------------------------------------
 
 import_db_infod.pl needs to be run as a system service:
 
@@ -28,7 +44,9 @@ import_db_infod.pl needs to be run as a system service:
 
 2) sudo /sbin/chkconfig -a import_db_infod
 
+
 ADDITIONAL PERL MODULES
+-----------------------
 
 Both the above need:
   Proc::Daemon

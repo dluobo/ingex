@@ -6,10 +6,12 @@ $(error Please set the AAFSDKINSTALL environment variable to the location of you
 endif	
 
 DATABASELIB_DIR = ../../database/src
+COMMON_DIR = ../../../common
+STUDIOCOMMON_DIR = ../../common
 
 CC = g++
 CFLAGS = -g -Wall -Wundef -W -Wno-unused-parameter -Wno-non-virtual-dtor -Werror
-INCLUDES = -I. -I$(DATABASELIB_DIR) -I$(AAFSDKINSTALL)/include
+INCLUDES = -I. -I$(DATABASELIB_DIR) -I$(COMMON_DIR) -I$(AAFSDKINSTALL)/include
 
 COMPILE = $(CC) $(CFLAGS) $(INCLUDES)
 LD = $(CC) -ldl -rdynamic
@@ -27,7 +29,7 @@ $(DATABASELIB_DIR)/libprodautodb.a:
 	@cd $(DATABASELIB_DIR) && $(MAKE) libprodautodb.a
 
 deletepkg: $(DATABASELIB_DIR)/libprodautodb.a $(OBJECTS)
-	$(LD) $(OBJECTS) -Xlinker -rpath -Xlinker . -L$(DATABASELIB_DIR) -L$(AAFSDKINSTALL)/lib/debug -lprodautodb -laafiid -lpq -lpqxx -luuid -lpthread -lxerces-c -o $@
+	$(LD) $(OBJECTS) -Xlinker -rpath -Xlinker . -L$(DATABASELIB_DIR) -L$(COMMON_DIR) -L$(STUDIOCOMMON_DIR) -L$(AAFSDKINSTALL)/lib/debug -lprodautodb -lcommon -lstudiocommon -laafiid -lpq -lpqxx -luuid -lpthread -lxerces-c -o $@
 
 	
 

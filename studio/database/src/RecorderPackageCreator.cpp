@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderPackageCreator.cpp,v 1.2 2010/03/29 17:06:52 philipn Exp $
+ * $Id: RecorderPackageCreator.cpp,v 1.3 2010/06/02 13:04:40 john_f Exp $
  *
  * Recorder package group creator
  *
@@ -36,16 +36,16 @@ using namespace prodauto;
 
 
 
-RecorderPackageCreator::RecorderPackageCreator(bool is_pal_project, int op)
+RecorderPackageCreator::RecorderPackageCreator(bool is_pal_project, OperationalPattern::EnumType op)
 : PackageGroup(is_pal_project, op)
 {
-    mFileFormat = MXF_FILE_FORMAT_TYPE;
+    mFileFormat = FileFormat::MXF;
     mCreationDate = g_nullTimestamp;
     mStartPosition = 0;
     mOrigin = 0;
     mFileLocationPrefix = "ingex";
     mImageAspectRatio = g_16x9ImageAspect;
-    mVideoResolutionId = UNC_MATERIAL_RESOLUTION;
+    mVideoResolutionId = MaterialResolution::UNC_MXF_ATOM;
     mAudioQuantizationBits = 16;
 }
 
@@ -157,13 +157,13 @@ string RecorderPackageCreator::GetFileLocationSuffix()
 {
     switch (mFileFormat)
     {
-        case MXF_FILE_FORMAT_TYPE:
+        case FileFormat::MXF:
             return ".mxf";
-        case MOV_FILE_FORMAT_TYPE:
+        case FileFormat::MOV:
             return ".mov";
-        case MPG_FILE_FORMAT_TYPE:
+        case FileFormat::MPG:
             return ".mpg";
-        case RAW_FILE_FORMAT_TYPE:
+        case FileFormat::RAW:
         default:
             return ".raw";
     }

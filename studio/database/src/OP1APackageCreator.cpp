@@ -1,5 +1,5 @@
 /*
- * $Id: OP1APackageCreator.cpp,v 1.1 2009/10/12 15:54:33 philipn Exp $
+ * $Id: OP1APackageCreator.cpp,v 1.2 2010/06/02 13:04:40 john_f Exp $
  *
  * OP-1A package group creator
  *
@@ -42,7 +42,7 @@ string OP1APackageCreator::CreateFileLocation(string prefix, string suffix)
 
 
 OP1APackageCreator::OP1APackageCreator(bool is_pal_project)
-: RecorderPackageCreator(is_pal_project, OPERATIONAL_PATTERN_1A)
+: RecorderPackageCreator(is_pal_project, OperationalPattern::OP_1A)
 {
 }
 
@@ -66,7 +66,7 @@ void OP1APackageCreator::CreatePackageGroup(SourceConfig *source_config, vector<
     mMaterialPackage->name = GetClipName();
     mMaterialPackage->creationDate = creation_date;
     mMaterialPackage->projectName = mProjectName;
-    mMaterialPackage->op = OPERATIONAL_PATTERN_1A;
+    mMaterialPackage->op = OperationalPattern::OP_1A;
     mMaterialPackage->addUserComments(mUserComments);
     mMaterialPackage->addUserComment(AVID_UC_SOURCE_NAME, source_config->name, STATIC_COMMENT_POSITION, 0);
 

@@ -1,5 +1,5 @@
 /*
- * $Id: AAFFile.cpp,v 1.10 2010/03/29 17:06:52 philipn Exp $
+ * $Id: AAFFile.cpp,v 1.11 2010/06/02 12:59:07 john_f Exp $
  *
  * AAF file for defining clips, multi-camera clips, etc
  *
@@ -44,7 +44,7 @@
 #include "CreateAAFException.h"
 #include "package_utils.h"
 
-#include <DatabaseEnums.h>
+#include <MaterialResolution.h>
 #include <Logging.h>
 
 
@@ -607,7 +607,7 @@ bool AAFFile::addMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPackag
                             }
                             
                             // if the source package and track match the multi-camera selector
-                            if (selectorDef->sourceConfig->name.compare(fileSourcePackage->sourceConfigName) == 0 && 
+                            if (selectorDef->sourceConfig->name == fileSourcePackage->sourceConfigName && 
                                 sourceTrack->id == selectorDef->sourceTrackID)
                             {
                                 if (activeMaterialPackages.insert(materialPackage).second)
@@ -1103,7 +1103,7 @@ void AAFFile::createMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPac
                     if (getSource(track, packages, &fileSourcePackage, &sourcePackage, &sourceTrack))
                     {
                         // if the source package and track match the mult-camera selection
-                        if (selectorDef->sourceConfig->name.compare(fileSourcePackage->sourceConfigName) == 0 && 
+                        if (selectorDef->sourceConfig->name == fileSourcePackage->sourceConfigName && 
                             sourceTrack->id == selectorDef->sourceTrackID)
                         {
                             doneSelectedTrack = true;
@@ -1189,7 +1189,7 @@ void AAFFile::createMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPac
                     if (getSource(track, packages, &fileSourcePackage, &sourcePackage, &sourceTrack))
                     {
                         // if the source package and track match the mult-camera selection
-                        if (selectorDef->sourceConfig->name.compare(fileSourcePackage->sourceConfigName) == 0 && 
+                        if (selectorDef->sourceConfig->name == fileSourcePackage->sourceConfigName && 
                             sourceTrack->id == selectorDef->sourceTrackID)
                         {
                             doneSelectedTrack = true;
@@ -1438,7 +1438,7 @@ void AAFFile::createMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPac
                                             AAF_CHECK(pComponent->QueryInterface(IID_IAAFSelector, (void **)&pSelector));
                                             
                                             if (isPicture && // if sound then the first track became the SelectedSegment
-                                                selectorDef->sourceConfig->name.compare(sequence[i].source) == 0)
+                                                selectorDef->sourceConfig->name == sequence[i].source)
                                             {
                                                 // set selected segment
                                                 AAF_CHECK(pSourceClip->QueryInterface(IID_IAAFSegment, (void **)&pSegment));
@@ -1579,7 +1579,7 @@ void AAFFile::createMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPac
                                                 AAF_CHECK(pComponent->SetLength(sourceClipLength));
                                                 
                                                 if (!isPicture || // the first sound track always becomes the SelectedSegment
-                                                    selectorDef->sourceConfig->name.compare(sequence[i].source) == 0)
+                                                    selectorDef->sourceConfig->name == sequence[i].source)
                                                 {
                                                     // set selected segment
                                                     AAF_CHECK(pSourceClip->QueryInterface(IID_IAAFSegment, (void **)&pSegment));
@@ -2043,7 +2043,7 @@ void AAFFile::mapFileSourceMob(SourcePackage* sourcePackage)
             AAF_CHECK(pCDCIDescriptor2->QueryInterface(IID_IAAFFileDescriptor, (void **)&pFileDescriptor));
     
             AAF_CHECK(pCDCIDescriptor2->Initialize());
-            if (fileDescriptor->videoResolutionID == DV25_MATERIAL_RESOLUTION)
+            if (fileDescriptor->videoResolutionID == MaterialResolution::DV25_MXF_ATOM)
             {
                 AAF_CHECK(pCDCIDescriptor2->SetHorizontalSubsampling(2));
                 AAF_CHECK(pCDCIDescriptor2->SetVerticalSubsampling(2));
@@ -2061,7 +2061,7 @@ void AAFFile::mapFileSourceMob(SourcePackage* sourcePackage)
                 setDIDInt32Property(pCDDigitalImageDescriptor, pDigitalImageDescriptor2,
                     kAAFPropID_DIDResolutionID, 0x8d);
             }
-            else if (fileDescriptor->videoResolutionID == DV50_MATERIAL_RESOLUTION)
+            else if (fileDescriptor->videoResolutionID == MaterialResolution::DV50_MXF_ATOM)
             {
                 AAF_CHECK(pCDCIDescriptor2->SetHorizontalSubsampling(2));
                 AAF_CHECK(pCDCIDescriptor2->SetVerticalSubsampling(1));
@@ -2079,7 +2079,7 @@ void AAFFile::mapFileSourceMob(SourcePackage* sourcePackage)
                 setDIDInt32Property(pCDDigitalImageDescriptor, pDigitalImageDescriptor2,
                     kAAFPropID_DIDResolutionID, 0x8e);
             }
-            else if (fileDescriptor->videoResolutionID == DVCPROHD_MATERIAL_RESOLUTION)
+            else if (fileDescriptor->videoResolutionID == MaterialResolution::DV100_MXF_ATOM)
             {
                 AAF_CHECK(pCDCIDescriptor2->SetHorizontalSubsampling(2));
                 AAF_CHECK(pCDCIDescriptor2->SetVerticalSubsampling(1));
@@ -2095,7 +2095,7 @@ void AAFFile::mapFileSourceMob(SourcePackage* sourcePackage)
                 setDIDInt32Property(pCDDigitalImageDescriptor, pDigitalImageDescriptor2,
                     kAAFPropID_DIDImageSize, track->sourceClip->length * 576000);
             }
-            else if (fileDescriptor->videoResolutionID == IMX30_MATERIAL_RESOLUTION)
+            else if (fileDescriptor->videoResolutionID == MaterialResolution::IMX30_MXF_ATOM)
             {
                 AAF_CHECK(pCDCIDescriptor2->SetHorizontalSubsampling(2));
                 AAF_CHECK(pCDCIDescriptor2->SetVerticalSubsampling(1));
@@ -2113,7 +2113,7 @@ void AAFFile::mapFileSourceMob(SourcePackage* sourcePackage)
                 setDIDInt32Property(pCDDigitalImageDescriptor, pDigitalImageDescriptor2,
                     kAAFPropID_DIDResolutionID, 0xa2);
             }
-            else if (fileDescriptor->videoResolutionID == IMX40_MATERIAL_RESOLUTION)
+            else if (fileDescriptor->videoResolutionID == MaterialResolution::IMX40_MXF_ATOM)
             {
                 AAF_CHECK(pCDCIDescriptor2->SetHorizontalSubsampling(2));
                 AAF_CHECK(pCDCIDescriptor2->SetVerticalSubsampling(1));
@@ -2131,7 +2131,7 @@ void AAFFile::mapFileSourceMob(SourcePackage* sourcePackage)
                 setDIDInt32Property(pCDDigitalImageDescriptor, pDigitalImageDescriptor2,
                     kAAFPropID_DIDResolutionID, 0xa1);
             }
-            else if (fileDescriptor->videoResolutionID == IMX50_MATERIAL_RESOLUTION)
+            else if (fileDescriptor->videoResolutionID == MaterialResolution::IMX50_MXF_ATOM)
             {
                 AAF_CHECK(pCDCIDescriptor2->SetHorizontalSubsampling(2));
                 AAF_CHECK(pCDCIDescriptor2->SetVerticalSubsampling(1));
@@ -2149,7 +2149,7 @@ void AAFFile::mapFileSourceMob(SourcePackage* sourcePackage)
                 setDIDInt32Property(pCDDigitalImageDescriptor, pDigitalImageDescriptor2,
                     kAAFPropID_DIDResolutionID, 0xa0);
             }
-            else if (fileDescriptor->videoResolutionID == UNC_MATERIAL_RESOLUTION)
+            else if (fileDescriptor->videoResolutionID == MaterialResolution::UNC_MXF_ATOM)
             {
                 AAF_CHECK(pCDCIDescriptor2->SetHorizontalSubsampling(2));
                 AAF_CHECK(pCDCIDescriptor2->SetVerticalSubsampling(1));
@@ -2167,7 +2167,7 @@ void AAFFile::mapFileSourceMob(SourcePackage* sourcePackage)
                 setDIDInt32Property(pCDDigitalImageDescriptor, pDigitalImageDescriptor2,
                     kAAFPropID_DIDResolutionID, 0xaa);
             }
-            else if (fileDescriptor->videoResolutionID == MJPEG21_MATERIAL_RESOLUTION)
+            else if (fileDescriptor->videoResolutionID == MaterialResolution::MJPEG21_MXF_ATOM)
             {
                 AAF_CHECK(pCDCIDescriptor2->SetHorizontalSubsampling(2));
                 AAF_CHECK(pCDCIDescriptor2->SetVerticalSubsampling(1));
@@ -2186,7 +2186,7 @@ void AAFFile::mapFileSourceMob(SourcePackage* sourcePackage)
                 setDIDInt32Property(pCDDigitalImageDescriptor, pDigitalImageDescriptor2,
                     kAAFPropID_DIDResolutionID, 0x4c);
             }
-            else if (fileDescriptor->videoResolutionID == MJPEG31_MATERIAL_RESOLUTION)
+            else if (fileDescriptor->videoResolutionID == MaterialResolution::MJPEG31_MXF_ATOM)
             {
                 AAF_CHECK(pCDCIDescriptor2->SetHorizontalSubsampling(2));
                 AAF_CHECK(pCDCIDescriptor2->SetVerticalSubsampling(1));
@@ -2205,7 +2205,7 @@ void AAFFile::mapFileSourceMob(SourcePackage* sourcePackage)
                 setDIDInt32Property(pCDDigitalImageDescriptor, pDigitalImageDescriptor2,
                     kAAFPropID_DIDResolutionID, 0x4d);
             }
-            else if (fileDescriptor->videoResolutionID == MJPEG101_MATERIAL_RESOLUTION)
+            else if (fileDescriptor->videoResolutionID == MaterialResolution::MJPEG101_MXF_ATOM)
             {
                 AAF_CHECK(pCDCIDescriptor2->SetHorizontalSubsampling(2));
                 AAF_CHECK(pCDCIDescriptor2->SetVerticalSubsampling(1));
@@ -2224,7 +2224,7 @@ void AAFFile::mapFileSourceMob(SourcePackage* sourcePackage)
                 setDIDInt32Property(pCDDigitalImageDescriptor, pDigitalImageDescriptor2,
                     kAAFPropID_DIDResolutionID, 0x4b);
             }
-            else if (fileDescriptor->videoResolutionID == MJPEG101M_MATERIAL_RESOLUTION)
+            else if (fileDescriptor->videoResolutionID == MaterialResolution::MJPEG101M_MXF_ATOM)
             {
                 AAF_CHECK(pCDCIDescriptor2->SetHorizontalSubsampling(2));
                 AAF_CHECK(pCDCIDescriptor2->SetVerticalSubsampling(1));
@@ -2243,7 +2243,7 @@ void AAFFile::mapFileSourceMob(SourcePackage* sourcePackage)
                 setDIDInt32Property(pCDDigitalImageDescriptor, pDigitalImageDescriptor2,
                     kAAFPropID_DIDResolutionID, 0x6e);
             }
-            else if (fileDescriptor->videoResolutionID == MJPEG151S_MATERIAL_RESOLUTION)
+            else if (fileDescriptor->videoResolutionID == MaterialResolution::MJPEG151S_MXF_ATOM)
             {
                 AAF_CHECK(pCDCIDescriptor2->SetHorizontalSubsampling(2));
                 AAF_CHECK(pCDCIDescriptor2->SetVerticalSubsampling(1));
@@ -2262,7 +2262,7 @@ void AAFFile::mapFileSourceMob(SourcePackage* sourcePackage)
                 setDIDInt32Property(pCDDigitalImageDescriptor, pDigitalImageDescriptor2,
                     kAAFPropID_DIDResolutionID, 0x4e);
             }
-            else if (fileDescriptor->videoResolutionID == MJPEG201_MATERIAL_RESOLUTION)
+            else if (fileDescriptor->videoResolutionID == MaterialResolution::MJPEG201_MXF_ATOM)
             {
                 AAF_CHECK(pCDCIDescriptor2->SetHorizontalSubsampling(2));
                 AAF_CHECK(pCDCIDescriptor2->SetVerticalSubsampling(1));
@@ -2281,7 +2281,7 @@ void AAFFile::mapFileSourceMob(SourcePackage* sourcePackage)
                 setDIDInt32Property(pCDDigitalImageDescriptor, pDigitalImageDescriptor2,
                     kAAFPropID_DIDResolutionID, 0x52);
             }
-            else if (fileDescriptor->videoResolutionID == DNX36p_MATERIAL_RESOLUTION)
+            else if (fileDescriptor->videoResolutionID == MaterialResolution::DNX36P_MXF_ATOM)
             {
                 AAF_CHECK(pCDCIDescriptor2->SetHorizontalSubsampling(2));
                 AAF_CHECK(pCDCIDescriptor2->SetVerticalSubsampling(1));
@@ -2299,7 +2299,7 @@ void AAFFile::mapFileSourceMob(SourcePackage* sourcePackage)
                 setDIDInt32Property(pCDDigitalImageDescriptor, pDigitalImageDescriptor2,
                     kAAFPropID_DIDResolutionID, 1253);
             }
-            else if (fileDescriptor->videoResolutionID == DNX120p_MATERIAL_RESOLUTION)
+            else if (fileDescriptor->videoResolutionID == MaterialResolution::DNX120P_MXF_ATOM)
             {
                 AAF_CHECK(pCDCIDescriptor2->SetHorizontalSubsampling(2));
                 AAF_CHECK(pCDCIDescriptor2->SetVerticalSubsampling(1));
@@ -2317,7 +2317,7 @@ void AAFFile::mapFileSourceMob(SourcePackage* sourcePackage)
                 setDIDInt32Property(pCDDigitalImageDescriptor, pDigitalImageDescriptor2,
                     kAAFPropID_DIDResolutionID, 1237);
             }
-            else if (fileDescriptor->videoResolutionID == DNX185p_MATERIAL_RESOLUTION)
+            else if (fileDescriptor->videoResolutionID == MaterialResolution::DNX185P_MXF_ATOM)
             {
                 AAF_CHECK(pCDCIDescriptor2->SetHorizontalSubsampling(2));
                 AAF_CHECK(pCDCIDescriptor2->SetVerticalSubsampling(1));
@@ -2335,7 +2335,7 @@ void AAFFile::mapFileSourceMob(SourcePackage* sourcePackage)
                 setDIDInt32Property(pCDDigitalImageDescriptor, pDigitalImageDescriptor2,
                     kAAFPropID_DIDResolutionID, 1238);
             }
-            else if (fileDescriptor->videoResolutionID == DNX120i_MATERIAL_RESOLUTION)
+            else if (fileDescriptor->videoResolutionID == MaterialResolution::DNX120I_MXF_ATOM)
             {
                 AAF_CHECK(pCDCIDescriptor2->SetHorizontalSubsampling(2));
                 AAF_CHECK(pCDCIDescriptor2->SetVerticalSubsampling(1));
@@ -2353,7 +2353,7 @@ void AAFFile::mapFileSourceMob(SourcePackage* sourcePackage)
                 setDIDInt32Property(pCDDigitalImageDescriptor, pDigitalImageDescriptor2,
                     kAAFPropID_DIDResolutionID, 1242);
             }
-            else if (fileDescriptor->videoResolutionID == DNX185i_MATERIAL_RESOLUTION)
+            else if (fileDescriptor->videoResolutionID == MaterialResolution::DNX185I_MXF_ATOM)
             {
                 AAF_CHECK(pCDCIDescriptor2->SetHorizontalSubsampling(2));
                 AAF_CHECK(pCDCIDescriptor2->SetVerticalSubsampling(1));

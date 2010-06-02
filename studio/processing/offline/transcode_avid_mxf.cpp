@@ -1,5 +1,5 @@
 /*
- * $Id: transcode_avid_mxf.cpp,v 1.12 2009/10/12 18:48:51 john_f Exp $
+ * $Id: transcode_avid_mxf.cpp,v 1.13 2010/06/02 12:59:07 john_f Exp $
  *
  * Transcodes Avid MXF files
  *
@@ -433,13 +433,13 @@ static int initialise_transcode(TranscodeAvidMXF* transcode, TranscodeStream* st
 {
     // check transcode is supported 
     if (!stream->isVideo || 
-        (stream->inputVideoResolutionID != DV50_MATERIAL_RESOLUTION &&
-            stream->inputVideoResolutionID != MJPEG21_MATERIAL_RESOLUTION))
+        (stream->inputVideoResolutionID != MaterialResolution::DV50_MXF_ATOM &&
+            stream->inputVideoResolutionID != MaterialResolution::MJPEG21_MXF_ATOM))
     {
         fprintf(stderr, "Input essence type not supported for transcode\n");
         return 0;
     }
-    if (stream->outputVideoResolutionID != MJPEG201_MATERIAL_RESOLUTION)
+    if (stream->outputVideoResolutionID != MaterialResolution::MJPEG201_MXF_ATOM)
     {
         fprintf(stderr, "Output essence type not supported for transcode\n");
         return 0;
@@ -448,10 +448,10 @@ static int initialise_transcode(TranscodeAvidMXF* transcode, TranscodeStream* st
     Decoder::DecoderType decoderType;
     switch (stream->inputVideoResolutionID)
     {
-        case DV50_MATERIAL_RESOLUTION:
+        case MaterialResolution::DV50_MXF_ATOM:
             decoderType = Decoder::DV_DECODER;
             break;
-        case MJPEG21_MATERIAL_RESOLUTION:
+        case MaterialResolution::MJPEG21_MXF_ATOM:
         default:
             decoderType = Decoder::MJPEG_DECODER;
             break;
@@ -483,13 +483,13 @@ static int transcode_stream(TranscodeStream* stream, uint8_t** buffer, uint32_t*
 
     // check transcode is supported
     if (!stream->isVideo ||
-        (stream->inputVideoResolutionID != DV50_MATERIAL_RESOLUTION &&
-            stream->inputVideoResolutionID != MJPEG21_MATERIAL_RESOLUTION))
+        (stream->inputVideoResolutionID != MaterialResolution::DV50_MXF_ATOM &&
+            stream->inputVideoResolutionID != MaterialResolution::MJPEG21_MXF_ATOM))
     {
         fprintf(stderr, "Input essence type not supported for transcode\n");
         return 0;
     }
-    if (stream->outputVideoResolutionID != MJPEG201_MATERIAL_RESOLUTION)
+    if (stream->outputVideoResolutionID != MaterialResolution::MJPEG201_MXF_ATOM)
     {
         fprintf(stderr, "Output essence type not supported for transcode\n");
         return 0;
@@ -510,7 +510,7 @@ static int transcode_stream(TranscodeStream* stream, uint8_t** buffer, uint32_t*
     
     
     // shift DV material up one line because the field order is reversed
-    if (stream->inputVideoResolutionID == DV50_MATERIAL_RESOLUTION)
+    if (stream->inputVideoResolutionID == MaterialResolution::DV50_MXF_ATOM)
     {
         // shift picture up one line
         y = decFrame->data[0];
@@ -656,7 +656,7 @@ int get_stream(MaterialHolder& sourceMaterial, prodauto::UMID uid, vector<string
     vector<string>::const_iterator iter2;
     for (streamIndex = 0, iter2 = inputFiles.begin(); iter2 != inputFiles.end(); streamIndex++, iter2++)
     {
-        if ((*iter2).compare((*iter1).second) == 0)
+        if ((*iter2) == (*iter1).second)
         {
             break;
         }
@@ -697,7 +697,7 @@ int transcode_avid_mxf(Decoder* decoder,
 
     // get material, file and tape source packages
     
-    packageGroup = new TranscodePackageGroup(transcode.isPALProject, OPERATIONAL_PATTERN_ATOM);
+    packageGroup = new TranscodePackageGroup(transcode.isPALProject, OperationalPattern::OP_ATOM);
     
     CHK_OFAIL(sourceMaterial.sourceMaterialPackage->getType() == prodauto::MATERIAL_PACKAGE);
     packageGroup->SetMaterialPackage(dynamic_cast<prodauto::MaterialPackage*>(sourceMaterial.sourceMaterialPackage));
@@ -1055,8 +1055,8 @@ int main(int argc, const char* argv[])
 {
     int cmdlnIndex = 1;
     string outputPrefix;
-    int inputVideoResolutionID = MJPEG21_MATERIAL_RESOLUTION;
-    int outputVideoResolutionID = MJPEG201_MATERIAL_RESOLUTION;
+    int inputVideoResolutionID = MaterialResolution::MJPEG21_MXF_ATOM;
+    int outputVideoResolutionID = MaterialResolution::MJPEG201_MXF_ATOM;
     int numFFMPEGThreads = 4;
     string sourceDirectory;
     string creatingDirectory;
@@ -1151,17 +1151,17 @@ int main(int argc, const char* argv[])
         }
         else if (strcmp(argv[cmdlnIndex], "--input-mjpeg-21") == 0)
         {
-            inputVideoResolutionID = MJPEG21_MATERIAL_RESOLUTION;
+            inputVideoResolutionID = MaterialResolution::MJPEG21_MXF_ATOM;
             cmdlnIndex++;
         }
         else if (strcmp(argv[cmdlnIndex], "--input-dv-50") == 0)
         {
-            inputVideoResolutionID = DV50_MATERIAL_RESOLUTION;
+            inputVideoResolutionID = MaterialResolution::DV50_MXF_ATOM;
             cmdlnIndex++;
         }
         else if (strcmp(argv[cmdlnIndex], "--output-mjpeg-201") == 0)
         {
-            outputVideoResolutionID = MJPEG201_MATERIAL_RESOLUTION;
+            outputVideoResolutionID = MaterialResolution::MJPEG201_MXF_ATOM;
             cmdlnIndex++;
         }
         else if (strcmp(argv[cmdlnIndex], "--fthreads") == 0)
@@ -1535,7 +1535,7 @@ int main(int argc, const char* argv[])
                 
                 
                 // create the destination directory if it doesn't exist
-                if (actualDestinationDirectory.compare(destinationDirectory) != 0 &&
+                if (actualDestinationDirectory != destinationDirectory &&
                     !check_directory_exists(actualDestinationDirectory))
                 {
                     if (mkdir(actualDestinationDirectory.c_str(), 0777) != 0)

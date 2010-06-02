@@ -1,3 +1,5 @@
+COMMON_DIR = ../../common
+STUDIOCOMMON_DIR = ../common
 DATABASELIB_DIR = ../database/src
 LIBMXF_DIR = ../../libMXF
 WRITEAVIDMXF_DIR = $(LIBMXF_DIR)/examples/writeavidmxf
@@ -7,7 +9,7 @@ LIBMXFPP_COMMON_DIR = $(LIBMXFPP_DIR)/examples/Common
 
 CC = g++
 CFLAGS = -g -Wall -Wundef -W -Wno-unused-parameter -Werror -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE
-INCLUDES = -I. -I$(DATABASELIB_DIR) -I$(LIBMXF_DIR)/lib/include -I$(WRITEAVIDMXF_DIR) -I$(LIBMXFPP_DIR) -I$(D10WRITER_DIR) -I$(LIBMXFPP_COMMON_DIR)
+INCLUDES = -I. -I$(COMMON_DIR) -I$(STUDIOCOMMON_DIR) -I$(DATABASELIB_DIR) -I$(LIBMXF_DIR)/lib/include -I$(WRITEAVIDMXF_DIR) -I$(LIBMXFPP_DIR) -I$(D10WRITER_DIR) -I$(LIBMXFPP_COMMON_DIR)
 
 COMPILE = $(CC) $(CFLAGS) $(INCLUDES)
 AR = ar cr
@@ -55,7 +57,7 @@ libmxfwriter.a: $(LIBOBJECTS)
 	
 	
 test_mxfwriter: libprodautodb.a libwriteavidmxf.a libMXF++.a libD10MXFOP1AWriter.a libMXF.a libmxfwriter.a .objs/test_mxfwriter.o 
-	$(CC) .objs/test_mxfwriter.o -L. -L$(DATABASELIB_DIR) -L$(WRITEAVIDMXF_DIR) -L$(LIBMXF_DIR)/lib -L$(LIBMXFPP_DIR)/libMXF++ -L$(D10WRITER_DIR) -lprodautodb -lmxfwriter -lwriteavidmxf -lD10MXFOP1AWriter -lMXF++ -lMXF -lpq -lpqxx -luuid -lpthread -o $@
+	$(CC) .objs/test_mxfwriter.o -L. -L$(DATABASELIB_DIR) -L$(COMMON_DIR) -L$(STUDIOCOMMON_DIR) -L$(WRITEAVIDMXF_DIR) -L$(LIBMXF_DIR)/lib -L$(LIBMXFPP_DIR)/libMXF++ -L$(D10WRITER_DIR) -lprodautodb -lcommon -lstudiocommon -lmxfwriter -lwriteavidmxf -lD10MXFOP1AWriter -lMXF++ -lMXF -lpq -lpqxx -luuid -lpthread -o $@
 
 	
 .deps/%.d : %.cpp

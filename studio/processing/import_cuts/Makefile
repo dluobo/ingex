@@ -1,15 +1,16 @@
 INSTALL_DIR ?= /usr/local
 
 DATABASELIB_DIR = ../../database/src
+COMMONLIB_DIR = ../../../common
 STUDIOCOMMONLIB_DIR = ../../common
 
 CC = g++
 CFLAGS = -g -Wall -Wundef -W -Wno-unused-parameter -Wno-non-virtual-dtor -Werror
 COMPILE = $(CC) $(CFLAGS)
 
-INCLUDES = -I. -I$(DATABASELIB_DIR) -I$(STUDIOCOMMONLIB_DIR) -I$(AAFSDKINSTALL)/include
-LIB_DIRS = -L$(DATABASELIB_DIR) -L$(STUDIOCOMMONLIB_DIR)
-LIBS = -lprodautodb -lstudiocommon -lpq -lpqxx -luuid -lpthread -lxerces-c
+INCLUDES = -I. -I$(DATABASELIB_DIR) -I$(COMMONLIB_DIR) -I$(STUDIOCOMMONLIB_DIR) -I$(AAFSDKINSTALL)/include
+LIB_DIRS = -L$(DATABASELIB_DIR) -L$(COMMONLIB_DIR) -L$(STUDIOCOMMONLIB_DIR)
+LIBS = -lprodautodb -lcommon -lstudiocommon -lpq -lpqxx -luuid -lpthread -lxerces-c
 
 
 SOURCES = $(wildcard *.cpp)
