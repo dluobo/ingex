@@ -1,7 +1,7 @@
 /***************************************************************************
- *   $Id: dialogues.h,v 1.10 2010/03/30 07:47:52 john_f Exp $             *
+ *   $Id: dialogues.h,v 1.11 2010/06/02 13:09:25 john_f Exp $             *
  *                                                                         *
- *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
+ *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
  *   Author: Matthew Marks                                                 *
  *                                                                         *
@@ -28,6 +28,8 @@
 #include <vector>
 #include "ingexgui.h"
 #include "timepos.h"
+#include <list>
+#include <wx/hashset.h>
 
 /// Set preroll and postroll
 class SetRollsDlg : public wxDialog
@@ -187,8 +189,15 @@ class JumpToTimecodeDlg : public wxDialog
 #define TEST_MAX_REC 180 //minutes
 #define TEST_MAX_GAP 900 //seconds
 
-DECLARE_EVENT_TYPE(wxEVT_TEST_DLG_MESSAGE, -1)
+WX_DECLARE_HASH_MAP(time_t, wxArrayString*, wxIntegerHash, wxIntegerEqual, HashOfArrayStrings);
+WX_DECLARE_HASH_SET(wxString, wxStringHash, wxStringEqual, SetOfStrings);
 
+struct DirContents {
+	std::list<time_t> mtimes;
+	HashOfArrayStrings files;
+};
+
+WX_DECLARE_HASH_MAP(wxString, DirContents*, wxStringHash, wxStringEqual, HashOfDirContents);
 
 class wxSpinCtrl;
 class wxSpinEvent;
@@ -198,9 +207,10 @@ class wxToggleButton;
 class TestModeDlg : public wxDialog
 {
 	public:
-		TestModeDlg(wxWindow *);
+		TestModeDlg(wxWindow *, const int, const int);
 		int ShowModal();
 		~TestModeDlg();
+		void SetRecordPaths(std::vector<std::string>*);
 		enum
 		{
 			RECORD,
@@ -223,11 +233,15 @@ class TestModeDlg : public wxDialog
 		void OnChangeMaxGapTime(wxSpinEvent &);
 		void OnRun(wxCommandEvent &);
 		void OnTimer(wxTimerEvent &);
+		void OnIdle(wxIdleEvent&);
 		void Record(bool rec = true);
+		void DeleteFileArrays(const wxString&);
 		wxSpinCtrl * mMinRecTime;
 		wxSpinCtrl * mMaxRecTime;
 		wxSpinCtrl * mMinGapTime;
 		wxSpinCtrl * mMaxGapTime;
+		wxCheckBox * mEraseEnable;
+		wxSpinCtrl * mEraseThreshold;
 		wxToggleButton * mRunButton;
 		wxStaticText * mRunStopMessage;
 		wxStaticText * mRunStopCountdown;
@@ -235,6 +249,10 @@ class TestModeDlg : public wxDialog
 		wxTimer * mTimer;
 		wxTimeSpan mCountdown;
 		bool mRecording;
+		const int mRecordId;
+		const int mStopId;
+		SetOfStrings mRecordPaths;
+		HashOfDirContents mDirInfo;
 	DECLARE_EVENT_TABLE()
 };
 
@@ -244,24 +262,26 @@ class TestModeDlg : public wxDialog
 class CuePointsDlg : public wxDialog
 {
 	public:
-		CuePointsDlg(wxWindow *, wxXmlDocument &);
+		CuePointsDlg(wxWindow *, wxXmlDocument&);
 		int ShowModal(const wxString = wxT(""));
 		void Shortcut(const int);
+		void Scroll(const bool);
 		const wxString GetDescription();
 		size_t GetColourIndex();
 		static ProdAuto::LocatorColour::EnumType GetColourCode(const size_t);
+		bool ValidCuePointSelected();
 		static const wxColour GetColour(const size_t);
 		static const wxColour GetLabelColour(const size_t);
 	private:
-		void OnEditorShown(wxGridEvent &);
-		void OnEditorHidden(wxGridEvent &);
+		void OnEditorShown(wxGridEvent&);
+		void OnEditorHidden(wxGridEvent&);
 		void Load();
 		void Save();
-		void OnMenu(wxCommandEvent &);
-		void OnOK(wxCommandEvent &);
-		void OnCellLeftClick(wxGridEvent &);
-		void OnSetGridRow(wxCommandEvent &);
-		void OnLabelLeftClick(wxGridEvent &);
+		void OnMenu(wxCommandEvent&);
+		void OnOK(wxCommandEvent&);
+		void OnCellLeftClick(wxGridEvent&);
+		void OnSetGridRow(wxCommandEvent&);
+		void OnLabelLeftClick(wxGridEvent&);
 		void SetColour(const int, const int);
 		void Reset();
 
@@ -271,10 +291,8 @@ class CuePointsDlg : public wxDialog
 		wxStaticText * mMessage;
 
 		wxXmlNode * mCuePointsNode;
-		wxString mDescription;
 		wxColour mTextColour;
 		wxColour mBackgroundColour;
-		int mColour;
 		int mCurrentRow;
 		int mDescrColours[10];
 	DECLARE_EVENT_TABLE()

@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: dragbuttonlist.cpp,v 1.12 2010/03/30 07:47:52 john_f Exp $      *
+ *   $Id: dragbuttonlist.cpp,v 1.13 2010/06/02 13:09:25 john_f Exp $      *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -58,27 +58,29 @@ void DragButtonList::OnRadioButton(wxCommandEvent& event)
 	mButtonEvtHandler->AddPendingEvent(event);
 }
 
-/// Replaces current state with a new column of video track radio buttons, one for each track with a video file, and with a quad split button at the top.
+/// Replaces current state with a new column of video track radio buttons, one for each track with a video file, and with a split view button at the top.
 /// Returns information about the new state.
 /// Single track buttons are labelled with the track name and have a tool tip showing the associated filename.
 /// All buttons are disabled.
 /// @param chunkInfo The file names, the track names and the track types.  Gets all info from here rather than examining the files themselves, because they may not be available yet.  Checks for null pointer.
 /// @param fileNames Returns the file name associated with each video track which has a file, with the audio filenames at the end.
 /// @param trackNames Returns corresponding names of tracks.
+/// @param nVideoTracks Returns the number of video tracks.
 /// @return The input type.
-prodauto::PlayerInputType DragButtonList::SetTracks(ChunkInfo* chunkInfo, std::vector<std::string> & fileNames, std::vector<std::string> & trackNames)
+prodauto::PlayerInputType DragButtonList::SetTracks(ChunkInfo* chunkInfo, std::vector<std::string> & fileNames, std::vector<std::string> & trackNames, unsigned int & nVideoTracks)
 {
 	Clear();
 	fileNames.clear();
 	trackNames.clear();
+	nVideoTracks = 0;
 	prodauto::PlayerInputType inputType = prodauto::MXF_INPUT;
 	if (chunkInfo) {
-		wxRadioButton * quadSplit = new wxRadioButton(this, wxID_HIGHEST + 1, wxT("Quad Split")); //the quad split is always the first video track (id = 0)
-		quadSplit->SetToolTip(wxT("Up to the first four successfully opened files"));
-		GetSizer()->Add(quadSplit, -1, wxEXPAND);
-		mEnableStates.Add(false); //enable later if any files successfully loaded
 		std::vector<std::string> audioFileNames;
 		if (chunkInfo->GetFiles()->GetCount()) { //this chunk has files associated
+			wxRadioButton * split = new wxRadioButton(this, wxID_HIGHEST + 1, wxT("Split View")); //the split is always the first video track (id = 0)
+			split->SetToolTip(wxT("Up to the first nine successfully opened files"));
+			GetSizer()->Add(split, -1, wxEXPAND);
+			mEnableStates.Add(false); //enable later if any files successfully loaded
 			wxString name;
 			for (size_t i = 0; i < chunkInfo->GetFiles()->GetCount(); i++) { //recorder loop
 				wxArrayString uniqueNames;
@@ -91,6 +93,7 @@ prodauto::PlayerInputType DragButtonList::SetTracks(ChunkInfo* chunkInfo, std::v
 					if (ProdAuto::VIDEO == chunkInfo->GetTracks()[i][j].type && !name.IsEmpty()) {
 						if (!duplicated) {
 							fileNames.push_back((*chunkInfo->GetFiles())[i][j].in());
+							nVideoTracks++;
 						}
 						wxRadioButton * rb = new wxRadioButton(this, fileNames.size() + wxID_HIGHEST + 1, wxString(chunkInfo->GetTracks()[i][j].src.package_name, *wxConvCurrent)); //ID corresponds to file index
 						rb->SetToolTip(name);
@@ -124,23 +127,25 @@ prodauto::PlayerInputType DragButtonList::SetTracks(ChunkInfo* chunkInfo, std::v
 }
 
 /// Alternative to SetTracks for MXF file mode
-/// Replaces current state with a new column of video file radio buttons, and with a quad split button at the top.
+/// Replaces current state with a new column of video file radio buttons, and with a split view button at the top.
 /// Returns information about the current state.
 /// Single track buttons are labelled with the Clip Track String and have a tool tip showing the associated filename.
 /// All buttons are disabled.
 /// @param paths The file names.
 /// @param fileNames Returns the file name associated with each video file, with the audio filenames at the end.
 /// @param trackNames Returns corresponding Clip Track Strings.
-/// @param editRate Returns an edit rate
+/// @param nVideoTracks Returns the number of video tracks.
+/// @param editRate Returns an edit rate.
 /// @return The input type.
-prodauto::PlayerInputType DragButtonList::SetMXFFiles(wxArrayString & paths, std::vector<std::string> & fileNames, std::vector<std::string> & trackNames, ProdAuto::MxfTimecode & editRate)
+prodauto::PlayerInputType DragButtonList::SetMXFFiles(wxArrayString & paths, std::vector<std::string> & fileNames, std::vector<std::string> & trackNames, unsigned int & nVideoTracks, ProdAuto::MxfTimecode & editRate)
 {
 	Clear();
 	fileNames.clear();
 	trackNames.clear();
-	wxRadioButton * quadSplit = new wxRadioButton(this, wxID_HIGHEST + 1, wxT("Quad Split")); //the quad split is always the first video track (id = 0)
-	quadSplit->SetToolTip(wxT("Up to the first four successfully opened files"));
-	GetSizer()->Add(quadSplit, -1, wxEXPAND);
+	nVideoTracks = 0;
+	wxRadioButton * split = new wxRadioButton(this, wxID_HIGHEST + 1, wxT("Split view")); //the split is always the first video track (id = 0)
+	split->SetToolTip(wxT("Up to the first nine successfully opened files"));
+	GetSizer()->Add(split, -1, wxEXPAND);
 	mEnableStates.Add(false); //enable later if any files successfully loaded
 	std::vector<std::string> audioFileNames;
 	mProjectName.Clear();
@@ -169,6 +174,7 @@ prodauto::PlayerInputType DragButtonList::SetMXFFiles(wxArrayString & paths, std
 				editRate.edit_rate.numerator = info.editRate.numerator;
 				editRate.edit_rate.denominator = info.editRate.denominator;
 				editRate.undefined = false;
+				nVideoTracks++;
 			}
 			else {
 				audioFileNames.push_back(path);
@@ -191,7 +197,7 @@ const wxString DragButtonList::GetProjectName()
 }
 
 /// Alternative to SetTracks for E to E mode.
-/// Replaces current state with a new column of video source radio buttons, and with a quad split button at the top.
+/// Replaces current state with a new column of video source radio buttons, and with a split view button at the top.
 /// Sources are given fixed names.
 /// All buttons are disabled.
 /// @param sources Returns the source name associated with each source.
@@ -201,13 +207,14 @@ const wxString DragButtonList::GetProjectName()
 #define N_SOURCES 4
 
 #ifndef DISABLE_SHARED_MEM_SOURCE
-prodauto::PlayerInputType DragButtonList::SetEtoE(std::vector<std::string> & sources, std::vector<std::string> & names)
+prodauto::PlayerInputType DragButtonList::SetEtoE(std::vector<std::string> & sources, std::vector<std::string> & names, unsigned int & nVideoTracks)
 {
 	Clear();
 	sources.clear();
 	names.clear();
-	wxRadioButton * quadSplit = new wxRadioButton(this, wxID_HIGHEST + 1, wxT("Quad Split")); //the quad split is always the first video source (id = 0)
-	GetSizer()->Add(quadSplit, -1, wxEXPAND);
+	nVideoTracks = N_SOURCES;
+	wxRadioButton * split = new wxRadioButton(this, wxID_HIGHEST + 1, wxT("Split view")); //the split is always the first video source (id = 0)
+	GetSizer()->Add(split, -1, wxEXPAND);
 	mEnableStates.Add(false); //enable later if any sources successfully opened
 	char source[3];
 	mEnableStates.SetCount(sources.size() + 1);
@@ -226,10 +233,20 @@ prodauto::PlayerInputType DragButtonList::SetEtoE(std::vector<std::string> & sou
 }
 #endif
 
+/// Updates the label on one of the buttons.
+/// @param id The source ID, starting at 0 for the split.  Checked for validity.
+/// @param name The new name.
+void DragButtonList::SetSourceName(const unsigned int id, const wxString& name)
+{
+	wxWindow *button = FindWindow(id + wxID_HIGHEST + 1);
+	if (button) button->SetLabel(name);
+}
+
 /// Enables/disables and selects the track select buttons.  Does nothing if no buttons.
-/// COMMENTED OUT: Hides the quad split button if there is only one track enabled.
-/// @param enables Enable state of each button.
-/// @param selected The button to select.
+/// Split button is enabled if any of the other buttons are.
+/// COMMENTED OUT: Hides the split view button if there is only one track enabled.
+/// @param enables Enable state of each button (excluding the split).
+/// @param selected The button to select, 0 being the split.
 void DragButtonList::EnableAndSelectTracks(std::vector<bool> * enables, const unsigned int selected)
 {
 	if (mEnableStates.GetCount()) {
@@ -238,18 +255,18 @@ void DragButtonList::EnableAndSelectTracks(std::vector<bool> * enables, const un
 			if (i >= mEnableStates.GetCount() - 1) { //sanity check
 				break;
 			}
-			mEnableStates[i + 1] = enables->at(i); //shifted down one by quad split
+			mEnableStates[i + 1] = enables->at(i); //shifted down one by split view
 			someOK |= enables->at(i);
 		}
 		if (selected < mEnableStates.GetCount()) { //sanity check
 			mSelected = selected;
 		}
 //		if (enables->size() < 2) {
-//			//no point in having a quad split if only one track to show
+//			//no point in having a split view if only one track to show
 //			GetSizer()->GetItem((size_t) 0)->GetWindow()->Hide(); ... this will need updating to reflect MVC philosophy
 //		}
 //		else {
-//			//enable quad split if any files OK
+			//enable split view if any files OK
 			mEnableStates[0] = someOK;
 //		}
 	}
@@ -299,20 +316,27 @@ bool DragButtonList::LaterTrack(const bool select)
 	return next < mEnableStates.GetCount();
 }
 
-/// If the quad split is displayed, switches source to that corresponding to the quadrant value given (if it is available).
-/// If an individual source is displayed, switches to the quad split (thus providing toggling behaviour).
-/// @param source The quadrant (1-4).
-void DragButtonList::SelectQuadrant(const unsigned int source)
+/// If the split view is displayed, switches source to that corresponding to the value given (if it is available).
+/// If an individual source is displayed, switches to the split view (thus providing toggling behaviour).
+/// @param source The source (1-9).
+void DragButtonList::ToggleSplitView(const unsigned int source)
 {
-	if (0 == mSelected && source && source < mEnableStates.GetCount()) { //showing quad split; sanity check
+	if (0 == mSelected && source && source < mEnableStates.GetCount()) { //showing split view; sanity check
 		//show individual source
 		Select(source);
 	}
 	else if (mSelected) { //showing an individual source
-		//show quad split
+		//show split view
 		Select(0);
 	}
 }
+
+/// Returns the ID of the selected source; 0 for a split.
+unsigned int DragButtonList::GetSelectedSource()
+{
+	return mSelected;
+}
+
 
 /// Selects the given source; does not sanity-check the value
 void DragButtonList::Select(unsigned int source)

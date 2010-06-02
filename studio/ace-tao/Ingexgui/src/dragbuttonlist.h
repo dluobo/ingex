@@ -36,16 +36,18 @@ class DragButtonList : public wxScrolledWindow
 {
 	public:
 		DragButtonList(wxWindow *, wxEvtHandler *);
-		prodauto::PlayerInputType SetTracks(ChunkInfo*, std::vector<std::string> &, std::vector<std::string> &);
-		prodauto::PlayerInputType SetMXFFiles(wxArrayString &, std::vector<std::string> &, std::vector<std::string> &, ProdAuto::MxfTimecode &);
+		prodauto::PlayerInputType SetTracks(ChunkInfo*, std::vector<std::string> &, std::vector<std::string> &, unsigned int &);
+		prodauto::PlayerInputType SetMXFFiles(wxArrayString &, std::vector<std::string> &, std::vector<std::string> &, unsigned int &, ProdAuto::MxfTimecode &);
 #ifndef DISABLE_SHARED_MEM_SOURCE
-		prodauto::PlayerInputType SetEtoE(std::vector<std::string> &, std::vector<std::string> &);
+		prodauto::PlayerInputType SetEtoE(std::vector<std::string> &, std::vector<std::string> &, unsigned int &);
 #endif
 		void EnableAndSelectTracks(std::vector<bool> *, const unsigned int);
 		void Clear();
+		void SetSourceName(const unsigned int, const wxString&);
+		unsigned int GetSelectedSource();
 		bool EarlierTrack(const bool);
 		bool LaterTrack(const bool);
-		void SelectQuadrant(const unsigned int source);
+		void ToggleSplitView(const unsigned int);
 		const wxString GetProjectName();
 //		std::vector<std::string> * GetFiles();
 	private:

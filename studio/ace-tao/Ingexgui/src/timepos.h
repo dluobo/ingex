@@ -1,7 +1,7 @@
 /***************************************************************************
- *   $Id: timepos.h,v 1.7 2009/09/18 16:10:16 john_f Exp $           *
+ *   $Id: timepos.h,v 1.8 2010/06/02 13:09:26 john_f Exp $           *
  *                                                                         *
- *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
+ *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
  *   Author: Matthew Marks                                                 *
  *                                                                         *
@@ -34,7 +34,7 @@
 #define UNKNOWN_POSITION wxT("   ??:??")
 #define TC_DISPLAY_UPDATE_INTERVAL 50 //ms - must be short enough to allow timely triggers
 
-DECLARE_EVENT_TYPE(wxEVT_TIMEPOS_EVENT, -1)
+DECLARE_EVENT_TYPE(EVT_TIMEPOS_EVENT, -1)
 
 /// Controls timecode and position displays
 class Timepos : public wxEvtHandler

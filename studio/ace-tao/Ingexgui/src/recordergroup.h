@@ -1,7 +1,7 @@
 /***************************************************************************
- *   $Id: recordergroup.h,v 1.8 2010/03/30 07:47:52 john_f Exp $         *
+ *   $Id: recordergroup.h,v 1.9 2010/06/02 13:09:25 john_f Exp $         *
  *                                                                         *
- *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
+ *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
  *   Author: Matthew Marks                                                 *
  *                                                                         *
@@ -26,7 +26,7 @@
 #include <wx/wx.h>
 #include "controller.h"
 #include "ingexgui.h"
-DECLARE_EVENT_TYPE(wxEVT_RECORDERGROUP_MESSAGE, -1)
+DECLARE_EVENT_TYPE(EVT_RECORDERGROUP_MESSAGE, -1)
 
 class Comms;
 class wxXmlDocument;

@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2006-2008 British Broadcasting Corporation              *
+ *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -25,7 +25,7 @@
 #include "RecorderC.h"
 #include <vector>
 
-DECLARE_EVENT_TYPE(wxEVT_TREE_MESSAGE, -1)
+DECLARE_EVENT_TYPE(EVT_TREE_MESSAGE, -1)
 
 class wxXmlDocument;
 class wxXmlNode;
@@ -45,7 +45,7 @@ class TickTreeCtrl : public wxTreeCtrl
 {
 	public:
 		TickTreeCtrl(wxWindow *, wxWindowID, const wxPoint& = wxDefaultPosition, const wxSize& = wxDefaultSize, const wxString & = wxT(""));
-		void AddRecorder(const wxString &, ProdAuto::TrackList_var, ProdAuto::TrackStatusList_var, bool, wxXmlDocument &);
+		void AddRecorder(const wxString &, const ProdAuto::TrackList_var &, const ProdAuto::TrackStatusList_var &, bool, wxXmlDocument &);
 		void RemoveRecorder(const wxString &);
 
 		void Clear();

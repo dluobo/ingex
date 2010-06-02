@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: ingexgui.cpp,v 1.23 2010/03/30 07:47:52 john_f Exp $           *
+ *   $Id: ingexgui.cpp,v 1.24 2010/06/02 13:09:25 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -137,17 +137,18 @@ BEGIN_EVENT_TABLE( IngexguiFrame, wxFrame )
 	EVT_KILL_FOCUS( IngexguiFrame::OnFocusLost )
 	EVT_LIST_ITEM_SELECTED( wxID_ANY, IngexguiFrame::OnEventSelection )
 	EVT_LIST_ITEM_ACTIVATED( wxID_ANY, IngexguiFrame::OnEventActivated )
+	EVT_LIST_BEGIN_LABEL_EDIT( wxID_ANY, IngexguiFrame::OnEventBeginEdit )
+	EVT_LIST_END_LABEL_EDIT( wxID_ANY, IngexguiFrame::OnEventEndEdit )
 	EVT_BUTTON( BUTTON_MENU_PrevTake, IngexguiFrame::OnShortcut )
 	EVT_BUTTON( BUTTON_MENU_NextTake, IngexguiFrame::OnShortcut )
 	EVT_BUTTON( BUTTON_JumpToTimecode, IngexguiFrame::OnJumpToTimecode )
 	EVT_BUTTON( BUTTON_TakeSnapshot, IngexguiFrame::OnTakeSnapshot )
 	EVT_BUTTON( BUTTON_DeleteCue, IngexguiFrame::OnDeleteCue )
 	EVT_COMMAND( wxID_ANY, EVT_PLAYER_MESSAGE, IngexguiFrame::OnPlayerEvent )
-	EVT_COMMAND( wxID_ANY, wxEVT_TREE_MESSAGE, IngexguiFrame::OnTreeEvent )
-	EVT_COMMAND( wxID_ANY, wxEVT_RECORDERGROUP_MESSAGE, IngexguiFrame::OnRecorderGroupEvent )
-	EVT_COMMAND( wxID_ANY, wxEVT_TEST_DLG_MESSAGE, IngexguiFrame::OnTestDlgEvent )
-	EVT_COMMAND( wxID_ANY, wxEVT_JOGSHUTTLE_MESSAGE, IngexguiFrame::OnJogShuttleEvent )
-	EVT_COMMAND( wxID_ANY, wxEVT_TIMEPOS_EVENT, IngexguiFrame::OnTimeposEvent )
+	EVT_COMMAND( wxID_ANY, EVT_TREE_MESSAGE, IngexguiFrame::OnTreeEvent )
+	EVT_COMMAND( wxID_ANY, EVT_RECORDERGROUP_MESSAGE, IngexguiFrame::OnRecorderGroupEvent )
+	EVT_COMMAND( wxID_ANY, EVT_JOGSHUTTLE_MESSAGE, IngexguiFrame::OnJogShuttleEvent )
+	EVT_COMMAND( wxID_ANY, EVT_TIMEPOS_EVENT, IngexguiFrame::OnTimeposEvent )
 	EVT_MENU( MENU_PlayRecordings, IngexguiFrame::OnPlayerCommand )
 #ifndef DISABLE_SHARED_MEM_SOURCE
 	EVT_MENU( MENU_EtoE, IngexguiFrame::OnPlayerCommand )
@@ -222,9 +223,9 @@ int IngexguiApp::FilterEvent(wxEvent& event)
 /// @param argc Command line argument count.
 /// @param argv Command line argument vector.
 IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
-	: wxFrame((wxFrame *)0, wxID_ANY, wxT("ingexgui")/*, wxDefaultPosition, wxDefaultSize, wxDEFAULT_FRAME_STYLE | wxWANTS_CHARS* - this doesn't prevent cursor keys being lost, as hoped */), mStatus(STOPPED), mTextFieldHasFocus(false), mToday(wxDateTime::Today()), mSnapshotIndex(1)
+	: wxFrame((wxFrame *)0, FRAME, wxT("ingexgui")/*, wxDefaultPosition, wxDefaultSize, wxDEFAULT_FRAME_STYLE | wxWANTS_CHARS* - this doesn't prevent cursor keys being lost, as hoped */), mStatus(STOPPED), mTextFieldHasFocus(false), mToday(wxDateTime::Today()), mSnapshotIndex(1)
 {
-	wxUpdateUIEvent::SetUpdateInterval(-1); //disable control updates until all controls have been created; otherwise, things like the warning dialogues will allow them to be produced
+	wxUpdateUIEvent::SetUpdateInterval(-1); //disable control updates until all controls have been created; otherwise, things like the warning dialogues will allow events to be generated which will then cause a crash
 	//logging
 	wxLog::SetActiveTarget(new wxLogStream(new ofstream(wxDateTime::Now().Format(wxT("ingexguiLog-%y%m%d-%H%M%S")).mb_str(*wxConvCurrent))));
         Log(wxT("Controller started on ") + wxDateTime::Now().FormatISODate());
@@ -256,6 +257,8 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
         }
         delete[] argv_;
 
+	mTestModeDlg = new TestModeDlg(this, BUTTON_MENU_Record, BUTTON_MENU_Stop); //persistent so that it can remember its parameters between invocations; create early as it's called when populating the events list
+
 	//menu
 	wxMenuBar * menuBar = new wxMenuBar;
 
@@ -284,9 +287,9 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
 
 	wxMenu * menuPlayerType = new wxMenu;
 #ifdef HAVE_DVS
-	menuPlayerType->AppendRadioItem(MENU_PlayerExtAccelOutput, wxT("External monitor and computer screen (accelerated if possible)")); //first item is selected by default
+	menuPlayerType->AppendRadioItem(MENU_PlayerExtAccelOutput, wxT("External monitor and computer screen (accelerated if possible)"));
 #endif
-	menuPlayerType->AppendRadioItem(MENU_PlayerAccelOutput, wxT("Computer screen (accelerated if possible)")); //selected by default if no DVS card
+	menuPlayerType->AppendRadioItem(MENU_PlayerAccelOutput, wxT("Computer screen (accelerated if possible)"));
 #ifdef HAVE_DVS
 	menuPlayerType->AppendRadioItem(MENU_PlayerExtOutput, wxT("External monitor"));
 	menuPlayerType->AppendRadioItem(MENU_PlayerExtUnaccelOutput, wxT("External monitor and computer screen unaccelerated (use if accelerated fails)"));
@@ -295,7 +298,7 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
 	menuPlayer->Append(MENU_PlayerType, wxT("Player type"), menuPlayerType);
 
 	wxMenu * menuPlayerOSD = new wxMenu;
-	menuPlayerOSD->AppendRadioItem(MENU_PlayerAbsoluteTimecode, wxT("&Absolute timecode")); //first item is selected by default
+	menuPlayerOSD->AppendRadioItem(MENU_PlayerAbsoluteTimecode, wxT("&Absolute timecode"));
 	menuPlayerOSD->AppendRadioItem(MENU_PlayerRelativeTimecode, wxT("&Relative timecode"));
 	menuPlayerOSD->AppendRadioItem(MENU_PlayerNoOSD, wxT("&OSD Off"));
 	menuPlayer->Append(MENU_PlayerOSD, wxT("Player On-Screen Display"), menuPlayerOSD);
@@ -381,13 +384,10 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
 	positionBox->Add(positionDisplay, 0, wxALIGN_CENTRE);
 
 #ifdef HAVE_DVS
-	mPlayer = new Player(this, wxID_ANY, true, prodauto::DUAL_DVS_AUTO_OUTPUT, SOURCE_TIMECODE);
-	mPlayer->SetOutputType(prodauto::X11_AUTO_OUTPUT);
-	GetMenuBar()->FindItem(MENU_PlayerAccelOutput)->Check();
+	mPlayer = new Player(this, wxID_ANY, true, prodauto::DUAL_DVS_AUTO_OUTPUT); //will fall back to X11_AUTO_OUTPUT if no DVS cards
 #else
-mPlayer = new Player(this, wxID_ANY, true, prodauto::X11_AUTO_OUTPUT, SOURCE_TIMECODE); //must delete this explicitly on app exit
+	mPlayer = new Player(this, wxID_ANY, true, prodauto::X11_AUTO_OUTPUT);
 #endif
-	mPlayer->AudioFollowsVideo(GetMenuBar()->FindItem(MENU_PlayerAudioFollowsVideo)->IsChecked());
 #ifdef HAVE_DVS
 	mPlayer->EnableSDIOSD(GetMenuBar()->FindItem(MENU_PlayerEnableSDIOSD)->IsChecked());
 #endif
@@ -421,7 +421,7 @@ mPlayer = new Player(this, wxID_ANY, true, prodauto::X11_AUTO_OUTPUT, SOURCE_TIM
 	recordPage->SetSizer(recordPageSizer);
 	wxStaticBoxSizer * recProjectNameBox = new wxStaticBoxSizer(wxHORIZONTAL, recordPage, wxT("Project"));
 	recordPageSizer->Add(recProjectNameBox, 0, wxEXPAND | wxALL, CONTROL_BORDER);
-	mRecProjectNameCtrl = new wxStaticText(recordPage, wxID_ANY, wxT("")); //name added later
+	mRecProjectNameCtrl = new wxStaticText(recordPage, REC_PROJECT_NAME, wxT("")); //name added later
 	recProjectNameBox->Add(mRecProjectNameCtrl, 1, wxEXPAND);
 	wxStaticBoxSizer * descriptionBox = new wxStaticBoxSizer(wxHORIZONTAL, recordPage, wxT("Description"));
 	recordPageSizer->Add(descriptionBox, 0, wxEXPAND | wxALL, CONTROL_BORDER);
@@ -503,19 +503,13 @@ mPlayer = new Player(this, wxID_ANY, true, prodauto::X11_AUTO_OUTPUT, SOURCE_TIM
 
 	//project name
 	wxString currentProject = SetProjectDlg::GetCurrentProjectName(mSavedState);
-	if (currentProject.IsEmpty()) {
-		SetTitle(TITLE);
-	}
-	else {
-		SetTitle(wxString(TITLE) + wxT(": ") + currentProject);
+	if (!currentProject.IsEmpty()) {
 		mRecorderGroup->SetCurrentProjectName(currentProject);
-		mRecProjectNameCtrl->SetLabel(currentProject);
-		mTimepos->SetDefaultEditRate(mEventList->SetCurrentProjectName(currentProject));
+		mTimepos->SetDefaultEditRate(mEventList->SetCurrentProjectName(currentProject)); //loads any stored list of events
 	}
 	//Various persistent dialogues
 	mHelpDlg = new HelpDlg(this); //persistent to allow it to be modeless in order to remain visible while using the app
 	mCuePointsDlg = new CuePointsDlg(this, mSavedState); //persistent so that a file doesn't have to be read each time a cue point is marked
-	mTestModeDlg = new TestModeDlg(this); //persistent so that it can remember its parameters between invocations
 	mChunkingDlg = new ChunkingDlg(this, mTimepos, mSavedState); //persistent as it controls chunking while recording, as well as showing to set up the parameters
 
 	mRecorderGroup->StartGettingRecorders(); //safe to let it generate events now that everything has been created (events will be processed if any dialogue is visible, such as the saved preferences warnings above)
@@ -577,8 +571,6 @@ void IngexguiFrame::SetProjectName()
 	if (wxID_OK == dlg.ShowModal()) {
 		mRecorderGroup->SetProjectNames(dlg.GetProjectNames());
 		mRecorderGroup->SetCurrentProjectName(dlg.GetSelectedProject());
-		SetTitle(wxString(TITLE) + wxT(": ") + dlg.GetSelectedProject());
-		mRecProjectNameCtrl->SetLabel(dlg.GetSelectedProject());
 		mEventList->SetCurrentProjectName(dlg.GetSelectedProject());
 		mSavedState.Save(mSavedStateFilename);
 	}
@@ -756,8 +748,6 @@ void IngexguiFrame::OnRecord( wxCommandEvent& WXUNUSED( event ) )
 ///		Event extra long: Frame number.
 ///	AT_START/WITHIN/AT_END: Update controls as some states etc will change.
 ///	CLOSE_REQ: Switch the player to external output only, or disable completely if external output is not being used.
-///	QUADRANT_CLICK: Toggle between full-screen and single source defined by the quadrant.
-///		Event int: the quadrant clicked on.
 ///	KEYPRESS: Respond to the user pressing a shortcut key in the player window when in "divert Keypresses" mode.
 ///		Event int: X-windows key value.
 ///	EDIT_RATE: Tell timepos the default edit rate.
@@ -825,9 +815,6 @@ void IngexguiFrame::OnPlayerEvent(wxCommandEvent& event) {
 			}
 #endif
 			break;
-		case QUADRANT_CLICK:
-			mPlayer->SelectQuadrant(event.GetInt());
-			break;
 		case KEYPRESS:
 			if (mCuePointsDlg->IsModal() && event.GetInt() > 47 && event.GetInt() < 58) { //"add cue" shortcut
 				mCuePointsDlg->Shortcut(event.GetInt() - 48);
@@ -854,9 +841,15 @@ void IngexguiFrame::OnJogShuttleEvent(wxCommandEvent& event)
 	menuEvent.SetId(wxID_ANY); //indicates no hit so far
 	switch ((JogShuttleEventType) event.GetId()) {
 		case JOG :
-			menuEvent.SetId(MENU_Pause);
-			AddPendingEvent(menuEvent);
-			menuEvent.SetId(event.GetInt() ? MENU_StepForwards : MENU_StepBackwards);
+			if (mCuePointsDlg->IsModal()) {
+				//Scroll up and down the list of cue points
+				mCuePointsDlg->Scroll(event.GetInt());
+			}
+			else {
+				menuEvent.SetId(MENU_Pause);
+				AddPendingEvent(menuEvent);
+				menuEvent.SetId(event.GetInt() ? MENU_StepForwards : MENU_StepBackwards);
+			}
 			break;
 		case SHUTTLE :
 			mPlayer->PlayAbsolute(event.GetInt());
@@ -965,7 +958,7 @@ void IngexguiFrame::OnCue( wxCommandEvent& WXUNUSED( event ) )
 				timecode.samples += frameCount; //will wrap automatically on display
 				mPlayer->DivertKeyPresses(); //so that key presses in the player window are sent to the dialogue
 				if (wxID_OK == mCuePointsDlg->ShowModal(Timepos::FormatTimecode(timecode))) {
-					mEventList->AddEvent(EventList::CUE, 0, frameCount, mCuePointsDlg->GetDescription(), mCuePointsDlg->GetColourIndex());
+					if (mCuePointsDlg->ValidCuePointSelected()) mEventList->AddEvent(EventList::CUE, 0, frameCount, mCuePointsDlg->GetDescription(), mCuePointsDlg->GetColourIndex());
 					mSavedState.Save(mSavedStateFilename);
 				}
 				mPlayer->DivertKeyPresses(false);
@@ -1010,11 +1003,11 @@ void IngexguiFrame::OnTimeposEvent(wxCommandEvent& event)
 }
 
 /// Responds to an event (cue point, start, chunk start or stop point) being selected by the user or by new recordings arriving
-/// Informs the player.
+/// Informs the player and supplies paths to the test mode dialogue so it knows where to erase files from.
 /// @param event The command event; ExtraLong is set to indicate a forced reload.  Do not use GetItem() to determine the selection as this may not be valid.
 void IngexguiFrame::OnEventSelection(wxListEvent& event)
 {
-	mPlayer->SelectRecording(mEventList->GetCurrentChunkInfo(), mEventList->GetCurrentCuePoint(), event.GetExtraLong());
+	mTestModeDlg->SetRecordPaths(mPlayer->SelectRecording(mEventList->GetCurrentChunkInfo(), mEventList->GetCurrentCuePoint(), event.GetExtraLong()));
 }
 
 /// Responds to an event (cue point) being double-clicked.
@@ -1024,6 +1017,52 @@ void IngexguiFrame::OnEventActivated(wxListEvent& WXUNUSED(event))
 {
 	mPlayer->SelectRecording(mEventList->GetCurrentChunkInfo(), mEventList->GetCurrentCuePoint());;
 	if (PAUSED == mStatus) mPlayer->Play();
+}
+
+/// Called when something gets focus.
+/// If it's the description control, disables conflicting shortcuts so that they go to the control.
+/// @param event The focus event.
+void IngexguiFrame::OnFocusGot(wxFocusEvent & event)
+{
+	if (TEXTCTRL_Description == event.GetId()) {
+		TextFieldHasFocus(true);
+	}
+	else {
+		event.Skip();
+	}
+}
+
+/// Called when something loses focus.
+/// If it's the description control, enables conflicting shortcuts so that they can be used.
+/// @param event The focus event.
+void IngexguiFrame::OnFocusLost(wxFocusEvent & event)
+{
+	if (TEXTCTRL_Description == event.GetId()) {
+		TextFieldHasFocus(false);
+	}
+	else {
+		event.Skip();
+	}
+}
+
+/// Disables conflicting shortcuts when editing an event description.
+void IngexguiFrame::OnEventBeginEdit(wxListEvent& WXUNUSED(event))
+{
+	TextFieldHasFocus(true);
+}
+
+/// Re-enables conflicting shortcuts after editing an event description.
+void IngexguiFrame::OnEventEndEdit(wxListEvent& WXUNUSED(event))
+{
+	TextFieldHasFocus(false);
+}
+
+/// Enables or disables the alphanumeric shortcuts to allow the characters they use to be entered into text boxes.
+/// @param hasFocus True to disable the shortcuts.
+void IngexguiFrame::TextFieldHasFocus(const bool hasFocus)
+{
+	mTextFieldHasFocus = hasFocus;
+	mMenuShortcuts->UpdateUI(); //otherwise doesn't update enable states and hence act upon the change until the menu is displayed
 }
 
 /// Responds to the an event from the group of recorders.
@@ -1050,7 +1089,7 @@ void IngexguiFrame::OnEventActivated(wxListEvent& WXUNUSED(event))
 ///	TRACK_STATUS: Informs source tree of tracks' status (recording or not) for given recorder.
 ///		Event string: The recorder name.
 ///		Event client data: Ptr to a RecorderData object, containing a track status list.  Deletes this.
-///		Event int: non-zero to ignore recording state mismatches.
+///		Event int: non-zero to indicate chunking, i.e. to ignore mismatches between intended and current recording state.
 ///	REMOVE_RECORDER: Removes the given recorder from the tree, and sets mode to disconnected if no recorders remaining.
 ///		Event string: The recorder name.
 ///	DISPLAY_TIMECODE: Displays the given timecode, enabling auto-increment.
@@ -1220,20 +1259,6 @@ void IngexguiFrame::OnRecorderGroupEvent(wxCommandEvent& event) {
 	}
 }
 
-/// Responds to an event from the test dialogue.
-/// Attempts to record or stop as appropriate.
-/// @param event The command event.
-void IngexguiFrame::OnTestDlgEvent(wxCommandEvent& event) {
-	if (TestModeDlg::RECORD == event.GetId()) {
-		wxCommandEvent menuEvent(wxEVT_COMMAND_MENU_SELECTED, BUTTON_MENU_Record);
-		AddPendingEvent(menuEvent);
-	}
-	else {
-		wxCommandEvent menuEvent(wxEVT_COMMAND_MENU_SELECTED, BUTTON_MENU_Stop);
-		AddPendingEvent(menuEvent);
-	}
-}
-
 /// Responds to an event from the source tree.
 /// Updates various controls (if the event string is empty)
 /// Requests and sets tape IDs for the recorder indicated by the event's string (if the event string is not empty)
@@ -1368,6 +1393,9 @@ void IngexguiFrame::OnPlayerCommand(wxCommandEvent & event)
 		case MENU_PlayerEnableSDIOSD:
 			mPlayer->EnableSDIOSD(event.IsChecked());
 			break;
+		case MENU_PlayerExtAccelOutput:
+			mPlayer->SetOutputType(prodauto::DUAL_DVS_AUTO_OUTPUT);
+			break;
 #endif
 		case MENU_PlayerAccelOutput:
 			mPlayer->SetOutputType(prodauto::X11_AUTO_OUTPUT);
@@ -1375,9 +1403,6 @@ void IngexguiFrame::OnPlayerCommand(wxCommandEvent & event)
 #ifdef HAVE_DVS
 		case MENU_PlayerExtOutput:
 			mPlayer->SetOutputType(prodauto::DVS_OUTPUT);
-			break;
-		case MENU_PlayerExtAccelOutput:
-			mPlayer->SetOutputType(prodauto::DUAL_DVS_AUTO_OUTPUT);
 			break;
 		case MENU_PlayerExtUnaccelOutput:
 			mPlayer->SetOutputType(prodauto::DUAL_DVS_X11_OUTPUT);
@@ -1387,13 +1412,13 @@ void IngexguiFrame::OnPlayerCommand(wxCommandEvent & event)
 			mPlayer->SetOutputType(prodauto::X11_OUTPUT);
 			break;
 		case MENU_PlayerAbsoluteTimecode:
-			mPlayer->SetOSD(SOURCE_TIMECODE);
+			mPlayer->SetOSDType(SOURCE_TIMECODE);
 			break;
 		case MENU_PlayerRelativeTimecode:
-			mPlayer->SetOSD(CONTROL_TIMECODE);
+			mPlayer->SetOSDType(CONTROL_TIMECODE);
 			break;
 		case MENU_PlayerNoOSD:
-			mPlayer->SetOSD(OSD_OFF);
+			mPlayer->SetOSDType(OSD_OFF);
 			break;
 		case MENU_PlayerAudioFollowsVideo:
 			mPlayer->AudioFollowsVideo(event.IsChecked());
@@ -1423,34 +1448,6 @@ void IngexguiFrame::OnClearDescription(wxCommandEvent & WXUNUSED(event))
 void IngexguiFrame::OnDescriptionEnterKey(wxCommandEvent & WXUNUSED(event))
 {
 	FindWindowById(NOTEBOOK, this)->SetFocus(); //seems as good a thing as any - has to be something which is enabled
-}
-
-/// Called when something gets focus.
-/// If it's the description control, disables conflicting shortcuts so that they go to the control.
-/// @param event The focus event.
-void IngexguiFrame::OnFocusGot(wxFocusEvent & event)
-{
-	if (TEXTCTRL_Description == event.GetId()) {
-		mTextFieldHasFocus = true;
-		mMenuShortcuts->UpdateUI(); //otherwise doesn't update enable states and hence disable conflicting shortcut keys until the menu is displayed
-	}
-	else {
-		event.Skip();
-	}
-}
-
-/// Called when something loses focus.
-/// If it's the description control, enables conflicting shortcuts so that they can be used.
-/// @param event The focus event.
-void IngexguiFrame::OnFocusLost(wxFocusEvent & event)
-{
-	if (TEXTCTRL_Description == event.GetId()) {
-		mTextFieldHasFocus = false;
-		mMenuShortcuts->UpdateUI(); //otherwise doesn't update enable states and hence enable conflicting shortcut keys until the menu is displayed
-	}
-	else {
-		event.Skip();
-	}
 }
 
 /// Deal with log messages: send to log stream
@@ -1490,9 +1487,15 @@ void IngexguiFrame::OnTakeSnapshot(wxCommandEvent & WXUNUSED(event))
 	std::string fileName = mPlayer->GetCurrentFileName();
 	if (!fileName.empty()) {
 		unsigned long offset = mPlayer->GetLatestFrameDisplayed();
-                wxExecute(wxString::Format(wxT("player --exit-at-end --disable-shuttle --raw-out /tmp/ingexgui_snapshot%%d.raw --clip-start %ld --clip-duration 1 -m "), offset) + wxString(fileName.c_str(), *wxConvCurrent), wxEXEC_SYNC);
-		//The following command is specific to MJPEG SD formats!  Because the data order is planar, the cropping has to be done at the output stage or the chroma breaks.  This may happen to the already-encoded picture which is unfortunate as the black lines may introduce artifacts.  Cropping at the top is to get rid of the VBI; cropping at the bottom is to get rid of one black line (but an even number of lines must be removed).
-		wxExecute(wxString::Format(wxT("ffmpeg -s 720x592 -f rawvideo -pix_fmt yuv422p -y -i /tmp/ingexgui_snapshot0.raw -s 1024x592 -croptop 16 -cropbottom 2 /tmp/ingexgui_snapshot%03d.jpg"), mSnapshotIndex++));
+                wxExecute(wxString::Format(wxT("player --exit-at-end --disable-shuttle --raw-out /tmp/snapshot%%d.raw --clip-start %ld --clip-duration 1 -m \""), offset) + wxString(fileName.c_str(), *wxConvCurrent) + wxT("\""), wxEXEC_SYNC); //FIXME: This assumes a command-line player is installed
+		wxString snapshotStem = mPlayer->GetProjectName();
+		for (size_t i = 0; i < wxFileName::GetForbiddenChars().Len(); i++) {
+			snapshotStem.Replace(wxFileName::GetForbiddenChars().Mid(i, 1), wxT("_"));
+		}
+		snapshotStem.Replace(wxString(wxFileName::GetPathSeparator()), wxT("_"));
+		snapshotStem = wxT("/tmp/snapshot-") + snapshotStem; //FIXME: Not Windows-compatible
+		//FIXME: The following command is specific to MJPEG SD formats!  Because the data order is planar, the cropping has to be done at the output stage or the chroma breaks.  This may happen to the already-encoded picture which is unfortunate as the black lines may introduce artifacts.  Cropping at the top is to get rid of the VBI; cropping at the bottom is to get rid of one black line (but an even number of lines must be removed).
+		wxExecute(wxT("ffmpeg -s 720x592 -f rawvideo -pix_fmt yuv422p -y -i /tmp/snapshot0.raw -s 1024x592 -croptop 16 -cropbottom 2 \"") + snapshotStem + wxString::Format(wxT("-%03d.jpg\""), mSnapshotIndex++));
 	}
 }
 
@@ -1506,6 +1509,22 @@ bool IngexguiFrame::IsRecording()
 void IngexguiFrame::OnUpdateUI(wxUpdateUIEvent& event)
 {
 	switch (event.GetId()) {
+		case FRAME:
+			if (mTree->HasRecorders()) {
+				SetTitle(wxString(TITLE) + wxT(": ") + mRecorderGroup->GetCurrentProjectName()); //must have a project name if we have recorders
+			}
+			else {
+				SetTitle(TITLE);
+			}
+			break;
+		case REC_PROJECT_NAME:
+			if (mTree->HasRecorders()) {
+				event.SetText(mRecorderGroup->GetCurrentProjectName());
+			}
+			else {
+				event.SetText(wxEmptyString);
+			}
+			break;
 		case PLAY_PROJECT_NAME:
 			if (mPlayer->GetProjectType().IsEmpty()) {
 				mPlayProjectNameBox->GetStaticBox()->Hide();
@@ -1514,6 +1533,7 @@ void IngexguiFrame::OnUpdateUI(wxUpdateUIEvent& event)
 				mPlayProjectNameBox->GetStaticBox()->Show();
 				((wxStaticText*) event.GetEventObject())->SetLabel(mPlayer->GetProjectName());
 				mPlayProjectNameBox->GetStaticBox()->SetLabel(mPlayer->GetProjectType()); //this doesn't have an ID
+				((wxStaticText*) event.GetEventObject())->SetMinSize(((wxStaticText*) event.GetEventObject())->GetSize()); //or project name is partially obscured if there was no project name available when the app was started
 			}
 			mPlayProjectNameBox->Layout();
 			break;
@@ -1680,14 +1700,16 @@ void IngexguiFrame::OnUpdateUI(wxUpdateUIEvent& event)
 				((wxStaticBitmap*) event.GetEventObject())->SetToolTip(wxT("Status OK"));
 			}
 			break;
-		case BUTTON_MENU_Record:
+		case BUTTON_MENU_Record: {
+			wxString legend;
 			if (mTree->HasRecorders()) {
-				event.SetText(wxString::Format(wxT("Record (%d track%s)"), mTree->EnabledTracks(), mTree->EnabledTracks() == 1 ? wxT("") : wxT("s")));
+				legend = wxString::Format(wxT("Record (%d track%s)"), mTree->EnabledTracks(), mTree->EnabledTracks() == 1 ? wxT("") : wxT("s"));
 			}
 			else {
-				event.SetText(wxT("Record"));
+				legend = wxT("Record");
 			}
 			if (event.GetEventObject()->IsKindOf(CLASSINFO(RecordButton))) {
+				event.SetText(legend);
 				switch (mStatus) {
 					case RUNNING_UP:
 						((RecordButton*) event.GetEventObject())->Pending();
@@ -1704,7 +1726,11 @@ void IngexguiFrame::OnUpdateUI(wxUpdateUIEvent& event)
 						break;
 				}
 			}
+			else {
+				event.SetText(legend + wxT("\tF1"));
+			}
 			break;
+		}
 		case BUTTON_MENU_Stop:
 			if (event.GetEventObject()->IsKindOf(CLASSINFO(wxButton))) {
 				if (RECORDING == mStatus || RUNNING_DOWN == mStatus) {
@@ -1751,6 +1777,37 @@ void IngexguiFrame::OnUpdateUI(wxUpdateUIEvent& event)
 		case MENU_PlayerDisable:
 			event.Check(!mPlayer->IsEnabled());
 			break;
+#ifdef HAVE_DVS
+		case MENU_PlayerExtAccelOutput:
+			event.Check(prodauto::DUAL_DVS_AUTO_OUTPUT == mPlayer->GetOutputType());
+			break;
+#endif
+		case MENU_PlayerAccelOutput:
+			event.Check(prodauto::X11_AUTO_OUTPUT == mPlayer->GetOutputType());
+			break;
+#ifdef HAVE_DVS
+		case MENU_PlayerExtOutput:
+			event.Check(prodauto::DVS_OUTPUT == mPlayer->GetOutputType());
+			break;
+		case MENU_PlayerExtUnaccelOutput:
+			event.Check(prodauto::DUAL_DVS_X11_OUTPUT == mPlayer->GetOutputType());
+			break;
+		case MENU_PlayerUnaccelOutput:
+			event.Check(prodauto::X11_OUTPUT == mPlayer->GetOutputType());
+			break;
+#endif
+		case MENU_PlayerAbsoluteTimecode:
+			event.Check(SOURCE_TIMECODE == mPlayer->GetOSDType());
+			break;
+		case MENU_PlayerRelativeTimecode:
+			event.Check(CONTROL_TIMECODE == mPlayer->GetOSDType());
+			break;
+		case MENU_PlayerNoOSD:
+			event.Check(OSD_OFF == mPlayer->GetOSDType());
+			break;
+		case MENU_PlayerAudioFollowsVideo:
+			event.Check(mPlayer->AudioFollowsVideo());
+			break;
 		default:
 			break;
 	}
@@ -1773,12 +1830,14 @@ bool IngexguiFrame::OperationAllowed(const int operation, bool* found)
 			enabled = mTree->HasRecorders();
 			break;
 		case MENU_SetProjectName:
-			switch (mStatus) {
-				case STOPPED: case RUNNING_DOWN: case PLAYING: case PLAYING_BACKWARDS: case PAUSED:
-					enabled = true;
-					break;
-				default:
-					break;
+			if (mTree->HasRecorders()) {
+				switch (mStatus) {
+					case STOPPED: case RUNNING_DOWN: case PLAYING: case PLAYING_BACKWARDS: case PAUSED:
+						enabled = true;
+						break;
+					default:
+						break;
+				}
 			}
 			break;
 		case MENU_MarkCue:
@@ -1876,7 +1935,7 @@ bool IngexguiFrame::OperationAllowed(const int operation, bool* found)
 			enabled = mChunkingDlg->CanChunk();
 			break;
 		case BUTTON_TakeSnapshot:
-			enabled = mPlayer->IsOK() && RECORDINGS == mPlayer->GetMode() && PAUSED == mStatus;
+			enabled = mPlayer->IsOK() && !mPlayer->IsShowingSplit() && RECORDINGS == mPlayer->GetMode() && PAUSED == mStatus;
 			break;
 		case BUTTON_DeleteCue:
 			enabled = RECORDING == mStatus //no point in deleting cue points after recording, as the descriptions have already been sent to the recorder

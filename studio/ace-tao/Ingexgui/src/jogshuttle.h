@@ -1,7 +1,7 @@
 /***************************************************************************
- *   $Id: jogshuttle.h,v 1.1 2009/01/29 07:45:26 stuart_hc Exp $             *
+ *   $Id: jogshuttle.h,v 1.2 2010/06/02 13:09:25 john_f Exp $             *
  *                                                                         *
- *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
+ *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
  *   Author: Matthew Marks                                                 *
  *                                                                         *
@@ -29,7 +29,7 @@ Refer to installation documentation for how to set up the host to provide this *
 
 #include "JogShuttle.h" //NB this is not this file!
 
-DECLARE_EVENT_TYPE(wxEVT_JOGSHUTTLE_MESSAGE, -1)
+DECLARE_EVENT_TYPE(EVT_JOGSHUTTLE_MESSAGE, -1)
 
 /// Class with methods that are called by the jog/shuttle device
 class JSListener : public ingex::JogShuttleListener

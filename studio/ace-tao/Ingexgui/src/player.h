@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: player.h,v 1.13 2010/03/30 07:47:52 john_f Exp $                *
+ *   $Id: player.h,v 1.14 2010/06/02 13:09:25 john_f Exp $                *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -52,11 +52,12 @@ enum PlayerEventType {
 	KEYPRESS,
 	PROGRESS_BAR_DRAG,
 	SPEED_CHANGE,
-	QUADRANT_CLICK,
+	IMAGE_CLICK,
 	LOAD_NEXT_CHUNK,
 	LOAD_PREV_CHUNK,
 	LOAD_FIRST_CHUNK,
 	EDIT_RATE,
+	SOURCE_NAME,
 };
 
 enum PlayerOSDtype {
@@ -110,6 +111,7 @@ class Listener : public prodauto::IngexPlayerListener
 		virtual void keyReleased(int, int);
 		virtual void progressBarPositionSet(float);
 		virtual void mouseClicked(int, int, int, int);
+		virtual void sourceNameChangeEvent(int, const char*);
 	private:
 		Player * mPlayer; //never changed so doesn't need protecting by mutex
 };
@@ -118,7 +120,7 @@ class Listener : public prodauto::IngexPlayerListener
 class Player : public wxPanel, prodauto::LocalIngexPlayer
 {
 	public:
-		Player(wxWindow*, const wxWindowID, const bool, const prodauto::PlayerOutputType, const PlayerOSDtype);
+		Player(wxWindow*, const wxWindowID, const bool, const prodauto::PlayerOutputType, const PlayerOSDtype = SOURCE_TIMECODE);
 		~Player();
 		void OnPlaybackTrackSelect(wxCommandEvent&);
 		void Record(const bool = true);
@@ -127,11 +129,12 @@ class Player : public wxPanel, prodauto::LocalIngexPlayer
 		bool Enable(bool = true);
 		bool IsEnabled() { return mEnabled; };
 		void Open(const PlayerOpenType);
-		void SelectRecording(ChunkInfo*, const int = 0, const bool = false);
+		std::vector<std::string>* SelectRecording(ChunkInfo*, const int = 0, const bool = false);
 		bool EarlierTrack(const bool);
 		bool LaterTrack(const bool);
 		void SelectTrack(const int, const bool);
-		void SetOSD(const PlayerOSDtype);
+		void SetOSDType(const PlayerOSDtype);
+		PlayerOSDtype GetOSDType() { return mOSDType; };
 		void EnableSDIOSD(bool = true);
 		void SetOutputType(const prodauto::PlayerOutputType);
 		void Play(const bool = false, const bool = false);
@@ -144,13 +147,16 @@ class Player : public wxPanel, prodauto::LocalIngexPlayer
 		bool WithinRecording();
 		bool AtRecordingEnd();
 		bool LastPlayingBackwards() { return mLastPlayingBackwards; };
-		bool ExtOutputIsAvailable() { return dvsCardIsAvailable(); };
+#ifdef HAVE_DVS
+		bool ExtOutputIsAvailable();
+#endif
 		bool AtMaxForwardSpeed();
 		bool AtMaxReverseSpeed();
 		void MuteAudio(const bool);
 		void AudioFollowsVideo(const bool);
+		bool AudioFollowsVideo();
 		unsigned long GetLatestFrameDisplayed() { return mPreviousFrameDisplayed; };
-		std::string GetCurrentFileName() { return mCurrentFileName; };
+		std::string GetCurrentFileName();
 		const wxString GetProjectName();
 		const wxString GetProjectType();
 		DragButtonList* GetTrackSelector(wxWindow*);
@@ -161,10 +167,10 @@ class Player : public wxPanel, prodauto::LocalIngexPlayer
 		PlayerMode GetMode() { return mMode; };
 		void SetPreviousMode();
 		int GetSpeed() { return mSpeed; };
-		void SelectQuadrant(const unsigned int);
 		bool ModeAllowed(PlayerMode mode) {return mModesAllowed[mode]; };
 		bool IsMuted() { return mMuted; };
-		prodauto::PlayerOutputType GetOutputType();
+		prodauto::PlayerOutputType GetOutputType() { return mOutputType; }; //don't use getOutputType as doesn't give right answer when player not open
+		bool IsShowingSplit();
 	private:
 		void OnModeButton(wxCommandEvent&);
 		void OnUpdateUI(wxUpdateUIEvent&);
@@ -177,7 +183,9 @@ class Player : public wxPanel, prodauto::LocalIngexPlayer
 		void OnSpeedChange(wxCommandEvent&);
 		void OnProgressBarDrag(wxCommandEvent&);
 		void OnKeyPress(wxCommandEvent&);
+		void OnImageClick(wxCommandEvent&);
 		void OnSocketEvent(wxSocketEvent&);
+		void OnSourceNameChange(wxCommandEvent&);
 		void TrafficControl(const bool, const bool = false);
 		bool HasChunkBefore();
 		bool HasChunkAfter();
@@ -186,7 +194,7 @@ class Player : public wxPanel, prodauto::LocalIngexPlayer
 		prodauto::IngexPlayerListenerRegistry mListenerRegistry;
 		DragButtonList* mTrackSelector;
 		wxWindow* mParent;
-		PlayerOSDtype mOSDtype;
+		PlayerOSDtype mOSDType;
 		bool mEnabled;
 		bool mOK;
 		PlayerState::PlayerState mState;
@@ -201,7 +209,6 @@ class Player : public wxPanel, prodauto::LocalIngexPlayer
 		bool mAtChunkEnd;
 		wxTimer * mFilePollTimer;
 		int mSpeed;
-		wxString mName;
 		bool mMuted;
 		bool mLastPlayingBackwards;
 		wxSocketClient * mSocket;
@@ -209,7 +216,6 @@ class Player : public wxPanel, prodauto::LocalIngexPlayer
 		bool mTrafficControl;
 		bool mPrevTrafficControl;
 		PlayerEventType mChunkLinking;
-		std::string mCurrentFileName;
 		PlayerMode mMode, mPreviousMode;
 		wxArrayString mFileModeMxfFiles;
 		unsigned int mFilesModeSelectedTrack;
@@ -221,6 +227,9 @@ class Player : public wxPanel, prodauto::LocalIngexPlayer
 		ChunkInfo* mCurrentChunkInfo;
 		prodauto::PlayerInputType mInputType;
 		bool mDivertKeyPresses;
+		prodauto::PlayerOutputType mOutputType;
+		bool mAudioFollowsVideo;
+		unsigned int mNVideoTracks;
 	DECLARE_EVENT_TABLE()
 };
 

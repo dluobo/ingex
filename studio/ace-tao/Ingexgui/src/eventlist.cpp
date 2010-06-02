@@ -1,7 +1,7 @@
 /***************************************************************************
- *   $Id: eventlist.cpp,v 1.10 2010/03/30 07:47:52 john_f Exp $           *
+ *   $Id: eventlist.cpp,v 1.11 2010/06/02 13:09:25 john_f Exp $           *
  *                                                                         *
- *   Copyright (C) 2009 British Broadcasting Corporation                   *
+ *   Copyright (C) 2009-2010 British Broadcasting Corporation                   *
  *   - all rights reserved.                                                *
  *   Author: Matthew Marks                                                 *
  *                                                                         *
@@ -31,20 +31,21 @@
 #include "dialogues.h"
 
 #define ROOT_NODE_NAME wxT("IngexguiEvents")
+DEFINE_EVENT_TYPE (EVT_RESTORE_LIST_LABEL);
 
 BEGIN_EVENT_TABLE( EventList, wxListView )
 	EVT_LIST_ITEM_SELECTED( wxID_ANY, EventList::OnEventSelection )
 //	EVT_LIST_ITEM_ACTIVATED( wxID_ANY, EventList::OnEventActivated )
 	EVT_LIST_BEGIN_LABEL_EDIT( wxID_ANY, EventList::OnEventBeginEdit )
 	EVT_LIST_END_LABEL_EDIT( wxID_ANY, EventList::OnEventEndEdit )
-	EVT_COMMAND( wxID_ANY, wxEVT_RESTORE_LIST_LABEL, EventList::OnRestoreListLabel )
+	EVT_COMMAND( wxID_ANY, EVT_RESTORE_LIST_LABEL, EventList::OnRestoreListLabel )
 END_EVENT_TABLE()
 
 const wxString TypeLabels[] = {wxT(""), wxT("Start"), wxT("Cue"), wxT("Chunk Start"), wxT("Last Frame"), wxT("PROBLEM")}; //must match order of EventType enum
 
 EventList::EventList(wxWindow * parent, wxWindowID id, const wxPoint & pos, const wxSize & size, bool loadEventFiles) :
 wxListView(parent, id, pos, size, wxLC_REPORT|wxLC_SINGLE_SEL|wxSUNKEN_BORDER|wxLC_EDIT_LABELS/*|wxALWAYS_SHOW_SB*/), //ALWAYS_SHOW_SB results in a disabled scrollbar on GTK (wx 2.8))
-mCurrentChunkInfo(-1), mBlockEventItem(-1), mRecordingNodeCount(0), mChunking(false), mRunThread(false), mSyncThread(false), mLoadEventFiles(loadEventFiles)
+mCanEditAfter(0), mCurrentChunkInfo(-1), mBlockEventItem(-1), mRecordingNodeCount(0), mChunking(false), mRunThread(false), mSyncThread(false), mLoadEventFiles(loadEventFiles)
 {
 	//set up the columns
 	wxListItem itemCol;
@@ -124,13 +125,13 @@ int64_t EventList::GetCurrentChunkStartPosition()
 }
 
 /// Responds to an attempt to edit in the event list.
-/// Allows editing only on cue points on a recording currently in progress.
+/// Allows editing of cue points only on a chunk currently being recorded (as the cue point info hasn't yet been sent to the recorder).
 /// Sets the selected label to the text of the description, as you can only edit the labels (left hand column) of a list control.
 /// Dispatches an event to restore the label text in case the user presses ENTER without making changes.
 /// @param event The list control event.
 void EventList::OnEventBeginEdit(wxListEvent& event)
 {
-	if (mCanEdit) {
+	if (event.GetIndex() > mCanEditAfter) {
 		//want to edit the description text (as opposed to the column 0 label text), so transfer it to the label
 		wxListItem item;
 		item.SetId(event.GetIndex());
@@ -140,7 +141,7 @@ void EventList::OnEventBeginEdit(wxListEvent& event)
 		item.SetMask(wxLIST_MASK_TEXT); //so it will update the text property
 		SetItem(item);
 		//If user presses ENTER without editing, no end editing event will be generated, so restore the label once editing has commenced (and so the modified label text has been grabbed)
-		wxCommandEvent restoreLabelEvent(wxEVT_RESTORE_LIST_LABEL, wxID_ANY);
+		wxCommandEvent restoreLabelEvent(EVT_RESTORE_LIST_LABEL, wxID_ANY);
 		restoreLabelEvent.SetExtraLong(event.GetIndex());
 		AddPendingEvent(restoreLabelEvent);
 
@@ -169,6 +170,9 @@ void EventList::OnEventEndEdit(wxListEvent& event)
 		SetColumnWidth(3, wxLIST_AUTOSIZE);
 #endif
 	}
+	//tell the frame so that alphanumeric shortcuts can be re-enabled
+	wxListEvent frameEvent(wxEVT_COMMAND_LIST_END_LABEL_EDIT);
+	GetParent()->AddPendingEvent(frameEvent);
 }
 
 /// Responds to commencement of editing by restoring the default label.
@@ -278,24 +282,23 @@ void EventList::SelectNextTake()
 	wxListItem item;
 	item.SetId(GetFirstSelected());
 	if (item.GetId() >= 0) { //something's selected
+		GetItem(item);
 		size_t chunk = item.GetData(); //the currently selected chunk
-		while (1) {
-			if (++chunk == mChunkInfoArray.GetCount()) { //the last chunk
-				Select(GetItemCount() - 1); //go to the end of it
-				break;
-			}
-			else if (!mChunkInfoArray.Item(chunk).HasChunkBefore()) { //we've found a new take
+		while (++chunk != mChunkInfoArray.GetCount()) {
+			if (!mChunkInfoArray.Item(chunk).HasChunkBefore()) { //we've found a new take
 				Select(mChunkInfoArray.Item(chunk).GetStartIndex()); //go to the beginning of it
 				break;
 			}
 		}
+		if (chunk == mChunkInfoArray.GetCount()) Select(GetItemCount() - 1); //select end of last chunk
 		EnsureVisible(GetFirstSelected());
 	}
 }
 
 /// Moves to the start of the last take, if possible.
 /// Generates a select event if new event selected.
-void EventList::SelectLastTake() {
+void EventList::SelectLastTake()
+{
 	size_t chunk = mChunkInfoArray.GetCount();
 	if (chunk) {
 		while (chunk--) { //not gone past the beginning
@@ -306,14 +309,9 @@ void EventList::SelectLastTake() {
 	}
 }
 
-/// Sets whether cue points can be edited or not.
-void EventList::CanEdit(const bool canEdit)
-{
-	mCanEdit = canEdit;
-}
-
 /// Returns true if an event is selected and if it's a cue point in the latest chunk.
-bool EventList::LatestChunkCuePointIsSelected() {
+bool EventList::LatestChunkCuePointIsSelected()
+{
 	bool isCuePoint = false;
 	if (-1 < GetFirstSelected()) {
 		wxListItem item;
@@ -410,6 +408,7 @@ void EventList::AddEvent(EventType type, ProdAuto::MxfTimecode * timecode, const
 			item.SetText(TypeLabels[START]);
 			item.SetTextColour(wxColour(0xFF, 0x20, 0x00));
 			item.SetBackgroundColour(wxColour(wxT("WHITE")));
+			mCanEditAfter = GetItemCount(); //don't allow editing of the start event description
 //			font.SetWeight(wxFONTWEIGHT_BOLD); breaks auto col width
 //			font.SetStyle(wxFONTSTYLE_ITALIC); breaks auto col width
 			break;
@@ -429,6 +428,7 @@ void EventList::AddEvent(EventType type, ProdAuto::MxfTimecode * timecode, const
 				item.SetText(mChunking ? TypeLabels[CHUNK] : TypeLabels[STOP]);
 				item.SetTextColour(mChunking ? wxColour(wxT("GREY")) : wxColour(wxT("BLACK")));
 				item.SetBackgroundColour(wxColour(wxT("WHITE")));
+				mCanEditAfter = GetItemCount(); //cue point data will be sent to recorder so don't allow editing of existing cue point descriptions (or the stop/chunk description)
 				mMutex.Lock();
 				mRecordingNode->AddProperty(wxT("Linking"), mChunking ? wxT("Continues") : wxT("Finishes"));
 				if (!description.IsEmpty()) {
@@ -496,7 +496,7 @@ void EventList::AddEvent(EventType type, ProdAuto::MxfTimecode * timecode, const
 				}
 				break;
 			}
-		default : //FIXME: putting these in will break the creation of the list of locators
+		default : //FIXME: putting these in will break the creation of the list of locators; "cue point" editing won't be prevented; probably other issues too!
 			item.SetText(TypeLabels[PROBLEM]);
 			item.SetTextColour(wxColour(wxT("RED")));
 			item.SetBackgroundColour(wxColour(wxT("WHITE")));
@@ -512,11 +512,12 @@ void EventList::AddEvent(EventType type, ProdAuto::MxfTimecode * timecode, const
 	mCondition->Signal();
 	mMutex.Unlock();
 
-	item.SetColumn(0); //event name column
+	//event name
+	item.SetColumn(0);
 	item.SetId(GetItemCount()); //will insert at end
 	item.SetData(mChunkInfoArray.GetCount() - 1); //the index of the chunk info for this chunk
 	InsertItem(item); //insert (at end)
-	if (START == type && frameCount > -1) {
+	if ((START == type || CUE == type) && frameCount > -1) {
 		Select(item.GetId());
 		EnsureVisible(item.GetId()); //scroll down if necessary
 	}
@@ -542,6 +543,9 @@ void EventList::AddEvent(EventType type, ProdAuto::MxfTimecode * timecode, const
 	duration.samples = position;
 	if (STOP == type) {
 		duration.samples--; //previous frame is the last recorded
+	}
+	if (STOP == type || CHUNK == type) {
+		duration.undefined |= mChunkInfoArray.Item(mChunkInfoArray.GetCount() - 1).GetLastTimecode().undefined;
 	}
 	item.SetColumn(2);
 	item.SetText(Timepos::FormatPosition(duration));
@@ -698,7 +702,7 @@ bool EventList::JumpToTimecode(const ProdAuto::MxfTimecode & tc, int64_t & offse
 }
 
 /// Sets the project name, for use in start event description and the filename of the saved events.
-/// This will generate a new XML file when new recordings are made.
+/// This will load the correponding XML file of events if one is found, and generate a new file when new recordings are made.
 /// Assumes that the current XML file is up to date.
 /// @return timecode for edit rate info
 ProdAuto::MxfTimecode EventList::SetCurrentProjectName(const wxString & name)
@@ -870,7 +874,12 @@ ProdAuto::MxfTimecode EventList::Load()
 				) {
 					long1 = 0;
 				}
-				lastPosition += long1; //OutSample is relative to start of chunk; make it relative to start of recording
+				if (long1) { //valid position
+					lastPosition += long1; //OutSample is relative to start of chunk; make it relative to start of recording
+				}
+				else {
+					lastPosition = 0; //indicates unknown
+				}
 				str = recordingNodes[i]->GetPropVal(wxT("Linking"), wxT("Finishes"));
 				AddEvent(wxT("Continues") == str ? CHUNK : STOP, 0, lastPosition, description);
 				if (wxT("Continues") != str) {
@@ -934,6 +943,7 @@ ProdAuto::MxfTimecode EventList::Load()
 				} //recorder node loop
 			} //recording node present
 		} //recording node loop
+Select(0);
 		SelectLastTake(); //not done earlier while recordings were being added
 	} //root node
 	return timecode;

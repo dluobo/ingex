@@ -1,7 +1,7 @@
 /***************************************************************************
- *   $Id: dialogues.cpp,v 1.12 2010/03/30 07:47:52 john_f Exp $           *
+ *   $Id: dialogues.cpp,v 1.13 2010/06/02 13:09:25 john_f Exp $           *
  *                                                                         *
- *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
+ *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
  *   Author: Matthew Marks                                                 *
  *                                                                         *
@@ -270,7 +270,7 @@ void SetProjectDlg::OnEdit( wxCommandEvent& WXUNUSED( event ) )
 void SetProjectDlg::EnterName(const wxString & msg, const wxString & caption, int item) //item defaults to wxNOT_FOUND
 {
 	while (true) {
-		wxString name = wxGetTextFromUser(msg, caption, mProjectList->GetString(item));
+		wxString name = wxGetTextFromUser(msg, caption, mProjectList->GetString(item), this);
 		name = name.Trim(true).Trim(false);
 		if (name.IsEmpty()) {
 			break;
@@ -497,7 +497,6 @@ wxXmlNode * SetTapeIdsDlg::GetTapeIdsNode(wxXmlDocument & doc)
 		//clean up
 		wxXmlNode * childNode = tapeIdsNode->GetChildren();
 		while (childNode) {
-//std::cerr << childNode->GetName() << std::endl;
 			if (wxT("TapeId") != childNode->GetName()) {
 				wxXmlNode * deadNode = childNode;
 				childNode = childNode->GetNext();
@@ -1149,20 +1148,23 @@ BEGIN_EVENT_TABLE(TestModeDlg, wxDialog)
 	EVT_SPINCTRL(MAX_GAP, TestModeDlg::OnChangeMaxGapTime)
 	EVT_TOGGLEBUTTON(RUN, TestModeDlg::OnRun)
 	EVT_TIMER(wxID_ANY, TestModeDlg::OnTimer)
+	EVT_IDLE(TestModeDlg::OnIdle)
 END_EVENT_TABLE()
 
-DEFINE_EVENT_TYPE(wxEVT_TEST_DLG_MESSAGE)
 #define COUNTDOWN_FORMAT wxT("%H:%M:%S")
 
 /// Sets up dialogue.
 /// @param parent The parent window.
-TestModeDlg::TestModeDlg(wxWindow * parent) : wxDialog(parent, wxID_ANY, (const wxString &) wxT("Test Mode")), mRecording(false)
+/// @param recordId ID of a menu event to send to the parent to start recording.
+/// @param stopId ID of a menu event to send to the parent to stop recording.
+TestModeDlg::TestModeDlg(wxWindow * parent, const int recordId, const int stopId) : wxDialog(parent, wxID_ANY, (const wxString &) wxT("Test Mode")), mRecording(false),
+mRecordId(recordId), mStopId(stopId)
 {
 	wxBoxSizer * mainSizer = new wxBoxSizer(wxVERTICAL);
 	SetSizer(mainSizer);
-	wxFlexGridSizer * gridSizer = new wxFlexGridSizer(3, 5, CONTROL_BORDER, CONTROL_BORDER);
+	wxFlexGridSizer * gridSizer = new wxFlexGridSizer(4, 5, CONTROL_BORDER, CONTROL_BORDER);
 	mainSizer->Add(gridSizer, 0, wxALL, CONTROL_BORDER);
-	//top row
+	//record time row
 	gridSizer->Add(new wxStaticText(this, wxID_ANY, wxT("Record time minimum"), wxDefaultPosition, wxDefaultSize, wxALIGN_RIGHT), 0, wxALIGN_CENTRE);
 #define DEFAULT_MAX_REC_TIME 1
 	mMinRecTime = new wxSpinCtrl(this, MIN_REC, wxT(""), wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 1, DEFAULT_MAX_REC_TIME, 1);
@@ -1171,7 +1173,7 @@ TestModeDlg::TestModeDlg(wxWindow * parent) : wxDialog(parent, wxID_ANY, (const 
 	mMaxRecTime = new wxSpinCtrl(this, MAX_REC, wxT(""), wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, mMinRecTime->GetValue(), TEST_MAX_REC, DEFAULT_MAX_REC_TIME);
 	gridSizer->Add(mMaxRecTime, 0, wxALIGN_CENTRE);
 	gridSizer->Add(new wxStaticText(this, wxID_ANY, wxT("min."), wxDefaultPosition, wxDefaultSize, wxALIGN_LEFT), 0, wxALIGN_CENTRE);
-	//middle row
+	//gap time row
 	gridSizer->Add(new wxStaticText(this, wxID_ANY, wxT("Gap time minimum"), wxDefaultPosition, wxDefaultSize, wxALIGN_RIGHT), 0, wxALIGN_CENTRE);
 #define DEFAULT_MAX_GAP_TIME 5
 	mMinGapTime = new wxSpinCtrl(this, MIN_GAP, wxT(""), wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 1, DEFAULT_MAX_GAP_TIME, 5);
@@ -1180,7 +1182,15 @@ TestModeDlg::TestModeDlg(wxWindow * parent) : wxDialog(parent, wxID_ANY, (const 
 	mMaxGapTime = new wxSpinCtrl(this, MAX_GAP, wxT(""), wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, mMinGapTime->GetValue(), TEST_MAX_GAP, DEFAULT_MAX_GAP_TIME);
 	gridSizer->Add(mMaxGapTime, 0, wxALIGN_CENTRE);
 	gridSizer->Add(new wxStaticText(this, wxID_ANY, wxT("sec."), wxDefaultPosition, wxDefaultSize, wxALIGN_LEFT), 0, wxALIGN_CENTRE);
-	//bottom row
+	//erase row
+	mEraseEnable = new wxCheckBox(this, wxID_ANY, wxT("Keep disk below"));
+	gridSizer->Add(mEraseEnable, 0, wxALIGN_RIGHT);
+	mEraseThreshold = new wxSpinCtrl(this, MAX_GAP, wxT(""), wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 1, 100, 50);
+	gridSizer->Add(mEraseThreshold, 0, wxALIGN_CENTRE);
+	gridSizer->Add(new wxStaticText(this, wxID_ANY, wxT("% full")), 0, wxALIGN_LEFT);
+	gridSizer->Add(new wxStaticText(this, wxID_ANY, wxT("")));
+	gridSizer->Add(new wxStaticText(this, wxID_ANY, wxT("")));
+	//button row
 	mRunButton = new wxToggleButton(this, RUN, wxT("Run"));
 	gridSizer->Add(mRunButton);
 	mRunStopMessage = new wxStaticText(this, wxID_ANY, wxT(""));
@@ -1189,10 +1199,10 @@ TestModeDlg::TestModeDlg(wxWindow * parent) : wxDialog(parent, wxID_ANY, (const 
 	gridSizer->Add(mRunStopCountdown, 0, wxALIGN_CENTRE_VERTICAL);
 	mCancelButton = new wxButton(this, wxID_CANCEL, wxT("Cancel"));
 	gridSizer->Add(mCancelButton);
+
 	Fit();
 	mTimer = new wxTimer(this);
 	srand(wxDateTime::Now().GetMillisecond());
-	SetNextHandler(parent);
 }
 
 /// Stops timer when dialogue deleted - otherwise there's a segfault when the timer completes...
@@ -1204,12 +1214,12 @@ TestModeDlg::~TestModeDlg()
 /// Stops testing when dialogue closed but leaves any recording happening
 int TestModeDlg::ShowModal()
 {
+	mRunStopMessage->SetLabel(wxT("Stopped"));
 	int rc = wxDialog::ShowModal();
 	mTimer->Stop();
 	mRunButton->SetValue(false);
 	mRecording = false;
-	mRunStopMessage->SetLabel(wxT("Stopped"));
-	mRunStopCountdown->SetLabel(wxT(""));
+	mRunStopCountdown->SetLabel(wxEmptyString);
 	return rc;
 }
 
@@ -1255,7 +1265,7 @@ void TestModeDlg::OnRun(wxCommandEvent & WXUNUSED(event))
 		Record(false);
 		mTimer->Stop();
 		mRunStopMessage->SetLabel(wxT("Stopped"));
-		mRunStopCountdown->SetLabel(wxT(""));
+		mRunStopCountdown->SetLabel(wxEmptyString);
 	}
 }
 
@@ -1263,7 +1273,7 @@ void TestModeDlg::OnRun(wxCommandEvent & WXUNUSED(event))
 void TestModeDlg::OnTimer(wxTimerEvent & WXUNUSED(event))
 {
 	mCountdown -= wxTimeSpan(0, 0, 1, 0); //one second
-	mRunStopCountdown->SetLabel(mCountdown.Format(COUNTDOWN_FORMAT));
+	if (!mDirInfo.size()) mRunStopCountdown->SetLabel(mCountdown.Format(COUNTDOWN_FORMAT)); //otherwise label set after erasing files
 	if (mCountdown.IsEqualTo(wxTimeSpan())) { //empty
 		Record(!mRecording);
 	}
@@ -1272,31 +1282,174 @@ void TestModeDlg::OnTimer(wxTimerEvent & WXUNUSED(event))
 	}
 }
 
-/// Sends a record or stop command, and starts the timer for the next command.
+/// Sets the path(s) to be scanned for erasing files to stop the disk(s) filling up.
+/// @param fullPaths The full path and filename of paths to be scanned; duplicates allowed; no action taken if zero.
+void TestModeDlg::SetRecordPaths(std::vector<std::string>* filenames)
+{
+	if (filenames) {
+		mRecordPaths.clear();
+		wxString path;
+		for (size_t i = 0; i < filenames->size(); i++) {
+			wxFileName::SplitPath(wxString((*filenames)[i].c_str(), *wxConvCurrent), &path, NULL, NULL);
+			if (!path.IsEmpty()) mRecordPaths.insert(path); //it's a set so avoids duplicates; no particular reason why the path should be empty I guess
+		}
+	}
+}
+
+/// Sends a record or stop command as a menu event to the parent, checks for files to erase, and starts the timer for the next command.
 /// @param rec True to record.
 void TestModeDlg::Record(bool rec)
 {
 	if (mRecording != rec) {
+		//send command
 		mRecording = rec;
-		wxCommandEvent frameEvent(wxEVT_TEST_DLG_MESSAGE, rec ? RECORD : STOP);
-		AddPendingEvent(frameEvent);
+		wxCommandEvent menuEvent(wxEVT_COMMAND_MENU_SELECTED, mRecording ? mRecordId : mStopId);
+		GetParent()->AddPendingEvent(menuEvent);
+		//disk cleanup
+		if (
+		 mEraseEnable->IsChecked()
+		 && mRecordPaths.size() //we know where the material is
+		 && !mDirInfo.size() //not already erasing
+		) {
+			//look at each directory to see if it needs clearing out
+			wxLongLong total, free;
+			wxDir dir;
+			wxString filePath;
+			SetOfStrings::iterator pathsIt = mRecordPaths.begin();
+			while (mRecordPaths.end() != pathsIt) {
+				if (
+				 wxGetDiskSpace(*pathsIt, &total, &free) //we know how full the disk is
+				 && ((int) (free * 100 / total).GetLo()) <= 100 - mEraseThreshold->GetValue() //the occupancy is over the erase threshold
+				 && dir.Open(*pathsIt) //we can open the material directory
+		 		 && dir.GetFirst(&filePath, wxEmptyString, wxDIR_FILES) //there is at least one file in it (ignore subdirectories)
+				) {
+					//Make a sorted list of file ages and a hash mapping those file ages to arrays of path names; erasing occurs in idle event handler
+					DirContents* contents = new DirContents;
+					time_t mtime;
+					bool failed = false;
+					do {
+						filePath = *pathsIt + wxFileName::GetPathSeparator() + filePath;
+						if (-1 == (mtime = wxFileModificationTime(filePath))) { //couldn't get file modification time
+							failed = true;
+							break; //don't continue or could end up deleting newer files than necessary
+						}
+						if (contents->files.find(mtime) == contents->files.end()) { //not got an array of files of this age
+							contents->mtimes.push_back(mtime);
+							contents->files[mtime] = new wxArrayString;
+						}
+						contents->files[mtime]->Add(filePath);
+					} while (dir.GetNext(&filePath));
+					if (failed) {
+						while (contents->files.size()) {
+							delete contents->files.begin()->second; //the string arrays
+							contents->files.erase(contents->files.begin()->first);
+						}
+						delete contents;
+					}
+					else {
+						contents->mtimes.sort();
+						mDirInfo[*pathsIt] = contents;
+					}
+				}
+				pathsIt++;
+			}
+		}
+		//work out duration of next action and send comment
 		int dur;
 		if (mRecording) {
-			mRunStopMessage->SetLabel(wxT("Recording for"));
+			if (!mDirInfo.size()) mRunStopMessage->SetLabel(wxT("Stopping in")); //otherwise label set after erasing files
 			int range = mMaxRecTime->GetValue() - mMinRecTime->GetValue() + 1;
 			while ((dur = rand()/(RAND_MAX/range)) > range) {}; //avoid occasional truncation to range
 			dur += mMinRecTime->GetValue();
 			mCountdown = wxTimeSpan::Minutes(dur);
 		}
 		else {
-			mRunStopMessage->SetLabel(wxT("Stopped for"));
+			if (!mDirInfo.size()) mRunStopMessage->SetLabel(wxT("Recording in")); //otherwise label set after erasing files
 			int range = mMaxGapTime->GetValue() - mMinGapTime->GetValue() + 1;
 			while ((dur = rand()/(RAND_MAX/range)) > range) {}; //avoid occasional truncation to range
 			dur += mMinGapTime->GetValue();
 			mCountdown = wxTimeSpan::Seconds(dur);
 		}
-		mRunStopCountdown->SetLabel(mCountdown.Format(COUNTDOWN_FORMAT));
+		if (!mDirInfo.size()) mRunStopCountdown->SetLabel(mCountdown.Format(COUNTDOWN_FORMAT)); //otherwise label set after erasing files
 		mTimer->Start(1000, wxTIMER_ONE_SHOT); //one second
+	}
+}
+
+///Erases files while idle, so that display can be updated
+void TestModeDlg::OnIdle(wxIdleEvent& event)
+{
+	if (mDirInfo.size()) {
+		//find and delete the oldest files overall: this caters for more than one record directory on the same disk, where otherwise they might be deleted unevenly from the directories
+		wxString dir;
+		wxLongLong total, free;
+		time_t mtime = 0; //dummy initialiser
+		HashOfDirContents::iterator dirIt = mDirInfo.begin();
+		//find the oldest files that need to be deleted
+		do {
+			if (
+			 wxGetDiskSpace(dirIt->first, &total, &free) //we know how full the disk is
+			 && (int) (free * 100 / total).GetLo() <= 100 - mEraseThreshold->GetValue() //the occupancy is over the erase threshold
+			 && (dir.IsEmpty() || *dirIt->second->mtimes.begin() < mtime) //the oldest files are the oldest we've come across
+			) {
+				dir = dirIt->first;
+				mtime = *dirIt->second->mtimes.begin();
+			}
+		} while (mDirInfo.end() != ++dirIt);
+		if (!dir.IsEmpty()) { //found something to delete
+			//erase all files of this age from this dir (because it's likely to correspond to a complete recording and it reduces number of disk space checks)
+			mRunStopMessage->SetLabel(wxT("Erasing..."));
+			mRunStopCountdown->SetLabel(wxEmptyString);
+			size_t index = 0;
+			while (
+			 wxRemoveFile(mDirInfo[dir]->files[mtime]->Item(index))
+			 && ++index < mDirInfo[dir]->files[mtime]->GetCount()
+			) {
+			}
+			//clean up
+			if (mDirInfo[dir]->files[mtime]->GetCount() == index) { //successfully removed all files
+				//remove the array of files and the mtime entry corresponding to it
+				delete mDirInfo[dir]->files[mtime];
+				mDirInfo[dir]->mtimes.erase(mDirInfo[dir]->mtimes.begin());
+			}
+			else {
+				//don't try again with this directory or might just get stuck
+				DeleteFileArrays(dir);
+				mDirInfo[dir]->mtimes.clear();
+			}
+			if (!mDirInfo[dir]->mtimes.size()) { //all files done
+				//remove the directory info
+				delete mDirInfo[dir];
+				mDirInfo.erase(dir);
+			}
+		}
+		else { //no files to delete
+			//remove all info
+			dirIt = mDirInfo.begin();
+			while (dirIt != mDirInfo.end()) {
+				DeleteFileArrays(dirIt->first);
+				delete dirIt++->second;
+			}
+			mDirInfo.clear();
+		}
+		if (mDirInfo.size()) { //more to erase
+			//call ourselves again
+			event.RequestMore();
+		}
+		else {
+			mRunStopMessage->SetLabel(mRecording ? wxT("Stopping in") : wxT("Recording in"));
+			mRunStopCountdown->SetLabel(mCountdown.Format(COUNTDOWN_FORMAT));
+		}
+	}
+}
+
+/// Deletes the arrays of file paths pointed to by an element of mDirInfo.
+/// Does not remove the mtimes or the files hash elements.
+/// @param dir The key of the element to delete the arrays from.
+void TestModeDlg::DeleteFileArrays(const wxString& dir)
+{
+	std::list<time_t>::iterator mtimeIt = mDirInfo[dir]->mtimes.begin();
+	while (mDirInfo[dir]->mtimes.end() != mtimeIt) {
+		delete mDirInfo[dir]->files[*mtimeIt++];
 	}
 }
 
@@ -1314,7 +1467,7 @@ static const struct {char colour[8]; char labelColour[8]; char label[8]; ProdAut
 	{ "#000000", "#FFFFFF", "Black", ProdAuto::LocatorColour::BLACK }
 };
 
-DEFINE_EVENT_TYPE (wxEVT_SET_GRID_ROW);
+DEFINE_EVENT_TYPE (EVT_SET_GRID_ROW);
 
 BEGIN_EVENT_TABLE(CuePointsDlg, wxDialog)
 	EVT_GRID_EDITOR_SHOWN(CuePointsDlg::OnEditorShown)
@@ -1323,11 +1476,12 @@ BEGIN_EVENT_TABLE(CuePointsDlg, wxDialog)
 	EVT_BUTTON(wxID_OK, CuePointsDlg::OnOK)
 	EVT_GRID_CELL_LEFT_CLICK(CuePointsDlg::OnCellLeftClick)
 	EVT_GRID_LABEL_LEFT_CLICK(CuePointsDlg::OnLabelLeftClick)
-	EVT_COMMAND(wxID_ANY, wxEVT_SET_GRID_ROW, CuePointsDlg::OnSetGridRow)
+	EVT_COMMAND(wxID_ANY, EVT_SET_GRID_ROW, CuePointsDlg::OnSetGridRow)
 //	EVT_GRID_CELL_RIGHT_CLICK(CuePointsDlg::OnCellRightClick) //don't use right click because it ignores the mouse pointer position
 END_EVENT_TABLE()
 
 /// Sets up dialogue.
+/// TODO: prevent selection of ranges - have tried selecting a row (or generating an event to do so) in an EVT_GRID_RANGE_SELECT handler but it gets upset.  Really wxGrid should have a style to do this.
 /// @param parent The parent window.
 /// @param savedState The setup file
 CuePointsDlg::CuePointsDlg(wxWindow * parent, wxXmlDocument & savedState) : wxDialog(parent, wxID_ANY, wxT(""),  wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER), mCurrentRow(0)
@@ -1353,7 +1507,7 @@ CuePointsDlg::CuePointsDlg(wxWindow * parent, wxXmlDocument & savedState) : wxDi
 	mGrid = new MyGrid(this, wxID_ANY);
 	mainSizer->Add(mGrid, 0 , wxEXPAND | wxALL, CONTROL_BORDER);
 
-	mMessage = new wxStaticText(this, wxID_ANY, wxT("Press a number key or click a label\nto choose a cue point;\npress ENTER to choose the highlighted cue point;\npress F2 to generate a default cue point;\nclick the highlighted cell to edit it."), wxDefaultPosition, wxDefaultSize, wxALIGN_CENTRE);
+	mMessage = new wxStaticText(this, wxID_ANY, wxT("To add a cue point:\n- Press a number key,\n- click on a number, or\n- press ENTER or the jog/shuttle cue point button\nto select the highlighted row.\nThe highlighted row can be changed with the jog wheel.\nClick the highlighted description cell to edit it\nor a colour cell to change the colour."), wxDefaultPosition, wxDefaultSize);
 	mTextColour = mMessage->GetForegroundColour();
 	mBackgroundColour = mMessage->GetBackgroundColour();
 	mainSizer->Add(mMessage, 0 , wxEXPAND | wxALL, CONTROL_BORDER);
@@ -1370,10 +1524,15 @@ CuePointsDlg::CuePointsDlg(wxWindow * parent, wxXmlDocument & savedState) : wxDi
 	buttonSizer->Add(cancelButton, 1, wxEXPAND | wxALL, CONTROL_BORDER);
 
 	//set up the grid
-	mGrid->CreateGrid(10, 2);
+	mGrid->CreateGrid(11, 2);
 	for (int row = 0; row < 10; row++) {
 		mGrid->SetRowLabelValue(row, wxString::Format(wxT("%d"), (row + 1) % 10));
 	}
+	mGrid->SetRowLabelValue(10, wxT("None"));
+	mGrid->SetReadOnly(10, 0);
+	mGrid->SetCellBackgroundColour(10, 0, wxSystemSettings::GetColour(wxSYS_COLOUR_BACKGROUND));
+	mGrid->SetReadOnly(10, 1);
+	mGrid->SetCellBackgroundColour(10, 1, wxSystemSettings::GetColour(wxSYS_COLOUR_BACKGROUND));
 	mGrid->SetColLabelValue(0, wxT("Description"));
 	mGrid->SetColLabelValue(1, wxT("Colour"));
 	wxGridCellAttr * readOnly = new wxGridCellAttr;
@@ -1472,12 +1631,11 @@ int CuePointsDlg::ShowModal(const wxString timecode)
 {
 	int rc = wxID_CANCEL; //to stop compiler warning
 	if (IsModal()) {
-		//return a blank (default) locator
-		mDescription.Clear();
-		mColour = 0;
+		Save();
 		EndModal(wxID_OK);
 	}
 	else {
+		Raise(); //Attempt to raise window to the top, which might be useful when opened by the Shuttle Pro, but window manager policy might prevent it happening
 		mTimecodeDisplay->SetLabel(timecode);
 		mTimecodeDisplay->Show(!timecode.IsEmpty());
 		mMessage->Show(!timecode.IsEmpty());
@@ -1486,11 +1644,13 @@ int CuePointsDlg::ShowModal(const wxString timecode)
 		if (timecode.IsEmpty()) {
 			SetTitle(wxT("Edit Cue Point Descriptions"));
 			mGrid->SetFocus(); //typing will immediately start editing
+			mGrid->ClearSelection(); //in case there's one hanging around from entering cue points, which looks silly
 		}
 		else {
 			SetTitle(wxT("Choose/edit Cue Point"));
 			mOkButton->SetFocus(); //stops shortcut keys disappearing into the grid
 			mMessage->SetForegroundColour(mTextColour); //as it's shown we need to see it...
+			mGrid->SelectRow(mCurrentRow); //always highlight one row
 		}
 		if (wxID_OK == (rc = wxDialog::ShowModal())) {
 			Save();
@@ -1506,7 +1666,7 @@ int CuePointsDlg::ShowModal(const wxString timecode)
 /// Disables shortcut keys so that they can be used for text entry
 void CuePointsDlg::OnEditorShown(wxGridEvent & WXUNUSED(event))
 {
-	mMessage->SetForegroundColour(mBackgroundColour); //disable shortcuts
+	mMessage->SetForegroundColour(mBackgroundColour); //will also disable shortcuts
 }
 
 /// Adjusts the grid and window sizes to reflect any editing changes.
@@ -1516,10 +1676,11 @@ void CuePointsDlg::OnEditorHidden(wxGridEvent & WXUNUSED(event))
 //	mGrid->ForceRefresh(); //sometimes makes a mess if you don't
 	Fit();
 	if (mTimecodeDisplay->IsShown()) {
+		mGrid->SelectRow(mCurrentRow);
 		mOkButton->SetFocus(); //stops shortcut keys disappearing into the grid
 		mMessage->SetForegroundColour(mTextColour); //as it's shown we need to see it...
 		//Prevent it jumping down a cell because it's likely you want to submit the just-edited value as the cue point
-		wxCommandEvent event(wxEVT_SET_GRID_ROW, mCurrentRow);
+		wxCommandEvent event(EVT_SET_GRID_ROW, mCurrentRow);
 		AddPendingEvent(event);
 	}
 	else {
@@ -1531,7 +1692,8 @@ void CuePointsDlg::OnEditorHidden(wxGridEvent & WXUNUSED(event))
 /// Sets the grid cursor to the row specified by the event ID - this has to be done this way because it doesn't like you doing it in a grid event handler
 void CuePointsDlg::OnSetGridRow(wxCommandEvent & event)
 {
-	mGrid->SetGridCursor(event.GetId(), 0);
+	mGrid->SetGridCursor(event.GetId(), 0); //or it doesn't highlight
+	mGrid->SelectRow(mCurrentRow); //or the selection goes away
 }
 
 /// Depending on the ID, sets a new locator colour (i.e. called from the pop-up colour menu), or, if enabled to do so, closes the dialogue (saving the grid state), setting the selected locator accordingly (i.e. called with a shortcut key).
@@ -1541,19 +1703,13 @@ void CuePointsDlg::OnMenu(wxCommandEvent & event)
 	if (event.GetId() < wxID_HIGHEST + 1 + N_CUE_POINT_COLOURS) { //a colour menu selection
 		SetColour(mCurrentRow, event.GetId() - wxID_HIGHEST - 1);
 		//Move the grid cursor away from the right hand column as it can't be "edited" as such
-		wxCommandEvent event(wxEVT_SET_GRID_ROW, mCurrentRow);
+		wxCommandEvent event(EVT_SET_GRID_ROW, mCurrentRow);
 		AddPendingEvent(event);
 	}
 	else if (mTextColour == mMessage->GetForegroundColour() && mTimecodeDisplay->IsShown()) { //shortcuts enabled
-		if (wxID_HIGHEST + N_CUE_POINT_COLOURS + 1 == event.GetId()) { //function key pressed
-			//return a blank (default) locator
-			mDescription.Clear();
-			mColour = 0;
-		}
-		else {
-			int row = event.GetId() == wxID_HIGHEST + N_CUE_POINT_COLOURS + 2 ? 9 : event.GetId() - N_CUE_POINT_COLOURS - wxID_HIGHEST - 3;
-			mDescription = mGrid->GetCellValue(row, 0).Trim(false).Trim(true);
-			mColour = mDescrColours[row];
+		if (wxID_HIGHEST + N_CUE_POINT_COLOURS + 1 != event.GetId()) { //number key pressed
+			//change cue point to correspond to number key
+			mCurrentRow = event.GetId() == wxID_HIGHEST + N_CUE_POINT_COLOURS + 2 ? 9 : event.GetId() - N_CUE_POINT_COLOURS - wxID_HIGHEST - 3;
 		}
 		Save();
 		EndModal(wxID_OK);
@@ -1563,8 +1719,8 @@ void CuePointsDlg::OnMenu(wxCommandEvent & event)
 	}
 }
 
-/// If dialogue is accepting locator selection shortcuts, acts as if the given locator number had been entered
-/// @param shortcut The locator number (0-9) or -1 to cancel the dialogue
+/// If dialogue is accepting cue point selection shortcuts, acts as if the given cue point number had been entered
+/// @param shortcut The cue point number (0-9) or -1 to cancel the dialogue
 void CuePointsDlg::Shortcut(const int shortcut)
 {
 	if (mTextColour == mMessage->GetForegroundColour() && mTimecodeDisplay->IsShown()) { //shortcuts enabled
@@ -1573,21 +1729,37 @@ void CuePointsDlg::Shortcut(const int shortcut)
 			EndModal(wxID_CANCEL);
 		}
 		else {
-			int row = shortcut ? shortcut - 1 : 9;
-			mDescription = mGrid->GetCellValue(row, 0).Trim(false).Trim(true);
-			mColour = mDescrColours[row];
+			mCurrentRow = shortcut ? shortcut - 1 : 9;
 			Save();
 			EndModal(wxID_OK);
 		}
 	}
 }
 
-/// Sets the selected locator values.
+/// If shortcuts are enabled, scrolls the selected row up or down, without wrapping.
+/// @param down True to scroll downwards.
+void CuePointsDlg::Scroll(const bool down)
+{
+	if (mTextColour == mMessage->GetForegroundColour() && mTimecodeDisplay->IsShown()) { //shortcuts enabled
+		if (down) {
+			if (mCurrentRow < 10) {
+				mCurrentRow++;
+				mGrid->SelectRow(mCurrentRow);
+			}
+		}
+		else {
+			if (mCurrentRow > 0) {
+				mCurrentRow--;
+				mGrid->SelectRow(mCurrentRow);
+			}
+		}
+	}
+}
+
+/// Saves the grid before ending modal.
 void CuePointsDlg::OnOK(wxCommandEvent & event)
 {
-	//Get current row
-	mDescription = mGrid->GetCellValue(mCurrentRow, 0).Trim(false).Trim(true);
-	mColour = mDescrColours[mCurrentRow];
+	Save();
 	event.Skip();
 }
 
@@ -1597,11 +1769,11 @@ void CuePointsDlg::OnCellLeftClick(wxGridEvent & event)
 {
 	mCurrentRow = event.GetRow(); //Note the row for ENTER being pressed in add cue mode, or if a colour is going to be set
 	if (mTimecodeDisplay->IsShown()) {
-		wxCommandEvent rowEvent(wxEVT_SET_GRID_ROW, mCurrentRow); //undo the "jump to the edited cell" from OnEditorHidden()
+		wxCommandEvent rowEvent(EVT_SET_GRID_ROW, mCurrentRow); //undo the "jump to the edited cell" from OnEditorHidden()
 		AddPendingEvent(rowEvent);
 		mOkButton->SetFocus(); //makes sure ENTER can still be pressed after clicking on a different event
 	}
-	if (1 == event.GetCol()) { //clicked in the colour column
+	if (1 == event.GetCol() && event.GetRow() < 10) { //clicked in the colour column
 		wxMenu colourMenu(wxT("Choose colour"));
 		for (unsigned int i = 0; i < N_CUE_POINT_COLOURS; i++) {
 			colourMenu.Append(wxID_HIGHEST + 1 + i, wxString(Colours[i].label, *wxConvCurrent));
@@ -1615,8 +1787,8 @@ void CuePointsDlg::OnCellLeftClick(wxGridEvent & event)
 void CuePointsDlg::OnLabelLeftClick(wxGridEvent & event)
 {
 	if (mTimecodeDisplay->IsShown() && mTextColour == mMessage->GetForegroundColour() && event.GetRow() > -1) { //make sure it isn't a click in a column heading
-		mDescription = mGrid->GetCellValue(event.GetRow(), 0).Trim(false).Trim(true);
-		mColour = mDescrColours[event.GetRow()];
+		mCurrentRow = event.GetRow();
+		Save();
 		EndModal(wxID_OK);
 	}
 }
@@ -1632,16 +1804,22 @@ void CuePointsDlg::SetColour(const int row, const int colour)
 	mDescrColours[row] = colour;
 }
 
+/// returns true if the selected cue point is not "none".
+bool CuePointsDlg::ValidCuePointSelected()
+{
+	return mCurrentRow < 10;
+}
+
 /// Returns the currently selected locator's description
 const wxString CuePointsDlg::GetDescription()
 {
-	return mDescription;
+	return mGrid->GetCellValue(mCurrentRow, 0).Trim(false).Trim(true);
 }
 
 /// Returns colour index of the currently selected locator
 size_t CuePointsDlg::GetColourIndex()
 {
-	return mColour;
+	return mDescrColours[mCurrentRow];
 }
 
 /// Returns the locator colour code corresponding to an index

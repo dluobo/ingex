@@ -1,4 +1,4 @@
-    # $Id: configure.in,v 1.14 2010/01/12 17:44:49 john_f Exp $
+    # $Id: configure.in,v 1.15 2010/06/02 13:09:25 john_f Exp $
 #
 AC_INIT(src/ingexgui.cpp)
 AM_INIT_AUTOMAKE(ingexgui, 0.1)
@@ -58,7 +58,7 @@ AC_DEFUN([PLAYERTEST],
 		AC_MSG_RESULT([yes])
 		AC_MSG_CHECKING([player for DVS card support])
 		# test player lib for dvs_register_listener symbol which only exists when DVS supported is compiled in
-		if test `readelf -s $WORKSPACE/player/IngexPlayer/$PLAYERLIB | grep -c dvs_register_listener` -gt 0; then
+		if test `readelf -s $WORKSPACE/player/IngexPlayer/$PLAYERLIB | grep -c sv_openex` -gt 0; then
 			AC_MSG_RESULT([yes])
 			DVS_CPPFLAGS="-DHAVE_DVS"
 			AC_MSG_CHECKING([for DVS SDK])

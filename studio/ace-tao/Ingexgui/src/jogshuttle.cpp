@@ -1,7 +1,7 @@
 /***************************************************************************
- *   $Id: jogshuttle.cpp,v 1.1 2009/01/29 07:45:26 stuart_hc Exp $           *
+ *   $Id: jogshuttle.cpp,v 1.2 2010/06/02 13:09:25 john_f Exp $           *
  *                                                                         *
- *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
+ *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
  *   Author: Matthew Marks                                                 *
  *                                                                         *
@@ -27,7 +27,7 @@ Refer to installation documentation for how to set up the host to provide this *
 #include <wx/wx.h>
 #include "jogshuttle.h"
 
-DEFINE_EVENT_TYPE(wxEVT_JOGSHUTTLE_MESSAGE)
+DEFINE_EVENT_TYPE(EVT_JOGSHUTTLE_MESSAGE)
 
 using namespace ingex; //jogshuttle stuff is in this namespace
 
@@ -67,7 +67,7 @@ void JSListener::buttonPressed(JogShuttle *, int number)
 	if ((size_t) number < mButtonsPressed.GetCount()) { //sanity check
 		mButtonsPressed[number] = 1;
 	}
-	wxCommandEvent event(wxEVT_JOGSHUTTLE_MESSAGE, JS_BUTTON_PRESSED);
+	wxCommandEvent event(EVT_JOGSHUTTLE_MESSAGE, JS_BUTTON_PRESSED);
 	event.SetInt(number);
 	mEvtHandler->AddPendingEvent(event);
 }
@@ -80,7 +80,7 @@ void JSListener::buttonReleased(JogShuttle *, int number)
 	if ((size_t) number < mButtonsPressed.GetCount()) { //sanity check
 		mButtonsPressed[number] = 0;
 	}
-	wxCommandEvent event(wxEVT_JOGSHUTTLE_MESSAGE, JS_BUTTON_RELEASED);
+	wxCommandEvent event(EVT_JOGSHUTTLE_MESSAGE, JS_BUTTON_RELEASED);
 	event.SetInt(number);
 	mEvtHandler->AddPendingEvent(event);
 }
@@ -91,7 +91,7 @@ void JSListener::buttonReleased(JogShuttle *, int number)
 /// @param position A rolling position number, mod 256.
 void JSListener::jog(JogShuttle *, bool clockwise, int)
 {
-	wxCommandEvent event(wxEVT_JOGSHUTTLE_MESSAGE, JOG);
+	wxCommandEvent event(EVT_JOGSHUTTLE_MESSAGE, JOG);
 	event.SetInt(clockwise);
 	mEvtHandler->AddPendingEvent(event);
 }
@@ -102,7 +102,7 @@ void JSListener::jog(JogShuttle *, bool clockwise, int)
 /// @param position Absolute extent (0-7).
 void JSListener::shuttle(JogShuttle *, bool clockwise, int position)
 {
-	wxCommandEvent event(wxEVT_JOGSHUTTLE_MESSAGE, SHUTTLE);
+	wxCommandEvent event(EVT_JOGSHUTTLE_MESSAGE, SHUTTLE);
 	event.SetInt(clockwise ? position : position * -1);
 	mEvtHandler->AddPendingEvent(event);
 }

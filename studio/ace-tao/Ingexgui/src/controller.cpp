@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: controller.cpp,v 1.11 2010/03/30 07:47:52 john_f Exp $          *
+ *   $Id: controller.cpp,v 1.12 2010/06/02 13:09:25 john_f Exp $          *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -25,7 +25,7 @@
 #include "comms.h"
 #include "ingexgui.h"
 
-DEFINE_EVENT_TYPE (wxEVT_CONTROLLER_THREAD);
+DEFINE_EVENT_TYPE (EVT_CONTROLLER_THREAD);
 IMPLEMENT_DYNAMIC_CLASS(ControllerThreadEvent, wxEvent)
 
 BEGIN_EVENT_TABLE( Controller, wxEvtHandler )
@@ -34,7 +34,7 @@ BEGIN_EVENT_TABLE( Controller, wxEvtHandler )
 END_EVENT_TABLE()
 
 /// Starts the thread, and resolves and connects to a recorder.
-/// Sends a wxEVT_CONTROLLER_THREAD FAILURE event if unsuccessful
+/// Sends an EVT_CONTROLLER_THREAD FAILURE event if unsuccessful
 /// @param name The name of the recorder.
 /// @param comms The comms object, to allow the recorder object to be resolved.
 /// @param handler The handler where events will be sent.
@@ -62,7 +62,7 @@ Controller::Controller(const wxString & name, Comms * comms, wxEvtHandler * hand
 	}
 	if (!msg.IsEmpty()) {
 		//whine
-		ControllerThreadEvent event(wxEVT_CONTROLLER_THREAD);
+		ControllerThreadEvent event(EVT_CONTROLLER_THREAD);
 		event.SetName(mName);
 		event.SetCommand(CONNECT);
 		event.SetResult(FAILURE);
@@ -197,7 +197,7 @@ void Controller::Destroy()
 		Signal(DIE);
 	}
 	else { //write a suicide note now
-		ControllerThreadEvent event(wxEVT_CONTROLLER_THREAD);
+		ControllerThreadEvent event(EVT_CONTROLLER_THREAD);
 		mMutex.Lock();
 		event.SetName(mName);
 		mMutex.Unlock();
@@ -325,7 +325,7 @@ wxThread::ExitCode Controller::Entry()
 			mCondition->Wait(); //unlock mutex and wait for a signal, then relock
 		}
 		//Now we're going
-		ControllerThreadEvent event(wxEVT_CONTROLLER_THREAD);
+		ControllerThreadEvent event(EVT_CONTROLLER_THREAD);
 		event.SetName(mName);
 		event.SetCommand(mCommand);
 		mCommand = NONE; //can now detect if another command is issued while busy(more frequently during abnormal situations) 
@@ -556,7 +556,7 @@ wxThread::ExitCode Controller::Entry()
 						event.SetTrackStatusList(mRecorder->TracksStatus());
 					}
 					//timecode situation
-					if (!event.GetNTracks() || event.GetTrackStatusList()[0].timecode.undefined || !event.GetTrackStatusList()[0].timecode.edit_rate.numerator || !event.GetTrackStatusList()[0].timecode.edit_rate.denominator) { //no or invalid timecode
+					if (!event.GetNTracks() || event.GetTrackStatusList()->operator[](0).timecode.undefined || !event.GetTrackStatusList()->operator[](0).timecode.edit_rate.numerator || !event.GetTrackStatusList()->operator[](0).timecode.edit_rate.denominator) { //no or invalid timecode
 						if (!mLastTimecodeReceived.undefined) { //newly in this state
 							mLastTimecodeReceived.undefined = true; //to allow future detection of state change
 							event.SetTimecodeStateChanged();
@@ -564,7 +564,7 @@ wxThread::ExitCode Controller::Entry()
 						}
 					}
 					else { //timecode value is OK
-						ProdAuto::MxfTimecode timecode = event.GetTrackStatusList()[0].timecode;
+						ProdAuto::MxfTimecode timecode = event.GetTrackStatusList()->operator[](0).timecode;
 						if (mLastTimecodeReceived.undefined) { //timecode has just appeared
 							event.SetTimecodeState(UNCONFIRMED);
 							if (!mTimecodeRunning) { //just started

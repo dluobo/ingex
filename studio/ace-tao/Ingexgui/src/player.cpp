@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: player.cpp,v 1.17 2010/03/30 07:47:52 john_f Exp $              *
+ *   $Id: player.cpp,v 1.18 2010/06/02 13:09:25 john_f Exp $              *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -44,7 +44,9 @@ BEGIN_EVENT_TABLE(Player, wxPanel)
 	EVT_COMMAND(STATE_CHANGE, EVT_PLAYER_MESSAGE, Player::OnStateChange)
 	EVT_COMMAND(SPEED_CHANGE, EVT_PLAYER_MESSAGE, Player::OnSpeedChange)
 	EVT_COMMAND(PROGRESS_BAR_DRAG, EVT_PLAYER_MESSAGE, Player::OnProgressBarDrag)
+	EVT_COMMAND(IMAGE_CLICK, EVT_PLAYER_MESSAGE, Player::OnImageClick)
 	EVT_COMMAND(KEYPRESS, EVT_PLAYER_MESSAGE, Player::OnKeyPress)
+	EVT_COMMAND(SOURCE_NAME, EVT_PLAYER_MESSAGE, Player::OnSourceNameChange)
 	EVT_TIMER(wxID_ANY, Player::OnFilePollTimer)
 	EVT_SOCKET(wxID_ANY, Player::OnSocketEvent)
 	EVT_TOGGLEBUTTON(wxID_ANY, Player::OnModeButton)
@@ -56,15 +58,17 @@ END_EVENT_TABLE()
 /// Player must be deleted explicitly or a traffic control notification will be missed.
 /// @param parent Parent object.
 /// @param enabled True to enable player.
-/// @param outputType The output type - accelerated or unaccelerated; SDI or not.
+/// @param outputType The output type - accelerated or unaccelerated; SDI or not.  If an SDI type and no SDI cards are available, defaults to accelerated with no SDI.
 /// @param displayType The on screen display type.
-Player::Player(wxWindow* parent, const wxWindowID id, const bool enabled, const PlayerOutputType outputType, const PlayerOSDtype displayType) :
+Player::Player(wxWindow* parent, const wxWindowID id, const bool enabled, const PlayerOutputType outputType, const PlayerOSDtype OSDType) :
 wxPanel(parent, id), LocalIngexPlayer(&mListenerRegistry), mTrackSelector(0), //to check before accessing as it's not created automatically
-mOSDtype(displayType), mEnabled(enabled), mOK(false), mState(PlayerState::STOPPED), mSpeed(0), mMuted(false), mOpeningSocket(false),
+mOSDType(OSDType), mEnabled(enabled), mOK(false), mState(PlayerState::STOPPED), mSpeed(0), mMuted(false), mOpeningSocket(false),
 mPrevTrafficControl(true), //so that it can be switched off
 mMode(RECORDINGS), mPreviousMode(RECORDINGS),
 mCurrentChunkInfo(0), //to check before accessing in case it hasn't been set
-mDivertKeyPresses(false)
+mDivertKeyPresses(false),
+mOutputType(outputType),
+mAudioFollowsVideo(false)
 {
 	//Controls
 	wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
@@ -81,7 +85,10 @@ mDivertKeyPresses(false)
 	Layout(); //or buttons are superimposed!
 
 	//set up LocalIngexPlayer
-	setOutputType(outputType);
+#ifdef HAVE_DVS
+	if (!dvsCardIsAvailable() && outputType != prodauto::X11_OUTPUT) mOutputType = X11_AUTO_OUTPUT;
+#endif
+	setOutputType(mOutputType);
 	setNumAudioLevelMonitors(4);
 	Rational unity = {1, 1};
 	setPixelAspectRatio(&unity);
@@ -89,7 +96,7 @@ mDivertKeyPresses(false)
 	mSelectRecDlg = new SelectRecDlg(this); //persistent so that it can remember what was the last recording played
 	mListener = new Listener(this, &mListenerRegistry); //registers with the player
 	mFilePollTimer = new wxTimer(this, wxID_ANY);
-	mDesiredTrackName = ""; //display the quad split by default
+	mDesiredTrackName = ""; //display the split view by default
 	mSocket = new wxSocketClient();
 	mSocket->SetEventHandler(*this);
 	mSocket->SetNotify(wxSOCKET_CONNECTION_FLAG);
@@ -155,12 +162,15 @@ bool Player::LaterTrack(const bool state)
 	return available;
 }
 
-/// If the quad split is displayed, switches source to that corresponding to the quadrant value given (if it is available).
-/// If an individual source is displayed, switches to the quad split (thus providing toggling behaviour).
-/// @param source The quadrant (1-4).
-void Player::SelectQuadrant(const unsigned int source)
+/// If the split view is displayed, switches source to that corresponding to the area clicked.
+/// If an individual source is displayed, switches to the split view (thus providing toggling behaviour).
+/// @param event Proportionate x-value of click (in 10ths %) in integer and y-value in extra long
+void Player::OnImageClick(wxCommandEvent& event)
 {
-	if (mTrackSelector) mTrackSelector->SelectQuadrant(source);
+	if (mTrackSelector) {
+		unsigned int divisions = mNVideoTracks > 4 ? 3 : 2;
+		mTrackSelector->ToggleSplitView(event.GetInt() * divisions / 1000 + event.GetExtraLong() * divisions / 1000 * divisions + 1);
+	}
 }
 
 /// Creates track selector if not already created.
@@ -171,9 +181,6 @@ DragButtonList* Player::GetTrackSelector(wxWindow * parent)
 	if (!mTrackSelector) {
 		mTrackSelector = new DragButtonList(parent, this);
 		SetMode(mMode, true); //SetMode will now work
-//if no setting of event handler, crashes when GetNextHandler() is called
-//		mTrackSelector->PushEventHandler(this); //so that events go here - crashes when button pressed
-//		mTrackSelector->SetNextHandler(this); //so that events go here
 	}
 	return mTrackSelector;
 }
@@ -277,7 +284,7 @@ void Player::OnKeyPress(wxCommandEvent& event)
 
 ///If player is enabled, puts in safe (non disk-accessing) "recording" mode, or returns it to the mode it was in before recording commenced.
 ///@param recording True to put into recording mode.
-void Player::Record(bool recording)
+void Player::Record(const bool recording)
 {
 	if (recording) {
 		mPreviousMode = mMode; //so that previous mode will be restored on stop, even if the player is disabled at the moment
@@ -352,7 +359,8 @@ const wxString Player::GetProjectType()
 /// @param chunkInfo Recording details - can be zero which will cause player to be reset if in recordings mode.  Player reloads if this has changed.
 /// @param cuePoint A cue point to jump to (0 is the start of the recording; > number of cue points is the end), if this value has changed.
 /// @param forceReload Reload the recording even if the chunk info hasn't changed
-void Player::SelectRecording(ChunkInfo * chunkInfo, const int cuePoint, const bool forceReload)
+/// @return File names if in recordings mode, or 0 otherwise
+std::vector<std::string>* Player::SelectRecording(ChunkInfo * chunkInfo, const int cuePoint, const bool forceReload)
 {
 	bool reload  = forceReload || mCurrentChunkInfo != chunkInfo;
 	mCurrentChunkInfo = chunkInfo;
@@ -379,17 +387,21 @@ void Player::SelectRecording(ChunkInfo * chunkInfo, const int cuePoint, const bo
 			JumpToFrame(mRecordingModeFrameOffset);
 		}
 	}
+	std::vector<std::string>* fileNames = 0;
+	if (RECORDINGS == mMode) fileNames = &mFileNames;
+	return fileNames;
 }
 
 /// Loads the player with the current recording details, or resets if these are absent
 void Player::LoadRecording()
 {
-	if (mCurrentChunkInfo && mTrackSelector) {
-		mInputType = mTrackSelector->SetTracks(mCurrentChunkInfo, mFileNames, mTrackNames);
+	mFileNames.clear();
+	if (mCurrentChunkInfo && mTrackSelector) mInputType = mTrackSelector->SetTracks(mCurrentChunkInfo, mFileNames, mTrackNames, mNVideoTracks);
+	if (mFileNames.size()) {
 		Load();
 	}
 	else {
-		Reset();
+		Reset(); //copes with recordings with no tracks
 	}
 }
 
@@ -409,7 +421,7 @@ void Player::SetMode(const PlayerMode mode, const bool force)
 					break;
 #ifndef DISABLE_SHARED_MEM_SOURCE //E to E mode available
 				case ETOE: {
-						mInputType = mTrackSelector->SetEtoE(mFileNames, mTrackNames);
+						mInputType = mTrackSelector->SetEtoE(mFileNames, mTrackNames, mNVideoTracks);
 						Load();
 						//clear the position display (even if loading failed) - no more FRAME_DISPLAYED events will be sent in this mode
 						wxCommandEvent event(EVT_PLAYER_MESSAGE, FRAME_DISPLAYED);
@@ -422,7 +434,7 @@ void Player::SetMode(const PlayerMode mode, const bool force)
 					{
 						if (mFileModeMovFile.IsEmpty()) { //MXF files
 							ProdAuto::MxfTimecode* editRate = new ProdAuto::MxfTimecode; //event handler must delete this!
-							mInputType = mTrackSelector->SetMXFFiles(mFileModeMxfFiles, mFileNames, mTrackNames, *editRate);
+							mInputType = mTrackSelector->SetMXFFiles(mFileModeMxfFiles, mFileNames, mTrackNames, mNVideoTracks, *editRate);
 							//Notify the edit rate to allow position display to work if it hasn't got it from anywhere else
 							wxCommandEvent event(EVT_PLAYER_MESSAGE, EDIT_RATE);
 							event.SetClientData(editRate); //invalid position
@@ -435,7 +447,8 @@ void Player::SetMode(const PlayerMode mode, const bool force)
 							mTrackNames.push_back((const char*) mFileModeMovFile.mb_str(*wxConvCurrent));
 							mTrackSelector->Clear();
 							mInputType = prodauto::FFMPEG_INPUT;
-							mFilesModeSelectedTrack = 1; //first source rather than quad split
+							mNVideoTracks = 1;
+							mFilesModeSelectedTrack = 1; //first source rather than split
 						}
 						Load();
 						break;
@@ -448,7 +461,7 @@ void Player::SetMode(const PlayerMode mode, const bool force)
 /// Opens a file/recording select dialogue, loading player if selections are made, and enabling player if disabled.
 void Player::Open(const PlayerOpenType type)
 {
-	bool opened;
+	bool opened = false;
 	switch (type) {
 		case OPEN_MOV: {
 			wxFileDialog dlg(this, wxT("Choose a MOV file"), wxT(""), wxT(""), wxT("MOV files |*.mov;*.MOV|All files|*.*"), wxFD_FILE_MUST_EXIST | wxFD_CHANGE_DIR); //select single file only
@@ -523,7 +536,7 @@ bool Player::Enable(bool state)
 			mOK = false;
 		}
 	}
-return mEnabled;
+	return mEnabled;
 }
 
 /// If player is enabled, tries to load the current filenames or re-load previously given filenames.  Starts polling if it can't open them all, unless in E to E mode.
@@ -577,7 +590,7 @@ void Player::Load()
 }
 
 /// If player is enabled, tries to load.
-/// Tries to select the file position previously selected by the user.  If this wasn't opened, selects the only file open or a quad split otherwise.
+/// Tries to select the file position previously selected by the user.  If this wasn't opened, selects the only file open or a split view otherwise.
 /// This method is the same as Load() except that it does not manipulate the polling timer or change the playing state.
 /// @return True if all files were opened.
 bool Player::Start()
@@ -610,14 +623,15 @@ bool Player::Start()
 				break;
 			default:
 				frameOffset = 0;
-		}	
+		}
+		setVideoSplit(mNVideoTracks > 4 ? NONA_SPLIT_VIDEO_SWITCH : QUAD_SPLIT_VIDEO_SWITCH);
 #ifndef DISABLE_SHARED_MEM_SOURCE
 		mOK = start(inputs, mOpened, SHM_INPUT != mInputType && LOAD_FIRST_CHUNK != mChunkLinking && (PlayerState::PAUSED == mState || PlayerState::STOPPED == mState), frameOffset > -1 ? frameOffset : 0); //play forwards or paused
 #else
 		mOK = start(inputs, mOpened, LOAD_FIRST_CHUNK != mChunkLinking && (PlayerState::PAUSED == mState || PlayerState::STOPPED == mState), frameOffset > -1 ? frameOffset : 0); //play forwards or paused
 #endif
 		if (-1 == frameOffset) seek(0, SEEK_END, FRAME_PLAY_UNIT);
-		int trackToSelect = (1 == mFileNames.size() ? 1 : 0); //display quad split by default unless only one file
+		int trackToSelect = (1 == mFileNames.size() ? 1 : 0); //display split view by default unless only one file
 		if (mOK) {
 			if (RECORDINGS == mMode && mCurrentChunkInfo) {
 				for (size_t i = 0; i < mCurrentChunkInfo->GetCuePointFrames().size(); i++) {
@@ -634,7 +648,7 @@ bool Player::Start()
 				else if (PlayerState::PLAYING_BACKWARDS == mState) {
 					playSpeed(-1);
 				}
-				SetOSD(mOSDtype);
+				SetOSDType(mOSDType);
 #ifndef DISABLE_SHARED_MEM_SOURCE
 			}
 			else {
@@ -653,14 +667,14 @@ bool Player::Start()
 			for (size_t i = 0; i < mOpened.size(); i++) {
 				if (mOpened[i]) {
 					nFilesOpen++;
-					aWorkingTrack = i + 1; // +1 because track 0 is quad split
+					aWorkingTrack = i + 1; // +1 because track 0 is split view
 				}
 			}
-			if (mDesiredTrackName.size()) { //want something other than quad split
+			if (mDesiredTrackName.size()) { //want something other than split view
 				size_t i;
 				for (i = 0; i < mTrackNames.size(); i++) {
 					if (mTrackNames[i] == mDesiredTrackName && mOpened[i]) { //located the desired track and it's available
-						trackToSelect = i + 1; // + 1 to offset for quad split
+						trackToSelect = i + 1; // + 1 to offset for split view
 						break;
 					}
 				}
@@ -683,8 +697,8 @@ bool Player::Start()
 }
 
 /// Displays the file corresponding to the given track (which is assumed to have been loaded) and titles the window appropriately.
-/// @param id The track ID - 0 for quad split.
-/// @param remember Save the track name (or the fact that it's a quad split) in order to try to select it when new filesets are loaded
+/// @param id The track ID - 0 for split view.
+/// @param remember Save the track name (or the fact that it's a split view) in order to try to select it when new filesets are loaded
 void Player::SelectTrack(const int id, const bool remember)
 {
 //std::cerr << "Player Select Track" << std::endl;
@@ -692,26 +706,12 @@ void Player::SelectTrack(const int id, const bool remember)
 		wxString title;
 		if (id) { //individual track
 			if (remember) {
-				mDesiredTrackName = mTrackNames[id - 1]; // -1 to offset for quad split
+				mDesiredTrackName = mTrackNames[id - 1]; //-1 to offset for split view
 			}
-			title = wxString(mTrackNames[id - 1].c_str(), *wxConvCurrent);
 		}
-		else { //quad split
+		else { //split view
 			if (remember) {
 				mDesiredTrackName = "";
-			}
-			unsigned int nTracks = 0;
-			for (size_t i = 0; i < mTrackNames.size(); i++) { //only go through video files
-				if (mOpened[i]) {
-					title += wxString(mTrackNames[i].c_str(), *wxConvCurrent) + wxT("; ");
-					if (4 == ++nTracks) {
-						//Quad Split displays the first four successfully opened files
-						break;
-					}
-				}
-			}
-			if (!title.IsEmpty()) { //trap for only audio files
-				title.resize(title.size() - 2); //remove trailing semicolon and space
 			}
 		}
 #ifndef DISABLE_SHARED_MEM_SOURCE
@@ -721,17 +721,28 @@ void Player::SelectTrack(const int id, const bool remember)
 		else {
 #endif
 			switchVideo(id);
-			if (id) { //not quad split
-				mCurrentFileName = mFileNames[id - 1]; //-1 to offset for quad split
-			}
-			else {
-				mCurrentFileName.clear(); //don't handle quad split for now
-			}
 #ifndef DISABLE_SHARED_MEM_SOURCE
 		}
 #endif
-		SetWindowName(title);
+		SetWindowName();
 	}
+}
+
+/// Returns the filename of the currently selected track, or an empty string if showing a split.
+std::string Player::GetCurrentFileName()
+{
+	std::string currentFileName;
+	if (mTrackSelector && mTrackSelector->GetSelectedSource()) { //not split view
+		currentFileName = mFileNames[mTrackSelector->GetSelectedSource() - 1]; //-1 to offset for split view
+	}
+	return currentFileName;
+}
+
+/// Returns true if showing a split view.
+/// Undefined if not showing anything.
+bool Player::IsShowingSplit()
+{
+	return mTrackSelector && 0 == mTrackSelector->GetSelectedSource();
 }
 
 /// Plays at an absolute speed, forwards or backwards, or pauses.
@@ -923,11 +934,11 @@ void Player::JumpToFrame(const int64_t frame)
 ///	OSD_OFF : none
 ///	CONTROL_TIMECODE : timecode based on file position
 ///	SOURCE_TIMECODE : timecode read from file
-void Player::SetOSD(const PlayerOSDtype type)
+void Player::SetOSDType(const PlayerOSDtype type)
 {
 //std::cerr << "Player SetOSD" << std::endl;
-	mOSDtype = type;
-	switch (mOSDtype) {
+	mOSDType = type;
+	switch (mOSDType) {
 		case OSD_OFF:
 			setOSDScreen(OSD_EMPTY_SCREEN);
 			break;
@@ -955,18 +966,22 @@ void Player::EnableSDIOSD(bool enabled)
 void Player::SetOutputType(const PlayerOutputType outputType)
 {
 //std::cerr << "Player SetOutputType" << std::endl;
-	setOutputType(outputType);
+	mOutputType = outputType;
+	setOutputType(mOutputType);
 	if (mOK) {
 		//above call has stopped the player so start it again
 		Start();
 	}
 }
 
-/// Returns how the player is appearing
-PlayerOutputType Player::GetOutputType()
+#ifdef HAVE_DVS
+/// Returns true if there is an external output available or if it's already being used by the player
+bool Player::ExtOutputIsAvailable()
 {
-	return getOutputType();
+	//if player is already using the card, dvsCardIsAvailable() will return false if there isn't another card available
+	return dvsCardIsAvailable() || (GetOutputType() == prodauto::DVS_OUTPUT || GetOutputType() == prodauto::DUAL_DVS_X11_OUTPUT || GetOutputType() == prodauto::DUAL_DVS_AUTO_OUTPUT);
 }
+#endif
 
 /// Responds to a frame displayed event from the listener. If not playing from shared memory:
 /// - Detects reaching the start, the end, a chunk start/end while playing, or leaving the start/end of a file and generates a player event accordingly.
@@ -1099,6 +1114,19 @@ void Player::OnProgressBarDrag(wxCommandEvent& event)
 	seek(event.GetInt(), SEEK_SET, PERCENTAGE_PLAY_UNIT);
 }
 
+/// Responds to a set source name event from the listener.
+/// Updates the track selector button label and the window name.
+void Player::OnSourceNameChange(wxCommandEvent& event)
+{
+	if (mTrackSelector) {
+		mTrackSelector->SetSourceName(event.GetInt() + 1, event.GetString()); //+1 to account for split view button
+		if (mTrackNames.size() > (unsigned int) event.GetInt()) { //sanity check
+			mTrackNames[event.GetInt()] = event.GetString().mb_str(*wxConvCurrent);
+			SetWindowName();
+		}
+	}
+}
+
 /// Responds to the file poll timer.
 /// Checks to see if any more files have appeared, and if so, restarts the player.
 /// If all files have appeared, kills the timer.
@@ -1162,26 +1190,48 @@ void Player::MuteAudio(const bool state)
 /// @param state true to follow video
 void Player::AudioFollowsVideo(const bool state)
 {
-	switchAudioGroup(state ? 0 : 1);
+	mAudioFollowsVideo = state;
+	switchAudioGroup(mAudioFollowsVideo ? 0 : 1);
 }
 
-/// Sets the name of the player window if the player is displayed
-/// @param name The name to display, which will have a note appended if audio is muted.  If empty, the previous name will be used (useful for updating mute status)
+/// Returns "audio follows video" state
+bool Player::AudioFollowsVideo()
+{
+	return mAudioFollowsVideo;
+}
+
+/// Sets the name of the window from the currently-selected track, split or supplied string, plus the mute and acceleration status.
+/// @param name If supplied, uses this string rather than the source names.
 void Player::SetWindowName(const wxString & name)
 {
+	wxString title;
 	if (!name.IsEmpty()) {
-		mName = name;
+		title = name;
 	}
-//	if (mOK) {
-		wxString title = mName;
-		if (X11_OUTPUT == getActualOutputType() || DUAL_DVS_X11_OUTPUT == getActualOutputType()) {
-			title += wxT(" (unaccelerated)");
+	else if (mTrackSelector) {
+		if (mTrackSelector->GetSelectedSource()) { //individual track
+			title = wxString(mTrackNames[mTrackSelector->GetSelectedSource() - 1].c_str(), *wxConvCurrent); //-1 to offset for split view
 		}
-		if (mMuted) {
-			title += wxT(" (Muted)");
+		else { //split view
+			unsigned int nTracks = 0;
+			for (size_t i = 0; i < mTrackNames.size(); i++) { //only go through video files
+				if (mOpened[i]) {
+					title += wxString(mTrackNames[i].c_str(), *wxConvCurrent) + wxT("; ");
+					if (9 == ++nTracks) break; //split view displays up to the first nine successfully opened files
+				}
+			}
+			if (!title.IsEmpty()) { //trap for only audio files
+				title.resize(title.size() - 2); //remove trailing semicolon and space
+			}
 		}
-		setX11WindowName((const char*) title.mb_str(*wxConvCurrent));
-//	}
+	}
+	if (X11_OUTPUT == getActualOutputType() || DUAL_DVS_X11_OUTPUT == getActualOutputType()) {
+		title += wxT(" (unaccelerated)");
+	}
+	if (mMuted) {
+		title += wxT(" (Muted)");
+	}
+	setX11WindowName((const char*) title.mb_str(*wxConvCurrent));
 }
 
 /// Sends a traffic control message to a server socket.
@@ -1223,25 +1273,25 @@ bool Player::HasChunkAfter()
 /// Returns true if there is a selectable track earlier in the list than the current one
 bool Player::HasEarlierTrack()
 {
-	return mTrackSelector->EarlierTrack(false);
+	return mTrackSelector && mTrackSelector->EarlierTrack(false);
 }
 
 /// Returns true if there is a selectable track later in the list than the current one
 bool Player::HasLaterTrack()
 {
-	return mTrackSelector->LaterTrack(false);
+	return mTrackSelector && mTrackSelector->LaterTrack(false);
 }
 
 /// Selects the previous selectable track in the list, if any
 void Player::SelectEarlierTrack()
 {
-	mTrackSelector->EarlierTrack(true);
+	if (mTrackSelector) mTrackSelector->EarlierTrack(true);
 }
 
 /// Selects the next selectable track in the list, if any
 void Player::SelectLaterTrack()
 {
-	mTrackSelector->LaterTrack(true);
+	if (mTrackSelector) mTrackSelector->LaterTrack(true);
 }
 
 /***************************************************************************
@@ -1385,8 +1435,8 @@ void Listener::progressBarPositionSet(float position)
 	mPlayer->AddPendingEvent(event);
 }
 
-/// Callback for the mouse being clicked.
-/// Decodes which quadrant has been clicked on (if any) and sends the value to the player.
+/// Callback for the mouse being clicked (not on the progress bar).
+/// If the image area has been clicked on, sends the relative x and y position to the player.
 /// @param imageWidth The width of the entire image in the player window.
 /// @param imageHeight The height of the entire image in the player window.
 /// @param xpos The horizontal position of the click within the player window (relative to its default width).
@@ -1394,8 +1444,21 @@ void Listener::progressBarPositionSet(float position)
 void Listener::mouseClicked(int imageWidth, int imageHeight, int xpos, int ypos)
 {
 	if (xpos <= imageWidth && ypos <= imageHeight) { //clicked inside the image (rather than the window)
-		wxCommandEvent event(EVT_PLAYER_MESSAGE, QUADRANT_CLICK);
-		event.SetInt((xpos < imageWidth / 2 ? 1 : 2) + (ypos < imageHeight / 2 ? 0 : 2));
+		wxCommandEvent event(EVT_PLAYER_MESSAGE, IMAGE_CLICK);
+		event.SetInt((long) xpos * 1000 / imageWidth); //in tenths of a percent
+		event.SetExtraLong((long) ypos * 1000 / imageHeight); //in tenths of a percent
 		mPlayer->AddPendingEvent(event);
 	}
+}
+
+/// Callback for a shared memory source name being updated.
+/// Sends the source name and index to the player.
+/// @param sourceIndex Index of the source
+/// @param name Name of the source.
+void Listener::sourceNameChangeEvent(int sourceIndex, const char* name)
+{
+	wxCommandEvent event(EVT_PLAYER_MESSAGE, SOURCE_NAME);
+	event.SetInt(sourceIndex);
+	event.SetString(wxString(name, *wxConvCurrent));
+	mPlayer->AddPendingEvent(event);
 }

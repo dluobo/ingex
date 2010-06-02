@@ -1,7 +1,7 @@
 /***************************************************************************
- *   $Id: eventlist.h,v 1.8 2010/03/30 07:47:52 john_f Exp $             *
+ *   $Id: eventlist.h,v 1.9 2010/06/02 13:09:25 john_f Exp $             *
  *                                                                         *
- *   Copyright (C) 2009 British Broadcasting Corporation                   *
+ *   Copyright (C) 2009-2010 British Broadcasting Corporation                   *
  *   - all rights reserved.                                                *
  *   Author: Matthew Marks                                                 *
  *                                                                         *
@@ -29,7 +29,6 @@
 
 WX_DECLARE_OBJARRAY(ProdAuto::TrackList_var, ArrayOfTrackList_var);
 WX_DECLARE_OBJARRAY(CORBA::StringSeq_var, ArrayOfStringSeq_var);
-DEFINE_EVENT_TYPE (wxEVT_RESTORE_LIST_LABEL);
 
 /// Class holding information about a chunk, for later replay.
 /// Holds the position of the chunk within the displayed list of events, the project name, an array of lists of files
@@ -67,13 +66,13 @@ class ChunkInfo
 		const unsigned long mStartIndex; //the index in the event list for the start of this chunk
 		ArrayOfStringSeq_var mFiles;
 		const wxString mProjectName;
-		ProdAuto::MxfTimecode mStartTimecode;
+		const ProdAuto::MxfTimecode mStartTimecode;
 		ProdAuto::MxfTimecode mLastTimecode;
-		int64_t mStartPosition;
+		const int64_t mStartPosition;
 		ArrayOfTrackList_var mTracks; //deletes itself
 		std::vector<int64_t> mCuePointFrames;
 		std::vector<size_t> mCueColourIndeces;
-		bool mHasChunkBefore;
+		const bool mHasChunkBefore;
 		bool mHasChunkAfter;
 };
 
@@ -130,7 +129,7 @@ class EventList : public wxListView, wxThread //used wxListCtrl for a while beca
 		ProdAuto::MxfTimecode GetStartTimecode();
 
 		ChunkInfoArray mChunkInfoArray;
-		bool mCanEdit;
+		long mCanEditAfter;
 		long mCurrentChunkInfo;
 		long mBlockEventItem;
 		wxMutex mMutex;

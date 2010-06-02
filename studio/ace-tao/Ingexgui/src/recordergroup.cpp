@@ -1,7 +1,7 @@
 /***************************************************************************
- *   $Id: recordergroup.cpp,v 1.10 2010/03/30 07:47:52 john_f Exp $       *
+ *   $Id: recordergroup.cpp,v 1.11 2010/06/02 13:09:25 john_f Exp $       *
  *                                                                         *
- *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
+ *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
  *   Author: Matthew Marks                                                 *
  *                                                                         *
@@ -28,15 +28,15 @@
 #include "ingexgui.h" //for consts
 #include <wx/xml/xml.h>
 
-DEFINE_EVENT_TYPE(wxEVT_RECORDERGROUP_MESSAGE)
+DEFINE_EVENT_TYPE(EVT_RECORDERGROUP_MESSAGE)
 
 BEGIN_EVENT_TABLE( RecorderGroupCtrl, wxListBox )
 	EVT_LEFT_DOWN(RecorderGroupCtrl::OnLMouseDown)
 	EVT_MIDDLE_DOWN(RecorderGroupCtrl::OnUnwantedMouseDown)
 	EVT_RIGHT_DOWN(RecorderGroupCtrl::OnRightMouseDown)
-	EVT_COMMAND(ENABLE_REFRESH, wxEVT_RECORDERGROUP_MESSAGE, RecorderGroupCtrl::OnListRefreshed)
+	EVT_COMMAND(ENABLE_REFRESH, EVT_RECORDERGROUP_MESSAGE, RecorderGroupCtrl::OnListRefreshed)
 	EVT_CONTROLLER_THREAD(RecorderGroupCtrl::OnControllerEvent)
-	EVT_COMMAND(wxID_ANY, wxEVT_TIMEPOS_EVENT, RecorderGroupCtrl::OnTimeposEvent)
+	EVT_COMMAND(wxID_ANY, EVT_TIMEPOS_EVENT, RecorderGroupCtrl::OnTimeposEvent)
 END_EVENT_TABLE()
 
 /// Initialises list with no recorders and creates Comms object for communication with the name server.
@@ -66,7 +66,7 @@ void RecorderGroupCtrl::StartGettingRecorders()
 			//show that something's happening
 			Insert(wxT("Getting list..."), 0); //this will be removed when the list has been obtained
 		}
-		mComms->StartGettingRecorders(wxEVT_RECORDERGROUP_MESSAGE, ENABLE_REFRESH); //threaded, so won't hang app; sends the given event when it's finished
+		mComms->StartGettingRecorders(EVT_RECORDERGROUP_MESSAGE, ENABLE_REFRESH); //threaded, so won't hang app; sends the given event when it's finished
 	}
 	mEnabledForInput = false;
 }
@@ -147,7 +147,7 @@ void RecorderGroupCtrl::Deselect(unsigned int index)
 	wxListBox::Deselect(index);
 	Disconnect(index);
 	//depopulate the source tree
-	wxCommandEvent event(wxEVT_RECORDERGROUP_MESSAGE, REMOVE_RECORDER);
+	wxCommandEvent event(EVT_RECORDERGROUP_MESSAGE, REMOVE_RECORDER);
 	event.SetString(GetString(index));
 	AddPendingEvent(event);
 	//preroll and postroll limits might have been relaxed
@@ -270,7 +270,7 @@ void RecorderGroupCtrl::OnControllerEvent(ControllerThreadEvent & event)
 					//everything about the recorder is now checked
 					Select(pos);
 					//populate the source tree
-					wxCommandEvent frameEvent(wxEVT_RECORDERGROUP_MESSAGE, NEW_RECORDER);
+					wxCommandEvent frameEvent(EVT_RECORDERGROUP_MESSAGE, NEW_RECORDER);
 					frameEvent.SetString(event.GetName());
 					frameEvent.SetInt(pos); //to allow quick disconnection
 					RecorderData * recorderData = new RecorderData(event.GetTrackStatusList(), event.GetTrackList()); //must be deleted by event handler
@@ -355,7 +355,7 @@ void RecorderGroupCtrl::OnControllerEvent(ControllerThreadEvent & event)
 	}
 	if (GetController(FindString(event.GetName(), true))) { //not been disconnected earlier in this function due to a reconnect failure, or has been destroyed (which can still result in an event being sent)
 		if (Controller::COMM_FAILURE == event.GetResult()) {
-			wxCommandEvent frameEvent(wxEVT_RECORDERGROUP_MESSAGE, COMM_FAILURE);
+			wxCommandEvent frameEvent(EVT_RECORDERGROUP_MESSAGE, COMM_FAILURE);
 			frameEvent.SetString(event.GetName());
 			AddPendingEvent(frameEvent);
 		}
@@ -369,7 +369,7 @@ void RecorderGroupCtrl::OnControllerEvent(ControllerThreadEvent & event)
 					}
 					break;
 				case Controller::RECORD : {
-					wxCommandEvent frameEvent(wxEVT_RECORDERGROUP_MESSAGE, NOT_CHUNKING == mChunking ? RECORDING : CHUNK_START);
+					wxCommandEvent frameEvent(EVT_RECORDERGROUP_MESSAGE, NOT_CHUNKING == mChunking ? RECORDING : CHUNK_START);
 					frameEvent.SetString(event.GetName());
 					frameEvent.SetInt(Controller::SUCCESS == event.GetResult());
 					RecorderData * recorderData = new RecorderData(event.GetTimecode()); //must be deleted by event handler
@@ -381,12 +381,12 @@ void RecorderGroupCtrl::OnControllerEvent(ControllerThreadEvent & event)
 					if (STOPPING == mChunking && Controller::SUCCESS == event.GetResult()) {
 						//prepare a trigger to restart recording once the next chunk start time has been reached, as recorders can't accept start times in the future
 						mStartTimecode = event.GetTimecode(); //this is the frame after the end of the recording
-						wxCommandEvent frameEvent(wxEVT_RECORDERGROUP_MESSAGE, SET_TRIGGER);
+						wxCommandEvent frameEvent(EVT_RECORDERGROUP_MESSAGE, SET_TRIGGER);
 						frameEvent.SetClientData(&mStartTimecode);
 						AddPendingEvent(frameEvent); //events after the first will be ignored
 						mChunking = WAITING; //make sure trigger can't happen twice
 					}
-					wxCommandEvent frameEvent(wxEVT_RECORDERGROUP_MESSAGE, NOT_CHUNKING == mChunking ? STOPPED : CHUNK_END);
+					wxCommandEvent frameEvent(EVT_RECORDERGROUP_MESSAGE, NOT_CHUNKING == mChunking ? STOPPED : CHUNK_END);
 					frameEvent.SetString(event.GetName());
 					frameEvent.SetInt (Controller::SUCCESS == event.GetResult());
 					RecorderData * recorderData = new RecorderData(event.GetTrackList(), event.GetStrings(), event.GetTimecode()); //must be deleted by event handler
@@ -401,7 +401,7 @@ void RecorderGroupCtrl::OnControllerEvent(ControllerThreadEvent & event)
 		if (event.GetNTracks()) { //have status
 			//timecode
 			if (event.TimecodeStateHasChanged()) {
-				wxCommandEvent frameEvent(wxEVT_RECORDERGROUP_MESSAGE);
+				wxCommandEvent frameEvent(EVT_RECORDERGROUP_MESSAGE);
 				frameEvent.SetString(event.GetName());
 				switch (event.GetTimecodeState()) {
 					case Controller::RUNNING : case Controller::UNCONFIRMED :
@@ -429,7 +429,7 @@ void RecorderGroupCtrl::OnControllerEvent(ControllerThreadEvent & event)
 				SetTimecodeRecorder(event.GetName());
 				//set the timecode value, running or stuck
 				mTimecodeRecorderStuck = Controller::STUCK == event.GetTimecodeState();
-				wxCommandEvent frameEvent(wxEVT_RECORDERGROUP_MESSAGE, mTimecodeRecorderStuck ? DISPLAY_TIMECODE_STUCK : DISPLAY_TIMECODE);
+				wxCommandEvent frameEvent(EVT_RECORDERGROUP_MESSAGE, mTimecodeRecorderStuck ? DISPLAY_TIMECODE_STUCK : DISPLAY_TIMECODE);
 				RecorderData * recorderData = new RecorderData(event.GetTrackStatusList()[0].timecode); //must be deleted by event handler
 				frameEvent.SetClientData(recorderData);
 				AddPendingEvent(frameEvent);
@@ -439,7 +439,7 @@ void RecorderGroupCtrl::OnControllerEvent(ControllerThreadEvent & event)
 				SetTimecodeRecorder(event.GetName());
 				//set the timecode value, running
 				mTimecodeRecorderStuck = false;
-				wxCommandEvent frameEvent(wxEVT_RECORDERGROUP_MESSAGE, DISPLAY_TIMECODE);
+				wxCommandEvent frameEvent(EVT_RECORDERGROUP_MESSAGE, DISPLAY_TIMECODE);
 				RecorderData * recorderData = new RecorderData(event.GetTrackStatusList()[0].timecode); //must be deleted by event handler
 				frameEvent.SetClientData(recorderData);
 				AddPendingEvent(frameEvent);
@@ -453,14 +453,14 @@ void RecorderGroupCtrl::OnControllerEvent(ControllerThreadEvent & event)
 				else {
 					//set the timecode value, running or stuck
 					mTimecodeRecorderStuck = Controller::STUCK == event.GetTimecodeState();
-					wxCommandEvent frameEvent(wxEVT_RECORDERGROUP_MESSAGE, mTimecodeRecorderStuck ? DISPLAY_TIMECODE_STUCK : DISPLAY_TIMECODE);
+					wxCommandEvent frameEvent(EVT_RECORDERGROUP_MESSAGE, mTimecodeRecorderStuck ? DISPLAY_TIMECODE_STUCK : DISPLAY_TIMECODE);
 					RecorderData * recorderData = new RecorderData(event.GetTrackStatusList()[0].timecode); //must be deleted by event handler
 					frameEvent.SetClientData(recorderData);
 					AddPendingEvent(frameEvent);
 				}
 			}
 			//track status
-			wxCommandEvent frameEvent(wxEVT_RECORDERGROUP_MESSAGE, TRACK_STATUS);
+			wxCommandEvent frameEvent(EVT_RECORDERGROUP_MESSAGE, TRACK_STATUS);
 			frameEvent.SetString(event.GetName());
 			frameEvent.SetInt(WAITING == mChunking); //prevent a problem being indicated during the period when the recorder is stopped between chunks but the expected state is to be recording
 			RecorderData * recorderData = new RecorderData(event.GetTrackStatusList()); //must be deleted by event handler
@@ -470,7 +470,7 @@ void RecorderGroupCtrl::OnControllerEvent(ControllerThreadEvent & event)
 		else { //no status
 			if (event.GetName() == mTimecodeRecorder) { //just lost timecode from the recorder we're using
 				SetTimecodeRecorder();
-				wxCommandEvent frameEvent(wxEVT_RECORDERGROUP_MESSAGE, DISPLAY_TIMECODE_MISSING);
+				wxCommandEvent frameEvent(EVT_RECORDERGROUP_MESSAGE, DISPLAY_TIMECODE_MISSING);
 				AddPendingEvent(frameEvent);
 			}
 		}
@@ -545,7 +545,7 @@ void RecorderGroupCtrl::RecordAll(const ProdAuto::MxfTimecode startTimecode)
 	//Ask for all the enable states
 	for (unsigned int i = 0; i < GetCount(); i++) {
 		if (GetController(i) && GetController(i)->IsOK()) {
-			wxCommandEvent event(wxEVT_RECORDERGROUP_MESSAGE, REQUEST_RECORD);
+			wxCommandEvent event(EVT_RECORDERGROUP_MESSAGE, REQUEST_RECORD);
 			event.SetString(GetName(i));
 			AddPendingEvent(event);
 		}
@@ -617,7 +617,7 @@ const ProdAuto::MxfDuration RecorderGroupCtrl::GetChunkingPostroll()
 void RecorderGroupCtrl::SetTimecodeRecorder(wxString name)
 {
 	mTimecodeRecorder = name;
-	wxCommandEvent frameEvent(wxEVT_RECORDERGROUP_MESSAGE, DISPLAY_TIMECODE_SOURCE);
+	wxCommandEvent frameEvent(EVT_RECORDERGROUP_MESSAGE, DISPLAY_TIMECODE_SOURCE);
 	frameEvent.SetString(mTimecodeRecorder);
 	AddPendingEvent(frameEvent);
 }

@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2006-2008 British Broadcasting Corporation              *
+ *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -31,7 +31,7 @@
 
 WX_DECLARE_STRING_HASH_MAP(wxTreeItemId, TreeItemHash);
 
-DEFINE_EVENT_TYPE(wxEVT_TREE_MESSAGE)
+DEFINE_EVENT_TYPE(EVT_TREE_MESSAGE)
 
 BEGIN_EVENT_TABLE(TickTreeCtrl, wxTreeCtrl)
 	EVT_LEFT_DOWN(TickTreeCtrl::OnLMouseDown)
@@ -75,7 +75,7 @@ TickTreeCtrl::TickTreeCtrl(wxWindow * parent, wxWindowID id, const wxPoint& pos,
 /// @param trackStatusList Whether each track is recording or not.
 /// @param routerRecorder True if this recorder is a router recorder - all tracks (should be only one anyway) will be regarded as router tracks and tape IDs will not be used.
 /// @param doc XML document object for tape ID information.
-void TickTreeCtrl::AddRecorder(const wxString & name, ProdAuto::TrackList_var trackList, ProdAuto::TrackStatusList_var trackStatusList, bool routerRecorder, wxXmlDocument & doc)
+void TickTreeCtrl::AddRecorder(const wxString & name, const ProdAuto::TrackList_var & trackList, const ProdAuto::TrackStatusList_var & trackStatusList, bool routerRecorder, wxXmlDocument & doc)
 {
 	Enable();
 	//make recorder root node
@@ -127,7 +127,7 @@ void TickTreeCtrl::AddRecorder(const wxString & name, ProdAuto::TrackList_var tr
 	//tape IDs
 	if (!routerRecorder && packageNameTreeNodes.size()) {
 		//tell the frame to tell the recorder the tape IDs
-		wxCommandEvent guiEvent(wxEVT_TREE_MESSAGE, wxID_ANY);
+		wxCommandEvent guiEvent(EVT_TREE_MESSAGE, wxID_ANY);
 		guiEvent.SetString(name);
 		AddPendingEvent(guiEvent);
 	}
@@ -458,7 +458,7 @@ void TickTreeCtrl::ReportState(wxTreeItemId id, bool recurse) {
 			RemoveMessage(id);
 		}
 		//tell the frame
-		wxCommandEvent guiEvent(wxEVT_TREE_MESSAGE, wxID_ANY);
+		wxCommandEvent guiEvent(EVT_TREE_MESSAGE, wxID_ANY);
 		AddPendingEvent(guiEvent);
 	}
 }
@@ -732,7 +732,7 @@ void TickTreeCtrl::ScanPackageNames(wxArrayString * names, std::vector<bool> * e
 			ReportState(GetFirstChild(recorder, packagesCookie), false); //don't recurse because it just adds overhead at this stage
 			if (tapeIdChanges) {
 				//tell frame to tell the recorder the tape IDs
-				wxCommandEvent guiEvent(wxEVT_TREE_MESSAGE, wxID_ANY);
+				wxCommandEvent guiEvent(EVT_TREE_MESSAGE, wxID_ANY);
 				guiEvent.SetString(((ItemData *) GetItemData(recorder))->GetString());
 				AddPendingEvent(guiEvent);
 			}

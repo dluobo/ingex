@@ -1,7 +1,7 @@
 /***************************************************************************
- *   $Id: controller.h,v 1.7 2009/03/19 17:50:29 john_f Exp $           *
+ *   $Id: controller.h,v 1.8 2010/06/02 13:09:25 john_f Exp $           *
  *                                                                         *
- *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
+ *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
  *   Author: Matthew Marks                                                 *
  *                                                                         *
@@ -122,10 +122,10 @@ private:
 /// in the macro wxNotifyEventFunction (i.e. not following the instructions completely), it works with gcc but doesn't compile under Win32.
 /// Members are all very simple.
 typedef void (wxEvtHandler::*ControllerThreadEventFunction)(ControllerThreadEvent &);
-DECLARE_EVENT_TYPE(wxEVT_CONTROLLER_THREAD, -1)
+DECLARE_EVENT_TYPE(EVT_CONTROLLER_THREAD, -1)
 
 #define EVT_CONTROLLER_THREAD(fn) \
-	DECLARE_EVENT_TABLE_ENTRY( wxEVT_CONTROLLER_THREAD, wxID_ANY, wxID_ANY, \
+	DECLARE_EVENT_TABLE_ENTRY( EVT_CONTROLLER_THREAD, wxID_ANY, wxID_ANY, \
 	(wxObjectEventFunction) (wxEventFunction) (ControllerThreadEventFunction) &fn, \
 	(wxObject*) NULL \
 	),
@@ -151,8 +151,8 @@ public:
 	void SetTimecodeStateChanged(bool changed = true) { mTimecodeStateChanged = changed; };
 	const wxString GetName() { return mName; };
 	const wxString GetMessage() { return mMessage; };
-	ProdAuto::TrackList_var GetTrackList() { return mTrackList; };
-	ProdAuto::TrackStatusList GetTrackStatusList() { return mTrackStatusList; };
+	const ProdAuto::TrackList_var & GetTrackList() { return mTrackList; };
+	const ProdAuto::TrackStatusList_var & GetTrackStatusList() { return mTrackStatusList; };
 	Controller::Command GetCommand() { return mCommand; };
 	Controller::Result GetResult() { return mResult; };
 	CORBA::StringSeq_var GetStrings() { return mStrings; };

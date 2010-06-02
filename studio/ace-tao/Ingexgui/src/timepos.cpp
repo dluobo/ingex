@@ -1,7 +1,7 @@
 /***************************************************************************
- *   $Id: timepos.cpp,v 1.6 2009/09/18 16:10:16 john_f Exp $           *
+ *   $Id: timepos.cpp,v 1.7 2010/06/02 13:09:26 john_f Exp $           *
  *                                                                         *
- *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
+ *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
  *   Author: Matthew Marks                                                 *
  *                                                                         *
@@ -24,7 +24,7 @@
 #include "timepos.h"
 #include "Timecode.h"
 
-DEFINE_EVENT_TYPE(wxEVT_TIMEPOS_EVENT)
+DEFINE_EVENT_TYPE(EVT_TIMEPOS_EVENT)
 
 BEGIN_EVENT_TABLE( Timepos, wxEvtHandler )
 	EVT_TIMER( -1, Timepos::OnRefreshTimer )
@@ -70,7 +70,7 @@ void Timepos::OnRefreshTimer(wxTimerEvent& WXUNUSED(event))
 		}
 	}
 	if (!mTriggerTimecode.undefined && wxDateTime::UNow() >= TimeFromTimecode(mTriggerTimecode, mTriggerWrap)) { //use TimeFromTimecode every time to take into account system clock drift
-		wxCommandEvent event(wxEVT_TIMEPOS_EVENT);
+		wxCommandEvent event(EVT_TIMEPOS_EVENT);
 		ProdAuto::MxfTimecode * tc = new ProdAuto::MxfTimecode(mTriggerTimecode); //deleted by event handler
 		event.SetClientData(tc);
 		mTriggerHandler->AddPendingEvent(event);
@@ -248,8 +248,8 @@ const wxString Timepos::FormatTimecode(const ProdAuto::MxfTimecode tc)
 	else {
 		//long seconds = tc.samples * tc.edit_rate.denominator / tc.edit_rate.numerator;
 		//return wxString::Format(wxT("%02d:%02d:%02d:%02d"), (seconds / 3600) % 24, (seconds / 60) % 60, seconds % 60, tc.samples % (tc.edit_rate.numerator / tc.edit_rate.denominator));
-		//generate compatible with dropped frame formats
-		Timecode timecode(tc.samples, tc.edit_rate.numerator / tc.edit_rate.denominator, tc.edit_rate.numerator % tc.edit_rate.denominator); //assume dropped frames if not integral number of frames per second
+		//generate compatible with drop frame formats
+		Ingex::Timecode timecode(tc.samples, tc.edit_rate.numerator, tc.edit_rate.denominator, tc.drop_frame);
 		return wxString(timecode.Text(), *wxConvCurrent);
 	}
 }
