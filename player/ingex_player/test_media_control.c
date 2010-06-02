@@ -1,5 +1,5 @@
 /*
- * $Id: test_media_control.c,v 1.4 2009/01/29 07:10:27 stuart_hc Exp $
+ * $Id: test_media_control.c,v 1.5 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -103,7 +103,7 @@ static void tmc_mark(void* data, int type, int toggle)
     printf("Mark %d (%s)\n", type, toggle ? "toggle" : "set");
 }
 
-static void tmc_clear_mark(void* data, int typeMask)
+static void tmc_clear_mark(void* data, unsigned int typeMask)
 {
     printf("Clear mark (mask = 0x%08x)\n", typeMask);
 }

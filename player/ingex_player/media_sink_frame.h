@@ -1,5 +1,5 @@
 /*
- * $Id: media_sink_frame.h,v 1.3 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: media_sink_frame.h,v 1.4 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -24,11 +24,6 @@
 #ifndef __MEDIA_SINK_FRAME_H__
 #define __MEDIA_SINK_FRAME_H__
 
-
-#ifdef __cplusplus
-extern "C"
-{
-#endif
 
 
 #include "frame_info.h"
@@ -67,10 +62,6 @@ int msf_complete_frame(MediaSinkFrame* sinkFrame, const OnScreenDisplayState* os
 void msf_free(MediaSinkFrame* sinkFrame);
 
 
-
-#ifdef __cplusplus
-}
-#endif
 
 
 #endif

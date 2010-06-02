@@ -1,5 +1,5 @@
 /*
- * $Id: x11_xv_display_sink.c,v 1.12 2009/12/17 15:57:41 john_f Exp $
+ * $Id: x11_xv_display_sink.c,v 1.13 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -781,7 +781,7 @@ static int init_frame(X11DisplayFrame* frame)
         }
         else
         {
-            frame->yuv_image->data = malloc(frame->yuv_image->data_size);
+            frame->yuv_image->data = (char *)malloc(frame->yuv_image->data_size);
             result = 1;
         }
 

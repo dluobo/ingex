@@ -1,5 +1,5 @@
 /*
- * $Id: utils.h,v 1.4 2009/01/29 07:10:27 stuart_hc Exp $
+ * $Id: utils.h,v 1.5 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -26,11 +26,6 @@
 #define __UTILS_H__
 
 #include <sys/time.h>
-
-#ifdef __cplusplus
-extern "C"
-{
-#endif
 
 
 #include "frame_info.h"
@@ -60,8 +55,6 @@ void cancel_and_join_thread(pthread_t* thread, void* data, void (*stop_func)(voi
 void join_thread(pthread_t* thread, void* data, void (*stop_func)(void*));
 
 
-void writeVITC(unsigned hh, unsigned mm, unsigned ss, unsigned ff, unsigned char *line);
-
 double calc_audio_power(const unsigned char* p_samples, int num_samples, int byte_alignment, double min_power);
 double calc_audio_peak_power(const unsigned char* p_samples, int num_samples, int byte_alignment, double min_power);
 
@@ -75,10 +68,6 @@ int64_t convert_length(int64_t length, const Rational* oldFrameRate, const Ratio
 int64_t convert_non_drop_timecode(int64_t timecode, const Rational* oldFrameRate, const Rational* newFrameRate);
 
 
-
-#ifdef __cplusplus
-}
-#endif
 
 
 #endif

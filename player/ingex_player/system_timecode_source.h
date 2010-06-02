@@ -1,5 +1,5 @@
 /*
- * $Id: system_timecode_source.h,v 1.3 2009/01/29 07:10:27 stuart_hc Exp $
+ * $Id: system_timecode_source.h,v 1.4 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -26,11 +26,6 @@
 
 
 
-#ifdef __cplusplus
-extern "C"
-{
-#endif
-
 
 #include "media_source.h"
 
@@ -41,10 +36,6 @@ int sts_create(int64_t startTimecode, const Rational* startTimecodeFrameRate, Me
 
 
 
-
-#ifdef __cplusplus
-}
-#endif
 
 
 #endif

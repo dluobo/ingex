@@ -1,5 +1,5 @@
 /*
- * $Id: raw_file_sink.c,v 1.6 2009/10/22 14:00:36 john_f Exp $
+ * $Id: raw_file_sink.c,v 1.7 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -190,7 +190,7 @@ static int rms_get_stream_buffer(void* data, int streamId, unsigned int bufferSi
 
     if (rawStream->allocatedBufferSize != bufferSize)
     {
-        if ((rawStream->buffer = realloc(rawStream->buffer, bufferSize)) == NULL)
+        if ((rawStream->buffer = (unsigned char *)realloc(rawStream->buffer, bufferSize)) == NULL)
         {
             ml_log_error("Failed to realloc memory for raw stream buffer\n");
             return 0;

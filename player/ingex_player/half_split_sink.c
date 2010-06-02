@@ -1,5 +1,5 @@
 /*
- * $Id: half_split_sink.c,v 1.6 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: half_split_sink.c,v 1.7 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -1364,7 +1364,7 @@ void hss_set_half_split_orientation(HalfSplitSink* split, int verticalSplit)
     }
 }
 
-void hss_set_half_split_type(HalfSplitSink* split, int type)
+void hss_set_half_split_type(HalfSplitSink* split, HalfSplitType type)
 {
     int refresh = 0;
 
@@ -1385,7 +1385,7 @@ void hss_set_half_split_type(HalfSplitSink* split, int type)
     {
         /* toggle */
         refresh = 1;
-        split->nextState.type = (split->nextState.type + 1) % (DUAL_PAN_SPLIT_TYPE + 1);
+        split->nextState.type = (HalfSplitType)((split->nextState.type + 1) % (DUAL_PAN_SPLIT_TYPE + 1));
     }
     PTHREAD_MUTEX_UNLOCK(&split->stateMutex);
 

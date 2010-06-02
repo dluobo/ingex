@@ -1,5 +1,5 @@
 /*
- * $Id: buffered_media_sink.h,v 1.3 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: buffered_media_sink.h,v 1.4 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -25,11 +25,6 @@
 #define __BUFFERED_MEDIA_SINK_H__
 
 
-#ifdef __cplusplus
-extern "C"
-{
-#endif
-
 
 #include "media_sink.h"
 
@@ -41,10 +36,6 @@ int bms_create(MediaSink** targetSink, int size, int dropFrameWhenFull, Buffered
 MediaSink* bms_get_sink(BufferedMediaSink* bufSink);
 
 
-
-#ifdef __cplusplus
-}
-#endif
 
 
 #endif

@@ -1,5 +1,5 @@
 /*
- * $Id: shared_mem_source.c,v 1.11 2009/10/12 16:06:30 philipn Exp $
+ * $Id: shared_mem_source.c,v 1.12 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -329,6 +329,9 @@ static int shm_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceLis
         if (track->isDisabled)
             continue;
 
+        if (track->streamInfo.type == EVENT_STREAM_TYPE && !nameUpdated)
+            continue;
+        
         if (! sdl_accept_frame(listener, i, frameInfo))
             continue;
 
@@ -443,18 +446,13 @@ static int shm_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceLis
 
         if (track->streamInfo.type == EVENT_STREAM_TYPE)
         {
-            if (nameUpdated)
-            {
-                SourceEvent event;
-                svt_set_name_update_event(&event, source->sourceName);
+            assert(nameUpdated);
+            
+            SourceEvent event;
+            svt_set_name_update_event(&event, source->sourceName);
 
-                svt_write_num_events(buffer, 1);
-                svt_write_event(buffer, 0, &event);
-            }
-            else
-            {
-                svt_write_num_events(buffer, 0);
-            }
+            svt_write_num_events(buffer, 1);
+            svt_write_event(buffer, 0, &event);
         }
 
         sdl_receive_frame(listener, i, buffer, track->frameSize);
@@ -777,7 +775,7 @@ int shms_open(const char* channel_name, double timeout, SharedMemSource** source
     }
 
     /* timecode tracks */
-    for (timecodeType = LTC_TRACK; timecodeType <= SYSTEM_TC_TRACK; timecodeType++)
+    for (timecodeType = LTC_TRACK; timecodeType <= SYSTEM_TC_TRACK; timecodeType = (TimecodeTrackType)(timecodeType + 1))
     {
         CHK_OFAIL(initialise_stream_info(&newSource->tracks[newSource->numTracks].streamInfo));
         newSource->tracks[newSource->numTracks].streamInfo.type = TIMECODE_STREAM_TYPE;

@@ -1,5 +1,5 @@
 /*
- * $Id: shuttle_input.c,v 1.4 2009/01/29 07:10:27 stuart_hc Exp $
+ * $Id: shuttle_input.c,v 1.5 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -105,7 +105,7 @@ typedef struct
 {
     short vendor;
     short product;
-    char* name;
+    const char* name;
 } ShuttleData;
 
 struct ShuttleInput

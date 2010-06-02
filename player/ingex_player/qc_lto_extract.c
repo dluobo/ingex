@@ -1,5 +1,5 @@
 /*
- * $Id: qc_lto_extract.c,v 1.6 2009/12/17 15:57:40 john_f Exp $
+ * $Id: qc_lto_extract.c,v 1.7 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -32,6 +32,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <stdarg.h>
+#define __STDC_FORMAT_MACROS
 #include <inttypes.h>
 #include <assert.h>
 #include <sys/types.h>
@@ -881,25 +882,27 @@ static int extract_index_file(QCLTOExtract* extract, unsigned char* buffer)
         close(fd); return -1;
     }
 
-    int64_t count = 0;
-    int64_t numWrite;
-    while (count < fileSize)
     {
-        numWrite = (count + (TAPEBLOCK - offset) < fileSize) ? (TAPEBLOCK - offset) : fileSize - count;
-        if (fwrite(buffer + offset, numWrite, 1, indexFile) != 1)
+        int64_t count = 0;
+        int64_t numWrite;
+        while (count < fileSize)
         {
-            ml_log_error("Failed to write the tape index file: %s\n", strerror(errno));
-            fclose(indexFile); close(fd); return -1;
-        }
-        count += numWrite;
-        offset = 0;
-
-        if (count < fileSize)
-        {
-            nread = read(fd, buffer, TAPEBLOCK);
-            if (nread != TAPEBLOCK) {
-                ml_log_error("read %d instead of TAPEBLOCK\n", nread);
+            numWrite = (count + (TAPEBLOCK - offset) < fileSize) ? (TAPEBLOCK - offset) : fileSize - count;
+            if (fwrite(buffer + offset, numWrite, 1, indexFile) != 1)
+            {
+                ml_log_error("Failed to write the tape index file: %s\n", strerror(errno));
                 fclose(indexFile); close(fd); return -1;
+            }
+            count += numWrite;
+            offset = 0;
+
+            if (count < fileSize)
+            {
+                nread = read(fd, buffer, TAPEBLOCK);
+                if (nread != TAPEBLOCK) {
+                    ml_log_error("read %d instead of TAPEBLOCK\n", nread);
+                    fclose(indexFile); close(fd); return -1;
+                }
             }
         }
     }

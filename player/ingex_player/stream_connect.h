@@ -1,5 +1,5 @@
 /*
- * $Id: stream_connect.h,v 1.3 2009/01/29 07:10:27 stuart_hc Exp $
+ * $Id: stream_connect.h,v 1.4 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -24,11 +24,6 @@
 #ifndef __STREAM_CONNECT_H__
 #define __STREAM_CONNECT_H__
 
-
-#ifdef __cplusplus
-extern "C"
-{
-#endif
 
 
 #include "media_source.h"
@@ -64,10 +59,6 @@ int create_pass_through_connect(MediaSink* sink, int sinkStreamId, int sourceStr
     const StreamInfo* streamInfo, StreamConnect** connect);
 
 
-
-#ifdef __cplusplus
-}
-#endif
 
 
 #endif

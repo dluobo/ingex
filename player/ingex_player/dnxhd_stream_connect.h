@@ -1,5 +1,5 @@
 /*
- * $Id: dnxhd_stream_connect.h,v 1.3 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: dnxhd_stream_connect.h,v 1.4 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -25,11 +25,6 @@
 #define __DNXHD_STREAM_CONNECT_H__
 
 
-#ifdef __cplusplus
-extern "C"
-{
-#endif
-
 
 #include "stream_connect.h"
 
@@ -41,10 +36,6 @@ int create_dnxhd_connect(MediaSink* sink, int sinkStreamId, int sourceStreamId,
     const StreamInfo* streamInfo, int numFFMPEGThreads, int useWorkerThread,
     StreamConnect** connect);
 
-
-#ifdef __cplusplus
-}
-#endif
 
 
 #endif

@@ -1,5 +1,5 @@
 /*
- * $Id: qc_session.h,v 1.6 2009/01/29 07:10:27 stuart_hc Exp $
+ * $Id: qc_session.h,v 1.7 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -24,11 +24,6 @@
 #ifndef __QC_SESSION_H__
 #define __QC_SESSION_H__
 
-
-#ifdef __cplusplus
-extern "C"
-{
-#endif
 
 
 #include "media_player.h"
@@ -57,10 +52,6 @@ int qcs_extract_timestamp(const char* sessionFilename, int* year, int* month, in
 
 void qcs_set_comments(QCSession* qcSession, const char* sessionComments);
 
-
-#ifdef __cplusplus
-}
-#endif
 
 
 #endif

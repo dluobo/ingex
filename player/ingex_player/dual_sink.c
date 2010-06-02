@@ -1,5 +1,5 @@
 /*
- * $Id: dual_sink.c,v 1.11 2010/02/12 14:00:06 philipn Exp $
+ * $Id: dual_sink.c,v 1.12 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -53,7 +53,7 @@ struct DualSink
     int dvsCard;
     int dvsChannel;
     SDIVITCSource sdiVITCSource;
-    int extraSDIVITCSource;
+    SDIVITCSource extraSDIVITCSource;
     int numBuffers;
     int disableSDIOSD;
     int disableX11OSD;
@@ -814,7 +814,7 @@ fail:
 }
 
 
-int dusk_open(int reviewDuration, int dvsCard, int dvsChannel, SDIVITCSource sdiVITCSource, int extraSDIVITCSource, int numBuffers,
+int dusk_open(int reviewDuration, int dvsCard, int dvsChannel, SDIVITCSource sdiVITCSource, SDIVITCSource extraSDIVITCSource, int numBuffers,
     int useXV, int disableSDIOSD, int disableX11OSD, const Rational* pixelAspectRatio,
     const Rational* monitorAspectRatio, float scale, int swScale, int fitVideo, X11WindowInfo* windowInfo, DualSink** dualSink)
 {

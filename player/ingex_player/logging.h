@@ -1,5 +1,5 @@
 /*
- * $Id: logging.h,v 1.3 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: logging.h,v 1.4 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -27,11 +27,6 @@
 
 
 #include <stdarg.h>
-
-#ifdef __cplusplus
-extern "C"
-{
-#endif
 
 
 
@@ -80,10 +75,6 @@ void ml_log_error_cont(const char* format, ...);
 
 
 
-
-#ifdef __cplusplus
-}
-#endif
 
 
 #endif

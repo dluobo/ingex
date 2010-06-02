@@ -1,5 +1,5 @@
 /*
- * $Id: qc_session.c,v 1.8 2010/01/12 16:32:33 john_f Exp $
+ * $Id: qc_session.c,v 1.9 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -25,6 +25,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
+#define __STDC_FORMAT_MACROS
 #include <inttypes.h>
 #include <unistd.h>
 #include <ctype.h>

@@ -1,5 +1,5 @@
 /*
- * $Id: progress_bar_input.h,v 1.3 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: progress_bar_input.h,v 1.4 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -25,11 +25,6 @@
 #define __PROGRESS_BAR_INPUT_H__
 
 
-
-#ifdef __cplusplus
-extern "C"
-{
-#endif
 
 
 typedef struct
@@ -63,10 +58,6 @@ void pip_close(ProgressBarInput* input);
 
 
 
-
-#ifdef __cplusplus
-}
-#endif
 
 
 

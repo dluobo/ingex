@@ -1,5 +1,5 @@
 /*
- * $Id: x11_display_sink.c,v 1.11 2009/12/17 15:57:41 john_f Exp $
+ * $Id: x11_display_sink.c,v 1.12 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -702,14 +702,16 @@ static int init_frame(X11DisplayFrame* frame)
     XInitImage(frame->xImage);
 
     /* set image byte orders */
-    uint16_t twoBytes = 0x0001;
-    if (((uint8_t*)&twoBytes)[0] == 0x01)
     {
-        frame->xImage->byte_order = LSBFirst;
-    }
-    else
-    {
-        frame->xImage->byte_order = MSBFirst;
+        uint16_t twoBytes = 0x0001;
+        if (((uint8_t*)&twoBytes)[0] == 0x01)
+        {
+            frame->xImage->byte_order = LSBFirst;
+        }
+        else
+        {
+            frame->xImage->byte_order = MSBFirst;
+        }
     }
     frame->xImage->bitmap_bit_order = MSBFirst;
 

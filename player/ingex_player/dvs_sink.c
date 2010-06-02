@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sink.c,v 1.15 2010/01/18 15:46:52 philipn Exp $
+ * $Id: dvs_sink.c,v 1.16 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -36,6 +36,7 @@
 #include "video_conversion.h"
 #include "video_conversion_10bits.h"
 #include "YUV_frame.h"
+#include "video_VITC.h"
 #include "utils.h"
 #include "logging.h"
 #include "macros.h"
@@ -43,7 +44,7 @@
 
 #if !defined(HAVE_DVS)
 
-int dvs_open(int dvsCard, int dvsChannel, SDIVITCSource sdiVITCSource, int extraSDIVITCSource,
+int dvs_open(int dvsCard, int dvsChannel, SDIVITCSource sdiVITCSource, SDIVITCSource extraSDIVITCSource,
     int numBuffers, int disableOSD, int fitVideo, DVSSink** sink)
 {
     return 0;
@@ -475,23 +476,23 @@ static int display_on_sv_fifo(DVSSink* sink, DVSFifoBuffer* fifoBuffer)
             /* extra VITC timecodes */
 
             /* line 0 */
-            writeVITC(fifoBuffer->extraVITCTimecode.hour, fifoBuffer->extraVITCTimecode.min,
+            write_vitc(fifoBuffer->extraVITCTimecode.hour, fifoBuffer->extraVITCTimecode.min,
                 fifoBuffer->extraVITCTimecode.sec, fifoBuffer->extraVITCTimecode.frame,
                 fifoBuffer->buffer);
 
             /* line 4 - backup copy */
-            writeVITC(fifoBuffer->extraVITCTimecode.hour, fifoBuffer->extraVITCTimecode.min,
+            write_vitc(fifoBuffer->extraVITCTimecode.hour, fifoBuffer->extraVITCTimecode.min,
                 fifoBuffer->extraVITCTimecode.sec, fifoBuffer->extraVITCTimecode.frame,
                 fifoBuffer->buffer + 4 * 2 * sink->rasterWidth);
         }
 
         /* line 8 */
-        writeVITC(fifoBuffer->vitcTimecode.hour, fifoBuffer->vitcTimecode.min,
+        write_vitc(fifoBuffer->vitcTimecode.hour, fifoBuffer->vitcTimecode.min,
             fifoBuffer->vitcTimecode.sec, fifoBuffer->vitcTimecode.frame,
             fifoBuffer->buffer + 8 * 2 * sink->rasterWidth);
 
         /* line 12 - backup copy */
-        writeVITC(fifoBuffer->vitcTimecode.hour, fifoBuffer->vitcTimecode.min,
+        write_vitc(fifoBuffer->vitcTimecode.hour, fifoBuffer->vitcTimecode.min,
             fifoBuffer->vitcTimecode.sec, fifoBuffer->vitcTimecode.frame,
             fifoBuffer->buffer + 12 * 2 * sink->rasterWidth);
 
@@ -912,7 +913,7 @@ static int dvs_register_stream(void* data, int streamId, const StreamInfo* strea
         {
             /* TODO: clean this up */
             
-            formats format = streamInfo->format;
+            StreamFormat format = streamInfo->format;
             if (streamInfo->format == YUV422_FORMAT ||
                 (streamInfo->format == UYVY_10BIT_FORMAT && sink->depth8Bit))
             {
@@ -1611,7 +1612,7 @@ int dvs_card_is_available(int card, int channel)
     return 1;
 }
 
-int dvs_open(int dvsCard, int dvsChannel, SDIVITCSource sdiVITCSource, int extraSDIVITCSource,
+int dvs_open(int dvsCard, int dvsChannel, SDIVITCSource sdiVITCSource, SDIVITCSource extraSDIVITCSource,
     int numBuffers, int disableOSD, int fitVideo, DVSSink** sink)
 {
     DVSSink* newSink;

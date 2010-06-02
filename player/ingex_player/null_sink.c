@@ -1,5 +1,5 @@
 /*
- * $Id: null_sink.c,v 1.5 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: null_sink.c,v 1.6 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -176,7 +176,7 @@ static int nms_get_stream_buffer(void* data, int streamId, unsigned int bufferSi
 
     if (nullStream->allocatedBufferSize != bufferSize)
     {
-        if ((nullStream->buffer = realloc(nullStream->buffer, bufferSize)) == NULL)
+        if ((nullStream->buffer = (unsigned char *)realloc(nullStream->buffer, bufferSize)) == NULL)
         {
             ml_log_error("Failed to realloc memory for raw stream buffer\n");
             return 0;

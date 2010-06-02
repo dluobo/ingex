@@ -1,5 +1,5 @@
 /*
- * $Id: keyboard_input_connect.h,v 1.3 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: keyboard_input_connect.h,v 1.4 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -26,11 +26,6 @@
 
 
 
-#ifdef __cplusplus
-extern "C"
-{
-#endif
-
 
 #include "media_control.h"
 #include "keyboard_input.h"
@@ -48,10 +43,6 @@ const ControlInputHelp* kic_get_default_control_help();
 const ControlInputHelp* kic_get_qc_control_help();
 
 
-
-#ifdef __cplusplus
-}
-#endif
 
 
 

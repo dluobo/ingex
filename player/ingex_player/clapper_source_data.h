@@ -1,9 +1,9 @@
 /*
- * $Id: vtr_error_source.h,v 1.1 2010/01/12 16:44:56 john_f Exp $
+ * $Id: clapper_source_data.h,v 1.1 2010/06/02 11:12:14 philipn Exp $
  *
- * Source for VTR errors
+ * Data for clapperboard
  *
- * Copyright (C) 2009 British Broadcasting Corporation, All Rights Reserved
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
@@ -21,26 +21,11 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifndef __VTR_ERROR_SOURCE_H__
-#define __VTR_ERROR_SOURCE_H__
+#include <inttypes.h>
 
-#include "types.h"
-#include "media_control.h"
-#include "media_source.h"
+#include "YUV_text_overlay.h"
 
-
-typedef struct
-{
-    void* data; /* passed as parameter in function calls */
-    
-    void (*set_vtr_error_level)(void* data, VTRErrorLevel level);
-    void (*mark_vtr_errors)(void* data, MediaSource* rootSource, MediaControl* mediaControl);
-} VTRErrorSource;
-
-
-void ves_set_vtr_error_level(VTRErrorSource* source, VTRErrorLevel level);
-void ves_mark_vtr_errors(VTRErrorSource* source, MediaSource* rootSource, MediaControl* mediaControl);
-
-
-#endif
+extern int16_t g_audioSec[];
+extern overlay g_bbcLogo;
+extern overlay g_bbcLargeLogo;
 

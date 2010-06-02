@@ -1,5 +1,5 @@
 /*
- * $Id: LocalIngexPlayer.cpp,v 1.20 2010/03/29 16:54:14 philipn Exp $
+ * $Id: LocalIngexPlayer.cpp,v 1.21 2010/06/02 11:12:13 philipn Exp $
  *
  * Copyright (C) 2008-2010 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
@@ -192,6 +192,82 @@ public:
 };
 
 
+class prodauto::LocalIngexPlayerListenerData : public IngexPlayerListenerData
+{
+public:
+    LocalIngexPlayerListenerData()
+    {
+        _dataVersion = -1;
+    }
+    
+    bool isCurrent(int currentDataVersion)
+    {
+        return currentDataVersion == _dataVersion;
+    }
+    
+    void setVersion(int dataVersion)
+    {
+        _dataVersion = dataVersion;
+    }
+    
+    void clearSources()
+    {
+        _sourceIdToIndex.clear();
+        _sourceName.clear();
+    }
+    
+    void registerSource(int sourceId, int sourceIndex)
+    {
+        _sourceIdToIndex[sourceId] = sourceIndex;
+        _sourceName[sourceIndex] = "";
+    }
+    
+    int getSourceIndex(int sourceId)
+    {
+        map<int, int>::const_iterator result = _sourceIdToIndex.find(sourceId);
+        if (result == _sourceIdToIndex.end())
+        {
+            return -1;
+        }
+        return result->second;
+    }
+    
+    int updateSourceName(int sourceId, const char* name)
+    {
+        int sourceIndex = getSourceIndex(sourceId);
+        if (sourceIndex < 0)
+        {
+            return -1;
+        }
+        if (name == NULL)
+        {
+            if (_sourceName[sourceIndex].empty())
+            {
+                return -1;
+            }
+            
+            _sourceName[sourceIndex] = "";
+            return sourceIndex;
+        }
+        else
+        {
+            if (_sourceName[sourceIndex] == name)
+            {
+                return -1;
+            }
+
+            _sourceName[sourceIndex] = name;
+            return sourceIndex;
+        }
+    }
+    
+private:
+    int _dataVersion;
+    map<int, int> _sourceIdToIndex;
+    map<int, string> _sourceName;
+};
+
+
 static string get_option(const map<string, string>& options, string name)
 {
     map<string, string>::const_iterator result = options.find(name);
@@ -342,144 +418,183 @@ static void* player_thread(void* arg)
 
 static void frame_displayed_event(void* data, const FrameInfo* frameInfo)
 {
-    IngexPlayerListenerRegistry* listener_registry = (IngexPlayerListenerRegistry*)data;
+    LocalIngexPlayer* player = (LocalIngexPlayer*)data;
+    IngexPlayerListenerRegistry* listener_registry = player->_listenerRegistry;
 
     ReadWriteLockGuard guard(&listener_registry->_listenersRWLock, false);
 
-    vector<IngexPlayerListener*>::const_iterator iter;
-    for (iter = listener_registry->_listeners.begin(); iter != listener_registry->_listeners.end(); iter++)
+    size_t i;
+    for (i = 0; i < listener_registry->_listeners.size(); i++)
     {
-        (*iter)->frameDisplayedEvent(frameInfo);
+        listener_registry->_listeners[i].first->frameDisplayedEvent(frameInfo);
     }
 }
 
 static void frame_dropped_event(void* data, const FrameInfo* lastFrameInfo)
 {
-    IngexPlayerListenerRegistry* listener_registry = (IngexPlayerListenerRegistry*)data;
+    LocalIngexPlayer* player = (LocalIngexPlayer*)data;
+    IngexPlayerListenerRegistry* listener_registry = player->_listenerRegistry;
 
     ReadWriteLockGuard guard(&listener_registry->_listenersRWLock, false);
 
-    vector<IngexPlayerListener*>::const_iterator iter;
-    for (iter = listener_registry->_listeners.begin(); iter != listener_registry->_listeners.end(); iter++)
+    size_t i;
+    for (i = 0; i < listener_registry->_listeners.size(); i++)
     {
-        (*iter)->frameDroppedEvent(lastFrameInfo);
+        listener_registry->_listeners[i].first->frameDroppedEvent(lastFrameInfo);
     }
 }
 
 static void state_change_event(void* data, const MediaPlayerStateEvent* event)
 {
-    IngexPlayerListenerRegistry* listener_registry = (IngexPlayerListenerRegistry*)data;
+    LocalIngexPlayer* player = (LocalIngexPlayer*)data;
+    IngexPlayerListenerRegistry* listener_registry = player->_listenerRegistry;
 
     ReadWriteLockGuard guard(&listener_registry->_listenersRWLock, false);
 
-    vector<IngexPlayerListener*>::const_iterator iter;
-    for (iter = listener_registry->_listeners.begin(); iter != listener_registry->_listeners.end(); iter++)
+    size_t i;
+    for (i = 0; i < listener_registry->_listeners.size(); i++)
     {
-        (*iter)->stateChangeEvent(event);
+        listener_registry->_listeners[i].first->stateChangeEvent(event);
     }
 }
 
 static void end_of_source_event(void* data, const FrameInfo* lastReadFrameInfo)
 {
-    IngexPlayerListenerRegistry* listener_registry = (IngexPlayerListenerRegistry*)data;
+    LocalIngexPlayer* player = (LocalIngexPlayer*)data;
+    IngexPlayerListenerRegistry* listener_registry = player->_listenerRegistry;
 
     ReadWriteLockGuard guard(&listener_registry->_listenersRWLock, false);
 
-    vector<IngexPlayerListener*>::const_iterator iter;
-    for (iter = listener_registry->_listeners.begin(); iter != listener_registry->_listeners.end(); iter++)
+    size_t i;
+    for (i = 0; i < listener_registry->_listeners.size(); i++)
     {
-        (*iter)->endOfSourceEvent(lastReadFrameInfo);
+        listener_registry->_listeners[i].first->endOfSourceEvent(lastReadFrameInfo);
     }
 }
 
 static void start_of_source_event(void* data, const FrameInfo* firstReadFrameInfo)
 {
-    IngexPlayerListenerRegistry* listener_registry = (IngexPlayerListenerRegistry*)data;
+    LocalIngexPlayer* player = (LocalIngexPlayer*)data;
+    IngexPlayerListenerRegistry* listener_registry = player->_listenerRegistry;
 
     ReadWriteLockGuard guard(&listener_registry->_listenersRWLock, false);
 
-    vector<IngexPlayerListener*>::const_iterator iter;
-    for (iter = listener_registry->_listeners.begin(); iter != listener_registry->_listeners.end(); iter++)
+    size_t i;
+    for (i = 0; i < listener_registry->_listeners.size(); i++)
     {
-        (*iter)->startOfSourceEvent(firstReadFrameInfo);
+        listener_registry->_listeners[i].first->startOfSourceEvent(firstReadFrameInfo);
     }
 }
 
 static void close_request(void* data)
 {
-    IngexPlayerListenerRegistry* listener_registry = (IngexPlayerListenerRegistry*)data;
+    LocalIngexPlayer* player = (LocalIngexPlayer*)data;
+    IngexPlayerListenerRegistry* listener_registry = player->_listenerRegistry;
 
     ReadWriteLockGuard guard(&listener_registry->_listenersRWLock, false);
 
-    vector<IngexPlayerListener*>::const_iterator iter;
-    for (iter = listener_registry->_listeners.begin(); iter != listener_registry->_listeners.end(); iter++)
+    size_t i;
+    for (i = 0; i < listener_registry->_listeners.size(); i++)
     {
-        (*iter)->playerCloseRequested();
+        listener_registry->_listeners[i].first->playerCloseRequested();
     }
 }
 
 static void player_closed(void* data)
 {
-    IngexPlayerListenerRegistry* listener_registry = (IngexPlayerListenerRegistry*)data;
+    LocalIngexPlayer* player = (LocalIngexPlayer*)data;
+    IngexPlayerListenerRegistry* listener_registry = player->_listenerRegistry;
 
     ReadWriteLockGuard guard(&listener_registry->_listenersRWLock, false);
 
-    vector<IngexPlayerListener*>::const_iterator iter;
-    for (iter = listener_registry->_listeners.begin(); iter != listener_registry->_listeners.end(); iter++)
+    size_t i;
+    for (i = 0; i < listener_registry->_listeners.size(); i++)
     {
-        (*iter)->playerClosed();
+        listener_registry->_listeners[i].first->playerClosed();
     }
 }
 
 static void x11_key_pressed(void* data, int key, int modifier)
 {
-    IngexPlayerListenerRegistry* listener_registry = (IngexPlayerListenerRegistry*)data;
+    LocalIngexPlayer* player = (LocalIngexPlayer*)data;
+    IngexPlayerListenerRegistry* listener_registry = player->_listenerRegistry;
 
     ReadWriteLockGuard guard(&listener_registry->_listenersRWLock, false);
 
-    vector<IngexPlayerListener*>::const_iterator iter;
-    for (iter = listener_registry->_listeners.begin(); iter != listener_registry->_listeners.end(); iter++)
+    size_t i;
+    for (i = 0; i < listener_registry->_listeners.size(); i++)
     {
-        (*iter)->keyPressed(key, modifier);
+        listener_registry->_listeners[i].first->keyPressed(key, modifier);
     }
 }
 
 static void x11_key_released(void* data, int key, int modifier)
 {
-    IngexPlayerListenerRegistry* listener_registry = (IngexPlayerListenerRegistry*)data;
+    LocalIngexPlayer* player = (LocalIngexPlayer*)data;
+    IngexPlayerListenerRegistry* listener_registry = player->_listenerRegistry;
 
     ReadWriteLockGuard guard(&listener_registry->_listenersRWLock, false);
 
-    vector<IngexPlayerListener*>::const_iterator iter;
-    for (iter = listener_registry->_listeners.begin(); iter != listener_registry->_listeners.end(); iter++)
+    size_t i;
+    for (i = 0; i < listener_registry->_listeners.size(); i++)
     {
-        (*iter)->keyReleased(key, modifier);
+        listener_registry->_listeners[i].first->keyReleased(key, modifier);
     }
 }
 
 static void x11_progress_bar_position_set(void* data, float position)
 {
-    IngexPlayerListenerRegistry* listener_registry = (IngexPlayerListenerRegistry*)data;
+    LocalIngexPlayer* player = (LocalIngexPlayer*)data;
+    IngexPlayerListenerRegistry* listener_registry = player->_listenerRegistry;
 
     ReadWriteLockGuard guard(&listener_registry->_listenersRWLock, false);
 
-    vector<IngexPlayerListener*>::const_iterator iter;
-    for (iter = listener_registry->_listeners.begin(); iter != listener_registry->_listeners.end(); iter++)
+    size_t i;
+    for (i = 0; i < listener_registry->_listeners.size(); i++)
     {
-        (*iter)->progressBarPositionSet(position);
+        listener_registry->_listeners[i].first->progressBarPositionSet(position);
     }
 }
 
 static void x11_mouse_clicked(void* data, int imageWidth, int imageHeight, int xPos, int yPos)
 {
-    IngexPlayerListenerRegistry* listener_registry = (IngexPlayerListenerRegistry*)data;
+    LocalIngexPlayer* player = (LocalIngexPlayer*)data;
+    IngexPlayerListenerRegistry* listener_registry = player->_listenerRegistry;
 
     ReadWriteLockGuard guard(&listener_registry->_listenersRWLock, false);
 
-    vector<IngexPlayerListener*>::const_iterator iter;
-    for (iter = listener_registry->_listeners.begin(); iter != listener_registry->_listeners.end(); iter++)
+    size_t i;
+    for (i = 0; i < listener_registry->_listeners.size(); i++)
     {
-        (*iter)->mouseClicked(imageWidth, imageHeight, xPos, yPos);
+        listener_registry->_listeners[i].first->mouseClicked(imageWidth, imageHeight, xPos, yPos);
+    }
+}
+
+static void source_name_change_event(void* data, int sourceId, const char* name)
+{
+    LocalIngexPlayer* player = (LocalIngexPlayer*)data;
+    IngexPlayerListenerRegistry* listener_registry = player->_listenerRegistry;
+
+    ReadWriteLockGuard guard(&listener_registry->_listenersRWLock, false);
+
+    size_t i;
+    LocalIngexPlayerListenerData* listener_data;
+    int updatedSourceIndex;
+    for (i = 0; i < listener_registry->_listeners.size(); i++)
+    {
+        listener_data = dynamic_cast<LocalIngexPlayerListenerData*>(listener_registry->_listeners[i].second);
+        if (!listener_data)
+        {
+            listener_data = new LocalIngexPlayerListenerData();
+            listener_registry->_listeners[i].second = listener_data;
+        }
+        player->updateListenerData(listener_data);
+        
+        updatedSourceIndex = listener_data->updateSourceName(sourceId, name);
+        if (updatedSourceIndex >= 0)
+        {
+            listener_registry->_listeners[i].first->sourceNameChangeEvent(updatedSourceIndex, name);
+        }
     }
 }
 
@@ -521,33 +636,39 @@ LocalIngexPlayer::LocalIngexPlayer(IngexPlayerListenerRegistry* listenerRegistry
 
     memset(&_mediaPlayerListener, 0, sizeof(MediaPlayerListener));
 
-    _mediaPlayerListener.data = listenerRegistry;
+    _mediaPlayerListener.data = this;
     _mediaPlayerListener.frame_displayed_event = frame_displayed_event;
     _mediaPlayerListener.frame_dropped_event = frame_dropped_event;
     _mediaPlayerListener.state_change_event = state_change_event;
     _mediaPlayerListener.end_of_source_event = end_of_source_event;
     _mediaPlayerListener.start_of_source_event = start_of_source_event;
     _mediaPlayerListener.player_closed = player_closed;
+    _mediaPlayerListener.source_name_change_event = source_name_change_event;
 
 
     memset(&_x11WindowListener, 0, sizeof(X11WindowListener));
-    _x11WindowListener.data = listenerRegistry;
+    _x11WindowListener.data = this;
     _x11WindowListener.close_request = close_request;
 
     memset(&_x11KeyListener, 0, sizeof(KeyboardInputListener));
-    _x11KeyListener.data = listenerRegistry;
+    _x11KeyListener.data = this;
     _x11KeyListener.key_pressed = x11_key_pressed;
     _x11KeyListener.key_released = x11_key_released;
 
     memset(&_x11ProgressBarListener, 0, sizeof(ProgressBarInputListener));
-    _x11ProgressBarListener.data = listenerRegistry;
+    _x11ProgressBarListener.data = this;
     _x11ProgressBarListener.position_set = x11_progress_bar_position_set;
 
     memset(&_x11MouseListener, 0, sizeof(MouseInputListener));
-    _x11MouseListener.data = listenerRegistry;
+    _x11MouseListener.data = this;
     _x11MouseListener.click = x11_mouse_clicked;
 
     memset(&_videoStreamInfo, 0, sizeof(_videoStreamInfo));
+
+
+    _listenerRegistry = listenerRegistry;
+    _sourceIdToIndexVersion = 0;
+
 
     pthread_mutex_init(&_configMutex, NULL);
     pthread_rwlock_init(&_playStateRWLock, NULL);
@@ -814,6 +935,13 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
             _playState = 0;
         }
         
+        // reset listener data
+        {
+            ReadWriteLockGuard guard(&_listenerRegistry->_listenersRWLock, true);
+            _sourceIdToIndexVersion++;
+            _sourceIdToIndex.clear();
+        }
+        
         // stop playing
         if (currentPlayState)
         {
@@ -840,15 +968,17 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
         int videoStreamIndex = -1;
         bool videoChanged = false;
         bool atLeastOneInputOpened = false;
-        vector<PlayerInput>::const_iterator iter;
-        for (iter = inputs.begin(); iter != inputs.end(); iter++)
+        size_t inputIndex;
+        map<int, int> newSourceIdToIndex;
+        for (inputIndex = 0; inputIndex < inputs.size(); inputIndex++)
         {
-            const PlayerInput& input = *iter;
+            const PlayerInput& input = inputs[inputIndex];
             MediaSource* mediaSource = 0;
             StreamInfo streamInfo;
             StreamInfo soundStreamInfo;
             int numBalls = 5;
             int numFFMPEGThreads = 0;
+            int sourceId;
 
             memset(&streamInfo, 0, sizeof(streamInfo));
             memset(&soundStreamInfo, 0, sizeof(soundStreamInfo));
@@ -922,8 +1052,30 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
                         inputsPresent.push_back(false);
                         continue;
                     }
-                    shms_get_default_timecode(shmSource, &_shmDefaultTCType, &_shmDefaultTCSubType);
                     mediaSource = shms_get_media_source(shmSource);
+                    
+                    // check whether all streams are disabled - if true, then source is closed
+                    int numStreams = msc_get_num_streams(mediaSource);
+                    int i;
+                    bool allDisabled = true;
+                    for (i = 0; i < numStreams; i++)
+                    {
+                        if (!msc_stream_is_disabled(mediaSource, i))
+                        {
+                            allDisabled = false;
+                            break;
+                        }
+                    }
+                    if (allDisabled)
+                    {
+                        msc_close(mediaSource);
+                        ml_log_warn("Closed shared memory source '%s'\n", input.name.c_str());
+                        opened.push_back(false);
+                        inputsPresent.push_back(false);
+                        continue;
+                    }
+
+                    shms_get_default_timecode(shmSource, &_shmDefaultTCType, &_shmDefaultTCSubType);
                 }
                 break;
 #endif
@@ -983,7 +1135,6 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
                     }
                 }
                 break;
-
             }
 
             // set software scaling to 2 if the material dimensions exceeds 1024
@@ -1026,6 +1177,12 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
                 }
             }
 
+            // record sourceId to input index map
+            if (msc_get_id(mediaSource, &sourceId))
+            {
+                newSourceIdToIndex[sourceId] = inputIndex;
+            }
+            
             opened.push_back(true);
             inputsPresent.push_back(true);
             atLeastOneInputOpened = true;
@@ -1285,14 +1442,14 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
 
                 case DVS_OUTPUT:
                     closeLocalX11Window();
-                    CHK_OTHROW_MSG(dvs_open(nextConfig.dvsCard, nextConfig.dvsChannel, VITC_AS_SDI_VITC, 0, 12,
+                    CHK_OTHROW_MSG(dvs_open(nextConfig.dvsCard, nextConfig.dvsChannel, VITC_AS_SDI_VITC, INVALID_SDI_VITC, 12,
                         nextConfig.disableSDIOSD, 1, &dvsSink), ("Failed to open DVS sink\n"));
                     newPlayState->mediaSink = dvs_get_media_sink(dvsSink);
                     break;
 
                 case DUAL_DVS_X11_OUTPUT:
                     CHK_OTHROW(setOrCreateX11Window(&nextConfig.externalWindowInfo));
-                    CHK_OTHROW_MSG(dusk_open(20, nextConfig.dvsCard, nextConfig.dvsChannel, VITC_AS_SDI_VITC, 0, 12, 0,
+                    CHK_OTHROW_MSG(dusk_open(20, nextConfig.dvsCard, nextConfig.dvsChannel, VITC_AS_SDI_VITC, INVALID_SDI_VITC, 12, 0,
                         nextConfig.disableSDIOSD, nextConfig.disableX11OSD, &nextConfig.pixelAspectRatio,
                         &nextConfig.monitorAspectRatio, nextConfig.scale, swScale, 1, &_windowInfo,
                         &dualSink), ("Failed to open dual DVS and X11 display sink\n"));
@@ -1306,7 +1463,7 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
 
                 case DUAL_DVS_X11_XV_OUTPUT:
                     CHK_OTHROW(setOrCreateX11Window(&nextConfig.externalWindowInfo));
-                    CHK_OTHROW_MSG(dusk_open(20, nextConfig.dvsCard, nextConfig.dvsChannel, VITC_AS_SDI_VITC, 0, 12, 1,
+                    CHK_OTHROW_MSG(dusk_open(20, nextConfig.dvsCard, nextConfig.dvsChannel, VITC_AS_SDI_VITC, INVALID_SDI_VITC, 12, 1,
                         nextConfig.disableSDIOSD, nextConfig.disableX11OSD, &nextConfig.pixelAspectRatio,
                         &nextConfig.monitorAspectRatio, nextConfig.scale, swScale, 1, &_windowInfo,
                         &dualSink), ("Failed to open dual DVS and X11 XV display sink\n"));
@@ -1408,6 +1565,13 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
         }
         
 
+        // reset listener data
+        {
+            ReadWriteLockGuard guard(&_listenerRegistry->_listenersRWLock, true);
+            _sourceIdToIndexVersion++;
+            _sourceIdToIndex = newSourceIdToIndex;
+        }
+        
         // start play thread
 
         newPlayState->playThreadArgs.startPaused = startPaused;
@@ -2298,3 +2462,22 @@ void LocalIngexPlayer::closeLocalX11Window()
         x11c_close_window(&_windowInfo);
     }
 }
+
+void LocalIngexPlayer::updateListenerData(LocalIngexPlayerListenerData* listenerData)
+{
+    if (listenerData->isCurrent(_sourceIdToIndexVersion))
+    {
+        return;
+    }
+    
+    listenerData->clearSources();
+    
+    map<int, int>::const_iterator iter;
+    for (iter = _sourceIdToIndex.begin(); iter != _sourceIdToIndex.end(); iter++)
+    {
+        listenerData->registerSource(iter->first, iter->second);
+    }
+    
+    listenerData->setVersion(_sourceIdToIndexVersion);
+}
+

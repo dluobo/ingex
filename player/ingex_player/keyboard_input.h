@@ -1,5 +1,5 @@
 /*
- * $Id: keyboard_input.h,v 1.5 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: keyboard_input.h,v 1.6 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -25,11 +25,6 @@
 #define __KEYBOARD_INPUT_H__
 
 
-
-#ifdef __cplusplus
-extern "C"
-{
-#endif
 
 
 #define SHIFT_KEY_MODIFIER           0x01
@@ -69,10 +64,6 @@ void kip_close(KeyboardInput* input);
 
 
 
-
-#ifdef __cplusplus
-}
-#endif
 
 
 

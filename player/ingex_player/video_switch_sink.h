@@ -1,5 +1,5 @@
 /*
- * $Id: video_switch_sink.h,v 1.7 2009/01/29 07:10:27 stuart_hc Exp $
+ * $Id: video_switch_sink.h,v 1.8 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -24,11 +24,6 @@
 #ifndef __VIDEO_SWITCH_SINK_H__
 #define __VIDEO_SWITCH_SINK_H__
 
-
-#ifdef __cplusplus
-extern "C"
-{
-#endif
 
 
 #include "media_sink.h"
@@ -77,10 +72,6 @@ int qvs_create_video_switch(MediaSink* sink, VideoSwitchSplit split, int applySp
 
 
 
-
-#ifdef __cplusplus
-}
-#endif
 
 
 #endif

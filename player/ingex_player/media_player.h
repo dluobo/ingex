@@ -1,5 +1,5 @@
 /*
- * $Id: media_player.h,v 1.9 2010/01/12 16:32:29 john_f Exp $
+ * $Id: media_player.h,v 1.10 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -25,18 +25,12 @@
 #define __MEDIA_PLAYER_H__
 
 
-#ifdef __cplusplus
-extern "C"
-{
-#endif
-
 
 #include "media_source.h"
 #include "media_sink.h"
 #include "media_control.h"
 #include "connection_matrix.h"
 #include "frame_info.h"
-#include "vtr_error_source.h"
 
 
 typedef struct MediaPlayer MediaPlayer;
@@ -67,6 +61,7 @@ typedef struct
     void (*state_change_event)(void* data, const MediaPlayerStateEvent* event);
     void (*end_of_source_event)(void* data, const FrameInfo* lastReadFrameInfo);
     void (*start_of_source_event)(void* data, const FrameInfo* firstReadFrameInfo);
+    void (*source_name_change_event)(void* data, int sourceId, const char* name);
 
     /* called when the player is closed (free'd) */
     void (*player_closed)(void* data);
@@ -78,6 +73,7 @@ void mpl_frame_dropped_event(MediaPlayerListener* listener, const FrameInfo* las
 void mpl_state_change_event(MediaPlayerListener* listener, const MediaPlayerStateEvent* event);
 void mpl_end_of_source_event(MediaPlayerListener* listener, const FrameInfo* lastFrameInfo);
 void mpl_start_of_source_event(MediaPlayerListener* listener, const FrameInfo* firstFrameInfo);
+void mpl_source_name_change_event(MediaPlayerListener* listener, int sourceId, const char* name);
 void mpl_player_closed(MediaPlayerListener* listener);
 
 
@@ -129,7 +125,7 @@ typedef struct
 int ply_create_player(MediaSource* source, MediaSink* sink, int initialLock,
     int closeAtEnd, int numFFMPEGThreads, int useWorkerThreads, int loop, int showFieldSymbol,
     const Timecode* startVITC, const Timecode* startLTC,
-    FILE* bufferStateLogFile, int* markSelectionTypeMasks, int numMarkSelections, MediaPlayer** player);
+    FILE* bufferStateLogFile, unsigned int* markSelectionTypeMasks, int numMarkSelections, MediaPlayer** player);
 int ply_register_player_listener(MediaPlayer* player, MediaPlayerListener* playerListener);
 MediaControl* ply_get_media_control(MediaPlayer* player);
 int ply_start_player(MediaPlayer* player, int startPaused);
@@ -141,8 +137,6 @@ void ply_enable_clip_marks(MediaPlayer* player, int markType);
 void ply_set_start_offset(MediaPlayer* player, int64_t offset);
 void ply_print_source_info(MediaPlayer* player);
 void ply_get_frame_rate(MediaPlayer* player, Rational* frameRate);
-int ply_register_vtr_error_source(MediaPlayer* player, VTRErrorSource* source);
-
 
 /* quality checking */
 typedef int (*qc_quit_validator_func)(MediaPlayer* player, void* data);
@@ -152,10 +146,6 @@ int ply_qc_quit_validate(MediaPlayer* player);
 
 void ply_activate_qc_mark_validation(MediaPlayer* player);
 
-
-#ifdef __cplusplus
-}
-#endif
 
 
 #endif

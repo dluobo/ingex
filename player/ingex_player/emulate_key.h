@@ -1,5 +1,5 @@
 /*
- * $Id: emulate_key.h,v 1.3 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: emulate_key.h,v 1.4 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -25,11 +25,6 @@
 #define __EMULATE_KEY_H__
 
 
-#ifdef __cplusplus
-extern "C"
-{
-#endif
-
 
 /* key codes are defined in /usr/include/X11/keysymdef.h (include keysym.h and not keysymdef.h)
    and modifiers (masks, eg. ShiftMask) in /usr/include/X11/X.h */
@@ -46,10 +41,6 @@ int emu_key(EmulateKey* emu, int keysym, int modifier);
 void free_emu(EmulateKey** emu);
 
 
-
-#ifdef __cplusplus
-}
-#endif
 
 
 #endif

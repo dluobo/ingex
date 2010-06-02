@@ -1,5 +1,5 @@
 /*
- * $Id: console_monitor.h,v 1.3 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: console_monitor.h,v 1.4 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -25,11 +25,6 @@
 #define __CONSOLE_MONITOR_H__
 
 
-#ifdef __cplusplus
-extern "C"
-{
-#endif
-
 
 #include "media_player.h"
 
@@ -42,10 +37,6 @@ void csm_close(ConsoleMonitor** monitor);
 
 
 
-
-#ifdef __cplusplus
-}
-#endif
 
 
 #endif

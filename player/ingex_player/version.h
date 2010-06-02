@@ -1,5 +1,5 @@
 /*
- * $Id: version.h,v 1.3 2009/01/29 07:10:27 stuart_hc Exp $
+ * $Id: version.h,v 1.4 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -25,21 +25,12 @@
 #define __VERSION_H__
 
 
-#ifdef __cplusplus
-extern "C"
-{
-#endif
-
 
 
 const char* get_player_version();
 const char* get_player_build_timestamp();
 
 
-
-#ifdef __cplusplus
-}
-#endif
 
 
 #endif

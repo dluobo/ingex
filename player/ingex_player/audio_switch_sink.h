@@ -1,5 +1,5 @@
 /*
- * $Id: audio_switch_sink.h,v 1.3 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: audio_switch_sink.h,v 1.4 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -24,11 +24,6 @@
 #ifndef __AUDIO_SWITCH_SINK_H__
 #define __AUDIO_SWITCH_SINK_H__
 
-
-#ifdef __cplusplus
-extern "C"
-{
-#endif
 
 
 #include "media_sink.h"
@@ -61,10 +56,6 @@ int qas_create_audio_switch(MediaSink* sink, AudioSwitchSink** swtch);
 
 
 
-
-#ifdef __cplusplus
-}
-#endif
 
 
 #endif

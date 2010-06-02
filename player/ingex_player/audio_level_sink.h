@@ -1,5 +1,5 @@
 /*
- * $Id: audio_level_sink.h,v 1.3 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: audio_level_sink.h,v 1.4 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -26,11 +26,6 @@
 #define __AUDIO_LEVEL_SINK_H__
 
 
-#ifdef __cplusplus
-extern "C"
-{
-#endif
-
 
 #include "media_sink.h"
 
@@ -41,10 +36,6 @@ int als_create_audio_level_sink(MediaSink* targetSink, int numAudioStreams, floa
     AudioLevelSink** sink);
 MediaSink* als_get_media_sink(AudioLevelSink* sink);
 
-
-#ifdef __cplusplus
-}
-#endif
 
 
 #endif

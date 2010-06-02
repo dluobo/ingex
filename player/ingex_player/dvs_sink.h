@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sink.h,v 1.6 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: dvs_sink.h,v 1.7 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -27,11 +27,6 @@
 
 
 
-#ifdef __cplusplus
-extern "C"
-{
-#endif
-
 
 #include "media_sink.h"
 
@@ -42,7 +37,8 @@ extern "C"
 
 typedef enum
 {
-    VITC_AS_SDI_VITC = 1,   /* allow 0 to be used in int type to indicate value is null */
+    INVALID_SDI_VITC,
+    VITC_AS_SDI_VITC,
     LTC_AS_SDI_VITC,
     COUNT_AS_SDI_VITC
 } SDIVITCSource;
@@ -54,7 +50,7 @@ typedef struct DVSSink DVSSink;
 
 int dvs_card_is_available(int card, int channel);
 
-int dvs_open(int dvsCard, int dvsChannel, SDIVITCSource sdiVITCSource, int extraSDIVITCSource,
+int dvs_open(int dvsCard, int dvsChannel, SDIVITCSource sdiVITCSource, SDIVITCSource extraSDIVITCSource,
     int numBuffers, int disableOSD, int fitVideo, DVSSink** sink);
 
 MediaSink* dvs_get_media_sink(DVSSink* sink);
@@ -62,10 +58,6 @@ MediaSink* dvs_get_media_sink(DVSSink* sink);
 /* only closes the DVS card - use when handling interrupt signals */
 void dvs_close_card(DVSSink* sink);
 
-
-#ifdef __cplusplus
-}
-#endif
 
 
 #endif

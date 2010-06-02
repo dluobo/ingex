@@ -1,5 +1,5 @@
 /*
- * $Id: qc_lto_access.c,v 1.5 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: qc_lto_access.c,v 1.6 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -436,7 +436,7 @@ static void get_status_string(QCLTOAccess* access, char statusString[40], QCLTOE
         strcpy(statusString, "Status: ");
 
         qce_get_lto_state(access->extract, extractState, updateMask);
-        if (extractState->status < (int)sizeof(g_extractStatusString) / sizeof(const char*))
+        if (extractState->status < (int)(sizeof(g_extractStatusString) / sizeof(const char*)))
         {
             strcat(statusString, g_extractStatusString[extractState->status]);
         }

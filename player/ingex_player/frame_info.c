@@ -1,5 +1,5 @@
 /*
- * $Id: frame_info.c,v 1.8 2009/12/17 15:57:40 john_f Exp $
+ * $Id: frame_info.c,v 1.9 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -90,9 +90,9 @@ static const char* g_sourceInfoNames[] =
 
 const char* get_stream_type_string(StreamType type)
 {
-    if (type >= sizeof(g_streamTypeStrings) / sizeof(char*))
+    if (type >= (int)(sizeof(g_streamTypeStrings) / sizeof(char*)))
     {
-        assert(type >= sizeof(g_streamTypeStrings) / sizeof(char*));
+        assert(type < (int)(sizeof(g_streamTypeStrings) / sizeof(char*)));
         ml_log_error("unknown stream type %d\n", type);
         return g_streamTypeStrings[0];
     }
@@ -102,9 +102,9 @@ const char* get_stream_type_string(StreamType type)
 
 const char* get_stream_format_string(StreamFormat format)
 {
-    if (format >= sizeof(g_streamFormatStrings) / sizeof(char*))
+    if (format >= (int)(sizeof(g_streamFormatStrings) / sizeof(char*)))
     {
-        assert(format >= sizeof(g_streamFormatStrings) / sizeof(char*));
+        assert(format < (int)(sizeof(g_streamFormatStrings) / sizeof(char*)));
         ml_log_error("unknown stream format %d\n", format);
         return g_streamFormatStrings[0];
     }
@@ -202,7 +202,7 @@ fail:
 
 int add_known_source_info(StreamInfo* streamInfo, SourceInfoName name, const char* value)
 {
-    if (name > sizeof(g_sourceInfoNames) / sizeof(char*))
+    if (name > (int)(sizeof(g_sourceInfoNames) / sizeof(char*)))
     {
         ml_log_warn("Unknown name enum %d\n", name);
         return add_source_info(streamInfo, g_sourceInfoNames[SRC_INFO_UNKNOWN], value);
@@ -289,9 +289,9 @@ const char* get_known_source_info_value(const StreamInfo* streamInfo, SourceInfo
 {
     int i;
 
-    if (name > sizeof(g_sourceInfoNames) / sizeof(char*))
+    if (name > (int)(sizeof(g_sourceInfoNames) / sizeof(char*)))
     {
-        assert(name <= sizeof(g_sourceInfoNames) / sizeof(char*));
+        assert(name <= (int)(sizeof(g_sourceInfoNames) / sizeof(char*)));
         ml_log_warn("Unknown name enum %d\n", name);
         return NULL;
     }

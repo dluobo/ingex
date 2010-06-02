@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_source.c,v 1.6 2009/09/18 16:16:24 philipn Exp $
+ * $Id: ffmpeg_source.c,v 1.7 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -28,6 +28,9 @@
 #include <string.h>
 #include <errno.h>
 #include <assert.h>
+#define __STDC_FORMAT_MACROS
+#define __STDC_CONSTANT_MACROS
+#include <inttypes.h>
 
 
 #if !defined(HAVE_FFMPEG) || !defined(HAVE_FFMPEG_SWSCALE)
@@ -43,6 +46,9 @@ int fms_open(const char* filename, int threadCount, int forceUYVYFormat, MediaSo
 
 #else /* defined(HAVE_FFMPEG) && defined(HAVE_FFMPEG_SWSCALE) */
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #ifdef FFMPEG_OLD_INCLUDE_PATHS
 #include <ffmpeg/avformat.h>
@@ -50,6 +56,10 @@ int fms_open(const char* filename, int threadCount, int forceUYVYFormat, MediaSo
 #else
 #include <libavformat/avformat.h>
 #include <libswscale/swscale.h>
+#endif
+
+#ifdef __cplusplus
+}
 #endif
 
 #include "ffmpeg_source.h"
@@ -213,13 +223,13 @@ static int push_packet(PacketQueue* queue, AVPacket* packet)
 
     if (queue->last == NULL)
     {
-        CHK_ORET((queue->first = av_malloc(sizeof(AVPacketList))) != NULL);
+        CHK_ORET((queue->first = (AVPacketList *)av_malloc(sizeof(AVPacketList))) != NULL);
         memset(queue->first, 0, sizeof(AVPacketList));
         queue->last = queue->first;
     }
     else
     {
-        CHK_ORET((queue->last->next = av_malloc(sizeof(AVPacketList))) != NULL);
+        CHK_ORET((queue->last->next = (AVPacketList *)av_malloc(sizeof(AVPacketList))) != NULL);
         memset(queue->last->next, 0, sizeof(AVPacketList));
         queue->last = queue->last->next;
     }
@@ -419,7 +429,7 @@ static int get_video_buffer(struct AVCodecContext* c, AVFrame *pic)
     int ret = avcodec_default_get_buffer(c, pic);
 
     /* attach the pts from the packet so we know the pts of the returned decoded frame */
-    int64_t* pts = av_malloc(sizeof(int64_t));
+    int64_t* pts = (int64_t *)av_malloc(sizeof(int64_t));
     *pts = g_videoPacketPTS;
     pic->opaque = pts;
 
@@ -674,7 +684,7 @@ static int open_video_stream(FFMPEGSource* source, int sourceId, int avStreamInd
         }
     }
 
-    videoStream->outputStream.buffer = av_malloc(videoStream->outputStream.bufferSize);
+    videoStream->outputStream.buffer = (unsigned char *)av_malloc(videoStream->outputStream.bufferSize);
     if (videoStream->outputStream.buffer == NULL)
     {
         ml_log_error("Failed to allocate video output buffer\n");
@@ -734,7 +744,7 @@ static int allocate_audio_output_buffers(FFMPEGSource* source)
 
             audioStream->outputStreams[j].bufferSize = audioFrameSize * 2;
             audioStream->outputStreams[j].dataSize = audioStream->outputStreams[j].bufferSize;
-            audioStream->outputStreams[j].buffer = av_malloc(audioStream->outputStreams[j].bufferSize);
+            audioStream->outputStreams[j].buffer = (unsigned char *)av_malloc(audioStream->outputStreams[j].bufferSize);
             if (audioStream->outputStreams[j].buffer == NULL)
             {
                 ml_log_error("Failed to allocate audio output buffer\n");
@@ -831,7 +841,7 @@ static int open_audio_stream(FFMPEGSource* source, int sourceId, int avStreamInd
     }
 
     audioStream->decodeBufferSize = AVCODEC_MAX_AUDIO_FRAME_SIZE;
-    audioStream->decodeBuffer = av_malloc(audioStream->decodeBufferSize);
+    audioStream->decodeBuffer = (unsigned char *)av_malloc(audioStream->decodeBufferSize);
     if (audioStream->decodeBuffer == NULL)
     {
         ml_log_error("Failed to allocate audio decode buffer\n");

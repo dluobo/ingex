@@ -1,5 +1,5 @@
 /*
- * $Id: multiple_sources.h,v 1.3 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: multiple_sources.h,v 1.4 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -25,11 +25,6 @@
 #define __MULTIPLE_SOURCES_H__
 
 
-#ifdef __cplusplus
-extern "C"
-{
-#endif
-
 
 #include "media_source.h"
 
@@ -43,10 +38,6 @@ MediaSource* mls_get_media_source(MultipleMediaSources* multSource);
 int mls_finalise_blank_sources(MultipleMediaSources* multSource);
 
 
-
-#ifdef __cplusplus
-}
-#endif
 
 
 #endif

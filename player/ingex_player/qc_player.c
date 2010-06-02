@@ -1,5 +1,5 @@
 /*
- * $Id: qc_player.c,v 1.13 2010/02/12 14:00:06 philipn Exp $
+ * $Id: qc_player.c,v 1.14 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -121,7 +121,7 @@ typedef struct
     Rational monitorAspectRatio;
     float scale;
     SDIVITCSource sdiVITCSource;
-    int extraSDIVITCSource;
+    SDIVITCSource extraSDIVITCSource;
     int disableSDIOSD;
     int disableX11OSD;
     int dvsBufferSize;
@@ -141,7 +141,7 @@ typedef struct
     const char* sessionScriptOptions;
     int writeAllMarks;
     int clipMarkType;
-    int pbMarkMask[2];
+    unsigned int pbMarkMask[2];
 #if defined(HAVE_SHTTPD)
     int qcHTTPPort;
 #endif
@@ -162,13 +162,13 @@ static const Options g_defaultOptions =
     {0,0},
     0.0,
     VITC_AS_SDI_VITC,
-    0,
+    INVALID_SDI_VITC,
     0,
     0,
     12,
     4,
     0,
-    {{{0,{0},0}},0},
+    {{{0,{0},WHITE_COLOUR}},0},
     1,
     1,
     0,
@@ -880,7 +880,6 @@ static int play_archive_mxf_file(QCPlayer* player, int argc, const char** argv, 
     ply_set_qc_quit_validator(player->mediaPlayer, validate_player_quit, player);
     
     mc_set_vtr_error_level(ply_get_media_control(player->mediaPlayer), (VTRErrorLevel)options->vtrErrorLevel);
-    ply_register_vtr_error_source(player->mediaPlayer, mxfs_get_vtr_error_source(mxfSource));
     mc_show_vtr_error_level(ply_get_media_control(player->mediaPlayer), options->showVTRErrorLevel);
 
 
@@ -1447,7 +1446,7 @@ int main(int argc, const char **argv)
                 fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
                 return 1;
             }
-            if (sscanf(argv[cmdlnIndex + 1], "%d\n", &logLevel) != 1)
+            if (sscanf(argv[cmdlnIndex + 1], "%d", &logLevel) != 1)
             {
                 usage(argv[0]);
                 fprintf(stderr, "Invalid argument for %s\n", argv[cmdlnIndex]);
@@ -1463,7 +1462,7 @@ int main(int argc, const char **argv)
                 fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
                 return 1;
             }
-            if (sscanf(argv[cmdlnIndex + 1], "%d\n", &logRemoveDays) != 1 || logRemoveDays < 0)
+            if (sscanf(argv[cmdlnIndex + 1], "%d", &logRemoveDays) != 1 || logRemoveDays < 0)
             {
                 usage(argv[0]);
                 fprintf(stderr, "Invalid argument for %s\n", argv[cmdlnIndex]);
@@ -1496,7 +1495,7 @@ int main(int argc, const char **argv)
                 fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
                 return 1;
             }
-            if (sscanf(argv[cmdlnIndex + 1], "%d\n", &options.dvsBufferSize) != 1 ||
+            if (sscanf(argv[cmdlnIndex + 1], "%d", &options.dvsBufferSize) != 1 ||
                 (options.dvsBufferSize != 0 && options.dvsBufferSize < MIN_NUM_DVS_FIFO_BUFFERS))
             {
                 usage(argv[0]);
@@ -1580,7 +1579,7 @@ int main(int argc, const char **argv)
                 fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
                 return 1;
             }
-            if (sscanf(argv[cmdlnIndex + 1], "%d\n", &options.srcBufferSize) != 1 || options.srcBufferSize < 0)
+            if (sscanf(argv[cmdlnIndex + 1], "%d", &options.srcBufferSize) != 1 || options.srcBufferSize < 0)
             {
                 usage(argv[0]);
                 fprintf(stderr, "Invalid argument for %s\n", argv[cmdlnIndex]);
@@ -1700,7 +1699,7 @@ int main(int argc, const char **argv)
                 fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
                 return 1;
             }
-            if (sscanf(argv[cmdlnIndex + 1], "%d\n", &options.reviewDuration) != 1 || options.reviewDuration <= 0)
+            if (sscanf(argv[cmdlnIndex + 1], "%d", &options.reviewDuration) != 1 || options.reviewDuration <= 0)
             {
                 usage(argv[0]);
                 fprintf(stderr, "Invalid argument for %s\n", argv[cmdlnIndex]);
@@ -1858,8 +1857,8 @@ int main(int argc, const char **argv)
                 fprintf(stderr, "Only %d mark selection masks supported\n", MAX_PB_MARK_SELECTIONS);
                 return 1;
             }
-            if (sscanf(argv[cmdlnIndex + 1], "0x%x\n", &options.pbMarkMask[numMarkSelections]) != 1 &&
-                sscanf(argv[cmdlnIndex + 1], "%d\n", &options.pbMarkMask[numMarkSelections]) != 1)
+            if (sscanf(argv[cmdlnIndex + 1], "0x%x", &options.pbMarkMask[numMarkSelections]) != 1 &&
+                sscanf(argv[cmdlnIndex + 1], "%u", &options.pbMarkMask[numMarkSelections]) != 1)
             {
                 usage(argv[0]);
                 fprintf(stderr, "Invalid argument for %s\n", argv[cmdlnIndex]);
@@ -1877,7 +1876,7 @@ int main(int argc, const char **argv)
                 fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
                 return 1;
             }
-            if (sscanf(argv[cmdlnIndex + 1], "%d\n", &options.qcHTTPPort) != 1 || options.qcHTTPPort < 0)
+            if (sscanf(argv[cmdlnIndex + 1], "%d", &options.qcHTTPPort) != 1 || options.qcHTTPPort < 0)
             {
                 usage(argv[0]);
                 fprintf(stderr, "Invalid argument for %s\n", argv[cmdlnIndex]);

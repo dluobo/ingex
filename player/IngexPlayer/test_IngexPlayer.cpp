@@ -1,5 +1,5 @@
 /*
- * $Id: test_IngexPlayer.cpp,v 1.13 2010/03/29 16:54:14 philipn Exp $
+ * $Id: test_IngexPlayer.cpp,v 1.14 2010/06/02 11:12:13 philipn Exp $
  *
  * Copyright (C) 2008-2010 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
@@ -132,6 +132,10 @@ public:
         printf("Mouse clicked (x,y)=(%d,%d), (w,h)=(%d,%d)\n", xPos, yPos, imageWidth, imageHeight);
     }
 
+    virtual void sourceNameChangeEvent(int sourceIndex, const char* name)
+    {
+        printf("Source name change: index=%d, name=%s\n", sourceIndex, name ? name : "<null>");
+    }
 
 private:
     LocalIngexPlayer* _player;

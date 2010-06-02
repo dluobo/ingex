@@ -1,5 +1,5 @@
 /*
- * $Id: x11_common.h,v 1.8 2009/09/18 16:16:25 philipn Exp $
+ * $Id: x11_common.h,v 1.9 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -36,11 +36,6 @@
 #include "mouse_input_connect.h"
 
 
-
-#ifdef __cplusplus
-extern "C"
-{
-#endif
 
 
 typedef struct
@@ -144,10 +139,6 @@ void x11c_update_window(X11WindowInfo* windowInfo, int displayWidth, int display
 void x11c_hide_window(X11WindowInfo* windowInfo);
 void x11c_close_window(X11WindowInfo* windowInfo);
 
-
-#ifdef __cplusplus
-}
-#endif
 
 
 #endif

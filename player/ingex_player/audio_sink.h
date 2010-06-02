@@ -1,5 +1,5 @@
 /*
- * $Id: audio_sink.h,v 1.3 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: audio_sink.h,v 1.4 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -25,11 +25,6 @@
 #define __AUDIO_SINK_H__
 
 
-#ifdef __cplusplus
-extern "C"
-{
-#endif
-
 
 #include "media_sink.h"
 
@@ -39,10 +34,6 @@ typedef struct AudioSink AudioSink;
 int aus_create_audio_sink(MediaSink* targetSink, int audioDevice, AudioSink** sink);
 MediaSink* aus_get_media_sink(AudioSink* sink);
 
-
-#ifdef __cplusplus
-}
-#endif
 
 
 #endif

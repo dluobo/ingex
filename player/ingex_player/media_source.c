@@ -1,5 +1,5 @@
 /*
- * $Id: media_source.c,v 1.6 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: media_source.c,v 1.7 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -279,6 +279,17 @@ void msc_set_clip_id(MediaSource* source, const char* id)
     }
 }
 
+int msc_get_id(MediaSource* source, int* sourceId)
+{
+    const StreamInfo* streamInfo;
+    if (msc_get_num_streams(source) <= 0 || !msc_get_stream_info(source, 0, &streamInfo))
+    {
+        return 0;
+    }
+    
+    *sourceId = streamInfo->sourceId;
+    return 1;
+}
 
 int msc_create_id()
 {

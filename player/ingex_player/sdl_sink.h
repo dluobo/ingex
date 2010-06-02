@@ -1,5 +1,5 @@
 /*
- * $Id: sdl_sink.h,v 1.3 2009/01/29 07:10:27 stuart_hc Exp $
+ * $Id: sdl_sink.h,v 1.4 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -26,11 +26,6 @@
 
 
 
-#ifdef __cplusplus
-extern "C"
-{
-#endif
-
 
 #include "media_sink.h"
 #include "x11_common.h"
@@ -48,10 +43,6 @@ void sdls_register_window_listener(SDLSink* sink, X11WindowListener* listener);
 void sdls_unregister_window_listener(SDLSink* sink, X11WindowListener* listener);
 
 
-
-#ifdef __cplusplus
-}
-#endif
 
 
 #endif

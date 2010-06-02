@@ -1,5 +1,5 @@
 /*
- * $Id: keyboard_input_connect.c,v 1.11 2010/01/12 16:32:25 john_f Exp $
+ * $Id: keyboard_input_connect.c,v 1.12 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -324,7 +324,7 @@ static void default_key_pressed(void* data, int key, int modifier)
             mc_set_half_split_orientation(connect->control, -1 /* toggle */);
             break;
         case 'd':
-            mc_set_half_split_type(connect->control, -1 /* toggle */);
+            mc_set_half_split_type(connect->control, TOGGLE_SPLIT_TYPE);
             break;
         case 'f':
             mc_show_half_split(connect->control, -1 /* toggle */);
@@ -612,7 +612,7 @@ static void qc_key_pressed(void* data, int key, int modifier)
                 mc_set_half_split_orientation(connect->control, -1 /* toggle */);
                 break;
             case 'd':
-                mc_set_half_split_type(connect->control, -1 /* toggle */);
+                mc_set_half_split_type(connect->control, TOGGLE_SPLIT_TYPE);
                 break;
             case 'f':
                 mc_show_half_split(connect->control, -1 /* toggle */);

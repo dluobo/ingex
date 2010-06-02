@@ -1,5 +1,5 @@
 /*
- * $Id: media_source.h,v 1.6 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: media_source.h,v 1.7 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -24,11 +24,6 @@
 #ifndef __MEDIA_SOURCE_H__
 #define __MEDIA_SOURCE_H__
 
-
-#ifdef __cplusplus
-extern "C"
-{
-#endif
 
 
 #include "frame_info.h"
@@ -148,6 +143,7 @@ int msc_get_buffer_state(MediaSource* source, int* numBuffers, int* numBuffersFi
 int64_t msc_convert_position(MediaSource* source, int64_t position, MediaSource* childSource);
 void msc_set_source_name(MediaSource* source, const char* name);
 void msc_set_clip_id(MediaSource* source, const char* id);
+int msc_get_id(MediaSource* source, int* sourceId);
 
 
 /* create a new unique id for the source */
@@ -173,10 +169,6 @@ void msc_init_stream_map(MediaSourceStreamMap* map);
 int msc_add_stream_to_map(MediaSourceStreamMap* map, int streamId, int sourceId);
 int msc_get_source_id(MediaSourceStreamMap* map, int streamId, int* sourceId);
 
-
-#ifdef __cplusplus
-}
-#endif
 
 
 #endif

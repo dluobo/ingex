@@ -1,5 +1,5 @@
 /*
- * $Id: on_screen_display.h,v 1.7 2010/02/12 14:00:06 philipn Exp $
+ * $Id: on_screen_display.h,v 1.8 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -24,11 +24,6 @@
 #ifndef __ON_SCREEN_DISPLAY__
 #define __ON_SCREEN_DISPLAY__
 
-
-#ifdef __cplusplus
-extern "C"
-{
-#endif
 
 
 #include "frame_info.h"
@@ -328,10 +323,6 @@ void osds_sink_reset(OnScreenDisplayState* state);
 void osds_reset_screen_state(OnScreenDisplayState* state);
 
 
-
-#ifdef __cplusplus
-}
-#endif
 
 
 #endif

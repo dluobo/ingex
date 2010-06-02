@@ -1,5 +1,5 @@
 /*
- * $Id: mouse_input_connect.h,v 1.3 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: mouse_input_connect.h,v 1.4 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -26,11 +26,6 @@
 
 
 
-#ifdef __cplusplus
-extern "C"
-{
-#endif
-
 
 #include "media_control.h"
 #include "video_switch_sink.h"
@@ -45,10 +40,6 @@ int mic_create_mouse_connect(MediaControl* control, VideoSwitchSink* videoSwitch
 void mic_free_mouse_connect(MouseConnect** connect);
 
 
-
-#ifdef __cplusplus
-}
-#endif
 
 
 

@@ -1,5 +1,5 @@
 /*
- * $Id: udp_source.c,v 1.6 2009/09/18 16:16:24 philipn Exp $
+ * $Id: udp_source.c,v 1.7 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -473,8 +473,8 @@ int udp_open(const char *address, MediaSource** source)
 
     /* FIXME: can this be done later? */
     /* allocate video and audio buffers for this source */
-    newSource->video = malloc(header.width * header.height * 3/2);
-    newSource->audio = malloc(header.audio_size);
+    newSource->video = (uint8_t *)malloc(header.width * header.height * 3/2);
+    newSource->audio = (uint8_t *)malloc(header.audio_size);
 
 
     // setup media source

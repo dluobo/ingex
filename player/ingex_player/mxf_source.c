@@ -1,5 +1,5 @@
 /*
- * $Id: mxf_source.c,v 1.13 2010/02/12 14:00:06 philipn Exp $
+ * $Id: mxf_source.c,v 1.14 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -79,11 +79,6 @@ struct MXFFileSource
 
     MediaSource mediaSource;
     
-    VTRErrorSource vtrErrorSource;
-    VTRErrorLevel vtrErrorLevel;
-    VTRErrorAtPos* vtrErrors;
-    long numVTRErrors;
-    
     MXFDataModel* dataModel;
     MXFReader* mxfReader;
     MXFReaderListener mxfListener;
@@ -93,6 +88,7 @@ struct MXFFileSource
     int numTimecodeTracks;
     int eof;
     int isArchiveMXF;
+    int isMetadataOnly;
 
     struct timeval lastPostCompleteTry;
     int postCompleteTryCount;
@@ -106,7 +102,7 @@ static void mxf_log_connect(MXFLogLevel level, const char* format, ...)
     va_list p_arg;
 
     va_start(p_arg, format);
-    ml_vlog(level, 0, format, p_arg);
+    ml_vlog((LogLevel)level, 0, format, p_arg);
     va_end(p_arg);
 }
 
@@ -209,38 +205,6 @@ static int deinterleave_audio(uint8_t* input, uint32_t inputSize, int numChannel
 
     return 1;
 }
-
-
-static void mark_vtr_errors(MXFFileSource* source, MediaSource* rootSource, MediaControl* mediaControl)
-{
-    long i;
-    int64_t convertedPosition;
-    long numMarked = 0;
-    uint8_t audioErrorCode, videoErrorCode;
-    
-    if (source->vtrErrorLevel == VTR_NO_ERROR_LEVEL)
-    {
-        ml_log_info("Not marking VTR errors for level == %d\n", source->vtrErrorLevel);
-        return;
-    }
-    
-    for (i = 0; i < source->numVTRErrors; i++)
-    {
-        audioErrorCode = source->vtrErrors[i].errorCode & 0x0f;
-        videoErrorCode = (source->vtrErrors[i].errorCode & 0xf0) >> 4;
-        
-        if (audioErrorCode >= (uint8_t)source->vtrErrorLevel ||
-            videoErrorCode >= (uint8_t)source->vtrErrorLevel)
-        {
-            convertedPosition = msc_convert_position(rootSource, source->vtrErrors[i].position, &source->mediaSource);
-            mc_mark_vtr_error(mediaControl, convertedPosition, 0, source->vtrErrors[i].errorCode);
-            numMarked++;
-        }
-    }
-
-    ml_log_info("Marked %ld of %ld VTR errors at level >= %d\n", numMarked, source->numVTRErrors, source->vtrErrorLevel);
-}
-
 
 static int create_output_streams(InputTrackData* trackData, int numOutputStreams, const StreamInfo* commonStreamInfo, int* nextOutputStreamId)
 {
@@ -789,6 +753,7 @@ static int mxfs_is_complete(void* data)
 
     /* only archive MXF files with option to mark PSE failures, VTR errors or digibeta dropouts require post complete step */
     if (!source->isArchiveMXF ||
+        source->isMetadataOnly ||
         (!source->markPSEFailures && !source->markVTRErrors && !source->markDigiBetaDropouts))
     {
         return 1;
@@ -825,9 +790,10 @@ static int mxfs_post_complete(void* data, MediaSource* rootSource, MediaControl*
     }
 
 
-    if (have_footer_metadata(source->mxfReader))
+    if (source->isMetadataOnly || have_footer_metadata(source->mxfReader))
     {
-        /* the archive MXF file is complete and the header metadata in the footer was already read by the MXF reader */
+        /* either the file is metadata only or 
+           the archive MXF file is complete and the header metadata in the footer was already read by the MXF reader */
         headerMetadata = get_header_metadata(source->mxfReader);
         source->donePostComplete = 1;
     }
@@ -885,7 +851,8 @@ static int mxfs_post_complete(void* data, MediaSource* rootSource, MediaControl*
             long numFailures = 0;
             long i;
 
-            if (archive_mxf_get_pse_failures(headerMetadata, &failures, &numFailures))
+            if (archive_mxf_get_pse_failures(headerMetadata, &failures, &numFailures) &&
+                numFailures > 0)
             {
                 ml_log_info("Marking %ld PSE failures\n", numFailures);
                 for (i = 0; i < numFailures; i++)
@@ -900,9 +867,21 @@ static int mxfs_post_complete(void* data, MediaSource* rootSource, MediaControl*
 
         if (source->markVTRErrors)
         {
-            if (archive_mxf_get_vtr_errors(headerMetadata, &source->vtrErrors, &source->numVTRErrors))
+            VTRErrorAtPos* errors = NULL;
+            long numErrors = 0;
+            long i;
+
+            if (archive_mxf_get_vtr_errors(headerMetadata, &errors, &numErrors) &&
+                numErrors > 0)
             {
-                mark_vtr_errors(source, rootSource, mediaControl);
+                ml_log_info("Marking %ld VTR errors\n", numErrors);
+                for (i = 0; i < numErrors; i++)
+                {
+                    convertedPosition = msc_convert_position(rootSource, errors[i].position, &source->mediaSource);
+                    mc_mark_vtr_error_position(mediaControl, convertedPosition, VTR_ERROR_MARK_TYPE, errors[i].errorCode);
+                }
+
+                SAFE_FREE(&errors);
             }
         }
 
@@ -912,7 +891,8 @@ static int mxfs_post_complete(void* data, MediaSource* rootSource, MediaControl*
             long numDigiBetaDropouts = 0;
             long i;
 
-            if (archive_mxf_get_digibeta_dropouts(headerMetadata, &digiBetaDropouts, &numDigiBetaDropouts))
+            if (archive_mxf_get_digibeta_dropouts(headerMetadata, &digiBetaDropouts, &numDigiBetaDropouts) &&
+                numDigiBetaDropouts > 0)
             {
                 ml_log_info("Marking %ld digibeta dropouts\n", numDigiBetaDropouts);
                 for (i = 0; i < numDigiBetaDropouts; i++)
@@ -1000,33 +980,7 @@ static void mxfs_close(void* data)
     mxf_free_data_model(&source->dataModel);
     SAFE_FREE(&source->filename);
     
-    SAFE_FREE(&source->vtrErrors);
-    source->numVTRErrors = 0;
-
     SAFE_FREE(&source);
-}
-
-
-void mxfs_set_vtr_error_level(void* data, VTRErrorLevel level)
-{
-    MXFFileSource* source = (MXFFileSource*)data;
-
-    source->vtrErrorLevel = level;
-}
-
-void mxfs_mark_vtr_errors(void* data, MediaSource* rootSource, MediaControl* mediaControl)
-{
-    MXFFileSource* source = (MXFFileSource*)data;
-
-    if (!source->markVTRErrors || !source->isArchiveMXF)
-    {
-        return;
-    }
-    
-    if (source->numVTRErrors > 0)
-    {
-        mark_vtr_errors(source, rootSource, mediaControl);
-    }
 }
 
 
@@ -1054,6 +1008,7 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
     int numTracks;
     int isPAL;
     mxfRational mxfFrameRate;
+    int isIMX = 0;
 
     CHK_ORET(initialise_stream_info(&commonStreamInfo));
 
@@ -1126,6 +1081,8 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
             ml_log_warn("Failed to read archive MXF information\n");
         }
     }
+    
+    newSource->isMetadataOnly = is_metadata_only(newSource->mxfReader);
 
     duration = get_duration(newSource->mxfReader);
 
@@ -1152,22 +1109,26 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
     newSource->mediaSource.close = mxfs_close;
     newSource->mediaSource.data = newSource;
     
-    newSource->vtrErrorSource.set_vtr_error_level = mxfs_set_vtr_error_level;
-    newSource->vtrErrorSource.mark_vtr_errors = mxfs_mark_vtr_errors;
-    newSource->vtrErrorSource.data = newSource;
-
     newSource->mxfListener.accept_frame = map_accept_frame;
     newSource->mxfListener.allocate_buffer = map_allocate_buffer;
     newSource->mxfListener.deallocate_buffer = map_deallocate_buffer;
     newSource->mxfListener.receive_frame = map_receive_frame;
 
 
-    numTracks = get_num_tracks(newSource->mxfReader);
-    numSourceTimecodes = get_num_source_timecodes(newSource->mxfReader);
-    newSource->numTimecodeTracks = 1 + numSourceTimecodes;
-    newSource->numInputTracks = numTracks + newSource->numTimecodeTracks;
+    if (newSource->isMetadataOnly)
+    {
+        numTracks = 0;
+        numSourceTimecodes = 0;
+    }
+    else
+    {
+        numTracks = get_num_tracks(newSource->mxfReader);
+        numSourceTimecodes = get_num_source_timecodes(newSource->mxfReader);
+        newSource->numTimecodeTracks = 1 + numSourceTimecodes;
+        newSource->numInputTracks = numTracks + newSource->numTimecodeTracks;
 
-    CALLOC_OFAIL(newSource->trackData, InputTrackData, newSource->numInputTracks);
+        CALLOC_OFAIL(newSource->trackData, InputTrackData, newSource->numInputTracks);
+    }
 
 
     /* create the common source information */
@@ -1302,21 +1263,25 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
                 outputStream->streamInfo.format = DV50_FORMAT;
             }
             else if (mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(D10_50_625_50_defined_template)) ||
-                mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(D10_50_625_50_extended_template)) ||
-                mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(D10_50_625_50_picture_only)) ||
                 mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(D10_40_625_50_defined_template)) ||
+                mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(D10_30_625_50_defined_template)) ||
+                mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(D10_50_525_60_defined_template)) ||
+                mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(D10_40_525_60_defined_template)) ||
+                mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(D10_30_525_60_defined_template)))
+            {
+                isIMX = 1;
+                outputStream->streamInfo.format = D10_PICTURE_FORMAT;
+            }
+            else if (mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(D10_50_625_50_extended_template)) ||
+                mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(D10_50_625_50_picture_only)) ||
                 mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(D10_40_625_50_extended_template)) ||
                 mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(D10_40_625_50_picture_only)) ||
-                mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(D10_30_625_50_defined_template)) ||
                 mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(D10_30_625_50_extended_template)) ||
                 mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(D10_30_625_50_picture_only)) ||
-                mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(D10_50_525_60_defined_template)) ||
                 mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(D10_50_525_60_extended_template)) ||
                 mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(D10_50_525_60_picture_only)) ||
-                mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(D10_40_525_60_defined_template)) ||
                 mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(D10_40_525_60_extended_template)) ||
                 mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(D10_40_525_60_picture_only)) ||
-                mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(D10_30_525_60_defined_template)) ||
                 mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(D10_30_525_60_extended_template)) ||
                 mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(D10_30_525_60_picture_only)) ||
                 mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(AvidIMX50_625_50)) ||
@@ -1353,31 +1318,37 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
         }
         else /* audio */
         {
-            CHK_OFAIL(create_output_streams(&newSource->trackData[i], track->audio.channelCount, &commonStreamInfo, &nextOutputStreamId));
-
-            /* TODO: don't assume PCM */
-            for (j = 0; j < (int)track->audio.channelCount; j++)
+            if (track->audio.channelCount > 0)
             {
-                outputStream = &newSource->trackData[i].streamData[j];
-
-                outputStream->streamInfo.type = SOUND_STREAM_TYPE;
-                outputStream->streamInfo.format = PCM_FORMAT;
-                outputStream->streamInfo.samplingRate.num = track->audio.samplingRate.numerator;
-                outputStream->streamInfo.samplingRate.den = track->audio.samplingRate.denominator;
-                outputStream->streamInfo.numChannels = 1;
-                outputStream->streamInfo.bitsPerSample = track->audio.bitsPerSample;
+                CHK_OFAIL(create_output_streams(&newSource->trackData[i], track->audio.channelCount, &commonStreamInfo, &nextOutputStreamId));
+    
+                /* TODO: don't assume PCM */
+                for (j = 0; j < (int)track->audio.channelCount; j++)
+                {
+                    outputStream = &newSource->trackData[i].streamData[j];
+    
+                    outputStream->streamInfo.type = SOUND_STREAM_TYPE;
+                    outputStream->streamInfo.format = PCM_FORMAT;
+                    outputStream->streamInfo.samplingRate.num = track->audio.samplingRate.numerator;
+                    outputStream->streamInfo.samplingRate.den = track->audio.samplingRate.denominator;
+                    outputStream->streamInfo.numChannels = 1;
+                    outputStream->streamInfo.bitsPerSample = track->audio.bitsPerSample;
+                }
             }
         }
     }
 
-    /* control/playout timecode streams */
-    CHK_OFAIL(create_output_streams(&newSource->trackData[numTracks], 1, &commonStreamInfo, &nextOutputStreamId));
-    outputStream = &newSource->trackData[numTracks].streamData[0];
-
-    outputStream->streamInfo.type = TIMECODE_STREAM_TYPE;
-    outputStream->streamInfo.format = TIMECODE_FORMAT;
-    outputStream->streamInfo.timecodeType = CONTROL_TIMECODE_TYPE;
-    outputStream->streamInfo.timecodeSubType = NO_TIMECODE_SUBTYPE;
+    if (!newSource->isMetadataOnly)
+    {
+        /* control/playout timecode streams */
+        CHK_OFAIL(create_output_streams(&newSource->trackData[numTracks], 1, &commonStreamInfo, &nextOutputStreamId));
+        outputStream = &newSource->trackData[numTracks].streamData[0];
+    
+        outputStream->streamInfo.type = TIMECODE_STREAM_TYPE;
+        outputStream->streamInfo.format = TIMECODE_FORMAT;
+        outputStream->streamInfo.timecodeType = CONTROL_TIMECODE_TYPE;
+        outputStream->streamInfo.timecodeSubType = NO_TIMECODE_SUBTYPE;
+    }
 
 
     /* source timecodes */
@@ -1393,36 +1364,59 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
         outputStream->streamInfo.timecodeType = SOURCE_TIMECODE_TYPE;
         if (newSource->isArchiveMXF)
         {
-            /* we are only interested in the VITC and LTC source timecodes */
-            if (timecodeType == SYSTEM_ITEM_TC_ARRAY_TIMECODE)
+            if (isIMX)
             {
-                if (!haveArchiveVITC)
+                if (timecodeType == SYSTEM_ITEM_SDTI_USER_TIMECODE)
                 {
-                    outputStream->streamInfo.timecodeSubType = VITC_SOURCE_TIMECODE_SUBTYPE;
-                    haveArchiveVITC = 1;
-                }
-                else if (!haveArchiveLTC)
-                {
+                    /* this is LTC */
                     outputStream->streamInfo.timecodeSubType = LTC_SOURCE_TIMECODE_SUBTYPE;
                     haveArchiveLTC = 1;
                 }
+                else if (timecodeType == FILE_SOURCE_PACKAGE_TIMECODE)
+                {
+                    /* this is the primary source timecode */
+                    outputStream->streamInfo.timecodeSubType = NO_TIMECODE_SUBTYPE;
+                }
                 else
                 {
-                    /* this is unexpected because a archive MXF file should only have a VITC and LTC timecode */
-                    ml_log_warn("Found more than 2 system item timecodes for archive MXF file\n");
-
                     outputStream->streamInfo.timecodeSubType = NO_TIMECODE_SUBTYPE;
-
+    
                     /* we disable it because it doesn't apply for archive MXF files */
                     outputStream->isDisabled = 1;
                 }
             }
             else
             {
-                outputStream->streamInfo.timecodeSubType = NO_TIMECODE_SUBTYPE;
-
-                /* we disable it because it doesn't apply for archive MXF files */
-                outputStream->isDisabled = 1;
+                if (timecodeType == SYSTEM_ITEM_TC_ARRAY_TIMECODE)
+                {
+                    if (!haveArchiveVITC)
+                    {
+                        outputStream->streamInfo.timecodeSubType = VITC_SOURCE_TIMECODE_SUBTYPE;
+                        haveArchiveVITC = 1;
+                    }
+                    else if (!haveArchiveLTC)
+                    {
+                        outputStream->streamInfo.timecodeSubType = LTC_SOURCE_TIMECODE_SUBTYPE;
+                        haveArchiveLTC = 1;
+                    }
+                    else
+                    {
+                        /* this is unexpected because a archive MXF file should only have a VITC and LTC timecode */
+                        ml_log_warn("Found more than 2 system item timecodes for archive MXF file\n");
+    
+                        outputStream->streamInfo.timecodeSubType = NO_TIMECODE_SUBTYPE;
+    
+                        /* we disable it because it doesn't apply for archive MXF files */
+                        outputStream->isDisabled = 1;
+                    }
+                }
+                else
+                {
+                    outputStream->streamInfo.timecodeSubType = NO_TIMECODE_SUBTYPE;
+    
+                    /* we disable it because it doesn't apply for archive MXF files */
+                    outputStream->isDisabled = 1;
+                }
             }
         }
         else
@@ -1450,10 +1444,5 @@ fail:
 MediaSource* mxfs_get_media_source(MXFFileSource* source)
 {
     return &source->mediaSource;
-}
-
-VTRErrorSource* mxfs_get_vtr_error_source(MXFFileSource* source)
-{
-    return &source->vtrErrorSource;
 }
 

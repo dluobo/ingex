@@ -1,5 +1,5 @@
 /*
- * $Id: clapper_source.h,v 1.3 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: clapper_source.h,v 1.4 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -26,11 +26,6 @@
 
 
 
-#ifdef __cplusplus
-extern "C"
-{
-#endif
-
 
 #include "media_source.h"
 
@@ -41,10 +36,6 @@ int clp_create(const StreamInfo* videoStreamInfo, const StreamInfo* audioStreamI
     int64_t length, MediaSource** source);
 
 
-
-#ifdef __cplusplus
-}
-#endif
 
 
 

@@ -1,5 +1,5 @@
 /*
- * $Id: raw_dv_source.h,v 1.3 2009/01/29 07:10:27 stuart_hc Exp $
+ * $Id: raw_dv_source.h,v 1.4 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -25,11 +25,6 @@
 #define __RAW_DV_SOURCE_H__
 
 
-#ifdef __cplusplus
-extern "C"
-{
-#endif
-
 
 #include "media_source.h"
 
@@ -39,10 +34,6 @@ extern "C"
 int rds_open(const char* filename, MediaSource** source);
 
 
-
-#ifdef __cplusplus
-}
-#endif
 
 
 #endif

@@ -1,5 +1,5 @@
 /*
- * $Id: video_conversion.h,v 1.5 2009/01/29 07:10:27 stuart_hc Exp $
+ * $Id: video_conversion.h,v 1.6 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -25,17 +25,20 @@
 #define __VIDEO_CONVERSION_H__
 
 
-#ifdef __cplusplus
-extern "C"
-{
-#endif
-
 #if defined(HAVE_FFMPEG)
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #ifdef FFMPEG_OLD_INCLUDE_PATHS
 #include <ffmpeg/avcodec.h>
 #else
 #include <libavcodec/avcodec.h>
+#endif
+
+#ifdef __cplusplus
+}
 #endif
 
 #endif
@@ -62,10 +65,6 @@ void yuv444_to_uyvy(int width, int height, uint8_t *input, uint8_t *output);
 void yuv422_to_uyvy_2(int width, int height, int shift_picture_up, uint8_t *input, uint8_t *output);
 
 void fill_black(StreamFormat format, int width, int height, unsigned char* image);
-
-#ifdef __cplusplus
-}
-#endif
 
 
 #endif

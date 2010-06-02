@@ -1,5 +1,5 @@
 /*
- * $Id: mxf_source.h,v 1.4 2010/01/12 16:32:29 john_f Exp $
+ * $Id: mxf_source.h,v 1.5 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -26,15 +26,9 @@
 
 
 
-#ifdef __cplusplus
-extern "C"
-{
-#endif
-
 
 #include "media_source.h"
 #include "archive_types.h"
-#include "vtr_error_source.h"
 
 
 typedef struct MXFFileSource MXFFileSource;
@@ -45,12 +39,7 @@ typedef struct MXFFileSource MXFFileSource;
 int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailure, int markVTRErrors, int markDigiBetaDropouts,
     MXFFileSource** source);
 MediaSource* mxfs_get_media_source(MXFFileSource* source);
-VTRErrorSource* mxfs_get_vtr_error_source(MXFFileSource* source);
 
-
-#ifdef __cplusplus
-}
-#endif
 
 
 #endif

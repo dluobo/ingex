@@ -1,5 +1,5 @@
 /*
- * $Id: media_control.c,v 1.10 2010/02/12 14:00:06 philipn Exp $
+ * $Id: media_control.c,v 1.11 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -139,7 +139,15 @@ void mc_mark_position(MediaControl* control, int64_t position, int type, int tog
     }
 }
 
-void mc_clear_mark(MediaControl* control, int typeMask)
+void mc_mark_vtr_error_position(MediaControl* control, int64_t position, int toggle, uint8_t errorCode)
+{
+    if (control && control->mark_vtr_error_position)
+    {
+        control->mark_vtr_error_position(control->data, position, toggle, errorCode);
+    }
+}
+
+void mc_clear_mark(MediaControl* control, unsigned int typeMask)
 {
     if (control && control->clear_mark)
     {
@@ -147,7 +155,7 @@ void mc_clear_mark(MediaControl* control, int typeMask)
     }
 }
 
-void mc_clear_mark_position(MediaControl* control, int64_t position, int typeMask)
+void mc_clear_mark_position(MediaControl* control, int64_t position, unsigned int typeMask)
 {
     if (control && control->clear_mark_position)
     {
@@ -211,19 +219,27 @@ void mc_next_vtr_error_level(MediaControl* control)
     }
 }
 
-void mc_mark_vtr_error(MediaControl* control, int64_t position, int toggle, uint8_t errorCode)
-{
-    if (control && control->mark_vtr_error)
-    {
-        control->mark_vtr_error(control->data, position, toggle, errorCode);
-    }
-}
-
 void mc_show_vtr_error_level(MediaControl* control, int enable)
 {
     if (control && control->show_vtr_error_level)
     {
         control->show_vtr_error_level(control->data, enable);
+    }
+}
+
+void mc_set_mark_filter(MediaControl* control, int selection, unsigned int typeMask)
+{
+    if (control && control->set_mark_filter)
+    {
+        control->set_mark_filter(control->data, selection, typeMask);
+    }
+}
+
+void mc_next_show_marks(MediaControl* control, int selection)
+{
+    if (control && control->next_show_marks)
+    {
+        control->next_show_marks(control->data, selection);
     }
 }
 
@@ -347,7 +363,7 @@ void mc_set_half_split_orientation(MediaControl* control, int vertical)
     }
 }
 
-void mc_set_half_split_type(MediaControl* control, int type)
+void mc_set_half_split_type(MediaControl* control, HalfSplitType type)
 {
     if (control && control->set_half_split_type)
     {

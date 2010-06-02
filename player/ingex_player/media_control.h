@@ -1,5 +1,5 @@
 /*
- * $Id: media_control.h,v 1.10 2010/02/12 14:00:06 philipn Exp $
+ * $Id: media_control.h,v 1.11 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -26,12 +26,8 @@
 
 
 
-#ifdef __cplusplus
-extern "C"
-{
-#endif
-
 #include "on_screen_display.h"
+#include "half_split_sink.h"
 
 typedef enum
 {
@@ -85,8 +81,9 @@ typedef struct
 
     void (*mark)(void* data, int type, int toggle);
     void (*mark_position)(void* data, int64_t position, int type, int toggle);
-    void (*clear_mark)(void* data, int typeMask /* ALL_MARK_TYPE will clear all mark types */);
-    void (*clear_mark_position)(void* data, int64_t position, int typeMask /* ALL_MARK_TYPE will clear all mark types */);
+    void (*mark_vtr_error_position)(void* data, int64_t position, int toggle, uint8_t errorCode);
+    void (*clear_mark)(void* data, unsigned int typeMask /* ALL_MARK_TYPE will clear all mark types */);
+    void (*clear_mark_position)(void* data, int64_t position, unsigned int typeMask /* ALL_MARK_TYPE will clear all mark types */);
     void (*clear_all_marks)(void* data, int typeMask /* ALL_MARK_TYPE will clear all mark types */);
     void (*seek_next_mark)(void* data);
     void (*seek_prev_mark)(void* data);
@@ -94,8 +91,9 @@ typedef struct
     void (*next_active_mark_selection)(void* data);
     void (*set_vtr_error_level)(void* data, VTRErrorLevel level);
     void (*next_vtr_error_level)(void* data);
-    void (*mark_vtr_error)(void* data, int64_t position, int toggle, uint8_t errorCode);
     void (*show_vtr_error_level)(void* data, int enable);
+    void (*set_mark_filter)(void *data, int selection, unsigned int typeMask);
+    void (*next_show_marks)(void *data, int selection);
 
 
     /* on screen display */
@@ -127,7 +125,7 @@ typedef struct
     /* functions for sinks supporting half-split */
 
     void (*set_half_split_orientation)(void* data, int vertical /* -1 == toggle */);
-    void (*set_half_split_type)(void* data, int type /* -1 == toggle, else see HalfSplitType enum */);
+    void (*set_half_split_type)(void* data, HalfSplitType type /* -1 == toggle, else see HalfSplitType enum */);
     void (*show_half_split)(void* data, int showSplitDivide /* -1 == toggle */);
     void (*move_half_split)(void* data, int rightOrDown, int speed /* 0...5 */);
 
@@ -170,8 +168,9 @@ void mc_mute_audio(MediaControl* control, int mute);
 
 void mc_mark(MediaControl* control, int type, int toggle);
 void mc_mark_position(MediaControl* control, int64_t position, int type, int toggle);
-void mc_clear_mark(MediaControl* control, int typeMask);
-void mc_clear_mark_position(MediaControl* control, int64_t position, int typeMask);
+void mc_mark_vtr_error_position(MediaControl* control, int64_t position, int toggle, uint8_t errorCode);
+void mc_clear_mark(MediaControl* control, unsigned int typeMask);
+void mc_clear_mark_position(MediaControl* control, int64_t position, unsigned int typeMask);
 void mc_clear_all_marks(MediaControl* control, int typeMask);
 void mc_seek_next_mark(MediaControl* control);
 void mc_seek_prev_mark(MediaControl* control);
@@ -179,8 +178,9 @@ void mc_seek_clip_mark(MediaControl* control);
 void mc_next_active_mark_selection(MediaControl* control);
 void mc_set_vtr_error_level(MediaControl* control, VTRErrorLevel level);
 void mc_next_vtr_error_level(MediaControl* control);
-void mc_mark_vtr_error(MediaControl* control, int64_t position, int toggle, uint8_t errorCode);
 void mc_show_vtr_error_level(MediaControl* control, int enable);
+void mc_set_mark_filter(MediaControl* control, int selection, unsigned int typeMask);
+void mc_next_show_marks(MediaControl* control, int selection);
 
 void mc_set_osd_screen(MediaControl* control, OSDScreen screen);
 void mc_next_osd_screen(MediaControl* control);
@@ -200,7 +200,7 @@ void mc_switch_audio_group(MediaControl* control, int index);
 void mc_snap_audio_to_video(MediaControl* control);
 
 void mc_set_half_split_orientation(MediaControl* sink, int vertical);
-void mc_set_half_split_type(MediaControl* sink, int type);
+void mc_set_half_split_type(MediaControl* sink, HalfSplitType type);
 void mc_show_half_split(MediaControl* sink, int showSplitDivide);
 void mc_move_half_split(MediaControl* sink, int rightOrDown, int speed);
 
@@ -215,10 +215,6 @@ void mc_select_menu_item_right(MediaControl* control);
 void mc_select_menu_item_center(MediaControl* control);
 void mc_select_menu_item_extra(MediaControl* control);
 
-
-#ifdef __cplusplus
-}
-#endif
 
 
 #endif

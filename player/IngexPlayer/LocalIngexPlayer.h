@@ -1,5 +1,5 @@
 /*
- * $Id: LocalIngexPlayer.h,v 1.16 2010/03/29 16:54:14 philipn Exp $
+ * $Id: LocalIngexPlayer.h,v 1.17 2010/06/02 11:12:13 philipn Exp $
  *
  * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
@@ -37,6 +37,8 @@ namespace prodauto
 
 
 class LocalIngexPlayerState;
+
+class LocalIngexPlayerListenerData;
 
 
 typedef enum
@@ -271,6 +273,15 @@ private:
     MouseInputListener _x11MouseListener;
 
     StreamInfo _videoStreamInfo;
+
+public:
+    // for listener callbacks
+    void updateListenerData(LocalIngexPlayerListenerData* listenerData);
+    IngexPlayerListenerRegistry* _listenerRegistry;
+    
+private:
+    int _sourceIdToIndexVersion;
+    std::map<int, int> _sourceIdToIndex;
 };
 
 

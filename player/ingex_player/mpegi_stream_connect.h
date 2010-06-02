@@ -1,5 +1,5 @@
 /*
- * $Id: mpegi_stream_connect.h,v 1.3 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: mpegi_stream_connect.h,v 1.4 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -25,11 +25,6 @@
 #define __MPEGI_STREAM_CONNECT_H__
 
 
-#ifdef __cplusplus
-extern "C"
-{
-#endif
-
 
 #include "stream_connect.h"
 
@@ -47,10 +42,6 @@ int create_mpegi_connect(MediaSink* sink, int sinkStreamId, int sourceStreamId,
 int init_mpegi_decoder_resources();
 void free_mpegi_decoder_resources();
 
-
-#ifdef __cplusplus
-}
-#endif
 
 
 #endif

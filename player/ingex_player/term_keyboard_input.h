@@ -1,5 +1,5 @@
 /*
- * $Id: term_keyboard_input.h,v 1.3 2009/01/29 07:10:27 stuart_hc Exp $
+ * $Id: term_keyboard_input.h,v 1.4 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -25,11 +25,6 @@
 #define __TERM_KEYBOARD_INPUT_H__
 
 
-#ifdef __cplusplus
-extern "C"
-{
-#endif
-
 
 #include "keyboard_input.h"
 
@@ -45,10 +40,6 @@ void tki_stop_term_keyboard(void* arg);
 /* used when a seg fault occurs and we just restore the terminal settings */
 void tki_restore_term_settings(TermKeyboardInput* termInput);
 
-
-#ifdef __cplusplus
-}
-#endif
 
 
 #endif

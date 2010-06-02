@@ -1,5 +1,5 @@
 /*
- * $Id: shared_mem_source.h,v 1.6 2009/10/12 16:06:30 philipn Exp $
+ * $Id: shared_mem_source.h,v 1.7 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -25,11 +25,6 @@
 #define __SHARED_MEM_SOURCE_H__
 
 
-#ifdef __cplusplus
-extern "C"
-{
-#endif
-
 
 #include "media_source.h"
 
@@ -43,10 +38,6 @@ MediaSource* shms_get_media_source(SharedMemSource* source);
 int shms_get_default_timecode(SharedMemSource* source, TimecodeType* type, TimecodeSubType* subType);
 
 
-
-#ifdef __cplusplus
-}
-#endif
 
 
 #endif

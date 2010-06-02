@@ -1,5 +1,5 @@
 /*
- * $Id: frame_info.h,v 1.13 2010/02/12 14:00:06 philipn Exp $
+ * $Id: frame_info.h,v 1.14 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -30,11 +30,6 @@
 #include "types.h"
 
 
-#ifdef __cplusplus
-extern "C"
-{
-#endif
-
 
 #define MAX_SOURCE_INFO_NAME_LEN        15
 #define MAX_SOURCE_INFO_VALUE_LEN       30
@@ -54,6 +49,8 @@ extern "C"
 #define DIGIBETA_DROPOUT_MARK_TYPE  0x00040000
 
 #define CLIP_ID_SIZE                128
+
+#define MAX_MARK_SELECTIONS     2
 
 
 
@@ -214,7 +211,9 @@ typedef struct
     /* user marks */
     VTRErrorLevel vtrErrorLevel;
     int isMarked;
-    int markType;
+    unsigned int markTypes[MAX_MARK_SELECTIONS];
+    unsigned int markTypeMasks[MAX_MARK_SELECTIONS]; /* mark filter */
+    int numMarkSelections;
     uint8_t vtrErrorCode;
 
     /* all timecodes are only present when all streams in the frame have been read */
@@ -251,10 +250,6 @@ int frame_is_ntsc_frame_rate(const FrameInfo* frameInfo);
 
 int get_rounded_frame_rate(const Rational* frameRate);
 
-
-#ifdef __cplusplus
-}
-#endif
 
 
 #endif

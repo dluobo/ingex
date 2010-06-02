@@ -1,5 +1,5 @@
 /*
- * $Id: shuttle_input_connect.h,v 1.5 2009/01/29 07:10:27 stuart_hc Exp $
+ * $Id: shuttle_input_connect.h,v 1.6 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -25,11 +25,6 @@
 #define __SHUTTLE_INPUT_CONNECT_H__
 
 
-#ifdef __cplusplus
-extern "C"
-{
-#endif
-
 
 #include "media_control.h"
 #include "shuttle_input.h"
@@ -47,10 +42,6 @@ const ControlInputHelp* sic_get_default_control_help();
 const ControlInputHelp* sic_get_qc_control_help();
 
 
-
-#ifdef __cplusplus
-}
-#endif
 
 
 #endif

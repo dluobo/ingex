@@ -1,5 +1,5 @@
 /*
- * $Id: x11_xv_display_sink.h,v 1.8 2009/01/29 07:10:27 stuart_hc Exp $
+ * $Id: x11_xv_display_sink.h,v 1.9 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -25,11 +25,6 @@
 #ifndef __X11_XV_DISPLAY_SINK_H__
 #define __X11_XV_DISPLAY_SINK_H__
 
-
-#ifdef __cplusplus
-extern "C"
-{
-#endif
 
 
 #include "media_sink.h"
@@ -65,10 +60,6 @@ void xvsk_register_mouse_listener(X11XVDisplaySink* sink, MouseInputListener* li
 void xvsk_unregister_mouse_listener(X11XVDisplaySink* sink, MouseInputListener* listener);
 
 
-
-#ifdef __cplusplus
-}
-#endif
 
 
 #endif

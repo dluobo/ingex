@@ -1,5 +1,5 @@
 /*
- * $Id: connection_matrix.h,v 1.3 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: connection_matrix.h,v 1.4 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -25,11 +25,6 @@
 #define __CONNECTION_MATRIX_H__
 
 
-#ifdef __cplusplus
-extern "C"
-{
-#endif
-
 
 #include "media_source.h"
 #include "media_sink.h"
@@ -44,10 +39,6 @@ MediaSourceListener* stm_get_stream_listener(ConnectionMatrix* matrix);
 int stm_sync(ConnectionMatrix* matrix);
 void stm_close(ConnectionMatrix** matrix);
 
-
-#ifdef __cplusplus
-}
-#endif
 
 
 #endif

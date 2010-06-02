@@ -1,5 +1,5 @@
 /*
- * $Id: IngexPlayerListener.cpp,v 1.1 2009/01/29 07:17:08 stuart_hc Exp $
+ * $Id: IngexPlayerListener.cpp,v 1.2 2010/06/02 11:12:13 philipn Exp $
  *
  * Copyright (C) 2009 British Broadcasting Corporation, All Rights Reserved
  * Author: Matthew Marks
@@ -72,10 +72,11 @@ IngexPlayerListenerRegistry::~IngexPlayerListenerRegistry()
 {
     ReadWriteLockGuard guard(&_listenersRWLock, true);
 
-    std::vector<IngexPlayerListener*>::iterator iter;
+    std::vector<std::pair<IngexPlayerListener*, IngexPlayerListenerData*> >::iterator iter;
     for (iter = _listeners.begin(); iter != _listeners.end(); iter++)
     {
-        (*iter)->unsetRegistry();
+        iter->first->unsetRegistry();
+        delete iter->second;
     }
     _listeners.clear();
     pthread_rwlock_destroy(&_listenersRWLock);
@@ -90,7 +91,7 @@ bool IngexPlayerListenerRegistry::registerListener(IngexPlayerListener* listener
     try
     {
         ReadWriteLockGuard guard(&_listenersRWLock, true);
-        _listeners.push_back(listener);
+        _listeners.push_back(std::make_pair(listener, (IngexPlayerListenerData*)0));
         if (listener->getRegistry() != 0 && listener->getRegistry() != this)
         {
             // first unregister the listener with the 'other' player 
@@ -111,14 +112,15 @@ bool IngexPlayerListenerRegistry::unregisterListener(IngexPlayerListener* listen
     {
         return true;
     }
-try
+    try
     {
         ReadWriteLockGuard guard(&_listenersRWLock, true);
-        std::vector<IngexPlayerListener*>::iterator iter;
+        std::vector<std::pair<IngexPlayerListener*, IngexPlayerListenerData*> >::iterator iter;
         for (iter = _listeners.begin(); iter != _listeners.end(); iter++)
         {
-            if (*iter == listener)
+            if (iter->first == listener)
             {
+                delete iter->second;
                 _listeners.erase(iter);
                 listener->unsetRegistry();
                 break;

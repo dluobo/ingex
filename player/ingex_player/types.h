@@ -1,5 +1,5 @@
 /*
- * $Id: types.h,v 1.6 2010/01/12 16:32:33 john_f Exp $
+ * $Id: types.h,v 1.7 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -94,7 +94,7 @@ static const Timecode g_invalidTimecode = {0, 99, 99, 99, 99};
 
 typedef struct
 {
-    int type;
+    unsigned int type;
     char name[32];
     Colour colour;
 } MarkConfig;

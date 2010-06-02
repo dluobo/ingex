@@ -1,5 +1,5 @@
 /*
- * $Id: clip_source.h,v 1.3 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: clip_source.h,v 1.4 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -25,11 +25,6 @@
 #define __CLIP_SOURCE_H__
 
 
-#ifdef __cplusplus
-extern "C"
-{
-#endif
-
 
 #include "media_source.h"
 
@@ -42,10 +37,6 @@ typedef struct ClipSource ClipSource;
 int cps_create(MediaSource* targetSource, const Rational* frameRate, int64_t start, int64_t duration, ClipSource** clipSource);
 MediaSource* cps_get_media_source(ClipSource* clipSource);
 
-
-#ifdef __cplusplus
-}
-#endif
 
 
 #endif

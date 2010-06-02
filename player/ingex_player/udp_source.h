@@ -1,5 +1,5 @@
 /*
- * $Id: udp_source.h,v 1.3 2009/01/29 07:10:27 stuart_hc Exp $
+ * $Id: udp_source.h,v 1.4 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -24,19 +24,11 @@
 #ifndef __UDP_MEM_SOURCE_H__
 #define __UDP_MEM_SOURCE_H__
 
-#ifdef __cplusplus
-extern "C"
-{
-#endif
-
 #include "media_source.h"
 
 /* udp network source */
 int udp_open(const char *address, MediaSource** source);
 
 
-#ifdef __cplusplus
-}
 #endif
 
-#endif

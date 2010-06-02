@@ -1,5 +1,5 @@
 /*
- * $Id: IngexPlayerListener.h,v 1.5 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: IngexPlayerListener.h,v 1.6 2010/06/02 11:12:13 philipn Exp $
  *
  * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
@@ -45,16 +45,24 @@ private:
 
 class IngexPlayerListener;
 
+class IngexPlayerListenerData
+{
+public:
+    virtual ~IngexPlayerListenerData() {}
+};
+
 class IngexPlayerListenerRegistry
 {
 public:
     IngexPlayerListenerRegistry();
     ~IngexPlayerListenerRegistry();
+    
     bool registerListener(IngexPlayerListener* listener);
     bool unregisterListener(IngexPlayerListener* listener);
+    
     /* allowing access for C callback functions */
     pthread_rwlock_t _listenersRWLock;
-    std::vector<IngexPlayerListener*> _listeners;
+    std::vector<std::pair<IngexPlayerListener*, IngexPlayerListenerData*> > _listeners;
 };
 
 class IngexPlayerListener
@@ -78,6 +86,7 @@ public:
     virtual void keyReleased(int key, int modifier) = 0;
     virtual void progressBarPositionSet(float position) = 0;
     virtual void mouseClicked(int imageWidth, int imageHeight, int xPos, int yPos) = 0;
+    virtual void sourceNameChangeEvent(int sourceIndex, const char* name) = 0;
 
 protected:
     IngexPlayerListenerRegistry* _registry;

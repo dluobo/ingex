@@ -1,5 +1,5 @@
 /*
- * $Id: dual_sink.h,v 1.8 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: dual_sink.h,v 1.9 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -25,11 +25,6 @@
 #define __DUAL_SINK_H__
 
 
-#ifdef __cplusplus
-extern "C"
-{
-#endif
-
 
 #include "dvs_sink.h"
 #include "x11_common.h"
@@ -41,7 +36,7 @@ typedef struct DualSink DualSink;
 
 
 int dusk_open(int reviewDuration, int dvsCard, int dvsChannel, SDIVITCSource sdiVITCSource,
-    int extraSDIVITCSource, int numBuffers, int useXV, int disableSDIOSD, int disableX11OSD,
+    SDIVITCSource extraSDIVITCSource, int numBuffers, int useXV, int disableSDIOSD, int disableX11OSD,
     const Rational* pixelAspectRatio, const Rational* monitorAspectRatio,
     float scale, int swScale, int fitVideo, X11WindowInfo* windowInfo, DualSink** dualSink);
 MediaSink* dusk_get_media_sink(DualSink* dualSink);
@@ -64,10 +59,6 @@ void dusk_unregister_mouse_listener(DualSink* dualSink, MouseInputListener* list
 
 
 
-
-#ifdef __cplusplus
-}
-#endif
 
 
 #endif

@@ -1,5 +1,5 @@
 /*
- * $Id: mjpeg_stream_connect.c,v 1.4 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: mjpeg_stream_connect.c,v 1.5 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -61,6 +61,9 @@ void free_mjpeg_decoder_resources()
 
 #else
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #ifdef FFMPEG_OLD_INCLUDE_PATHS
 #include <ffmpeg/avcodec.h>
@@ -70,6 +73,9 @@ void free_mjpeg_decoder_resources()
 #include <libavformat/avformat.h>
 #endif
 
+#ifdef __cplusplus
+}
+#endif
 
 /* some large number that we would not exceed */
 #define MAX_STATIC_MJPEG_DECODERS          32

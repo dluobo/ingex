@@ -1,5 +1,5 @@
 /*
- * $Id: http_access.c,v 1.7 2010/01/12 16:32:22 john_f Exp $
+ * $Id: http_access.c,v 1.8 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -25,9 +25,11 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <inttypes.h>
 #include <sys/time.h>
 #include <unistd.h>
+#define __STDC_FORMAT_MACROS
+#define __STDC_CONSTANT_MACROS
+#include <inttypes.h>
 
 #include "http_access.h"
 
@@ -190,6 +192,7 @@ static void http_player_state_xml(struct shttpd_arg* arg)
 static void http_player_state_txt(struct shttpd_arg* arg)
 {
     HTTPAccess* access = (HTTPAccess*)arg->user_data;
+    int i;
 
     shttpd_printf(arg, "HTTP/1.1 200 OK\r\n");
     shttpd_printf(arg, "Content-type: text/plain\r\n\r\n");
@@ -201,6 +204,11 @@ static void http_player_state_txt(struct shttpd_arg* arg)
     shttpd_printf(arg, "position=%"PRId64"\n", access->currentFrameInfo.position);
     shttpd_printf(arg, "startOffset=%"PRId64"\n", access->currentFrameInfo.startOffset);
     shttpd_printf(arg, "vtrErrorLevel=%u\n", access->currentFrameInfo.vtrErrorLevel);
+    shttpd_printf(arg, "numMarkSelections=%d\n", access->currentFrameInfo.numMarkSelections);
+    for (i = 0; i < access->currentFrameInfo.numMarkSelections; i++)
+    {
+        shttpd_printf(arg, "markFilter_%d=%u\n", i, access->currentFrameInfo.markTypeMasks[i]);
+    }
 
     PTHREAD_MUTEX_UNLOCK(&access->playerStateMutex);
 
@@ -225,8 +233,9 @@ static void http_player_control(struct shttpd_arg* arg)
     int toggle = 1;
     int markType = 0;
     int64_t position = 0;
-    int markTypeMask = 0;
+    unsigned int markTypeMask = 0;
     int vtrErrorLevel = 0;
+    int selection = 0;
 
 
 	requestURI = shttpd_get_env(arg, "REQUEST_URI");
@@ -519,6 +528,24 @@ static void http_player_control(struct shttpd_arg* arg)
         if (queryOk && queryValueCount == 2)
         {
             mc_clear_mark_position(access->control, position, markTypeMask);
+        }
+    }
+    else if (strcmp("/player/control/next-show-marks", requestURI) == 0)
+    {
+        queryOk = 1;
+        selection = 0;
+
+        if (get_query_value(arg, "sel", queryValue, sizeof(queryValue)))
+        {
+            if (!parse_int(queryValue, &selection))
+            {
+                queryOk = 0;
+            }
+        }
+
+        if (queryOk)
+        {
+            mc_next_show_marks(access->control, selection);
         }
     }
     else if (strcmp("/player/control/set-vtr-error-level", requestURI) == 0)

@@ -1,5 +1,5 @@
 /*
- * $Id: media_sink.h,v 1.6 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: media_sink.h,v 1.7 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -24,11 +24,6 @@
 #ifndef __MEDIA_SINK_H__
 #define __MEDIA_SINK_H__
 
-
-#ifdef __cplusplus
-extern "C"
-{
-#endif
 
 
 #include "media_sink_frame.h"
@@ -181,10 +176,6 @@ FrameSequenceSink* msk_get_frame_sequence(MediaSink* sink);
 
 int msk_mute_audio(MediaSink* sink, int mute);
 
-
-#ifdef __cplusplus
-}
-#endif
 
 
 #endif

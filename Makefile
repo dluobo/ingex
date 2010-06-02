@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.2 2009/01/23 20:09:45 john_f Exp $
+# $Id: Makefile,v 1.3 2010/06/02 11:16:58 philipn Exp $
 #
 # Makefile for building the Ingex suite of applications
 #
@@ -41,23 +41,25 @@ studio:
 .PHONY: archive
 archive:
 	$(MAKE) -C libMXF
+	$(MAKE) -C libMXF++
 	$(MAKE) -C common
 	$(MAKE) -C player
-	$(MAKE) -C archive
+	$(MAKE) -C archive/src
 
 .PHONY: install
 install:
 	$(MAKE) -C libMXF $@
 	$(MAKE) -C libMXF++ $@
 
+# do 'realclean' for studio/ace-tao to delete files generated from IDL
 .PHONY: clean
 clean:
 	$(MAKE) -C libMXF $@
 	$(MAKE) -C libMXF++ $@
 	$(MAKE) -C common $@
 	$(MAKE) -C player $@
-	$(MAKE) -C studio $@
-	$(MAKE) -C archive $@
+	$(MAKE) -C studio realclean
+	$(MAKE) -C archive/src $@
 
 # So far, only libMXF and common have make check targets
 .PHONY: check

@@ -1,5 +1,5 @@
 /*
- * $Id: player.c,v 1.24 2010/03/30 08:26:07 john_f Exp $
+ * $Id: player.c,v 1.25 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -27,12 +27,13 @@
 #include <stdio.h>
 #include <string.h>
 #include <malloc.h>
-#include <inttypes.h>
 #include <signal.h>
 #include <assert.h>
 #include <unistd.h>
 #include <sys/time.h>
 #include <errno.h>
+#define __STDC_FORMAT_MACROS
+#include <inttypes.h>
 
 #include "media_player.h"
 #include "shuttle_input_connect.h"
@@ -829,6 +830,7 @@ static void usage(const char* cmd)
     fprintf(stderr, "                                  type is 1...32 (bit position in the 32-bit value used internally),\n");
     fprintf(stderr, "                                  name is a string with maximum length 31 and\n");
     fprintf(stderr, "                                  colour is one of white|yellow|cyan|green|magenta|red|blue|orange\n");
+    fprintf(stderr, "  [--mark-filter <mask>]*  Set 32-bit marks filter on next progress bar (default all enabled: 0xffffffff)\n");
 #if defined(HAVE_SHTTPD)
     fprintf(stderr, "  --http-access <port>     Player access via http <port>\n");
 #endif
@@ -958,7 +960,7 @@ int main(int argc, const char **argv)
     X11WindowInfo windowInfo = {NULL, 0, 0, 0};
     SDIVITCSource sdiVITCSource = VITC_AS_SDI_VITC;
     int loop = 0;
-    int extraSDIVITCSource = 0;
+    SDIVITCSource extraSDIVITCSource = INVALID_SDI_VITC;
     int64_t systemStartTimecode = -1;
     Rational systemStartTimecodeFrameRate = {0, 0};
     int reviewDuration = 20;
@@ -972,6 +974,8 @@ int main(int argc, const char **argv)
     int httpPort = -1;
 #endif
     MarkConfigs markConfigs;
+    unsigned int markFilters[MAX_PB_MARK_SELECTIONS] = {ALL_MARK_TYPE};
+    int numMarkFilters = 0;
     int64_t maxLength = -1;
     Rational maxLengthFrameRate = {0, 0};
     double timeout = -1.0;
@@ -998,7 +1002,7 @@ int main(int argc, const char **argv)
     int prescaledSplit = 0;
     int64_t startFrame = -1;
     Rational startFrameFrameRate = {0, 0};
-    int markSelectionTypeMasks[MAX_PB_MARK_SELECTIONS];
+    unsigned int markSelectionTypeMasks[MAX_PB_MARK_SELECTIONS];
     int numMarkSelections = 0;
     char sessionComments[MAX_SESSION_COMMENTS_SIZE];
     int dvsCard = -1;
@@ -1011,8 +1015,6 @@ int main(int argc, const char **argv)
     int numDisabledStreams = 0;
     int disableShuttle = 0;
     int forceUYVYFormat;
-    VTRErrorSource* vtrErrorSources[MAX_INPUTS];
-    int numVTRErrorSources = 0;
     int vtrErrorLevel = 1;
     int showVTRErrorLevel = 0;
 
@@ -1069,7 +1071,7 @@ int main(int argc, const char **argv)
                 fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
                 return 1;
             }
-            if (sscanf(argv[cmdlnIndex + 1], "%d\n", &logLevel) != 1)
+            if (sscanf(argv[cmdlnIndex + 1], "%d", &logLevel) != 1)
             {
                 usage(argv[0]);
                 fprintf(stderr, "Invalid argument for %s\n", argv[cmdlnIndex]);
@@ -1102,7 +1104,7 @@ int main(int argc, const char **argv)
                 fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
                 return 1;
             }
-            if (sscanf(argv[cmdlnIndex + 1], "%d\n", &dvsCard) != 1)
+            if (sscanf(argv[cmdlnIndex + 1], "%d", &dvsCard) != 1)
             {
                 usage(argv[0]);
                 fprintf(stderr, "Invalid argument for %s\n", argv[cmdlnIndex]);
@@ -1118,7 +1120,7 @@ int main(int argc, const char **argv)
                 fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
                 return 1;
             }
-            if (sscanf(argv[cmdlnIndex + 1], "%d\n", &dvsChannel) != 1)
+            if (sscanf(argv[cmdlnIndex + 1], "%d", &dvsChannel) != 1)
             {
                 usage(argv[0]);
                 fprintf(stderr, "Invalid argument for %s\n", argv[cmdlnIndex]);
@@ -1134,7 +1136,7 @@ int main(int argc, const char **argv)
                 fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
                 return 1;
             }
-            if (sscanf(argv[cmdlnIndex + 1], "%d\n", &dvsBufferSize) != 1 ||
+            if (sscanf(argv[cmdlnIndex + 1], "%d", &dvsBufferSize) != 1 ||
                 (dvsBufferSize != 0 && dvsBufferSize < MIN_NUM_DVS_FIFO_BUFFERS))
             {
                 usage(argv[0]);
@@ -1391,7 +1393,7 @@ int main(int argc, const char **argv)
                 fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
                 return 1;
             }
-            if (sscanf(argv[cmdlnIndex + 1], "%d\n", &numFFMPEGThreads) != 1 ||
+            if (sscanf(argv[cmdlnIndex + 1], "%d", &numFFMPEGThreads) != 1 ||
                 numFFMPEGThreads < 0)
             {
                 usage(argv[0]);
@@ -1423,7 +1425,7 @@ int main(int argc, const char **argv)
                 fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
                 return 1;
             }
-            if (sscanf(argv[cmdlnIndex + 1], "%d\n", &srcBufferSize) != 1 || srcBufferSize < 0)
+            if (sscanf(argv[cmdlnIndex + 1], "%d", &srcBufferSize) != 1 || srcBufferSize < 0)
             {
                 usage(argv[0]);
                 fprintf(stderr, "Invalid argument for %s\n", argv[cmdlnIndex]);
@@ -1589,7 +1591,7 @@ int main(int argc, const char **argv)
                 fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
                 return 1;
             }
-            if (sscanf(argv[cmdlnIndex + 1], "%d\n", &reviewDuration) != 1 || reviewDuration <= 0)
+            if (sscanf(argv[cmdlnIndex + 1], "%d", &reviewDuration) != 1 || reviewDuration <= 0)
             {
                 usage(argv[0]);
                 fprintf(stderr, "Invalid argument for %s\n", argv[cmdlnIndex]);
@@ -1651,6 +1653,30 @@ int main(int argc, const char **argv)
             }
             cmdlnIndex += 2;
         }
+        else if (strcmp(argv[cmdlnIndex], "--mark-filter") == 0)
+        {
+            if (cmdlnIndex + 1 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            if (numMarkFilters >= MAX_PB_MARK_SELECTIONS)
+            {
+                fprintf(stderr, "Only %d mark filters supported\n", MAX_PB_MARK_SELECTIONS);
+                return 1;
+            }
+            if ((sscanf(argv[cmdlnIndex + 1], "0x%x", &markFilters[numMarkFilters]) != 1 &&
+                    sscanf(argv[cmdlnIndex + 1], "%u", &markFilters[numMarkFilters]) != 1) ||
+                markFilters[numMarkFilters] > (unsigned int)ALL_MARK_TYPE)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Invalid argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            numMarkFilters++;
+            cmdlnIndex += 2;
+        }
 #if defined(HAVE_SHTTPD)
         else if (strcmp(argv[cmdlnIndex], "--http-access") == 0)
         {
@@ -1660,7 +1686,7 @@ int main(int argc, const char **argv)
                 fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
                 return 1;
             }
-            if (sscanf(argv[cmdlnIndex + 1], "%d\n", &httpPort) != 1 || httpPort < 0)
+            if (sscanf(argv[cmdlnIndex + 1], "%d", &httpPort) != 1 || httpPort < 0)
             {
                 usage(argv[0]);
                 fprintf(stderr, "Invalid argument for %s\n", argv[cmdlnIndex]);
@@ -1814,8 +1840,8 @@ int main(int argc, const char **argv)
                 fprintf(stderr, "Only %d mark selection masks supported\n", MAX_PB_MARK_SELECTIONS);
                 return 1;
             }
-            if (sscanf(argv[cmdlnIndex + 1], "0x%x\n", &markSelectionTypeMasks[numMarkSelections]) != 1 &&
-                sscanf(argv[cmdlnIndex + 1], "%d\n", &markSelectionTypeMasks[numMarkSelections]) != 1)
+            if (sscanf(argv[cmdlnIndex + 1], "0x%x", &markSelectionTypeMasks[numMarkSelections]) != 1 &&
+                sscanf(argv[cmdlnIndex + 1], "%u", &markSelectionTypeMasks[numMarkSelections]) != 1)
             {
                 usage(argv[0]);
                 fprintf(stderr, "Invalid argument for %s\n", argv[cmdlnIndex]);
@@ -1837,7 +1863,7 @@ int main(int argc, const char **argv)
                 fprintf(stderr, "Hardcoded stream disables is set to %zd\n", sizeof(disableStream) / sizeof(int));
                 return 1;
             }
-            if (sscanf(argv[cmdlnIndex + 1], "%d\n", &disableStream[numDisabledStreams]) != 1)
+            if (sscanf(argv[cmdlnIndex + 1], "%d", &disableStream[numDisabledStreams]) != 1)
             {
                 usage(argv[0]);
                 fprintf(stderr, "Invalid argument for %s\n", argv[cmdlnIndex]);
@@ -2323,10 +2349,6 @@ int main(int argc, const char **argv)
                     goto fail;
                 }
                 mediaSource = mxfs_get_media_source(mxfSource);
-                
-                assert(numVTRErrorSources < (int)(sizeof(vtrErrorSources) / sizeof(VTRErrorSource)));
-                vtrErrorSources[numVTRErrorSources] = mxfs_get_vtr_error_source(mxfSource);
-                numVTRErrorSources++;
                 break;
 
 #if !defined(DISABLE_SHARED_MEM_SOURCE)
@@ -2917,11 +2939,14 @@ int main(int argc, const char **argv)
     mc_set_vtr_error_level(ply_get_media_control(g_player.mediaPlayer), (VTRErrorLevel)vtrErrorLevel);
     mc_show_vtr_error_level(ply_get_media_control(g_player.mediaPlayer), showVTRErrorLevel);
 
-    for (i = 0; i < numVTRErrorSources; i++)
+    
+    /* set mark filter */
+    
+    for (i = 0; i < numMarkFilters; i++)
     {
-        ply_register_vtr_error_source(g_player.mediaPlayer, vtrErrorSources[i]);
+        mc_set_mark_filter(ply_get_media_control(g_player.mediaPlayer), i, markFilters[i]);
     }
-
+    
     
     /* qc or not control stuff */
 

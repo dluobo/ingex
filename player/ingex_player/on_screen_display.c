@@ -1,5 +1,5 @@
 /*
- * $Id: on_screen_display.c,v 1.13 2010/02/12 14:00:06 philipn Exp $
+ * $Id: on_screen_display.c,v 1.14 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -594,7 +594,7 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
     int numberStringLen;
     char vtrErrorCodeString[6];
     int vtrErrorCodeStringLen;
-    int i, k;
+    int i, k, j;
     int timecodeXPos;
     int timecodeYPos;
     int timecodeWidth;
@@ -609,6 +609,23 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
     int markPixelSet;
     int markPixel;
     int hideAudioLevels;
+    int isMarked;
+    int markOn;
+    int haveVTRErrorLevel;
+
+
+    /* determine whether to show a mark - a frame could be marked but not shown if it is masked out, or is a
+       vtr error mark only and the vtr error code is < the target error level */
+
+    isMarked = 0;
+    for (i = 0; i < frameInfo->numMarkSelections; i++)
+    {
+        isMarked = isMarked ||
+                (frameInfo->isMarked && (frameInfo->markTypes[i] & frameInfo->markTypeMasks[i]) &&
+                (((frameInfo->markTypes[i] & frameInfo->markTypeMasks[i]) != VTR_ERROR_MARK_TYPE) ||
+                    (frameInfo->vtrErrorLevel != VTR_NO_ERROR_LEVEL &&
+                     frameInfo->vtrErrorCode >= frameInfo->vtrErrorLevel)));
+    }
 
 
     /* start/stop ticker use if required */
@@ -652,7 +669,7 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
 
     /* show player state if timer busy or player is paused */
 
-    if (frameInfo->isMarked)
+    if (isMarked)
     {
         txtY = g_rec601YUVColours[RED_COLOUR].Y;
         txtU = g_rec601YUVColours[RED_COLOUR].U;
@@ -732,14 +749,23 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
 
     /* mark */
 
-    if (frameInfo->isMarked)
+    if (isMarked)
     {
         xPos = (width - (osdd->state->markConfigs.numConfigs * (osdd->markOverlay.w + MARK_OVERLAY_SPACING)) - MARK_OVERLAY_SPACING) / 2;
         yPos = (height * 11) / 16 + osdd->osdPlaySymbol->h / 2 + 5;
 
         for (i = 0; i < osdd->state->markConfigs.numConfigs; i++)
         {
-            if (frameInfo->markType & osdd->state->markConfigs.configs[i].type)
+            markOn = 0;
+            for (j = 0; j < frameInfo->numMarkSelections; j++)
+            {
+                markOn = markOn ||
+                         ((frameInfo->markTypes[j] & osdd->state->markConfigs.configs[i].type & frameInfo->markTypeMasks[j]) &&
+                         ((frameInfo->markTypes[j] & osdd->state->markConfigs.configs[i].type & frameInfo->markTypeMasks[j]) != VTR_ERROR_MARK_TYPE ||
+                            (frameInfo->vtrErrorLevel != VTR_NO_ERROR_LEVEL && frameInfo->vtrErrorCode >= frameInfo->vtrErrorLevel)));
+            }
+            
+            if (markOn)
             {
                 /* on */
                 txtY = g_rec601YUVColours[osdd->state->markConfigs.configs[i].colour].Y;
@@ -766,7 +792,16 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
     
     /* vtr error level */
     
-    if (osdd->state->showVTRErrorLevel && frameInfo->isMarked && frameInfo->vtrErrorCode > 0)
+    haveVTRErrorLevel = 0;
+    for (i = 0; i < frameInfo->numMarkSelections; i++)
+    {
+        haveVTRErrorLevel = haveVTRErrorLevel ||
+                            ((frameInfo->markTypes[i] & frameInfo->markTypeMasks[i] & VTR_ERROR_MARK_TYPE) &&
+                             frameInfo->vtrErrorLevel != VTR_NO_ERROR_LEVEL &&
+                             frameInfo->vtrErrorCode >= (uint8_t)frameInfo->vtrErrorLevel);
+    }
+    
+    if (osdd->state->showVTRErrorLevel && isMarked && haveVTRErrorLevel)
     {
         txtY = g_rec601YUVColours[LIGHT_WHITE_COLOUR].Y;
         txtU = g_rec601YUVColours[LIGHT_WHITE_COLOUR].U;
@@ -799,7 +834,7 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
 
     /* timecode type and timecode */
 
-    if (frameInfo->isMarked)
+    if (isMarked)
     {
         txtY = g_rec601YUVColours[RED_COLOUR].Y;
         txtU = g_rec601YUVColours[RED_COLOUR].U;
@@ -1590,7 +1625,7 @@ static int add_menu_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* frameI
         numMenuItemsShown = 0;
         while (item != NULL && numMenuItemsShown < menuInt->numLines)
         {
-            itemInt = osdm_get_item_private_data(item, (long)osdd);
+            itemInt = (OSDMenuListItemInt *)osdm_get_item_private_data(item, (long)osdd);
 
             /* create internal item data if it does not exist */
             if (itemInt == NULL)
@@ -2212,6 +2247,10 @@ static void osdd_free_marks_model(void* data, OSDMarksModel** model)
     {
         osdd->marksModel = NULL;
     }
+    else if (osdd->secondMarksModel == *model)
+    {
+        osdd->secondMarksModel = NULL;
+    }
     PTHREAD_MUTEX_UNLOCK(&osdd->setMarksModelMutex)
 
     destroy_mutex(&(*model)->marksMutex);
@@ -2373,7 +2412,7 @@ static int osdd_add_to_image(void* data, const FrameInfo* frameInfo, unsigned ch
     /* complete the state screen selection */
     if (!osdd->state->screenSet && osdd->state->nextScreen)
     {
-        osdd->state->screen = (osdd->state->screen + 1 > OSD_EMPTY_SCREEN) ? 0 : osdd->state->screen + 1;
+        osdd->state->screen = (OSDScreen)((osdd->state->screen + 1 > OSD_EMPTY_SCREEN) ? 0 : osdd->state->screen + 1);
     }
     osdd->state->screenSet = 0;
     osdd->state->nextScreen = 0;
@@ -2381,7 +2420,7 @@ static int osdd_add_to_image(void* data, const FrameInfo* frameInfo, unsigned ch
     /* take into account that menu screen is optionally present */
     if (osdd->state->screen == OSD_MENU_SCREEN && osdd->menu == NULL)
     {
-        osdd->state->screen = (osdd->state->screen + 1 > OSD_EMPTY_SCREEN) ? 0 : osdd->state->screen + 1;
+        osdd->state->screen = (OSDScreen)((osdd->state->screen + 1 > OSD_EMPTY_SCREEN) ? 0 : osdd->state->screen + 1);
     }
 
 
@@ -3626,14 +3665,14 @@ void osds_complete(OnScreenDisplayState* state, const FrameInfo* frameInfo)
             for (i = 0; i < frameInfo->numTimecodes; i++)
             {
                 if ((state->setTimecodeIndex < 0 || state->setTimecodeIndex == typedIndex) &&
-                    (state->setTimecodeType < 0 || frameInfo->timecodes[i].timecodeType == (unsigned int)state->setTimecodeType) &&
-                    (state->setTimecodeSubType < 0 || frameInfo->timecodes[i].timecodeSubType == (unsigned int)state->setTimecodeSubType))
+                    (state->setTimecodeType < 0 || frameInfo->timecodes[i].timecodeType == state->setTimecodeType) &&
+                    (state->setTimecodeSubType < 0 || frameInfo->timecodes[i].timecodeSubType == state->setTimecodeSubType))
                 {
                     state->timecodeIndex = index;
                     break;
                 }
-                else if ((state->setTimecodeType < 0 || frameInfo->timecodes[i].timecodeType == (unsigned int)state->setTimecodeType) &&
-                    (state->setTimecodeSubType < 0 || frameInfo->timecodes[i].timecodeSubType == (unsigned int)state->setTimecodeSubType))
+                else if ((state->setTimecodeType < 0 || frameInfo->timecodes[i].timecodeType == state->setTimecodeType) &&
+                    (state->setTimecodeSubType < 0 || frameInfo->timecodes[i].timecodeSubType == state->setTimecodeSubType))
                 {
                     typedIndex++;
                 }
@@ -3685,7 +3724,7 @@ void osds_reset(OnScreenDisplayState* state)
 {
     int i;
 
-    state->screen = 0;
+    state->screen = OSD_SOURCE_INFO_SCREEN;
     /* TODO: if the player starts in a different state then these will be wrong if no
     state change event is sent */
     state->isPlaying = 1;

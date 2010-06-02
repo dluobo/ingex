@@ -1,5 +1,5 @@
 /*
- * $Id: dnxhd_stream_connect.c,v 1.5 2009/03/19 17:42:56 john_f Exp $
+ * $Id: dnxhd_stream_connect.c,v 1.6 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -52,6 +52,9 @@ int create_dnxhd_connect(MediaSink* sink, int sinkStreamId, int sourceStreamId,
 
 #else
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #ifdef FFMPEG_OLD_INCLUDE_PATHS
 #include <ffmpeg/avcodec.h>
@@ -61,6 +64,9 @@ int create_dnxhd_connect(MediaSink* sink, int sinkStreamId, int sourceStreamId,
 #include <libavformat/avformat.h>
 #endif
 
+#ifdef __cplusplus
+}
+#endif
 
 typedef struct
 {

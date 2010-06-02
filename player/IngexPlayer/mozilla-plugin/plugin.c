@@ -189,6 +189,12 @@ public:
         printf("Mouse clicked (x,y)=(%d,%d), (w,h)=(%d,%d)\n", xPos, yPos, imageWidth, imageHeight);
     }
     
+    virtual void sourceNameChangeEvent(int sourceIndex, const char* name)
+    {
+        printf("Source name change: index=%d, name=%s\n", sourceIndex, name ? name : "<null>");
+    }
+    
+    
 private:
     LocalIngexPlayer* _player;
 	IngexPlayerListenerRegistry* _listener_registry;

@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_source.h,v 1.4 2009/09/18 16:16:24 philipn Exp $
+ * $Id: ffmpeg_source.h,v 1.5 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -26,11 +26,6 @@
 
 
 
-#ifdef __cplusplus
-extern "C"
-{
-#endif
-
 
 #include "media_source.h"
 
@@ -38,9 +33,6 @@ extern "C"
 int fms_open(const char* filename, int threadCount, int forceUYVYFormat, MediaSource** source);
 
 
-#ifdef __cplusplus
-}
-#endif
-
 
 #endif
+

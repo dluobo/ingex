@@ -1,5 +1,5 @@
 /*
- * $Id: macros.h,v 1.3 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: macros.h,v 1.4 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -24,11 +24,6 @@
 #ifndef __MACROS_H__
 #define __MACROS_H__
 
-
-#ifdef __cplusplus
-extern "C"
-{
-#endif
 
 
 /* function checks */
@@ -143,10 +138,6 @@ e.g. ml_log_error("Some error %d" LOG_LOC_FORMAT, x, LOG_LOC_PARAMS); */
 
 
 
-
-#ifdef __cplusplus
-}
-#endif
 
 
 #endif

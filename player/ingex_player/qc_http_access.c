@@ -1,5 +1,5 @@
 /*
- * $Id: qc_http_access.c,v 1.6 2009/12/17 15:57:40 john_f Exp $
+ * $Id: qc_http_access.c,v 1.7 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -717,7 +717,7 @@ static void http_qcreport_report_page(struct shttpd_arg* arg)
     char report[256];
     char filename[FILENAME_MAX];
     FILE* reportFile;
-	int	state = (int)(arg->state - (void*)0);
+	int	state = (int)((char *)arg->state - (char *)0);
     int numRead;
     int outNumBytes;
 
@@ -782,7 +782,7 @@ static void http_qcreport_report_page(struct shttpd_arg* arg)
     fclose(reportFile);
 
 
-	arg->state = (void *)0 + state;
+	arg->state = (char *)0 + state;
     if (numRead < arg->out.len)
     {
         arg->flags |= SHTTPD_END_OF_OUTPUT;

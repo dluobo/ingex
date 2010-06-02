@@ -1,5 +1,5 @@
 /*
- * $Id: video_switch_database.h,v 1.4 2009/01/29 07:10:27 stuart_hc Exp $
+ * $Id: video_switch_database.h,v 1.5 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -27,11 +27,6 @@
 
 #include "types.h"
 
-
-#ifdef __cplusplus
-extern "C"
-{
-#endif
 
 #define VIDEO_SWITCH_DB_ENTRY_SIZE      64
 
@@ -70,10 +65,6 @@ int vsd_parse_entry(const unsigned char* entryBuffer, int entryBufferSize, Video
 
 int vsd_dump(const char* filename, FILE* output);
 
-
-#ifdef __cplusplus
-}
-#endif
 
 
 #endif

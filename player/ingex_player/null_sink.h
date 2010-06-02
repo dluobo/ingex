@@ -1,5 +1,5 @@
 /*
- * $Id: null_sink.h,v 1.3 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: null_sink.h,v 1.4 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -26,11 +26,6 @@
 
 
 
-#ifdef __cplusplus
-extern "C"
-{
-#endif
-
 
 #include "media_sink.h"
 
@@ -40,10 +35,6 @@ extern "C"
 int nms_open(MediaSink** sink);
 
 
-
-#ifdef __cplusplus
-}
-#endif
 
 
 #endif

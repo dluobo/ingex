@@ -1,5 +1,5 @@
 /*
- * $Id: buffered_media_source.h,v 1.3 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: buffered_media_source.h,v 1.4 2010/06/02 11:12:14 philipn Exp $
  *
  *
  *
@@ -25,11 +25,6 @@
 #define __BUFFERED_MEDIA_SOURCE_H__
 
 
-#ifdef __cplusplus
-extern "C"
-{
-#endif
-
 
 #include "media_source.h"
 #include "media_player.h"
@@ -44,10 +39,6 @@ MediaSource* bmsrc_get_source(BufferedMediaSource* bufSource);
 void bmsrc_set_media_player(BufferedMediaSource* bufSource, MediaPlayer* player);
 
 
-
-#ifdef __cplusplus
-}
-#endif
 
 
 #endif
