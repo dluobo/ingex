@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.2 2008/11/06 11:16:09 john_f Exp $
+# $Id: Makefile,v 1.3 2010/06/02 10:53:03 john_f Exp $
 #
 # Makefile for building the Ingex studio
 #
@@ -23,18 +23,32 @@
 
 .PHONY: all
 all:
-	$(MAKE) -C capture
 	$(MAKE) -C common
+	$(MAKE) -C capture
 	$(MAKE) -C mxfwriter
+	$(MAKE) -C mxfreader
 	$(MAKE) -C database
 	$(MAKE) -C ace-tao -f Makefile.non_mwc
 	$(MAKE) -C processing
 
 .PHONY: clean
 clean:
-	$(MAKE) -C capture $@
 	$(MAKE) -C common $@
+	$(MAKE) -C capture $@
 	$(MAKE) -C mxfwriter $@
+	$(MAKE) -C mxfreader $@
 	$(MAKE) -C database $@
 	$(MAKE) -C ace-tao -f Makefile.non_mwc $@
 	$(MAKE) -C processing $@
+
+# 'realclean' only implemented in ace-tao directory; default to 'clean' elsewhere
+.PHONY: realclean
+realclean:
+	$(MAKE) -C common clean
+	$(MAKE) -C capture clean
+	$(MAKE) -C mxfwriter clean
+	$(MAKE) -C mxfreader clean
+	$(MAKE) -C database clean
+	$(MAKE) -C ace-tao -f Makefile.non_mwc $@
+	$(MAKE) -C processing clean
+
