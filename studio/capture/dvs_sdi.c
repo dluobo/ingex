@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.c,v 1.30 2010/03/30 08:13:47 john_f Exp $
+ * $Id: dvs_sdi.c,v 1.31 2010/06/02 13:06:43 john_f Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -23,11 +23,23 @@
 
 #define _XOPEN_SOURCE 600           // for posix_memalign
 
+#define __STDC_CONSTANT_MACROS
+#define __STDC_FORMAT_MACROS
+
+#include "dvs_clib.h"
+#include "dvs_fifo.h"
+
+#include "nexus_control.h"
+#include "logF.h"
+#include "video_VITC.h"
+#include "video_conversion.h"
+#include "video_test_signals.h"
+#include "avsync_analysis.h"
+#include "time_utils.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <malloc.h>
-#define __STDC_CONSTANT_MACROS
-#define __STDC_FORMAT_MACROS
 #include <inttypes.h>
 #include <string.h>
 #include <math.h>
@@ -58,16 +70,11 @@ extern "C"
 }
 #endif
 
-#include "dvs_clib.h"
-#include "dvs_fifo.h"
+using namespace Ingex;
 
-#include "nexus_control.h"
-#include "logF.h"
-#include "video_VITC.h"
-#include "video_conversion.h"
-#include "video_test_signals.h"
-#include "avsync_analysis.h"
-#include "time_utils.h"
+const int PAL_AUDIO_SAMPLES = 1920;
+const int NTSC_AUDIO_SAMPLES[5] = { 1602, 1601, 1602, 1601, 1602 };
+static int ntsc_audio_seq = 0;
 
 //#define MAX_CHANNELS 8  (defined in nexus_control.h)
 // each DVS card can have 2 channels, so 4 cards gives 8 channels
@@ -93,6 +100,11 @@ int             control_id, ring_id[MAX_CHANNELS];
 int             width = 0, height = 0;
 int             sec_width = 0, sec_height = 0;
 int             frame_rate_numer = 0, frame_rate_denom = 0;
+int fps = 0;
+bool df = false;
+VideoRaster::EnumType primary_video_raster = VideoRaster::NONE;
+VideoRaster::EnumType secondary_video_raster = VideoRaster::NONE;
+Interlace::EnumType interlace = Interlace::NONE;
 int             element_size = 0, dma_video_size = 0, dma_total_size = 0;
 static int      audio_offset = 0, audio_size = 0, audio_pair_size = 0;
 
@@ -105,8 +117,13 @@ int             num_aud_samp_offset = 0;
 int             frame_number_offset = 0;
 */
 
-CaptureFormat   video_format = Format422PlanarYUV;
-CaptureFormat   video_secondary_format = FormatNone;
+CaptureFormat   video_format = Format422PlanarYUV;    // Only retained for backward compatibility
+CaptureFormat   video_secondary_format = FormatNone;  // Only retained for backward compatibility
+Ingex::PixelFormat::EnumType primary_pixel_format = Ingex::PixelFormat::NONE;
+Ingex::PixelFormat::EnumType secondary_pixel_format = Ingex::PixelFormat::NONE;
+static int primary_line_shift = 0;
+static int secondary_line_shift = 0;
+
 static int verbose = 0;
 static int verbose_channel = -1;    // which channel to show when verbose is on
 static int audio8ch = 0;
@@ -133,7 +150,8 @@ static int master_channel = -1;                      // default is no master tim
 
 // The mutex m_master_tc guards all access to master_tc and master_tod variables
 pthread_mutex_t m_master_tc = PTHREAD_MUTEX_INITIALIZER;
-static int master_tc = 0;               // timecode as integer
+//static int master_tc = 0;               // timecode as integer
+static Ingex::Timecode master_tc;       // master timecode
 static int64_t master_tod = 0;          // gettimeofday value corresponding to master_tc
 
 // When generating dummy frames, use LTC differences to calculate how many frames
@@ -173,6 +191,28 @@ static void timestamp_decode(int64_t timestamp, int * year, int * month, int * d
     *minute = my_tm.tm_min;
     *sec = my_tm.tm_sec;
     *microsec = timestamp % INT64_C(1000000);
+}
+
+static Ingex::Timecode timecode_from_dvs_bits(int bits, int fps_num, int fps_den)
+{
+    int hr10  = (bits & 0x30000000) >> 28;
+    int hr01  = (bits & 0x0f000000) >> 24;
+    int hr = 10 * hr10 + hr01;
+    int min10 = (bits & 0x00700000) >> 20;
+    int min01 = (bits & 0x000f0000) >> 16;
+    int min = 10 * min10 + min01;
+    int sec10 = (bits & 0x00007000) >> 12;
+    int sec01 = (bits & 0x00000f00) >> 8;
+    int sec = 10 * sec10 + sec01;
+    int fm10  = (bits & 0x00000030) >> 4;
+    int fm01  = bits & 0x0000000f;
+    int fm = 10 * fm10 + fm01;
+
+    bool drop = (bits & 0x00000040) != 0;
+
+    //fprintf(stderr, "%08x %02d:%02d:%02d:%02d %s\n", bits, hr, min, sec, fm, drop ? "DF" : "NDF");
+
+    return Ingex::Timecode(hr, min, sec, fm, fps_num, fps_den, drop);
 }
 
 static void show_scheduler()
@@ -289,6 +329,7 @@ static int check_sdk_version3(void)
     return result;
 }
 
+/*
 static void framerate_for_videomode(int videomode, int *p_numer, int *p_denom)
 {
     int video = videomode & SV_MODE_MASK;       // mask off everything except video
@@ -314,9 +355,107 @@ static void framerate_for_videomode(int videomode, int *p_numer, int *p_denom)
         *p_denom = 1;
     }
 }
+*/
 
-static int set_videomode_on_all_channels(int max_channels, int opt_video_mode)
+static int get_video_raster(int channel, VideoRaster::EnumType & video_raster)
 {
+    int dvs_mode;
+    int ret = sv_query(a_sv[channel], SV_QUERY_MODE_CURRENT, 0, &dvs_mode);
+
+    switch (dvs_mode & SV_MODE_MASK)
+    {
+    case SV_MODE_PAL:
+        video_raster = VideoRaster::PAL;
+        break;
+    case SV_MODE_NTSC:
+        video_raster = VideoRaster::NTSC;
+        break;
+    case SV_MODE_SMPTE274_25I:
+        video_raster = VideoRaster::SMPTE274_25I;
+        break;
+    case SV_MODE_SMPTE274_29I:
+        video_raster = VideoRaster::SMPTE274_29I;
+        break;
+    case SV_MODE_SMPTE296_50P:
+        video_raster = VideoRaster::SMPTE296_50P;
+        break;
+    case SV_MODE_SMPTE296_59P:
+        video_raster = VideoRaster::SMPTE296_59P;
+        break;
+    default:
+        video_raster = VideoRaster::NONE;
+        break;
+    }
+
+    return ret;
+}
+
+static VideoRaster::EnumType sd_raster(VideoRaster::EnumType raster)
+{
+    VideoRaster::EnumType sd_raster;
+    switch (raster)
+    {
+    case VideoRaster::PAL:
+    case VideoRaster::SMPTE274_25I:
+    case VideoRaster::SMPTE296_50P:
+        sd_raster = VideoRaster::PAL;
+        break;
+    case VideoRaster::NTSC:
+    case VideoRaster::SMPTE274_29I:
+    case VideoRaster::SMPTE296_59P:
+        sd_raster = VideoRaster::NTSC;
+        break;
+    default:
+        sd_raster = VideoRaster::NONE;
+        break;
+    }
+
+    return sd_raster;
+}
+
+static int set_videomode_on_all_channels(int max_channels, VideoRaster::EnumType video_raster, int n_audio)
+{
+    int dvs_mode = SV_MODE_COLOR_YUV422 | SV_MODE_STORAGE_FRAME;
+
+
+    if (n_audio == 0)
+    {
+        dvs_mode |= SV_MODE_AUDIO_NOAUDIO;
+    }
+    else if (n_audio <= 4)
+    {
+        dvs_mode |= SV_MODE_AUDIO_4CHANNEL;
+    }
+    else
+    {
+        dvs_mode |= SV_MODE_AUDIO_8CHANNEL;
+    }
+
+    switch (video_raster)
+    {
+    case VideoRaster::PAL:
+    case VideoRaster::PAL_B:
+        dvs_mode |= SV_MODE_PAL;
+        break;
+    case VideoRaster::NTSC:
+        dvs_mode |= SV_MODE_NTSC;
+        break;
+    case VideoRaster::SMPTE274_25I:
+        dvs_mode |= SV_MODE_SMPTE274_25I;
+        break;
+    case VideoRaster::SMPTE274_29I:
+        dvs_mode |= SV_MODE_SMPTE274_29I;
+        break;
+    case VideoRaster::SMPTE296_50P:
+        dvs_mode |= SV_MODE_SMPTE296_50P;
+        break;
+    case VideoRaster::SMPTE296_59P:
+        dvs_mode |= SV_MODE_SMPTE296_59P;
+        break;
+    default:
+        break;
+    }
+
     // Assume SDK multichannel capability (> major version 3)
     int card = 0;
     int channel = 0;
@@ -336,9 +475,9 @@ static int set_videomode_on_all_channels(int max_channels, int opt_video_mode)
         }
         if (res == SV_OK)
         {
-            res = sv_videomode(a_sv[channel], opt_video_mode);
+            res = sv_videomode(a_sv[channel], dvs_mode);
             if (res != SV_OK) {
-                fprintf(stderr, "sv_videomode(channel=%d, 0x%08x) failed: ", channel, opt_video_mode);
+                fprintf(stderr, "sv_videomode(channel=%d, 0x%08x) failed: ", channel, dvs_mode);
                 sv_errorprint(a_sv[channel], res);
                 sv_close(a_sv[channel]);
                 return 0;
@@ -361,18 +500,18 @@ static int set_videomode_on_all_channels(int max_channels, int opt_video_mode)
                     int res = sv_openex(&a_sv[channel], card_str, SV_OPENPROGRAM_DEMOPROGRAM, SV_OPENTYPE_DEFAULT, 0, 0);
                     if (res == SV_OK)
                     {
-                        res = sv_videomode(a_sv[channel], opt_video_mode);
+                        res = sv_videomode(a_sv[channel], dvs_mode);
                         if (res != SV_OK) {
-                            logTF("card %d: channel=1, sv_videomode(0x%08x) failed, trying without AUDIO\n", card, opt_video_mode);
-                            opt_video_mode = opt_video_mode & (~SV_MODE_AUDIO_MASK);
-                            res = sv_videomode(a_sv[channel], opt_video_mode);
+                            logTF("card %d: channel=1, sv_videomode(0x%08x) failed, trying without AUDIO\n", card, dvs_mode);
+                            dvs_mode = dvs_mode & (~SV_MODE_AUDIO_MASK);
+                            res = sv_videomode(a_sv[channel], dvs_mode);
                             if (res != SV_OK) {
-                                fprintf(stderr, "sv_videomode(channel=%d, 0x%08x) failed: ", channel, opt_video_mode);
+                                fprintf(stderr, "sv_videomode(channel=%d, 0x%08x) failed: ", channel, dvs_mode);
                                 sv_errorprint(a_sv[channel], res);
                                 sv_close(a_sv[channel]);
                                 return 0;
                             }
-                            logTF("card %d: channel=1, sv_videomode(0x%08x) succeeded without AUDIO\n", card, opt_video_mode);
+                            logTF("card %d: channel=1, sv_videomode(0x%08x) succeeded without AUDIO\n", card, dvs_mode);
                         }
 
                         sv_close(a_sv[channel]);
@@ -555,14 +694,23 @@ static int allocate_shared_buffers(int num_channels, long long max_memory)
     p_control->ringlen = ring_len;
     p_control->elementsize = element_size;
 
-    p_control->width = width;
-    p_control->height = height;
     p_control->frame_rate_numer = frame_rate_numer;
     p_control->frame_rate_denom = frame_rate_denom;
+
+    //p_control->drop_frame = df;
+
+    p_control->pri_video_raster = primary_video_raster;
+    p_control->pri_pixel_format = primary_pixel_format;
     p_control->pri_video_format = video_format;
+    p_control->width = width;
+    p_control->height = height;
+    
+    p_control->sec_video_raster = secondary_video_raster;
+    p_control->sec_pixel_format = secondary_pixel_format;
     p_control->sec_video_format = video_secondary_format;
     p_control->sec_width = sec_width;
     p_control->sec_height = sec_height;
+
     p_control->default_tc_type = timecode_type;
     p_control->master_tc_channel = master_channel;
 
@@ -647,31 +795,38 @@ static time_t today_midnight_time(void)
 
 // Given a 64bit time-of-day corresponding to when a frame was captured,
 // calculate a derived timecode from the global master timecode.
-static int derive_timecode_from_master(int64_t tod_rec, int64_t *p_diff_to_master)
+static Ingex::Timecode derive_timecode_from_master(int64_t tod_rec, int64_t *p_diff_to_master)
 {
-    int derived_tc = 0;
+    Ingex::Timecode derived_tc = master_tc;
     int64_t diff_to_master = 0;
+    // tod_rec is microseconds since 1970
 
     PTHREAD_MUTEX_LOCK( &m_master_tc )
 
-    // if master_tod is not set, derived_tc is also left as 0
-    if (master_tod) {
+    if (master_tod && !master_tc.IsNull())
+    {
         // compute offset between this chan's recorded frame's time-of-day and master's
         diff_to_master = tod_rec - master_tod;
-        int int_diff = diff_to_master;
-        int div;
-        if (int_diff < 0)   // -ve range is from -20000 to -1
-            div = (int_diff - 19999) / 40000;
-        else                // +ve range is from 0 to 19999
-            div = (int_diff + 20000) / 40000;
-        derived_tc = master_tc + div;
+        int int_diff = diff_to_master;  // microseconds, should be a relatively small number
+        int sign_diff = 1;
+        // round to nearest frame
+        if (int_diff < 0)
+        {
+            int_diff = -int_diff;
+            sign_diff = -1;
+        }
+        int microsecs_per_frame = 1000000 * master_tc.FrameRateDenominator() / master_tc.FrameRateNumerator();
+        int div = (int_diff + microsecs_per_frame / 2) / microsecs_per_frame;
+        derived_tc = master_tc + sign_diff * div;
     }
 
     PTHREAD_MUTEX_UNLOCK( &m_master_tc )
 
     // return diff_to_master for logging purposes
     if (p_diff_to_master)
+    {
         *p_diff_to_master = diff_to_master;
+    }
 
     return derived_tc;
 }
@@ -761,7 +916,8 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
 
     uint8_t *vid_dest = ring[chan] + element_size * ((pc->lastframe+1) % ring_len);
     uint8_t *dma_dest = vid_dest;
-    if (video_format == Format422PlanarYUV || video_format == Format422PlanarYUVShifted) {
+    if (Ingex::PixelFormat::UYVY_422 != primary_pixel_format)
+    {
 #if 0
         // Store frame at pc->lastframe+2 to allow space for UYVY->YUV422 conversion
         dma_dest = ring[chan] + element_size * ((pc->lastframe+2) % ring_len);
@@ -844,7 +1000,7 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
     int64_t tod_rec = tod - clock_diff;
     //logTF("tod = %"PRId64", cur_clock = %"PRId64", rec_clock = %"PRId64" microseconds\n", tod, cur_clock, rec_clock);
 
-    if (video_format == Format422PlanarYUV || video_format == Format422PlanarYUVShifted)
+    if (Ingex::PixelFormat::YUV_PLANAR_422 == primary_pixel_format)
     {
         uint8_t *vid_input = dma_dest;
 
@@ -857,7 +1013,7 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
 
         // Repack to planar YUV 4:2:2
         uyvy_to_yuv422(     width, height,
-                            video_format == Format422PlanarYUVShifted,  // do DV50 line shift?
+                            primary_line_shift,
                             vid_input,                      // input
                             vid_dest);                      // output
 
@@ -880,14 +1036,28 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
     }
 
     // Convert primary video into secondary video buffer
-    if (video_secondary_format != FormatNone) {
-        if (width > 720) {
+    if (Ingex::PixelFormat::NONE != secondary_pixel_format)
+    {
+        if (width > 720)
+        {
             // HD primary video, scale and reformat to SD secondary
-            PixelFormat in_pixfmt = (video_format == Format422UYVY) ? PIX_FMT_UYVY422 : PIX_FMT_YUV422P;
-            PixelFormat out_pixfmt = PIX_FMT_YUV420P;
-            if (video_secondary_format == Format422PlanarYUV ||
-                video_secondary_format == Format422PlanarYUVShifted) {
+            ::PixelFormat in_pixfmt;
+            if (Ingex::PixelFormat::UYVY_422 == primary_pixel_format)
+            {
+                in_pixfmt = PIX_FMT_UYVY422;
+            }
+            else
+            {
+                in_pixfmt = PIX_FMT_YUV422P;
+            }
+            ::PixelFormat out_pixfmt;
+            if (Ingex::PixelFormat::YUV_PLANAR_422 == secondary_pixel_format)
+            {
                 out_pixfmt = PIX_FMT_YUV422P;
+            }
+            else
+            {
+                out_pixfmt = PIX_FMT_YUV420P;
             }
 
             td[chan].scale_context = sws_getCachedContext(td[chan].scale_context,
@@ -912,130 +1082,148 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
                             0, height,
                             td[chan].outFrame->data, td[chan].outFrame->linesize);
         }
-        else {
+        else
+        {
             // SD primary video, reformat for SD secondary
-            if (video_secondary_format == Format422PlanarYUV || video_secondary_format == Format422PlanarYUVShifted) {
+            if (Ingex::PixelFormat::YUV_PLANAR_422 == secondary_pixel_format)
+            {
                 // Repack to planar YUV 4:2:2
                 uyvy_to_yuv422( width, height,
-                                video_secondary_format == Format422PlanarYUVShifted,    // do DV50 line shift?
+                                secondary_line_shift,
                                 dma_dest,                                   // input
                                 vid_dest + (audio_offset + audio_size));    // output
             }
-            else {
-                // Downconvert to 4:2:0 YUV buffer located just after audio
-                if (video_secondary_format == Format420PlanarYUVShifted) {  // do DV25 style subsampling?
-                    uyvy_to_yuv420_DV_sampling( width, height,
-                                1,                                          // do DV25 line shift?
-                                dma_dest,                                   // input
-                                vid_dest + (audio_offset + audio_size));    // output
-                }
-                else {
-                    uyvy_to_yuv420( width, height,
-                                0,                                          // do DV25 line shift?
-                                dma_dest,                                   // input
-                                vid_dest + (audio_offset + audio_size));    // output
-                }
+            else if (Ingex::PixelFormat::YUV_PLANAR_420_DV == secondary_pixel_format)
+            {
+                // Downsample and repack to planar YUV 4:2:0 for PAL DV
+                uyvy_to_yuv420_DV_sampling( width, height,
+                            secondary_line_shift,                       // should be true
+                            dma_dest,                                   // input
+                            vid_dest + (audio_offset + audio_size));    // output
+            }
+            else if (Ingex::PixelFormat::YUV_PLANAR_411 == secondary_pixel_format)
+            {
+                // Downsample and repack to planar YUV 4:1:1 for NTSC DV
+                uyvy_to_yuv411( width, height,
+                            secondary_line_shift,                       // should be false
+                            dma_dest,                                   // input
+                            vid_dest + (audio_offset + audio_size));    // output
+            }
+            else if (Ingex::PixelFormat::YUV_PLANAR_420_MPEG == secondary_pixel_format)
+            {
+                // Downsample and repack to planar YUV 4:2:0 for MPEG
+                uyvy_to_yuv420( width, height,
+                            0,                                          // no DV25 line shift
+                            dma_dest,                                   // input
+                            vid_dest + (audio_offset + audio_size));    // output
             }
         }
     }
 
     // The various timecodes...
 
-    // SMPTE-12M LTC and VITC\n");
-    int ltc_tc = pbuffer->timecode.ltc_tc;
-    int vitc1_tc = pbuffer->timecode.vitc_tc;
-    int vitc2_tc = pbuffer->timecode.vitc_tc2;
+    // SMPTE-12M LTC and VITC
+    int ltc_bits = pbuffer->timecode.ltc_tc;
+    int vitc1_bits = pbuffer->timecode.vitc_tc;
+    int vitc2_bits = pbuffer->timecode.vitc_tc2;
     // "DLTC" and "DVITC" timecodes from RP188/RP196 ANC data
-    int vitc1_anc = pbuffer->anctimecode.dvitc_tc[0];
-    int vitc2_anc = pbuffer->anctimecode.dvitc_tc[1];
-    int ltc_anc = pbuffer->anctimecode.dltc_tc;
+    int dltc_bits = pbuffer->anctimecode.dltc_tc;
+    int dvitc1_bits = pbuffer->anctimecode.dvitc_tc[0];
+    int dvitc2_bits = pbuffer->anctimecode.dvitc_tc[1];
 
 
     // Handle buggy field order (can happen with misconfigured camera)
     // Incorrect field order causes vitc_tc and vitc2 to be swapped.
     // If the high bit is set on vitc use vitc2 instead.
-    int vitc_tc;
-    if ((unsigned)vitc1_tc >= 0x80000000 && (unsigned)vitc2_tc < 0x80000000)
+    int vitc_bits;
+    if ((unsigned)vitc1_bits >= 0x80000000 && (unsigned)vitc2_bits < 0x80000000)
     {
-        vitc_tc = vitc2_tc;
+        vitc_bits = vitc2_bits;
         if (1) //(verbose)
         {
             PTHREAD_MUTEX_LOCK( &m_log )
-            logTF("chan %d: 1st vitc value >= 0x80000000 (0x%08x), using 2nd vitc (0x%08x)\n", chan, vitc1_tc, vitc2_tc);
+            logTF("chan %d: 1st vitc value >= 0x80000000 (0x%08x), using 2nd vitc (0x%08x)\n", chan, vitc1_bits, vitc2_bits);
             PTHREAD_MUTEX_UNLOCK( &m_log )
         }
     }
     else
     {
-        vitc_tc = vitc1_tc;
+        vitc_bits = vitc1_bits;
     }
-    int vitc_anc;
-    if ((unsigned)vitc1_anc >= 0x80000000 && (unsigned)vitc2_anc < 0x80000000)
+    int dvitc_bits;
+    if ((unsigned)dvitc1_bits >= 0x80000000 && (unsigned)dvitc2_bits < 0x80000000)
     {
-        vitc_anc = vitc2_anc;
+        dvitc_bits = dvitc2_bits;
         if (1) //(verbose)
         {
             PTHREAD_MUTEX_LOCK( &m_log )
-            logTF("chan %d: 1st dvitc value >= 0x80000000 (0x%08x), using 2nd vitc (0x%08x)\n", chan, vitc1_anc, vitc2_anc);
+            logTF("chan %d: 1st dvitc value >= 0x80000000 (0x%08x), using 2nd vitc (0x%08x)\n", chan, dvitc1_bits, dvitc2_bits);
             PTHREAD_MUTEX_UNLOCK( &m_log )
         }
     }
     else
     {
-        vitc_anc = vitc1_anc;
+        dvitc_bits = dvitc1_bits;
     }
 
     // A similar check must be done for LTC since the field
     // flag is occasionally set when the fifo call returns
-    if ((unsigned)ltc_tc >= 0x80000000)
+    if ((unsigned)ltc_bits >= 0x80000000)
     {
         if (0) //(verbose)
         {
             PTHREAD_MUTEX_LOCK( &m_log )
-            logTF("chan %d: ltc tc >= 0x80000000 (0x%08x), masking high bit\n", chan, ltc_tc);
+            logTF("chan %d: ltc tc >= 0x80000000 (0x%08x), masking high bit\n", chan, ltc_bits);
             PTHREAD_MUTEX_UNLOCK( &m_log )
         }
-        ltc_tc = (unsigned)ltc_tc & 0x7fffffff;
+        ltc_bits = (unsigned)ltc_bits & 0x7fffffff;
     }
-    if ((unsigned)ltc_anc >= 0x80000000)
+    if ((unsigned)dltc_bits >= 0x80000000)
     {
         if (0) //(verbose)
         {
             PTHREAD_MUTEX_LOCK( &m_log )
-            logTF("chan %d: dltc tc >= 0x80000000 (0x%08x), masking high bit\n", chan, ltc_anc);
+            logTF("chan %d: dltc tc >= 0x80000000 (0x%08x), masking high bit\n", chan, dltc_bits);
             PTHREAD_MUTEX_UNLOCK( &m_log )
         }
-        ltc_anc = (unsigned)ltc_anc & 0x7fffffff;
+        dltc_bits = (unsigned)dltc_bits & 0x7fffffff;
     }
 
     // Optionally mask off irrelevant bits in the timecodes.
     // NB not sure where drop-frame flag is.
     if (0)
     {
-        vitc_tc &= 0x3f7f7f3f;
-        ltc_tc &= 0x3f7f7f3f;
-        vitc_anc &= 0x3f7f7f3f;
-        ltc_anc &= 0x3f7f7f3f;
+        vitc_bits &= 0x3f7f7f3f;
+        ltc_bits &= 0x3f7f7f3f;
+        dvitc_bits &= 0x3f7f7f3f;
+        dltc_bits &= 0x3f7f7f3f;
     }
 
-    // sys_tc uses system clock as timecode source (tod_rec is in microsecs since 1970)
+    Ingex::Timecode tc_ltc = timecode_from_dvs_bits(ltc_bits, frame_rate_numer, frame_rate_denom);
+    Ingex::Timecode tc_vitc = timecode_from_dvs_bits(vitc_bits, frame_rate_numer, frame_rate_denom);
+    Ingex::Timecode tc_dltc = timecode_from_dvs_bits(dltc_bits, frame_rate_numer, frame_rate_denom);
+    Ingex::Timecode tc_dvitc = timecode_from_dvs_bits(dvitc_bits, frame_rate_numer, frame_rate_denom);
+
+    // System timecode - start with microseconds since midnight (tod_rec is in microsecs since 1970)
     int64_t sys_time_microsec = tod_rec - (today_midnight_time() * INT64_C(1000000));
-    // compute sys_time timecode as int number of frames since midnight
-    int sys_tc = (int)(sys_time_microsec * frame_rate_numer / (INT64_C(1000000) * frame_rate_denom));
+
+    // Compute system timecode as int number of frames since midnight
+    int systc_as_int = (int)(sys_time_microsec * frame_rate_numer / (INT64_C(1000000) * frame_rate_denom));
+    bool systc_drop = (frame_rate_numer % frame_rate_denom != 0);
+    Ingex::Timecode tc_systc(systc_as_int, frame_rate_numer, frame_rate_denom, systc_drop);
 
     // Convert timecodes to frames since midnight
-    int vitc_as_int = dvs_tc_to_int(vitc_tc);
-    int ltc_as_int = dvs_tc_to_int(ltc_tc);
-    int dvitc_as_int = dvs_tc_to_int(vitc_anc);
-    int dltc_as_int = dvs_tc_to_int(ltc_anc);
+    int ltc_as_int = tc_ltc.FramesSinceMidnight();
+    int vitc_as_int = tc_vitc.FramesSinceMidnight();
+    int dltc_as_int = tc_dltc.FramesSinceMidnight();
+    int dvitc_as_int = tc_dvitc.FramesSinceMidnight();
 
     int orig_vitc_as_int = vitc_as_int;
     int orig_ltc_as_int = ltc_as_int;
 
     // If enabled, handle master timecode distribution
-    int derived_tc = 0;
     int64_t diff_to_master = 0;
-    if (master_channel >= 0)
+    if (master_channel >= 0 && NexusTC_SYSTEM != timecode_type)
     {
         if (chan == master_channel)
         {
@@ -1044,19 +1232,20 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
             switch (timecode_type)
             {
             case NexusTC_LTC:
-                master_tc = ltc_as_int;
+                master_tc = tc_ltc;
                 break;
             case NexusTC_VITC:
-                master_tc = vitc_as_int;
+                master_tc = tc_vitc;
                 break;
             case NexusTC_DLTC:
-                master_tc = dltc_as_int;
+                master_tc = tc_dltc;
                 break;
             case NexusTC_DVITC:
-                master_tc = dvitc_as_int;
+                master_tc = tc_dvitc;
                 break;
-            default:
-                master_tc = vitc_as_int;
+            case  NexusTC_SYSTEM:
+            case  NexusTC_DEFAULT:
+                // not applicable
                 break;
             }
             master_tod = tod_rec;
@@ -1064,24 +1253,29 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
         }
         else
         {
-            derived_tc = derive_timecode_from_master(tod_rec, &diff_to_master);
+            Ingex::Timecode derived_tc = derive_timecode_from_master(tod_rec, &diff_to_master);
 
             switch (timecode_type)
             {
             case NexusTC_LTC:
-                ltc_as_int = derived_tc;
+                tc_ltc = derived_tc;
+                ltc_as_int = derived_tc.FramesSinceMidnight();
                 break;
             case NexusTC_VITC:
-                vitc_as_int = derived_tc;
+                tc_vitc = derived_tc;
+                vitc_as_int = derived_tc.FramesSinceMidnight();
                 break;
             case NexusTC_DLTC:
-                dltc_as_int = derived_tc;
+                tc_dltc = derived_tc;
+                dltc_as_int = derived_tc.FramesSinceMidnight();
                 break;
             case NexusTC_DVITC:
-                dvitc_as_int = derived_tc;
+                tc_dvitc = derived_tc;
+                dvitc_as_int = derived_tc.FramesSinceMidnight();
                 break;
-            default:
-                vitc_as_int = derived_tc;
+            case  NexusTC_SYSTEM:
+            case  NexusTC_DEFAULT:
+                // not applicable
                 break;
             }
         }
@@ -1125,7 +1319,7 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
             break;
         case NexusTC_SYSTEM:
         default:
-            diff = sys_tc - last_systc;
+            diff = systc_as_int - last_systc;
             break;
         }
         // We expect diff to be 1 frame
@@ -1181,11 +1375,13 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
     // re-calculate the pointer to NexusFrameData
     nfd = (NexusFrameData *)(ring[chan] + element_size * ((pc->lastframe + 1) % ring_len) + frame_data_offset);
 
-    // LTC and VITC bits
-    nfd->vitc_bits = vitc_tc;
-    nfd->ltc_bits = ltc_tc;
-    nfd->dvitc_bits = vitc_tc;
-    nfd->dltc_bits = ltc_tc;
+    // LTC, VITC, DLTC, DVITC, SYS as Ingex::Timecode
+    nfd->tc_ltc = tc_ltc;
+    nfd->tc_vitc = tc_vitc;
+    nfd->tc_dltc = tc_dltc;
+    nfd->tc_dvitc = tc_dvitc;
+    nfd->tc_systc = tc_systc;
+
     // LTC and VITC as frame count
     nfd->vitc = vitc_as_int;
     nfd->ltc = ltc_as_int;
@@ -1204,11 +1400,10 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
     // audio[0].size is total size in bytes of 2 channels of 32bit samples
     int num_audio_samples = pbuffer->audio[0].size / 2 / 4;
     nfd->num_aud_samp = num_audio_samples;
+    //logTF("chan %d: num_audio_samples = %d\n", chan, num_audio_samples);
 
     // store timestamp of when frame was captured (microseconds since 1970)
     nfd->timestamp = tod_rec;
-
-    nfd->systc = sys_tc;
 
     // Timecode error occurs when difference is not exactly 1
     // or (around midnight) not exactly -2159999
@@ -1221,32 +1416,37 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
     int tc_bits;
     int tc_frames;
     int tc_diff;
+    Ingex::Timecode tc_tc = tc_systc;
     const char * tc_name = "";
     switch (timecode_type)
     {
     case NexusTC_VITC:
         tc_name = "VITC";
-        tc_bits = vitc_tc;
+        tc_bits = vitc_bits;
         tc_frames = vitc_as_int;
         tc_diff = vitc_diff;
+        tc_tc = tc_vitc;
         break;
     case NexusTC_LTC:
         tc_name = "LTC";
-        tc_bits = ltc_tc;
+        tc_bits = ltc_bits;
         tc_frames = ltc_as_int;
         tc_diff = ltc_diff;
+        tc_tc = tc_ltc;
         break;
     case NexusTC_DVITC:
         tc_name = "DVITC";
-        tc_bits = vitc_anc;
+        tc_bits = vitc_bits;
         tc_frames = dvitc_as_int;
         tc_diff = dvitc_diff;
+        tc_tc = tc_dvitc;
         break;
     case NexusTC_DLTC:
         tc_name = "DLTC";
-        tc_bits = ltc_anc;
+        tc_bits = dltc_bits;
         tc_frames = dltc_as_int;
         tc_diff = dltc_diff;
+        tc_tc = tc_dltc;
         break;
     default:
         tc_bits = 0;
@@ -1256,20 +1456,21 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
     int tc_err = (tc_diff != 1 && tc_diff != 2159999 && pc->lastframe != -1); // NB. 2159999 assumes 25 fps
 
     // log timecode discontinuity if any, or give verbose log of specified chan
-    if (tc_err || (verbose && chan == verbose_channel)) {
+    if (tc_err || (verbose && chan == verbose_channel))
+    {
         PTHREAD_MUTEX_LOCK( &m_log )
         if (0)
         {
             // All timecode info
-            logTF("chan %d: lastframe=%6d tick/2=%7d hwdrop=%5d vitc1=%08x vitc2=%08x ltc=%08x dvitc1=%08x dvitc2=%08x dltc=%08x vitc_diff=%d%s ltc_diff=%d%s dvitc_diff=%d%s dltc_diff=%d%s\n",
+            logTF("chan %d: lastframe=%6d tick/2=%7d hwdrop=%3d vitc1=%08x vitc2=%08x ltc=%08x dvitc1=%08x dvitc2=%08x dltc=%08x vitc_diff=%d%s ltc_diff=%d%s dvitc_diff=%d%s dltc_diff=%d%s\n",
             chan, pc->lastframe, pbuffer->control.tick / 2,
             info.dropped,
-            vitc1_tc,
-            vitc2_tc,
-            ltc_tc,
-            vitc1_anc,
-            vitc2_anc,
-            ltc_anc,
+            vitc1_bits,
+            vitc2_bits,
+            ltc_bits,
+            vitc1_bits,
+            vitc2_bits,
+            dltc_bits,
             vitc_diff,
             vitc_diff != 1 ? "!" : "",
             ltc_diff,
@@ -1282,9 +1483,9 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
         else
         {
             // Selected timecode info
-            logTF("chan %d: lastframe=%6d tick/2=%7d hwdrop=%5d tc=%08x frames=%7d tc_err=%d\n",
+            logTF("chan %d: lastframe=%6d tick/2=%7d hwdrop=%3d tc=%08x %s frames=%7d tc_err=%d\n",
                 chan, pc->lastframe, pbuffer->control.tick / 2, info.dropped,
-                tc_bits, tc_frames, tc_diff - 1);
+                tc_bits, tc_tc.Text(), tc_frames, tc_diff - 1);
         }
         PTHREAD_MUTEX_UNLOCK( &m_log )
     }
@@ -1357,20 +1558,33 @@ static int write_dummy_frames(sv_handle *sv, int chan, int current_frame_tick, i
         else
             num_dummy_frames = current_frame_tick - tick_last_dummy_frame;
 
+        // Master timecode -
         // first dummy frame will get the closest timecode to the master timecode
         // subsequent dummy frames will increment by 1
-        int last_tc = derive_timecode_from_master(tod_tc_read, NULL);
+        Ingex::Timecode derived_tc = derive_timecode_from_master(tod_tc_read, NULL);
+
+        // Timecode from system clock
+        // (tod_tc_read is in microsecs since 1970)
+        int64_t sys_time_microsec = tod_tc_read - (today_midnight_time() * INT64_C(1000000));
+        // Compute timecode as int number of frames since midnight
+        int sys_tc = (int)(sys_time_microsec * frame_rate_numer / (INT64_C(1000000) * frame_rate_denom));
+        Ingex::Timecode system_tc(sys_tc, frame_rate_numer, frame_rate_denom, false);
+
+        if (derived_tc.IsNull())
+        {
+            // Use system clock
+            derived_tc = system_tc;
+        }
+
+        /*
+        int last_tc = derive_timecode_from_master(tod_tc_read, NULL).FramesSinceMidnight();
         int last_vitc = last_tc;
         int last_ltc = last_tc;
         int last_dvitc = last_tc;
         int last_dltc = last_tc;
 
-        // sys_time uses system clock as timecode source (tod_tc_read is in microsecs since 1970)
-        int64_t sys_time_microsec = tod_tc_read - (today_midnight_time() * INT64_C(1000000));
-        // compute sys_time timecode as int number of frames since midnight
-        int sys_tc = (int)(sys_time_microsec * frame_rate_numer / (INT64_C(1000000) * frame_rate_denom));
         int last_systc = sys_tc;
-
+        */
 
         for (int i = 0; i < num_dummy_frames; i++)
         {
@@ -1392,40 +1606,51 @@ static int write_dummy_frames(sv_handle *sv, int chan, int current_frame_tick, i
             if (no_video_secondary_frame)
             {
                 uint8_t *vid_dest_sec = ring[chan] + element_size * ((pc->lastframe+1) % ring_len) + audio_offset + audio_size;
-                if (video_secondary_format == Format420PlanarYUV ||
-                    video_secondary_format == Format420PlanarYUVShifted)
-                {
-                    // 4:2:0
-                    memcpy(vid_dest_sec, no_video_secondary_frame, sec_width*sec_height*3/2);
-                }
-                else
+                if (Ingex::PixelFormat::YUV_PLANAR_422 == secondary_pixel_format)
                 {
                     // 4:2:2
                     memcpy(vid_dest_sec, no_video_secondary_frame, sec_width*sec_height*2);
                 }
+                else
+                {
+                    // 4:2:0 or 4:1:1
+                    memcpy(vid_dest_sec, no_video_secondary_frame, sec_width*sec_height*3/2);
+                }
             }
 
-            // write silent 4 channels of 32bit audio
-            memset(ring[chan] + element_size * ((pc->lastframe+1) % ring_len) + audio_offset, 0, 1920*4*4);
+            // write silent audio
+            int n_audio_samples;
+            switch (primary_video_raster)
+            {
+            case Ingex::VideoRaster::PAL:
+            case Ingex::VideoRaster::SMPTE274_25I:
+            case Ingex::VideoRaster::SMPTE274_25P:
+            default:
+                n_audio_samples = PAL_AUDIO_SAMPLES;
+                break;
+            case Ingex::VideoRaster::NTSC:
+            case Ingex::VideoRaster::SMPTE274_29I:
+            case Ingex::VideoRaster::SMPTE274_29P:
+                n_audio_samples = NTSC_AUDIO_SAMPLES[ntsc_audio_seq];
+                ntsc_audio_seq++;
+                ntsc_audio_seq %= 5;
+                break;
+            }
+            if (audio8ch)
+            {
+                memset(ring[chan] + element_size * ((pc->lastframe+1) % ring_len) + audio_offset, 0, n_audio_samples * 4 * 8);
+            }
+            else
+            {
+                memset(ring[chan] + element_size * ((pc->lastframe+1) % ring_len) + audio_offset, 0, n_audio_samples * 4 * 4);
+            }
 
             NexusFrameData * last_nfd = (NexusFrameData *)(ring[chan] + element_size * ((pc->lastframe) % ring_len) + frame_data_offset);
             // Increment timecode by 1 for dummy frames after the first
             if (i > 0)
             {
-                if (pc->lastframe >= 0)
-                {
-                // Don't think these lines will make any difference
-                    last_vitc = last_nfd->vitc;
-                    last_ltc = last_nfd->ltc;
-                    last_dvitc = last_nfd->dvitc;
-                    last_dltc = last_nfd->dltc;
-                    last_systc = last_nfd->systc;
-                }
-                last_vitc++;
-                last_ltc++;
-                last_dvitc++;
-                last_dltc++;
-                last_systc++;
+                derived_tc += 1;
+                system_tc += 1;
             }
             int last_ftk = 0;
             if (pc->lastframe >= 0)
@@ -1434,21 +1659,30 @@ static int write_dummy_frames(sv_handle *sv, int chan, int current_frame_tick, i
             }
             last_ftk++;
 
-            nfd->vitc = last_vitc;
-            nfd->ltc = last_ltc;
-            nfd->dvitc = last_dvitc;
-            nfd->dltc = last_dltc;
-            nfd->systc = last_systc;
+            nfd->tc_vitc = derived_tc;
+            nfd->tc_ltc = derived_tc;
+            nfd->tc_dvitc = derived_tc;
+            nfd->tc_dltc = derived_tc;
+            nfd->tc_systc = system_tc;
+
+            nfd->vitc = derived_tc.FramesSinceMidnight();
+            nfd->ltc = derived_tc.FramesSinceMidnight();
+            nfd->dvitc = derived_tc.FramesSinceMidnight();
+            nfd->dltc = derived_tc.FramesSinceMidnight();
+            nfd->systc = system_tc.FramesSinceMidnight();
+
             nfd->tick = last_ftk;
 
             nfd->timestamp = tod_tc_read;
+
+            nfd->num_aud_samp = n_audio_samples;
 
             // Indicate we've got a bad video signal
             nfd->signal_ok = 0;
 
             if (verbose)
             {
-                logTF("chan: %d i:%2d  cur_frame_tick=%d tick_last_dummy_frame=%d last_ftk=%d tc=%d ltc=%d\n", chan, i, current_frame_tick, tick_last_dummy_frame, last_ftk, last_vitc, last_ltc);
+                logTF("chan: %d i:%2d  cur_frame_tick=%d tick_last_dummy_frame=%d last_ftk=%d tc=%s\n", chan, i, current_frame_tick, tick_last_dummy_frame, last_ftk, derived_tc.Text());
             }
 
             // signal frame is now ready
@@ -1476,23 +1710,32 @@ static void wait_for_good_signal(sv_handle *sv, int chan, int required_good_fram
         sv_timecode_info    timecodes;
         int                 sdiA, videoin, audioin, tc_status;
 
+        // When master video signal is not present, we may still be able to read LTC and use for master timecode.
+
+        // get time/tick from card
         SV_CHECK( sv_currenttime(sv, SV_CURRENTTIME_CURRENT, &current_tick, &h_clock, &l_clock) );
-        SV_CHECK( sv_timecode_feedback(sv, &timecodes, NULL) );     // read current input timecodes
+        // try to read current input timecodes
+        SV_CHECK( sv_timecode_feedback(sv, &timecodes, NULL) );
+        // update time-of-day the timecodes were read
         int64_t tod_tc_read = gettimeofday64();
 
-        // Keep master timecode ticking over when video signal is not present
         if (chan == master_channel)
         {
-            int ltc_as_int = dvs_tc_to_int(timecodes.altc_tc);
-            int vitc_as_int = dvs_tc_to_int(timecodes.avitc_tc[0]);
-
-            // update time-of-day the timecodes were read
             PTHREAD_MUTEX_LOCK( &m_master_tc )
-            master_tc = (timecode_type == NexusTC_LTC) ? ltc_as_int : vitc_as_int;
-            master_tod = tod_tc_read;
+            switch (timecode_type)
+            {
+            case NexusTC_LTC:
+                master_tc = timecode_from_dvs_bits(timecodes.altc_tc, frame_rate_numer, frame_rate_denom);
+                break;
+            default:
+                break;
+            }
             PTHREAD_MUTEX_UNLOCK( &m_master_tc )
+
+            master_tod = tod_tc_read;
         }
 
+        // Check for input signals
         SV_CHECK( sv_query(sv, SV_QUERY_INPUTRASTER_SDIA, 0, &sdiA) );
         SV_CHECK( sv_query(sv, SV_QUERY_VIDEOINERROR, 0, &videoin) );
         SV_CHECK( sv_query(sv, SV_QUERY_AUDIOINERROR, 0, &audioin) );
@@ -1516,6 +1759,7 @@ static void wait_for_good_signal(sv_handle *sv, int chan, int required_good_fram
             fflush(stdout);
         }
 
+        // See if input signal restored
         if (videoin == SV_OK)
         {
             good_frames++;
@@ -1662,11 +1906,11 @@ static void usage_exit(void)
     fprintf(stderr, "                         YUV422 - secondary buffer is planar YUV 4:2:2 16bpp\n");
     fprintf(stderr, "                         DV50   - secondary buffer is planar YUV 4:2:2 with field order line shift\n");
     fprintf(stderr, "                         MPEG   - secondary buffer is planar YUV 4:2:0\n");
-    fprintf(stderr, "                         DV25   - secondary buffer is planar YUV 4:2:0 with field order line shift\n");
+    fprintf(stderr, "                         DV25   - secondary buffer is planar YUV 4:2:0 suitable for DV25\n");
     fprintf(stderr, "    -mode vid[:AUDIO8]   set input mode on all DVS cards, vid is one of:\n");
-    fprintf(stderr, "                         PAL,NTSC,1920x1080i50,1920x1080i60,1280x720p50,1280x720p60\n");
+    fprintf(stderr, "                         PAL,NTSC,1920x1080i25,1920x1080i29,1280x720p50,1280x720p59\n");
     fprintf(stderr, "                         AUDIO8 enables 8 audio channels per SDI input\n");
-    fprintf(stderr, "                         E.g. -mode 1920x1080i50:AUDIO8\n");
+    fprintf(stderr, "                         E.g. -mode 1920x1080i29:AUDIO8\n");
     fprintf(stderr, "    -sync <type>         set input sync type on all DVS cards, sync is one of:\n");
     fprintf(stderr, "                         bilevel   - analog bilevel sync [default for PAL/NTSC mode]\n");
     fprintf(stderr, "                         trilevel  - analog trilevel sync [default for HD modes]\n");
@@ -1696,8 +1940,14 @@ int main (int argc, char ** argv)
     int             n, max_channels = MAX_CHANNELS;
     long long       opt_max_memory = 0;
     const char      *logfiledir = ".";
-    int             opt_video_mode = -1, current_video_mode = -1;
+    //int             opt_video_mode = -1;
+    //int             current_video_mode = -1;
     int             opt_sync_type = -1;
+    VideoRaster::EnumType mode_video_raster = VideoRaster::NONE;
+
+    enum CaptureFmt { NONE, UYVY, YUV422, DV50, MPEG, DV25 };
+    CaptureFmt primary_capture_format = YUV422;
+    CaptureFmt secondary_capture_format = NONE;
 
     time_t now;
     struct tm *tm_now;
@@ -1780,24 +2030,6 @@ int main (int argc, char ** argv)
             }
             n++;
         }
-        /*
-        else if (strcmp(argv[n], "-rt") == 0)
-        {
-            if (argc <= n+1)
-                usage_exit();
-
-            if (strcmp(argv[n+1], "VITC") == 0) {
-                recover_timecode_type = RecoverVITC;
-            }
-            else if (strcmp(argv[n+1], "LTC") == 0) {
-                recover_timecode_type = RecoverLTC;
-            }
-            else {
-                usage_exit();
-            }
-            n++;
-        }
-        */
         else if (strcmp(argv[n], "-m") == 0)
         {
             if (sscanf(argv[n+1], "%lld", &opt_max_memory) != 1) {
@@ -1830,28 +2062,33 @@ int main (int argc, char ** argv)
                 }
             }
 
-            // Default video mode is PAL/YUV422/FRAME/AUDIO8CH/32
-            opt_video_mode =    SV_MODE_PAL |
-                                SV_MODE_COLOR_YUV422 |
-                                SV_MODE_STORAGE_FRAME |
-                                SV_MODE_AUDIO_4CHANNEL;
-            if (strcmp(vidmode, "PAL") == 0) {
-                opt_video_mode = (opt_video_mode & ~SV_MODE_MASK) | SV_MODE_PAL;
+            if (strcmp(vidmode, "PAL") == 0)
+            {
+                mode_video_raster = VideoRaster::PAL;
             }
-            else if (strcmp(vidmode, "NTSC") == 0) {
-                opt_video_mode = (opt_video_mode & ~SV_MODE_MASK) | SV_MODE_NTSC;
+            else if (strcmp(vidmode, "NTSC") == 0)
+            {
+                mode_video_raster = VideoRaster::NTSC;
             }
-            else if (strcmp(vidmode, "1920x1080i50") == 0) {    // SMPTE274/25I
-                opt_video_mode = (opt_video_mode & ~SV_MODE_MASK) | SV_MODE_SMPTE274_25I;
+            else if (strcmp(vidmode, "1920x1080i25") == 0)
+            {
+                mode_video_raster = VideoRaster::SMPTE274_25I;
             }
-            else if (strcmp(vidmode, "1920x1080i60") == 0) {    // SMPTE274/30I
-                opt_video_mode = (opt_video_mode & ~SV_MODE_MASK) | SV_MODE_SMPTE274_30I;
+            else if (strcmp(vidmode, "1920x1080i29") == 0)
+            {
+                mode_video_raster = VideoRaster::SMPTE274_29I;
             }
-            else if (strcmp(vidmode, "1280x720p50") == 0) {     // SMPTE296/50P
-                opt_video_mode = (opt_video_mode & ~SV_MODE_MASK) | SV_MODE_SMPTE296_50P;
+            else if (strcmp(vidmode, "1280x720p50") == 0)
+            {
+                mode_video_raster = VideoRaster::SMPTE296_50P;
             }
-            else if (strcmp(vidmode, "1280x720p60") == 0) {     // SMPTE296/60P
-                opt_video_mode = (opt_video_mode & ~SV_MODE_MASK) | SV_MODE_SMPTE296_60P;
+            else if (strcmp(vidmode, "1280x720p59") == 0)
+            {
+                mode_video_raster = VideoRaster::SMPTE296_59P;
+            }
+            else
+            {
+                usage_exit();
             }
 
             // Default audio mode is 4 channels per SDI input
@@ -1898,18 +2135,23 @@ int main (int argc, char ** argv)
         else if (strcmp(argv[n], "-f") == 0)
         {
             if (argc <= n+1)
+            {
                 usage_exit();
-
-            if (strcmp(argv[n+1], "UYVY") == 0) {
-                video_format = Format422UYVY;
             }
-            else if (strcmp(argv[n+1], "YUV422") == 0) {
-                video_format = Format422PlanarYUV;
+            else if (strcmp(argv[n+1], "UYVY") == 0)
+            {
+                primary_capture_format = UYVY;
             }
-            else if (strcmp(argv[n+1], "DV50") == 0) {
-                video_format = Format422PlanarYUVShifted;
+            else if (strcmp(argv[n+1], "YUV422") == 0)
+            {
+                primary_capture_format = YUV422;
             }
-            else {
+            else if (strcmp(argv[n+1], "DV50") == 0)
+            {
+                primary_capture_format = DV50;
+            }
+            else
+            {
                 usage_exit();
             }
             n++;
@@ -1917,24 +2159,31 @@ int main (int argc, char ** argv)
         else if (strcmp(argv[n], "-s") == 0)
         {
             if (argc <= n+1)
+            {
                 usage_exit();
-
-            if (strcmp(argv[n+1], "None") == 0) {
+            }
+            else if (strcmp(argv[n+1], "None") == 0)
+            {
                 video_secondary_format = FormatNone;
             }
-            else if (strcmp(argv[n+1], "YUV422") == 0) {
-                video_secondary_format = Format422PlanarYUV;
+            else if (strcmp(argv[n+1], "YUV422") == 0)
+            {
+                secondary_capture_format = YUV422;
             }
-            else if (strcmp(argv[n+1], "DV50") == 0) {
-                video_secondary_format = Format422PlanarYUVShifted;
+            else if (strcmp(argv[n+1], "DV50") == 0)
+            {
+                secondary_capture_format = DV50;
             }
-            else if (strcmp(argv[n+1], "MPEG") == 0) {
-                video_secondary_format = Format420PlanarYUV;
+            else if (strcmp(argv[n+1], "MPEG") == 0)
+            {
+                secondary_capture_format = MPEG;
             }
-            else if (strcmp(argv[n+1], "DV25") == 0) {
-                video_secondary_format = Format420PlanarYUVShifted;
+            else if (strcmp(argv[n+1], "DV25") == 0)
+            {
+                secondary_capture_format = DV25;
             }
-            else {
+            else
+            {
                 usage_exit();
             }
             n++;
@@ -1965,56 +2214,6 @@ int main (int argc, char ** argv)
         }
     }
 
-    // Display info on primary video format
-    switch (video_format) {
-        case Format422UYVY:
-                logTF("Capturing video as UYVY (4:2:2)\n"); break;
-        case Format422PlanarYUV:
-                logTF("Capturing video as YUV 4:2:2 planar\n"); break;
-        case Format422PlanarYUVShifted:
-                logTF("Capturing video as YUV 4:2:2 planar with picture shifted down by one line\n"); break;
-        default:
-                logTF("Unsupported video buffer format\n");
-                return 1;
-    }
-
-    // Display info on secondary video format
-    switch (video_secondary_format) {
-        case FormatNone:
-                logTF("Secondary video buffer is disabled\n"); break;
-        case Format422PlanarYUV:
-                logTF("Secondary video buffer is YUV 4:2:2 planar\n"); break;
-        case Format422PlanarYUVShifted:
-                logTF("Secondary video buffer is YUV 4:2:2 planar with picture shifted down by one line\n"); break;
-        case Format420PlanarYUV:
-                logTF("Secondary video buffer is YUV 4:2:0 planar\n"); break;
-        case Format420PlanarYUVShifted:
-                logTF("Secondary video buffer is YUV 4:2:0 planar with picture shifted down by one line\n"); break;
-        default:
-                logTF("Unsupported Secondary video buffer format\n");
-                return 1;
-    }
-
-    if (master_channel > max_channels-1) {
-        logTF("Master channel number (%d) greater than highest channel number (%d)\n", master_channel, max_channels-1);
-        return 1;
-    }
-
-    if (master_channel < 0) {
-        logTF("Master timecode not used\n");
-    }
-    else {
-        logTF("Master timecode type is %s using channel %d\n",
-            nexus_timecode_type_name(timecode_type), master_channel);
-    }
-
-    logTF("Using %s to determine number of frames to recover when video re-aquired\n",
-            nexus_timecode_type_name(timecode_type));
-
-    if (audio8ch)
-    {
-        logTF("Audio 8 channel mode enabled\n");
-    }
 
     char logfile[FILENAME_MAX];
     strcpy(logfile, logfiledir);
@@ -2043,10 +2242,10 @@ int main (int argc, char ** argv)
         return 1;
     }
 
-    // Set video mode if specified
-    if (opt_video_mode != -1) {
-        if (! set_videomode_on_all_channels(max_channels, opt_video_mode))
-            return 1;
+    // Set video mode if requested
+    if (VideoRaster::NONE != mode_video_raster)
+    {
+        set_videomode_on_all_channels(max_channels, mode_video_raster, audio8ch ? 8 : 4);
     }
 
     //////////////////////////////////////////////////////
@@ -2061,7 +2260,7 @@ int main (int argc, char ** argv)
     // Check SDK multichannel capability
     if (check_sdk_version3())
     {
-        sv_info status_info;
+        //sv_info status_info;
         int card = 0;
         int channel = 0;
         for (card = 0; card < max_channels && channel < max_channels; card++)
@@ -2096,27 +2295,44 @@ int main (int argc, char ** argv)
                 fprintf(stderr, "Minimum memory alignment for DMA transfers = %d\n", alignment);
                 */
 
-                sv_status(a_sv[channel], &status_info);
-                sv_query(a_sv[channel], SV_QUERY_MODE_CURRENT, 0, &current_video_mode);
-                framerate_for_videomode(current_video_mode, &frame_rate_numer, &frame_rate_denom);
-                logTF("card %d: device present (%dx%d videomode=0x%08X rate=%d/%d)\n", card, status_info.xsize, status_info.ysize, current_video_mode, frame_rate_numer, frame_rate_denom);
+                //sv_status(a_sv[channel], &status_info);
+                //sv_query(a_sv[channel], SV_QUERY_MODE_CURRENT, 0, &current_video_mode);
+                //framerate_for_videomode(current_video_mode, &frame_rate_numer, &frame_rate_denom);
+                VideoRaster::EnumType ch_raster = VideoRaster::NONE;
+                get_video_raster(channel, ch_raster);
+                int ch_width;
+                int ch_height;
+                int ch_fps_num;
+                int ch_fps_den;
+                Interlace::EnumType ch_interlace;
+                VideoRaster::GetInfo(ch_raster, ch_width, ch_height, ch_fps_num, ch_fps_den, ch_interlace);
 
-                if (width == 0)
+                logTF("card %d: device present (%dx%d %d/%d %s)\n",
+                    card, ch_width, ch_height, ch_fps_num, ch_fps_den,
+                    Interlace::NONE == ch_interlace ? "progressive" : "interlaced");
+
+                if (channel == 0)
                 {
-                    // Set size from first channel
-                    width = status_info.xsize;
-                    height = status_info.ysize;
+                    // Set params from first channel
+                    primary_video_raster = ch_raster;
+                    width = ch_width;
+                    height = ch_height;
+                    frame_rate_numer = ch_fps_num;
+                    frame_rate_denom = ch_fps_den;
+                    interlace = ch_interlace;
                 }
-                else if (width != status_info.xsize || height != status_info.ysize)
+                else if (width != ch_width || height != ch_height
+                    || frame_rate_numer != ch_fps_num || frame_rate_denom != ch_fps_den
+                    || (interlace != ch_interlace))
                 {
                     // Warn if other channels different from first
-                    logTF("card %d: warning: different video size!\n", card);
+                    logTF("card %d: warning: different video raster!\n", card);
                 }
 
                 // Set AES input
                 set_aes_option(channel, aes_audio);
 
-                set_sync_option(channel, opt_sync_type, status_info.xsize);
+                set_sync_option(channel, opt_sync_type, ch_width);
 
                 // check for multichannel mode
                 int multichannel_mode = 0;
@@ -2141,8 +2357,19 @@ int main (int argc, char ** argv)
                                     0);
                         if (res == SV_OK)
                         {
-                            sv_status(a_sv[channel], &status_info);
-                            logTF("card %d: opened second channel (%dx%d)\n", card, status_info.xsize, status_info.ysize);
+                            VideoRaster::EnumType ch_raster = VideoRaster::NONE;
+                            get_video_raster(channel, ch_raster);
+                            int ch_width;
+                            int ch_height;
+                            int ch_fps_num;
+                            int ch_fps_den;
+                            Interlace::EnumType ch_interlace;
+                            VideoRaster::GetInfo(ch_raster, ch_width, ch_height, ch_fps_num, ch_fps_den, ch_interlace);
+
+                            logTF("card %d: second channel (%dx%d %d/%d %s)\n",
+                                card, ch_width, ch_height, ch_fps_num, ch_fps_den,
+                                Interlace::NONE == ch_interlace ? "progressive" : "interlaced");
+
                             // Set AES audio routing
                             if (aes_audio)
                             {
@@ -2205,7 +2432,7 @@ int main (int argc, char ** argv)
         //
         // card specified by string of form "PCI,card=n" where n = 0,1,2,3
         //
-        sv_info status_info;
+        //sv_info status_info;
         int card;
         for (card = 0; card < max_channels; card++)
         {
@@ -2221,26 +2448,43 @@ int main (int argc, char ** argv)
                                 0);
             if (res == SV_OK)
             {
-                sv_status(a_sv[card], &status_info);
-                sv_query(a_sv[card], SV_QUERY_MODE_CURRENT, 0, &current_video_mode);
-                framerate_for_videomode(current_video_mode, &frame_rate_numer, &frame_rate_denom);
-                logTF("card %d: device present (%dx%d videomode=0x%08X rate=%d/%d)\n", card, status_info.xsize, status_info.ysize, current_video_mode, frame_rate_numer, frame_rate_denom);
+                VideoRaster::EnumType ch_raster = VideoRaster::NONE;
+                get_video_raster(card, ch_raster);
+                int ch_width;
+                int ch_height;
+                int ch_fps_num;
+                int ch_fps_den;
+                Interlace::EnumType ch_interlace;
+                VideoRaster::GetInfo(ch_raster, ch_width, ch_height, ch_fps_num, ch_fps_den, ch_interlace);
+
+                logTF("card %d: device present (%dx%d %d/%d %s)\n",
+                    card, ch_width, ch_height, ch_fps_num, ch_fps_den,
+                    Interlace::NONE == ch_interlace ? "progressive" : "interlaced");
+
                 num_sdi_threads++;
-                if (width == 0)
+
+                if (card == 0)
                 {
-                    width = status_info.xsize;
-                    height = status_info.ysize;
+                    // Set params from first channel
+                    primary_video_raster = ch_raster;
+                    width = ch_width;
+                    height = ch_height;
+                    frame_rate_numer = ch_fps_num;
+                    frame_rate_denom = ch_fps_den;
+                    interlace = ch_interlace;
                 }
-                else if (width != status_info.xsize || height != status_info.ysize)
+                else if (width != ch_width || height != ch_height
+                    || frame_rate_numer != ch_fps_num || frame_rate_denom != ch_fps_den
+                    || (interlace != ch_interlace))
                 {
                     // Warn if other channels different from first
-                    logTF("card %d: different video size!\n", card);
+                    logTF("card %d: warning: different video raster!\n", card);
                 }
 
                 // Set AES input
                 set_aes_option(card, aes_audio);
 
-                set_sync_option(card, opt_sync_type, status_info.xsize);
+                set_sync_option(card, opt_sync_type, ch_width);
             }
             else
             {
@@ -2252,10 +2496,183 @@ int main (int argc, char ** argv)
         }
     }
 
+    // We now know primary_video_raster, width, height, frame_rate and interlace (from card).
+    
+    // Set fps and df for constructing Timecodes
+    // Currently assuming drop frame for NTSC frame rate but this is not necessarily the case!
+    fps = frame_rate_numer / frame_rate_denom;
+    df = false;
+    if (frame_rate_numer % frame_rate_denom > 0)
+    {
+        df = true;
+        ++fps;
+    }
+
+    // Set secondary_video_raster
+    if (NONE != secondary_capture_format)
+    {
+        // Secondary format is always SD even when primary is HD
+        secondary_video_raster = sd_raster(primary_video_raster);
+    }
+
+    // Set pixel format needed for capture format and raster
+    switch (primary_capture_format)
+    {
+    case UYVY:
+        primary_pixel_format = Ingex::PixelFormat::UYVY_422;
+        video_format = Format422UYVY;
+        break;
+    case YUV422:
+        primary_pixel_format = Ingex::PixelFormat::YUV_PLANAR_422;
+        video_format = Format422PlanarYUV;
+        break;
+    case DV50:
+        if (Ingex::VideoRaster::PAL == primary_video_raster)
+        {
+            primary_pixel_format = Ingex::PixelFormat::YUV_PLANAR_422;
+            primary_line_shift = 1;
+            primary_video_raster = Ingex::VideoRaster::PAL_B;
+            video_format = Format422PlanarYUVShifted;
+        }
+        else if (Ingex::VideoRaster::NTSC == primary_video_raster)
+        {
+            primary_pixel_format = Ingex::PixelFormat::YUV_PLANAR_422;
+            video_format = Format422PlanarYUV;
+        }
+        else
+        {
+            // Not valid
+        }
+        break;
+    case MPEG:
+    case DV25:
+    case NONE:
+        // Not valid as primary format
+        break;
+    }
+
+    switch (secondary_capture_format)
+    {
+    case YUV422:
+        secondary_pixel_format = Ingex::PixelFormat::YUV_PLANAR_422;
+        video_secondary_format = Format422PlanarYUV;
+        break;
+    case DV50:
+        if (Ingex::VideoRaster::PAL == secondary_video_raster)
+        {
+            secondary_pixel_format = Ingex::PixelFormat::YUV_PLANAR_422;
+            secondary_line_shift = 1;
+            secondary_video_raster = Ingex::VideoRaster::PAL_B;
+            video_secondary_format = Format422PlanarYUVShifted;
+        }
+        else if (Ingex::VideoRaster::NTSC == secondary_video_raster)
+        {
+            secondary_pixel_format = Ingex::PixelFormat::YUV_PLANAR_422;
+            video_secondary_format = Format422PlanarYUV;
+        }
+        else
+        {
+            // Not valid
+        }
+        break;
+    case MPEG:
+        secondary_pixel_format = Ingex::PixelFormat::YUV_PLANAR_420_MPEG;
+        video_secondary_format = Format422PlanarYUV;
+        break;
+    case DV25:
+        if (Ingex::VideoRaster::PAL == secondary_video_raster)
+        {
+            secondary_pixel_format = Ingex::PixelFormat::YUV_PLANAR_420_DV;
+            secondary_line_shift = 1;
+            secondary_video_raster = Ingex::VideoRaster::PAL_B;
+            video_secondary_format = Format420PlanarYUVShifted;
+        }
+        else if (Ingex::VideoRaster::NTSC == secondary_video_raster)
+        {
+            secondary_pixel_format = Ingex::PixelFormat::YUV_PLANAR_411;
+            video_secondary_format = Format411PlanarYUV;
+        }
+        else
+        {
+            // Not valid
+        }
+        break;
+    case UYVY:
+        // Not valid as secondary format
+        break;
+    case NONE:
+        secondary_pixel_format = Ingex::PixelFormat::NONE;
+        video_secondary_format = FormatNone;
+        break;
+    }
+
+
     if (num_sdi_threads < 1)
     {
         logTF("Error: No SDI monitor threads created.  Exiting\n");
         return 1;
+    }
+
+    /*
+    // Display info on primary video format
+    switch (video_format)
+    {
+        case Format422UYVY:
+                logTF("Capturing video as UYVY (4:2:2)\n"); break;
+        case Format422PlanarYUV:
+                logTF("Capturing video as YUV 4:2:2 planar\n"); break;
+        case Format422PlanarYUVShifted:
+                logTF("Capturing video as YUV 4:2:2 planar with picture shifted down by one line\n"); break;
+        default:
+                logTF("Unsupported video buffer format\n");
+                return 1;
+    }
+
+    // Display info on secondary video format
+    switch (video_secondary_format)
+    {
+        case FormatNone:
+                logTF("Secondary video buffer is disabled\n"); break;
+        case Format422PlanarYUV:
+                logTF("Secondary video buffer is YUV 4:2:2 planar\n"); break;
+        case Format422PlanarYUVShifted:
+                logTF("Secondary video buffer is YUV 4:2:2 planar with picture shifted down by one line\n"); break;
+        case Format420PlanarYUV:
+                logTF("Secondary video buffer is YUV 4:2:0 planar\n"); break;
+        case Format420PlanarYUVShifted:
+                logTF("Secondary video buffer is YUV 4:2:0 planar with picture shifted down by one line\n"); break;
+        default:
+                logTF("Unsupported Secondary video buffer format\n");
+                return 1;
+    }
+    */
+
+    // Report on capture formats
+    logTF("Primary capture   %s, %s\n", Ingex::VideoRaster::Name(primary_video_raster).c_str(), Ingex::PixelFormat::Name(primary_pixel_format).c_str());
+    logTF("Secondary capture %s, %s\n", Ingex::VideoRaster::Name(secondary_video_raster).c_str(), Ingex::PixelFormat::Name(secondary_pixel_format).c_str());
+
+    if (master_channel > max_channels-1)
+    {
+        logTF("Master channel number (%d) greater than highest channel number (%d)\n", master_channel, max_channels-1);
+        return 1;
+    }
+
+    if (master_channel < 0)
+    {
+        logTF("Master timecode not used\n");
+    }
+    else
+    {
+        logTF("Master timecode type is %s using channel %d\n",
+            nexus_timecode_type_name(timecode_type), master_channel);
+    }
+
+    logTF("Using %s to determine number of frames to recover when video re-aquired\n",
+            nexus_timecode_type_name(timecode_type));
+
+    if (audio8ch)
+    {
+        logTF("Audio 8 channel mode enabled\n");
     }
 
     // Ideally we would get the dma_video_size and audio_size parameters
@@ -2280,7 +2697,25 @@ int main (int argc, char ** argv)
     case 20: // CentaurusII PCI-X
     case 23: // CentaurusII PCIe
     default:
-        extra_offset = 6144;
+        switch (primary_video_raster)
+        {
+        case Ingex::VideoRaster::PAL:
+        case Ingex::VideoRaster::PAL_B:
+        case Ingex::VideoRaster::SMPTE274_25I:
+        case Ingex::VideoRaster::SMPTE274_25P:
+        case Ingex::VideoRaster::SMPTE296_50P:
+        case Ingex::VideoRaster::SMPTE274_29I:
+        case Ingex::VideoRaster::SMPTE274_29P:
+        case Ingex::VideoRaster::SMPTE296_59P:
+            extra_offset = 0x1800;
+            break;
+        case Ingex::VideoRaster::NTSC:
+            extra_offset = 0x3400;
+            break;
+        default:
+            extra_offset = 0;
+            break;
+        }
         break;
     }
 
@@ -2320,24 +2755,27 @@ int main (int argc, char ** argv)
 
     // Compute size of secondary video (if any)
     int secondary_video_size = 0;
-    if (video_secondary_format != FormatNone) {
-        // Secondary format is always SD even when primary is HD
-        switch (frame_rate_numer) {
-            case 25:
-            case 50:
-                sec_width = 720;
-                sec_height = 576;
-                break;
-            default:
-                sec_width = 720;
-                sec_height = 480;
-                break;
-        }
+    if (Ingex::VideoRaster::NONE != secondary_video_raster)
+    {
+        int sec_fps_num;
+        int sec_fps_den;
+        Interlace::EnumType sec_interlace;
+        VideoRaster::GetInfo(secondary_video_raster, sec_width, sec_height, sec_fps_num, sec_fps_den, sec_interlace);
 
         // Secondary video can be 4:2:2 or 4:2:0 so work out the correct size
-        secondary_video_size = sec_width*sec_height*3/2;
-        if (video_secondary_format == Format422PlanarYUV || video_secondary_format == Format422PlanarYUVShifted)
-            secondary_video_size = sec_width*sec_height*2;
+        switch (secondary_pixel_format)
+        {
+        case Ingex::PixelFormat::YUV_PLANAR_422:
+            secondary_video_size = sec_width * sec_height *  2;
+            break;
+        case Ingex::PixelFormat::YUV_PLANAR_420_MPEG:
+        case Ingex::PixelFormat::YUV_PLANAR_420_DV:
+        case Ingex::PixelFormat::YUV_PLANAR_411:
+            secondary_video_size = sec_width * sec_height * 3 / 2;
+            break;
+        default:
+            break;
+        }
     }
 
     // Element size made up from DMA transferred buffer plus secondary video (if any)
@@ -2345,58 +2783,76 @@ int main (int argc, char ** argv)
 
     // Create "NO VIDEO" frame
     no_video_frame = (uint8_t*)malloc(width*height*2);
-    uyvy_no_video_frame(width, height, no_video_frame);
-    if (video_format == Format422PlanarYUV || video_format == Format422PlanarYUVShifted)
+    if (Ingex::PixelFormat::UYVY_422 == primary_pixel_format)
     {
+        // UYVY 422
+        uyvy_no_video_frame(width, height, no_video_frame);
+    }
+    else if (Ingex::PixelFormat::YUV_PLANAR_422 == primary_pixel_format)
+    {
+        // Planar YUV 422
         uint8_t *tmp_frame = (uint8_t*)malloc(width*height*2);
         uyvy_no_video_frame(width, height, tmp_frame);
 
         // Repack to planar YUV 4:2:2
         uyvy_to_yuv422( width, height,
-                        video_format == Format422PlanarYUVShifted,  // do DV50 line shift?
+                        primary_line_shift,
                         tmp_frame,                      // input
                         no_video_frame);                // output
 
         free(tmp_frame);
     }
+    else
+    {
+        // Shouldn't get here, above are the only possibilities
+    }
 
     // Create "NO VIDEO" frame for secondary buffer
-    if (video_secondary_format == Format422PlanarYUV || video_secondary_format == Format422PlanarYUVShifted)
+    if (Ingex::PixelFormat::NONE != secondary_pixel_format)
     {
         uint8_t *tmp_frame = (uint8_t*)malloc(sec_width*sec_height*2);
         uyvy_no_video_frame(sec_width, sec_height, tmp_frame);
-
-        // Repack to planar YUV 4:2:2
-        no_video_secondary_frame = (uint8_t*)malloc(sec_width*sec_height*2);
-        uyvy_to_yuv422( sec_width, sec_height,
-                        video_secondary_format == Format422PlanarYUVShifted,    // do DV50 line shift?
-                        tmp_frame,                      // input
-                        no_video_secondary_frame);      // output
-
-        free(tmp_frame);
-    }
-    else if (video_secondary_format == Format420PlanarYUV || video_secondary_format == Format420PlanarYUVShifted)
-    {
-        uint8_t *tmp_frame = (uint8_t*)malloc(sec_width*sec_height*2);
-        uyvy_no_video_frame(sec_width, sec_height, tmp_frame);
-
-        // Repack to planar YUV 4:2:0
-        no_video_secondary_frame = (uint8_t*)malloc(sec_width*sec_height*3/2);
-        if (video_secondary_format == Format420PlanarYUVShifted)
+        if (Ingex::PixelFormat::YUV_PLANAR_422 == secondary_pixel_format)
         {
+            // Repack to planar YUV 4:2:2
+            no_video_secondary_frame = (uint8_t*)malloc(sec_width*sec_height*2);
+            uyvy_to_yuv422( sec_width, sec_height,
+                            secondary_line_shift,
+                            tmp_frame,                      // input
+                            no_video_secondary_frame);      // output
+
+        }
+        else if (Ingex::PixelFormat::YUV_PLANAR_420_DV == secondary_pixel_format)
+        {
+            // Repack to planar YUV 4:2:0 for PAL DV
+            no_video_secondary_frame = (uint8_t*)malloc(sec_width*sec_height*3/2);
             uyvy_to_yuv420_DV_sampling( sec_width, sec_height,
-                            1,                              // with DV50 line shift
+                            secondary_line_shift,           // should be 1
+                            tmp_frame,                      // input
+                            no_video_secondary_frame);      // output
+        }
+        else if (Ingex::PixelFormat::YUV_PLANAR_411 == secondary_pixel_format)
+        {
+            // Repack to planar YUV 4:1:1 for NTSC DV
+            no_video_secondary_frame = (uint8_t*)malloc(sec_width*sec_height*3/2);
+            uyvy_to_yuv411( sec_width, sec_height,
+                            secondary_line_shift,           // should be 0
+                            tmp_frame,                      // input
+                            no_video_secondary_frame);      // output
+        }
+        else if (Ingex::PixelFormat::YUV_PLANAR_420_MPEG == secondary_pixel_format)
+        {
+            // Repack to planar YUV 4:2:0 for MPEG
+            no_video_secondary_frame = (uint8_t*)malloc(sec_width*sec_height*3/2);
+            uyvy_to_yuv420( sec_width, sec_height,
+                            0,                              // no line shift
                             tmp_frame,                      // input
                             no_video_secondary_frame);      // output
         }
         else
         {
-            uyvy_to_yuv420( sec_width, sec_height,
-                            0,                              // no DV50 line shift
-                            tmp_frame,                      // input
-                            no_video_secondary_frame);      // output
+            // Shouldn't get here, above are the only possibilities
         }
-
         free(tmp_frame);
     }
 
