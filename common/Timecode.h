@@ -1,9 +1,9 @@
 /*
- * $Id: Timecode.h,v 1.3 2009/06/12 17:50:00 john_f Exp $
+ * $Id: Timecode.h,v 1.4 2010/06/02 10:52:38 philipn Exp $
  *
  * Class to hold a Timecode
  *
- * Copyright (C) 2006  British Broadcasting Corporation.
+ * Copyright (C) 2006 - 2010  British Broadcasting Corporation.
  * All Rights Reserved.
  *
  * This program is free software; you can redistribute it and/or
@@ -28,16 +28,20 @@
 #include <sys/timeb.h>
 #include <string>
 
+namespace Ingex
+{
+
 class Duration
 {
 public:
-    Duration(int frames = 0, int fps = 25, bool df = false);
+    Duration(int frames = 0, int fps_num = 25, int fps_den = 1, bool df = false);
     int FrameCount() { return mFrameCount; }
     const char * Text() const { return mText; }
 private:
 // fundamental data
     int mFrameCount;
-    int mFramesPerSecond;
+    int mFrameRateNumerator;
+    int mFrameRateDenominator;
     bool mDropFrame;
 
 // derived data
@@ -55,27 +59,30 @@ private:
 class Timecode
 {
 public:
-// enum
-    //enum Mode { TC25, TC30, TC30DF };
-
 // constructors
-    Timecode(int frames_since_midnight = 0, int fps = 25, bool df = false);
-    Timecode(int hr, int min, int sec, int frame, int fps = 25, bool df = false);
-    Timecode(const char * s, int fps = 25, bool df = false);
+    Timecode();
+    Timecode(int frames_since_midnight, int fps_num, int fps_den, bool df);
+    Timecode(int hr, int min, int sec, int frame, int fps_num, int fps_den, bool df);
+    Timecode(const char * s, int fps_num, int fps_den, bool df);
 // copy constructor
     Timecode(const Timecode & tc);
 // assignment
     Timecode & operator=(const Timecode &);
-    Timecode & operator=(int frames_since_midnight);
+    //Timecode & operator=(int frames_since_midnight);
 
 // methods
     const char * Text() const { return mText; }
     const char * TextNoSeparators() const { return mTextNoSeparators; }
     int FramesSinceMidnight() const { return mFramesSinceMidnight; }
-    int FramesPerSecond() const { return mFramesPerSecond; }
+    int FrameRateNumerator() const { return mFrameRateNumerator; }
+    int FrameRateDenominator() const { return mFrameRateDenominator; }
     bool DropFrame() const { return mDropFrame; }
-    int EditRateNumerator() const;
-    int EditRateDenominator() const;
+    void DropFrame(bool df) { mDropFrame = df; UpdateHoursMinsEtc(); }
+    int Hours() const { return mHours; }
+    int Minutes() const { return mMinutes; }
+    int Seconds() const { return mSeconds; }
+    int Frames() const { return mFrames; }
+    bool IsNull() const { return mIsNull; }
 
 // operator overload
     friend Timecode operator+(const Timecode & lhs, const int & frames);
@@ -83,12 +90,15 @@ public:
     //friend void operator+=(Timecode & lhs, const Timecode & rhs);
     //friend void operator-=(Timecode & lhs, const Timecode & rhs);
     void operator+=(int frames);
+    void operator-=(int frames);
 
 private:
 // fundamental data
     int mFramesSinceMidnight;
-    int mFramesPerSecond;
+    int mFrameRateNumerator;
+    int mFrameRateDenominator;
     bool mDropFrame;
+    bool mIsNull;
 
 // derived data
     int mHours;
@@ -103,6 +113,8 @@ private:
     void UpdateHoursMinsEtc();
     void UpdateText();
 };
+
+} // namespace
 
 #endif //#ifndef Timecode_h
 

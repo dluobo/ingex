@@ -1,7 +1,8 @@
 /*
 * receive_video.c - Receive uncompressed video over multicast
 *
-* Copyright (C) 2003 Stuart Cunningham <stuart_hc@users.sourceforge.net>
+* Copyright (C) 2003 - 2010  British Broadcasting Corporation
+* All rights reserved
 *
 * This program is free software; you can redistribute it and/or modify
 * it under the terms of the GNU General Public License as published by
@@ -18,23 +19,20 @@
 * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 */
 
+#define __STDC_LIMIT_MACROS
+#define __STDC_FORMAT_MACROS
+#include <inttypes.h>
 #include <stdio.h>
-#include <sys/types.h>
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>			/* for getopt */
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#define __STDC_FORMAT_MACROS
-#include <inttypes.h>
 
 #include "multicast_video.h"
 #include <audio_utils.h>
 
-/* Compile with
-	gcc -g -W -Wall -O3 -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -o receive_video receive_video.c
-*/
 
 static void usage(void)
 {
@@ -56,7 +54,8 @@ static void usage(void)
 
 extern int main(int argc, char *argv[])
 {
-	char				remote[4096], *p, *video_file = "rec.yuv", *audio_file = "rec.wav";
+	char				remote[4096], *p;
+	const char			*video_file = "rec.yuv", *audio_file = "rec.wav";
 	FILE				*fp_video = NULL, *fp_audio = NULL;
 	int					c, fd, port, verbose = 1, raw_read = 0;
 	uint64_t			video_file_limit = UINT64_MAX;
@@ -166,9 +165,9 @@ extern int main(int argc, char *argv[])
 
 	int video_size = header.width * header.height * 3/2;
 	int audio_size = header.audio_size;
-	uint8_t *video = malloc(video_size);
-	uint8_t *audio = malloc(audio_size);
-	uint8_t *tmp_audio = malloc(audio_size);
+	uint8_t * video = (uint8_t *)malloc(video_size);
+	uint8_t * audio = (uint8_t *)malloc(audio_size);
+	uint8_t * tmp_audio = (uint8_t *)malloc(audio_size);
 
 	// Clear video and audio buffers since network reads may return
 	// incomplete frames

@@ -1,5 +1,5 @@
 /*
- * $Id: detect_digibeta_dropouts.c,v 1.1 2010/01/12 17:08:16 john_f Exp $
+ * $Id: detect_digibeta_dropouts.c,v 1.2 2010/06/02 10:52:38 philipn Exp $
  *
  * Utility to detect digibeta dropouts
  *
@@ -207,19 +207,19 @@ int main(int argc, const char **argv)
 
     if (is10Bit) {
         input_buffer_size = (width + 5) / 6 * 16 * height;
-        input_buffer = malloc(input_buffer_size);
+        input_buffer = (unsigned char *)malloc(input_buffer_size);
         input_buffer_8bit_size = width * 2 * height;
-        input_buffer_8bit = malloc(input_buffer_8bit_size);
+        input_buffer_8bit = (unsigned char *)malloc(input_buffer_8bit_size);
     } else {
         input_buffer_size = width * 2 * height;
-        input_buffer = malloc(input_buffer_size);
+        input_buffer = (unsigned char *)malloc(input_buffer_size);
         input_buffer_8bit_size = input_buffer_size;
         input_buffer_8bit = input_buffer;
     }
     
     YUV_frame_from_buffer(&frame, input_buffer_8bit, width, height, UYVY);
     
-    workspace = malloc(sizeof(int) * width * height);
+    workspace = (int *)malloc(sizeof(int) * width * height);
     
     if (offset > 0) {
         if (fseek(input, offset * input_buffer_size, SEEK_SET) != 0) {

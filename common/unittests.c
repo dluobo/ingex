@@ -58,8 +58,8 @@ int main(int argc, char *argv[])
 	int result = 0;
 	size_t frame_size = width * height * 2;
 	size_t frame_size_10bit = frame_size * 4 / 3;
-	char *output_name = "test.uyvy";
-	char *input_name = "sport10bit";
+	const char *output_name = "test.uyvy";
+	const char *input_name = "sport10bit";
 
 	int i;
 	for (i = 1; i < argc; i++) {

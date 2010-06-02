@@ -1,9 +1,9 @@
 /*
- * $Id: Timecode.cpp,v 1.7 2010/03/29 17:06:52 philipn Exp $
+ * $Id: Timecode.cpp,v 1.8 2010/06/02 10:52:38 philipn Exp $
  *
  * Class to hold a Timecode
  *
- * Copyright (C) 2006  British Broadcasting Corporation.
+ * Copyright (C) 2006 - 2010  British Broadcasting Corporation.
  * All Rights Reserved.
  *
  * This program is free software; you can redistribute it and/or
@@ -30,43 +30,75 @@ const unsigned int DF_FRAMES_PER_MINUTE       = 60 * 30 - 2;                    
 const unsigned int DF_FRAMES_PER_TEN_MINUTE   = 10 * DF_FRAMES_PER_MINUTE + 2;  // 17982
 const unsigned int DF_FRAMES_PER_HOUR         = 6 * DF_FRAMES_PER_TEN_MINUTE;   // 107892
 
+using namespace Ingex;
 
-// constructor - timecode defaults to zero, mode defaults to TC25
-Timecode::Timecode(int frames_since_midnight, int fps, bool df)
-: mFramesSinceMidnight(frames_since_midnight), mFramesPerSecond(fps), mDropFrame(df)
+// default constructor initialises null timecode
+Timecode::Timecode()
+: mIsNull(true)
 {
+    UpdateText();
+}
+
+
+// constructor from frame count
+Timecode::Timecode(int frames_since_midnight, int fps_num, int fps_den, bool df)
+: mFramesSinceMidnight(frames_since_midnight), mFrameRateNumerator(fps_num), mFrameRateDenominator(fps_den), mDropFrame(df), mIsNull(false)
+{
+    //fprintf(stderr, "frames_since_midnight %d, fps_num %d, fps_den %d, %s\n", frames_since_midnight, fps_num, fps_den, df ? "DF" : "NDF");
+
     // Guard against garbage data
-    if (mFramesSinceMidnight < 0)
+    if (0 == mFrameRateNumerator || 0 == mFrameRateDenominator)
     {
-        mFramesSinceMidnight = 0;
+        mIsNull = true;
     }
 
-    // Drop frame only supported for 30 fps
-    if (df && fps != 30)
+    // Drop frame only supported for 30000/1001 fps
+    if (df && fps_num != 30000)
     {
         mDropFrame = false;
     }
+
     UpdateHoursMinsEtc();
     UpdateText();
 }
 
-// constructor - mode defaults to TC25
-Timecode::Timecode(int hr, int min, int sec, int frame, int fps, bool df)
-: mFramesPerSecond(fps), mDropFrame(df), mHours(hr), mMinutes(min), mSeconds(sec), mFrames(frame)
+// constructor from hrs, mins, secs, frames
+Timecode::Timecode(int hr, int min, int sec, int frame, int fps_num, int fps_den, bool df)
+: mFrameRateNumerator(fps_num), mFrameRateDenominator(fps_den), mDropFrame(df),  mIsNull(false),
+  mHours(hr), mMinutes(min), mSeconds(sec), mFrames(frame)
 {
-    // Drop frame only supported for 30 fps
-    if (df && fps != 30)
+    // Guard against garbage data
+    if (0 == mFrameRateNumerator || 0 == mFrameRateDenominator)
+    {
+        mIsNull = true;
+    }
+
+    // Drop frame only supported for 30000/1001 fps
+    if (df && fps_num != 30000)
     {
         mDropFrame = false;
     }
+
     UpdateFramesSinceMidnight();
     UpdateText();
 }
 
-// constructor - from text - mode defaults to TC25
-Timecode::Timecode(const char * s, int fps, bool df)
-: mFramesPerSecond(fps), mDropFrame(df)
+// constructor - from text
+Timecode::Timecode(const char * s, int fps_num, int fps_den, bool df)
+: mFrameRateNumerator(fps_num), mFrameRateDenominator(fps_den), mDropFrame(df), mIsNull(false)
 {
+    // Guard against garbage data
+    if (0 == mFrameRateNumerator || 0 == mFrameRateDenominator)
+    {
+        mIsNull = true;
+    }
+
+    // Drop frame only supported for 30000/1001 frame rate
+    if (mDropFrame && mFrameRateNumerator != 30000)
+    {
+        mDropFrame = false;
+    }
+
     bool ok = false;
     if (11 == strlen(s))
     {
@@ -76,6 +108,7 @@ Timecode::Timecode(const char * s, int fps, bool df)
         }
         else if (4 == sscanf(s,"%2d:%2d:%2d.%2d", &mHours, &mMinutes, &mSeconds, &mFrames))
         {
+            mDropFrame = true;
             ok = true;
         }
         else if (4 == sscanf(s,"%2d:%2d:%2d;%2d", &mHours, &mMinutes, &mSeconds, &mFrames))
@@ -93,19 +126,7 @@ Timecode::Timecode(const char * s, int fps, bool df)
         }
     }
 
-     // Drop frame only supported for 30 fps
-    if (mDropFrame && mFramesPerSecond != 30)
-    {
-        mDropFrame = false;
-    }
-
-    if (!ok)
-    {
-        mHours = 0;
-        mMinutes = 0;
-        mSeconds = 0;
-        mFrames = 0;
-    }
+    mIsNull = !ok;
 
     UpdateFramesSinceMidnight();
     UpdateText();
@@ -114,8 +135,10 @@ Timecode::Timecode(const char * s, int fps, bool df)
 // Copy constructor
 Timecode::Timecode(const Timecode & tc)
 {
-    mFramesPerSecond = tc.mFramesPerSecond;
+    mFrameRateNumerator = tc.mFrameRateNumerator;
+    mFrameRateDenominator = tc.mFrameRateDenominator;
     mDropFrame = tc.mDropFrame;
+    mIsNull = tc.mIsNull;
     mFramesSinceMidnight = tc.mFramesSinceMidnight;
     mHours = tc.mHours;
     mMinutes = tc.mMinutes;
@@ -129,8 +152,10 @@ Timecode & Timecode::operator=(const Timecode & tc)
 {
     if (this != &tc)
     {
-        mFramesPerSecond = tc.mFramesPerSecond;
+        mFrameRateNumerator = tc.mFrameRateNumerator;
+        mFrameRateDenominator = tc.mFrameRateDenominator;
         mDropFrame = tc.mDropFrame;
+        mIsNull = tc.mIsNull;
         mFramesSinceMidnight = tc.mFramesSinceMidnight;
         mHours = tc.mHours;
         mMinutes = tc.mMinutes;
@@ -141,90 +166,118 @@ Timecode & Timecode::operator=(const Timecode & tc)
     return *this;
 }
 
+/*
 Timecode & Timecode::operator=(int frames_since_midnight)
 {
     // Guard against garbage data
     if (frames_since_midnight < 0)
     {
-        frames_since_midnight = 0;
+        mIsNull = true;
     }
-    mFramesSinceMidnight = frames_since_midnight;
+    else
+    {
+        mFramesSinceMidnight = frames_since_midnight;
+        mIsNull = false;
+    }
     UpdateHoursMinsEtc();
     UpdateText();
     return *this;
 }
+*/
 
 void Timecode::UpdateHoursMinsEtc()
 {
-    // Guard against garbage data
-    if (mFramesSinceMidnight < 0)
+    if (!mIsNull)
     {
-        mFramesSinceMidnight = 0;
+        // Make sure frames in valid range
+        const int64_t frames_per_day = 24 * 60 * 60 * (int64_t)mFrameRateNumerator / mFrameRateDenominator;
+        if (mFramesSinceMidnight < 0)
+        {
+            mFramesSinceMidnight += frames_per_day;
+        }
+        mFramesSinceMidnight %= frames_per_day;
+
+        int frames = mFramesSinceMidnight;
+        int nominal_fps = mFrameRateNumerator / mFrameRateDenominator
+            + (mFrameRateNumerator % mFrameRateDenominator ? 1 : 0);
+
+        if (!mDropFrame)
+        {
+            mHours = frames / (nominal_fps * 60 * 60);
+            frames %= (nominal_fps * 60 * 60);
+            mMinutes = frames / (nominal_fps * 60);
+            frames %= (nominal_fps * 60);
+            mSeconds = frames / nominal_fps;
+            mFrames = frames % nominal_fps;
+        }
+        else
+        {
+            // Assuming 30000/1001 frame rate here
+            mHours = frames / DF_FRAMES_PER_HOUR;
+            frames %= DF_FRAMES_PER_HOUR;
+
+            int ten_minute = frames / DF_FRAMES_PER_TEN_MINUTE;
+            frames %= DF_FRAMES_PER_TEN_MINUTE;
+
+            // must adjust frame count to make minutes calculation work
+            // calculations from here on in just assume that within the 10 minute cycle
+            // there are only DF_FRAMES_PER_MINUTE (1798) frames per minute - even for the first minute
+            // in the ten minute cycle. Hence we decrement the frame count by 2 to get the minutes count
+            // So for the first two frames of the ten minute cycle we get a negative frames number
+
+            frames -= 2;
+
+            int unit_minute = frames / DF_FRAMES_PER_MINUTE;
+            frames %= DF_FRAMES_PER_MINUTE;
+            mMinutes = ten_minute * 10 + unit_minute;
+
+            // frames now contains frame in minute @ 1798 frames per minute
+            // put the 2 frame adjustment back in to get the correct frame count
+            // For the first two frames of the ten minute cycle, frames is negative and this
+            // adjustment makes it non-negative. For other minutes in the cycle the frames count
+            // goes from 0 upwards, thus this adjusment gives the required 2 frame offset
+
+            frames += 2;
+
+            mSeconds = frames / nominal_fps;
+            mFrames = frames % nominal_fps;
+        }
+
+        // Prevent hours exceeding one day
+        mHours %= 24;
     }
-
-    int frames = mFramesSinceMidnight;
-
-    if (!mDropFrame)
-    {
-        mHours = frames / (mFramesPerSecond * 60 * 60);
-        frames %= (mFramesPerSecond * 60 * 60);
-        mMinutes = frames / (mFramesPerSecond * 60);
-        frames %= (mFramesPerSecond * 60);
-        mSeconds = frames / mFramesPerSecond;
-        mFrames = frames % mFramesPerSecond;
-    }
-    else
-    {
-        mHours = frames / DF_FRAMES_PER_HOUR;
-        frames %= DF_FRAMES_PER_HOUR;
-
-        int ten_minute = frames / DF_FRAMES_PER_TEN_MINUTE;
-        frames %= DF_FRAMES_PER_TEN_MINUTE;
-
-        // must adjust frame count to make minutes calculation work
-        // calculations from here on in just assume that within the 10 minute cycle
-        // there are only DF_FRAMES_PER_MINUTE (1798) frames per minute - even for the first minute
-        // in the ten minute cycle. Hence we decrement the frame count by 2 to get the minutes count
-        // So for the first two frames of the ten minute cycle we get a negative frames number
-
-        frames -= 2;
-
-        int unit_minute = frames / DF_FRAMES_PER_MINUTE;
-        frames %= DF_FRAMES_PER_MINUTE;
-        mMinutes = ten_minute * 10 + unit_minute;
-
-        // frames now contains frame in minute @ 1798 frames per minute
-        // put the 2 frame adjustment back in to get the correct frame count
-        // For the first two frames of the ten minute cycle, frames is negative and this
-        // adjustment makes it non-negative. For other minutes in the cycle the frames count
-        // goes from 0 upwards, thus this adjusment gives the required 2 frame offset
-
-        frames += 2;
-
-        mSeconds = frames / mFramesPerSecond;
-        mFrames = frames % mFramesPerSecond;
-    }
-
-    // Prevent hours exceeding one day
-    mHours %= 24;
 }
 
 void Timecode::UpdateFramesSinceMidnight()
 {
-    if (!mDropFrame)
+    if (!mIsNull)
     {
-        mFramesSinceMidnight = mFrames
-            + mSeconds * mFramesPerSecond
-            + mMinutes * 60 * mFramesPerSecond
-            + mHours * 60 * 60 * mFramesPerSecond;
-    }
-    else
-    {
-        mFramesSinceMidnight = mFrames
-            + mSeconds * mFramesPerSecond
-            + (mMinutes % 10) * DF_FRAMES_PER_MINUTE
-            + (mMinutes / 10) * DF_FRAMES_PER_TEN_MINUTE
-            + mHours * DF_FRAMES_PER_HOUR;
+        int nominal_fps = mFrameRateNumerator / mFrameRateDenominator
+            + (mFrameRateNumerator % mFrameRateDenominator ? 1 : 0);
+
+        if (!mDropFrame)
+        {
+            mFramesSinceMidnight = mFrames
+                + mSeconds * nominal_fps
+                + mMinutes * 60 * nominal_fps
+                + mHours * 60 * 60 * nominal_fps;
+        }
+        else
+        {
+            // Assuming 30000/1001 frame rate here
+            mFramesSinceMidnight = mFrames
+                + mSeconds * nominal_fps
+                + (mMinutes % 10) * DF_FRAMES_PER_MINUTE
+                + (mMinutes / 10) * DF_FRAMES_PER_TEN_MINUTE
+                + mHours * DF_FRAMES_PER_HOUR;
+            /* alternative code
+            mFramesSinceMidnight = mFrames
+                + mSeconds * nominal_fps
+                + mMinutes * DF_FRAMES_PER_MINUTE
+                + (mMinutes / 10) * 2
+                + mHours * DF_FRAMES_PER_HOUR;
+            */
+        }
     }
 }
 
@@ -236,52 +289,26 @@ then be const.
 */
 void Timecode::UpdateText()
 {
-    // Full text representation
-    if (mDropFrame)
+    if (mIsNull)
     {
-        sprintf(mText,"%02d:%02d:%02d;%02d", mHours, mMinutes, mSeconds, mFrames);
+        sprintf(mText, "??:??:??:??");
+        sprintf(mTextNoSeparators, "????????");
     }
     else
     {
-        sprintf(mText,"%02d:%02d:%02d:%02d", mHours, mMinutes, mSeconds, mFrames);
-    }
+        // Full text representation
+        if (mDropFrame)
+        {
+            sprintf(mText,"%02d:%02d:%02d;%02d", mHours, mMinutes, mSeconds, mFrames);
+        }
+        else
+        {
+            sprintf(mText,"%02d:%02d:%02d:%02d", mHours, mMinutes, mSeconds, mFrames);
+        }
 
-    // No separators version
-    sprintf(mTextNoSeparators,"%02d%02d%02d%02d", mHours, mMinutes, mSeconds, mFrames);
-}
-
-/**
-To help with conversion to MXF-style timecode.
-*/
-int Timecode::EditRateNumerator() const
-{
-    int num = 0;
-    if (!mDropFrame)
-    {
-        num = mFramesPerSecond;
+        // No separators version
+        sprintf(mTextNoSeparators,"%02d%02d%02d%02d", mHours, mMinutes, mSeconds, mFrames);
     }
-    else
-    {
-        num = mFramesPerSecond * 1000;
-    }
-    return num;
-}
-
-/**
-To help with conversion to MXF-style timecode.
-*/
-int Timecode::EditRateDenominator() const
-{
-    int denom = 0;
-    if (!mDropFrame)
-    {
-        denom = 1;
-    }
-    else
-    {
-        denom = 1001;
-    }
-    return denom;
 }
 
 /**
@@ -294,10 +321,21 @@ void Timecode::operator+=(int frames)
     UpdateText();
 }
 
+/**
+Subtract a number of frames.
+*/
+void Timecode::operator-=(int frames)
+{
+    mFramesSinceMidnight -= frames;
+
+    UpdateHoursMinsEtc();
+    UpdateText();
+}
 
 
-Duration::Duration(int frames, int fps, bool df)
-: mFrameCount(frames), mFramesPerSecond(fps), mDropFrame(df)
+
+Duration::Duration(int frames, int fps_num, int fps_den, bool df)
+: mFrameCount(frames), mFrameRateNumerator(fps_num), mFrameRateDenominator(fps_den), mDropFrame(df)
 {
     UpdateHoursMinsEtc();
     UpdateText();
@@ -306,15 +344,17 @@ Duration::Duration(int frames, int fps, bool df)
 void Duration::UpdateHoursMinsEtc()
 {
     int frames = mFrameCount;
+    int nominal_fps = mFrameRateNumerator / mFrameRateDenominator
+        + (mFrameRateNumerator % mFrameRateDenominator ? 1 : 0);
 
     if (!mDropFrame)
     {
-        mHours = frames / (mFramesPerSecond * 60 * 60);
-        frames %= (mFramesPerSecond * 60 * 60);
-        mMinutes = frames / (mFramesPerSecond * 60);
-        frames %= (mFramesPerSecond * 60);
-        mSeconds = frames / mFramesPerSecond;
-        mFrames = frames % mFramesPerSecond;
+        mHours = frames / (nominal_fps * 60 * 60);
+        frames %= (nominal_fps * 60 * 60);
+        mMinutes = frames / (nominal_fps * 60);
+        frames %= (nominal_fps * 60);
+        mSeconds = frames / nominal_fps;
+        mFrames = frames % nominal_fps;
     }
     else
     {
@@ -344,8 +384,8 @@ void Duration::UpdateHoursMinsEtc()
 
         frames += 2;
 
-        mSeconds = frames / mFramesPerSecond;
-        mFrames = frames % mFramesPerSecond;
+        mSeconds = frames / nominal_fps;
+        mFrames = frames % nominal_fps;
     }
 }
 
@@ -378,13 +418,16 @@ void Duration::UpdateText()
 #endif
 }
 
+namespace Ingex
+{
+
 /**
 Get difference between two Timecodes.
 */
 Duration operator-(const Timecode & lhs, const Timecode & rhs)
 {
     // NB. Should check for mode compatibility
-    return Duration(lhs.FramesSinceMidnight() - rhs.FramesSinceMidnight(), lhs.mFramesPerSecond, lhs.mDropFrame);
+    return Duration(lhs.FramesSinceMidnight() - rhs.FramesSinceMidnight(), lhs.mFrameRateNumerator, lhs.mFrameRateDenominator, lhs.mDropFrame);
 }
 
 /**
@@ -392,8 +435,10 @@ Add a number of frames to a timecode.
 */
 Timecode operator+(const Timecode & lhs, const int & frames)
 {
-    return Timecode(lhs.mFramesSinceMidnight + frames);
+    return Timecode(lhs.mFramesSinceMidnight + frames, lhs.mFrameRateNumerator, lhs.mFrameRateDenominator, lhs.mDropFrame);
 }
+
+} // namespace
 
 
 

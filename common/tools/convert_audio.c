@@ -1,5 +1,5 @@
 /*
- * $Id: convert_audio.c,v 1.1 2008/05/07 17:04:18 philipn Exp $
+ * $Id: convert_audio.c,v 1.2 2010/06/02 10:52:38 philipn Exp $
  *
  * Utility to store video frames from dvs_sdi ring buffer to disk files
  *
@@ -37,128 +37,170 @@ static void usage_exit(void)
     fprintf(stderr, "    -c num_chans        number of channels of input audio to read and multiplex to output\n");
     fprintf(stderr, "                        (determines how many input audio filenames required)\n");
     fprintf(stderr, "    -ib bits per samp   bits per sample of each input file (default 24)\n");
-    fprintf(stderr, "    -ob bits per samp   bits per sample for output wav file (default 16)\n");
-	exit(1);
+    fprintf(stderr, "    -ob bits per samp   bits per sample for output file (default 16)\n");
+    fprintf(stderr, "    -wav                output to wav (default)\n");
+    fprintf(stderr, "    -raw                output to raw file\n");
+    exit(1);
 }
 
 extern int main(int argc, char *argv[])
 {
-	int				num_channels = 2;
-	int				input_bps = 24;
-	int				output_bps = 16;
-	char			*audio_file[4] = {NULL,NULL,NULL,NULL}, *wav_file = NULL;
-	FILE			*infp[4] = {NULL,NULL,NULL,NULL}, *outfp = NULL;
-	int				i;
+    int             num_channels = 2;
+    int             input_bps = 24;
+    int             output_bps = 16;
+    char            *audio_file[4] = {NULL,NULL,NULL,NULL}, *wav_file = NULL;
+    FILE            *infp[4] = {NULL,NULL,NULL,NULL}, *outfp = NULL;
+    int             i;
+    int wav = 1;
 
-	int n;
-	for (n = 1; n < argc; n++)
-	{
-		if (strcmp(argv[n], "-h") == 0 || strcmp(argv[n], "--help") == 0)
-		{
-			usage_exit();
-		}
-		else if (strcmp(argv[n], "-c") == 0)
-		{
-			if (n+1 >= argc ||
-				sscanf(argv[n+1], "%u", &num_channels) != 1 ||
-				num_channels > 4 || num_channels < 1 || num_channels == 3)
-			{
-				fprintf(stderr, "-c requires number of channels {1,2,4}\n");
-				return 1;
-			}
-			n++;
-		}
-		else if (strcmp(argv[n], "-ib") == 0)
-		{
-			if (n+1 >= argc ||
-				sscanf(argv[n+1], "%u", &input_bps) != 1 ||
-				input_bps != 8 || input_bps != 16 || input_bps != 24 || input_bps != 32)
-			{
-				fprintf(stderr, "-ib requires bits per sample {8,16,24,32}\n");
-				return 1;
-			}
-			n++;
-		}
-		else if (strcmp(argv[n], "-ob") == 0)
-		{
-			if (n+1 >= argc ||
-				sscanf(argv[n+1], "%u", &output_bps) != 1 ||
-				output_bps != 8 || output_bps != 16 || output_bps != 24 || output_bps != 32)
-			{
-				fprintf(stderr, "-ob requires bits per sample {8,16,24,32}\n");
-				return 1;
-			}
-			n++;
-		}
-		else {
-			int audio_arg_consumed = 0;
-			for (i = 0; i < num_channels; i++) {
-				if (! audio_file[i]) {
-					audio_file[i] = argv[n];
-					audio_arg_consumed = 1;
-					break;
-				}
-			}
-			if (audio_arg_consumed)
-				continue;
+    int n;
+    for (n = 1; n < argc; n++)
+    {
+        if (strcmp(argv[n], "-h") == 0 || strcmp(argv[n], "--help") == 0)
+        {
+            usage_exit();
+        }
+        else if (strcmp(argv[n], "-c") == 0)
+        {
+            if (n+1 >= argc ||
+                sscanf(argv[n+1], "%u", &num_channels) != 1 ||
+                num_channels > 4 || num_channels < 1 || num_channels == 3)
+            {
+                fprintf(stderr, "-c requires number of channels {1,2,4}\n");
+                return 1;
+            }
+            n++;
+        }
+        else if (strcmp(argv[n], "-ib") == 0)
+        {
+            if (n+1 >= argc ||
+                sscanf(argv[n+1], "%u", &input_bps) != 1 ||
+                (input_bps != 8 && input_bps != 16 && input_bps && 24 != input_bps && 32))
+            {
+                fprintf(stderr, "-ib requires bits per sample {8,16,24,32}\n");
+                return 1;
+            }
+            n++;
+        }
+        else if (strcmp(argv[n], "-ob") == 0)
+        {
+            if (n+1 >= argc ||
+                sscanf(argv[n+1], "%u", &output_bps) != 1 ||
+                (output_bps != 8 && output_bps != 16 && output_bps && 24 != output_bps && 32))
+            {
+                fprintf(stderr, "-ob requires bits per sample {8,16,24,32}\n");
+                return 1;
+            }
+            n++;
+        }
+        else if (strcmp(argv[n], "-wav") == 0)
+        {
+            wav = 1;
+        }
+        else if (strcmp(argv[n], "-raw") == 0)
+        {
+            wav = 0;
+        }
+        else
+        {
+            int audio_arg_consumed = 0;
+            for (i = 0; i < num_channels; i++)
+            {
+                if (! audio_file[i])
+                {
+                    audio_file[i] = argv[n];
+                    audio_arg_consumed = 1;
+                    break;
+                }
+            }
+            if (audio_arg_consumed)
+                continue;
 
-			if (! wav_file)
-				wav_file = argv[n];
-			else
-				usage_exit();
-		}
-	}
+            if (! wav_file)
+            {
+                wav_file = argv[n];
+            }
+            else
+            {
+                usage_exit();
+            }
+        }
+    }
 
-	for (i = 0; i < num_channels; i++) {
-		if (audio_file[i] == NULL || wav_file == NULL) {
-			fprintf(stderr, "require %d audio files and one output wav file\n", num_channels);
-			usage_exit();
-		}
-	}
+    for (i = 0; i < num_channels; i++)
+    {
+        if (audio_file[i] == NULL || wav_file == NULL)
+        {
+            fprintf(stderr, "require %d audio files and one output wav file\n", num_channels);
+            usage_exit();
+        }
+    }
 
-	for (i = 0; i < num_channels; i++) {
-		if ((infp[i] = fopen(audio_file[i], "rb")) == NULL) {
-			fprintf(stderr, "Error opening %s\n", audio_file[i]);
-			perror("fopen");
-			return 1;
-		}
-	}
+    for (i = 0; i < num_channels; i++)
+    {
+        if ((infp[i] = fopen(audio_file[i], "rb")) == NULL)
+        {
+            fprintf(stderr, "Error opening %s\n", audio_file[i]);
+            perror("fopen");
+            return 1;
+        }
+    }
 
-	if ((outfp = fopen(wav_file, "wb")) == NULL) {
-		fprintf(stderr, "Error opening %s\n", wav_file);
-		perror("fopen");
-		return 1;
-	}
+    if ((outfp = fopen(wav_file, "wb")) == NULL)
+    {
+        fprintf(stderr, "Error opening %s\n", wav_file);
+        perror("fopen");
+        return 1;
+    }
 
-	if (! writeWavHeader(outfp, output_bps, num_channels)) {
-		fprintf(stderr, "Failed to write WAV header\n");
-		return 1;
-	}
+    if (wav && ! writeWavHeader(outfp, output_bps, num_channels))
+    {
+        fprintf(stderr, "Failed to write WAV header\n");
+        return 1;
+    }
 
-	while (1) {
-		int input_at_eof = 0;
-		uint8_t buf[4][4];		// at most 4 channels each of 32bps
+    while (1)
+    {
+        int input_at_eof = 0;
+        uint8_t buf[4][4];      // at most 4 channels each of 32bps
 
-		// currently only supports reading 24bit inputs and
-		// writing 16bit output wav
-		for (i = 0; i < num_channels; i++) {
-			if (fread(buf[i], input_bps / 8, 1, infp[i]) != 1) {
-				if (feof(infp[i])) {
-					input_at_eof = 1;
-					break;
-				}
-				perror("fread from audio file");
-				return 1;
-			}
-		}
-		if (input_at_eof)
-			break;
+        for (i = 0; i < num_channels; i++)
+        {
+            if (fread(buf[i], input_bps / 8, 1, infp[i]) != 1)
+            {
+                if (feof(infp[i]))
+                {
+                    input_at_eof = 1;
+                    break;
+                }
+                perror("fread from audio file");
+                return 1;
+            }
+        }
+        if (input_at_eof)
+        {
+            break;
+        }
 
-		fwrite(&buf[0][1], 2, 1, outfp);
-		fwrite(&buf[1][1], 2, 1, outfp);
-	}
+        // currently only supports reading 24-bit or 16-bit inputs
+        // and writing 16-bit output
+        if (input_bps == 16 && output_bps == 16)
+        {
+            fwrite(&buf[0][0], 2, 1, outfp);
+            fwrite(&buf[1][0], 2, 1, outfp);
+        }
+        else if (input_bps == 24 && output_bps == 16)
+        {
+            fwrite(&buf[0][1], 2, 1, outfp);
+            fwrite(&buf[1][1], 2, 1, outfp);
+        }
+    }
 
-	update_WAV_header(outfp);
+    if (wav)
+    {
+        update_WAV_header(outfp);
+    }
 
-	return 0;
+    return 0;
 }
+

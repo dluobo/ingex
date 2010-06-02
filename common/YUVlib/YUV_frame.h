@@ -1,5 +1,5 @@
 /*
- * $Id: YUV_frame.h,v 1.6 2010/03/30 08:20:17 john_f Exp $
+ * $Id: YUV_frame.h,v 1.7 2010/06/02 10:52:38 philipn Exp $
  *
  *
  *
@@ -50,7 +50,8 @@ typedef enum
 {
     YV12, IF09, YVU9, IYUV,
     UYVY, YUY2, YVYU, HDYC,
-    Y42B, I420, YV16, YV24
+    Y42B, I420, YV16, YV24,
+    Y41B
 } formats;
 
 typedef enum

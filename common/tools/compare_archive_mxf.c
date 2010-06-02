@@ -1,5 +1,5 @@
 /*
- * $Id: compare_archive_mxf.c,v 1.2 2009/03/25 13:47:26 john_f Exp $
+ * $Id: compare_archive_mxf.c,v 1.3 2010/06/02 10:52:38 philipn Exp $
  *
  * 
  *
@@ -830,36 +830,36 @@ int main(int argc, const char** argv)
     
     if (audioSampleShift > 0)
     {
-        CHECK((bufferA0 = malloc((maxAudioFrameShift * 2 + 1) * 1920 * 3)) != NULL);
-        CHECK((bufferA1 = malloc((maxAudioFrameShift * 2 + 1) * 1920 * 3)) != NULL);
-        CHECK((bufferA2 = malloc((maxAudioFrameShift * 2 + 1) * 1920 * 3)) != NULL);
-        CHECK((bufferA3 = malloc((maxAudioFrameShift * 2 + 1) * 1920 * 3)) != NULL);
-        CHECK((bufferB0 = malloc(1920 * 3)) != NULL);
-        CHECK((bufferB1 = malloc(1920 * 3)) != NULL);
-        CHECK((bufferB2 = malloc(1920 * 3)) != NULL);
-        CHECK((bufferB3 = malloc(1920 * 3)) != NULL);
+        CHECK((bufferA0 = (unsigned char *)malloc((maxAudioFrameShift * 2 + 1) * 1920 * 3)) != NULL);
+        CHECK((bufferA1 = (unsigned char *)malloc((maxAudioFrameShift * 2 + 1) * 1920 * 3)) != NULL);
+        CHECK((bufferA2 = (unsigned char *)malloc((maxAudioFrameShift * 2 + 1) * 1920 * 3)) != NULL);
+        CHECK((bufferA3 = (unsigned char *)malloc((maxAudioFrameShift * 2 + 1) * 1920 * 3)) != NULL);
+        CHECK((bufferB0 = (unsigned char *)malloc(1920 * 3)) != NULL);
+        CHECK((bufferB1 = (unsigned char *)malloc(1920 * 3)) != NULL);
+        CHECK((bufferB2 = (unsigned char *)malloc(1920 * 3)) != NULL);
+        CHECK((bufferB3 = (unsigned char *)malloc(1920 * 3)) != NULL);
     }
     else if (audioSampleShift < 0)
     {
-        CHECK((bufferA0 = malloc(1920 * 3)) != NULL);
-        CHECK((bufferA1 = malloc(1920 * 3)) != NULL);
-        CHECK((bufferA2 = malloc(1920 * 3)) != NULL);
-        CHECK((bufferA3 = malloc(1920 * 3)) != NULL);
-        CHECK((bufferB0 = malloc((maxAudioFrameShift * 2 + 1) * 1920 * 3)) != NULL);
-        CHECK((bufferB1 = malloc((maxAudioFrameShift * 2 + 1) * 1920 * 3)) != NULL);
-        CHECK((bufferB2 = malloc((maxAudioFrameShift * 2 + 1) * 1920 * 3)) != NULL);
-        CHECK((bufferB3 = malloc((maxAudioFrameShift * 2 + 1) * 1920 * 3)) != NULL);
+        CHECK((bufferA0 = (unsigned char *)malloc(1920 * 3)) != NULL);
+        CHECK((bufferA1 = (unsigned char *)malloc(1920 * 3)) != NULL);
+        CHECK((bufferA2 = (unsigned char *)malloc(1920 * 3)) != NULL);
+        CHECK((bufferA3 = (unsigned char *)malloc(1920 * 3)) != NULL);
+        CHECK((bufferB0 = (unsigned char *)malloc((maxAudioFrameShift * 2 + 1) * 1920 * 3)) != NULL);
+        CHECK((bufferB1 = (unsigned char *)malloc((maxAudioFrameShift * 2 + 1) * 1920 * 3)) != NULL);
+        CHECK((bufferB2 = (unsigned char *)malloc((maxAudioFrameShift * 2 + 1) * 1920 * 3)) != NULL);
+        CHECK((bufferB3 = (unsigned char *)malloc((maxAudioFrameShift * 2 + 1) * 1920 * 3)) != NULL);
     }
     else
     {
-        CHECK((bufferA0 = malloc(1920 * 3)) != NULL);
-        CHECK((bufferA1 = malloc(1920 * 3)) != NULL);
-        CHECK((bufferA2 = malloc(1920 * 3)) != NULL);
-        CHECK((bufferA3 = malloc(1920 * 3)) != NULL);
-        CHECK((bufferB0 = malloc(1920 * 3)) != NULL);
-        CHECK((bufferB1 = malloc(1920 * 3)) != NULL);
-        CHECK((bufferB2 = malloc(1920 * 3)) != NULL);
-        CHECK((bufferB3 = malloc(1920 * 3)) != NULL);
+        CHECK((bufferA0 = (unsigned char *)malloc(1920 * 3)) != NULL);
+        CHECK((bufferA1 = (unsigned char *)malloc(1920 * 3)) != NULL);
+        CHECK((bufferA2 = (unsigned char *)malloc(1920 * 3)) != NULL);
+        CHECK((bufferA3 = (unsigned char *)malloc(1920 * 3)) != NULL);
+        CHECK((bufferB0 = (unsigned char *)malloc(1920 * 3)) != NULL);
+        CHECK((bufferB1 = (unsigned char *)malloc(1920 * 3)) != NULL);
+        CHECK((bufferB2 = (unsigned char *)malloc(1920 * 3)) != NULL);
+        CHECK((bufferB3 = (unsigned char *)malloc(1920 * 3)) != NULL);
     }
          
 

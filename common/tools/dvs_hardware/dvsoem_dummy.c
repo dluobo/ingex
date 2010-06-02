@@ -1,5 +1,5 @@
 /*
- * $Id: dvsoem_dummy.c,v 1.11 2010/03/30 08:11:07 john_f Exp $
+ * $Id: dvsoem_dummy.c,v 1.12 2010/06/02 10:52:38 philipn Exp $
  *
  * Implement a debug-only DVS hardware library for testing.
  *
@@ -20,6 +20,8 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
  * 02110-1301, USA.
  */
+
+#define __STDC_CONSTANT_MACROS  // for INT64_C
 
 #include <stdio.h>
 #include <string.h>
@@ -386,8 +388,8 @@ int sv_fifo_putbuffer(sv_handle * sv, sv_fifo * pfifo, sv_fifo_buffer * pbuffer,
     // Update hardware values
     pbuffer->control.tick = dvs->frame_count * 2;
     int64_t currenttime = gettimeofday64();
-    pbuffer->control.clock_high = currenttime / 0x100000000;
-    pbuffer->control.clock_low = currenttime % 0x100000000;
+    pbuffer->control.clock_high = currenttime / INT64_C(0x100000000);
+    pbuffer->control.clock_low = currenttime % INT64_C(0x100000000);
 
     // Simulate typical behaviour of capture fifo by sleeping until next
     // expected frame boundary. The simulated hardware clock is the system
@@ -474,8 +476,8 @@ int sv_currenttime(sv_handle * sv, int brecord, int *ptick, uint32 *pclockhigh, 
     *ptick = dvs->frame_count * 2;
 
     int64_t currenttime = gettimeofday64();
-    *pclockhigh = currenttime / 0x100000000;
-    *pclocklow = currenttime % 0x100000000;
+    *pclockhigh = currenttime / INT64_C(0x100000000);
+    *pclocklow = currenttime % INT64_C(0x100000000);
 
     return SV_OK;
 }

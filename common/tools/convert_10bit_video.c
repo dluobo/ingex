@@ -1,5 +1,5 @@
 /*
- * $Id: convert_10bit_video.c,v 1.1 2009/12/17 15:49:42 john_f Exp $
+ * $Id: convert_10bit_video.c,v 1.2 2010/06/02 10:52:38 philipn Exp $
  *
  * Utility to convert 10-bit UYVY to 8-bit UYVY and vice versa
  *
@@ -178,9 +178,9 @@ int main(int argc, const char **argv)
     
     if (to8bit) {
         input_buffer_size = (width + 5) / 6 * 16 * height;
-        input_buffer = malloc(input_buffer_size);
+        input_buffer = (unsigned char *)malloc(input_buffer_size);
         output_buffer_size = width * 2 * height;
-        output_buffer = malloc(output_buffer_size);
+        output_buffer = (unsigned char *)malloc(output_buffer_size);
         
         while (1) {
             num_read = fread(input_buffer, input_buffer_size, 1, input);
@@ -205,9 +205,9 @@ int main(int argc, const char **argv)
         
     } else {
         input_buffer_size = width * 2 * height;
-        input_buffer = malloc(input_buffer_size);
+        input_buffer = (unsigned char *)malloc(input_buffer_size);
         output_buffer_size = (width + 5) / 6 * 16 * height;
-        output_buffer = malloc(output_buffer_size);
+        output_buffer = (unsigned char *)malloc(output_buffer_size);
 
         while (1) {
             num_read = fread(input_buffer, input_buffer_size, 1, input);

@@ -66,8 +66,8 @@ static void usage(void)
 extern int main(int argc, char *argv[])
 {
 	char				remote[4096], *p,
-						*input_file = "out.yuv",
-						*audio_input_file = NULL,
+						*audio_input_file = NULL;
+	const char			*input_file = "out.yuv",
 						*source_name = "send_video source";
 	FILE				*input = NULL, *fp_audio = NULL;
 	int					c, fd, port,
@@ -174,8 +174,8 @@ extern int main(int argc, char *argv[])
 		}
 	}
 
-	unsigned char *buf = malloc(buf_size);
-	unsigned char *audio = malloc(audio_buf_size);
+	unsigned char *buf = (unsigned char *)malloc(buf_size);
+	unsigned char *audio = (unsigned char *)malloc(audio_buf_size);
 
 	if (!mpegts_input) {
 		printf("Scaling input video %dx%d to %dx%d\n", in_width, in_height, out_width, out_height);
@@ -237,7 +237,7 @@ extern int main(int argc, char *argv[])
 	
 	uint64_t packets = 0;
 	uint64_t total_written = 0;
-	uint8_t *p_video = malloc(video_buf_size);
+	uint8_t *p_video = (uint8_t *)malloc(video_buf_size);
 
 	while (1)
 	{

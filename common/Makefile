@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.8 2008/10/10 05:47:50 stuart_hc Exp $
+# $Id: Makefile,v 1.9 2010/06/02 10:52:38 philipn Exp $
 #
 # Makefile for building common functions
 #
@@ -21,15 +21,17 @@
 # 02110-1301, USA.
 #
 
-CC=gcc
+CC=g++
 OPT=-DNDEBUG -O3 -mmmx -msse2
 INCLUDES=-IYUVlib
 CFLAGS=-Wall -W -Wno-unused-parameter -g -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE $(OPT) $(INCLUDES)
+CPPFLAGS=-Wall -W -Wno-unused-parameter -g -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE $(OPT) $(INCLUDES)
 
 # Check for old-style FFMPEG header locations and if needed add -DFFMPEG_OLD_INCLUDE_PATHS
 FFMPEG_OLDSTYLE_INCLUDE := $(shell for f in /usr/local/include /usr/include; do test -e $$f/ffmpeg/avcodec.h && echo $$f && break; done)
 ifneq "$(FFMPEG_OLDSTYLE_INCLUDE)" ""
 	CFLAGS += -DFFMPEG_OLD_INCLUDE_PATHS
+	CPPFLAGS += -DFFMPEG_OLD_INCLUDE_PATHS
 endif
 
 HEADERS=$(wildcard *.h)
@@ -51,7 +53,7 @@ $(LIBCOMMON): $(OBJECTS)
 	ar rcv $(LIBCOMMON) $(OBJECTS)
 
 unittests: unittests.c $(LIBCOMMON)
-	gcc -Wall -W -g unittests.c -o unittests $(LIBCOMMON) -lm
+	g++ -Wall -W -g unittests.c -o unittests $(LIBCOMMON) -lm
 
 .PHONY: check
 check: all

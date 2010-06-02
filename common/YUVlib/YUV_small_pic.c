@@ -1,5 +1,5 @@
 /*
- * $Id: YUV_small_pic.c,v 1.4 2009/09/18 15:07:24 philipn Exp $
+ * $Id: YUV_small_pic.c,v 1.5 2010/06/02 10:52:38 philipn Exp $
  *
  *
  *
@@ -124,6 +124,30 @@ static void h_sub_2_121_s(BYTE* srcLine, BYTE* dstLine,
     srcLine += inStride;
     acc += *srcLine * 3;
     *dstLine = acc / 4;
+}
+
+// Output is shifted two pixels to right
+static void h_sub_2_121_s2(BYTE* srcLine, BYTE* dstLine,
+                           const int inStride, const int outStride,
+                           const int hsub, const int w)
+{
+    int     acc;
+    int     i;
+
+    // skip first sample
+    srcLine += inStride;
+    for (i = 0; i < w - 1; i++)
+    {
+        acc = *srcLine;
+        srcLine += inStride;
+        acc += *srcLine * 2;
+        srcLine += inStride;
+        acc += *srcLine;
+        *dstLine = acc / 4;
+        dstLine += outStride;
+    }
+    // copy last edge sample
+    *dstLine = *srcLine;
 }
 
 // Sub sample a line with (1,1)/2 filtering
@@ -407,6 +431,8 @@ int small_pic(YUV_frame* in_frame, YUV_frame* out_frame,
             case 200:
                 if ((ssx_in == 2) && (ssx_out == 2))
                     sub_line_Y = &h_sub_2_121_s;
+                else if ((ssx_in == 4) && (ssx_out == 4))
+                    sub_line_Y = &h_sub_2_121_s2;
                 else
                     sub_line_Y = &h_sub_2_121;
                 break;
@@ -423,6 +449,8 @@ int small_pic(YUV_frame* in_frame, YUV_frame* out_frame,
                 break;
             case 200:
                 if ((ssx_in == 2) && (ssx_out == 2))
+                    sub_line_UV = &h_sub_2_11_s;
+                else if ((ssx_in == 4) && (ssx_out == 4))
                     sub_line_UV = &h_sub_2_11_s;
                 else
                     sub_line_UV = &h_sub_2_121;

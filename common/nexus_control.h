@@ -1,9 +1,10 @@
 /*
- * $Id: nexus_control.h,v 1.5 2009/10/12 14:39:04 john_f Exp $
+ * $Id: nexus_control.h,v 1.6 2010/06/02 10:52:38 philipn Exp $
  *
  * Shared memory interface between SDI capture threads and reader threads.
  *
- * Copyright (C) 2005  Stuart Cunningham <stuart_hc@users.sourceforge.net>
+ * Copyright (C) 2005 - 2010 British Broadcasting Corporation
+ * All rights reserved
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -37,18 +38,19 @@
 #define PTHREAD_MUTEX_UNLOCK(x)
 #endif
 
-#ifdef __cplusplus
-extern "C"
-{
-#endif
+#include <inttypes.h>
+
+#include "VideoRaster.h"
+#include "Timecode.h"
 
 typedef enum {
     FormatNone,                // Indicates off or disabled
     Format422UYVY,             // 4:2:2 buffer suitable for uncompressed capture
-    Format422PlanarYUV,        // 4:2:2 buffer suitable for JPEG encoding
-    Format422PlanarYUVShifted, // 4:2:2 buffer suitable for DV50 encoding (picture shift down 1 line)
+    Format422PlanarYUV,        // 4:2:2 buffer suitable for JPEG or NTSC DV50 encoding
+    Format422PlanarYUVShifted, // 4:2:2 buffer suitable for PAL DV50 encoding (picture shift down 1 line)
     Format420PlanarYUV,        // 4:2:0 buffer suitable for MPEG encoding
-    Format420PlanarYUVShifted  // 4:2:0 buffer suitable for DV25 encoding (picture shift down 1 line)
+    Format420PlanarYUVShifted, // 4:2:0 buffer suitable for PAL DV25 encoding (picture shift down 1 line)
+    Format411PlanarYUV         // 4:1:1 buffer suitable for NTSC DV25 encoding
 } CaptureFormat;
 
 // Currently supported types of capture timecodes.
@@ -62,19 +64,27 @@ typedef enum {
 } NexusTimecode;
 
 typedef struct {
-    int vitc_bits; // timecode bits
-    int ltc_bits;
-    int dvitc_bits;
-    int dltc_bits;
-    int vitc;  // timecode as frame count
+    // Timecode objects - preferred
+    Ingex::Timecode tc_vitc;
+    Ingex::Timecode tc_ltc;
+    Ingex::Timecode tc_dvitc;
+    Ingex::Timecode tc_dltc;
+    Ingex::Timecode tc_systc;
+    // Timecodes as frame counts - deprecated
+    int vitc;
     int ltc;
     int dvitc;
     int dltc;
     int systc;
+    // Capture timestampe - microseconds since 1970
+    int64_t timestamp;
+    // Hardware tick count
     int tick;
-    int64_t timestamp; // microseconds since 1970
+    // Signal ok flag
     int signal_ok;
+    // Number of audio samples for this frame
     int num_aud_samp;
+    // Frame number (incrementing count)
     int frame_number;
 } NexusFrameData;
 
@@ -150,6 +160,10 @@ typedef struct {
     int             frame_rate_denom;   // frame rate denominator e.g 1
     CaptureFormat   pri_video_format;   // primary video format: usually UYVY, YUV422, ...
     CaptureFormat   sec_video_format;   // secondary video format: usually NONE, YUV420, ...
+    Ingex::VideoRaster::EnumType     pri_video_raster;
+    Ingex::VideoRaster::EnumType     sec_video_raster;
+    Ingex::PixelFormat::EnumType     pri_pixel_format;
+    Ingex::PixelFormat::EnumType     sec_pixel_format;
     int             sec_width;          // width of secondary video (if any)
     int             sec_height;         // height of secondary video (if any)
     NexusTimecode   default_tc_type;    // type of timecode to be used by recorder etc.
@@ -202,6 +216,7 @@ extern int nexus_signal_ok(const NexusControl *pctl, uint8_t *ring[], int channe
 extern int nexus_frame_number(const NexusControl *pctl, uint8_t *ring[], int channel, int frame);
 
 extern int nexus_tc(const NexusControl *pctl, uint8_t *ring[], int channel, int frame, NexusTimecode tctype);
+Ingex::Timecode nexus_timecode(const NexusControl *pctl, uint8_t *ring[], int channel, int frame, NexusTimecode tctype);
 
 extern const uint8_t *nexus_primary_video(const NexusControl *pctl, uint8_t *ring[], int channel, int frame);
 extern const uint8_t *nexus_secondary_video(const NexusControl *pctl, uint8_t *ring[], int channel, int frame);
@@ -216,8 +231,5 @@ extern void nexus_set_source_name(NexusControl *pctl, int channel, const char *s
 extern void nexus_get_source_name(NexusControl *pctl, int channel, char *source_name, size_t source_name_size,
                                   int *update_count);
 
-#ifdef __cplusplus
-}
-#endif
-
 #endif // NEXUS_CONTROL_H
+

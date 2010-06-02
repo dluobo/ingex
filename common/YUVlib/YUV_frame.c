@@ -1,5 +1,5 @@
 /*
- * $Id: YUV_frame.c,v 1.6 2010/03/30 08:20:17 john_f Exp $
+ * $Id: YUV_frame.c,v 1.7 2010/06/02 10:52:38 philipn Exp $
  *
  *
  *
@@ -40,6 +40,7 @@ int YUV_frame_from_buffer(YUV_frame* frame, void* buffer,
     {
     case YV12: case IF09: case YVU9: case IYUV:
     case Y42B: case I420: case YV16: case YV24:
+    case Y41B:
         frame->Y.pixelStride = 1;
         break;
     case UYVY: case YUY2: case YVYU: case HDYC:
@@ -82,6 +83,12 @@ int YUV_frame_from_buffer(YUV_frame* frame, void* buffer,
         frame->U.w = w / 2;
         frame->U.lineStride = frame->Y.lineStride / 2;
         break;
+    case Y41B:
+        if (w % 4 != 0)
+            return 0;
+        frame->U.w = w / 4;
+        frame->U.lineStride = frame->Y.lineStride / 4;
+        break;
     case YV24:
         break;
     default:
@@ -105,7 +112,7 @@ int YUV_frame_from_buffer(YUV_frame* frame, void* buffer,
         frame->U.buff = frame->Y.buff + 3;
         frame->V.buff = frame->Y.buff + 1;
         break;
-    case IYUV: case IF09: case YVU9: case Y42B: case I420:
+    case IYUV: case IF09: case YVU9: case Y42B: case I420: case Y41B:
         frame->Y.buff = buffer;
         frame->U.buff = frame->Y.buff + (frame->Y.lineStride * frame->Y.h);
         frame->V.buff = frame->U.buff + (frame->U.lineStride * frame->U.h);
@@ -127,7 +134,7 @@ int frame_size(const int w, const int h, const formats format)
     {
     case UYVY: case YUY2: case YVYU: case HDYC: case Y42B: case YV16:
         return (w * h) * 2;
-    case YV12: case IYUV: case I420:
+    case YV12: case IYUV: case I420: case Y41B:
         return (w * h) * 3 / 2;
     case IF09: case YVU9:
         return (w * h) * 9 / 8;

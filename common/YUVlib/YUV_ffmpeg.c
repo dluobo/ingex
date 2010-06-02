@@ -1,5 +1,5 @@
 /*
- * $Id: YUV_ffmpeg.c,v 1.3 2009/09/18 15:07:24 philipn Exp $
+ * $Id: YUV_ffmpeg.c,v 1.4 2010/06/02 10:52:38 philipn Exp $
  *
  *
  *
@@ -37,6 +37,10 @@ int YUV_frame_from_AVFrame(YUV_frame* dest,
         ssx = 2;
         ssy = 2;
         break;
+    case PIX_FMT_YUV411P:
+        ssx = 4;
+        ssy = 1;
+        break;
     case PIX_FMT_YUYV422: case PIX_FMT_YUV422P:
         ssx = 2;
         ssy = 1;
@@ -63,6 +67,7 @@ int YUV_frame_from_AVFrame(YUV_frame* dest,
     switch (avctx->pix_fmt)
     {
     case PIX_FMT_YUV420P: case PIX_FMT_YUV422P: case PIX_FMT_YUV444P:
+    case PIX_FMT_YUV411P:
         dest->Y.pixelStride = 1;
         dest->U.pixelStride = 1;
         break;

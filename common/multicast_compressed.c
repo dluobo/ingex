@@ -3,6 +3,10 @@
 #define __STDC_FORMAT_MACROS
 #include <inttypes.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifdef FFMPEG_OLD_INCLUDE_PATHS
 #include <ffmpeg/avcodec.h>
 #include <ffmpeg/avformat.h>
@@ -11,6 +15,9 @@
 #include <libavformat/avformat.h>
 #endif
 
+#ifdef __cplusplus
+}
+#endif
 
 #define MPA_FRAME_SIZE 1152
 
@@ -58,13 +65,13 @@ static int initialise_tc_mask (internal_mpegts_encoder_t *ts)
 	ts->tc_xoffset = 460;
 	ts->tc_yoffset = 30;
 	//ts->tc_yoffset = ts->video_st->codec->height - 30;
-	ts->tc_mask = av_mallocz (ts->tc_width* ts->tc_height);
+	ts->tc_mask = (uint8_t *)av_mallocz (ts->tc_width* ts->tc_height);
 	return 0;
 }
 
 
 /* add a video output stream */
-AVStream *add_video_stream(AVFormatContext *oc, int codec_id, int width, int height, int bit_rate, int thread_count)
+AVStream *add_video_stream(AVFormatContext *oc, enum CodecID codec_id, int width, int height, int bit_rate, int thread_count)
 {
     //Modifiying all values to ts format values
     AVCodecContext *c;
@@ -166,7 +173,7 @@ static AVFrame *alloc_picture(int pix_fmt, int width, int height)
     if (!picture)
         return NULL;
     size = avpicture_get_size(pix_fmt, width, height);
-    picture_buf = malloc(size);
+    picture_buf = (uint8_t *)malloc(size);
     if (!picture_buf) {
         av_free(picture);
         return NULL;
@@ -204,7 +211,7 @@ static int open_video(internal_mpegts_encoder_t *ts)
         /* allocate output buffer */
         /* XXX: API change will be done */
         ts->video_outbuf_size = 550000;
-        ts->video_outbuf = malloc(ts->video_outbuf_size);
+        ts->video_outbuf = (uint8_t *)malloc(ts->video_outbuf_size);
     }
 
     /* allocate the encoded raw picture */
@@ -232,7 +239,7 @@ static void close_video(internal_mpegts_encoder_t *ts)
 /* 
  * add an audio output stream
  */
-static AVStream *add_audio_stream(AVFormatContext *oc, int codec_id)
+static AVStream *add_audio_stream(AVFormatContext *oc, enum CodecID codec_id)
 {
     AVCodecContext *c;
     AVStream *st;
@@ -278,10 +285,10 @@ static int open_audio(internal_mpegts_encoder_t *ts)
     }
 
     ts->audio_outbuf_size = 15000;
-    ts->audio_outbuf = malloc(ts->audio_outbuf_size);
+    ts->audio_outbuf = (uint8_t *)malloc(ts->audio_outbuf_size);
 
     ts->audio_inbuf_size = 20000;
-    ts->audio_inbuf = malloc(ts->audio_inbuf_size);
+    ts->audio_inbuf = (int16_t *)malloc(ts->audio_inbuf_size);
     /* ugly hack for PCM codecs (will be removed ASAP with new PCM
        support to compute the input frame size in samples */
     if (c->frame_size <= 1) {
@@ -354,7 +361,7 @@ extern mpegts_encoder_t *mpegts_encoder_init (const char *filename, int width, i
 		return NULL;
 	}
 
-	mpegts = av_mallocz (sizeof(internal_mpegts_encoder_t));
+	mpegts = (internal_mpegts_encoder_t *)av_mallocz (sizeof(internal_mpegts_encoder_t));
 	if (!mpegts) {
 		fprintf (stderr, "Could not allocate encoder object\n");
 		return NULL;

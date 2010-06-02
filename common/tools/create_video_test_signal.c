@@ -1,5 +1,5 @@
 /*
- * $Id: create_video_test_signal.c,v 1.2 2010/01/12 16:05:52 john_f Exp $
+ * $Id: create_video_test_signal.c,v 1.3 2010/06/02 10:52:38 philipn Exp $
  *
  * Create file with UYVY video test signal
  *
@@ -151,7 +151,7 @@ int main(int argc, const char **argv)
 
     
     output_buffer_size = width * 2 * height;
-    output_buffer = malloc(output_buffer_size);
+    output_buffer = (unsigned char *)malloc(output_buffer_size);
     
     switch (test_signal)
     {

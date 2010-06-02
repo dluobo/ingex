@@ -1,5 +1,5 @@
 /*
- * $Id: YUV_ffmpeg.h,v 1.3 2009/09/18 15:07:24 philipn Exp $
+ * $Id: YUV_ffmpeg.h,v 1.4 2010/06/02 10:52:38 philipn Exp $
  *
  *
  *
@@ -24,6 +24,10 @@
 #ifndef __YUVLIB_FFMPEG__
 #define __YUVLIB_FFMPEG__
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifdef FFMPEG_OLD_INCLUDE_PATHS
 #include <ffmpeg/avformat.h>
 #else
@@ -36,6 +40,10 @@
  */
 extern int YUV_frame_from_AVFrame(YUV_frame* dest,
                                   AVCodecContext *avctx, AVFrame* source);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // __YUVLIB_FFMPEG__
 

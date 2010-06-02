@@ -1,5 +1,5 @@
 /*
- * $Id: YUV_text_overlay.h,v 1.2 2009/09/18 15:07:24 philipn Exp $
+ * $Id: YUV_text_overlay.h,v 1.3 2010/06/02 10:52:38 philipn Exp $
  *
  *
  *
@@ -64,35 +64,35 @@ void free_overlay(overlay* ovly);
 // Create a text overlay. If the width exceeds max_width the text will
 // be truncated (at a word break) to fit.
 // A positive return value indicates the number of characters actually used.
-int text_to_overlay(p_info_rec* info, overlay* ovly, char* text,
-                    int max_width, char* font, const int size,
+int text_to_overlay(p_info_rec* info, overlay* ovly, const char* text,
+                    int max_width, const char* font, const int size,
                     const int aspect_ratio_num,
                     const int aspect_ratio_den);
 
 // Create a text overlay. If the width exceeds max_width the text will
 // be wrapped (at a word break) to fit.
-YUV_error text_to_overlay_player(p_info_rec* info, overlay* ovly, char* text,
+YUV_error text_to_overlay_player(p_info_rec* info, overlay* ovly, const char* text,
                           int max_width, int min_width,
                           int x_margin, int y_margin,
                           int center,
                           int tab_width,
                           int enable_align_right,
-                          char* font, const int size,
+                          const char* font, const int size,
                           const int aspect_ratio_num,
                           const int aspect_ratio_den);
 
 
 // Create a multi line text overlay. Line breaks occur either when the max
 // width is reached, or when a \n character occurs.
-int ml_text_to_ovly(p_info_rec* info, overlay* ovly, char* text,
-                    int max_width, char* font, const int size,
+int ml_text_to_ovly(p_info_rec* info, overlay* ovly, const char* text,
+                    int max_width, const char* font, const int size,
                     const int aspect_ratio_num,
                     const int aspect_ratio_den);
 
 // Create a multi line text overlay. Line breaks occur either when the max
 // width is reached, or when a \n character occurs.
-YUV_error ml_text_to_ovly_player(p_info_rec* info, overlay* ovly, char* text,
-                          int max_width, char* font, const int size,
+YUV_error ml_text_to_ovly_player(p_info_rec* info, overlay* ovly, const char* text,
+                          int max_width, const char* font, const int size,
                           int margin,
                           const int aspect_ratio_num,
                           const int aspect_ratio_den);
@@ -116,7 +116,7 @@ void free_timecode(timecode_data* tc_data);
 
 // Render a set of characters to use when overlaying a timecode.
 int init_timecode(p_info_rec* info, timecode_data* tc_data,
-                  char* font, const int size,
+                  const char* font, const int size,
                   const int aspect_ratio_num, const int aspect_ratio_den);
 
 // Superimpose a timecode on a video frame at position (x, y).
@@ -140,7 +140,7 @@ YUV_error char_to_overlay(p_info_rec* info, overlay* ovly, char character,
 void free_char_set(char_set_data* cs_data);
 
 YUV_error char_set_to_overlay(p_info_rec* info, char_set_data* cs_data,
-                          char* cset, char* font, const int size,
+                          const char* cset, const char* font, const int size,
                           const int aspect_ratio_num,
                           const int aspect_ratio_den);
 

@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.5 2010/02/17 15:56:50 philipn Exp $
+# $Id: Makefile,v 1.6 2010/06/02 10:52:38 philipn Exp $
 #
 # Makefile for building useful command-line tools
 #
@@ -33,7 +33,7 @@ LIB_COMMON=../libcommon.a
 
 PROGS=convert_audio convert_10bit_video create_video_test_signal detect_digibeta_dropouts \
 	compare_archive_mxf clapperboard_avsync disk_rw_benchmark send_video receive_video \
-	create_audio_test_signal
+	create_audio_test_signal dump_vc3
 
 .PHONY: all
 all: $(PROGS) dvs_hardware
@@ -43,31 +43,34 @@ dvs_hardware:
 	cd dvs_hardware && $(MAKE)
 
 convert_audio: convert_audio.c $(LIB_COMMON)
-	gcc $(CFLAGS) $(INCLUDE) $< $(LIB_COMMON) -o $@ -lm
+	g++ $(CFLAGS) $(INCLUDE) $< $(LIB_COMMON) -o $@ -lm
 
 convert_10bit_video: convert_10bit_video.c $(LIB_COMMON)
-	gcc $(CFLAGS) $(INCLUDE) $< $(LIB_COMMON) -o $@
+	g++ $(CFLAGS) $(INCLUDE) $< $(LIB_COMMON) -o $@
 
 create_video_test_signal: create_video_test_signal.c $(LIB_COMMON)
-	gcc $(CFLAGS) $(INCLUDE) $< $(LIB_COMMON) -o $@
+	g++ $(CFLAGS) $(INCLUDE) $< $(LIB_COMMON) -o $@
 
 create_audio_test_signal: create_audio_test_signal.c
-	gcc $(CFLAGS) -lm $< -o $@
+	g++ $(CFLAGS) -lm $< -o $@
 
 detect_digibeta_dropouts: detect_digibeta_dropouts.c $(LIB_COMMON)
-	gcc $(CFLAGS) $(INCLUDE) $< $(LIB_COMMON) -L../YUVlib -lYUVlib -o $@
+	g++ $(CFLAGS) $(INCLUDE) $< $(LIB_COMMON) -L../YUVlib -lYUVlib -o $@
 
 compare_archive_mxf: compare_archive_mxf.c $(LIB_COMMON)
-	gcc $(CFLAGS) $(INCLUDE) $< $(LIB_COMMON) -o $@
+	g++ $(CFLAGS) $(INCLUDE) $< $(LIB_COMMON) -o $@
 
 clapperboard_avsync: clapperboard_avsync.c $(LIB_COMMON)
-	gcc $(CFLAGS) -I. $(INCLUDE) $< $(LIB_COMMON) $(MXF_LIB) -o $@ -lm
+	g++ $(CFLAGS) -I. $(INCLUDE) $< $(LIB_COMMON) $(MXF_LIB) -o $@ -lm
 
 send_video: send_video.c $(LIB_COMMON)
-	gcc $(CFLAGS) $(INCLUDE) $< $(LIB_COMMON) -o $@ -L../YUVlib -lYUVlib -lpthread
+	g++ $(CFLAGS) $(INCLUDE) $< $(LIB_COMMON) -o $@ -L../YUVlib -lYUVlib -lpthread
 
 receive_video: receive_video.c $(LIB_COMMON)
-	gcc $(CFLAGS) $(INCLUDE) $< $(LIB_COMMON) -o $@ -L../YUVlib -lYUVlib -lpthread -lm
+	g++ $(CFLAGS) $(INCLUDE) $< $(LIB_COMMON) -o $@ -L../YUVlib -lYUVlib -lpthread -lm
+
+dump_vc3: dump_vc3.c
+	g++ $(CFLAGS) $< -o $@
 
 clean:
 	cd dvs_hardware && $(MAKE) $@

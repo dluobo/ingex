@@ -1,9 +1,12 @@
 /*
- * $Id: video_VITC.h,v 1.2 2008/04/18 15:54:34 john_f Exp $
+ * $Id: video_VITC.h,v 1.3 2010/06/02 10:52:38 philipn Exp $
  *
  * Utilities for reading, writing and dealing with VITC timecodes
  *
- * Copyright (C) 2005  Stuart Cunningham <stuart_hc@users.sourceforge.net>
+ * Copyright (C) 2005  British Broadcasting Corporation.
+ * All Rights Reserved.
+ *
+ * Author: Stuart Cunningham
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -31,8 +34,13 @@ extern "C" {
 extern char *framesToStr(int tc, char *s);
 extern int dvs_tc_to_int(int tc);
 extern int tc_to_int(unsigned hh, unsigned mm, unsigned ss, unsigned ff);
+
 extern int readVITC(const unsigned char *line, unsigned *hh, unsigned *mm, unsigned *ss, unsigned *ff);
 extern int black_or_grey_line(const unsigned char *line, int width);
+
+extern void draw_vitc_line(unsigned char value[9], unsigned char *line);
+extern void write_vitc_one_field(unsigned hh, unsigned mm, unsigned ss, unsigned ff, int field_flag, unsigned char *line);
+extern void write_vitc(unsigned hh, unsigned mm, unsigned ss, unsigned ff, unsigned char *line);
 
 #ifdef __cplusplus
 }

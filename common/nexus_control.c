@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_control.c,v 1.4 2010/03/30 08:07:36 john_f Exp $
+ * $Id: nexus_control.c,v 1.5 2010/06/02 10:52:38 philipn Exp $
  *
  * Module for creating and accessing nexus shared control memory
  *
@@ -148,6 +148,40 @@ extern int nexus_tc(const NexusControl *pctl, uint8_t *ring[], int channel, int 
         break;
     default:
         tc = nfd->vitc;
+        break;
+    }
+
+    return tc;
+}
+
+Ingex::Timecode nexus_timecode(const NexusControl *pctl, uint8_t *ring[], int channel, int frame, NexusTimecode tctype)
+{
+    NexusFrameData * nfd = nexus_frame_data(pctl, ring, channel, frame);
+
+    if (tctype == NexusTC_DEFAULT)
+    {
+        tctype = pctl->default_tc_type;
+    }
+
+    Ingex::Timecode tc = nfd->tc_systc;
+    switch (tctype)
+    {
+    case NexusTC_VITC:
+        tc = nfd->tc_vitc;
+        break;
+    case NexusTC_LTC:
+        tc = nfd->tc_ltc;
+        break;
+    case NexusTC_DVITC:
+        tc = nfd->tc_dvitc;
+        break;
+    case NexusTC_DLTC:
+        tc = nfd->tc_dltc;
+        break;
+    case NexusTC_SYSTEM:
+        tc = nfd->tc_systc;
+        break;
+    default:
         break;
     }
 
@@ -315,3 +349,4 @@ extern int nexus_connection_status(const NexusConnection *p, int *p_heartbeat_st
 
     return 0;
 }
+

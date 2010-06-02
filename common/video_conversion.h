@@ -1,5 +1,5 @@
 /*
- * $Id: video_conversion.h,v 1.5 2010/02/12 14:04:46 philipn Exp $
+ * $Id: video_conversion.h,v 1.6 2010/06/02 10:52:38 philipn Exp $
  *
  * MMX optimised video format conversion functions
  *
@@ -46,6 +46,8 @@ void yuv444_to_uyvy(int width, int height, const uint8_t *input, uint8_t *output
 
 void yuv422_to_yuv420_DV_sampling(int width, int height, int shift_picture_down, const uint8_t *input, uint8_t *output);
 void uyvy_to_yuv420_DV_sampling(int width, int height, int shift_picture_down, const uint8_t *input, uint8_t *output);
+
+void uyvy_to_yuv411(int width, int height, int shift_picture_down, const uint8_t *input, uint8_t *output);
 
 #ifdef __cplusplus
 }

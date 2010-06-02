@@ -23,14 +23,14 @@
 extern int connect_to_multicast_address(const char *address, int port __attribute__ ((unused)))
 {
 #if TESTING_FLAG
-	printf("Inside multicast_video: connect_to_multicast_address with DEBUG_UDP_SEND_RECV; return\n)"
+	printf("Inside multicast_video: connect_to_multicast_address with DEBUG_UDP_SEND_RECV; return\n")
 #endif
 	return open(address, O_RDONLY);
 }
 extern int open_socket_for_streaming(const char *remote, int port __attribute__ ((unused)))
 {
 #if TESTING_FLAG
-	printf("Inside multicast_video: open_socket_for_streaming with DEBUG_UDP_SEND_RECV; return\n)"
+	printf("Inside multicast_video: open_socket_for_streaming with DEBUG_UDP_SEND_RECV; return\n")
 #endif
 	return open(remote, O_CREAT|O_TRUNC|O_RDWR, 0664);
 }
@@ -95,19 +95,25 @@ else
 			return -1;
 		}
 		/* Join multicast group if multicast address */
-		if ( ((((in_addr_t)(ntohl(sock.sin6_addr.s6_addr))) & 0xf0000000) == 0xe0000000) ) {
-			struct ip_mreq imr;
+		/* if ( ((((in_addr_t)(ntohl(sock.sin6_addr.s6_addr))) & 0xf0000000) == 0xe0000000) )
+          Line above rather dodgy; below is my guess at something better. */
+        if (sock.sin6_addr.s6_addr[0] == 0xff)
+        {
+			struct ipv6_mreq imr;
 	
-			imr.imr_multiaddr.s_addr = sock.sin6_addr.s6_addr;
-			imr.imr_interface.s_addr = INADDR_ANY;
+            for (int i = 0; i < 16; ++i)
+            {
+                imr.ipv6mr_multiaddr.s6_addr[i] = sock.sin6_addr.s6_addr[i];
+            }
+			imr.ipv6mr_interface = 0;
 	
-			if (setsockopt( fd, IPPROTO_IP, IP_ADD_MEMBERSHIP,
-							(char*)&imr, sizeof(struct ip_mreq) ) == -1) {
+			if (setsockopt( fd, IPPROTO_IPV6, IPV6_ADD_MEMBERSHIP,
+							(char*)&imr, sizeof(struct ipv6_mreq) ) == -1) {
 				perror("failed to join IP multicast group");
 				return -1;
 			}
+            printf("Joined ipv6 multicast group for %s:%d\n", address, port);
 		}
-		printf("Joined multicast group for %s:%d\n", address, port);
 		return fd;
 	}					
 	else
@@ -135,8 +141,8 @@ else
 				perror("failed to join IP multicast group");
 				return -1;
 			}
+            printf("Joined multicast group for %s port %d\n", address, port);
 		}
-		printf("Joined multicast group for %s port %d\n", address, port);
 		return fd;
 	}//end of FLAG_V6
 }
@@ -752,7 +758,7 @@ extern int send_audio_video(int fd, int width, int height, int audio_channels,
 	printf("HERE !!!! Inside multicast_video: send_audio_video\n");
 #endif
 	// FIXME: change this to a stack variable after testing with valgrind
-	unsigned char *buf = malloc(PACKET_SIZE);
+	unsigned char *buf = (unsigned char *)malloc(PACKET_SIZE);
 	int total_bytes_written = 0;
 
 	int video_size = width * height * 3/2;				// video is YUV planar 4:2:0

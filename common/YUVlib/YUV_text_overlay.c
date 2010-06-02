@@ -1,5 +1,5 @@
 /*
- * $Id: YUV_text_overlay.c,v 1.4 2010/01/12 16:10:20 john_f Exp $
+ * $Id: YUV_text_overlay.c,v 1.5 2010/06/02 10:52:38 philipn Exp $
  *
  *
  *
@@ -99,7 +99,7 @@ static int allocate_info(p_info_rec* p_info)
     return YUV_OK;
 }
 
-static int find_font(info_rec* info, char* family, char* path)
+static int find_font(info_rec* info, const char* family, char* path)
 {
     FcPattern*	pattern;
     FcPattern*	matchedPattern;
@@ -122,7 +122,7 @@ static int find_font(info_rec* info, char* family, char* path)
     return YUV_OK;
 }
 
-static int set_font(info_rec* info, char* family, int size,
+static int set_font(info_rec* info, const char* family, int size,
                     int aspect_ratio_num, int aspect_ratio_den)
 {
     char	fontPath[1024];
@@ -209,6 +209,32 @@ static void filterUV(overlay* ovly, const int ssx, const int ssy)
             *dstLine++ = (A + (B * 2)) / 4;
         }
     }
+    else if (ssx == 4)
+    {
+        int	A, B, C, D, E;
+
+        // 1/8, 1/4, 1/4, 1/4, 1/8 filter
+        srcLineA = ovly->buff;
+        dstLine = ovly->Cbuff;
+        for (j = 0; j < ovly->h; j++)
+        {
+            A = 0;
+            B = 0;
+            C = *srcLineA++;
+            D = *srcLineA++;
+            for (i = 0; i < ovly->w - 2; i++)
+            {
+                E = *srcLineA++;
+                *dstLine++ = (A + ((B + C + D) * 2) + E) / 8;
+                A = B;
+                B = C;
+                C = D;
+                D = E;
+            }
+            *dstLine++ = (A + ((B + C + D) * 2)) / 8;
+            *dstLine++ = (B + ((C + D) * 2)) / 8;
+        }
+    }
     // vertical
     if (ssy == 2)
     {
@@ -228,8 +254,8 @@ static void filterUV(overlay* ovly, const int ssx, const int ssy)
     ovly->ssy = ssy;
 }
 
-int text_to_overlay(p_info_rec* p_info, overlay* ovly, char* text,
-                    int max_width, char* font, const int size, 
+int text_to_overlay(p_info_rec* p_info, overlay* ovly, const char* text,
+                    int max_width, const char* font, const int size, 
                     const int aspect_ratio_num,
                     const int aspect_ratio_den)
 {
@@ -379,13 +405,13 @@ int text_to_overlay(p_info_rec* p_info, overlay* ovly, char* text,
     return result;	// length of string actually rendered
 }
 
-YUV_error text_to_overlay_player(p_info_rec* p_info, overlay* ovly, char* text,
+YUV_error text_to_overlay_player(p_info_rec* p_info, overlay* ovly, const char* text,
                           int max_width, int min_width,
                           int x_margin, int y_margin,
                           int center,
                           int tab_width,
                           int enable_align_right,
-                          char* font, const int size,
+                          const char* font, const int size,
                           const int aspect_ratio_num,
                           const int aspect_ratio_den)
 {
@@ -588,19 +614,19 @@ YUV_error text_to_overlay_player(p_info_rec* p_info, overlay* ovly, char* text,
 }
 
 
-int ml_text_to_ovly(p_info_rec* info, overlay* ovly, char* text,
-                    int max_width, char* font, const int size,
+int ml_text_to_ovly(p_info_rec* info, overlay* ovly, const char* text,
+                    int max_width, const char* font, const int size,
                     const int aspect_ratio_num, const int aspect_ratio_den)
 {
     #define MAX_LINES 100
-    overlay	line_ovly[MAX_LINES];
-    char*	sub_str;
-    int		count;
-    int		length;
-    int		no_lines;
-    BYTE*	src;
-    BYTE*	dst;
-    int		j, n;
+    overlay	    line_ovly[MAX_LINES];
+    const char* sub_str;
+    int         count;
+    int         length;
+    int         no_lines;
+    BYTE*       src;
+    BYTE*       dst;
+    int         j, n;
 
     // render each line of text to an overlay
     sub_str = text;
@@ -644,19 +670,19 @@ int ml_text_to_ovly(p_info_rec* info, overlay* ovly, char* text,
     return YUV_OK;
 }
 
-YUV_error ml_text_to_ovly_player(p_info_rec* info, overlay* ovly, char* text,
-                          int max_width, char* font, const int size, int margin,
+YUV_error ml_text_to_ovly_player(p_info_rec* info, overlay* ovly, const char* text,
+                          int max_width, const char* font, const int size, int margin,
                           const int aspect_ratio_num, const int aspect_ratio_den)
 {
     #define MAX_LINES 100
-    overlay line_ovly[MAX_LINES];
-    char*   sub_str;
-    int     count;
-    int     length;
-    int     no_lines;
-    BYTE*   src;
-    BYTE*   dst;
-    int     j, n;
+    overlay     line_ovly[MAX_LINES];
+    const char* sub_str;
+    int         count;
+    int         length;
+    int         no_lines;
+    BYTE*       src;
+    BYTE*       dst;
+    int         j, n;
 
     // render each line of text to an overlay
     sub_str = text;
@@ -893,7 +919,7 @@ void free_timecode(timecode_data* tc_data)
 }
 
 int init_timecode(p_info_rec* p_info, timecode_data* tc_data,
-                  char* font, const int size,
+                  const char* font, const int size,
                   const int aspect_ratio_num, const int aspect_ratio_den)
 {
     info_rec*		info;
@@ -1154,7 +1180,7 @@ void free_char_set(char_set_data* cs_data)
 }
 
 YUV_error char_set_to_overlay(p_info_rec* p_info, char_set_data* cs_data,
-                          char* cset, char* font, const int size,
+                          const char* cset, const char* font, const int size,
                           const int aspect_ratio_num,
                           const int aspect_ratio_den)
 {
