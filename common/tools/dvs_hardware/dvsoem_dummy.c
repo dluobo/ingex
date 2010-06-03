@@ -1,5 +1,5 @@
 /*
- * $Id: dvsoem_dummy.c,v 1.12 2010/06/02 10:52:38 philipn Exp $
+ * $Id: dvsoem_dummy.c,v 1.13 2010/06/03 11:05:33 john_f Exp $
  *
  * Implement a debug-only DVS hardware library for testing.
  *
@@ -106,12 +106,27 @@ static int int_to_dvs_tc(int tc)
     return result;
 }
 
-// Represent the colour and position of a colour bar
+// Represent the colour and position of a colour bar for dummy video
 typedef struct {
     double          position;
     unsigned char   colour[4];
 } bar_colour_t;
 
+// Dummy audio: 500Hz tone fits neatly into 1920 samples (1 PAL video frame).
+// Use a simple table of signed 16bit samples to avoid linking maths library.
+static int16_t tone_500Hz_16bit_1cycle[96] = {
+0x0000, 0x006B, 0x00D6, 0x0140, 0x01A7, 0x0210, 0x0271, 0x02D8,
+0x032F, 0x0393, 0x03E1, 0x043B, 0x0486, 0x04CF, 0x0515, 0x0551,
+0x058D, 0x05BA, 0x05EE, 0x060B, 0x0632, 0x0645, 0x065A, 0x0661,
+0x0668, 0x0661, 0x065B, 0x0645, 0x062F, 0x060F, 0x05EA, 0x05BE,
+0x058A, 0x0552, 0x0514, 0x04D0, 0x0487, 0x0437, 0x03E7, 0x038C,
+0x0335, 0x02D4, 0x0273, 0x020F, 0x01A8, 0x013F, 0x00D7, 0x006A,
+0x0000, 0xFF96, 0xFF29, 0xFEC2, 0xFE56, 0xFDF2, 0xFD8E, 0xFD29,
+0xFCD0, 0xFC6F, 0xFC1C, 0xFBC7, 0xFB7A, 0xFB2F, 0xFAEE, 0xFAAC,
+0xFA76, 0xFA42, 0xFA16, 0xF9F2, 0xF9D0, 0xF9B9, 0xF9A9, 0xF99B,
+0xF99C, 0xF99B, 0xF9A9, 0xF9B9, 0xF9D0, 0xF9F3, 0xFA13, 0xFA47,
+0xFA70, 0xFAB2, 0xFAE9, 0xFB32, 0xFB79, 0xFBC7, 0xFC1C, 0xFC6F,
+0xFCD0, 0xFD29, 0xFD8F, 0xFDEF, 0xFE5A, 0xFEBF, 0xFF2B, 0xFF94 };
 
 static void setup_source_buf(DvsCard * dvs)
 {
@@ -149,20 +164,28 @@ static void setup_source_buf(DvsCard * dvs)
             printf("DVSDUMMY: processing param[%s]\n", param);
 
             if (strncmp(param, "help", strlen("help")) == 0) {
-                printf("DVSDUMMY: valid arguments are:\n");
+                printf("DVSDUMMY: valid parameters are:\n");
+                printf("video=PAL (default)\n");
                 printf("video=NTSC\n");
                 printf("video=1920x1080i50\n");
                 printf("video=1920x1080i60\n");
                 printf("video=1280x720p50\n");
                 printf("video=1280x720p60\n");
-                printf("vidfile=filename.uyvy\n");
-                printf("audfile=filename.pcm (16bit 48kHz audio)\n");
-                printf("good_tc=A/L/V (A=All, L=LTC, V=VITC)\n");
+                printf("vidfile=filename.uyvy (uncompressed UYVY)\n");
+                printf("audfile=audio12.pcm (16bit 48kHz stereo audio)\n");
+                printf("good_tc=A/L/V (A=All (default), L=LTC, V=VITC)\n");
             }
             else if (strncmp(param, "video=", strlen("video=")) == 0) {
                 int tmpw, tmph, rate;
                 char ff;
-                if (strcmp(param, "video=NTSC") == 0) {
+                if (strcmp(param, "video=PAL") == 0) {
+                    dvs->width = 720;
+                    dvs->height = 576;
+                    dvs->frame_rate_numer = 25;
+                    dvs->frame_rate_denom = 1;
+                    dvs->videomode = SV_MODE_PAL;
+                }
+                else if (strcmp(param, "video=NTSC") == 0) {
                     dvs->width = 720;
                     dvs->height = 480;
                     dvs->frame_rate_numer = 30000;
@@ -261,17 +284,20 @@ static void setup_source_buf(DvsCard * dvs)
         int32_t * audio3 = (int32_t *)audio34;
         int32_t * audio4 = audio3 + 1;
 
-        // TODO: Create a nice tone.
-        // For now, just do a sawtooth.
-        int amplitude = 0x08000000;
+        // Create 500Hz tone on audio 1,2 and 1000Hz tone on audio 3,4
         int i;
-        for (i = 0; i < 1920; ++i)
+        for (i = 0; i < 1920; i++)
         {
-            int32_t sample = (2 * amplitude / 192) * (i % 192) - amplitude;
-            *audio1++ = sample;
-            *audio2++ = sample;
-            *audio3++ = sample;
-            *audio4++ = sample;
+            // shift 16bit sample to 32bit
+            int sample500 = tone_500Hz_16bit_1cycle[i % 96] << 16;
+
+            // double frequency for audio 3 and 4
+            int sample1000 = tone_500Hz_16bit_1cycle[(i*2) % 96] << 16;
+
+            audio1[i * 2] = sample500;
+            audio2[i * 2] = sample500;
+            audio3[i * 2] = sample1000;
+            audio4[i * 2] = sample1000;
         }
     }
     else {
