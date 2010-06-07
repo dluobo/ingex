@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.c,v 1.31 2010/06/02 13:06:43 john_f Exp $
+ * $Id: dvs_sdi.c,v 1.32 2010/06/07 10:24:13 john_f Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -1189,16 +1189,6 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
         dltc_bits = (unsigned)dltc_bits & 0x7fffffff;
     }
 
-    // Optionally mask off irrelevant bits in the timecodes.
-    // NB not sure where drop-frame flag is.
-    if (0)
-    {
-        vitc_bits &= 0x3f7f7f3f;
-        ltc_bits &= 0x3f7f7f3f;
-        dvitc_bits &= 0x3f7f7f3f;
-        dltc_bits &= 0x3f7f7f3f;
-    }
-
     Ingex::Timecode tc_ltc = timecode_from_dvs_bits(ltc_bits, frame_rate_numer, frame_rate_denom);
     Ingex::Timecode tc_vitc = timecode_from_dvs_bits(vitc_bits, frame_rate_numer, frame_rate_denom);
     Ingex::Timecode tc_dltc = timecode_from_dvs_bits(dltc_bits, frame_rate_numer, frame_rate_denom);
@@ -1209,6 +1199,7 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
 
     // Compute system timecode as int number of frames since midnight
     int systc_as_int = (int)(sys_time_microsec * frame_rate_numer / (INT64_C(1000000) * frame_rate_denom));
+    // Choose drop-frame mode for systc if rate not integral
     bool systc_drop = (frame_rate_numer % frame_rate_denom != 0);
     Ingex::Timecode tc_systc(systc_as_int, frame_rate_numer, frame_rate_denom, systc_drop);
 
@@ -1382,11 +1373,12 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
     nfd->tc_dvitc = tc_dvitc;
     nfd->tc_systc = tc_systc;
 
-    // LTC and VITC as frame count
+    // LTC, VITC, DLTC, DVITC, SYS as integer frame count
     nfd->vitc = vitc_as_int;
     nfd->ltc = ltc_as_int;
     nfd->dvitc = dvitc_as_int;
     nfd->dltc = dltc_as_int;
+    nfd->systc = systc_as_int;
 
     // "frame" tick (tick / 2)
     int frame_tick = pbuffer->control.tick / 2;
