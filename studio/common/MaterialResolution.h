@@ -1,5 +1,5 @@
 /*
- * $Id: MaterialResolution.h,v 1.1 2010/06/02 13:10:46 john_f Exp $
+ * $Id: MaterialResolution.h,v 1.2 2010/06/14 15:40:32 john_f Exp $
  *
  * Material resolution codes and details
  *
@@ -107,6 +107,9 @@ public:
         MP3,
 
         CUTS,
+
+	XDCAMHD422_RAW,
+	XDCAMHD422_MOV,
 
         END
     };

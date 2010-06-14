@@ -1,5 +1,5 @@
 /*
- * $Id: MaterialResolution.cpp,v 1.1 2010/06/02 13:10:46 john_f Exp $
+ * $Id: MaterialResolution.cpp,v 1.2 2010/06/14 15:40:32 john_f Exp $
  *
  * Material resolution codes and details
  *
@@ -198,6 +198,14 @@ std::string MaterialResolution::Name(MaterialResolution::EnumType res)
         name = "Vision Cuts";
         break;
 
+	case XDCAMHD422_RAW:
+		name = "XDCAMHD422 Raw";
+		break;
+	
+	case XDCAMHD422_MOV:
+		name = "XDCAMHD422 Quicktime";
+		break;
+
     default:
         name = "Unknown";
         break;
@@ -295,6 +303,16 @@ void MaterialResolution::GetInfo(MaterialResolution::EnumType res, FileFormat::E
         format = FileFormat::RAW;
         op = OperationalPattern::OP_ATOM;
         break;
+	
+	case XDCAMHD422_RAW:
+		format = FileFormat::RAW;
+		op = OperationalPattern::OP_1A;
+		break;
+
+	case XDCAMHD422_MOV:
+		format = FileFormat::MOV;
+		op = OperationalPattern::OP_1A;
+		break;
 
     case NONE:
     case END:
@@ -315,6 +333,7 @@ bool MaterialResolution::CheckVideoFormat(MaterialResolution::EnumType res,
     {
     case MaterialResolution::DV25_RAW:
     case MaterialResolution::DV25_MXF_ATOM:
+    case MaterialResolution::DV25_MOV:
         if ((Ingex::VideoRaster::PAL_B == raster && Ingex::PixelFormat::YUV_PLANAR_420_DV == format)
             || (Ingex::VideoRaster::NTSC == raster && Ingex::PixelFormat::YUV_PLANAR_411 == format))
         {
@@ -323,6 +342,7 @@ bool MaterialResolution::CheckVideoFormat(MaterialResolution::EnumType res,
         break;
     case MaterialResolution::DV50_RAW:
     case MaterialResolution::DV50_MXF_ATOM:
+    case MaterialResolution::DV50_MOV:
         if ((Ingex::VideoRaster::PAL_B == raster && Ingex::PixelFormat::YUV_PLANAR_422 == format)
             || (Ingex::VideoRaster::NTSC == raster && Ingex::PixelFormat::YUV_PLANAR_422 == format))
         {
@@ -331,6 +351,7 @@ bool MaterialResolution::CheckVideoFormat(MaterialResolution::EnumType res,
         break;
     case MaterialResolution::DV100_RAW:
     case MaterialResolution::DV100_MXF_ATOM:
+    case MaterialResolution::DV100_MOV:
         if ((Ingex::VideoRaster::SMPTE274_25I == raster && Ingex::PixelFormat::YUV_PLANAR_422 == format)
             || (Ingex::VideoRaster::SMPTE274_29I == raster && Ingex::PixelFormat::YUV_PLANAR_422 == format))
         {
@@ -386,8 +407,15 @@ bool MaterialResolution::CheckVideoFormat(MaterialResolution::EnumType res,
             || (Ingex::VideoRaster::SMPTE274_29P == raster && Ingex::PixelFormat::YUV_PLANAR_422 == format))
         {
             result = true;
-        }
+        }	
+		break;
+
+	case MaterialResolution::XDCAMHD422_RAW:
+	case MaterialResolution::XDCAMHD422_MOV:
+	if (Ingex::VideoRaster::SMPTE274_25I == raster && Ingex::PixelFormat::YUV_PLANAR_422 == format)
+			result = true;
         break;
+
     case MaterialResolution::DVD:
     case MaterialResolution::MPEG4_MOV:
         if ((Ingex::VideoRaster::PAL == raster && Ingex::PixelFormat::YUV_PLANAR_420_MPEG == format)
