@@ -1,5 +1,5 @@
 /*
- * $Id: XMCFile.cpp,v 1.2 2010/06/02 12:59:07 john_f Exp $
+ * $Id: XMCFile.cpp,v 1.3 2010/06/14 15:26:51 john_f Exp $
  *
  * Parse Multi-Camera cuts file.
  *
@@ -26,6 +26,7 @@
 
 #define __STDC_FORMAT_MACROS 1 // for PRId64 macro
 
+#include <cstdio>
 #include <memory>
 
 #include <xercesc/dom/DOM.hpp>

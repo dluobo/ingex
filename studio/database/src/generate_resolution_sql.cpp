@@ -1,4 +1,4 @@
-
+#include <cstdio>
 #include "MaterialResolution.h"
 
 const char * const VR_FMT = "INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (%d, '%s');\n";

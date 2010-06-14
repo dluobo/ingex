@@ -1,4 +1,5 @@
-#include <stdarg.h>
+#include <cstdio>
+#include <cstdarg>
 
 #include "ICException.h"
 

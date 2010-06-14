@@ -1,5 +1,5 @@
 /*
- * $Id: udp_source.c,v 1.7 2010/06/02 11:12:14 philipn Exp $
+ * $Id: udp_source.c,v 1.8 2010/06/14 15:26:51 john_f Exp $
  *
  *
  *
@@ -416,8 +416,8 @@ int udp_open(const char *address, MediaSource** source)
 	}
 	else//v6 version
 	{
-		p = strchr(address, '[');
-		strcpy(remote, p+1);
+		const char *p_bracket = strchr(address, '[');
+		strcpy(remote, p_bracket + 1);
 		if ((strchr(remote, ']'))-strrchr(remote,':')<= 0) 
 		{	/* get the port number */
 			port =1234;				/* default port to 1234 */
