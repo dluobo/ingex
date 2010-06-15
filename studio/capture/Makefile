@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.13 2010/06/02 13:06:43 john_f Exp $
+# $Id: Makefile,v 1.14 2010/06/15 08:00:13 john_f Exp $
 #
 # Makefile for building ingex server and utilities.
 #
@@ -73,8 +73,8 @@ nexus_set_source: nexus_set_source.c
 nexus_save: nexus_save.o
 	$(LINK.cpp) nexus_save.o -o nexus_save $(LIBS) $(LIBPATHS) $(FFMPEG_LIBS)
 
-nexus_multicast: nexus_multicast.c
-	g++ $(CFLAGS) nexus_multicast.c -o nexus_multicast $(LIBS) $(LIBPATHS) -L../../common/YUVlib -lYUVlib $(FFMPEG_LIBS)
+nexus_multicast: nexus_multicast.o multicast_compressed.o
+	$(LINK.cpp) $(CFLAGS) nexus_multicast.o multicast_compressed.o -o nexus_multicast $(LIBS) $(LIBPATHS) -L../../common/YUVlib -lYUVlib $(FFMPEG_LIBS)
 
 nexus_xv: nexus_xv.c
 	g++ $(CFLAGS) nexus_xv.c -o nexus_xv $(LIBS) $(LIBPATHS) -L/usr/X11R6/lib -L/usr/X11R6/lib64 -lXv
