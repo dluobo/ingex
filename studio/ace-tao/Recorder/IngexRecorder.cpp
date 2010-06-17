@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorder.cpp,v 1.14 2010/06/02 13:09:53 john_f Exp $
+ * $Id: IngexRecorder.cpp,v 1.15 2010/06/17 17:27:34 john_f Exp $
  *
  * Class to manage an individual recording.
  *
@@ -72,10 +72,35 @@ IngexRecorder::IngexRecorder(IngexRecorderImpl * impl, unsigned int index)
 {
     ACE_DEBUG((LM_DEBUG, ACE_TEXT("IngexRecorder::IngexRecorder()\n")));
 
+    // Make our own copy of recorder config to avoid problems
+    // if it is re-loaded during a recording.
+    mRecorder.reset(impl->Recorder()->clone());
+
+    // Clear track enables
     for (unsigned int i = 0; i < MAX_CHANNELS; ++i)
     {
         mChannelEnable.push_back(false);
     }
+
+    // Debug RecorderConfig
+    /*
+    prodauto::RecorderConfig * rc = mRecorder->getConfig();
+    for (std::vector<prodauto::RecorderInputConfig*>::const_iterator it = rc->recorderInputConfigs.begin(); it != rc->recorderInputConfigs.end(); ++it)
+    {
+        prodauto::RecorderInputConfig * ric = *it;
+        for (std::vector<prodauto::RecorderInputTrackConfig*>::const_iterator it = ric->trackConfigs.begin(); it != ric->trackConfigs.end(); ++it)
+        {
+            prodauto::RecorderInputTrackConfig * ritc = *it;
+            prodauto::SourceConfig * sc = ritc->sourceConfig;
+            prodauto::SourcePackage * sp = 0;
+            if (sc)
+            {
+                sp = sc->getSourcePackage();
+                fprintf(stderr, "SourcePackage: %s (%s)\n", sp->name.c_str(), sp->isPersistent() ? "persistent" : "not persistent");
+            }
+        }
+    }
+    */
 }
 
 /**

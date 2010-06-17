@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorderImpl.h,v 1.8 2010/06/02 13:09:53 john_f Exp $
+ * $Id: IngexRecorderImpl.h,v 1.9 2010/06/17 17:27:34 john_f Exp $
  *
  * Servant class for Recorder.
  *
@@ -148,7 +148,9 @@ private:
 // methods
 	void DoStop(Ingex::Timecode timecode, framecount_t post_roll);
     void UpdateShmSourceNames();
+    void InitCopying();
     void StartCopying(unsigned int index);
+    void StopCopying(unsigned int index);
     int TranslateLocatorColour(ProdAuto::LocatorColour::EnumType e);
 
 // data

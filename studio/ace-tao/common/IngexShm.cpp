@@ -1,5 +1,5 @@
 /*
- * $Id: IngexShm.cpp,v 1.4 2010/06/02 13:09:53 john_f Exp $
+ * $Id: IngexShm.cpp,v 1.5 2010/06/17 17:27:34 john_f Exp $
  *
  * Interface for reading audio/video data from shared memory.
  *
@@ -179,6 +179,7 @@ void IngexShm::Attach()
         if (ok)
         {
             ACE_DEBUG((LM_INFO, ACE_TEXT("Connected to shared memory.\n")));
+            this->InfoSetup();  // Register recorder name and pid
         }
     }
 }
@@ -289,9 +290,8 @@ void IngexShm::GetFrameRate(int & fps, bool & df)
 }
 
 // Informational updates from Recorder to shared memory
-void IngexShm::InfoSetup(std::string name)
+void IngexShm::InfoSetup()
 {
-    // Called once on Recorder startup to register this Recorder in shared mem
     int pid = getpid();
     for (int i = 0; i < MAX_RECORDERS; i++)
     {
@@ -300,7 +300,7 @@ void IngexShm::InfoSetup(std::string name)
             // This slot is free, so take it
             memset(&mpControl->record_info[i], 0, sizeof(mpControl->record_info[i]));
             mpControl->record_info[i].pid = pid;
-            strncpy(mpControl->record_info[i].name, name.c_str(), sizeof(mpControl->record_info[i].name));
+            strncpy(mpControl->record_info[i].name, mRecorderName.c_str(), sizeof(mpControl->record_info[i].name));
             return;
         }
         // Check if process is dead, if so take over slot
@@ -308,9 +308,10 @@ void IngexShm::InfoSetup(std::string name)
         {
             memset(&mpControl->record_info[i], 0, sizeof(mpControl->record_info[i]));
             mpControl->record_info[i].pid = pid;
-            strncpy(mpControl->record_info[i].name, name.c_str(), sizeof(mpControl->record_info[i].name));
+            strncpy(mpControl->record_info[i].name, mRecorderName.c_str(), sizeof(mpControl->record_info[i].name));
             return;
         }
+        // Otherwise try next slot
     }
 }
 

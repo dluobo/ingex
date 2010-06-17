@@ -1,5 +1,5 @@
 /*
- * $Id: IngexShm.h,v 1.4 2010/06/02 13:09:53 john_f Exp $
+ * $Id: IngexShm.h,v 1.5 2010/06/17 17:27:34 john_f Exp $
  *
  * Interface for reading audio/video data from shared memory.
  *
@@ -194,8 +194,11 @@ public:
         }
     }
 
+    // Store recorder name ready for informational update when connecting to shared memory
+    void RecorderName(const std::string & name) { mRecorderName = name; }
+
     // Informational updates from Recorder to shared memory
-    void InfoSetup(std::string name);
+    void InfoSetup();
     int InfoGetRecIdx(void);
     void InfoResetChannels(void);
     void InfoReset(unsigned int channel, int index, bool quad_video);
@@ -215,6 +218,7 @@ protected:
     IngexShm & operator= (const IngexShm &);
 
 private:
+    std::string mRecorderName;
     unsigned int mChannels;
     unsigned int mAudioTracksPerChannel;
     uint8_t * mRing[MAX_CHANNELS];

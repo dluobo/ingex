@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorder.h,v 1.12 2010/06/02 13:09:53 john_f Exp $
+ * $Id: IngexRecorder.h,v 1.13 2010/06/17 17:27:34 john_f Exp $
  *
  * Class to manage an individual recording.
  *
@@ -152,11 +152,7 @@ public:
     }
 
 private:
-    // Current RecorderConfig
-    // May be better to return a unique ptr for thread safety
-    // - can't do that as tape names are only stored in the instance
-    //prodauto::Recorder * Recorder() const { return mRecorder; }
-    prodauto::Recorder * Recorder() const { return mpImpl->Recorder(); }
+    prodauto::Recorder * Recorder() const { return mRecorder.get(); }
 
     bool GetProjectFromDb(const std::string & name, prodauto::ProjectName & project_name);
     void DoCompletionCallback() { if(mpCompletionCallback) (*mpCompletionCallback)(this); }
@@ -208,6 +204,9 @@ private:
     ACE_Thread_Mutex mDroppedFramesMutex;
     bool mDroppedFrames;
     int mStartFrame[MAX_CHANNELS];
+
+// Recorder config from database (private copy)
+    std::auto_ptr<prodauto::Recorder> mRecorder;
 
 // Recording metadata
     ACE_Thread_Mutex mMetadataMutex;

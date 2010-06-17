@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorderImpl.cpp,v 1.17 2010/06/02 13:09:53 john_f Exp $
+ * $Id: IngexRecorderImpl.cpp,v 1.18 2010/06/17 17:27:34 john_f Exp $
  *
  * Servant class for Recorder.
  *
@@ -78,14 +78,7 @@ bool IngexRecorderImpl::Init()
     bool ok = true;
 
     // Shared memory initialisation
-    IngexShm::Instance();
-    /*
-    if (!IngexShm::Instance()->Init())
-    {
-        ACE_DEBUG((LM_ERROR, ACE_TEXT("Shared Memory init failed!\n")));
-        ok = false;
-    }
-    */
+    IngexShm::Instance()->RecorderName(mName);
 
     // Get frame rate
     /*
@@ -182,9 +175,6 @@ bool IngexRecorderImpl::Init()
         break;
     }
     */
-
-    // Start copy process
-    this->StartCopying(0);
 
     char buf[256];
     if (ACE_OS::hostname(buf, 256) == 0)
@@ -402,10 +392,6 @@ char * IngexRecorderImpl::RecordingFormat (
     // Clear previous monitoring data for enabled channels
     IngexShm::Instance()->InfoResetChannels();
 
-    // Stop any copy process to reduce disc activity.
-    unsigned int recording_index = mRecordingIndex++;
-    mCopyManager.StopCopying(recording_index);
-
     // Make sure we are up-to-date with source config and
     // settings from database.
     // Also happens when controller requests tracks.
@@ -505,6 +491,9 @@ char * IngexRecorderImpl::RecordingFormat (
         }
     }
 
+    // Get index for this recording
+    unsigned int recording_index = mRecordingIndex++;
+
     // Make a new IngexRecorder to manage this recording.
     mpIngexRecorder = new IngexRecorder(this, recording_index);
 
@@ -524,6 +513,12 @@ char * IngexRecorderImpl::RecordingFormat (
 
     // Setup IngexRecorder
     mpIngexRecorder->Setup(start_tc, mProjectName);
+
+    // Setup copy parameters
+    this->InitCopying();
+
+    // Control copy process to reduce disc activity.
+    this->StopCopying(recording_index);
 
     // Start
     if (!test_only)
@@ -731,7 +726,7 @@ void IngexRecorderImpl::NotifyCompletion(IngexRecorder * rec)
     }
 }
 
-void IngexRecorderImpl::StartCopying(unsigned int index)
+void IngexRecorderImpl::InitCopying()
 {
     mCopyManager.Command(RecorderSettings::Instance()->copy_command);
     mCopyManager.ClearSrcDest();
@@ -741,8 +736,18 @@ void IngexRecorderImpl::StartCopying(unsigned int index)
     {
         mCopyManager.AddSrcDest(it->dir, it->copy_dest, it->copy_priority);
     }
+}
 
+void IngexRecorderImpl::StartCopying(unsigned int index)
+{
+    ACE_DEBUG((LM_DEBUG, ACE_TEXT("IngexRecorderImpl::StartCopying(%d)\n"), index));
     mCopyManager.StartCopying(index);
+}
+
+void IngexRecorderImpl::StopCopying(unsigned int index)
+{
+    ACE_DEBUG((LM_DEBUG, ACE_TEXT("IngexRecorderImpl::StopCopying(%d)\n"), index));
+    mCopyManager.StopCopying(index);
 }
 
 void IngexRecorderImpl::UpdateShmSourceNames()
