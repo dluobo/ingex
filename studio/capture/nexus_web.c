@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_web.c,v 1.8 2009/10/29 09:23:54 philipn Exp $
+ * $Id: nexus_web.c,v 1.9 2010/06/17 17:15:30 john_f Exp $
  *
  * Stand-alone web server to monitor and control nexus applications
  *
@@ -212,7 +212,7 @@ static void nexus_state(struct shttpd_arg* arg)
         double audio_peak_power[4];
         get_audio_peak_power(pctl, ring, i, lastframe, audio_peak_power);
 
-        shttpd_printf(arg, "\n\t\t%d:{",i); // start channel
+        shttpd_printf(arg, "\n\t\t\"%d\":{",i); // start channel
         shttpd_printf(arg, "\n\t\t\t\"temperature\": %.1f,", pc->hwtemperature);
         shttpd_printf(arg, "\n\t\t\t\"source_name\": \"%s\",", pc->source_name);
         shttpd_printf(arg, "\n\t\t\t\"lastframe\": %d,", pc->lastframe);
@@ -233,6 +233,7 @@ static void nexus_state(struct shttpd_arg* arg)
     int recordersUsed = 0;
     for (int recidx = 0; recidx < MAX_RECORDERS; recidx++) {
         // Check if Recorder exists and is running
+
         if (pctl->record_info[recidx].pid == 0) {
             // Recorder never existed for this recidx
             continue;
@@ -252,7 +253,7 @@ static void nexus_state(struct shttpd_arg* arg)
 
         // Loop over channels
         for (i = 0; i < pctl->channels; i++) {
-            shttpd_printf(arg, "\n\t\t\t%d:{",i); // start channel block
+            shttpd_printf(arg, "\n\t\t\t\"%d\":{",i); // start channel block
             int j;
             int encodersUsed = 0;
             int lastEncoderUsed = 0;
@@ -272,7 +273,7 @@ static void nexus_state(struct shttpd_arg* arg)
                 lastEncoderUsed = 1;
                 encodersUsed ++;
                 //TODO - possibly list as description:{details} rather than an arbitrary id
-                shttpd_printf(arg, "\n\t\t\t\t%d:{", j); //start encode type block
+                shttpd_printf(arg, "\n\t\t\t\t\"%d\":{", j); //start encode type block
                 shttpd_printf(arg, "\n\t\t\t\t\t\"desc\": \"%s\",",p_enc->desc);
                 shttpd_printf(arg, "\n\t\t\t\t\t\"enabled\": %d,", p_enc->enabled);
                 shttpd_printf(arg, "\n\t\t\t\t\t\"recording\": %d,", p_enc->recording);
