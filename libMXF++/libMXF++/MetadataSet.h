@@ -1,5 +1,5 @@
 /*
- * $Id: MetadataSet.h,v 1.3 2010/06/02 11:03:29 philipn Exp $
+ * $Id: MetadataSet.h,v 1.4 2010/06/18 09:31:11 philipn Exp $
  *
  * 
  *
@@ -69,6 +69,10 @@ public:
         if (_pos < _size)
         {
             _pos++;
+        }
+        else if (_pos == ((uint32_t)-1))
+        {
+            _pos = 0;
         }
         return _pos < _size;
     }
