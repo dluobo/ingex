@@ -1,5 +1,5 @@
 /*
- * $Id: DatabaseObject.cpp,v 1.2 2009/10/22 13:53:09 john_f Exp $
+ * $Id: DatabaseObject.cpp,v 1.3 2010/06/18 08:25:14 john_f Exp $
  *
  * An object corresponding to a row in a table in the database
  *
@@ -61,7 +61,7 @@ void DatabaseObject::cloneInPlace()
 
 void DatabaseObject::clone(DatabaseObject* clonedObject)
 {
-    _databaseID = clonedObject->_databaseID;
+    clonedObject->_databaseID = _databaseID;
 }
 
 long DatabaseObject::getDatabaseID() const

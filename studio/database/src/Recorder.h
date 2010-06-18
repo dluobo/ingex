@@ -1,5 +1,5 @@
 /*
- * $Id: Recorder.h,v 1.3 2009/09/18 17:48:40 philipn Exp $
+ * $Id: Recorder.h,v 1.4 2010/06/18 08:25:14 john_f Exp $
  *
  * Recorder and configuration
  *
@@ -51,6 +51,8 @@ public:
     ~RecorderInputTrackConfig();
 
     bool isConnectedToSource() { return sourceConfig != 0; }
+
+    RecorderInputTrackConfig* clone(std::map<SourceConfig*, SourceConfig*> &clonedSourceConfigs);
     
     uint32_t index;
     uint32_t number;
@@ -67,6 +69,8 @@ public:
 
     // note that it is the track index and not the track number!
     RecorderInputTrackConfig* getTrackConfig(uint32_t index);
+
+    RecorderInputConfig* clone(std::map<SourceConfig*, SourceConfig*> &clonedSourceConfigs);
     
     uint32_t index;
     std::string name;
@@ -81,7 +85,7 @@ public:
     RecorderParameter(std::string name, std::string value, int type);
     RecorderParameter(const RecorderParameter& param);
     virtual ~RecorderParameter();
-    
+
     std::string name;
     std::string value;
     int type;
@@ -117,6 +121,8 @@ public:
     void setIntParam(std::string name, int value);    
     void setBoolParam(std::string name, bool value);    
     void setRationalParam(std::string name, Rational value);    
+
+    RecorderConfig* clone();
     
     
     std::string name;
@@ -136,7 +142,10 @@ public:
     bool hasConfig();
     RecorderConfig* getConfig();
     std::vector<RecorderConfig*>& getAllConfigs();
-    
+
+    Recorder* clone();
+
+
     std::string name;
     
 private:

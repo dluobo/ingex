@@ -1,5 +1,5 @@
 /*
- * $Id: Recorder.cpp,v 1.4 2010/06/02 13:04:40 john_f Exp $
+ * $Id: Recorder.cpp,v 1.5 2010/06/18 08:25:14 john_f Exp $
  *
  * Recorder and configuration
  *
@@ -41,6 +41,32 @@ RecorderInputTrackConfig::RecorderInputTrackConfig()
 RecorderInputTrackConfig::~RecorderInputTrackConfig()
 {}
 
+RecorderInputTrackConfig* RecorderInputTrackConfig::clone(map<SourceConfig*, SourceConfig*> &clonedSourceConfigs)
+{
+    RecorderInputTrackConfig *config = new RecorderInputTrackConfig();
+    config->index = index;
+    config->number = number;
+    if (sourceConfig)
+    {
+        map<SourceConfig*, SourceConfig*>::const_iterator result = clonedSourceConfigs.find(sourceConfig);
+        if (result == clonedSourceConfigs.end())
+        {
+            config->sourceConfig = sourceConfig->clone();
+            clonedSourceConfigs[sourceConfig] = config->sourceConfig;
+        }
+        else
+        {
+            config->sourceConfig = result->second;
+        }
+    }
+    config->sourceTrackID = sourceTrackID;
+
+    DatabaseObject::clone(config);
+
+    return config;
+}
+
+
 
 RecorderInputConfig::RecorderInputConfig()
 : DatabaseObject(), index(0)
@@ -67,6 +93,23 @@ RecorderInputTrackConfig* RecorderInputConfig::getTrackConfig(uint32_t index)
     }
     
     return 0;
+}
+
+RecorderInputConfig* RecorderInputConfig::clone(map<SourceConfig*, SourceConfig*> &clonedSourceConfigs)
+{
+    RecorderInputConfig *config = new RecorderInputConfig();
+    config->index = index;
+    config->name = name;
+
+    size_t i;
+    for (i = 0; i < trackConfigs.size(); i++)
+    {
+        config->trackConfigs.push_back(trackConfigs[i]->clone(clonedSourceConfigs));
+    }
+
+    DatabaseObject::clone(config);
+
+    return config;
 }
 
 
@@ -316,7 +359,30 @@ void RecorderConfig::setRationalParam(string name, Rational value)
     
     setParam(name, buffer);
 }
+
+RecorderConfig* RecorderConfig::clone()
+{
+    RecorderConfig *config = new RecorderConfig();
+    config->name = name;
+    config->parameters = parameters;
+
+    map<SourceConfig*, SourceConfig*> clonedSourceConfigs;
+    size_t i;
+    for (i = 0; i < recorderInputConfigs.size(); i++)
+    {
+        config->recorderInputConfigs.push_back(recorderInputConfigs[i]->clone(clonedSourceConfigs));
+    }
     
+    map<SourceConfig*, SourceConfig*>::const_iterator iter;
+    for (iter = clonedSourceConfigs.begin(); iter != clonedSourceConfigs.end(); iter++)
+    {
+        config->sourceConfigs.push_back(iter->second);
+    }
+
+    DatabaseObject::clone(config);
+
+    return config;
+}
 
 
 
@@ -376,5 +442,25 @@ RecorderConfig* Recorder::getConfig()
 vector<RecorderConfig*>& Recorder::getAllConfigs()
 {
     return _allConfigs;
+}
+
+Recorder* Recorder::clone()
+{
+    Recorder *recorder = new Recorder();
+    recorder->name = name;
+
+    size_t i;
+    for (i = 0; i < _allConfigs.size(); i++)
+    {
+        recorder->_allConfigs.push_back(_allConfigs[i]->clone());
+        if (_allConfigs[i] == _config)
+        {
+            recorder->_config = recorder->_allConfigs.back();
+        }
+    }
+
+    DatabaseObject::clone(recorder);
+
+    return recorder;
 }
 

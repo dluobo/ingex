@@ -1,5 +1,5 @@
 /*
- * $Id: SourceConfig.cpp,v 1.6 2010/06/02 13:04:40 john_f Exp $
+ * $Id: SourceConfig.cpp,v 1.7 2010/06/18 08:25:14 john_f Exp $
  *
  * Live recording or tape Source configuration
  *
@@ -39,6 +39,22 @@ SourceTrackConfig::SourceTrackConfig()
 
 SourceTrackConfig::~SourceTrackConfig()
 {}
+
+SourceTrackConfig* SourceTrackConfig::clone()
+{
+    SourceTrackConfig *config = new SourceTrackConfig();
+    config->id = id;
+    config->number = number;
+    config->name = name;
+    config->dataDef = dataDef;
+    config->editRate = editRate;
+    config->length = length;
+
+    DatabaseObject::clone(config);
+
+    return config;
+}
+
 
 
 SourceConfig::SourceConfig()
@@ -173,4 +189,28 @@ SourcePackage* SourceConfig::getSourcePackage()
     return _sourcePackage;
 }
 
+SourceConfig* SourceConfig::clone()
+{
+    SourceConfig *config = new SourceConfig();
+    config->name = name;
+    config->type = type;
+    config->spoolNumber = spoolNumber;
+    config->recordingLocation = recordingLocation;
+    
+    size_t i;
+    for (i = 0; i < trackConfigs.size(); i++)
+    {
+        config->trackConfigs.push_back(trackConfigs[i]->clone());
+    }
+    
+    PA_ASSERT(!_sourcePackage || _sourcePackage->isPersistent());
+    if (_sourcePackage)
+    {
+        config->_sourcePackage = dynamic_cast<SourcePackage*>(_sourcePackage->clone());
+    }
+
+    DatabaseObject::clone(config);
+
+    return config;
+}
 
