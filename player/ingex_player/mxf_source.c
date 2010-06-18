@@ -1,5 +1,5 @@
 /*
- * $Id: mxf_source.c,v 1.14 2010/06/02 11:12:14 philipn Exp $
+ * $Id: mxf_source.c,v 1.15 2010/06/18 09:44:51 philipn Exp $
  *
  *
  *
@@ -75,6 +75,7 @@ struct MXFFileSource
     int markPSEFailures;
     int markVTRErrors;
     int markDigiBetaDropouts;
+    int markTimecodeBreaks;
     char* filename;
 
     MediaSource mediaSource;
@@ -89,6 +90,7 @@ struct MXFFileSource
     int eof;
     int isArchiveMXF;
     int isMetadataOnly;
+    int isIMX;
 
     struct timeval lastPostCompleteTry;
     int postCompleteTryCount;
@@ -751,10 +753,11 @@ static int mxfs_is_complete(void* data)
     int64_t availableLength;
     int64_t length;
 
-    /* only archive MXF files with option to mark PSE failures, VTR errors or digibeta dropouts require post complete step */
+    /* only archive MXF files with option to mark PSE failures, VTR errors, digibeta dropouts or timecode breaks
+       require post complete step */
     if (!source->isArchiveMXF ||
         source->isMetadataOnly ||
-        (!source->markPSEFailures && !source->markVTRErrors && !source->markDigiBetaDropouts))
+        (!source->markPSEFailures && !source->markVTRErrors && !source->markDigiBetaDropouts && !source->markTimecodeBreaks))
     {
         return 1;
     }
@@ -782,8 +785,8 @@ static int mxfs_post_complete(void* data, MediaSource* rootSource, MediaControl*
 
     /* only archive MXF files with option to mark PSE failures, VTR errors or digibeta dropouts require post complete step */
     if (source->donePostComplete ||
-        !source->isArchiveMXF ||
-        (!source->markPSEFailures && !source->markVTRErrors && !source->markDigiBetaDropouts))
+        !source->isArchiveMXF || source->isIMX ||
+        (!source->markPSEFailures && !source->markVTRErrors && !source->markDigiBetaDropouts && !source->markTimecodeBreaks))
     {
         source->donePostComplete = 1;
         return 1;
@@ -792,7 +795,7 @@ static int mxfs_post_complete(void* data, MediaSource* rootSource, MediaControl*
 
     if (source->isMetadataOnly || have_footer_metadata(source->mxfReader))
     {
-        /* either the file is metadata only or 
+        /* either the file is metadata only,
            the archive MXF file is complete and the header metadata in the footer was already read by the MXF reader */
         headerMetadata = get_header_metadata(source->mxfReader);
         source->donePostComplete = 1;
@@ -904,6 +907,25 @@ static int mxfs_post_complete(void* data, MediaSource* rootSource, MediaControl*
                 SAFE_FREE(&digiBetaDropouts);
             }
         }
+
+        if (source->markTimecodeBreaks)
+        {
+            TimecodeBreak* timecodeBreaks = NULL;
+            long numTimecodeBreaks = 0;
+            long i;
+
+            if (archive_mxf_get_timecode_breaks(headerMetadata, &timecodeBreaks, &numTimecodeBreaks))
+            {
+                ml_log_info("Marking %ld timecode breaks\n", numTimecodeBreaks);
+                for (i = 0; i < numTimecodeBreaks; i++)
+                {
+                    convertedPosition = msc_convert_position(rootSource, timecodeBreaks[i].position, &source->mediaSource);
+                    mc_mark_position(mediaControl, convertedPosition, TIMECODE_BREAK_MARK_TYPE, 0);
+                }
+
+                SAFE_FREE(&timecodeBreaks);
+            }
+        }
     }
 
     if (freeHeaderMetadata)
@@ -985,7 +1007,7 @@ static void mxfs_close(void* data)
 
 
 int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int markVTRErrors, int markDigiBetaDropouts,
-    MXFFileSource** source)
+    int markTimecodeBreaks, MXFFileSource** source)
 {
     MXFFileSource* newSource = NULL;
     MXFFile* mxfFile = NULL;
@@ -1008,7 +1030,6 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
     int numTracks;
     int isPAL;
     mxfRational mxfFrameRate;
-    int isIMX = 0;
 
     CHK_ORET(initialise_stream_info(&commonStreamInfo));
 
@@ -1051,6 +1072,7 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
     newSource->markPSEFailures = markPSEFailures;
     newSource->markVTRErrors = markVTRErrors;
     newSource->markDigiBetaDropouts = markDigiBetaDropouts;
+    newSource->markTimecodeBreaks = markTimecodeBreaks;
     CALLOC_OFAIL(newSource->filename, char, strlen(filename) + 1);
     strcpy(newSource->filename, filename);
 
@@ -1269,7 +1291,7 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
                 mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(D10_40_525_60_defined_template)) ||
                 mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(D10_30_525_60_defined_template)))
             {
-                isIMX = 1;
+                newSource->isIMX = 1;
                 outputStream->streamInfo.format = D10_PICTURE_FORMAT;
             }
             else if (mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(D10_50_625_50_extended_template)) ||
@@ -1364,18 +1386,13 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
         outputStream->streamInfo.timecodeType = SOURCE_TIMECODE_TYPE;
         if (newSource->isArchiveMXF)
         {
-            if (isIMX)
+            if (newSource->isIMX)
             {
                 if (timecodeType == SYSTEM_ITEM_SDTI_USER_TIMECODE)
                 {
                     /* this is LTC */
                     outputStream->streamInfo.timecodeSubType = LTC_SOURCE_TIMECODE_SUBTYPE;
                     haveArchiveLTC = 1;
-                }
-                else if (timecodeType == FILE_SOURCE_PACKAGE_TIMECODE)
-                {
-                    /* this is the primary source timecode */
-                    outputStream->streamInfo.timecodeSubType = NO_TIMECODE_SUBTYPE;
                 }
                 else
                 {

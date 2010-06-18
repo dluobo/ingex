@@ -1,5 +1,5 @@
 /*
- * $Id: buffered_media_source.c,v 1.6 2010/02/17 15:58:10 philipn Exp $
+ * $Id: buffered_media_source.c,v 1.7 2010/06/18 09:44:51 philipn Exp $
  *
  *
  *
@@ -892,7 +892,8 @@ static int bmsrc_get_position(void* data, int64_t* position)
 {
     BufferedMediaSource* bufSource = (BufferedMediaSource*)data;
 
-    return bufSource->clientPosition;
+    *position = bufSource->clientPosition;
+    return 1;
 }
 
 static int bmsrc_get_available_length(void* data, int64_t* length)

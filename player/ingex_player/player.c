@@ -1,5 +1,5 @@
 /*
- * $Id: player.c,v 1.25 2010/06/02 11:12:14 philipn Exp $
+ * $Id: player.c,v 1.26 2010/06/18 09:44:51 philipn Exp $
  *
  *
  *
@@ -69,6 +69,7 @@
 #include "clip_source.h"
 #include "raw_dv_source.h"
 #include "ffmpeg_source.h"
+#include "vitc_reader_sink_source.h"
 #include "version.h"
 #include "utils.h"
 #include "logging.h"
@@ -78,6 +79,8 @@
 #define MAX_INPUTS                  64
 
 #define MAX_PB_MARK_SELECTIONS      2
+
+#define MAX_VITC_LINE_READ          16
 
 
 typedef enum
@@ -610,6 +613,28 @@ static int parse_length(const char* text, int allowDecimal, int64_t* value, Rati
     return 0;
 }
 
+static int parse_vitc_lines(const char *text, unsigned int *vitcLines, int *numVITCLines)
+{
+    (*numVITCLines) = 0;
+    
+    const char *text_ptr = text;
+    while ((*numVITCLines) < MAX_VITC_LINE_READ) {
+        if (sscanf(text_ptr, "%d", &vitcLines[(*numVITCLines)]) != 1)
+            break;
+        (*numVITCLines)++;
+        
+        text_ptr = strchr(text_ptr, ',');
+        if (!text_ptr)
+            break;
+        text_ptr++;
+    }
+    
+    if (text_ptr && text_ptr[0] != '\0')
+        return 0;
+    
+    return 1;
+}
+
 static int complete_source_info(StreamInfo* streamInfo)
 {
     if (streamInfo->type == UNKNOWN_STREAM_TYPE)
@@ -811,6 +836,7 @@ static void usage(const char* cmd)
     fprintf(stderr, "  --mark-pse-fails         Add marks for PSE failures recorded in the archive MXF file\n");
     fprintf(stderr, "  --mark-vtr-errors        Add marks for VTR playback errors recorded in the archive MXF file\n");
     fprintf(stderr, "  --mark-digi-dropouts     Add marks for DigiBeta dropouts recorded in the archive MXF file\n");
+    fprintf(stderr, "  --mark-tc-breaks         Add marks for timecode breaks recorded in the archive MXF file\n");
     fprintf(stderr, "  --vtr-error-level <val>  Set the initial minimum VTR error level. 0 means no errors. Max value is %d (default 1)\n", VTR_NO_GOOD_LEVEL);
     fprintf(stderr, "  --show-vtr-error-level   Show the VTR error level in the OSD\n");
     fprintf(stderr, "  --pixel-aspect <W:H>     Video pixel aspect ratio of the display (default 1:1)\n");
@@ -865,6 +891,8 @@ static void usage(const char* cmd)
     fprintf(stderr, "  [--pb-mark-mask <val>]*  32-bit mask for marks to show on the (next) progress bar (decimal or 0x hex)\n");
     fprintf(stderr, "  --start-paused           Start with the player paused\n");
     fprintf(stderr, "  [--disable-stream <num>]*    Disable stream <num>. Use --src-info to check which streams are available\n");
+    fprintf(stderr, "  --disable-shuttle        Do not grab and use the jog-shuttle control\n");
+    fprintf(stderr, "  --vitc-read <lines>      Read VITC from 625-line VBI, where <lines> is comma seperated list of lines to try (e.g. '19,21')\n");
     fprintf(stderr, "\n");
     fprintf(stderr, "Inputs:\n");
     fprintf(stderr, "  -m, --mxf  <file>        MXF file input\n");
@@ -896,7 +924,6 @@ static void usage(const char* cmd)
     fprintf(stderr, "  --disable-audio          Disable audio from the next input\n");
     fprintf(stderr, "  --src-name <name>        Set the source name (eg. used to label the sources in the split sink)\n");
     fprintf(stderr, "  --clip-id <val>          Set the clip identifier for the source\n");
-    fprintf(stderr, "  --disable-shuttle        Do not grab and use the jog-shuttle control\n");
     fprintf(stderr, "\n");
 }
 
@@ -952,6 +979,7 @@ int main(int argc, const char **argv)
     int markPSEFails = 0;
     int markVTRErrors = 0;
     int markDigiBetaDropouts = 0;
+    int markTimecodeBreaks = 0;
     Rational pixelAspectRatio = {1, 1};
     Rational monitorAspectRatio = {0, 0};
     Rational sourceAspectRatio = {0, 0};
@@ -1017,6 +1045,9 @@ int main(int argc, const char **argv)
     int forceUYVYFormat;
     int vtrErrorLevel = 1;
     int showVTRErrorLevel = 0;
+    unsigned int vitcLines[MAX_VITC_LINE_READ];
+    int numVITCLines = 0;
+    VITCReaderSinkSource *vitcReaderSonk = NULL;
 
     memset(inputs, 0, sizeof(inputs));
     memset(&markConfigs, 0, sizeof(markConfigs));
@@ -1453,6 +1484,11 @@ int main(int argc, const char **argv)
             markDigiBetaDropouts = 1;
             cmdlnIndex += 1;
         }
+        else if (strcmp(argv[cmdlnIndex], "--mark-tc-breaks") == 0)
+        {
+            markTimecodeBreaks = 1;
+            cmdlnIndex += 1;
+        }
         else if (strcmp(argv[cmdlnIndex], "--vtr-error-level") == 0)
         {
             if (cmdlnIndex + 1 >= argc)
@@ -1877,6 +1913,27 @@ int main(int argc, const char **argv)
             startPaused = 1;
             cmdlnIndex += 1;
         }
+        else if (strcmp(argv[cmdlnIndex], "--disable-shuttle") == 0)
+        {
+            disableShuttle = 1;
+            cmdlnIndex++;
+        }
+        else if (strcmp(argv[cmdlnIndex], "--vitc-read") == 0)
+        {
+            if (cmdlnIndex + 1 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            if (!parse_vitc_lines(argv[cmdlnIndex + 1], vitcLines, &numVITCLines))
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Invalid argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            cmdlnIndex += 2;
+        }
         else if (strcmp(argv[cmdlnIndex], "-m") == 0 ||
             strcmp(argv[cmdlnIndex], "--mxf") == 0)
         {
@@ -2220,11 +2277,6 @@ int main(int argc, const char **argv)
             inputs[numInputs].clipId = argv[cmdlnIndex + 1];
             cmdlnIndex += 2;
         }
-        else if (strcmp(argv[cmdlnIndex], "--disable-shuttle") == 0)
-        {
-            disableShuttle = 1;
-            cmdlnIndex++;
-        }
         else
         {
             usage(argv[0]);
@@ -2343,7 +2395,8 @@ int main(int argc, const char **argv)
         switch (inputs[i].type)
         {
             case MXF_INPUT:
-                if (!mxfs_open(inputs[i].filename, forceD3MXFInput, markPSEFails, markVTRErrors, markDigiBetaDropouts, &mxfSource))
+                if (!mxfs_open(inputs[i].filename, forceD3MXFInput, markPSEFails, markVTRErrors, markDigiBetaDropouts,
+                    markTimecodeBreaks, &mxfSource))
                 {
                     ml_log_error("Failed to open MXF file source\n");
                     goto fail;
@@ -2478,7 +2531,7 @@ int main(int argc, const char **argv)
             goto fail;
         }
     }
-
+    
     /* finalise the blank video sources */
     if (!mls_finalise_blank_sources(multipleSource))
     {
@@ -2518,6 +2571,51 @@ int main(int argc, const char **argv)
         g_player.mediaSource = bmsrc_get_source(bufferedSource);
     }
 
+
+    /* open vitc reader */
+    
+    if (numVITCLines > 0)
+    {
+        if (srcBufferSize > 0)
+        {
+            /* create another multiple source that includes the buffered source and the vitc reader */
+            /* this is needed because the vitc reader can't be buffered because it requires the raw (decoded)
+               video image to decode the vitc */
+            
+            if (!mls_create(&sourceAspectRatio, maxLength, &maxLengthFrameRate, &multipleSource))
+            {
+                ml_log_error("Failed to create multiple source data\n");
+                goto fail;
+            }
+            if (!mls_assign_source(multipleSource, &g_player.mediaSource))
+            {
+                ml_log_error("Failed to assign media source to multiple source\n");
+                goto fail;
+            }
+            g_player.mediaSource = mls_get_media_source(multipleSource);
+        }
+        
+        /* create vitc reader and assign */
+        
+        if (!vss_create_vitc_reader(vitcLines, numVITCLines, &vitcReaderSonk))
+        {
+            ml_log_error("Failed to open vitc reader\n");
+            goto fail;
+        }
+        mediaSource = vss_get_media_source(vitcReaderSonk);
+
+        if (!mls_assign_source(multipleSource, &mediaSource))
+        {
+            ml_log_error("Failed to assign media source to multiple source\n");
+            goto fail;
+        }
+        
+        if (!mls_finalise_blank_sources(multipleSource))
+        {
+            ml_log_error("Failed to finalise blank video sources\n");
+            goto fail;
+        }
+    }
 
     /* open clip source */
 
@@ -2682,7 +2780,8 @@ int main(int argc, const char **argv)
         default:
             assert(0);
     }
-
+    
+    
 #if defined(HAVE_PORTAUDIO)
     /* create audio sink */
     if (!disablePCAudio)
@@ -2717,7 +2816,7 @@ int main(int argc, const char **argv)
             osd_set_progress_bar_visibility(osd, !hideProgressBar);
         }
     }
-
+    
 
     /* create video switch, half split or frame sequence sink */
 
@@ -2797,6 +2896,14 @@ int main(int argc, const char **argv)
         fprintf(g_player.bufferStateLogFile, "# Columns: frame, source buffers filled, sink buffers filled\n");
     }
 
+    /* set vitc reader target sink */
+    
+    if (vitcReaderSonk != NULL)
+    {
+        vss_set_target_sink(vitcReaderSonk, g_player.mediaSink);
+        g_player.mediaSink = vss_get_media_sink(vitcReaderSonk);
+    }
+    
 
     /* disable streams */
 

@@ -1,5 +1,5 @@
 /*
- * $Id: on_screen_display.c,v 1.14 2010/06/02 11:12:14 philipn Exp $
+ * $Id: on_screen_display.c,v 1.15 2010/06/18 09:44:51 philipn Exp $
  *
  *
  *
@@ -849,10 +849,12 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
         box = 80;
     }
 
-    timecodeXPos = width / 2;
-    timecodeYPos = (height * 13) / 16;
-    timecodeWidth = 0;
-    timecodeHeight = 0;
+    timecodeXPos = (width - (osdd->timecodeTypeData.cs_ovly[UNKNOWN_TC_OVLY_IDX].w * 5 / 3 +
+        osdd->timecodeTextData.width)) / 2;
+    timecodeYPos = (height * 13) / 16 - osdd->timecodeTextData.height / 2;
+    timecodeWidth = osdd->timecodeTypeData.cs_ovly[UNKNOWN_TC_OVLY_IDX].w * 5 / 3 +
+        osdd->timecodeTextData.width;
+    timecodeHeight = osdd->timecodeTextData.height;
 
     /* display timecode */
     if (osdd->state->timecodeIndex >= 0)

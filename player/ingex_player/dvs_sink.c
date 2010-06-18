@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sink.c,v 1.16 2010/06/02 11:12:14 philipn Exp $
+ * $Id: dvs_sink.c,v 1.17 2010/06/18 09:44:51 philipn Exp $
  *
  *
  *
@@ -478,23 +478,23 @@ static int display_on_sv_fifo(DVSSink* sink, DVSFifoBuffer* fifoBuffer)
             /* line 0 */
             write_vitc(fifoBuffer->extraVITCTimecode.hour, fifoBuffer->extraVITCTimecode.min,
                 fifoBuffer->extraVITCTimecode.sec, fifoBuffer->extraVITCTimecode.frame,
-                fifoBuffer->buffer);
+                fifoBuffer->buffer, 1);
 
             /* line 4 - backup copy */
             write_vitc(fifoBuffer->extraVITCTimecode.hour, fifoBuffer->extraVITCTimecode.min,
                 fifoBuffer->extraVITCTimecode.sec, fifoBuffer->extraVITCTimecode.frame,
-                fifoBuffer->buffer + 4 * 2 * sink->rasterWidth);
+                fifoBuffer->buffer + 4 * 2 * sink->rasterWidth, 1);
         }
 
         /* line 8 */
         write_vitc(fifoBuffer->vitcTimecode.hour, fifoBuffer->vitcTimecode.min,
             fifoBuffer->vitcTimecode.sec, fifoBuffer->vitcTimecode.frame,
-            fifoBuffer->buffer + 8 * 2 * sink->rasterWidth);
+            fifoBuffer->buffer + 8 * 2 * sink->rasterWidth, 1);
 
         /* line 12 - backup copy */
         write_vitc(fifoBuffer->vitcTimecode.hour, fifoBuffer->vitcTimecode.min,
             fifoBuffer->vitcTimecode.sec, fifoBuffer->vitcTimecode.frame,
-            fifoBuffer->buffer + 12 * 2 * sink->rasterWidth);
+            fifoBuffer->buffer + 12 * 2 * sink->rasterWidth, 1);
 
     }
     else

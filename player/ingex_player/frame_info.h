@@ -1,5 +1,5 @@
 /*
- * $Id: frame_info.h,v 1.14 2010/06/02 11:12:14 philipn Exp $
+ * $Id: frame_info.h,v 1.15 2010/06/18 09:44:51 philipn Exp $
  *
  *
  *
@@ -47,6 +47,7 @@
 #define VTR_ERROR_MARK_TYPE         0x00010000
 #define PSE_FAILURE_MARK_TYPE       0x00020000
 #define DIGIBETA_DROPOUT_MARK_TYPE  0x00040000
+#define TIMECODE_BREAK_MARK_TYPE    0x00080000
 
 #define CLIP_ID_SIZE                128
 

@@ -1,5 +1,5 @@
 /*
- * $Id: qc_player.c,v 1.14 2010/06/02 11:12:14 philipn Exp $
+ * $Id: qc_player.c,v 1.15 2010/06/18 09:44:51 philipn Exp $
  *
  *
  *
@@ -798,7 +798,7 @@ static int play_archive_mxf_file(QCPlayer* player, int argc, const char** argv, 
     strcat(filename, name);
 
     /* open mxf file */
-    if (!mxfs_open(filename, 0, options->markPSEFails, options->markVTRErrors, options->markDigiBetaDropouts, &mxfSource))
+    if (!mxfs_open(filename, 0, options->markPSEFails, options->markVTRErrors, options->markDigiBetaDropouts, 0, &mxfSource))
     {
         ml_log_error("Failed to open MXF file source '%s'\n", filename);
         goto fail;
