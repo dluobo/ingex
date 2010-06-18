@@ -1,7 +1,7 @@
 #! /usr/bin/perl -w
 
 #/***************************************************************************
-# * $Id: xferserver.pl,v 1.13 2010/06/02 12:59:07 john_f Exp $             *
+# * $Id: xferserver.pl,v 1.14 2010/06/18 10:11:23 john_f Exp $             *
 # *                                                                         *
 # *   Copyright (C) 2008-2010 British Broadcasting Corporation              *
 # *   - all rights reserved.                                                *
@@ -62,7 +62,7 @@ use IO::Socket;
 use IO::Select;
 use IO::File;
 use Getopt::Std;
-our $VERSION = '$Revision: 1.13 $'; #used by Getopt in the case of --version or --help
+our $VERSION = '$Revision: 1.14 $'; #used by Getopt in the case of --version or --help
 $VERSION =~ s/\s*\$Revision:\s*//;
 $VERSION =~ s/\s*\$\s*$//;
 $Getopt::Std::STANDARD_HELP_VERSION = 1; #so it stops after version message
@@ -413,7 +413,7 @@ sub serveStatus {
 			foreach (sort keys %pairs) { #there will always be at least one pair for each priority
 				push @output, "\t\t\t\t{ \"source\" : " . E($_) . ', "destination" : ' . E($pairs{$_}{dest}) . ' }';
 			}
-			push @priorities, "\t\t\t$priority : [\n" . (join ",\n", @output) . "\n\t\t\t]";
+			push @priorities, "\t\t\t\"$priority\" : [\n" . (join ",\n", @output) . "\n\t\t\t]";
 		}
 		print $client join(",\n", @priorities), "\n";
 	}
