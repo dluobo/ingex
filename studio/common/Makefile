@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.4 2010/06/02 13:10:46 john_f Exp $
+# $Id: Makefile,v 1.5 2010/06/18 10:07:25 john_f Exp $
 #
 # Makefile for building studio common functions
 #
@@ -56,20 +56,27 @@ LIBOBJECTS = $(LIBCSOURCES:%.c=%.o) $(LIBCPPSOURCES:%.cpp=%.o)
 
 LIBCOMMON = -L../../common -lcommon
 LIBSTUDIOCOMMON = libstudiocommon.a
+YUVLIB=-L../../common/YUVlib -lYUVlib
 
 .PHONY: all
-all: $(LIBSTUDIOCOMMON) test_ffmpeg_encoder test_ffmpeg_encoder_av
+all: $(LIBSTUDIOCOMMON) test_ffmpeg_encoder test_ffmpeg_encoder_av yuv422_to_mjpeg yuv422_to_mjpeg_threaded
 
 $(LIBSTUDIOCOMMON): $(LIBOBJECTS)
 	ar rcv $(LIBSTUDIOCOMMON) $(LIBOBJECTS)
 
 .PHONY: clean
 clean:
-	rm -f $(LIBSTUDIOCOMMON) $(LIBOBJECTS) test_ffmpeg_encoder.o test_ffmpeg_encoder_av.o
+	rm -f $(LIBSTUDIOCOMMON) $(LIBOBJECTS) test_ffmpeg_encoder.o test_ffmpeg_encoder_av.o yuv422_to_mjpeg.o
 
 test_ffmpeg_encoder: test_ffmpeg_encoder.o $(LIBSTUDIOCOMMON)
 	$(LINK.cpp) -Wall -W -g test_ffmpeg_encoder.o $(LIBSTUDIOCOMMON) $(LIBCOMMON) -lavformat -lavcodec -lswscale -lavutil -lz -lbz2 -lmp3lame -lx264 -lfaac -lfaad -lm -lpthread -o test_ffmpeg_encoder
 
 test_ffmpeg_encoder_av: test_ffmpeg_encoder_av.o $(LIBSTUDIOCOMMON)
 	$(LINK.cpp) -Wall -W -g test_ffmpeg_encoder_av.o $(LIBSTUDIOCOMMON) -lavformat -lavcodec -lswscale -lavutil -lz -lbz2 -lmp3lame -lx264 -lfaac -lfaad -lm -lpthread -o test_ffmpeg_encoder_av
+
+yuv422_to_mjpeg: yuv422_to_mjpeg.o
+	$(LINK.cpp) -Wall -W -g yuv422_to_mjpeg.o $(INCLUDES) $(LIBSTUDIOCOMMON) $(LIBCOMMON) $(YUVLIB) -ljpeg -lpthread -o $@
+
+yuv422_to_mjpeg_threaded: yuv422_to_mjpeg.o
+	$(LINK.cpp) -Wall -W -g yuv422_to_mjpeg.o -DBUILD_USING_MJPEG_THREADED_API $(INCLUDES) $(LIBSTUDIOCOMMON) $(LIBCOMMON) $(YUVLIB) -ljpeg -lpthread -o $@
 
