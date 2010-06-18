@@ -1,25 +1,9 @@
 The jog-shuttle controller can be used to control the player. Events from the jog-shuttle controller are read through an event device file /dev/input/eventxxx; the code that reads from this device file is in ingex/player/ingex_player/shuttle_input.c and the mapping of jog-shuttle events to player control is in ingex/player/ingex_player/shuttle_input_connect.c.
 
 The player needs to have read permission for the event device and by default a non-root user does not have read permission.
+This is achieved by copying ../jogshuttle/51-shuttle-pro.rules to /etc/udev/rules.d/ and then unplugging/replugging the jog-shuttle control.
 
-As root, edit the udev configuration file 50-udev-default.rules, which is either in /lib/udev/rules.d/ or /etc/udev/rules.d/, and change the mode in the line
- KERNEL=="mouse*|mice|event*", NAME="input/%k", MODE="0640" 
-to 0644 
- KERNEL=="mouse*|mice|event*", NAME="input/%k", MODE="0644" 
-
-It might be worth doing a cp /lib/udev/rules.d/50-udev-default.rules /etc/udev/rules.d/
-
-(In SuSe 10.3, you should already have a file in /etc/udev/rules.d to edit- 
-so use a little low cunning as appropriate)
-
-It might be worth doing a 
-
->sudo cp /lib/udev/rules.d/50-udev-default.rules /etc/udev/rules.d/
-
-Unplug the jog-shuttle controller and restart the udev system 
- > sudo /sbin/service boot.udev stop 
- > sudo /sbin/service boot.udev start 
-Plug the controller back in and check that there is at least one device (which is probably the jog-shuttle) can be read by non-root users 
+You can check that there is at least one device (which is probably the jog-shuttle) which can be read by non-root users:
  > ls -l /dev/input/event* 
 
 

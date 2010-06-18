@@ -1,0 +1,5 @@
+# File to overwrite the defaults in /lib/udev/rules.d/50-udev-default.rules
+# Place in /etc/udev/rules.d/51-shuttle-pro.rules
+# Needed for the Contour shuttle Pro (v1 or v2) to work with the player and Ingexgui
+SUBSYSTEM=="input", ATTRS{name}=="Contour Design ShuttlePRO*", MODE="0644"
+
