@@ -1,5 +1,5 @@
 /*
- * $Id: D10MXFOP1AWriter.h,v 1.4 2010/06/02 11:03:29 philipn Exp $
+ * $Id: D10MXFOP1AWriter.h,v 1.5 2010/06/18 09:32:00 philipn Exp $
  *
  * D10 MXF OP-1A writer
  *
@@ -53,7 +53,7 @@ public:
         D10_SAMPLE_RATE_625_50I,
         D10_SAMPLE_RATE_525_60I,
     } D10SampleRate;
-
+    
 public:
     static uint32_t GetContentPackageSize(D10SampleRate sample_rate, uint32_t encoded_picture_size);
 
@@ -112,7 +112,8 @@ public:
     mxfUMID GetFileSourcePackageUID() const { return mFileSourcePackageUID; }
     
     
-    // complete writing file
+    // optional update of header metadata and complete writing file
+    void UpdateStartTimecode(int64_t count);
     void CompleteFile();
     
 private:
@@ -158,6 +159,8 @@ private:
     int64_t mHeaderMetadataStartPos;
     int64_t mHeaderMetadataEndPos;
     std::vector<SetWithDuration*> mSetsWithDuration;
+    mxfpp::TimecodeComponent *mMaterialPackageTC;
+    mxfpp::TimecodeComponent *mFilePackageTC;
     
     D10ContentPackageInt mContentPackage;
     DynamicByteArray mAES3Block;

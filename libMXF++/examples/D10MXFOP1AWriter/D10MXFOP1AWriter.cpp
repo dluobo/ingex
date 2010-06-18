@@ -1,5 +1,5 @@
 /*
- * $Id: D10MXFOP1AWriter.cpp,v 1.4 2010/06/02 11:03:29 philipn Exp $
+ * $Id: D10MXFOP1AWriter.cpp,v 1.5 2010/06/18 09:32:00 philipn Exp $
  *
  * D10 MXF OP-1A writer
  *
@@ -186,6 +186,8 @@ D10MXFOP1AWriter::D10MXFOP1AWriter()
     mHeaderPartition = 0;
     mHeaderMetadataStartPos = 0;
     mHeaderMetadataEndPos = 0;
+    mMaterialPackageTC = 0;
+    mFilePackageTC = 0;
     
     mAES3Block.allocate(1920 * 4 * 8 + 4); // max size required
     
@@ -391,17 +393,17 @@ HeaderMetadata* D10MXFOP1AWriter::CreateHeaderMetadata()
     mSetsWithDuration.push_back(new StructComponentSet(sequence));
 
     // Preface - ContentStorage - MaterialPackage - Timecode Track - TimecodeComponent
-    TimecodeComponent *timecode_component = new TimecodeComponent(mHeaderMetadata);
-    sequence->appendStructuralComponents(timecode_component);
-    timecode_component->setDataDefinition(MXF_DDEF_L(Timecode));
-    timecode_component->setDuration(-1); // updated when writing completed
-    timecode_component->setRoundedTimecodeBase(mRoundedTimecodeBase);
+    mMaterialPackageTC = new TimecodeComponent(mHeaderMetadata);
+    sequence->appendStructuralComponents(mMaterialPackageTC);
+    mMaterialPackageTC->setDataDefinition(MXF_DDEF_L(Timecode));
+    mMaterialPackageTC->setDuration(-1); // updated when writing completed
+    mMaterialPackageTC->setRoundedTimecodeBase(mRoundedTimecodeBase);
     if (mSampleRate == D10_SAMPLE_RATE_625_50I)
-        timecode_component->setDropFrame(false);
+        mMaterialPackageTC->setDropFrame(false);
     else
-        timecode_component->setDropFrame(mDropFrameTimecode);
-    timecode_component->setStartTimecode(mStartTimecode);
-    mSetsWithDuration.push_back(new StructComponentSet(timecode_component));
+        mMaterialPackageTC->setDropFrame(mDropFrameTimecode);
+    mMaterialPackageTC->setStartTimecode(mStartTimecode);
+    mSetsWithDuration.push_back(new StructComponentSet(mMaterialPackageTC));
 
     // Preface - ContentStorage - MaterialPackage - Timeline Tracks
     // video track and audio track
@@ -460,18 +462,18 @@ HeaderMetadata* D10MXFOP1AWriter::CreateHeaderMetadata()
     sequence->setDuration(-1); // updated when writing completed
     mSetsWithDuration.push_back(new StructComponentSet(sequence));
 
-    // Preface - ContentStorage - MaterialPackage - Timecode Track - TimecodeComponent
-    timecode_component = new TimecodeComponent(mHeaderMetadata);
-    sequence->appendStructuralComponents(timecode_component);
-    timecode_component->setDataDefinition(MXF_DDEF_L(Timecode));
-    timecode_component->setDuration(-1); // updated when writing completed
-    timecode_component->setRoundedTimecodeBase(mRoundedTimecodeBase);
+    // Preface - ContentStorage - SourcePackage - Timecode Track - TimecodeComponent
+    mFilePackageTC = new TimecodeComponent(mHeaderMetadata);
+    sequence->appendStructuralComponents(mFilePackageTC);
+    mFilePackageTC->setDataDefinition(MXF_DDEF_L(Timecode));
+    mFilePackageTC->setDuration(-1); // updated when writing completed
+    mFilePackageTC->setRoundedTimecodeBase(mRoundedTimecodeBase);
     if (mSampleRate == D10_SAMPLE_RATE_625_50I)
-        timecode_component->setDropFrame(false);
+        mFilePackageTC->setDropFrame(false);
     else
-        timecode_component->setDropFrame(mDropFrameTimecode);
-    timecode_component->setStartTimecode(mStartTimecode);
-    mSetsWithDuration.push_back(new StructComponentSet(timecode_component));
+        mFilePackageTC->setDropFrame(mDropFrameTimecode);
+    mFilePackageTC->setStartTimecode(mStartTimecode);
+    mSetsWithDuration.push_back(new StructComponentSet(mFilePackageTC));
 
     // Preface - ContentStorage - SourcePackage - Timeline Tracks
     // video track followed by audio track
@@ -746,6 +748,14 @@ int64_t D10MXFOP1AWriter::GetFileSize() const
     return mMXFFile->size();
 }
 
+void D10MXFOP1AWriter::UpdateStartTimecode(int64_t count)
+{
+    MXFPP_ASSERT(mMXFFile);
+    
+    mMaterialPackageTC->setStartTimecode(count);
+    mFilePackageTC->setStartTimecode(count);
+}
+
 void D10MXFOP1AWriter::CompleteFile()
 {
     MXFPP_ASSERT(mMXFFile);
@@ -763,7 +773,6 @@ void D10MXFOP1AWriter::CompleteFile()
         mSetsWithDuration[i]->UpdateDuration(mDuration);
     mIndexSegment->setIndexDuration(mDuration);
 
-    
     // re-write the header metadata
     mMXFFile->seek(mHeaderMetadataStartPos, SEEK_SET);
     PositionFillerWriter pos_filler_writer(mHeaderMetadataEndPos);
