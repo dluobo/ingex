@@ -55,7 +55,7 @@ create_aaf: $(DATABASELIB_DIR)/libprodautodb.a $(STUDIOCOMMONLIB_DIR)/libstudioc
 
 .PHONY: install-web
 install-web: create_aaf
-	cp create_aaf $(INSTALL_WEB_DIR)
+	mkdir -p $(INSTALL_WEB_DIR); cp create_aaf $(INSTALL_WEB_DIR)
 
 .PHONY: uninstall-web
 uninstall-web:
