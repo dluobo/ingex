@@ -1,5 +1,5 @@
 /*
- * $Id: record_mxf.c,v 1.4 2010/01/14 14:05:36 john_f Exp $
+ * $Id: record_mxf.c,v 1.5 2010/06/18 08:51:51 john_f Exp $
  *
  * Record uncompressed SDI video and audio to disk.
  *
@@ -113,7 +113,7 @@ static void cleanup_exit(int res, sv_handle *sv)
         sv_close(sv);
     }
     if (write_mxf) {
-        if (!complete_archive_mxf_file(&mxfout, NULL, NULL, 0, NULL, 0, NULL, 0)) {
+        if (!complete_archive_mxf_file(&mxfout, NULL, NULL, 0, NULL, 0, NULL, 0, NULL, 0)) {
             fprintf(stderr, "Failed to complete writing MXF file\n");
         }
     }
@@ -302,7 +302,7 @@ static int capture_sv_fifo(sv_handle *sv, sv_fifo *pinput)
             uint8_t *full_video = ring_frame(last_frame_captured + 1);
 
             // Read VITC (line 19 or line 8 here)
-            if (readVITC(ring_frame(last_frame_captured + 1) + stride * 8, &hh, &mm, &ss, &ff)) {
+            if (readVITC(ring_frame(last_frame_captured + 1) + stride * 8, 1, &hh, &mm, &ss, &ff)) {
                 printf("readVITC: %02u:%02u:%02u:%02u", hh, mm, ss, ff);
                 vitc.hour = hh;
                 vitc.min = mm;
@@ -313,7 +313,7 @@ static int capture_sv_fifo(sv_handle *sv, sv_fifo *pinput)
                 printf("readVITC failed");
 
             // Read LTC (line 15 or line 0 here)
-            if (readVITC(ring_frame(last_frame_captured + 1) + stride * 0, &hh, &mm, &ss, &ff)) {
+            if (readVITC(ring_frame(last_frame_captured + 1) + stride * 0, 1, &hh, &mm, &ss, &ff)) {
                 printf("  LTC: %02u:%02u:%02u:%02u\n", hh, mm, ss, ff);
                 vitc.hour = hh;
                 vitc.min = mm;
@@ -459,7 +459,7 @@ static void * sdi_monitor(void *arg)
             "LONPROG";
         InfaxData d3InfaxData;
         parse_infax_data(d3InfaxDataString, &d3InfaxData, 1);
-        if (!complete_archive_mxf_file(&mxfout, &d3InfaxData, &pseFailure, 1, vtrErrors, 0, NULL, 0)) {
+        if (!complete_archive_mxf_file(&mxfout, &d3InfaxData, &pseFailure, 1, vtrErrors, 0, NULL, 0, NULL, 0)) {
             fprintf(stderr, "Failed to complete writing MXF file\n");
         }
 

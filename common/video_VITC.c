@@ -1,5 +1,5 @@
 /*
- * $Id: video_VITC.c,v 1.3 2010/06/02 10:52:38 philipn Exp $
+ * $Id: video_VITC.c,v 1.4 2010/06/18 08:53:42 john_f Exp $
  *
  * Utilities for reading, writing and dealing with VITC timecodes
  *
@@ -83,11 +83,12 @@ extern int tc_to_int(unsigned hh, unsigned mm, unsigned ss, unsigned ff)
 
 typedef struct {
 	const unsigned char *line;
+	int y_stride, y_offset;
 	int bit0_centre;
 	float bit_width;
 } VITCinfo;
 
-// Input must be one line of UYVY video (720 pixels, 720*2 bytes)
+// Input must be one line of UYVY or Y video (720 pixels)
 extern unsigned VBIbit(VITCinfo *pinfo, int bit)
 {
 	// Bits are 7.5 luma samples wide (see SMPTE-266)
@@ -98,8 +99,8 @@ extern unsigned VBIbit(VITCinfo *pinfo, int bit)
 	//int bit_pos = (int)(bit * 7.5 + 0.5) + 28;
 	int bit_pos = (int)(bit * pinfo->bit_width + 0.5) + pinfo->bit0_centre;
 
-	// use the bit_pos index into the UYVY packing
-	unsigned char Y = pinfo->line[bit_pos * 2 + 1];
+	// use the bit_pos index into the Y data
+	unsigned char Y = pinfo->line[bit_pos * pinfo->y_stride + pinfo->y_offset];
 
 	// If the luma value is greater than 0x7F then it is
 	// likely to be a "1" bit value.  SMPTE-266M says the
@@ -118,13 +119,22 @@ extern unsigned readVBIbits(VITCinfo *pinfo, int bit, int width)
 	return value;
 }
 
-extern int readVITC(const unsigned char *line,
+extern int readVITC(const unsigned char *line, int is_uyvy,
 					unsigned *hh, unsigned *mm, unsigned *ss, unsigned *ff)
 {
 	unsigned CRC = 0;
 	int i;
 	VITCinfo info;
 	info.line = line;
+	if (is_uyvy) {
+	    // UYVY packing
+	    info.y_stride = 2;
+	    info.y_offset = 1;
+	} else {
+	    // Y only
+	    info.y_stride = 1;
+	    info.y_offset = 0;
+	}
 
 	// First, scan from left to find first sync pair (black->white->black).
 	// Start and end pixels (18 to 42) are very conservative (VITC would
@@ -135,8 +145,8 @@ extern int readVITC(const unsigned char *line,
 	lastY = 0xFF;
 	last2Y = 0xFF;
 	for (i = 18; i < 42; i++) {
-		unsigned char Y = line[i*2+1];
-		//printf("i=%d offset=%d Y=%x\n", i, i*2+1, Y);
+		unsigned char Y = line[i*info.y_stride + info.y_offset];
+		//printf("i=%d offset=%d Y=%x\n", i, i*info.y_stride + info.y_offset, Y);
 		if (bit0_start == -1) {
 			if (Y > 0xB0)
 				bit0_start = i;
@@ -173,8 +183,8 @@ extern int readVITC(const unsigned char *line,
 	lastY = 0xFF;
 	last2Y = 0xFF;
 	for (i = scan_start; i < scan_start + 7.5*2; i++) {
-		unsigned char Y = line[i*2+1];
-		//printf("i=%d offset=%d Y=%x\n", i, i*2+1, Y);
+		unsigned char Y = line[i*info.y_stride + info.y_offset];
+		//printf("i=%d offset=%d Y=%x\n", i, i*info.y_stride + info.y_offset, Y);
 		if (Y <= 0xB0 && lastY <= 0xB0 && Y < lastY && lastY < last2Y) {
 			bit80_end = i - 2;
 			break;
@@ -211,12 +221,12 @@ extern int readVITC(const unsigned char *line,
 // Return true if the line contains only black or grey (< 0x80)
 // luminance values and no colour difference.
 // Useful for detecting when there is no VITC at all on a line.
-extern int black_or_grey_line(const unsigned char *line, int width)
+extern int black_or_grey_line(const unsigned char *uyvy_line, int width)
 {
 	int i;
 	for (i = 0; i < width; i++) {
-		unsigned char UV = line[i*2];
-		unsigned char Y = line[i*2+1];
+		unsigned char UV = uyvy_line[i*2];
+		unsigned char Y = uyvy_line[i*2+1];
 
 		if (abs(0x80 - UV) > 1) {
 			// contains colour, therefore not a grey or black line
@@ -231,17 +241,25 @@ extern int black_or_grey_line(const unsigned char *line, int width)
 	return 1;
 }
 
-extern void draw_vitc_line(unsigned char value[9], unsigned char *line)
+extern void draw_vitc_line(unsigned char value[9], unsigned char *line, int is_uyvy)
 {
 	// Modelled on digibeta output where it was found:
 	// * peak or trough of bit is always 5 pixels wide
 	// * start of first sync bit is pixel 25
+	
+	// stride and offset
+	int y_stride = 1;
+	int y_offset = 0;
+	if (is_uyvy) {
+	    y_stride = 2;
+	    y_offset = 1;
+	}
 
 	// Draw transition from low to high for first sync bit
 	int pos = 25;
-	line[pos++ *2+1] = 0x2A;
-	line[pos++ *2+1] = 0x68;
-	line[pos++ *2+1] = 0xA6;
+	line[pos++ *y_stride + y_offset] = 0x2A;
+	line[pos++ *y_stride + y_offset] = 0x68;
+	line[pos++ *y_stride + y_offset] = 0xA6;
 	// position is now at start of first sync bit peak (pos==28)
 
 	int val_i, i;
@@ -277,70 +295,70 @@ extern void draw_vitc_line(unsigned char value[9], unsigned char *line)
 			if (even_bit) {
 				// draw 7 pixels for even bit
 				if (bit) {
-					line[pos++ *2+1] = 0xC0;
-					line[pos++ *2+1] = 0xC0;
-					line[pos++ *2+1] = 0xC0;
-					line[pos++ *2+1] = 0xC0;
-					line[pos++ *2+1] = 0xC0;
+					line[pos++ *y_stride + y_offset] = 0xC0;
+					line[pos++ *y_stride + y_offset] = 0xC0;
+					line[pos++ *y_stride + y_offset] = 0xC0;
+					line[pos++ *y_stride + y_offset] = 0xC0;
+					line[pos++ *y_stride + y_offset] = 0xC0;
 					if (next_bit) {				// keep high
-						line[pos++ *2+1] = 0xC0;
-						line[pos++ *2+1] = 0xC0;
+						line[pos++ *y_stride + y_offset] = 0xC0;
+						line[pos++ *y_stride + y_offset] = 0xC0;
 					}
 					else {						// transition to low
-						line[pos++ *2+1] = 0x94;
-						line[pos++ *2+1] = 0x3C;
+						line[pos++ *y_stride + y_offset] = 0x94;
+						line[pos++ *y_stride + y_offset] = 0x3C;
 					}
 				}
 				else {	// low bit
-					line[pos++ *2+1] = 0x10;
-					line[pos++ *2+1] = 0x10;
-					line[pos++ *2+1] = 0x10;
-					line[pos++ *2+1] = 0x10;
-					line[pos++ *2+1] = 0x10;
+					line[pos++ *y_stride + y_offset] = 0x10;
+					line[pos++ *y_stride + y_offset] = 0x10;
+					line[pos++ *y_stride + y_offset] = 0x10;
+					line[pos++ *y_stride + y_offset] = 0x10;
+					line[pos++ *y_stride + y_offset] = 0x10;
 					if (next_bit) {				// transition to high
-						line[pos++ *2+1] = 0x3C;
-						line[pos++ *2+1] = 0x94;
+						line[pos++ *y_stride + y_offset] = 0x3C;
+						line[pos++ *y_stride + y_offset] = 0x94;
 					}
 					else {						// keep low
-						line[pos++ *2+1] = 0x10;
-						line[pos++ *2+1] = 0x10;
+						line[pos++ *y_stride + y_offset] = 0x10;
+						line[pos++ *y_stride + y_offset] = 0x10;
 					}
 				}
 			}
 			else {
 				// draw 8 pixels for odd bit
 				if (bit) {
-					line[pos++ *2+1] = 0xC0;
-					line[pos++ *2+1] = 0xC0;
-					line[pos++ *2+1] = 0xC0;
-					line[pos++ *2+1] = 0xC0;
-					line[pos++ *2+1] = 0xC0;
+					line[pos++ *y_stride + y_offset] = 0xC0;
+					line[pos++ *y_stride + y_offset] = 0xC0;
+					line[pos++ *y_stride + y_offset] = 0xC0;
+					line[pos++ *y_stride + y_offset] = 0xC0;
+					line[pos++ *y_stride + y_offset] = 0xC0;
 					if (next_bit) {				// keep high
-						line[pos++ *2+1] = 0xC0;
-						line[pos++ *2+1] = 0xC0;
-						line[pos++ *2+1] = 0xC0;
+						line[pos++ *y_stride + y_offset] = 0xC0;
+						line[pos++ *y_stride + y_offset] = 0xC0;
+						line[pos++ *y_stride + y_offset] = 0xC0;
 					}
 					else {						// transition to low
-						line[pos++ *2+1] = 0xA6;
-						line[pos++ *2+1] = 0x68;
-						line[pos++ *2+1] = 0x2A;
+						line[pos++ *y_stride + y_offset] = 0xA6;
+						line[pos++ *y_stride + y_offset] = 0x68;
+						line[pos++ *y_stride + y_offset] = 0x2A;
 					}
 				}
 				else {	// low bit
-					line[pos++ *2+1] = 0x10;
-					line[pos++ *2+1] = 0x10;
-					line[pos++ *2+1] = 0x10;
-					line[pos++ *2+1] = 0x10;
-					line[pos++ *2+1] = 0x10;
+					line[pos++ *y_stride + y_offset] = 0x10;
+					line[pos++ *y_stride + y_offset] = 0x10;
+					line[pos++ *y_stride + y_offset] = 0x10;
+					line[pos++ *y_stride + y_offset] = 0x10;
+					line[pos++ *y_stride + y_offset] = 0x10;
 					if (next_bit) {				// transition to high
-						line[pos++ *2+1] = 0x2A;
-						line[pos++ *2+1] = 0x68;
-						line[pos++ *2+1] = 0xA6;
+						line[pos++ *y_stride + y_offset] = 0x2A;
+						line[pos++ *y_stride + y_offset] = 0x68;
+						line[pos++ *y_stride + y_offset] = 0xA6;
 					}
 					else {						// keep low
-						line[pos++ *2+1] = 0x10;
-						line[pos++ *2+1] = 0x10;
-						line[pos++ *2+1] = 0x10;
+						line[pos++ *y_stride + y_offset] = 0x10;
+						line[pos++ *y_stride + y_offset] = 0x10;
+						line[pos++ *y_stride + y_offset] = 0x10;
 					}
 				}
 			}
@@ -348,14 +366,20 @@ extern void draw_vitc_line(unsigned char value[9], unsigned char *line)
 	}
 }
 
-extern void write_vitc_one_field(unsigned hh, unsigned mm, unsigned ss, unsigned ff, int field_flag, unsigned char *line)
+extern void write_vitc_one_field(unsigned hh, unsigned mm, unsigned ss, unsigned ff, int field_flag,
+                                 unsigned char *line, int is_uyvy)
 {
-	// Set line to black UYVY
 	int i;
-	for (i = 0; i < 720; i++) {
-		line[i*2+0] = 0x80;
-		line[i*2+1] = 0x10;
-	}
+	if (is_uyvy) {
+	    // Set line to black UYVY
+        for (i = 0; i < 720; i++) {
+            line[i*2+0] = 0x80;
+            line[i*2+1] = 0x10;
+        }
+    } else {
+        // Set Y to black
+        memset(line, 0x10, 720);
+    }
 
 	// data for one line is 9 bytes (8 bytes + 1 byte CRC)
 	unsigned char data[9] = {0};
@@ -414,12 +438,15 @@ extern void write_vitc_one_field(unsigned hh, unsigned mm, unsigned ss, unsigned
 
 	data[di++] = CRC;
 
-	draw_vitc_line(data, line);
+	draw_vitc_line(data, line, is_uyvy);
 }
 
-extern void write_vitc(unsigned hh, unsigned mm, unsigned ss, unsigned ff, unsigned char *line)
+extern void write_vitc(unsigned hh, unsigned mm, unsigned ss, unsigned ff, unsigned char *line, int is_uyvy)
 {
-	write_vitc_one_field(hh, mm, ss, ff, 0, line);
-	write_vitc_one_field(hh, mm, ss, ff, 1, line + 720*2);
+	write_vitc_one_field(hh, mm, ss, ff, 0, line, is_uyvy);
+	if (is_uyvy)
+	    write_vitc_one_field(hh, mm, ss, ff, 1, line + 720*2, 1);
+	else
+	    write_vitc_one_field(hh, mm, ss, ff, 1, line + 720, 0);
 }
 

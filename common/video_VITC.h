@@ -1,5 +1,5 @@
 /*
- * $Id: video_VITC.h,v 1.3 2010/06/02 10:52:38 philipn Exp $
+ * $Id: video_VITC.h,v 1.4 2010/06/18 08:53:42 john_f Exp $
  *
  * Utilities for reading, writing and dealing with VITC timecodes
  *
@@ -35,12 +35,13 @@ extern char *framesToStr(int tc, char *s);
 extern int dvs_tc_to_int(int tc);
 extern int tc_to_int(unsigned hh, unsigned mm, unsigned ss, unsigned ff);
 
-extern int readVITC(const unsigned char *line, unsigned *hh, unsigned *mm, unsigned *ss, unsigned *ff);
-extern int black_or_grey_line(const unsigned char *line, int width);
+extern int readVITC(const unsigned char *line, int is_uyvy, unsigned *hh, unsigned *mm, unsigned *ss, unsigned *ff);
+extern int black_or_grey_line(const unsigned char *uyvy_line, int width);
 
-extern void draw_vitc_line(unsigned char value[9], unsigned char *line);
-extern void write_vitc_one_field(unsigned hh, unsigned mm, unsigned ss, unsigned ff, int field_flag, unsigned char *line);
-extern void write_vitc(unsigned hh, unsigned mm, unsigned ss, unsigned ff, unsigned char *line);
+extern void draw_vitc_line(unsigned char value[9], unsigned char *line, int is_uyvy);
+extern void write_vitc_one_field(unsigned hh, unsigned mm, unsigned ss, unsigned ff, int field_flag,
+                                 unsigned char *line, int is_uyvy);
+extern void write_vitc(unsigned hh, unsigned mm, unsigned ss, unsigned ff, unsigned char *line, int is_uyvy);
 
 #ifdef __cplusplus
 }
