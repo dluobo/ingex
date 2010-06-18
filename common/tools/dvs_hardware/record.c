@@ -1,5 +1,5 @@
 /*
- * $Id: record.c,v 1.3 2010/01/14 14:05:36 john_f Exp $
+ * $Id: record.c,v 1.4 2010/06/18 08:50:41 john_f Exp $
  *
  * Record uncompressed SDI video and audio to disk.
  *
@@ -276,12 +276,12 @@ static int capture_sv_fifo(sv_handle *sv, sv_fifo *pinput)
             int stride = 720*2;
             unsigned hh, mm, ss, ff;
 
-            if (readVITC(ring_frame(last_frame_captured + 1) + stride * 0, &hh, &mm, &ss, &ff))
+            if (readVITC(ring_frame(last_frame_captured + 1) + stride * 0, 1, &hh, &mm, &ss, &ff))
                 printf("readVITC: %02u:%02u:%02u:%02u", hh, mm, ss, ff);
             else
                 printf("readVITC failed");
 
-            if (readVITC(ring_frame(last_frame_captured + 1) + stride * 2, &hh, &mm, &ss, &ff))
+            if (readVITC(ring_frame(last_frame_captured + 1) + stride * 2, 1, &hh, &mm, &ss, &ff))
                 printf("  LTC: %02u:%02u:%02u:%02u\n", hh, mm, ss, ff);
             else
                 printf("  LTC failed\n");
