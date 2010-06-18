@@ -2576,11 +2576,11 @@
 +
 +    if (DV_PROFILE_IS_HD(c->sys)) {
 +	/* HD formats are always 16:9 */
-+	aspect = 0x07;
++	aspect = 0x02;
 +    } else {
 +	aspect = 0; /* 4:3 is the default*/
 +        if((int)(av_q2d(c->avctx->sample_aspect_ratio) * c->avctx->width / c->avctx->height * 10) >= 17) /* 16:9 */
-+            aspect = 0x07; // REGRESSION: 0x02???
++            aspect = 0x02;
 +    }
 +
  

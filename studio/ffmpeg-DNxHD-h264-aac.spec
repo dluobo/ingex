@@ -1,7 +1,7 @@
 Summary: FFmpeg library with DNxHD(VC-3) DVCPRO-HD H.264 AAC MP3 A52(AC-3) codecs
 Name: ffmpeg-DNxHD-h264-aac
 Version: 0.5
-Release: 4
+Release: 5
 License: GPL
 Group: System Environment/Daemons
 Source: ffmpeg-%{version}.tar.bz2
@@ -15,6 +15,7 @@ Patch6: ffmpeg-0.5-dnxhd-interlaced-parse.patch
 Patch7: ffmpeg-0.5-archive-mxf.patch
 Patch8: ffmpeg-0.5-dnxhd-avid-nitris.patch
 Patch9: ffmpeg-0.5-dnxhd-sst.patch
+Patch10: ffmpeg-0.5-quicktime-aspect-ratio.patch
 Url: http://www.ffmpeg.org/download.html
 BuildRoot: %{_tmppath}/%{name}-root
 BuildRequires: autoconf nasm
@@ -49,6 +50,7 @@ rm -rf $RPM_BUILD_ROOT
 %patch7
 %patch8
 %patch9
+%patch10
 
 %build
 ./configure --prefix=/usr --enable-pthreads --disable-demuxer=ogg --enable-swscale --enable-libx264 --enable-libmp3lame --enable-gpl --enable-libfaac --enable-libfaad
@@ -76,6 +78,12 @@ rm -rf $RPM_BUILD_ROOT
 /usr/share/
 
 %changelog
+* Thu Jun 10 2010 Philip de Nier 0.5-5
+- Fix DV aspect ratio in bitstream (DISP)
+- Added ffmpeg-0.5-quicktime-aspect-ratio.patch
+	- Added 'pasp' atom to quicktime to define the pixel/sample aspect ratio
+	- Not adjusting visual/display width using sample aspect ratio
+	- Setting visual/display width to 1920/1280 for DVCProHD
 * Mon May 10 2010 Philip de Nier 0.5-4
 - Added patch implementing MPEG-2 non-linear quantizer (qscale >= 2) to fix
   CBR failure for complex pictures
