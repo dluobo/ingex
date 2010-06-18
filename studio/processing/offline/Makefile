@@ -1,4 +1,4 @@
-# $Id: Makefile,v 1.9 2010/06/02 12:59:07 john_f Exp $
+# $Id: Makefile,v 1.10 2010/06/18 09:53:47 philipn Exp $
 #
 DATABASELIB_DIR = ../../database/src
 LIBMXF_DIR = ../../../libMXF
@@ -30,14 +30,6 @@ SOURCES = transcode_avid_mxf.cpp
 OBJECTS = $(subst .cpp,.o,$(SOURCES))
 DEPENDENCIES = $(subst .cpp,.d,$(SOURCES))
 
-C_SOURCES = mjpeg_compress.c
-C_OBJECTS = $(subst .c,.o,$(C_SOURCES))
-C_DEPENDENCIES += $(subst .c,.d,$(C_SOURCES))
-
-SOURCE += C_SOURCES
-OBJECTS += C_OBJECTS
-DEPENDENCIES += C_DEPENDENCIES
-
 
 FFMPEG_LIBS = -lavformat -lavcodec -lavutil -lz -lbz2 -lmp3lame -lx264 -lfaac -lfaad -lm
 
@@ -46,13 +38,9 @@ TRANSCODE_LIBS = -ljpeg $(FFMPEG_LIBS) -L$(STUDIOCOMMON_DIR) -lstudiocommon -L$(
 	-L$(MXFWRITER_DIR) -lmxfwriter -L$(WRITEAVIDMXF_DIR) -lwriteavidmxf \
 	-L$(MXFREADER_DIR) -lMXFReader -L$(LIBMXF_DIR)/lib -lMXF -lpq -lpqxx -luuid -lpthread 
 
-YUV422TOMJPEG_LIBS = -L$(STUDIOCOMMON_DIR) -lstudiocommon -L$(YUVLIB_DIR) -lYUVlib \
-	-L$(COMMON_DIR) -lcommon -ljpeg -lpthread
 
-	
-	
 .PHONY: all
-all: transcode_avid_mxf yuv422_to_mjpeg yuv422_to_mjpeg_threaded
+all: transcode_avid_mxf
 
 
 %.d : %.cpp
@@ -81,18 +69,11 @@ all: transcode_avid_mxf yuv422_to_mjpeg yuv422_to_mjpeg_threaded
 transcode_avid_mxf: libmxfwriter.a transcode_avid_mxf.o
 	$(CPP_COMPILE) transcode_avid_mxf.o $(TRANSCODE_LIBS) -o $@
 
-yuv422_to_mjpeg: yuv422_to_mjpeg.c
-	$(CPP_COMPILE) -g yuv422_to_mjpeg.c $(INCLUDES) $(YUV422TOMJPEG_LIBS) -o $@
-
-yuv422_to_mjpeg_threaded: yuv422_to_mjpeg.c
-	$(CPP_COMPILE) -g yuv422_to_mjpeg.c -DBUILD_USING_MJPEG_THREADED_API $(INCLUDES) $(YUV422TOMJPEG_LIBS) -o $@
-
-
 	
 
 .PHONY: clean
 clean:
-	@rm -f *.d *.o *.a *~ transcode_avid_mxf yuv422_to_mjpeg yuv422_to_mjpeg_threaded
+	@rm -f *.d *.o *.a *~ transcode_avid_mxf
 	
 	
 
