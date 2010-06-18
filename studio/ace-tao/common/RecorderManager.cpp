@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderManager.cpp,v 1.3 2008/09/03 13:43:34 john_f Exp $
+ * $Id: RecorderManager.cpp,v 1.4 2010/06/18 08:57:40 john_f Exp $
  *
  * Wrapper for ProdAuto::Recorder.
  *
@@ -208,6 +208,7 @@ void RecorderManager::Start(const std::string & project)
             rec_enable[i] = 1;
         }
 
+        // Tape names not used at present
         CORBA::ULong card_count = mTrackCount / 5; // dodgy
         CORBA::StringSeq tapes;
         tapes.length(card_count);
@@ -221,8 +222,13 @@ void RecorderManager::Start(const std::string & project)
             ACE_DEBUG((LM_DEBUG, ACE_TEXT("Tape: %C\n"), (const char *)tapes[i]));
         }
 
+        CORBA::StringSeq project_names;
+        project_names.length(1);
+        project_names[0] = CORBA::string_dup(project.c_str());
+
         try
         {
+            //mRecorder->AddProjectNames(project_names); // Not needed
             mRecorder->Start(start_tc, pre_roll, rec_enable, project.c_str(), false);
             ACE_DEBUG((LM_DEBUG, ACE_TEXT("Start command sent.\n")));
         }
