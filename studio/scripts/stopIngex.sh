@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # Stop the Ingex processes listed here
-PROCESSES="player Recorder nexus_multicast nexus_web sys_info_web dvs_sdi dvs_dummy xferserver.pl"
+PROCESSES="player Recorder nexus_multicast nexus_web system_info_web dvs_sdi dvs_dummy bmd_anasdi testgen xferserver.pl"
 
 # Also kill the PIDs that are in the file named here
 KONSOLE_PIDS="/tmp/ingexPIDs.txt"
@@ -37,7 +37,7 @@ done
 if [ -r ${KONSOLE_PIDS} ] ; then
   #echo "Found PIDs file"
   for PID in $( < ${KONSOLE_PIDS} ); do
-    if sudo kill -0 $PID
+    if sudo kill -0 $PID 2>/dev/null
     then
       # echo "Killing $PID"
       sudo kill $PID

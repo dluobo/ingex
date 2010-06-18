@@ -152,7 +152,7 @@ fi
 # first kill quad split, recorder and capture processes, if they're running
 # Check whether process is running and kill if it is
 echo "Checking for Ingex processes..."
-PROCESSES="player Recorder nexus_multicast nexus_web sys_info_web dvs_dummy xferserver.pl"
+PROCESSES="player Recorder nexus_multicast nexus_web system_info_web dvs_sdi dvs_dummy bmd_anasdi testgen xferserver.pl"
 for PROC in  $PROCESSES ; do
   if sudo killall -q -0 -e ${PROC}
   then
@@ -169,7 +169,7 @@ done
 if [ -r ${KONSOLE_PIDS} ] ; then
   #echo "Found PIDs file"
   for PID in $( < ${KONSOLE_PIDS} ); do
-    if sudo kill -0 $PID
+    if sudo kill -0 $PID 2>/dev/null
     then
       # echo "Killing $PID"
       sudo kill $PID
