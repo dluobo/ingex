@@ -30,15 +30,27 @@ var editrate = 25;
 
 var tree = false;
 var treeLoader = false;
+var renderedExt;
+
 var onLoad_Logging = function() {
-	checkJSLoaded(function(){Logging_init();});
+	checkJSLoaded(function(){
+		Ext.onReady(function(){
+			Logging_init();
+		});
+	});
 }
 loaderFunctions.Logging = onLoad_Logging;
 
 var ILtc = false;
-
 /// Initialise the interface, set up the tree, the editors etc, plus the KeyMap to enable keyboard shortcuts
 function Logging_init () {
+
+	renderedExt = false;
+
+//check to see if tree exists/is already rendered 	
+if($('takesList').innerHTML){renderedExt = true;}
+
+
 	treeLoader = new Ext.tree.TreeLoader({
 		dataUrl : "/cgi-bin/ingex-modules/Logging.ingexmodule/data/getProgramme.pl",
 		uiProviders:{
@@ -55,6 +67,9 @@ function Logging_init () {
 			}
 	    });
 	
+
+if(!renderedExt){ //ensure that only loads tree once
+
 	tree = new Ext.tree.ColumnTree({
 		width: '100%',
 		height: 300,
@@ -112,6 +127,7 @@ function Logging_init () {
 	
 	// render the tree
 	tree.render();
+
 	tree.expandAll();
 	
 	treeEditor = new Ext.tree.ColumnTreeEditor(tree,{ 
@@ -130,6 +146,7 @@ function Logging_init () {
 	
 	ILpopulateItemList();
 	
+}
 	Ext.getDoc().addKeyMap([
 		{
 			key: Ext.EventObject.ENTER,
@@ -178,11 +195,13 @@ function Logging_init () {
 			ctrl: true,
 			stopEvent: true
 		}, {
-			key: Ext.EventObject.NUM_PLUS,
+			key: Ext.EventObject.G,
+			ctrl:true,
 			fn: ILsetGood,
 			stopEvent: true
 		}, {
-			key: Ext.EventObject.NUM_MINUS,
+			key: Ext.EventObject.B,
+			ctrl: true,
 			fn: ILsetNoGood,
 			stopEvent: true
 		}, {
@@ -216,6 +235,7 @@ function Logging_init () {
 	ILpopulateProgRecInfo();
 
 	ILtc = new ingexLoggingTimecode();
+	
 }
 
 /// Start/stop take timecode updates
@@ -262,12 +282,12 @@ function ILgetFramesTotalFromText (text) {
 /// Convert a number of frames to a timecode string
 /// @param length the number of frames
 /// @return the timecode string
-function ILgetTextFromFramesTotal (length) {
+function ILgetTextFromFramesTotal (clipLength) {
 	var h; var m; var s; var f;
-	s = Math.floor(length/editrate);
+	s = Math.floor(clipLength/editrate);
 	m = Math.floor(s/60);
 	h = Math.floor(m/60);
-	f = length - (editrate * s);
+	f = clipLength - (editrate * s);
 	s = s - (60 * m);
 	m = m - (60 * h);
 	
@@ -477,7 +497,7 @@ function ILstoreTake () {
 	var outpoint = $('outpointBox').value;
 	var duration = $('durationBox').value;
 	var start = ILgetFramesTotalFromText(inpoint);
-	var length = ILgetFramesTotalFromText(duration);
+	var clipLength = ILgetFramesTotalFromText(duration);
 	
 	// -- Create node
 	var tmpNode= new Ext.tree.TreeNode({
@@ -501,6 +521,7 @@ function ILstoreTake () {
 			ILresetTake();
 		} catch (e) {
 			insole.alert("Error storing new take: "+e.name+" - "+e.message);
+			insole.alert("error adding to tree");
 		}
 	} else {
 		insole.alert("Error storing new take: tree unavailable.");
@@ -511,14 +532,15 @@ function ILstoreTake () {
 		url: '/cgi-bin/ingex-modules/Logging.ingexmodule/data/addTake.pl',
 		params : {
 			takeno: takeNumber,
+			item: item.attributes.databaseID,
 			location: locationID,
 			date: sqlDate,
 			start: start,
-			length: length,
 			result: result,
 			comment: comment,
-			item: item.attributes.databaseID,
-			editrate: editrate
+			editrate: editrate,
+			clipLength: clipLength		
+			
 		},
 		success: function(response) {
 			try {
@@ -631,11 +653,11 @@ function ILupdateNodeInDB (node,dataIndex,value) {
 			node.attributes.out = newOut;
 			node.getUI().getTakeElement('out').innerHTML = newOut;
 		} else if (dataIndex == "out") {
-			var length = ILgetFramesTotalFromText(value)-ILgetFramesTotalFromText(node.attributes.inpoint);
-			valueToSend = length;
-			dataIndex = "length";
+			var clipLength = ILgetFramesTotalFromText(value)-ILgetFramesTotalFromText(node.attributes.inpoint);
+			valueToSend = clipLength;
+			dataIndex = "clipLength";
 			// update duration
-			var newDuration = ILgetTextFromFramesTotal(length);
+			var newDuration = ILgetTextFromFramesTotal(clipLength);
 			node.attributes.duration = newDuration;
 			node.getUI().getTakeElement('duration').innerHTML = newDuration;
 		} else if (dataIndex == "duration") {
@@ -730,6 +752,18 @@ function ILdiscoverRecorders() {
 			} catch (e) {
 				elSel.add(elOptNew); // IE only
 			}
+			
+			var elOptNew = document.createElement('option');
+			elOptNew.text = "Local Sys Time";
+			elOptNew.value = "1";
+			try{
+				elSel.add(elOptNew, null); //standards compliant; doesn't work in IE
+			}catch (e){
+				elSel.add(elOptNew); //IE only
+			}
+
+
+
 			for (node in nodes) {
 				if(nodes[node].nodeType != "Recorder") continue;
 				var elOptNew = document.createElement('option');
@@ -752,8 +786,9 @@ function ILdiscoverRecorders() {
 /// Construct the URL to query a recorder
 /// @param recName the recorder's name
 /// @return the url
+/// Do not query if no recorder exists or no recorder selected
 function ILgetRecorderURL (recName) {
-	if(typeof ILRecorders[recName] != "undefined") {
+	if(typeof( ILRecorders[recName] != "undefined") && recName != -1 && recName != 1) {
 		return ILRecorders[recName].ip+queryLoc;
 	}
 	return false;
@@ -927,17 +962,56 @@ function ingexLoggingTimecode () {
 	this.getter = false;
 	this.ajaxtimeout = false;
 
+	this.incrementMethod = function(){
+		
+		var recSel = $('recorderSelector'); 
+		//if no timecode supply selected do nothing
+		if (recSel.options[recSel.selectedIndex].value == -1){
+		 	clearInterval(ILtc.incrementer);
+			clearInterval(ILtc.getter);
+			this.incrementer = false;
+			this.getter = false;
+			this.ajaxtimeout = false;
+			$('tcDisplay').innerHTML = "-- : -- : -- : --";
+			
+		}else if (recSel.options[recSel.selectedIndex].value == 1){ //if system time selected
+		 	
+			
+			//clear incrementer and begin updating from local system time
+			clearInterval(ILtc.incrementer);
+			clearInterval(ILtc.getter);
+			this.incrementer = false;
+			this.getter = false;
+			this.ajaxtimeout = false;
+			ILtc.startIncrementing(false);
+		}else{ //if a recorder is selectedinsole.log("a recorder is selected");
+			//clear incrementer and begin updating from recorder
+			clearInterval(ILtc.incrementer);
+			clearInterval(ILtc.getter);
+			this.incrementer = false;
+			this.getter = false;
+			this.ajaxtimeout = false;			
+			ILtc.startIncrementing();
+		}
+
+
+	}
+
+
 	this.startIncrementing = function(getFromServer,reset) {
+		//try to connect to server unless told otherwise
 		if (isDefault(getFromServer)) getFromServer = true;
+		
 		if (isDefault(reset)) reset = false;
+		
 		if(!this.incrementer || reset) {
-			if(getFromServer){
+			if(getFromServer){//getting update from server timecode
 				if($('tcDisplay').innerHTML == "-- : -- : -- : --") {
 					showLoading('tcDisplay');
 				}
 				this.update();
 				this.getter = setInterval(function(){ILtc.update();},2000);
-			} else {
+			} else {//getting update from local timecode
 				this.incrementer = setInterval(function(){ILtc.increment(tcFreq);},(tcFreq*40));
 			}
 		}
@@ -950,6 +1024,7 @@ function ingexLoggingTimecode () {
 				if (ILtc.ajaxtimeout) {
 					clearTimeout(ILtc.ajaxtimeout);
 					ILtc.ajaxtimeout = false;
+					//calls for local incrementation
 					ILtc.startIncrementing(false);
 				}
 				try {
@@ -965,24 +1040,33 @@ function ingexLoggingTimecode () {
 				}
 			}
 		};
-
-		var recSel = $('recorderSelector');
-		var recorderURL = ILgetRecorderURL(recSel.options[recSel.selectedIndex].value);
-		if(!recorderURL) {
-			insole.alert("Error querying recorder for timecode - no recorder URL available");
-			return false;
-		}
 		
-		var now = new Date();
-		var random = Math.floor(Math.random()*101);
-		var requestID = now.getHours()+now.getMinutes()+now.getSeconds()+now.getMilliseconds()+random;
+		//only search for a recorder if on the Logging tab
+		if (currentTab == "Logging"){
+			var recSel = $('recorderSelector');
+			
+			if (recSel.options[recSel.selectedIndex].value != -1 && recSel.options[recSel.selectedIndex].value != 1 ){  //if a recorder is selected
 
-		xmlHttp.open("GET","/cgi-bin/ingex-modules/Logging.ingexmodule/tc.pl?url="+recorderURL+"&"+requestID,true);
-		xmlHttp.send(null);
-		if (this.ajaxtimeout) {
-			clearTimeout(this.ajaxtimeout);
+				var recorderURL = ILgetRecorderURL(recSel.options[recSel.selectedIndex].value);
+
+				if(!recorderURL){
+					 insole.alert("Error querying recorder for timecode - no recorder URL available");
+					return false;
+				}
+		
+				var now = new Date();
+				var random = Math.floor(Math.random()*101);
+				var requestID = now.getHours()+now.getMinutes()+now.getSeconds()+now.getMilliseconds()+random;
+
+				xmlHttp.open("GET","/cgi-bin/ingex-modules/Logging.ingexmodule/tc.pl?url="+recorderURL+"&"+requestID,true);
+				xmlHttp.send(null);
+				if (this.ajaxtimeout) {
+					clearTimeout(this.ajaxtimeout);
+				}
+				this.ajaxtimeout = setTimeout(function(){ILtc.ajaxTimedout()},5000);
+			}
 		}
-		this.ajaxtimeout = setTimeout(function(){ILtc.ajaxTimedout()},5000);
+
 	}
 	
 	this.ajaxTimedout = function() {
@@ -1003,10 +1087,23 @@ function ingexLoggingTimecode () {
 		this.stopped = stopped;
 		if(startInc) this.startIncrementing();
 	}
-	
+
+
 	this.increment = function(numToInc) {
 		if (isDefault(numToInc)) numToInc = 1;
 		var draw = false;
+		var recSel = $('recorderSelector');
+		if (recSel.options[recSel.selectedIndex].value == 1){
+			
+			var now = new Date();
+			this.h = now.getHours();
+			this.m = now.getMinutes();
+			this.s = now.getSeconds();
+			this.f = Math.floor((editrate/1000)*now.getMilliseconds());
+			
+		}
+
+
 		if (!this.stopped) {
 			// Do the actual incrementing
 			this.f += numToInc;
@@ -1032,8 +1129,9 @@ function ingexLoggingTimecode () {
 			
 			// draw
 			var fr = "--";
+
 			if (showFrames) fr = f;
-			if (showFrames || draw) $('tcDisplay').innerHTML = h+":"+m+":"+s+":"+fr;
+			if (showFrames || draw)	$('tcDisplay').innerHTML = h+":"+m+":"+s+":"+fr;
 			
 			if(this.takeRunning) {
 				this.durF += numToInc;
