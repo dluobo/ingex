@@ -1,5 +1,5 @@
 /*
- * $Id: create_video_test_signal.c,v 1.3 2010/06/02 10:52:38 philipn Exp $
+ * $Id: create_video_test_signal.c,v 1.4 2010/06/25 13:54:06 philipn Exp $
  *
  * Create file with UYVY video test signal
  *
@@ -59,6 +59,7 @@ static void usage(const char *cmd)
     fprintf(stderr, "  --dur <frames>   Set the number of video frames (default %d)\n", DEFAULT_NUM_FRAMES);
     fprintf(stderr, "  --width          Image width (default %d)\n", DEFAULT_WIDTH);
     fprintf(stderr, "  --height         Image height (default %d)\n", DEFAULT_HEIGHT);
+    fprintf(stderr, "  --rec709         Rec. 709 (HD) signal standard (default Rec. 601 (SD))\n");
 }
 
 int main(int argc, const char **argv)
@@ -68,6 +69,7 @@ int main(int argc, const char **argv)
     int dur = DEFAULT_NUM_FRAMES;
     int width = DEFAULT_WIDTH;
     int height = DEFAULT_HEIGHT;
+    int rec601 = 1;
     const char *output_filename = NULL;
     FILE *output;
     unsigned char *output_buffer;
@@ -122,6 +124,10 @@ int main(int argc, const char **argv)
                 fprintf(stderr, "Failed to parse height '%s'\n", argv[cmdln_index]);
             }
         }
+        else if (strcmp(argv[cmdln_index], "--rec709") == 0)
+        {
+            rec601 = 0;
+        }
         else
         {
             break;
@@ -156,7 +162,7 @@ int main(int argc, const char **argv)
     switch (test_signal)
     {
         case COLOUR_BARS_SIGNAL:
-            uyvy_color_bars(width, height, output_buffer);
+            uyvy_color_bars(width, height, rec601, output_buffer);
             break;
         case BLACK_SIGNAL:
             uyvy_black_frame(width, height, output_buffer);

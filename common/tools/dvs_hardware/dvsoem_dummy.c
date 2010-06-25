@@ -1,5 +1,5 @@
 /*
- * $Id: dvsoem_dummy.c,v 1.13 2010/06/03 11:05:33 john_f Exp $
+ * $Id: dvsoem_dummy.c,v 1.14 2010/06/25 13:54:06 philipn Exp $
  *
  * Implement a debug-only DVS hardware library for testing.
  *
@@ -104,6 +104,11 @@ static int int_to_dvs_tc(int tc)
     write_bcd(raw_tc + 3, hr);
     int result = *(int *)(raw_tc);
     return result;
+}
+
+static int is_rec601(int videomode)
+{
+    return videomode == SV_MODE_PAL || videomode == SV_MODE_NTSC;
 }
 
 // Represent the colour and position of a colour bar for dummy video
@@ -276,7 +281,7 @@ static void setup_source_buf(DvsCard * dvs)
         unsigned char *audio34 = audio12 + 0x4000;
     
         // setup colorbars
-        uyvy_color_bars(dvs->width, dvs->height, video);
+        uyvy_color_bars(dvs->width, dvs->height, is_rec601(dvs->videomode), video);
     
         // Create audio
         int32_t * audio1 = (int32_t *)audio12;

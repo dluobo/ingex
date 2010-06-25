@@ -76,7 +76,7 @@ int main(int argc, char *argv[])
 	uint8_t *frame10bit2 = (uint8_t*)malloc(frame_size_10bit);
 
 	// colourbars and timecode burning
-	uyvy_color_bars(width, height, frame);
+	uyvy_color_bars(width, height, 1, frame);
 	burn_mask_uyvy(111222, 90, 90, 720, 576, frame);
 	write_sample("c.uyvy", frame_size, frame);
 	uyvy_to_yuv422_nommx(width, height, 0, frame, frame2);
@@ -88,7 +88,7 @@ int main(int argc, char *argv[])
 	burn_mask_yuv420(111222, 90, 90, 720, 576, frame2);
 	write_sample("cb.yuv", 720*576*3/2, frame2);
 
-	uyvy_color_bars(width, height, frame);
+	uyvy_color_bars(width, height, 1, frame);
 	uyvy_to_yuv422_nommx(width, height, 0, frame, frame2);
 	burn_mask_yuv422(111222, 90, 90, 720, 576, frame2);
 	write_sample("c422.yuv", 720*576*2, frame2);

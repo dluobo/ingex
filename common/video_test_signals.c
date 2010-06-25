@@ -1,5 +1,5 @@
 /*
- * $Id: video_test_signals.c,v 1.2 2008/02/06 16:58:51 john_f Exp $
+ * $Id: video_test_signals.c,v 1.3 2010/06/25 13:54:06 philipn Exp $
  *
  * Video test frames
  *
@@ -35,10 +35,10 @@ typedef struct {
 
 // Generate a video buffer containing uncompressed UYVY video representing
 // the familiar colour bars test signal (or YUY2 video if specified).
-static void create_colour_bars(unsigned char *video_buffer, int width, int height, int convert_to_YUY2)
+static void create_colour_bars(unsigned char *video_buffer, int width, int height, int convert_to_YUY2, int rec601)
 {
 	int				i,j,b;
-	bar_colour_t	UYVY_table[] = {
+	bar_colour_t	rec601_UYVY_table[] = {
 				{52/720.0,	{0x80,0xEB,0x80,0xEB}},	// white
 				{140/720.0,	{0x10,0xD2,0x92,0xD2}},	// yellow
 				{228/720.0,	{0xA5,0xA9,0x10,0xA9}},	// cyan
@@ -49,6 +49,18 @@ static void create_colour_bars(unsigned char *video_buffer, int width, int heigh
 				{668/720.0,	{0x80,0x10,0x80,0x10}},	// black
 				{720/720.0,	{0x80,0xEB,0x80,0xEB}}	// white
 			};
+	bar_colour_t	rec709_UYVY_table[] = {
+				{52/720.0,	{0x80,0xEB,0x80,0xEB}},	// white
+				{140/720.0,	{0x10,0xDB,0x8A,0xDB}},	// yellow
+				{228/720.0,	{0x9A,0xBC,0x10,0xBC}},	// cyan
+				{316/720.0,	{0x2A,0xAD,0x1A,0xAD}},	// green
+				{404/720.0,	{0xD6,0x4E,0xE6,0x4E}},	// magenta
+				{492/720.0,	{0x66,0x3F,0xF0,0x3F}},	// red
+				{580/720.0,	{0xF0,0x20,0x76,0x20}},	// blue
+				{668/720.0,	{0x80,0x10,0x80,0x10}},	// black
+				{720/720.0,	{0x80,0xEB,0x80,0xEB}}	// white
+			};
+	bar_colour_t *UYVY_table = (rec601 ? rec601_UYVY_table : rec709_UYVY_table);
 
 	for (j = 0; j < height; j++)
 	{
@@ -111,9 +123,9 @@ void uyvy_random_frame(int width, int height, unsigned char *video_buffer)
 }
 
 
-void uyvy_color_bars(int width, int height, uint8_t *output)
+void uyvy_color_bars(int width, int height, int rec601, uint8_t *output)
 {
-	create_colour_bars(output, width, height, 0);
+	create_colour_bars(output, width, height, 0, rec601);
 }
 
 void uyvy_black_frame(int width, int height, uint8_t *output)
