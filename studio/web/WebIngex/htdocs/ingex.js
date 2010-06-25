@@ -102,6 +102,13 @@ function getTab(tabName, optionNotTab, logToHistory, getContent, postStr)
 		monitors.stopDisplay();
 	}
 	
+	//if current module(i.e. the one we're leaving) is Logging, stop trying to increment timecode
+	if(currentTab == "Logging"){
+		clearInterval(ILtc.incrementer);
+		clearInterval(ILtc.getter);
+	}
+
+
 	//if current tab is config, re-create the monitors object to take into account any changes we just made
 	if(viewingConfig) {
 		viewingConfig = false;
