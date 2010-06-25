@@ -31,6 +31,7 @@ use prodautodb;
 use IngexJSON;
 use ILutil;
 
+
 print header;
 
 my $dbh = prodautodb::connect(
@@ -66,7 +67,7 @@ if (($errorMessage = validate_params()) eq "ok")
 		LOCATION => param('location'),
 		DATE => param('date'),
 		START => param('start'),
-		LENGTH => param('length'),
+		LENGTH => param('clipLength'),
 		RESULT => $resultID,
 		COMMENT => $comment,
 		ITEM => param('item'),
@@ -89,16 +90,20 @@ if (($errorMessage = validate_params()) eq "ok")
 } else {
 	print '{"success":false,"error":"'.$errorMessage.'","id":-1}';
 }
+
+
 exit (0);
 
 sub validate_params
 {
-    return "No take number defined" if (!defined param('takeno') || param('takeno') =~ /^\s*$/);
+    
+	
+	return "No take number defined" if (!defined param('takeno') || param('takeno') =~ /^\s*$/);
 	return "No item defined" if (!defined param('item') || param('item') =~ /^\s*$/);
 	return "No location defined" if (!defined param('location') || param('location') =~ /^\s*$/);
 	return "No date defined" if (!defined param('date') || param('date') =~ /^\s*$/);
 	return "No start timecode defined" if (!defined param('start') || param('start') =~ /^\s*$/);
-	return "No duration defined" if (!defined param('length') || param('length') =~ /^\s*$/);
+	return "No duration defined" if (!defined param('clipLength') || param('clipLength') =~ /^\s*$/);
 	return "No result (good/no good) defined" if (!defined param('result') || param('result') =~ /^\s*$/);
 
     return "ok";
