@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_control.h,v 1.6 2010/06/02 10:52:38 philipn Exp $
+ * $Id: nexus_control.h,v 1.7 2010/06/25 13:51:28 philipn Exp $
  *
  * Shared memory interface between SDI capture threads and reader threads.
  *
@@ -98,8 +98,8 @@ typedef struct {
                                 // use lastframe % ringlen to get buffer index
     int     hwdrop;             // frame-drops recorded by sv interface
     double  hwtemperature;      // temperature of capture card hardware (degrees C)
-    int     num_audio_avail;    // number of audio channels configured and available for
-                                // capture at the hardware level (not how many channels
+    int     num_audio_avail;    // number of audio tracks configured and available for
+                                // capture at the hardware level (not how many tracks
                                 // are carried by the current SDI signal, if any).
 
     // Following members are written to by Recorder
@@ -107,8 +107,11 @@ typedef struct {
 } NexusBufCtl;
 
 #define MAX_RECORDERS 2             // number of Recorders per machine
-#define MAX_ENCODES_PER_CHANNEL 2   // Recorder can make this number of encodes per channel
+#define MAX_ENCODES_PER_CHANNEL 3   // Recorder can make this number of encodes per channel
 #define MAX_CHANNELS 8              // number of separate video+audio inputs
+
+// Mono audio data is arranged in blocks of MAX_AUDIO_SAMPLES_PER_FRAME for each audio track
+#define MAX_AUDIO_SAMPLES_PER_FRAME 1920
 
 typedef struct {
     int     enabled;            // set to 1 if channel and encoding is enabled
@@ -131,11 +134,9 @@ typedef struct {
 // Each element in a ring buffer is structured to facilitate the
 // DMA transfer from the capture card, and is structured as follows:
 //  video (4:2:2 primary)   - offset 0, size given by width*height*2
-//  audio channels 1,2      - offset given by audio12_offset
-//  audio channels 3,4      - offset given by audio34_offset
-//  audio channels 5,6 (optional)
-//  audio channels 7,8 (optional)
+//  audio 32bit mono tracks - offset given by audio_offset (4 or 8 tracks)
 //  (padding)
+//  audio 16bit mono tracks - offset given by sec_audio_offset (4 or 8 tracks)
 //  signal status           - offset given by signal_ok_offset
 //  tick                    - offset given by tick_offset
 //  timecodes               - offsets given by vitc_offset, ltc_offset
@@ -171,13 +172,12 @@ typedef struct {
     int             owner_pid;          // process id of nominal owner of shared memory e.g. dvs_sdi
     struct timeval  owner_heartbeat;    // heartbeat timestamp of owner of shared memory
 
-    // The following describe offsets within a ring buffer element for accessing data
-    int             audio12_offset;     // offset to start of audio ch 1,2 samples
-    int             audio34_offset;     // offset to start of audio ch 3,4 samples
-    int             audio56_offset;     // offset to start of audio ch 5,6 samples (if used)
-    int             audio78_offset;     // offset to start of audio ch 7,8 samples (if used)
-    int             audio_size;         // size in bytes of all audio data (4/8 chans)
-                                        // including internal padding for DMA transfer
+    // The following describe offsets and sizes within a ring buffer element for accessing data
+    int             num_audio_tracks;   // number of audio tracks captured, either 4 or 8
+    int             audio_offset;       // offset to start of mono 32bit audio tracks (4/8 tracks)
+    int             audio_size;         // size in bytes of all mono 32bit audio data (4/8 tracks)
+    int             sec_audio_offset;   // offset to start of secondary mono audio tracks (4/8 tracks)
+    int             sec_audio_size;     // size of all secondary mono audio tracks
     int             frame_data_offset;  // offset to struct with timecode and other data
     int             sec_video_offset;   // offset to secondary video buffer
 
@@ -221,10 +221,8 @@ Ingex::Timecode nexus_timecode(const NexusControl *pctl, uint8_t *ring[], int ch
 extern const uint8_t *nexus_primary_video(const NexusControl *pctl, uint8_t *ring[], int channel, int frame);
 extern const uint8_t *nexus_secondary_video(const NexusControl *pctl, uint8_t *ring[], int channel, int frame);
 
-extern const uint8_t *nexus_audio12(const NexusControl *pctl, uint8_t *ring[], int channel, int frame);
-extern const uint8_t *nexus_audio34(const NexusControl *pctl, uint8_t *ring[], int channel, int frame);
-extern const uint8_t *nexus_audio56(const NexusControl *pctl, uint8_t *ring[], int channel, int frame);
-extern const uint8_t *nexus_audio78(const NexusControl *pctl, uint8_t *ring[], int channel, int frame);
+extern const uint8_t *nexus_primary_audio(const NexusControl *pctl, uint8_t *ring[], int channel, int frame, int audio_track);
+extern const uint8_t *nexus_secondary_audio(const NexusControl *pctl, uint8_t *ring[], int channel, int frame, int audio_track);
 
 extern void nexus_set_source_name(NexusControl *pctl, int channel, const char *source_name);
 

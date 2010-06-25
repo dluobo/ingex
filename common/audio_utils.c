@@ -1,5 +1,5 @@
 /*
- * $Id: audio_utils.c,v 1.6 2009/04/16 17:49:25 john_f Exp $
+ * $Id: audio_utils.c,v 1.7 2010/06/25 13:51:28 philipn Exp $
  *
  * Write uncompressed audio in WAV format, and update WAV header.
  *
@@ -133,12 +133,18 @@ extern void write_audio(FILE *fp, uint8_t *p, int num_samples, int bits_per_inpu
     return;
 }
 
+// Channel is either:
+//   0 - first channel of pair
+//   1 - second channel of pair
+// Conversion is simple truncation from 32 to 16 bit samples
 extern void dvsaudio32_to_16bitmono(int channel, const uint8_t *buf32, uint8_t *buf16)
 {
     int i;
     // A DVS audio buffer contains a mix of two 32bits-per-sample channels
     // Data for one sample pair is 8 bytes:
-    //  a0 a0 a0 a0  a1 a1 a1 a1
+    //  a0 a0 a0 a0  b0 b0 b0 b0  a1 a1 a1 a1   b1 b1 b1 b1
+    // converted to
+    //  a0 a0  a1 a1  a2 a2  a3 a4
 
     int channel_offset = 0;
     if (channel == 1)
@@ -179,6 +185,18 @@ extern void pair16bit_to_dvsaudio32(int samples, const uint8_t *buf16, uint8_t *
         *buf32++ = 0;
         *buf32++ = buf16[i+0];
         *buf32++ = buf16[i+1];
+    }
+}
+
+// Convert 2 separate 16bit mono audio buffers into a single 16bit stereo buffer
+extern void audio_16bit_mono_to_16bit_stereo(int samples, const uint8_t *a1, const uint8_t *a2, uint8_t *out)
+{
+    int i;
+    for (i = 0; i < samples*2; i += 2) {
+        *out++ = a1[i+0];
+        *out++ = a1[i+1];
+        *out++ = a2[i+0];
+        *out++ = a2[i+1];
     }
 }
 

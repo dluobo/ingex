@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_control.c,v 1.5 2010/06/02 10:52:38 philipn Exp $
+ * $Id: nexus_control.c,v 1.6 2010/06/25 13:51:28 philipn Exp $
  *
  * Module for creating and accessing nexus shared control memory
  *
@@ -198,24 +198,16 @@ extern const uint8_t *nexus_secondary_video(const NexusControl *pctl, uint8_t *r
     return ring[channel] + pctl->elementsize * (frame % pctl->ringlen) + pctl->sec_video_offset;
 }
 
-extern const uint8_t *nexus_audio12(const NexusControl *pctl, uint8_t *ring[], int channel, int frame)
+extern const uint8_t *nexus_primary_audio(const NexusControl *pctl, uint8_t *ring[], int channel, int frame, int audio_track)
 {
-    return (ring[channel] + pctl->elementsize * (frame % pctl->ringlen) + pctl->audio12_offset);
+    return (ring[channel] + pctl->elementsize * (frame % pctl->ringlen) + pctl->audio_offset) +
+			audio_track * MAX_AUDIO_SAMPLES_PER_FRAME * 4;		// 32bit audio
 }
 
-extern const uint8_t *nexus_audio34(const NexusControl *pctl, uint8_t *ring[], int channel, int frame)
+extern const uint8_t *nexus_secondary_audio(const NexusControl *pctl, uint8_t *ring[], int channel, int frame, int audio_track)
 {
-    return (ring[channel] + pctl->elementsize * (frame % pctl->ringlen) + pctl->audio34_offset);
-}
-
-extern const uint8_t *nexus_audio56(const NexusControl *pctl, uint8_t *ring[], int channel, int frame)
-{
-    return (ring[channel] + pctl->elementsize * (frame % pctl->ringlen) + pctl->audio56_offset);
-}
-
-extern const uint8_t *nexus_audio78(const NexusControl *pctl, uint8_t *ring[], int channel, int frame)
-{
-    return (ring[channel] + pctl->elementsize * (frame % pctl->ringlen) + pctl->audio78_offset);
+    return (ring[channel] + pctl->elementsize * (frame % pctl->ringlen) + pctl->sec_audio_offset) +
+			audio_track * MAX_AUDIO_SAMPLES_PER_FRAME * 2;		// 16bit audio
 }
 
 extern void nexus_set_source_name(NexusControl *pctl, int channel, const char *source_name)
