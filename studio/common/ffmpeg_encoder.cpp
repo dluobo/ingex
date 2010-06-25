@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder.cpp,v 1.1 2010/06/02 10:38:05 john_f Exp $
+ * $Id: ffmpeg_encoder.cpp,v 1.2 2010/06/25 14:23:59 philipn Exp $
  *
  * Encode uncompressed video to DV using libavcodec
  *
@@ -382,6 +382,51 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init(MaterialResolution::EnumType res, 
                 encoded_frame_size = 576000;        // SMPTE 370M spec
             }
             break;
+
+		case MaterialResolution::XDCAMHD422_RAW:
+        //case MaterialResolution::XDCAMHD422_MXF_OP1A ///TODO NOT IMPLEMENTED YET
+            codec_id = CODEC_ID_MPEG2VIDEO; 
+            codec_type = CODEC_TYPE_VIDEO;
+            buffer_size = 364083330; //= 364 MB seems about right.
+            bit_rate =50000000;
+            width = 1920;
+            height = 1080;
+            encoded_frame_size = (bit_rate / 200)+2000000;
+            encoder->codec_context->bit_rate =bit_rate;
+            encoder->codec_context->gop_size = 14;
+            encoder->codec_context->b_frame_strategy = 0;
+#if defined(FFMPEG_NONLINEAR_PATCH)
+            // non-linear quantization is implemented, except for qscale 1 which could cause an integer overflow
+            // in the quantization process for large DCT coefficients
+            encoder->codec_context->qmin = 2;
+            encoder->codec_context->qmax = 31;
+#else
+#warning "Using FFmpeg without MPEG non-linear quantization patch"
+            encoder->codec_context->qmin = 1;
+            encoder->codec_context->qmax = 12;
+#endif
+            encoder->codec_context->me_method = 5; // (epzs)
+            encoder->codec_context->width = width;
+            encoder->codec_context->height = height;
+            encoder->codec_context->rc_max_rate = 60000000;
+            encoder->codec_context->rc_min_rate = 0;
+            encoder->codec_context->rc_buffer_size = 50000000; 
+            encoder->codec_context->rc_initial_buffer_occupancy = 50000000;
+            encoder->codec_context->flags |= CODEC_FLAG_INTERLACED_DCT;
+            encoder->codec_context->flags |= CODEC_FLAG_ALT_SCAN;
+            encoder->codec_context->flags |= CODEC_FLAG_CLOSED_GOP;
+            encoder->codec_context->flags2 |= CODEC_FLAG2_NON_LINEAR_QUANT;
+            encoder->codec_context->flags2 |= CODEC_FLAG2_INTRA_VLC;
+            encoder->codec_context->rc_max_available_vbv_use =1;
+            encoder->codec_context->rc_min_vbv_overflow_use = 1;
+            encoder->codec_context->lmin = 1 * FF_QP2LAMBDA;
+            encoder->codec_context->lmax = 3 * FF_QP2LAMBDA;
+            encoder->codec_context->max_b_frames =2;
+            encoder->codec_context->stream_codec_tag = 'c'<<24 | '5'<<16 | 'd'<<8 | 'x';
+            encoder->codec_context->mb_decision = FF_MB_DECISION_SIMPLE;
+            encoder->codec_context->scenechange_threshold = 1000000000;
+            break;
+
         default:
             break;
         }
@@ -514,18 +559,29 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init(MaterialResolution::EnumType res, 
 
         avcodec_set_dimensions(encoder->codec_context, width, height + encoder->padtop);
 
-        //encoder->codec_context->sample_aspect_ratio = av_d2q(16.0/9*576/720, 255); // {64, 45}
-        // Actually the active picture is less than 720 wide, the correct numbers appear below
-    #if 0
-        // 4:3
-        encoder->codec_context->sample_aspect_ratio.num = 59;
-        encoder->codec_context->sample_aspect_ratio.den = 54;
-    #else
-        // 16:9
-        encoder->codec_context->sample_aspect_ratio.num = 118;
-        encoder->codec_context->sample_aspect_ratio.den = 81;
-    #endif
-        // Need to set sample aspect ratio depending on raster
+
+        if (MaterialResolution::DV100_MOV == res ||
+            MaterialResolution::XDCAMHD422_MOV == res)
+        {
+            encoder->codec_context->sample_aspect_ratio.num = 1;
+            encoder->codec_context->sample_aspect_ratio.den = 1;
+        }
+        else
+        {
+            //encoder->codec_context->sample_aspect_ratio = av_d2q(16.0/9*576/720, 255); // {64, 45}
+            // Actually the active picture is less than 720 wide, the correct numbers appear below
+        #if 0
+            // 4:3
+            encoder->codec_context->sample_aspect_ratio.num = 59;
+            encoder->codec_context->sample_aspect_ratio.den = 54;
+        #else
+            // 16:9
+            encoder->codec_context->sample_aspect_ratio.num = 118;
+            encoder->codec_context->sample_aspect_ratio.den = 81;
+        #endif
+            // Need to set sample aspect ratio depending on raster
+        }
+
 
         /* prepare codec */
         if (avcodec_open(encoder->codec_context, encoder->codec) < 0)

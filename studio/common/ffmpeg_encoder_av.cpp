@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder_av.cpp,v 1.1 2010/06/02 10:38:05 john_f Exp $
+ * $Id: ffmpeg_encoder_av.cpp,v 1.2 2010/06/25 14:23:59 philipn Exp $
  *
  * Encode AV and write to file.
  *
@@ -100,6 +100,104 @@ typedef struct
     struct SwsContext * scale_context;
     int scale_image;
 } internal_ffmpeg_encoder_t;
+
+static int init_video_xdcam(internal_ffmpeg_encoder_t * enc)
+{
+   AVCodecContext * codec_context;
+
+    codec_context = enc->video_st->codec;
+    codec_context->codec_id = CODEC_ID_MPEG2VIDEO;
+    codec_context->codec_type = CODEC_TYPE_VIDEO;
+   
+    enc->video_st->r_frame_rate.num = 25;
+    enc->video_st->r_frame_rate.den = 1;
+
+    codec_context->time_base.num=1;
+    codec_context->time_base.den=25;
+
+    int width = 1920;
+    int height = 1080;
+  
+
+    codec_context->gop_size = 12;
+#if defined(FFMPEG_NONLINEAR_PATCH)
+    // non-linear quantization is implemented, except for qscale 1 which could cause an integer overflow
+    // in the quantization process for large DCT coefficients
+    codec_context->qmin = 2;
+    codec_context->qmax = 31;
+#else
+#warning "Using FFmpeg without MPEG non-linear quantization patch"
+    codec_context->qmin = 1;
+    codec_context->qmax = 12;
+#endif
+    codec_context->me_method = 5; // (epzs)
+    codec_context->width = width;
+    codec_context->height = height;
+    codec_context->flags |= CODEC_FLAG_INTERLACED_DCT;
+   // codec_context->flags |= CODEC_FLAG_CLOSED_GOP; //No need for closed GOP in non MXF/XDCAM
+    codec_context->flags2 |= CODEC_FLAG2_NON_LINEAR_QUANT;
+    codec_context->flags2 |= CODEC_FLAG2_INTRA_VLC;
+    codec_context->rc_max_available_vbv_use =1;
+    codec_context->rc_min_vbv_overflow_use = 1;
+    codec_context->lmin = 1 * FF_QP2LAMBDA;
+    codec_context->lmax = 3 * FF_QP2LAMBDA;
+    codec_context->max_b_frames =2;
+    codec_context->mb_decision = FF_MB_DECISION_SIMPLE;
+	codec_context->pix_fmt = PIX_FMT_YUV422P;
+	codec_context->bit_rate =50000000;
+	codec_context->rc_max_rate = 60000000;
+	codec_context->rc_min_rate = 0;
+	codec_context->rc_buffer_size = 50000000; 
+	codec_context->stream_codec_tag = ('c'<<24) + ('5'<<16) + ('d'<<8) + 'x';
+	
+
+   avcodec_set_dimensions(codec_context,width,height);
+
+ // some formats want stream headers to be seperate
+    if(!strcmp(enc->oc->oformat->name, "mp4")
+        || !strcmp(enc->oc->oformat->name, "mov")
+        || !strcmp(enc->oc->oformat->name, "3gp"))
+    {
+        codec_context->flags |= CODEC_FLAG_GLOBAL_HEADER;
+    }
+
+/* find the video encoder */
+    AVCodec * codec = avcodec_find_encoder(codec_context->codec_id);
+    if (!codec)
+    {
+        fprintf(stderr, "video codec id=%d not found\n",
+            codec_context->codec_id);
+        return -1;
+    }
+
+    /* open the codec */
+    if (avcodec_open(codec_context, codec) < 0)
+    {
+        fprintf(stderr, "could not open video codec\n");
+        return -1;
+    }
+
+
+    /* allocate input video frame */
+    enc->inputFrame = avcodec_alloc_frame();
+    if (!enc->inputFrame)
+    {
+        fprintf(stderr, "Could not allocate input frame\n");
+        return 0;
+    }
+    enc->inputFrame->top_field_first = 1;
+
+    /* allocate output buffer */
+    enc->video_outbuf = NULL;
+    if (!(enc->oc->oformat->flags & AVFMT_RAWPICTURE))
+    {
+        enc->video_outbuf_size = (codec_context->bit_rate / 200)+2000000;
+        enc->video_outbuf = (uint8_t *)malloc(enc->video_outbuf_size);
+        }
+
+    return 0;
+
+}
 
 
 
@@ -645,6 +743,9 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, Mate
     case MaterialResolution::DV100_MOV:
         fmt_name = "mov";
         break;
+	case MaterialResolution::XDCAMHD422_MOV:
+        fmt_name = "mov";
+	break;
     default:
         break;
     }
@@ -722,10 +823,11 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, Mate
 
     /* Set aspect ratio for video stream */
     AVRational sar;
-    if (MaterialResolution::DV100_MOV == res)
+    if (MaterialResolution::DV100_MOV == res ||
+        MaterialResolution::XDCAMHD422_MOV == res)
     {
-        sar.num = 4;
-        sar.den = 3;
+        sar.num = 1;
+        sar.den = 1;
     }
     else if (wide_aspect)
     {
@@ -739,6 +841,7 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, Mate
         sar.num = 59;
         sar.den = 54;
     }
+
 #if 0
     // Bodge for FCP - no longer needed.
     // When writing track header in mov file, ffmpeg (see movenc.c) writes
@@ -772,6 +875,33 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, Mate
     enc->video_st->codec->time_base.num = 1;
     enc->video_st->codec->time_base.den = 25;
 
+
+ // Setup ffmpeg threads if specified
+    AVCodecContext * vcodec_context = enc->video_st->codec;
+    if (num_threads != 0) {
+        int threads = 0;
+        if (num_threads == THREADS_USE_BUILTIN_TUNING)
+        {
+            // select number of threaded based on picture size/codec type
+            if ((vcodec_context->width > 720)||(res==MaterialResolution::XDCAMHD422_MOV))
+            {
+                threads = 4;
+			
+            }
+        }
+        else
+        {
+            // use number of threads specified by function arg
+            threads = num_threads;
+        }
+        if (threads > 0)
+        {
+            avcodec_thread_init(vcodec_context, threads);
+            vcodec_context->thread_count= threads;
+        }
+    }
+
+
     /* Initialise video codec */
     switch (res)
     {
@@ -786,6 +916,9 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, Mate
     case MaterialResolution::DV100_MOV:
         init_video_dv(enc, res, start_tc);
         break;
+	case MaterialResolution::XDCAMHD422_MOV:
+		init_video_xdcam(enc);
+		break;
     default:
         break;
     }
@@ -820,6 +953,7 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, Mate
         case MaterialResolution::DV25_MOV:
         case MaterialResolution::DV50_MOV:
         case MaterialResolution::DV100_MOV:
+		case MaterialResolution::XDCAMHD422_MOV:
             init_audio_pcm(aenc);
             break;
         default:
@@ -833,29 +967,7 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, Mate
         aenc->audio_outbuf = (uint8_t *)av_malloc(aenc->audio_outbuf_size);
     }
 
-    // Setup ffmpeg threads if specified
-    AVCodecContext * vcodec_context = enc->video_st->codec;
-    if (num_threads != 0) {
-        int threads = 0;
-        if (num_threads == THREADS_USE_BUILTIN_TUNING)
-        {
-            // select number of threaded based on picture size
-            if (vcodec_context->width > 720)
-            {
-                threads = 4;
-            }
-        }
-        else
-        {
-            // use number of threads specified by function arg
-            threads = num_threads;
-        }
-        if (threads > 0)
-        {
-            avcodec_thread_init(vcodec_context, threads);
-            vcodec_context->thread_count= threads;
-        }
-    }
+   
 
     // Set separate stream header if format requires it.
     if (!strcmp(enc->oc->oformat->name, "mp4")

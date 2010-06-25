@@ -1,5 +1,5 @@
 /*
- * $Id: test_ffmpeg_encoder_av.cpp,v 1.1 2010/06/02 10:38:05 john_f Exp $
+ * $Id: test_ffmpeg_encoder_av.cpp,v 1.2 2010/06/25 14:23:59 philipn Exp $
  *
  * Test ffmpeg encoder av
  *
@@ -109,6 +109,7 @@ static int require_conversion(VideoFormat input_video_format, int input_width, i
         case MaterialResolution::DV50_MOV:
             return input_video_format != YUV422_VIDEO_FORMAT || input_width != 720 || input_height != 576;
         case MaterialResolution::DV100_MOV:
+        case MaterialResolution::XDCAMHD422_MOV:
             return input_video_format != YUV422_VIDEO_FORMAT || input_width != 1920 || input_height != 1080;
         default:
             return 0;
@@ -154,6 +155,7 @@ static void convert_video(struct SwsContext **convert_context,
             output_pix_fmt = PIX_FMT_YUV422P;
             break;
         case MaterialResolution::DV100_MOV:
+        case MaterialResolution::XDCAMHD422_MOV:
             output_pix_fmt = PIX_FMT_YUV422P;
             break;
         default:
@@ -180,9 +182,9 @@ static void usage(const char *cmd)
 {
     fprintf(stderr, "Usage: %s <<options>> <<inputs>> <av output>\n", cmd);
     fprintf(stderr, "Options:\n");
-    fprintf(stderr, "  --format <name>    Output format: DVD, MPEG4MOV, DV25MOV, DV50MOV, DV100MOV. Default is DV25MOV\n");
+    fprintf(stderr, "  --format <name>    Output format: DVD, MPEG4MOV, DV25MOV, DV50MOV, DV100MOV, XDCAMHDMOV. Default is DV25MOV\n");
     fprintf(stderr, "  --start <tc>       Start timecode; frame count or hh:mm:ss:ff. Default is 0\n");
-    fprintf(stderr, "  --size <WxH>       Picture dimensions. Default is 720x576, except DV100MOV which is 1920x1080\n");
+    fprintf(stderr, "  --size <WxH>       Picture dimensions. Default is 720x576, except DV100MOV and XDCAMHDMOV which are 1920x1080\n");
     fprintf(stderr, "  --notwide          4:3 aspect ratio. Default is wide aspect ratio 16:9\n");
     fprintf(stderr, "  --uyvy             Video input is UYVY 4:2:2. Default is YUV 4:2:0 planar\n");
     fprintf(stderr, "  --yuv422           Video input is YUV 4:2:2 planar. Default is YUV 4:2:0 planar\n");
@@ -246,6 +248,8 @@ int main(int argc, const char **argv)
                 output_format = MaterialResolution::DV50_MOV;
             } else if (strcmp(argv[cmdln_index + 1], "DV100MOV") == 0) {
                 output_format = MaterialResolution::DV100_MOV;
+            } else if (strcmp(argv[cmdln_index + 1], "XDCAMHDMOV") == 0) {
+                output_format = MaterialResolution::XDCAMHD422_MOV;
             } else {
                 usage(argv[0]);
                 fprintf(stderr, "Unknown format '%s'\n", argv[cmdln_index + 1]);
@@ -261,7 +265,7 @@ int main(int argc, const char **argv)
                 fprintf(stderr, "Missing argument for '%s'\n", argv[cmdln_index]);
                 return 1;
             }
-            if (sscanf(argv[cmdln_index + 1], "%d:%d:%d:%d", &hour, &min, &sec, &frame) != 4) {
+            if (sscanf(argv[cmdln_index + 1], "%d:%d:%d:%d", &hour, &min, &sec, &frame) == 4) {
                 start = hour * 60 * 60 * 25 + min * 60 * 25 + sec * 25 + frame;
             } else if (sscanf(argv[cmdln_index + 1], "%d", &start) != 1) {
                 usage(argv[0]);
@@ -403,6 +407,7 @@ int main(int argc, const char **argv)
                 input_height = 576;
                 break;
             case MaterialResolution::DV100_MOV:
+            case MaterialResolution::XDCAMHD422_MOV:
                 input_width = 1920;
                 input_height = 1080;
                 break;

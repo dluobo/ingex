@@ -13,7 +13,7 @@ static int usage(char *argv[])
     fprintf(stderr, "    -b n_frames    read one frame then loop n_frames\n");
     fprintf(stderr, "    -r <res>       encoder resolution (DV25,DV50,IMX30,IMX40,IMX50,\n");
     fprintf(stderr, "                   DNX36p,DNX120p,DNX185p,DNX120i,DNX185i,\n");
-    fprintf(stderr, "                   DV100_1080i50,DV100_720p50)\n");
+    fprintf(stderr, "                   DV100_1080i50,DV100_720p50,XDCAMHD)\n");
     return 1;
 }
 
@@ -109,6 +109,11 @@ extern int main(int argc, char *argv[])
             {
                 res = MaterialResolution::DV100_MXF_ATOM;
                 raster = Ingex::VideoRaster::SMPTE296_50P;
+            }
+            else if (strcmp(argv[n+1], "XDCAMHD") == 0)
+            {
+                res = MaterialResolution::XDCAMHD422_RAW;
+                raster = Ingex::VideoRaster::SMPTE274_25I;
             }
             n += 2;
             continue;
@@ -216,6 +221,11 @@ extern int main(int argc, char *argv[])
         {
             fprintf(stderr, "ffmpeg_encoder_encode() failed, frames_encoded = %d\n", frames_encoded);
             return(1);
+        }
+        else if (compressed_size == 0)
+        {
+            printf("ffmpeg_encoder_encode returned compressed size == 0\n");
+            continue;
         }
 
         if (! benchmark_encode)
