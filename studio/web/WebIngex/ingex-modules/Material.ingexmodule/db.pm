@@ -861,8 +861,7 @@ sub prepare_exttree_json
 							# the video track has the video format
 							if ($descriptor && $descriptor->{"VIDEO_RES"}) {
 								$materialRow{"video"} =
-								    $descriptor->{"FILE_FORMAT"} . ": "
-								  . $descriptor->{"VIDEO_RES"};
+								  $descriptor->{"VIDEO_RES"};
 								$materialRow{"vresid"} =
 								  $descriptor->{"VIDEO_RES_ID"};
 							}
