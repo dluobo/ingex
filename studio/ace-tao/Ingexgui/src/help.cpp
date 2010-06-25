@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: help.cpp,v 1.15 2010/06/02 13:09:25 john_f Exp $                *
+ *   $Id: help.cpp,v 1.16 2010/06/25 14:23:10 philipn Exp $                *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -172,6 +172,6 @@ AboutDlg::AboutDlg(wxWindow * parent)
 #ifdef DISABLE_SHARED_MEM_SOURCE
 	message += wxT("not ");
 #endif
-	message += wxT("included.  Please send feedback to matthewmarks@users.sourceforge.net.\n\nVersion $Id: help.cpp,v 1.15 2010/06/02 13:09:25 john_f Exp $\n\nCopyright (C) British Broadcasting Corporation 2006-2009 - All rights reserved.\n\n$Date: 2010/06/02 13:09:25 $.");
+	message += wxT("included.  Please send feedback to matthewmarks@users.sourceforge.net.\n\nVersion $Id: help.cpp,v 1.16 2010/06/25 14:23:10 philipn Exp $\n\nCopyright (C) British Broadcasting Corporation 2006-2009 - All rights reserved.\n\n$Date: 2010/06/25 14:23:10 $.");
 	textBox->SetValue(message);
 };
