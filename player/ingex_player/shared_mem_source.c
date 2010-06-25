@@ -1,5 +1,5 @@
 /*
- * $Id: shared_mem_source.c,v 1.13 2010/06/25 14:04:28 philipn Exp $
+ * $Id: shared_mem_source.c,v 1.14 2010/06/25 14:40:57 philipn Exp $
  *
  *
  *
@@ -230,25 +230,6 @@ static int rec_ring_timecode(SharedMemSource *source, int track, int lastFrame)
     }
 
     return nexus_tc(conn.pctl, conn.ring, source->channel, lastFrame, tc_type);
-}
-
-static void dvsaudio32_to_16bitmono(int channel, int num_samples, const uint8_t *buf32, uint8_t *buf16)
-{
-    int i;
-    // A DVS audio buffer contains a mix of two 32bits-per-sample channels
-    // Data for one sample pair is 8 bytes:
-    //  a0 a0 a0 a0  a1 a1 a1 a1
-
-    int channel_offset = 0;
-    if (channel == 1)
-        channel_offset = 4;
-
-    // Skip every other channel, copying 16 most significant bits of 32 bits
-    // from little-endian DVS format to little-endian 16bits
-    for (i = channel_offset; i < num_samples*4*2; i += 8) {
-        *buf16++ = buf32[i+2];
-        *buf16++ = buf32[i+3];
-    }
 }
 
 /* returns 0 when successfull, -2 if timed out, otherwise -1 */
