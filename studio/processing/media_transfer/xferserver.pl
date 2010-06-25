@@ -1,7 +1,7 @@
 #! /usr/bin/perl -w
 
 #/***************************************************************************
-# * $Id: xferserver.pl,v 1.14 2010/06/18 10:11:23 john_f Exp $             *
+# * $Id: xferserver.pl,v 1.15 2010/06/25 14:27:26 philipn Exp $             *
 # *                                                                         *
 # *   Copyright (C) 2008-2010 British Broadcasting Corporation              *
 # *   - all rights reserved.                                                *
@@ -39,7 +39,7 @@
 
 # Arguments after the client name and identifier should be supplied in groups of three: priority (a positive number), source path and destination path.  The script will attempt to copy all the files in all the path pairs at the highest priority (the smallest priority argument value) before moving on to the next, and so on.  (Offline files would normally be given higher priority [smaller argument value] than online files, because they are likely to be needed sooner and are smaller so will be copied more quickly.)  The script saves paths in file PATHS_FILE (unless overridden with the -a option) to allow copying to commence without client intervention when the script is (re)started.  When a client supplies paths, the copying cycle starts or restarts from the highest priority, letting any pending file copy finish first.  This minimises the delay in copying high-priority files without wasting any bandwidth by re-copying.
 
-# In each source directory, every file whose name begins with 8 digits and an underscore* and ends in ".mxf", ".mov" or ".xml" (case-insensitive) is examined.  If it does not exist in a subdirectory of the corresponding destination path, named after the first 8 digits of the filename*, it is copied using the COPY executable or curl (FTP mode), into <destination path>/<first 8 digits of filename>*/<DEST_INCOMING>, creating directories if necessary.  After a successful copy, the file is moved up one directory level.  This prevents anything looking at the destination directories from seeing partial files.  At the end of each copying cycle, the (empty) DEST_INCOMING subdirectories are removed.  (* If option -d is provided, 8-digit subdirectories are not used and files do not have to start with 8 digits and an underscore.)
+# In each source directory and any subdirectories whose names match SUBDIRS, every file whose name begins with 8 digits and an underscore* and ends in ".mxf", ".mov" or ".xml" (case-insensitive) is examined.  If it does not exist in a subdirectory of the corresponding destination path, named after the first 8 digits of the filename*, it is copied using the COPY executable or curl (FTP mode), into <destination path>/<first 8 digits of filename>*/<source subdirectory if present>/<DEST_INCOMING>, creating directories if necessary.  After a successful copy, the file is moved up one directory level.  This prevents anything looking at the destination directories from seeing partial files.  At the end of each copying cycle, the (empty) DEST_INCOMING subdirectories are removed.  (* If option -d is provided, 8-digit subdirectories are not used and files do not have to start with 8 digits and an underscore.)
 
 # If the file already exists in its final resting place, but is of a different length to the source file, a warning is issued and the destination file is renamed to allow copying without overwriting it.  (Copying is abandoned if there is already a file with the new name.)  If a file fails to copy, any partial file is deleted and no more files are copied from that source directory (because the order of copying must be maintained - see below).  Once a copy cycle has been successfully completed, the script sleeps until it receives further client connections.  If any files could not be copied, it re-awakes after RECHECK_INTERVAL to try again.
 # Because the script creates all required destination directories, it is recommended that mount points are made non-writeable so that non-mounted drives are detected rather than destination directories being created at, and data being copied to, the mount point, which may fill up a system drive.
@@ -47,7 +47,7 @@
 # For each priority, the files to copy are sorted by decreasing age as indicated by ctime, making sure that all files with the latest detected ctime have been accounted for.  Before copying a file, the amount of free space is checked to make sure it is likely to fit (unless in FTP mode), and further copying from this source directory is abandoned (until retry) if it doesn't: this avoids wasting time repeatedly copying large files that won't succeed.  When copying of the last file with a particular ctime in a particular source directory is completed, this ctime is written to the configuration file, and any files older than this are subsequently ignored.  This allows files to be removed from the destination without them being copied again if they remain on the source.  (ctime is used rather than mtime, because it indicates the time the source file was made visible by moving it into the source directory, therefore making it impossible for older files, which would never be copied, to appear subsequently.)
 # There must not be more than one destination path for any source path (or the most recent destination path will apply).  When a path pair is supplied, an existing pair with the same source at another priority will be removed.  There is no way to remove path pairs automatically - these must be removed from PATHS_FILE while the script is not running.
 
-# PATHS_FILE is normally automatically handled but for completeness its format is explained here.  It contains fields separated by newlines.  Each group of fields consists of a priority value (indicated by having a leading space), followed by one or more triplets of source directory, destination directory and ctime value.  Any files in the corresponding source directory with a ctime of this value or less will not be copied.  (The -c option causes these values to be set to zero when the file is first read, but updated values will be written to the file even if nothing is copied.)  An exception is the priority 1 section, which contains the extra directory name immediately after the priority value (may be blank) and an extra ctime value for this extra directory, after each normal ctime value.
+# PATHS_FILE is normally automatically handled but for completeness its format is explained here.  It contains fields separated by newlines.  Each group of fields consists of a priority value (indicated by having a leading space), followed by one or more triplets of source directory, destination directory and ctime value.  Any files in the corresponding source directory with a ctime of this value or less will not be copied.  (The -c option causes these values to be set to zero when the file is first read, but updated values will be written to the file even if nothing is copied.)  The exception is the priority 1 section, which contains the extra directory name immediately after the priority value (may be blank) and an extra ctime value for this extra directory, after each normal ctime value.
 
 # If option -e or -g is supplied, the path specified with it forms an additional destination for all files at priority '1'.  This is intended for use with a portable drive onto which to copy offline rushes (and operates in the same way whether using FTP mode or not).  With option -e, each source file will be copied to the extra destination first; with option -g, they are all copied to the extra destination first. 
 
@@ -62,7 +62,7 @@ use IO::Socket;
 use IO::Select;
 use IO::File;
 use Getopt::Std;
-our $VERSION = '$Revision: 1.14 $'; #used by Getopt in the case of --version or --help
+our $VERSION = '$Revision: 1.15 $'; #used by Getopt in the case of --version or --help
 $VERSION =~ s/\s*\$Revision:\s*//;
 $VERSION =~ s/\s*\$\s*$//;
 $Getopt::Std::STANDARD_HELP_VERSION = 1; #so it stops after version message
@@ -82,10 +82,11 @@ use constant DELETE_THRESHOLD => 90; #disk must be at least this full (%) for de
 use constant PERMISSIONS => '0775'; #for directory creation
 #use constant COPY => '/home/ingex/bin/cpfs'; #for copying at different speeds
 use constant COPY => './cpfs'; #for copying at different speeds
-use constant SLOW_LIMIT => 2000;  #bandwidth limit kByte/s as supplied to COPY
+use constant SLOW_LIMIT => 10000;  #bandwidth limit kByte/s as supplied to COPY
 use constant FAST_LIMIT => 50000; #bandwidth limit kByte/s as supplied to COPY (0 = unlimited)
 use constant RECHECK_INTERVAL => 10; #time (seconds) between rechecks if something failed
 use constant PATHS_FILE => 'paths'; #name of file the script generates to save copying details for automatic resumption of copying after restarting
+use constant SUBDIRS => qw(xml); #list of subdirectories of each source directory to scan if found (can be empty); equivalent subdirectories are generated at the destination
 
 use constant FTP_ROOT => '';
 use constant FTP_SPEED => '20'; #Mbits/sec
@@ -95,7 +96,7 @@ use constant WARNING_COLOUR => 'red'; #for messages reporting warnings
 use constant MAIN_COPY_COLOUR => 'green'; #for messages reporting copying progress to main destination
 use constant EXTRA_COPY_COLOUR => 'blue'; #for messages reporting copying progress to extra destination
 use constant CLIENT_COLOUR => 'cyan'; #for messages reporting client connections
-use constant RETRY_COLOUR => 'red blink'; #for the retrying message (which sits on the screen for some time)
+use constant RETRY_COLOUR => 'red'; #for the retrying message (which sits on the screen for some time)
 use constant ABORT_COLOUR => 'on_bright_red'; #for the aborting message (which may sit on the screen for some time)
 use constant TC_COLOUR => 'on_yellow'; #for traffic control on/off messages
 
@@ -471,7 +472,7 @@ sub SaveConfig { #should be locked before doing this to prevent concurrent file 
 			print $config "$transfers->{extraDest}\n" if 1 == $priority;
 			my %sources = %{ $transfers->{transfers}{$priority} };
 			foreach (sort keys %sources) {
-				print $config "$_\n$sources{$_}{dest}\n$sources{$_}{ctimeCleared}\n";
+				print $config "$_\n$sources{$_}{dest}\n$sources{$_}{normalCtimeCleared}\n";
 				print $config "$sources{$_}{extraCtimeCleared}\n" if 1 == $priority;
 			}
  		}
@@ -540,7 +541,7 @@ sub addPair {
  #store details
  foreach (keys %{$transfers->{transfers}}) {
 	if (exists $transfers->{transfers}{$_}{$source}) {
-		$ctimeCleared = $transfers->{transfers}{$_}{$source}{ctimeCleared} unless defined $ctimeCleared; #if this is a different priority then the ctimeCleared value is still valid
+		$ctimeCleared = $transfers->{transfers}{$_}{$source}{normalCtimeCleared} unless defined $ctimeCleared; #if this is a different priority then the ctimeCleared value is still valid
 		$extraCtimeCleared = $transfers->{transfers}{$_}{$source}{extraCtimeCleared} if exists $transfers->{transfers}{$_}{$source}{extraCtimeCleared} && !defined $extraCtimeCleared; #if this is a different priority then the ctimeCleared value is still valid
 		delete $transfers->{transfers}{$_}{$source}; #may be putting this straight back again!
 		last; #shouldn't be more than one!
@@ -550,11 +551,11 @@ sub addPair {
  $transfers->{extraDest} = ($opts{e} ? $opts{e} : '') if 1 == $priority;
  $transfers->{transfers}{$priority}{$source}{stale} = STALE;
  if (defined $ctimeCleared) {
- 	$transfers->{transfers}{$priority}{$source}{ctimeCleared} = $ctimeCleared;
+ 	$transfers->{transfers}{$priority}{$source}{normalCtimeCleared} = $ctimeCleared;
  	$transfers->{transfers}{$priority}{$source}{extraCtimeCleared} = $extraCtimeCleared if 1 == $priority;
  }
  else {
- 	$transfers->{transfers}{$priority}{$source}{ctimeCleared} = 0; #copy everything from the epoch onwards
+ 	$transfers->{transfers}{$priority}{$source}{normalCtimeCleared} = 0; #copy everything from the epoch onwards
  	$transfers->{transfers}{$priority}{$source}{extraCtimeCleared} = 0 if 1 == $priority;
  }
  #tell the copying thread
@@ -568,144 +569,169 @@ sub addPair {
 }
 
 # scan a source/destination directory pair, make a list of files that need to be copied, and delete unneeded source files
-sub Scan {
- my ($handle, $srcDir, $normalDestRoot, $ctimeCleared, $share, $extraDestRoot, $extraCtimeCleared, $ftpFileList) = @_;
- my ($totalFiles, $totalToCopy, $extraTotalToCopy, $totalNormalSize, $totalExtraSize, $latestCtime) = (0, 0, 0, 0, 0, 0);
- my (@essenceFiles, @extraEssenceFiles);
- my ($ftpOk, $ok, $extraOk) = (1, 1, defined $extraDestRoot);
- my @files = sort readdir $handle; #sorting useful for verbose option
- while (@files && ($ok || $extraOk)) {
-	my $srcName = shift @files;
-	my $fullSource = "$srcDir/$srcName";
-	if (-d $fullSource) {
-		Report("d  $srcName\n", 0, $share) if $opts{v} && $srcName !~ /^\.\.?$/;
-		next;
-	}
-	#generate temp dest path
-	my ($normalDestDir, $extraDestDir);
-	if ($opts{d}) { #don't use subdirectories
-		if ($srcName =~ /\.[mM][xX][fF]$/ || $srcName =~ /\.[mM][oO][vV]$/  || $srcName =~ /\.[xX][mM][lL]$/) {
-			$normalDestDir = $normalDestRoot;
-			$extraDestDir = $extraDestRoot if defined $extraDestRoot;
+# $srcRoot: root of source directory to scan
+# $subDir: subdir of source directory to scan (or empty string)
+# $normalDestRoot: path of main destination directory (excluding any subdirectories, if used)
+# $ctimeCleared: stage copying has reached in increasing order of ctime value
+# $share: shared memory object
+# $extraDestRoot, $extraCtimeCleared: optional equivalents for $normalDestRoot and $ctimeCleared if copying to extra destination
+# $ftpFileList: optional reference to hash cache of details of files on FTP server
+
+sub ScanDir {
+ my ($srcRoot, $subDir, $normalDestRoot, $normalCtimeCleared, $share, $extraDestRoot, $extraCtimeCleared, $ftpFileList) = @_;
+ my ($normalOK, $extraOK) = (0, 0);
+ my ($totalSrcFiles, $latestCtime, $totalNormalToCopy, $totalExtraToCopy, $totalNormalSize, $totalExtraSize) = (0, 0, 0, 0, 0, 0);
+ my (@normalFiles, @extraFiles);
+ my ($normalDestPath, $extraDestPath);
+ my $srcPath = $subDir ? "$srcRoot/$subDir" : $srcRoot;
+ if (opendir(SRC, $srcPath)) {
+	($normalOK, $extraOK) = (1, defined $extraDestRoot);
+	my $ftpOK = 1;
+	my $loop = 0;
+	do { #loop to make sure we get all the files with the latest ctime we find
+		my $scanTime = time;
+		my @fileNames = sort readdir SRC; #sorting useful for verbose option
+		while (@fileNames && ($normalOK || $extraOK)) {
+			my $srcName = shift @fileNames;
+			my $fullSource = "$srcPath/$srcName";
+			if (-d $fullSource) {
+				Report("d  $srcName\n", 0, $share) if $opts{v} && $srcName !~ /^\.\.?$/;
+				next;
+			}
+			#check filename and generate temp dest path
+			if ($opts{d}) { #don't use date subdirectories
+				if ($srcName =~ /\.[mM][xX][fF]$/ || $srcName =~ /\.[mM][oO][vV]$/  || $srcName =~ /\.[xX][mM][lL]$/) {
+					$normalDestPath = $subDir ? "$normalDestRoot/$subDir" : $normalDestRoot;
+					$extraDestPath = $subDir ? "$extraDestRoot/$subDir" : $extraDestRoot if defined $extraDestRoot;
+				}
+				else {
+					Report("- $srcName\n", 0, $share) if $opts{v} && $srcName !~ /^\.\.?$/;
+					next;
+				}
+			}
+			else {
+				if ($srcName =~ /^(\d{8})_.*\.[mM][xX][fF]$/ || $srcName =~ /^(\d{8})_.*\.[mM][oO][vV]$/ || $srcName =~ /^(\d{8})_.*\.[xX][mM][lL]$/) {
+					$normalDestPath = $subDir ? "$normalDestRoot/$1/$subDir" : "$normalDestRoot/$1";
+					$extraDestPath = $subDir ? "$extraDestRoot/$1/$subDir" : "$extraDestRoot/$1" if defined $extraDestRoot;
+				}
+				else {
+					Report("-  $srcName\n", 0, $share) if $opts{v} && $srcName !~ /^\.\.?$/;
+					next;
+				}
+			}
+			$totalSrcFiles++;
+			#get info about the file
+			#Use ctime to test for files to be ignored that have been copied already.
+			#This is because ctime is updated when the completed files are atomically moved to the source directories,
+			#so we can guarantee that files with an earlier ctime won't appear after we've copied everything up to a certain ctime,
+			#which could otherwise result in files not being copied.
+			#Use mtime to test for deleting old files, because age of file since creation/modification is what is important.
+			my ($dev, $size, $mtime, $ctime) = (stat $fullSource)[0, 7, 9, 10];
+			unless ($dev) { #if lstat fails then it returns a null list
+				Report("WARNING: failed to stat '$fullSource': $!: abandoning this directory for this copying cycle\n", 0, $share, WARNING_COLOUR);
+				$normalOK = 0;
+				$extraOK = 0;
+				last;
+			}
+			unless ($size) {
+				Report("WARNING: '$fullSource' has zero length: ignoring\n", 0, $share, WARNING_COLOUR); #if the file later acquires length, its ctime will be updated, so useful content won't be deleted without copying
+				next;
+			}
+			$latestCtime = $ctime if $ctime > $latestCtime;
+			#check for existing copies and generate copy details
+			(my $altName = $srcName) =~ s/(.*)(\.[^.]+)/$1_dup$2/; #will always succeed due to check above
+			my $copied = $ctime <= $normalCtimeCleared; #already copied if ctime indicates it
+			my @checkDest;
+			if ($ftpOK) {
+				@checkDest = CheckDest($srcPath, $normalDestPath, $srcName, $size, $altName, $share, $ftpFileList); #even if this dir has been abandoned, still check for a copy to see if we can delete the source file
+				$ftpOK = $checkDest[1]; #will always be 1 if not using FTP
+			}
+			else {
+				#don't make repeated FTP attempts as it can get very slow...
+				@checkDest = (0, 0, 0);
+			}
+			$normalOK &= $checkDest[1];
+			Report(($copied ? 'c' : ' ') . ($checkDest[2] ? 's' : ' ') . " $srcName\n", 0, $share) if $opts{v};
+			$copied |= $checkDest[2];
+			if ($normalOK & !$copied) {
+				push @normalFiles, {
+					name => $srcName,
+					srcDir => $srcPath,
+					destDir => $normalDestPath,
+					mtime => $mtime,
+					ctime => $ctime,
+					size => $size,
+					extra => 0,
+				};
+				$totalNormalToCopy++;
+				$totalNormalSize += $size;
+			}
+			my $extraCopied = 1; #default if no extra destination
+			if (defined $extraDestPath) {
+				$extraCopied = $ctime <= $extraCtimeCleared; #already copied if ctime indicates it
+				@checkDest = CheckDest($srcPath, $extraDestPath, $srcName, $size, $altName, $share); #never use ftp; even if this dir has been abandoned, still check for a copy to see if we can delete the source file
+				$extraOK &= $checkDest[1];
+				Report(($extraCopied ? 'c' : ' ') . ($checkDest[2] ? 's' : ' ') . " $srcName (extra)\n", 0, $share) if $opts{v};
+				$extraCopied |= $checkDest[2];
+				if ($extraOK & !$extraCopied) {
+					push @extraFiles, {
+						name => $srcName,
+						srcDir => $srcPath,
+						destDir => $extraDestPath,
+						mtime => $mtime,
+						ctime => $ctime,
+						size => $size,
+						extra => 1,
+					};
+					$totalExtraToCopy++;
+					$totalExtraSize += $size;
+				}
+			}
+			#delete source file if redundant
+			if ($copied
+			&& $extraCopied
+			&& time > $mtime + KEEP_PERIOD
+			&& dfportable($srcPath)->{per} >= DELETE_THRESHOLD) {
+				if ($opts{p}) {
+					Report("Would delete old file '$fullSource' if not prevented by command-line option, as aleady copied and disk is " . dfportable($srcPath)->{per} . "% full.\n", 0, $share);
+				}
+				else {
+					Report("Removing old file '$fullSource', as already copied and disk is " . dfportable($srcPath)->{per} . "% full.\n", 0, $share);
+					unlink $fullSource or Report("WARNING: could not remove '$fullSource': $!\n", 0, $share, WARNING_COLOUR);
+				}
+			}
 		}
-		else {
-			Report("- $srcName\n", 0, $share) if $opts{v} && $srcName !~ /^\.\.?$/;
-			next;
+		$loop = ($normalOK || $extraOK) && $latestCtime >= $scanTime; #if we find files with the same or later ctime as when (just before) the scan started, scan again in case more files have appeared with the same ctime as the latest found
+ 		if (!$normalOK || $loop) {
+ 			@normalFiles = ();
+			$totalNormalToCopy = 0;
+			$totalNormalSize = 0;
 		}
-	}
-	else {
-		if ($srcName =~ /^(\d{8})_.*\.[mM][xX][fF]$/ || $srcName =~ /^(\d{8})_.*\.[mM][oO][vV]$/ || $srcName =~ /^(\d{8})_.*\.[xX][mM][lL]$/) {
-			$normalDestDir = "$normalDestRoot/$1";
-			$extraDestDir = "$extraDestRoot/$1" if defined $extraDestRoot;
+		if (!$extraOK || $loop) {
+ 			@extraFiles = ();
+			$totalExtraToCopy = 0;
+			$totalExtraSize = 0;
 		}
-		else {
-			Report("-  $srcName\n", 0, $share) if $opts{v} && $srcName !~ /^\.\.?$/;
-			next;
+		if ($loop) {
+			$totalSrcFiles = 0;
+			$latestCtime = 0;
+			rewinddir SRC;
+			sleep 1; #delay the retry to prevent a possible deluge of scans
 		}
-	}
-	$totalFiles++;
-	#get info about the file
-	#Use ctime to test for files to be ignored that have been copied already.
-	#This is because ctime is updated when the completed files are atomically moved to the source directories,
-	#so we can guarantee that files with an earlier ctime won't appear after we've copied everything up to a certain ctime,
-	#which could otherwise result in files not being copied.
-	#Use mtime to test for deleting old files, because age of file since creation/modification is what is important.
-	my ($dev, $size, $mtime, $ctime) = (stat $fullSource)[0, 7, 9, 10];
-	unless ($dev) { #if lstat fails then it returns a null list
-		Report("WARNING: failed to stat '$fullSource': $!: abandoning this directory for this copying cycle\n", 0, $share, WARNING_COLOUR);
-		$ok = 0;
-		$extraOk = 0;
-		last;
-	}
-	unless ($size) {
-		Report("WARNING: '$fullSource' has zero length: ignoring\n", 0, $share, WARNING_COLOUR); #if the file later acquires length, its ctime will be updated, so useful content won't be deleted without copying
-		next;
-	}
-	$latestCtime = $ctime if $ctime > $latestCtime;
-	#check for existing copies and generate copy details
-	(my $altName = $srcName) =~ s/(.*)(\.[^.]+)/$1_dup$2/; #will always succeed due to check above
-	my $copied = $ctime <= $ctimeCleared; #already copied if ctime indicates it
-	my @checkDest;
-	if ($ftpOk) {
-		@checkDest = CheckDest($srcDir, $normalDestDir, $srcName, $size, $altName, $share, $ftpFileList); #even if this dir has been abandoned, still check for a copy to see if we can delete the source file
-		$ftpOk = $checkDest[1]; #will always be 1 if not using FTP
-	}
-	else {
-		#don't make repeated FTP attempts as it can get very slow...
-		@checkDest = (0, 0, 0);
-	}
-	$ok &= $checkDest[1];
-	Report(($copied ? 'c' : ' ') . ($checkDest[2] ? 's' : ' ') . " $srcName\n", 0, $share) if $opts{v};
-	$copied |= $checkDest[2];
-	if ($ok & !$copied) {
-		push @essenceFiles, {
-			name => $srcName,
-			srcDir => $srcDir,
-			destDir => $normalDestDir,
-			mtime => $mtime,
-			ctime => $ctime,
-			size => $size,
-			extra => 0,
-		};
-		$totalToCopy++;
-		$totalNormalSize += $size;
-	}
-	my $extraCopied = 1; #default if no extra destination
-	if (defined $extraDestDir) {
-		$extraCopied = $ctime <= $extraCtimeCleared; #already copied if ctime indicates it
-		@checkDest = CheckDest($srcDir, $extraDestDir, $srcName, $size, $altName, $share); #never use ftp; even if this dir has been abandoned, still check for a copy to see if we can delete the source file
-		$extraOk &= $checkDest[1];
-		Report(($extraCopied ? 'c' : ' ') . ($checkDest[2] ? 's' : ' ') . " $srcName (extra)\n", 0, $share) if $opts{v};
-		$extraCopied |= $checkDest[2];
-		if ($extraOk & !$extraCopied) {
-			push @extraEssenceFiles, {
-				name => $srcName,
-				srcDir => $srcDir,
-				destDir => $extraDestDir,
-				mtime => $mtime,
-				ctime => $ctime,
-				size => $size,
-				extra => 1,
-			};
-			$extraTotalToCopy++;
-			$totalExtraSize += $size;
-		}
-	}
-	#delete source file if redundant
-	if ($copied
-	 && $extraCopied
-	 && time > $mtime + KEEP_PERIOD
-	 && dfportable($srcDir)->{per} >= DELETE_THRESHOLD) {
-		if ($opts{p}) {
-			Report("Would delete old file '$fullSource' if not prevented by command-line option, as aleady copied and disk is " . dfportable($srcDir)->{per} . "% full.\n", 0, $share);
-		}
-		else {
-			Report("Removing old file '$fullSource', as already copied and disk is " . dfportable($srcDir)->{per} . "% full.\n", 0, $share);
-			unlink $fullSource or Report("WARNING: could not remove '$fullSource': $!\n", 0, $share, WARNING_COLOUR);
-		}
-	}
+		elsif ($normalOK || $extraOK) {
+			if ($totalSrcFiles) {
+				Report("Directory contains $totalSrcFiles recognised file" . (1 == $totalSrcFiles ? '' : 's') . ".\n", 0, $share);
+				Report("$totalNormalToCopy will be copied ($totalNormalSize bytes) to '$normalDestPath/'.\n", 0, $share) if $normalOK;
+				Report("$totalExtraToCopy will be copied ($totalExtraSize bytes) to extra destination '$extraDestPath/'.\n", 0, $share) if $extraOK;
+			}
+			else {
+				Report("Directory contains no recognised files.\n", 0, $share);
+			}
+ 		}
+	} while $loop;
+	closedir(SRC);
  }
- unless ($ok) {
- 	@essenceFiles = ();
-	$totalToCopy = 0;
-	$totalNormalSize = 0;
- }
- unless ($extraOk) {
- 	@extraEssenceFiles = ();
-	$extraTotalToCopy = 0;
-	$totalExtraSize = 0;
- }
- if ($ok || $extraOk) {
-	if ($totalFiles) {
-		Report("Directory contains $totalFiles recognised file" . (1 == $totalFiles ? '' : 's') . ".\n", 0, $share);
-		Report("$totalToCopy will be copied ($totalNormalSize bytes) to '$normalDestRoot/'.\n", 0, $share) if $ok;
-		Report("$extraTotalToCopy will be copied ($totalExtraSize bytes) to extra destination '$extraDestRoot/'.\n", 0, $share) if $extraOk;
-	}
-	else {
-		Report("Directory contains no recognised files.\n", 0, $share);
-	}
- }
- return $ok, $extraOk, $latestCtime, $totalToCopy, $extraTotalToCopy, $totalNormalSize, $totalExtraSize, @essenceFiles, @extraEssenceFiles; #arrays will be concatenated
+ return $normalOK, $extraOK, $latestCtime, $totalNormalToCopy, $totalExtraToCopy, $totalNormalSize, $totalExtraSize, @normalFiles, @extraFiles; #arrays will be concatenated
 }
 
 #Checks to see if a destination file already exists; if so and it's the same size, indicate that it's already copied; if not the same size, try to move it out of the way by renaming
@@ -781,102 +807,115 @@ sub childLoop {
  $SIG{USR1} = 'IGNORE';
  $SIG{USR2} = 'IGNORE';
  local $| = 1; #autoflush stdout
-
- my $retry = 0;
+ my $retry = 0; #if a problem occurs, this is set to 1 to cause a retry after a pause
  while (1) { #share unlocked at this point
 	#wait for main thread or retry interval
 	my $rin = "";
 	vec($rin, fileno(STDIN), 1) = 1;
-	if (!select $rin, undef, $rin, $retry ? RECHECK_INTERVAL : undef) { #timed out
+	if (!select $rin, undef, $rin, $retry ? RECHECK_INTERVAL : undef) { #timed out (only if retrying)
 		Report("Retrying...\n", 0, $share);
 		$share->lock(LOCK_EX);
 	}
 	else { #kicked by the main thread
 		$share->lock(LOCK_EX) unless $terminate; #do this now to keep STDIN in sync with staleFrom to avoid unnecessary scans; condition prevents a hang on interrupt
-		<STDIN>;
+		my $dummy;
+		sysread STDIN, $dummy, 1; #take the kick! (not supposed to mix buffered read with select or <STDIN> would work here)
 	}
+	$retry = 0;
+	my $interrupting = 0; #this is set to 1 if the normal sequence of copies needs to be interrupted because the script has been told that a higher priority pair needs to be scanned
 	my $transfers = thaw($share->fetch);
 	delete $transfers->{staleFrom}; #checking started
 	my @priorities = sort keys %{ $transfers->{transfers} };
 	my $priority;
-	#change all stale source dirs to PROCESSING so we can determine where new files arrive while copying
+	#change all stale source dirs to PROCESSING so we can determine where new files arrive while copying (by status being changed to STALE again by main thread)
 	foreach $priority (@priorities) {
 		foreach (keys %{ $transfers->{transfers}{$priority} }) {
 			$transfers->{transfers}{$priority}{$_}{stale} = PROCESSING unless UP_TO_DATE == $transfers->{transfers}{$priority}{$_}{stale};
 		}
 	}
-	$retry = 0;
-	my $interrupting = 0;
 	my %incomingDirs; #paths of temporary incoming directories, so they can be deleted on completion
 	my %ftpFileList; #file names and sizes on server if using FTP, to avoid repeated FTP calls
 	Report("Verbose mode. c: ctime cleared; s: on server; d: directory; -: unrecognised\n", 1, $transfers) if $opts{v};
-	foreach my $priority (@priorities) { #NB share locked at this point
-		last if $interrupting;
+	PRIORITY: foreach my $priority (@priorities) { #NB share locked at this point
 		$share->store(freeze $transfers);
 		$share->unlock;
 		my %pairs = %{ $transfers->{transfers}{$priority} };
-		my @essenceFiles;
-		my ($totalNormalFiles, $totalNormalSize, $totalExtraFiles, $totalExtraSize) = (0, 0, 0, 0);
+		my @priEssenceFiles;
+		my ($priNormalFiles, $priNormalSize, $priExtraFiles, $priExtraSize) = (0, 0, 0, 0);
 		#make a list of all the files to copy at this priority
-		foreach (sort keys %pairs) {
-			next unless PROCESSING == $pairs{$_}{stale}; #no point in scanning if not stale
-
-			#generate an array of files that need to be copied
-			if (!opendir(SRC, $_)) {
-				Report("WARNING: failed to open source directory '$_/': $!\n", 0, $share, WARNING_COLOUR);
-				$retry = 1;
-				next;
-			}
-			my @scan;
-			my $scanTime;
-			my $extra = 1 == $priority && '' ne $transfers->{extraDest};
-			my $loop;
-			do { #loop to make sure we get all the files with the latest ctime we find
-				$scanTime = time;
-				Report("Priority $priority: scanning '$_/'...\n", 0, $share);
-				@scan = Scan(*SRC, $_, $pairs{$_}{dest}, $pairs{$_}{ctimeCleared}, $share, $extra ? $transfers->{extraDest} : undef, $pairs{$_}{extraCtimeCleared}, \%ftpFileList); #enable extra destination if at priority 1 and it is supplied
-				$loop = ($scan[0] || $scan[1]) && $scan[2] >= $scanTime; #if we find files with the same or later ctime as when (just before) the scan started, scan again in case more files have appeared with the same ctime as the latest found
-				if ($loop) {
-					rewinddir SRC;
-					sleep 1; #delay the retry to prevent a possible deluge of scans
+		foreach my $srcPath (sort keys %pairs) {
+			next unless PROCESSING == $pairs{$srcPath}{stale}; #no point in scanning if not stale
+			#generate an array of files that need to be copied, from this destination and any recognised subdirectories (treated as one list of files)
+			my ($pairNormalToCopy, $pairExtraToCopy, $pairNormalSize, $pairExtraSize, $pairLatestCtime) = (0, 0, 0, 0, 0);
+			my @pairEssenceFiles;
+			my $extra = 1 == $priority && '' ne $transfers->{extraDest}; #true if using extra destination directory for this pair
+			my $subdirIndex = 0; #steps through predefined list of possible subdirectories
+			Report("Priority $priority: scanning '$srcPath/'...\n", 0, $share);
+			my ($normalOK, #list of transfers to normal destination directory was created ok
+			  $extraOK, #list of transfers to extra destination directory was created ok
+			  $latestCtime, #age of youngest recognised source file found
+			  $normalToCopy, #number of files to copy to normal destination
+			  $extraToCopy, #number of files to copy to extra destination
+			  $normalSize, #number of bytes to copy to normal destination
+			  $extraSize, #number of bytes to copy to extra destination
+			  @essenceFiles) #array of hashes of transfer details
+			 = ScanDir($srcPath, '', $pairs{$srcPath}{dest}, $pairs{$srcPath}{normalCtimeCleared}, $share, $extra ? $transfers->{extraDest} : undef, $pairs{$srcPath}{extraCtimeCleared}, \%ftpFileList); #the main directory
+			while (1) {
+				#check scan
+				if (!$normalOK || ($extra && !$extraOK)) {
+					$retry = 1;
+					last; #abandon whole pair as common ctime value for main and subdirectories
 				}
-			} while $loop;
-			closedir(SRC);
-			$retry |= !$scan[0] || !($scan[1] || !$extra);
-			#update stale status and saved ctimeCleared values if they won't be updated anyway
-			#- this prevents scans of up-to-date directories
+				#update aggregate values
+				$pairLatestCtime = $latestCtime if $latestCtime > $pairLatestCtime;
+				$pairNormalToCopy += $normalToCopy;
+				$pairExtraToCopy += $extraToCopy;
+				$pairNormalSize += $normalSize;
+				$pairExtraSize += $extraSize;
+				push @pairEssenceFiles, @essenceFiles;
+				#find a/next subdirectory to scan
+				while (SUBDIRS && defined ((SUBDIRS)[$subdirIndex]) && !-d "$srcPath/" . (SUBDIRS)[$subdirIndex]) {
+					$subdirIndex++; #skip subdirectory that doesn't exist
+				}
+				last unless SUBDIRS && defined ((SUBDIRS)[$subdirIndex]);
+				Report("Scanning subdir '" . (SUBDIRS)[$subdirIndex] . "/'...\n", 0, $share);
+				($normalOK, $extraOK, $latestCtime, $normalToCopy, $extraToCopy, $normalSize, $extraSize, @essenceFiles)
+				 = ScanDir($srcPath, (SUBDIRS)[$subdirIndex], $pairs{$srcPath}{dest}, $pairs{$srcPath}{normalCtimeCleared}, $share, $extra ? $transfers->{extraDest} : undef, $pairs{$srcPath}{extraCtimeCleared}, \%ftpFileList) if -d "$srcPath/" . (SUBDIRS)[$subdirIndex];
+				$subdirIndex++;
+			}
+			#update stale status and saved ctimeCleared values if they won't be updated anyway by copying, to prevent scans of up-to-date directories
 			my $locked = 0;
-			if ($scan[0] && ($scan[1] || !$extra) && !$scan[5]) { #up to date
+			if ($normalOK && ($extraOK || !$extra) && !@pairEssenceFiles) { #up to date
 				$share->lock(LOCK_EX);
 				$transfers = thaw($share->fetch);
 				$locked = 1;
-				if (exists $transfers->{transfers}{$priority}{$_} #make sure config hasn't changed
-				 && PROCESSING == $transfers->{transfers}{$priority}{$_}{stale}) { #new files haven't appeared since scanning
-					$transfers->{transfers}{$priority}{$_}{stale} = UP_TO_DATE;
+				if (exists $transfers->{transfers}{$priority}{$srcPath} #make sure config hasn't changed
+				 && PROCESSING == $transfers->{transfers}{$priority}{$srcPath}{stale}) { #new files haven't appeared since scanning
+					$transfers->{transfers}{$priority}{$srcPath}{stale} = UP_TO_DATE;
 				}
 			}
 			my $needToSave = 0;
-			if (shift @scan && $scan[1] != $pairs{$_}{ctimeCleared} && !$scan[2]) { #not copying anything from this source to main dest so ctimeCleared won't get updated, but has changed
+			if ($normalOK && $latestCtime != $pairs{$srcPath}{normalCtimeCleared} && !$pairNormalToCopy) { #not copying anything from this source to main dest so ctimeCleared won't get updated, but has changed
 				#save the new ctimeCleared value
 				unless ($locked) {
 					$share->lock(LOCK_EX);
 					$transfers = thaw($share->fetch);
 					$locked = 1;
 				}
-				if (exists $transfers->{transfers}{$priority}{$_}) { #make sure config hasn't changed
-					$transfers->{transfers}{$priority}{$_}{ctimeCleared} = $scan[1];
+				if (exists $transfers->{transfers}{$priority}{$srcPath}) { #make sure config hasn't changed
+					$transfers->{transfers}{$priority}{$srcPath}{normalCtimeCleared} = $latestCtime;
 				}
 				$needToSave = 1;
 			}
-			if (shift @scan && $scan[0] != $pairs{$_}{extraCtimeCleared} && !$scan[2]) { #not copying anything from this source to extra dest so extraCtimeCleared won't get updated, but has changed
+			if ($extraOK && $latestCtime != $pairs{$srcPath}{extraCtimeCleared} && !$pairExtraToCopy) { #not copying anything from this source to extra dest so extraCtimeCleared won't get updated, but has changed
 				#save the new ctimeCleared value
 				unless ($locked) {
 					$share->lock(LOCK_EX);
 					$transfers = thaw($share->fetch);
 					$locked = 1;
 				}
-				if (exists $transfers->{transfers}{$priority}{$_}) { #make sure config hasn't changed
-					$transfers->{transfers}{$priority}{$_}{extraCtimeCleared} = $scan[0];
+				if (exists $transfers->{transfers}{$priority}{$srcPath}) { #make sure config hasn't changed
+					$transfers->{transfers}{$priority}{$srcPath}{extraCtimeCleared} = $latestCtime;
 				}
 				$needToSave = 1;
 			}
@@ -887,36 +926,37 @@ sub childLoop {
 			}
 
 			#add information to copying details
- 			$pairs{$_}{latestCtime} = shift @scan; #for updating saved value correctly even if youngest file doesn't need to be copied
- 			$pairs{$_}{nFiles} = shift @scan; #so we can determine when all files in this directory have been copied
- 			$pairs{$_}{extraNFiles} = shift @scan; #so we can determine when all files in this directory have been copied (if used)
-			$totalNormalSize += shift @scan;
-			$totalExtraSize += shift @scan;
-			push @essenceFiles, @scan; #takes all remaining values, i.e. both arrays
-			$totalNormalFiles += $pairs{$_}{nFiles};
-			$totalExtraFiles += $pairs{$_}{extraNFiles};
+  			$pairs{$srcPath}{normalNFiles} = $pairNormalToCopy; #so we can determine when all files in this directory have been copied
+  			$pairs{$srcPath}{extraNFiles} = $pairExtraToCopy; #so we can determine when all files in this directory have been copied (if used)
+  			$pairs{$srcPath}{latestCtime} = $pairLatestCtime; #for updating saved value correctly even if youngest file doesn't need to be copied
+			#update global vbls
+			$priNormalFiles += $pairs{$srcPath}{normalNFiles};
+			$priExtraFiles += $pairs{$srcPath}{extraNFiles};
+			$priNormalSize += $pairNormalSize;
+			$priExtraSize += $pairExtraSize;
+			push @priEssenceFiles, @pairEssenceFiles;
 		}
 
 		#update stats
 		$share->lock(LOCK_EX);
 		$transfers = thaw($share->fetch);
 		$transfers->{current}{priority} = $priority;
-		$transfers->{current}{totalNormalFiles} = $totalNormalFiles;
-		$transfers->{current}{totalExtraFiles} = $totalExtraFiles;
-		$transfers->{current}{totalNormalSize} = $totalNormalSize;
-		$transfers->{current}{totalExtraSize} = $totalExtraSize;
+		$transfers->{current}{totalNormalFiles} = $priNormalFiles;
+		$transfers->{current}{totalExtraFiles} = $priExtraFiles;
+		$transfers->{current}{totalNormalSize} = $priNormalSize;
+		$transfers->{current}{totalExtraSize} = $priExtraSize;
 		my $prevFile;
 
 		#copy the files at this priority, oldest first, optionally with extras taking priority
-		foreach my $essenceFile (sort $byAge @essenceFiles) { #NB share locked at this point
-			if (exists $transfers->{staleFrom} && ($transfers->{staleFrom} < $priority || $transfers->{staleFrom} == 1 && $opts{g})) {
-				#retry as new files of a higher priority may have appeared
-				#in the case of $opts{g}, must rescan even if copying priority 1 files, because all new priority 1 files must be copied to extra destination first
+		foreach my $essenceFile (sort $byAge @priEssenceFiles) { #NB share locked at this point
+			if (exists $transfers->{staleFrom} && ($transfers->{staleFrom} < $priority || ($transfers->{staleFrom} == 1 && $opts{g}))) {
+				#retry as new files of a higher priority may have appeared,
+				#or in the case of $opts{g}, must rescan even if copying priority 1 files, because all new priority 1 files must be copied to extra destination first
 				$interrupting = 1;
-				last;
+				last PRIORITY;
 			}
 			my $latestCtimeCopied = $essenceFile->{extra} ? 'extraLatestCtimeCopied' : 'latestCtimeCopied';
-			my $ctimeCleared = $essenceFile->{extra} ? 'extraCtimeCleared' : 'ctimeCleared';
+			my $ctimeCleared = $essenceFile->{extra} ? 'extraCtimeCleared' : 'normalCtimeCleared';
 			if (exists $pairs{$essenceFile->{srcDir}}{$latestCtimeCopied}) { #have already tried to copy something from this source dir
 				if (-1 == $pairs{$essenceFile->{srcDir}}{$latestCtimeCopied}) { #have had a problem with this source dir
 					next; #ignore this source dir
@@ -1119,9 +1159,9 @@ sub childLoop {
 				$transfers->{current}{totalNormalFiles}--;
 				$transfers->{current}{totalNormalSize} -= $essenceFile->{size};
 			}
-			if (!--$pairs{$essenceFile->{srcDir}}{$essenceFile->{extra} ? 'extraNFiles' : 'nFiles'}) { #this set all copied
+			if (!--$pairs{$essenceFile->{srcDir}}{$essenceFile->{extra} ? 'extraNFiles' : 'normalNFiles'}) { #this set all copied
 				Report("All files from '$essenceFile->{srcDir}/' to '$essenceFile->{destDir}/' successfully copied.\n", 1, $transfers, $essenceFile->{extra} ? EXTRA_COPY_COLOUR : MAIN_COPY_COLOUR);
-				if (!exists $pairs{$essenceFile->{srcDir}}{$essenceFile->{extra} ? 'nFiles' : 'extraNFiles'} || !$pairs{$essenceFile->{srcDir}}{$essenceFile->{extra} ? 'nFiles' : 'extraNFiles'}) { #other set not present or all copied
+				if (!exists $pairs{$essenceFile->{srcDir}}{$essenceFile->{extra} ? 'normalNFiles' : 'extraNFiles'} || !$pairs{$essenceFile->{srcDir}}{$essenceFile->{extra} ? 'normalNFiles' : 'extraNFiles'}) { #other set not present or all copied
 					#mark this source dir as up to date
 					if (exists $transfers->{transfers}{$priority}{$essenceFile->{srcDir}}) { #pair hasn't disappeared
 						if (PROCESSING == $transfers->{transfers}{$priority}{$essenceFile->{srcDir}}{stale}) { #new files haven't appeared since scanning
@@ -1154,7 +1194,7 @@ sub childLoop {
 			' 2>/dev/null';
 	}
 	if ($interrupting) {
-		Report("Interrupting copying to check for new files of a higher priority\n", 0, $share);
+		Report("Interrupting copying to check for new files of a higher priority\n", 0, $share); #rescan will start immediately because the child process will have been kicked
 	}
 	elsif ($retry) {
 		Report('Pausing for ' . RECHECK_INTERVAL . " seconds before retrying.\n\n", 0, $share, RETRY_COLOUR);
