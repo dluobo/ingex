@@ -337,7 +337,7 @@ sub get_page_content
                             # the video track has the video format
                             if ($descriptor && $descriptor->{"VIDEO_RES"})
                             {
-                                $materialRow{"video"} = $descriptor->{"FILE_FORMAT"}.":<br />".$descriptor->{"VIDEO_RES"};
+                                $materialRow{"video"} = $descriptor->{"VIDEO_RES"};
                             }
                         }
 
