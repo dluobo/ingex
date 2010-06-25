@@ -1,5 +1,5 @@
 /*
- * $Id: MaterialResolution.h,v 1.2 2010/06/14 15:40:32 john_f Exp $
+ * $Id: MaterialResolution.h,v 1.3 2010/06/25 14:26:00 philipn Exp $
  *
  * Material resolution codes and details
  *
@@ -73,13 +73,13 @@ public:
         UNC_MXF_ATOM,
 
         DV25_RAW,
-        DV50_RAW,
-        DV100_RAW,
         DV25_MXF_ATOM,
-        DV50_MXF_ATOM,
-        DV100_MXF_ATOM,
         DV25_MOV,
+        DV50_RAW,
+        DV50_MXF_ATOM,
         DV50_MOV,
+        DV100_RAW,
+        DV100_MXF_ATOM,
         DV100_MOV,
 
         MJPEG21_MXF_ATOM,
@@ -102,14 +102,14 @@ public:
         DNX120P_MXF_ATOM,
         DNX185P_MXF_ATOM,
 
+        XDCAMHD422_RAW,
+        XDCAMHD422_MOV,
+
         DVD,
         MPEG4_MOV,
         MP3,
 
         CUTS,
-
-	XDCAMHD422_RAW,
-	XDCAMHD422_MOV,
 
         END
     };
