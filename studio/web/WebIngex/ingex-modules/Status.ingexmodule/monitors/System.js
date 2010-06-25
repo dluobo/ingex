@@ -145,20 +145,27 @@ function Status_process_usageBar (instanceData,visible,dataDescription,threshold
 			// Check that this data item hasn't been disabled
 			if(data[item] != false) {
 				// Work out the percentage used (either from amount used or amount free data)
-				if(dataDescription.used) {
-					used = Math.round(100*(data[item][dataDescription.used]/data[item][dataDescription.total]));
-				} else if(dataDescription.free) {
-					used = 100-Math.round(100*(data[item][dataDescription.free]/data[item][dataDescription.total]));
-				}
+				//ensure doesn't try to work out size of disks with no size
+				if (data[item][dataDescription.total] != 0){	
+
+					if(dataDescription.used) {
+						used = Math.round(100*(data[item][dataDescription.used]/data[item][dataDescription.total]));
+					} else if(dataDescription.free) {
+						used = 100-Math.round(100*(data[item][dataDescription.free]/data[item][dataDescription.total]));
+					}
+				}else if (data[item][dataDescription.total] == 0){ used = 0; }
 				
 				thresholdBroken = false;
 				if(threshOver && used >= threshold) {
 					thresholdBroken = true;
 					errorLevel++;
-				} else if (!threshOver && data[item][dataDescription.free] <= threshold) {
+				} else if (!threshOver && data[item][dataDescription.free] <= threshold && data[item][dataDescription.total]!=0) //make sure doesn't show threshold broken on a zero size disk
+				{
 					thresholdBroken = true;
 					errorLevel++;
 				}
+				
+
 				// Colour the bar red if the value is over/under the threshold (as appropriate)
 				var bgCol
 				if(thresholdBroken){
@@ -212,16 +219,16 @@ function Status_process_usageBar (instanceData,visible,dataDescription,threshold
 		// Work out the percentage used (either from amount used or amount free data)
 		if(dataDescription.used) {
 			if(!data[dataDescription.used]){ data[dataDescription.used] = 0; }	// description undefined
-			used = Math.round(100*(data[dataDescription.used]/data[dataDescription.total]));
-		} else if(dataDescription.free) {
-			used = 100-Math.round(100*(data[dataDescription.free]/data[dataDescription.total]));
-		}
-		
+				used = Math.round(100*(data[dataDescription.used]/data[dataDescription.total]));
+			}else if(dataDescription.free) {
+				used = 100-Math.round(100*(data[dataDescription.free]/data[dataDescription.total]));
+			}
+			
 		thresholdBroken = false;
 		if(threshOver && used >= threshold) {
 			thresholdBroken = true;
 			errorLevel++;
-		} else if (!threshOver && data[dataDescription.free] <= threshold) {
+		} else if (!threshOver && data[dataDescription.free] <= threshold){
 			thresholdBroken = true;
 			errorLevel++;
 		}
