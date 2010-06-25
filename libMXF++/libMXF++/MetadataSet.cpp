@@ -1,5 +1,5 @@
 /*
- * $Id: MetadataSet.cpp,v 1.3 2010/06/02 11:03:29 philipn Exp $
+ * $Id: MetadataSet.cpp,v 1.4 2010/06/25 14:02:02 philipn Exp $
  *
  * 
  *
@@ -1268,6 +1268,15 @@ void MetadataSet::removeItem(const mxfKey* itemKey)
     MXFPP_CHECK(mxf_remove_item(_cMetadataSet, itemKey, &item));
     mxf_free_item(&item);
 }
+
+
+MetadataSet* MetadataSet::clone(HeaderMetadata *toHeaderMetadata)
+{
+    ::MXFMetadataSet *toMetadataSet;
+    MXFPP_CHECK(mxf_clone_set(_cMetadataSet, toHeaderMetadata->getCHeaderMetadata(), &toMetadataSet));
+    return toHeaderMetadata->wrap(toMetadataSet);
+}
+
 
 void MetadataSet::attachAvidAttribute(string name, string value)
 {

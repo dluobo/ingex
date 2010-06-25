@@ -1,5 +1,5 @@
 /*
- * $Id: MetadataSet.h,v 1.4 2010/06/18 09:31:11 philipn Exp $
+ * $Id: MetadataSet.h,v 1.5 2010/06/25 14:02:02 philipn Exp $
  *
  * 
  *
@@ -244,6 +244,8 @@ public:
     
     void removeItem(const mxfKey* itemKey);
     
+    
+    MetadataSet* clone(HeaderMetadata *toHeaderMetadata);
 
     // Avid extensions
     void attachAvidAttribute(std::string name, std::string value);

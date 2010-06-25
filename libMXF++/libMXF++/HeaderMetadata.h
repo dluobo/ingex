@@ -1,5 +1,5 @@
 /*
- * $Id: HeaderMetadata.h,v 1.2 2010/06/02 11:03:29 philipn Exp $
+ * $Id: HeaderMetadata.h,v 1.3 2010/06/25 14:02:02 philipn Exp $
  *
  * 
  *
@@ -27,6 +27,12 @@
 
 #include <libMXF++/File.h>
 #include <libMXF++/DataModel.h>
+
+
+
+extern bool operator < (const mxfKey& left, const mxfKey& right);
+extern bool operator < (const mxfUUID& left, const mxfUUID& right);
+
 
 
 namespace mxfpp
