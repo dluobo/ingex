@@ -1,5 +1,5 @@
 /*
- * $Id: shared_mem_source.c,v 1.12 2010/06/02 11:12:14 philipn Exp $
+ * $Id: shared_mem_source.c,v 1.13 2010/06/25 14:04:28 philipn Exp $
  *
  *
  *
@@ -194,18 +194,9 @@ static const uint8_t *rec_ring_video(SharedMemSource *source, int lastFrame)
         return nexus_secondary_video(conn.pctl, conn.ring, source->channel, lastFrame);
 }
 
-static const uint8_t *rec_ring_audio(SharedMemSource *source, int track, int lastFrame)
+static const uint8_t *rec_ring_audio_track(SharedMemSource *source, int track, int lastFrame)
 {
-    if (track == 0 || track == 1)
-        return nexus_audio12(conn.pctl, conn.ring, source->channel, lastFrame);
-
-    if (track == 2 || track == 3)
-        return nexus_audio34(conn.pctl, conn.ring, source->channel, lastFrame);
-
-    if (track == 4 || track == 5)
-        return nexus_audio56(conn.pctl, conn.ring, source->channel, lastFrame);
-
-    return nexus_audio78(conn.pctl, conn.ring, source->channel, lastFrame);
+	return nexus_secondary_audio(conn.pctl, conn.ring, source->channel, lastFrame, track);
 }
 
 static int rec_ring_num_aud_samp(SharedMemSource *source, int track, int lastFrame)
@@ -422,14 +413,10 @@ static int shm_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceLis
             // audio size is variable so set frameSize for this frame
             int num_samples = rec_ring_num_aud_samp(source, i - 1, lastFrame);
 
-            // Get a pointer to the correct DVS audio buffer
-            const uint8_t *buf32 = rec_ring_audio(source, i - 1, lastFrame);
+            // Get a pointer to the correct DVS audio track
+            const uint8_t *mono_audio = rec_ring_audio_track(source, i - 1, lastFrame);
 
-            // determine which channel (0 or 1) of the DVS pair to use
-            int pair_num = (i - 1) % 2;
-
-            // reformat audio from interleaved DVS audio format to single channel audio
-            dvsaudio32_to_16bitmono(pair_num, num_samples, buf32, buffer);
+            memcpy(buffer, mono_audio, num_samples*2);
         }
 
         if (track->streamInfo.type == TIMECODE_STREAM_TYPE) {
@@ -649,16 +636,8 @@ int shms_open(const char* channel_name, double timeout, SharedMemSource** source
         height = conn.pctl->sec_height;
     }
     
-    newSource->numAudioTracks = 4;
-    if (conn.pctl->audio56_offset > 0)
-    {
-        newSource->numAudioTracks += 2;
-        if (conn.pctl->audio78_offset > 0)
-        {
-            newSource->numAudioTracks += 2;
-        }
-    }
-    
+    newSource->numAudioTracks = conn.pctl->num_audio_tracks;
+
     switch (conn.pctl->default_tc_type)
     {
         case NexusTC_LTC:
