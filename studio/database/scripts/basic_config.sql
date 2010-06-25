@@ -15,11 +15,15 @@ SELECT setval('rlc_id_seq', max(rlc_identifier)) FROM recordinglocation;
 -- sourceconfig
 --
 
-INSERT INTO sourceconfig VALUES (100, 'VT1', 2, NULL, 10);
-INSERT INTO sourceconfig VALUES (101, 'VT2', 2, NULL, 10);
-INSERT INTO sourceconfig VALUES (102, 'VT3', 2, NULL, 10);
-INSERT INTO sourceconfig VALUES (103, 'VT4', 2, NULL, 10);
-INSERT INTO sourceconfig VALUES (104, 'Mixer Out', 2, NULL, 10);
+INSERT INTO sourceconfig VALUES (100, 'Cam1', 2, NULL, 10);
+INSERT INTO sourceconfig VALUES (101, 'Cam2', 2, NULL, 10);
+INSERT INTO sourceconfig VALUES (102, 'Cam3', 2, NULL, 10);
+INSERT INTO sourceconfig VALUES (103, 'Cam4', 2, NULL, 10);
+INSERT INTO sourceconfig VALUES (104, 'Cam5', 2, NULL, 10);
+INSERT INTO sourceconfig VALUES (105, 'Cam6', 2, NULL, 10);
+INSERT INTO sourceconfig VALUES (106, 'Cam7', 2, NULL, 10);
+INSERT INTO sourceconfig VALUES (107, 'Cam8', 2, NULL, 10);
+INSERT INTO sourceconfig VALUES (110, 'Mixer Out', 2, NULL, 10);
 
 SELECT setval('scf_id_seq', max(scf_identifier)) FROM sourceconfig;
 
@@ -28,32 +32,56 @@ SELECT setval('scf_id_seq', max(scf_identifier)) FROM sourceconfig;
 -- sourcetrackconfig
 --
 
--- VT1
+-- Cam1
 INSERT INTO sourcetrackconfig VALUES (200, 1, 1, 'V',  1, '(25,1)', 10800000, 100);
 INSERT INTO sourcetrackconfig VALUES (201, 2, 1, 'A1', 2, '(25,1)', 10800000, 100);
 INSERT INTO sourcetrackconfig VALUES (202, 3, 2, 'A2', 2, '(25,1)', 10800000, 100);
 INSERT INTO sourcetrackconfig VALUES (203, 4, 3, 'A3', 2, '(25,1)', 10800000, 100);
 INSERT INTO sourcetrackconfig VALUES (204, 5, 4, 'A4', 2, '(25,1)', 10800000, 100);
--- VT2
+-- Cam2
 INSERT INTO sourcetrackconfig VALUES (210, 1, 1, 'V',  1, '(25,1)', 10800000, 101);
 INSERT INTO sourcetrackconfig VALUES (211, 2, 1, 'A1', 2, '(25,1)', 10800000, 101);
 INSERT INTO sourcetrackconfig VALUES (212, 3, 2, 'A2', 2, '(25,1)', 10800000, 101);
 INSERT INTO sourcetrackconfig VALUES (213, 4, 3, 'A3', 2, '(25,1)', 10800000, 101);
 INSERT INTO sourcetrackconfig VALUES (214, 5, 4, 'A4', 2, '(25,1)', 10800000, 101);
--- VT3
+-- Cam3
 INSERT INTO sourcetrackconfig VALUES (220, 1, 1, 'V',  1, '(25,1)', 10800000, 102);
 INSERT INTO sourcetrackconfig VALUES (221, 2, 1, 'A1', 2, '(25,1)', 10800000, 102);
 INSERT INTO sourcetrackconfig VALUES (222, 3, 2, 'A2', 2, '(25,1)', 10800000, 102);
 INSERT INTO sourcetrackconfig VALUES (223, 4, 3, 'A3', 2, '(25,1)', 10800000, 102);
 INSERT INTO sourcetrackconfig VALUES (224, 5, 4, 'A4', 2, '(25,1)', 10800000, 102);
--- VT4
+-- Cam4
 INSERT INTO sourcetrackconfig VALUES (230, 1, 1, 'V',  1, '(25,1)', 10800000, 103);
 INSERT INTO sourcetrackconfig VALUES (231, 2, 1, 'A1', 2, '(25,1)', 10800000, 103);
 INSERT INTO sourcetrackconfig VALUES (232, 3, 2, 'A2', 2, '(25,1)', 10800000, 103);
 INSERT INTO sourcetrackconfig VALUES (233, 4, 3, 'A3', 2, '(25,1)', 10800000, 103);
 INSERT INTO sourcetrackconfig VALUES (234, 5, 4, 'A4', 2, '(25,1)', 10800000, 103);
--- Mixer Out
+-- Cam5
 INSERT INTO sourcetrackconfig VALUES (240, 1, 1, 'V',  1, '(25,1)', 10800000, 104);
+INSERT INTO sourcetrackconfig VALUES (241, 2, 1, 'A1', 2, '(25,1)', 10800000, 104);
+INSERT INTO sourcetrackconfig VALUES (242, 3, 2, 'A2', 2, '(25,1)', 10800000, 104);
+INSERT INTO sourcetrackconfig VALUES (243, 4, 3, 'A3', 2, '(25,1)', 10800000, 104);
+INSERT INTO sourcetrackconfig VALUES (244, 5, 4, 'A4', 2, '(25,1)', 10800000, 104);
+-- Cam6
+INSERT INTO sourcetrackconfig VALUES (250, 1, 1, 'V',  1, '(25,1)', 10800000, 105);
+INSERT INTO sourcetrackconfig VALUES (251, 2, 1, 'A1', 2, '(25,1)', 10800000, 105);
+INSERT INTO sourcetrackconfig VALUES (252, 3, 2, 'A2', 2, '(25,1)', 10800000, 105);
+INSERT INTO sourcetrackconfig VALUES (253, 4, 3, 'A3', 2, '(25,1)', 10800000, 105);
+INSERT INTO sourcetrackconfig VALUES (254, 5, 4, 'A4', 2, '(25,1)', 10800000, 105);
+-- Cam7
+INSERT INTO sourcetrackconfig VALUES (260, 1, 1, 'V',  1, '(25,1)', 10800000, 106);
+INSERT INTO sourcetrackconfig VALUES (261, 2, 1, 'A1', 2, '(25,1)', 10800000, 106);
+INSERT INTO sourcetrackconfig VALUES (262, 3, 2, 'A2', 2, '(25,1)', 10800000, 106);
+INSERT INTO sourcetrackconfig VALUES (263, 4, 3, 'A3', 2, '(25,1)', 10800000, 106);
+INSERT INTO sourcetrackconfig VALUES (264, 5, 4, 'A4', 2, '(25,1)', 10800000, 106);
+-- Cam8
+INSERT INTO sourcetrackconfig VALUES (270, 1, 1, 'V',  1, '(25,1)', 10800000, 107);
+INSERT INTO sourcetrackconfig VALUES (271, 2, 1, 'A1', 2, '(25,1)', 10800000, 107);
+INSERT INTO sourcetrackconfig VALUES (272, 3, 2, 'A2', 2, '(25,1)', 10800000, 107);
+INSERT INTO sourcetrackconfig VALUES (273, 4, 3, 'A3', 2, '(25,1)', 10800000, 107);
+INSERT INTO sourcetrackconfig VALUES (274, 5, 4, 'A4', 2, '(25,1)', 10800000, 107);
+-- Mixer Out
+INSERT INTO sourcetrackconfig VALUES (300, 1, 1, 'V',  1, '(25,1)', 10800000, 110);
 
 
 SELECT setval('sct_id_seq', max(sct_identifier)) FROM sourcetrackconfig;
@@ -220,7 +248,7 @@ INSERT INTO recorderinputtrackconfig VALUES (533, 4, 0, 213, NULL, NULL);
 INSERT INTO recorderinputtrackconfig VALUES (534, 5, 0, 213, NULL, NULL);
 
 -- Ingex-Router-StudioA
-INSERT INTO recorderinputtrackconfig VALUES (600, 1, 1, 300, 104, 1);
+INSERT INTO recorderinputtrackconfig VALUES (600, 1, 1, 300, 110, 1);
 
 
 SELECT setval('rtc_id_seq', max(rtc_identifier)) FROM recorderinputtrackconfig;
