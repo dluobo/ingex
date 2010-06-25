@@ -59,11 +59,11 @@ sub get_page_content
 			</select>
 			<br />
 			Producer:
-			<br /><input type='text' id='producer' name='producer' class='progInfoFormElement' value='' disabled=true><br />
+			<br /><input type='text' id='producer' name='producer' class='progInfoFormElement' value=''><br />
 			Director:
-			<br /><input type='text' id='director' name='director' class='progInfoFormElement' value='' disabled=true><br />
+			<br /><input type='text' id='director' name='director' class='progInfoFormElement' value=''><br />
 			PA:
-			<br /><input type='text' id='pa' name='pa' class='progInfoFormElement' value='' disabled=true>
+			<br /><input type='text' id='pa' name='pa' class='progInfoFormElement' value=''>
 			<!--
 				<div class='rightButtons'>
 					<small><a class='simpleButton' href=''>Save Changes</a></small>
@@ -73,7 +73,7 @@ sub get_page_content
 		
 		<div id='recorderSelect'>
 			<h1>Recorder</h1>
-			<select name='recorder' class='progInfoFormElement' id='recorderSelector' onChange='ILtc.startIncrementing()'>
+			<select name='recorder' class='progInfoFormElement' id='recorderSelector' onChange='ILtc.incrementMethod()'>
 				<option value='0'>Loading...</option>
 			</select>
 		</div>
