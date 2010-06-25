@@ -1,5 +1,5 @@
 /*
- * $Id: testgen.c,v 1.5 2009/10/12 15:11:46 john_f Exp $
+ * $Id: testgen.c,v 1.6 2010/06/25 14:22:21 philipn Exp $
  *
  * Dummy SDI input for testing shared memory video & audio interface.
  *
@@ -188,9 +188,10 @@ static int allocate_shared_buffers(int num_channels, long long max_memory)
     p_control->pri_video_format = video_format;
     p_control->sec_video_format = video_secondary_format;
 
-    p_control->audio12_offset = audio_offset;
-    p_control->audio34_offset = audio_offset + audio_size / 2;
+    p_control->audio_offset = audio_offset;
     p_control->audio_size = audio_size;
+    p_control->sec_audio_offset = 0;
+    p_control->sec_audio_size = 0;
 
     p_control->frame_data_offset = frame_data_offset;
     /*
@@ -318,7 +319,7 @@ static int fill_buffers(int num_channels, int shift)
         {
             memcpy(ring[i] + element_size * frame_num, video_yuv422, video_yuv422_size);
             memcpy(ring[i] + element_size * frame_num + video_yuv422_size, audio_buf, audio_buf_size);
-            memcpy(ring[i] + element_size * frame_num + p_control->audio12_offset + p_control->audio_size,
+            memcpy(ring[i] + element_size * frame_num + p_control->audio_offset + p_control->audio_size,
                 video_yuv, video_yuv_size);
         }
     }

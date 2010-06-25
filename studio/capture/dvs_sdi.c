@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.c,v 1.32 2010/06/07 10:24:13 john_f Exp $
+ * $Id: dvs_sdi.c,v 1.33 2010/06/25 14:22:21 philipn Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -106,7 +106,9 @@ VideoRaster::EnumType primary_video_raster = VideoRaster::NONE;
 VideoRaster::EnumType secondary_video_raster = VideoRaster::NONE;
 Interlace::EnumType interlace = Interlace::NONE;
 int             element_size = 0, dma_video_size = 0, dma_total_size = 0;
-static int      audio_offset = 0, audio_size = 0, audio_pair_size = 0;
+static int      audio_offset = 0, audio_size = 0;
+static int      secondary_audio_offset = 0, secondary_audio_size = 0;
+static int      secondary_video_offset = 0;
 
 int             frame_data_offset = 0;
 
@@ -655,11 +657,11 @@ static int allocate_shared_buffers(int num_channels, long long max_memory)
     }
 
     // calculate reasonable ring buffer length
-    // reduce by small number 5 to leave a little room for other shared mem
+    // reduce by small number 5 to leave a little room for other shared mem e.g. database servers
     ring_len = max_memory / num_channels / element_size - 5;
     printf("buffer size %lld (%.3f MiB) calculated per channel ring_len %d\n", max_memory, max_memory / (1024*1024.0), ring_len);
 
-    printf("element_size=%d ring_len=%d (%.2f secs) (total=%lld)\n", element_size, ring_len, ring_len / 25.0, (long long)element_size * ring_len);
+    printf("element_size=%d(0x%x) ring_len=%d (%.2f secs) (total=%lld)\n", element_size, element_size, ring_len, ring_len / 25.0, (long long)element_size * ring_len);
     if (ring_len < 10)
     {
         printf("ring_len=%d too small (< 10) - try increasing shmmax:\n", ring_len);
@@ -714,19 +716,13 @@ static int allocate_shared_buffers(int num_channels, long long max_memory)
     p_control->default_tc_type = timecode_type;
     p_control->master_tc_channel = master_channel;
 
-    p_control->audio12_offset = audio_offset;
-    p_control->audio34_offset = audio_offset + audio_pair_size;
-    if (audio8ch) {
-        p_control->audio56_offset = audio_offset + audio_pair_size * 2;
-        p_control->audio78_offset = audio_offset + audio_pair_size * 3;
-    }
-    else {
-        p_control->audio56_offset = 0;
-        p_control->audio78_offset = 0;
-    }
+    p_control->num_audio_tracks = (audio8ch ? 8 : 4);
+    p_control->audio_offset = audio_offset;
     p_control->audio_size = audio_size;
+    p_control->sec_audio_offset = secondary_audio_offset;
+    p_control->sec_audio_size = secondary_audio_size;
 
-    p_control->sec_video_offset = dma_video_size + audio_size;
+    p_control->sec_video_offset = secondary_video_offset;
 
     p_control->frame_data_offset = frame_data_offset;
 
@@ -791,6 +787,100 @@ static time_t today_midnight_time(void)
     now_tm.tm_min = 0;
     now_tm.tm_hour = 0;
     return mktime(&now_tm);
+}
+
+static void dvsaudio32_deinterleave_32bit(uint8_t *audio12, uint8_t *audio34, uint8_t *a32[])
+{
+	// Copy all 32bits, de-interleaving pairs
+    for (int i = 0; i < MAX_AUDIO_SAMPLES_PER_FRAME; i++) {
+        int src_idx = i*4*2;                // index into 32bit interleaved pairs
+        int mon_idx = i*4;                  // index into 32bit mono audio
+        a32[0][mon_idx + 0] = audio12[src_idx + 0];
+        a32[0][mon_idx + 1] = audio12[src_idx + 1];
+        a32[0][mon_idx + 2] = audio12[src_idx + 2];
+        a32[0][mon_idx + 3] = audio12[src_idx + 3];
+        a32[1][mon_idx + 0] = audio12[src_idx + 4];
+        a32[1][mon_idx + 1] = audio12[src_idx + 5];
+        a32[1][mon_idx + 2] = audio12[src_idx + 6];
+        a32[1][mon_idx + 3] = audio12[src_idx + 7];
+
+        a32[2][mon_idx + 0] = audio34[src_idx + 0];
+        a32[2][mon_idx + 1] = audio34[src_idx + 1];
+        a32[2][mon_idx + 2] = audio34[src_idx + 2];
+        a32[2][mon_idx + 3] = audio34[src_idx + 3];
+        a32[3][mon_idx + 0] = audio34[src_idx + 4];
+        a32[3][mon_idx + 1] = audio34[src_idx + 5];
+        a32[3][mon_idx + 2] = audio34[src_idx + 6];
+        a32[3][mon_idx + 3] = audio34[src_idx + 7];
+	}
+}
+
+static void dvsaudio32_deinterleave_16bit(uint8_t *audio12, uint8_t *audio34, uint8_t *a16[])
+{
+    // Copy 16 most significant bits out of 32 bit audio pairs
+    // for 4 channels each loop iteraction
+    for (int i = 0; i < MAX_AUDIO_SAMPLES_PER_FRAME; i++) {
+        int tmp_idx = i*4*2;                // index into 32bit interleaved pairs
+        int sec_idx = i*2;                  // index into 16bit mono audio buffers
+        a16[0][sec_idx + 0] = audio12[tmp_idx + 2];
+        a16[0][sec_idx + 1] = audio12[tmp_idx + 3];
+        a16[1][sec_idx + 0] = audio12[tmp_idx + 6];
+        a16[1][sec_idx + 1] = audio12[tmp_idx + 7];
+
+        a16[2][sec_idx + 0] = audio34[tmp_idx + 2];
+        a16[2][sec_idx + 1] = audio34[tmp_idx + 3];
+        a16[3][sec_idx + 0] = audio34[tmp_idx + 6];
+        a16[3][sec_idx + 1] = audio34[tmp_idx + 7];
+    }
+}
+
+static void dvsaudio32_to_4_mono_tracks(uint8_t *src, uint8_t *dst32, uint8_t *dst16)
+{
+    // src contains either 4 channels or 8 channels as multiplexed pairs
+    // where each pair is aligned on a 0x4000 boundary
+    uint8_t *audio12 = src;
+    uint8_t *audio34 = src + 0x4000;
+
+    // De-interleave to 32bit mono buffers
+    //
+    // Setup pointers for 32bit mono audio
+    uint8_t *a32[4];
+    a32[0] = dst32;
+    a32[1] = dst32 + MAX_AUDIO_SAMPLES_PER_FRAME*4 * 1;
+    a32[2] = dst32 + MAX_AUDIO_SAMPLES_PER_FRAME*4 * 2;
+    a32[3] = dst32 + MAX_AUDIO_SAMPLES_PER_FRAME*4 * 3;
+
+	dvsaudio32_deinterleave_32bit(audio12, audio34, a32);
+
+    // De-interleave and truncate to 16bit mono
+    //
+    // Setup pointers for 16bit mono audio
+    uint8_t *a16[4];
+    a16[0] = dst16;
+    a16[1] = dst16 + MAX_AUDIO_SAMPLES_PER_FRAME*2 * 1;
+    a16[2] = dst16 + MAX_AUDIO_SAMPLES_PER_FRAME*2 * 2;
+    a16[3] = dst16 + MAX_AUDIO_SAMPLES_PER_FRAME*2 * 3;
+
+	dvsaudio32_deinterleave_16bit(audio12, audio34, a16);
+}
+
+static void dvsaudio32_to_mono_audio(uint8_t *src, uint8_t *dst32, uint8_t *dst16, int audio8)
+{
+    // src and dst32 can be the same buffer, so first read full src audio into tmp buffer
+    uint8_t tmp[audio_size];
+
+    memcpy(tmp, src, audio_size);
+
+	dvsaudio32_to_4_mono_tracks(tmp, dst32, dst16);
+
+	if (audio8)
+	{
+		// 32bit buffer is fixed by DVS internals to have channel 5,6 at offset 0x8000
+		// 16bit buffer has channel 5 start immediately after channel 4
+		dvsaudio32_to_4_mono_tracks(tmp + 0x8000,
+						            dst32 + 0x8000,
+									dst16 + MAX_AUDIO_SAMPLES_PER_FRAME*2 * 4);
+	}
 }
 
 // Given a 64bit time-of-day corresponding to when a frame was captured,
@@ -916,6 +1006,9 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
 
     uint8_t *vid_dest = ring[chan] + element_size * ((pc->lastframe+1) % ring_len);
     uint8_t *dma_dest = vid_dest;
+
+    // If primary format is not native DMA format (UYVY) use video_work_area[]
+    // buffer to store temporary copy of DMA'd video and audio.
     if (Ingex::PixelFormat::UYVY_422 != primary_pixel_format)
     {
 #if 0
@@ -974,6 +1067,10 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
             dma_dest, (unsigned long)pbuffer->audio[0].addr[0], (unsigned long)pbuffer->audio[0].addr[1]);
     }
 
+    // Set number of audio samples captured into ring element (not constant for NTSC)
+    // audio[0].size is total size in bytes of 2 channels of 32bit samples
+    int num_audio_samples = pbuffer->audio[0].size / 2 / 4;
+
     // Get current time-of-day time and this chan's current hw clock.
     int current_tick;
     // Note DVS type uint32 rather than uint32_t
@@ -1000,6 +1097,7 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
     int64_t tod_rec = tod - clock_diff;
     //logTF("tod = %"PRId64", cur_clock = %"PRId64", rec_clock = %"PRId64" microseconds\n", tod, cur_clock, rec_clock);
 
+    // DMA transfer gives video as UYVY.  Convert to Planar YUV if required.
     if (Ingex::PixelFormat::YUV_PLANAR_422 == primary_pixel_format)
     {
         uint8_t *vid_input = dma_dest;
@@ -1024,15 +1122,33 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
         // copy audio to match
         if (!no_audio)
         {
-            memcpy( vid_dest + audio_offset,    // dest
-                    dma_dest + audio_offset,    // src
-                    audio_size);
+            dvsaudio32_to_mono_audio(
+                    dma_dest + audio_offset,              // src
+                    vid_dest + audio_offset,              // 32bit dest
+                    vid_dest + secondary_audio_offset,    // 16bit dest
+                    audio8ch);                            // 4 or 8 channels
+        }
+    }
+    else
+    {
+        // No video reformat required, just de-interleave audio to give mono audio
+        if (!no_audio)
+        {
+            // reformats 32bit interleaved and writes back to same audio buffer
+            // adds 16bit version of same audio to secondary audio buffer
+            dvsaudio32_to_mono_audio(
+                    vid_dest + audio_offset,              // src
+                    vid_dest + audio_offset,              // 32bit dest
+                    vid_dest + secondary_audio_offset,    // 16bit dest
+                    audio8ch);                            // 4 or 8 channels
         }
     }
 
+    // No audio present in signal, so add silence
     if (no_audio)
     {
-        memset( vid_dest + audio_offset, 0, audio_size);
+        memset(vid_dest + audio_offset, 0, audio_size);
+        memset(vid_dest + secondary_audio_offset, 0, secondary_audio_size);
     }
 
     // Convert primary video into secondary video buffer
@@ -1074,7 +1190,7 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
                             in_pixfmt,
                             width, height);
             avpicture_fill( (AVPicture*)td[chan].outFrame,
-                            vid_dest + (audio_offset + audio_size),     // output to secondary video
+                            vid_dest + secondary_video_offset,          // output to secondary video
                             out_pixfmt,
                             sec_width, sec_height);
             sws_scale(td[chan].scale_context,
@@ -1091,7 +1207,7 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
                 uyvy_to_yuv422( width, height,
                                 secondary_line_shift,
                                 dma_dest,                                   // input
-                                vid_dest + (audio_offset + audio_size));    // output
+                                vid_dest + secondary_video_offset);         // output
             }
             else if (Ingex::PixelFormat::YUV_PLANAR_420_DV == secondary_pixel_format)
             {
@@ -1099,7 +1215,7 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
                 uyvy_to_yuv420_DV_sampling( width, height,
                             secondary_line_shift,                       // should be true
                             dma_dest,                                   // input
-                            vid_dest + (audio_offset + audio_size));    // output
+                            vid_dest + secondary_video_offset);         // output
             }
             else if (Ingex::PixelFormat::YUV_PLANAR_411 == secondary_pixel_format)
             {
@@ -1107,7 +1223,7 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
                 uyvy_to_yuv411( width, height,
                             secondary_line_shift,                       // should be false
                             dma_dest,                                   // input
-                            vid_dest + (audio_offset + audio_size));    // output
+                            vid_dest + secondary_video_offset);         // output
             }
             else if (Ingex::PixelFormat::YUV_PLANAR_420_MPEG == secondary_pixel_format)
             {
@@ -1115,7 +1231,7 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
                 uyvy_to_yuv420( width, height,
                             0,                                          // no DV25 line shift
                             dma_dest,                                   // input
-                            vid_dest + (audio_offset + audio_size));    // output
+                            vid_dest + secondary_video_offset);         // output
             }
         }
     }
@@ -1387,10 +1503,7 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
     // Set signal_ok flag
     nfd->signal_ok = 1;
 
-
-    // Set number of audio samples captured into ring element (not constant for NTSC)
-    // audio[0].size is total size in bytes of 2 channels of 32bit samples
-    int num_audio_samples = pbuffer->audio[0].size / 2 / 4;
+    // Audio samples is 1920 for PAL frame rates, but varies between 1600 and 1602 for NTSC rates
     nfd->num_aud_samp = num_audio_samples;
     //logTF("chan %d: num_audio_samples = %d\n", chan, num_audio_samples);
 
@@ -1597,7 +1710,7 @@ static int write_dummy_frames(sv_handle *sv, int chan, int current_frame_tick, i
             // dummy video frame in secondary buffer
             if (no_video_secondary_frame)
             {
-                uint8_t *vid_dest_sec = ring[chan] + element_size * ((pc->lastframe+1) % ring_len) + audio_offset + audio_size;
+                uint8_t *vid_dest_sec = ring[chan] + element_size * ((pc->lastframe+1) % ring_len) + secondary_video_offset;
                 if (Ingex::PixelFormat::YUV_PLANAR_422 == secondary_pixel_format)
                 {
                     // 4:2:2
@@ -1911,7 +2024,7 @@ static void usage_exit(void)
     fprintf(stderr, "    -tt <tc type>        preferred type of timecode to use: VITC, LTC, DVITC, DLTC, SYS [default VITC]\n");
     fprintf(stderr, "    -mc <master ch>      channel to use as timecode master: 0..7 [default -1 i.e. no master]\n");
     fprintf(stderr, "    -c <max channels>    maximum number of channels to use for capture\n");
-    fprintf(stderr, "    -m <max memory MiB>  maximum memory to use for ring buffers in MiB\n");
+    fprintf(stderr, "    -m <max memory MiB>  maximum memory to use for ring buffers in MiB [default use all available]\n");
     fprintf(stderr, "    -a8                  use 8 audio tracks per video channel\n");
     fprintf(stderr, "    -aes                 use AES/EBU audio with default routing\n");
     fprintf(stderr, "    -aes4                use AES/EBU audio with 4,4 routing\n");
@@ -2047,7 +2160,7 @@ int main (int argc, char ** argv)
         else if (strcmp(argv[n], "-mode") == 0)
         {
             char vidmode[256] = "", audmode[256] = "";
-            if (sscanf(argv[n+1], "%s:%s", vidmode, audmode) != 2) {
+            if (sscanf(argv[n+1], "%[^:]:%s", vidmode, audmode) != 2) {
                 if (sscanf(argv[n+1], "%s", vidmode) != 1) {
                     fprintf(stderr, "-mode requires option of the form videomode[:audiomode]\n");
                     return 1;
@@ -2080,7 +2193,8 @@ int main (int argc, char ** argv)
             }
             else
             {
-                usage_exit();
+                fprintf(stderr, "video mode \"%s\" not supported\n", vidmode);
+                return 1;
             }
 
             // Default audio mode is 4 channels per SDI input
@@ -2715,7 +2829,8 @@ int main (int argc, char ** argv)
     // empirically determined offsets.
     dma_video_size = width*height*2 + extra_offset;
 
-    audio_pair_size = 0x4000;
+    // Set up audio sizes for DMA transferred audio and reformatted secondary audio
+    int audio_pair_size = 0x4000;
     if (audio8ch)
     {
         audio_size = audio_pair_size * 4;
@@ -2728,22 +2843,27 @@ int main (int argc, char ** argv)
 
     // Max audio_size (8ch) is 0x10000      = 65536
     // Max audio data (8ch) is 1920 * 4 * 8 = 61440
-    // so we use the spare bytes at end for timecode and other data
+    //
+    // So we use the spare bytes at end for timecode and other per-frame data
+    // (a historical artifact from when the dma_total_size was set to be identical
+    // to element_size, in order to avoid perceived memory aligment issues)
     frame_data_offset = audio_offset + audio_size - sizeof(NexusFrameData);
-
-    /*
-    vitc_offset         = audio_offset + audio_size - 1 * sizeof(int);
-    ltc_offset          = audio_offset + audio_size - 2 * sizeof(int);
-    sys_time_offset     = audio_offset + audio_size - 3 * sizeof(int);
-    tick_offset         = audio_offset + audio_size - 4 * sizeof(int);
-    signal_ok_offset    = audio_offset + audio_size - 5 * sizeof(int);
-    num_aud_samp_offset = audio_offset + audio_size - 6 * sizeof(int);
-    frame_number_offset = audio_offset + audio_size - 7 * sizeof(int);
-    */
 
     // An element in the ring buffer contains: video(4:2:2) + audio + video(4:2:0)
     dma_total_size = dma_video_size     // video frame as captured by dma transfer
                     + audio_size;       // DVS internal structure for audio channels
+
+    // Compute size of secondary audio (always present as 16bit audio is always useful)
+    if (audio8ch)
+    {
+        // PAL_AUDIO_SAMPLES is maximum of all SDI audio formats
+        secondary_audio_size = 8 * PAL_AUDIO_SAMPLES * 2;
+    }
+    else
+    {
+        secondary_audio_size = 4 * PAL_AUDIO_SAMPLES * 2;
+    }
+    secondary_audio_offset = audio_offset + audio_size;
 
     // Compute size of secondary video (if any)
     int secondary_video_size = 0;
@@ -2769,9 +2889,14 @@ int main (int argc, char ** argv)
             break;
         }
     }
+	secondary_video_offset = secondary_audio_offset + secondary_audio_size;
 
-    // Element size made up from DMA transferred buffer plus secondary video (if any)
-    element_size = dma_total_size + secondary_video_size;
+    // Element size made up from DMA transferred buffer plus 16bit audio, plus secondary video (if any)
+    //
+    // TODO: Check whether element_size permit contiguous elements to be aligned on a large enough
+    // boundary for DMA transfers.  Historically DMA required a 4096 (0x1000) boundary, but
+    // sv_query(..., SV_QUERY_DMAALIGNMENT, ...) should tell us if padding is needed here.
+    element_size = dma_total_size + secondary_audio_size + secondary_video_size;
 
     // Create "NO VIDEO" frame
     no_video_frame = (uint8_t*)malloc(width*height*2);

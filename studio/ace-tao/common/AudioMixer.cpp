@@ -1,5 +1,5 @@
 /*
- * $Id: AudioMixer.cpp,v 1.2 2009/10/12 14:42:40 john_f Exp $
+ * $Id: AudioMixer.cpp,v 1.3 2010/06/25 14:22:21 philipn Exp $
  *
  * Simple class for mixing 4 audio tracks into 2 tracks.
  *
@@ -181,6 +181,68 @@ void AudioMixer::Mix(const audio_sample32_t * in1,
         *out = (audio_sample16_t) (mix1 / 65536);
         ++out;
         *out = (audio_sample16_t) (mix2 / 65536);
+        ++out;
+    }
+}
+
+/**
+Mix 4 co-timed input samples to 2 co-timed output samples for a time series
+of num_samples sample sets.
+Inputs are 4 named mono 16bit audio buffers while output samples are presented as alternating L/R type sequence.
+Input and output samples are 16-bit.
+*/
+void AudioMixer::Mix(const audio_sample16_t * in1,
+        const audio_sample16_t * in2,
+        const audio_sample16_t * in3,
+        const audio_sample16_t * in4,
+        audio_sample16_t * out,
+        int num_samples)
+{
+    double mix1;
+    double mix2;
+
+    for (int i = 0; i < num_samples; ++i)
+    {
+        // Apply mixing matrix.
+        mix1 = m11 * (*in1)
+            + m13 * (*in3);
+
+        mix2 = m21 * (*in1)
+            + m23 * (*in3);
+
+        mix1 += m12 * (*in2)
+            + m14 * (*in4);
+
+        mix2 += m22 * (*in2)
+            + m24 * (*in4);
+
+        ++in1;
+        ++in2;
+        ++in3;
+        ++in4;
+
+        // Clip samples to max/min permitted values.
+        if(mix1 > mSampleMax)
+        {
+            mix1 = mSampleMax;
+        }
+        else if(mix1 < mSampleMin)
+        {
+            mix1 = mSampleMin;
+        }
+        if(mix2 > mSampleMax)
+        {
+            mix2 = mSampleMax;
+        }
+        else if(mix2 < mSampleMin)
+        {
+            mix2 = mSampleMin;
+        }
+
+        // Store results
+        *out = mix1;
+        ++out;
+        *out = mix2;
         ++out;
     }
 }

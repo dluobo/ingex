@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_web.c,v 1.9 2010/06/17 17:15:30 john_f Exp $
+ * $Id: nexus_web.c,v 1.10 2010/06/25 14:22:21 philipn Exp $
  *
  * Stand-alone web server to monitor and control nexus applications
  *
@@ -94,16 +94,9 @@ static void get_audio_peak_power(const NexusControl *pctl, uint8_t **ring, int i
 {
     int pair;
     for (pair = 0; pair < 2; pair++) {
-        const uint8_t *audio_dvs;
-        if (pair == 0)
-            audio_dvs = nexus_audio12(pctl, ring, input, lastframe);
-        else if (pair == 1)
-            audio_dvs = nexus_audio34(pctl, ring, input, lastframe);
-
         int audio_chan;
         for (audio_chan = 0; audio_chan < 2; audio_chan++) {
-            uint8_t audio_16bitmono[1920*2];
-            dvsaudio32_to_16bitmono(audio_chan, audio_dvs, audio_16bitmono);
+            const uint8_t *audio_16bitmono = nexus_secondary_audio(pctl, ring, input, lastframe, audio_chan);
             audio_peak_power[pair*2 + audio_chan] = calc_audio_peak_power(audio_16bitmono, 1920, 2, -96.0);
         }
     }
@@ -293,11 +286,11 @@ static void nexus_state(struct shttpd_arg* arg)
         // The quad "channel" looks like a normal channel but it is virtual,
         // existing only in the Recorder as a composition of 4 normal channels.
         const NexusRecordEncodingInfo *p_enc = &(pctl->record_info[recidx].quad);
-        if (p_enc->enabled) {
+	 if (p_enc->enabled) {
             shttpd_printf(arg, ","); // add comma
             shttpd_printf(arg, "\n\t\t\t\"quad\":{");
             // TODO single encode type hardboded = bad
-            shttpd_printf(arg, "\n\t\t\t\t0:{"); // start encode type block
+            shttpd_printf(arg, "\n\t\t\t\t\"0\":{"); // start encode type block
             shttpd_printf(arg, "\n\t\t\t\t\t\"desc\":\"%s\",", p_enc->desc);
             shttpd_printf(arg, "\n\t\t\t\t\t\"enabled\": %d,", p_enc->enabled);
             shttpd_printf(arg, "\n\t\t\t\t\t\"recording\": %d,", p_enc->recording);
@@ -384,7 +377,7 @@ static void timecode(struct shttpd_arg* arg)
     NexusTC tc;
     int ltc = nexus_tc(pctl, ring, 0, lastframe, NexusTC_LTC);
     framesToTC(ltc, &tc);
-    shttpd_printf(arg, "\n\t\"tc\": { \"h\": %d, \"m\": %d, \"s\": %d, \"f\": %d, \"stopped\": %d },", tc.h, tc.m, tc.s, tc.f, tc_stuck);
+    shttpd_printf(arg, "\n\t\"tc\": { \"h\": %d, \"m\": %d, \"s\": %d, \"f\": %d, \"stopped\": %d }", tc.h, tc.m, tc.s, tc.f, tc_stuck);
     
     shttpd_printf(arg,"\n}\n"); // end whole thing
     arg->flags |= SHTTPD_END_OF_OUTPUT;

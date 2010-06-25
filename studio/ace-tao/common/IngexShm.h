@@ -1,5 +1,5 @@
 /*
- * $Id: IngexShm.h,v 1.5 2010/06/17 17:27:34 john_f Exp $
+ * $Id: IngexShm.h,v 1.6 2010/06/25 14:22:21 philipn Exp $
  *
  * Interface for reading audio/video data from shared memory.
  *
@@ -132,29 +132,25 @@ public:
         return nexus_frame_data(mpControl, mRing, channel, frame);
     }
 
-    int32_t * pAudio12(unsigned int channel, unsigned int frame)
+    int32_t * pPrimaryAudio(unsigned int channel, unsigned int frame, int track)
     {
-        return (int32_t *)nexus_audio12(mpControl, mRing, channel, frame);
+        return (int32_t *)nexus_primary_audio(mpControl, mRing, channel, frame, track);
     }
 
-    int32_t * pAudio34(unsigned int channel, unsigned int frame)
+    int16_t * pSecondaryAudio(unsigned int channel, unsigned int frame, int track)
     {
-        return (int32_t *)nexus_audio34(mpControl, mRing, channel, frame);
-    }
-
-    int32_t * pAudio56(unsigned int channel, unsigned int frame)
-    {
-        return (int32_t *)nexus_audio56(mpControl, mRing, channel, frame);
-    }
-
-    int32_t * pAudio78(unsigned int channel, unsigned int frame)
-    {
-        return (int32_t *)nexus_audio78(mpControl, mRing, channel, frame);
+        return (int16_t *)nexus_secondary_audio(mpControl, mRing, channel, frame, track);
     }
 
     int NumAudioSamples(unsigned int channel, unsigned int frame)
     {
-        return nexus_num_aud_samp(mpControl, mRing, channel, frame);
+		int audio_samples_per_frame = nexus_num_aud_samp(mpControl, mRing, channel, frame);
+		// Guard against garbage data
+        if (audio_samples_per_frame < 0 || audio_samples_per_frame > 1920)
+        {
+            audio_samples_per_frame = 1920;
+        }
+        return audio_samples_per_frame;
     }
 
     CaptureFormat PrimaryCaptureFormat()

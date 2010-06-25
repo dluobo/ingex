@@ -1,5 +1,5 @@
 /*
- * $Id: AudioMixer.h,v 1.2 2009/10/12 14:42:41 john_f Exp $
+ * $Id: AudioMixer.h,v 1.3 2010/06/25 14:22:21 philipn Exp $
  *
  * Simple class for mixing 4 audio tracks into 2 tracks.
  *
@@ -41,6 +41,12 @@ public:
     void SetMix(EnumeratedMatrix matrix);
     void Mix(const audio_sample32_t * in1,
         const audio_sample32_t * in3,
+        audio_sample16_t * out,
+        int num_samples);
+    void Mix(const audio_sample16_t * in1,
+        const audio_sample16_t * in2,
+        const audio_sample16_t * in3,
+        const audio_sample16_t * in4,
         audio_sample16_t * out,
         int num_samples);
 private:

@@ -1,5 +1,5 @@
 /*
- * $Id: IngexShm.cpp,v 1.5 2010/06/17 17:27:34 john_f Exp $
+ * $Id: IngexShm.cpp,v 1.6 2010/06/25 14:22:21 philipn Exp $
  *
  * Interface for reading audio/video data from shared memory.
  *
@@ -139,7 +139,7 @@ void IngexShm::Attach()
         // Shared memory found for control data, attach to it
         mpControl = (NexusControl *)ACE_OS::shmat(control_id, NULL, 0);
         mChannels = mpControl->channels;
-        mAudioTracksPerChannel = (mpControl->audio78_offset ? 8 : 4);
+        mAudioTracksPerChannel = mpControl->num_audio_tracks;
 
         ACE_DEBUG((LM_DEBUG,
             ACE_TEXT("Connected to p_control %@\n  channels=%d elementsize=%d ringlen=%d\n"),

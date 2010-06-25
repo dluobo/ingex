@@ -1,5 +1,5 @@
 /*
- * $Id: system_info_web.c,v 1.2 2009/10/12 15:11:31 john_f Exp $
+ * $Id: system_info_web.c,v 1.3 2010/06/25 14:22:21 philipn Exp $
  *
  * Web server to get info on CPU, memory and disk statistics
  *
@@ -142,7 +142,10 @@ static void disk_filesystem_stats(struct shttpd_arg* arg)
 
         if (buf[0] != '/')      // skip mounts which don't start with '/'
             continue;
-        p = strchr(buf, ' ');   // find the end of first word
+        //avoid the /proc mount
+	if (strncmp(buf, "/proc", 5) == 0)
+	   continue;
+	p = strchr(buf, ' ');   // find the end of first word
         if (p == NULL)
             continue;           // skip lines without a space
 

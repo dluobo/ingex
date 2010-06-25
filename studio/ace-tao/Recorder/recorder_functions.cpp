@@ -1,5 +1,5 @@
 /*
- * $Id: recorder_functions.cpp,v 1.34 2010/06/02 13:09:53 john_f Exp $
+ * $Id: recorder_functions.cpp,v 1.35 2010/06/25 14:22:21 philipn Exp $
  *
  * Functions which execute in recording threads.
  *
@@ -60,6 +60,8 @@
 #include <ace/OS_NS_unistd.h>
 
 #include <cstdio>
+#include <cstring>
+#include <cerrno>
 #include <iostream>
 #include <sstream>
 
@@ -418,6 +420,15 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         encoder = ENCODER_FFMPEG;
         mt_possible = true;
         break;
+	case MaterialResolution::XDCAMHD422_RAW:
+	//case MaterialResolution::XDCAMHD422_MXF_OP1A: TODO Not yet implemented
+		//pix_fmt = PIXFMT_422;
+		//codec_input_format = HD_422;
+		encoder = ENCODER_FFMPEG;
+		filename_extension = ".m2v";
+		
+		break;
+
     // Browse formats
     case MaterialResolution::DVD:
         encoder = ENCODER_FFMPEG_AV;
@@ -535,6 +546,8 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         ACE_DEBUG((LM_WARNING, ACE_TEXT("Warning: SourcePackage has fewer tracks than SourcConfig!\n")));
     }
 
+
+
     // Override file name extension for MXF or MOV wrapping
     switch (file_format)
     {
@@ -549,6 +562,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     default:
         break;
     }
+
 
     // (video) filename
     std::ostringstream filename_prefix;
@@ -776,6 +790,8 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         }
     }
 
+
+
     // Initialisation for av files
     // ffmpeg av encoder
     ffmpeg_encoder_av_t * enc_av = 0;
@@ -966,15 +982,9 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     // Update Record info
     IngexShm::Instance()->InfoSetRecording(channel_i, p_opt->index, quad_video, true);
     IngexShm::Instance()->InfoSetDesc(channel_i, p_opt->index, quad_video,
-                "%s%s %s%s%s%s%s",
+                "%s%s",
                 resolution_name.c_str(),
-                quad_video ? "(quad)" : "",
-                raw ? "RAW" : "MXF",
-                /*enable_audio12 ? " A12" : "",
-                enable_audio34 ? " A34" : "",
-                enable_audio56 ? " A56" : "",
-                enable_audio78 ? " A78" : ""*/
-                "", "", "", ""
+                quad_video ? " (quad)" : ""
                 );
 
     p_opt->FramesWritten(0);
@@ -1075,40 +1085,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                 //ACE_DEBUG((LM_DEBUG, ACE_TEXT("Channel %d, Frame %d\n"), ch, frame[ch]));
             }
 
-            // Set up some audio pointers.
-            // NB. Assuming all from same hardware channel.
-
-            // Pointer to audio12
-            int32_t * p_audio12 = IngexShm::Instance()->pAudio12(channel_i, frame[channel_i]);
-
-            // Pointer to audio34
-            int32_t * p_audio34 = IngexShm::Instance()->pAudio34(channel_i, frame[channel_i]);
-
-            // Pointer to audio56
-            int32_t * p_audio56 = IngexShm::Instance()->pAudio56(channel_i, frame[channel_i]);
-
-            // Pointer to audio78
-            int32_t * p_audio78 = IngexShm::Instance()->pAudio78(channel_i, frame[channel_i]);
-
-            // Need to set this for each captured frame because the number
-            // varies in NTSC.
             int audio_samples_per_frame = IngexShm::Instance()->NumAudioSamples(channel_i, frame[channel_i]);
-            // Guard against garbage data
-            if (audio_samples_per_frame < 0 || audio_samples_per_frame > 1920)
-            {
-                audio_samples_per_frame = 1920;
-            }
-
-            // Until we have mono audio buffers in IngexShm, demultiplex the audio.
-            // Buffers for audio de-interleaving
-            int16_t a[8][audio_samples_per_frame];
-            deinterleave_32to16(p_audio12, a[0], a[1], audio_samples_per_frame);
-            deinterleave_32to16(p_audio34, a[2], a[3], audio_samples_per_frame);
-            if (IngexShm::Instance()->AudioTracksPerChannel() >= 8)
-            {
-                deinterleave_32to16(p_audio56, a[4], a[5], audio_samples_per_frame);
-                deinterleave_32to16(p_audio78, a[6], a[7], audio_samples_per_frame);
-            }
 
             // Set up all the input pointers as tracks of an EncodeFrame
             int frame_index = frame[channel_i];
@@ -1150,16 +1127,10 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                 }
                 else
                 {
-                    //p = IngexShm::Instance()->pAudio(hw.channel, hw.track, frames[hw.channel]);
-                    // Mono audio buffers not yet available
-                    p = a[hw.track - 1];
-                    size = audio_samples_per_frame * 2;
-                    
-                    // Audio not in shared memory buffer so we need to copy for multi-threaded encode
-                    if (mt_encoder)
-                    {
-                        copy = true;
-                    }
+                    // Get pointer to 16bit mono audio buffer (in shared memory) for this track
+                    p = IngexShm::Instance()->pSecondaryAudio(channel_i, frame[channel_i], hw.track - 1);
+
+                    size = audio_samples_per_frame * 2;	// 16bit audio
                 }
                 
                 /*
@@ -1303,12 +1274,15 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             }
  
             // Mix audio for browse version
-            int16_t mixed_audio[audio_samples_per_frame * 2];    // for stereo pair output
+            int16_t mixed_audio[audio_samples_per_frame * 2];    // for 16bit stereo pair output
 
-// Needs update for mono 32-bit audio buffers when we have them
             if (browse_audio || ENCODER_FFMPEG_AV == encoder)
             {
-                mixer.Mix(p_audio12, p_audio34, mixed_audio, audio_samples_per_frame);
+                int16_t *pA1 = IngexShm::Instance()->pSecondaryAudio(channel_i, frame[channel_i], 0);
+                int16_t *pA2 = IngexShm::Instance()->pSecondaryAudio(channel_i, frame[channel_i], 1);
+                int16_t *pA3 = IngexShm::Instance()->pSecondaryAudio(channel_i, frame[channel_i], 2);
+                int16_t *pA4 = IngexShm::Instance()->pSecondaryAudio(channel_i, frame[channel_i], 3);
+                mixer.Mix(pA1, pA2, pA3, pA4, mixed_audio, audio_samples_per_frame);
             }
 
             //
@@ -1524,12 +1498,15 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                                 if (PICTURE_DATA_DEFINITION == mp_trk->dataDef)
                                 {
                                     // Video
-                                    size_t n = fwrite(eft.Data(), eft.Size(), 1, fp);
-                                    if (n == 0)
+                                    if (eft.Size())
                                     {
-                                        ACE_DEBUG((LM_ERROR, ACE_TEXT("Raw video file write error!\n")));
-                                        fclose(fp);
-                                        fp = NULL;
+                                        size_t n = fwrite(eft.Data(), eft.Size(), 1, fp);
+                                        if (n == 0)
+                                        {
+                                            ACE_DEBUG((LM_ERROR, ACE_TEXT("Raw video file write error!\n")));
+                                            fclose(fp);
+                                            fp = NULL;
+                                        }
                                     }
                                 }
                                 else if (mp_trk->dataDef == SOUND_DATA_DEFINITION)
@@ -1672,6 +1649,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     }
 
     IngexShm::Instance()->InfoSetRecording(channel_i, p_opt->index, quad_video, false);
+    IngexShm::Instance()->InfoSetDesc(channel_i, p_opt->index, quad_video, "");
 
     // Get user comments (only available after stop)
     p_rec->GetMetadata(project_name, user_comments);
@@ -1742,15 +1720,30 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     {
         if (mxf || (SAVE_PACKAGE_DATA && ENCODER_FFMPEG_AV == encoder && !quad_video))
         {
+            std::ostringstream creating_metadata_filename;
+            creating_metadata_filename << p_opt->dir << PATH_SEPARATOR <<
+                                          mxf_subdir_creating << PATH_SEPARATOR <<
+                                          p_opt->file_ident << ".xml";
             std::ostringstream metadata_filename;
             metadata_filename << p_opt->dir << PATH_SEPARATOR <<
                                  mxf_subdir_metadata << PATH_SEPARATOR <<
                                  p_opt->file_ident << ".xml";
 
-            package_creator->SaveToFile(metadata_filename.str());
-            ACE_DEBUG((LM_DEBUG, ACE_TEXT("Saved package group '%C' to metadata file '%C'\n"),
-                                          package_creator->GetMaterialPackage()->name.c_str(),
-                                          metadata_filename.str().c_str()));
+            // save to creating directory and then move to the metadata directory
+            package_creator->SaveToFile(creating_metadata_filename.str());
+            if (rename(creating_metadata_filename.str().c_str(), metadata_filename.str().c_str()) != 0)
+            {
+                ACE_DEBUG((LM_ERROR, ACE_TEXT("Failed to rename metadata file from '%C' to '%C': %C\n"),
+                                              creating_metadata_filename.str().c_str(),
+                                              metadata_filename.str().c_str(),
+                                              strerror(errno)));
+            }
+            else
+            {
+                ACE_DEBUG((LM_DEBUG, ACE_TEXT("Saved package group '%C' to metadata file '%C'\n"),
+                                              package_creator->GetMaterialPackage()->name.c_str(),
+                                              metadata_filename.str().c_str()));
+            }
         }
     }
     catch (const prodauto::ProdAutoException & e)

@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_multicast.c,v 1.12 2010/03/29 17:06:52 philipn Exp $
+ * $Id: nexus_multicast.c,v 1.13 2010/06/25 14:22:21 philipn Exp $
  *
  * Utility to multicast video frames from dvs_sdi ring buffer to network
  *
@@ -302,6 +302,7 @@ extern int main(int argc, char *argv[])
     {
         const uint8_t *p_video = blank_video, *p_audio = blank_audio;
         int tc = 0, ltc = 0, signal_ok = 0;
+        uint8_t audio[1920*2*2];		// holds audio for 2 tracks of 16bit audio
 
 
         if (! nexus_connection_status(&nc, NULL, NULL)) {
@@ -345,10 +346,8 @@ extern int main(int argc, char *argv[])
             // get video and audio pointers
             const uint8_t *video_frame = ring[channelnum] + video_offset +
                                     pctl->elementsize * (pc->lastframe % pctl->ringlen);
-            const uint8_t *audio_dvs_fmt = ring[channelnum] + pctl->audio12_offset +
-                                    pctl->elementsize * (pc->lastframe % pctl->ringlen);
-
-            uint8_t audio[1920*2*2];
+            const uint8_t *audio1 = nexus_secondary_audio(pctl, nc.ring, channelnum, pc->lastframe, 0);
+            const uint8_t *audio2 = nexus_secondary_audio(pctl, nc.ring, channelnum, pc->lastframe, 1);
 
             if (signal_ok) {
                 if (width != out_width || height != out_height) {
@@ -365,13 +364,13 @@ extern int main(int argc, char *argv[])
 
                 if (ts) {
                     // MPEG-2 audio encoder needs 16bit stereo pair
-                    dvsaudio32_to_16bitpair(1920, audio_dvs_fmt, audio);
+                    audio_16bit_mono_to_16bit_stereo(1920, audio1, audio2, audio);
                 }
                 else {
                     // reformat audio to two mono channels one after the other
-                    // i.e. 1920 samples of channel 0, followed by 1920 samples of channel 1
-                    dvsaudio32_to_16bitmono(0, audio_dvs_fmt, audio);
-                    dvsaudio32_to_16bitmono(1, audio_dvs_fmt, audio + 1920*2);
+                    // i.e. 1920 samples of audio1, followed by 1920 samples of audio2
+                    memcpy(audio, audio1, 1920*2);
+                    memcpy(audio + 1920*2, audio2, 1920*2);
                 }
                 p_audio = audio;
             }

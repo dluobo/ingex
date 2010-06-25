@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_save.c,v 1.12 2010/06/02 13:10:46 john_f Exp $
+ * $Id: nexus_save.c,v 1.13 2010/06/25 14:22:21 philipn Exp $
  *
  * Utility to store video frames from dvs_sdi ring buffer to disk files
  *
@@ -272,7 +272,7 @@ extern int main(int argc, char *argv[])
     // Default to primary 4:2:2 video
     int frame_size = width*height*2;
     int video_offset = 0;
-    int audio_offset = pctl->audio12_offset;
+    int audio_offset = pctl->audio_offset;
     int audio_size = pctl->audio_size;
 
     printf("  saved image is %dx%d\n", width, height);
@@ -305,6 +305,8 @@ extern int main(int argc, char *argv[])
     // Get the video raster and check that video buffer is compatible
     Ingex::VideoRaster::EnumType raster = Ingex::VideoRaster::NONE;
     switch (res) {
+    case MaterialResolution::NONE:
+        break;
     case MaterialResolution::DV50_RAW:
     case MaterialResolution::IMX30_MXF_ATOM:
     case MaterialResolution::IMX40_MXF_ATOM:
@@ -379,16 +381,6 @@ extern int main(int argc, char *argv[])
 
             tc = nfd->vitc;
             ltc = nfd->ltc;
-
-            /*
-            tc = *(int*)(ring[channelnum] + pctl->elementsize *
-                                    (frame_idx % pctl->ringlen)
-                            + pctl->vitc_offset);
-            ltc = *(int*)(ring[channelnum] + pctl->elementsize *
-                                    (frame_idx % pctl->ringlen)
-                            + pctl->ltc_offset);
-            */
-
 
             uint8_t *video_frame = ring[channelnum] + video_offset +
                                 pctl->elementsize * (frame_idx % pctl->ringlen);

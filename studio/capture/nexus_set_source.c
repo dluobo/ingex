@@ -85,11 +85,11 @@ extern int main(int argc, char *argv[])
                 pctl->height,
                 pctl->frame_rate_numer,
                 pctl->frame_rate_denom);
-        printf("  pri_format=%d sec_format=%d a12_offset=%d a34_offset=%d audio_size=%d\n",
+        printf("  pri_format=%d sec_format=%d audio_offset=%d sec_audio_offset=%d audio_size=%d\n",
                 pctl->pri_video_format,
                 pctl->sec_video_format,
-                pctl->audio12_offset,
-                pctl->audio34_offset,
+                pctl->audio_offset,
+                pctl->sec_audio_offset,
                 pctl->audio_size);
         printf("  frame_data_offset=%d\n", pctl->frame_data_offset);
         /*

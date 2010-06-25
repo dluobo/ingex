@@ -135,9 +135,9 @@ extern int main(int argc, char *argv[])
                 pctl->owner_heartbeat.tv_usec,
                 now.tv_sec,
                 now.tv_usec);
-        printf("  a12_offset=%d a34_offset=%d audio_size=%d\n",
-                pctl->audio12_offset,
-                pctl->audio34_offset,
+        printf("  audio_offset=%d sec_audio_offset=%d audio_size=%d\n",
+                pctl->audio_offset,
+                pctl->sec_audio_offset,
                 pctl->audio_size);
         printf("  frame_data_offset=%d\n", pctl->frame_data_offset);
         /*
@@ -213,13 +213,10 @@ extern int main(int argc, char *argv[])
 
             last_saved[i] = lastframe;
 
-            // reformat audio for calculating peak power
-            const uint8_t *audio_dvs = nexus_audio12(pctl, ring, i, lastframe);
-
+            // calculate peak power
             int audio_chan;
             for (audio_chan = 0; audio_chan < 2; audio_chan++) {
-                uint8_t audio_16bitmono[1920*2];
-                dvsaudio32_to_16bitmono(audio_chan, audio_dvs, audio_16bitmono);
+                const uint8_t *audio_16bitmono = nexus_secondary_audio(pctl, ring, i, lastframe, audio_chan);
                 audio_peak_power[i][audio_chan] = calc_audio_peak_power(audio_16bitmono, 1920, 2, -96.0);
             }
 
