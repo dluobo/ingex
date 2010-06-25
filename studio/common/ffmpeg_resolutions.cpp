@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_resolutions.cpp,v 1.1 2010/06/02 13:10:46 john_f Exp $
+ * $Id: ffmpeg_resolutions.cpp,v 1.2 2010/06/25 14:24:33 philipn Exp $
  *
  * Info on ffmpeg parameters for a particular MaterialResolution
  *
@@ -118,6 +118,19 @@ void get_ffmpeg_params(MaterialResolution::EnumType res, Ingex::VideoRaster::Enu
             break;
         }
         break;
+
+	case MaterialResolution::XDCAMHD422_RAW:
+         codec_id = CODEC_ID_MPEG2VIDEO;	
+		 codec_type = CODEC_TYPE_VIDEO;
+		 pix_fmt = PIX_FMT_YUV422P;
+         break;
+
+	case MaterialResolution::XDCAMHD422_MOV:   
+		 codec_id = CODEC_ID_MPEG2VIDEO;	
+		 codec_type = CODEC_TYPE_VIDEO;
+		 pix_fmt = PIX_FMT_YUV422P;
+      break;
+
     case MaterialResolution::DVD:
         codec_id = CODEC_ID_MPEG2VIDEO;
         codec_type = CODEC_TYPE_VIDEO;
