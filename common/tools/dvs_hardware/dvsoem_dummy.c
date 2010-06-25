@@ -1,5 +1,5 @@
 /*
- * $Id: dvsoem_dummy.c,v 1.14 2010/06/25 13:54:06 philipn Exp $
+ * $Id: dvsoem_dummy.c,v 1.15 2010/06/25 14:41:54 philipn Exp $
  *
  * Implement a debug-only DVS hardware library for testing.
  *
@@ -69,6 +69,7 @@ typedef struct {
     int frame_rate_numer;
     int frame_rate_denom;
     int videomode;
+    int audio_channels;
     int frame_size;
     int frame_count;
     int timecode;
@@ -118,7 +119,8 @@ typedef struct {
 } bar_colour_t;
 
 // Dummy audio: 500Hz tone fits neatly into 1920 samples (1 PAL video frame).
-// Use a simple table of signed 16bit samples to avoid linking maths library.
+// Use a simple table of signed 16bit samples to avoid linking maths library,
+// and to aid debugging when looking through hex data.
 static int16_t tone_500Hz_16bit_1cycle[96] = {
 0x0000, 0x006B, 0x00D6, 0x0140, 0x01A7, 0x0210, 0x0271, 0x02D8,
 0x032F, 0x0393, 0x03E1, 0x043B, 0x0486, 0x04CF, 0x0515, 0x0551,
@@ -261,7 +263,11 @@ static void setup_source_buf(DvsCard * dvs)
 
     // DVS dma transfer buffer is:
     // <video (UYVY)><audio ch 1+2 with fill to 0x4000><audio ch 3+4 with fill>
+    // (if SV_MODE_AUDIO_8CHANNEL)<audio ch 5+6><audio ch 7+8>
     dvs->frame_size = video_size + 0x4000 + 0x4000;
+    if (dvs->audio_channels == 8) {
+        dvs->frame_size += 0x4000 + 0x4000;    // 4 extra audio channels
+    }
 
     if (fp_video && fp_audio && vidfile_size) {
         int max_memory = 103680000;         // 5 seconds of 720x576
@@ -303,6 +309,30 @@ static void setup_source_buf(DvsCard * dvs)
             audio2[i * 2] = sample500;
             audio3[i * 2] = sample1000;
             audio4[i * 2] = sample1000;
+        }
+
+        if (dvs->audio_channels == 8) {
+            // The 4 extra channels are arranged after the first 4 (size 0x8000)
+            int32_t * audio5 = (int32_t *)(audio12 + 0x8000);
+            int32_t * audio6 = audio5 + 1;
+            int32_t * audio7 = (int32_t *)(audio34 + 0x8000);
+            int32_t * audio8 = audio7 + 1;
+    
+            // Create 500Hz tone on audio 5,6 and 1000Hz tone on audio 7,8
+            int i;
+            for (i = 0; i < 1920; i++)
+            {
+                // shift 16bit sample to 32bit
+                int sample500 = tone_500Hz_16bit_1cycle[i % 96] << 16;
+    
+                // double frequency for audio 7 and 8
+                int sample1000 = tone_500Hz_16bit_1cycle[(i*2) % 96] << 16;
+    
+                audio5[i * 2] = sample500;
+                audio6[i * 2] = sample500;
+                audio7[i * 2] = sample1000;
+                audio8[i * 2] = sample1000;
+            }
         }
     }
     else {
@@ -564,6 +594,17 @@ int sv_videomode(sv_handle * sv, int videomode)
         dvs->height = 720;
         dvs->frame_rate_numer = 60000;
         dvs->frame_rate_denom = 1001;
+        break;
+    }
+
+    // Only 4 and 8 channel audio implemented (more audio modes are possible)
+    switch (videomode & SV_MODE_AUDIO_MASK)
+    {
+    case SV_MODE_AUDIO_8CHANNEL:
+        dvs->audio_channels = 8;
+        break;
+    default:
+        dvs->audio_channels = 4;
         break;
     }
 
