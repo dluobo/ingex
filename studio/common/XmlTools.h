@@ -1,5 +1,5 @@
 /*
- * $Id: XmlTools.h,v 1.2 2009/09/18 16:25:48 philipn Exp $
+ * $Id: XmlTools.h,v 1.3 2010/07/06 14:15:13 john_f Exp $
  *
  * Utility class for handling XML.
  *
@@ -32,13 +32,19 @@
 
 XERCES_CPP_NAMESPACE_USE
 
+#if XERCES_VERSION_MAJOR >= 3
+#define FileToDomParser DOMLSParser
+#else
+#define FileToDomParser DOMBuilder
+#endif
+
 class XmlTools
 {
 public:
     static void Initialise();
     static void Terminate();
     static void DomToFile(DOMDocument * doc, const char * filename, bool pretty_print = true);
-    static void FileToDom(const char * filename, DOMBuilder * & parser, DOMDocument * & doc);
+    static void FileToDom(const char * filename, FileToDomParser * & parser, DOMDocument * & doc);
 };
 
 // ---------------------------------------------------------------------------

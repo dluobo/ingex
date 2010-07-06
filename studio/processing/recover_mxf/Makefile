@@ -36,7 +36,7 @@ LIB_DIRS = -L$(LIBMXFPP_DIR)/libMXF++ \
 		   -L$(INGEXMXFINFO_DIR) \
 		   -L$(MXFWRITER_DIR) \
 		   -L$(OPATOMREADER_DIR) 
-LIBS = -lOPAtomReader -lingexmxfinfo -lmxfwriter -lprodautodb -lcommon -lstudiocommon -lpq -lpqxx -lMXF++ -lwriteavidmxf -lMXF -luuid -lpthread
+LIBS = -lOPAtomReader -lingexmxfinfo -lmxfwriter -lprodautodb -lcommon -lstudiocommon -lpqxx -lMXF++ -lwriteavidmxf -lMXF -luuid -lpthread
 
 
 SOURCES = $(wildcard *.cpp)

@@ -15,7 +15,7 @@ while getopts 'h' OPT
 do
   case $OPT in
   h)   MAX_CHANNELS=2
-       MODE="1920x1080i50"
+       MODE="1920x1080i25"
        SECONDARY_BUFFER="YUV422"
        ;;
   ?)   echo "${usage}"

@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_xv.c,v 1.5 2009/10/12 15:11:46 john_f Exp $
+ * $Id: nexus_xv.cpp,v 1.1 2010/07/06 14:15:13 john_f Exp $
  *
  * Utility to display current video frame on X11 display.
  *

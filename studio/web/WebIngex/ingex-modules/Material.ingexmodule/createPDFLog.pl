@@ -145,8 +145,8 @@ sub write_pdf {
 	my ( $fh, $filename ) = tempfile( DIR => $tempdir, SUFFIX => '.pdf' );	# create unique temp file
 
 	my $pdf = new PDF::Create(				'filename'     => $filename,
-	                                        'Author'       => 'John Doe',
-	                                        'Title'        => 'Sample PDF',
+	                                        'Author'       => '',
+	                                        'Title'        => 'PDF Logsheet',
 	                                        'CreationDate' => [ localtime ], );
 	                   
 	# Prepare fonts
@@ -166,7 +166,7 @@ sub write_pdf {
 		my $pkgid = $_;
 		$timePos->{$pos} = $pkgid;		# lookup table for pakage ids ordered by time
 	}
-	my @srtPos = sort{$a cmp $b} (keys %{$timePos});	# ordered position list
+	my @srtPos = sort{$a <=> $b} (keys %{$timePos});	# ordered position list
 	
 	# calculate total run duration
 	my $startLogPos = $srtPos[0];

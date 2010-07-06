@@ -1,9 +1,9 @@
 /*
- * $Id: dvs_sdi.c,v 1.33 2010/06/25 14:22:21 philipn Exp $
+ * $Id: dvs_sdi.cpp,v 1.1 2010/07/06 14:15:13 john_f Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
- * Copyright (C) 2005  Stuart Cunningham <stuart_hc@users.sourceforge.net>
+ * Copyright (C) 2005 - 2010 British Broadcasting Corporation
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -20,8 +20,6 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
  * 02110-1301, USA.
  */
-
-#define _XOPEN_SOURCE 600           // for posix_memalign
 
 #define __STDC_CONSTANT_MACROS
 #define __STDC_FORMAT_MACROS
@@ -76,8 +74,7 @@ const int PAL_AUDIO_SAMPLES = 1920;
 const int NTSC_AUDIO_SAMPLES[5] = { 1602, 1601, 1602, 1601, 1602 };
 static int ntsc_audio_seq = 0;
 
-//#define MAX_CHANNELS 8  (defined in nexus_control.h)
-// each DVS card can have 2 channels, so 4 cards gives 8 channels
+const int64_t microseconds_per_day = 24 * 60 * 60 * INT64_C(1000000);
 
 // Each thread uses the following thread-specific data
 typedef struct {
@@ -86,10 +83,15 @@ typedef struct {
     AVFrame *outFrame;
 } SDIThreadData;
 
-// Debug
-static int DEBUG_TIMING = 0;
+// Global variables for local context
+namespace
+{
 
-// Globals
+// Debug
+int DEBUG_TIMING = 0;
+
+int64_t midnight_microseconds = 0;
+
 pthread_t       sdi_thread[MAX_CHANNELS] = {0};
 sv_handle       *a_sv[MAX_CHANNELS] = {0};
 SDIThreadData   td[MAX_CHANNELS];
@@ -106,61 +108,48 @@ VideoRaster::EnumType primary_video_raster = VideoRaster::NONE;
 VideoRaster::EnumType secondary_video_raster = VideoRaster::NONE;
 Interlace::EnumType interlace = Interlace::NONE;
 int             element_size = 0, dma_video_size = 0, dma_total_size = 0;
-static int      audio_offset = 0, audio_size = 0;
-static int      secondary_audio_offset = 0, secondary_audio_size = 0;
-static int      secondary_video_offset = 0;
+int      audio_offset = 0, audio_size = 0;
+int      secondary_audio_offset = 0, secondary_audio_size = 0;
+int      secondary_video_offset = 0;
 
 int             frame_data_offset = 0;
-
-/*
-int             ltc_offset = 0, vitc_offset = 0;
-int             sys_time_offset = 0, tick_offset = 0, signal_ok_offset = 0;
-int             num_aud_samp_offset = 0;
-int             frame_number_offset = 0;
-*/
 
 CaptureFormat   video_format = Format422PlanarYUV;    // Only retained for backward compatibility
 CaptureFormat   video_secondary_format = FormatNone;  // Only retained for backward compatibility
 Ingex::PixelFormat::EnumType primary_pixel_format = Ingex::PixelFormat::NONE;
 Ingex::PixelFormat::EnumType secondary_pixel_format = Ingex::PixelFormat::NONE;
-static int primary_line_shift = 0;
-static int secondary_line_shift = 0;
+int primary_line_shift = 0;
+int secondary_line_shift = 0;
 
-static int verbose = 0;
-static int verbose_channel = -1;    // which channel to show when verbose is on
-static int audio8ch = 0;
-static int test_avsync = 0;
-static uint8_t *video_work_area[MAX_CHANNELS];
-static int benchmark = 0;
-static uint8_t *benchmark_video = NULL;
-static char *video_sample_file = NULL;
-static int aes_audio = 0;
-static int aes_routing = 0;
+int verbose = 0;
+int verbose_channel = -1;    // which channel to show when verbose is on
+int audio8ch = 0;
+int test_avsync = 0;
+uint8_t *video_work_area[MAX_CHANNELS];
+int benchmark = 0;
+uint8_t *benchmark_video = NULL;
+char *video_sample_file = NULL;
+int aes_audio = 0;
+int aes_routing = 0;
 
 pthread_mutex_t m_log = PTHREAD_MUTEX_INITIALIZER;      // logging mutex to prevent intermixing logs
 
-// Recover timecode type is the type of timecode to use to generate dummy frames
-/*
-typedef enum {
-    RecoverVITC,
-    RecoverLTC
-} RecoverTimecodeType;
-*/
-
-static NexusTimecode timecode_type = NexusTC_VITC;   // default timecode is VITC
-static int master_channel = -1;                      // default is no master timecode distribution
+NexusTimecode timecode_type = NexusTC_VITC;   // default timecode is VITC
+int master_channel = -1;                      // default is no master timecode distribution
 
 // The mutex m_master_tc guards all access to master_tc and master_tod variables
 pthread_mutex_t m_master_tc = PTHREAD_MUTEX_INITIALIZER;
-//static int master_tc = 0;               // timecode as integer
-static Ingex::Timecode master_tc;       // master timecode
-static int64_t master_tod = 0;          // gettimeofday value corresponding to master_tc
+//int master_tc = 0;               // timecode as integer
+Ingex::Timecode master_tc;       // master timecode
+int64_t master_tod = 0;          // gettimeofday value corresponding to master_tc
 
 // When generating dummy frames, use LTC differences to calculate how many frames
-//static NexusTimecode recover_timecode_type = RecoverLTC;
+//NexusTimecode recover_timecode_type = RecoverLTC;
 
-static uint8_t *no_video_frame = NULL;              // captioned black frame saying "NO VIDEO"
-static uint8_t *no_video_secondary_frame = NULL;    // captioned black frame saying "NO VIDEO"
+uint8_t *no_video_frame = NULL;              // captioned black frame saying "NO VIDEO"
+uint8_t *no_video_secondary_frame = NULL;    // captioned black frame saying "NO VIDEO"
+
+}
 
 #define SV_CHECK(x) {int res = x; if (res != SV_OK) { fprintf(stderr, "sv call failed=%d  %s line %d\n", res, __FILE__, __LINE__); sv_errorprint(sv,res); cleanup_exit(1, sv); } }
 
@@ -181,7 +170,11 @@ static uint8_t *no_video_secondary_frame = NULL;    // captioned black frame say
 #define SV_AUDIOAESROUTING_4_4      3
 #endif
 
-static void timestamp_decode(int64_t timestamp, int * year, int * month, int * day, int * hour, int * minute, int * sec, int * microsec)
+// Functions in local context
+namespace
+{
+
+void timestamp_decode(int64_t timestamp, int * year, int * month, int * day, int * hour, int * minute, int * sec, int * microsec)
 {
     time_t time_sec = timestamp / INT64_C(1000000);
     struct tm my_tm;
@@ -195,7 +188,7 @@ static void timestamp_decode(int64_t timestamp, int * year, int * month, int * d
     *microsec = timestamp % INT64_C(1000000);
 }
 
-static Ingex::Timecode timecode_from_dvs_bits(int bits, int fps_num, int fps_den)
+Ingex::Timecode timecode_from_dvs_bits(int bits, int fps_num, int fps_den)
 {
     int hr10  = (bits & 0x30000000) >> 28;
     int hr01  = (bits & 0x0f000000) >> 24;
@@ -217,7 +210,7 @@ static Ingex::Timecode timecode_from_dvs_bits(int bits, int fps_num, int fps_den
     return Ingex::Timecode(hr, min, sec, fm, fps_num, fps_den, drop);
 }
 
-static void show_scheduler()
+void show_scheduler()
 {
     int sched = sched_getscheduler(0);
     switch (sched)
@@ -237,7 +230,7 @@ static void show_scheduler()
     }
 }
 
-static int init_process_shared_mutex(pthread_mutex_t *mutex)
+int init_process_shared_mutex(pthread_mutex_t *mutex)
 {
     pthread_mutexattr_t attr;
     if (pthread_mutexattr_init(&attr) != 0) {
@@ -261,7 +254,7 @@ static int init_process_shared_mutex(pthread_mutex_t *mutex)
     return 1;
 }
 
-static void cleanup_shared_mem(void)
+void cleanup_shared_mem(void)
 {
     int             i, id;
     struct shmid_ds shm_desc;
@@ -281,7 +274,7 @@ static void cleanup_shared_mem(void)
     }
 }
 
-static void cleanup_exit(int res, sv_handle *sv)
+void cleanup_exit(int res, sv_handle *sv)
 {
     printf("cleaning up\n");
 
@@ -313,7 +306,7 @@ static void cleanup_exit(int res, sv_handle *sv)
     exit(res);
 }
 
-static int check_sdk_version3(void)
+int check_sdk_version3(void)
 {
     sv_handle *sv;
     sv_version version;
@@ -332,7 +325,7 @@ static int check_sdk_version3(void)
 }
 
 /*
-static void framerate_for_videomode(int videomode, int *p_numer, int *p_denom)
+void framerate_for_videomode(int videomode, int *p_numer, int *p_denom)
 {
     int video = videomode & SV_MODE_MASK;       // mask off everything except video
 
@@ -359,7 +352,7 @@ static void framerate_for_videomode(int videomode, int *p_numer, int *p_denom)
 }
 */
 
-static int get_video_raster(int channel, VideoRaster::EnumType & video_raster)
+int get_video_raster(int channel, VideoRaster::EnumType & video_raster)
 {
     int dvs_mode;
     int ret = sv_query(a_sv[channel], SV_QUERY_MODE_CURRENT, 0, &dvs_mode);
@@ -392,7 +385,7 @@ static int get_video_raster(int channel, VideoRaster::EnumType & video_raster)
     return ret;
 }
 
-static VideoRaster::EnumType sd_raster(VideoRaster::EnumType raster)
+VideoRaster::EnumType sd_raster(VideoRaster::EnumType raster)
 {
     VideoRaster::EnumType sd_raster;
     switch (raster)
@@ -415,7 +408,7 @@ static VideoRaster::EnumType sd_raster(VideoRaster::EnumType raster)
     return sd_raster;
 }
 
-static int set_videomode_on_all_channels(int max_channels, VideoRaster::EnumType video_raster, int n_audio)
+int set_videomode_on_all_channels(int max_channels, VideoRaster::EnumType video_raster, int n_audio)
 {
     int dvs_mode = SV_MODE_COLOR_YUV422 | SV_MODE_STORAGE_FRAME;
 
@@ -577,18 +570,18 @@ void set_sync_option(int channel, int sync_type, int width)
     }
 }
 
-static void catch_sigusr1(int sig_number)
+void catch_sigusr1(int sig_number)
 {
     // toggle a flag
 }
 
-static void catch_sigint(int sig_number)
+void catch_sigint(int sig_number)
 {
     printf("\nReceived signal %d - ", sig_number);
     cleanup_exit(0, NULL);
 }
 
-static void log_avsync_analysis(int chan, int lastframe, const uint8_t *addr, unsigned long audio12_offset, unsigned long audio34_offset)
+void log_avsync_analysis(int chan, int lastframe, const uint8_t *addr, unsigned long audio12_offset, unsigned long audio34_offset)
 {
     int line_size = width*2;
     int click1 = 0, click1_off = -1;
@@ -620,7 +613,7 @@ static void log_avsync_analysis(int chan, int lastframe, const uint8_t *addr, un
 
 // Read available physical memory stats and
 // allocate shared memory ring buffers accordingly.
-static int allocate_shared_buffers(int num_channels, long long max_memory)
+int allocate_shared_buffers(int num_channels, long long max_memory)
 {
     long long   k_shmmax = 0;
     int         ring_len, i;
@@ -777,7 +770,8 @@ static int allocate_shared_buffers(int num_channels, long long max_memory)
 
 // Return number of seconds between 1 Jan 1970 and last midnight
 // where midnight is localtime not GMT.
-static time_t today_midnight_time(void)
+/*
+time_t today_midnight_time(void)
 {
     struct tm now_tm;
 
@@ -788,8 +782,9 @@ static time_t today_midnight_time(void)
     now_tm.tm_hour = 0;
     return mktime(&now_tm);
 }
+*/
 
-static void dvsaudio32_deinterleave_32bit(uint8_t *audio12, uint8_t *audio34, uint8_t *a32[])
+void dvsaudio32_deinterleave_32bit(uint8_t *audio12, uint8_t *audio34, uint8_t *a32[])
 {
 	// Copy all 32bits, de-interleaving pairs
     for (int i = 0; i < MAX_AUDIO_SAMPLES_PER_FRAME; i++) {
@@ -815,7 +810,7 @@ static void dvsaudio32_deinterleave_32bit(uint8_t *audio12, uint8_t *audio34, ui
 	}
 }
 
-static void dvsaudio32_deinterleave_16bit(uint8_t *audio12, uint8_t *audio34, uint8_t *a16[])
+void dvsaudio32_deinterleave_16bit(uint8_t *audio12, uint8_t *audio34, uint8_t *a16[])
 {
     // Copy 16 most significant bits out of 32 bit audio pairs
     // for 4 channels each loop iteraction
@@ -834,7 +829,7 @@ static void dvsaudio32_deinterleave_16bit(uint8_t *audio12, uint8_t *audio34, ui
     }
 }
 
-static void dvsaudio32_to_4_mono_tracks(uint8_t *src, uint8_t *dst32, uint8_t *dst16)
+void dvsaudio32_to_4_mono_tracks(uint8_t *src, uint8_t *dst32, uint8_t *dst16)
 {
     // src contains either 4 channels or 8 channels as multiplexed pairs
     // where each pair is aligned on a 0x4000 boundary
@@ -864,7 +859,7 @@ static void dvsaudio32_to_4_mono_tracks(uint8_t *src, uint8_t *dst32, uint8_t *d
 	dvsaudio32_deinterleave_16bit(audio12, audio34, a16);
 }
 
-static void dvsaudio32_to_mono_audio(uint8_t *src, uint8_t *dst32, uint8_t *dst16, int audio8)
+void dvsaudio32_to_mono_audio(uint8_t *src, uint8_t *dst32, uint8_t *dst16, int audio8)
 {
     // src and dst32 can be the same buffer, so first read full src audio into tmp buffer
     uint8_t tmp[audio_size];
@@ -885,7 +880,7 @@ static void dvsaudio32_to_mono_audio(uint8_t *src, uint8_t *dst32, uint8_t *dst1
 
 // Given a 64bit time-of-day corresponding to when a frame was captured,
 // calculate a derived timecode from the global master timecode.
-static Ingex::Timecode derive_timecode_from_master(int64_t tod_rec, int64_t *p_diff_to_master)
+Ingex::Timecode derive_timecode_from_master(int64_t tod_rec, int64_t *p_diff_to_master)
 {
     Ingex::Timecode derived_tc = master_tc;
     int64_t diff_to_master = 0;
@@ -926,7 +921,7 @@ static Ingex::Timecode derive_timecode_from_master(int64_t tod_rec, int64_t *p_d
 //
 // Gets a frame from the SDI FIFO and stores it to memory ring buffer
 // (also can write to disk as a debugging option)
-static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_from_video_loss)
+int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_from_video_loss)
 {
     sv_fifo_buffer      *pbuffer;
     //sv_fifo_bufferinfo  bufferinfo;
@@ -1311,7 +1306,7 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
     Ingex::Timecode tc_dvitc = timecode_from_dvs_bits(dvitc_bits, frame_rate_numer, frame_rate_denom);
 
     // System timecode - start with microseconds since midnight (tod_rec is in microsecs since 1970)
-    int64_t sys_time_microsec = tod_rec - (today_midnight_time() * INT64_C(1000000));
+    int64_t sys_time_microsec = (tod_rec - midnight_microseconds) % microseconds_per_day;
 
     // Compute system timecode as int number of frames since midnight
     int systc_as_int = (int)(sys_time_microsec * frame_rate_numer / (INT64_C(1000000) * frame_rate_denom));
@@ -1643,7 +1638,7 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
     return SV_OK;
 }
 
-static int write_dummy_frames(sv_handle *sv, int chan, int current_frame_tick, int tick_last_dummy_frame, int64_t tod_tc_read)
+int write_dummy_frames(sv_handle *sv, int chan, int current_frame_tick, int tick_last_dummy_frame, int64_t tod_tc_read)
 {
     // No video so copy "no video" frame instead
     //
@@ -1670,7 +1665,8 @@ static int write_dummy_frames(sv_handle *sv, int chan, int current_frame_tick, i
 
         // Timecode from system clock
         // (tod_tc_read is in microsecs since 1970)
-        int64_t sys_time_microsec = tod_tc_read - (today_midnight_time() * INT64_C(1000000));
+        //int64_t sys_time_microsec = tod_tc_read - (today_midnight_time() * INT64_C(1000000));
+        int64_t sys_time_microsec = (tod_tc_read - midnight_microseconds) % microseconds_per_day;
         // Compute timecode as int number of frames since midnight
         int sys_tc = (int)(sys_time_microsec * frame_rate_numer / (INT64_C(1000000) * frame_rate_denom));
         Ingex::Timecode system_tc(sys_tc, frame_rate_numer, frame_rate_denom, false);
@@ -1802,7 +1798,7 @@ static int write_dummy_frames(sv_handle *sv, int chan, int current_frame_tick, i
     return tick_last_dummy_frame;
 }
 
-static void wait_for_good_signal(sv_handle *sv, int chan, int required_good_frames)
+void wait_for_good_signal(sv_handle *sv, int chan, int required_good_frames)
 {
     int good_frames = 0;
     int tick_last_dummy_frame = -1;
@@ -1891,7 +1887,7 @@ static void wait_for_good_signal(sv_handle *sv, int chan, int required_good_fram
 }
 
 // channel number passed as void * (using cast)
-static void * sdi_monitor(void *arg)
+void * sdi_monitor(void *arg)
 {
     long                chan = (long)arg;
     sv_handle           *sv = a_sv[chan];
@@ -1996,7 +1992,7 @@ static void * sdi_monitor(void *arg)
 }
 
 
-static void usage_exit(void)
+void usage_exit(void)
 {
     fprintf(stderr, "Usage: dvs_sdi [options]\n");
     fprintf(stderr, "\n");
@@ -2040,6 +2036,8 @@ static void usage_exit(void)
     exit(1);
 }
 
+} // unnamed namespace
+
 int main (int argc, char ** argv)
 {
     int             n, max_channels = MAX_CHANNELS;
@@ -2054,11 +2052,14 @@ int main (int argc, char ** argv)
     CaptureFmt primary_capture_format = YUV422;
     CaptureFmt secondary_capture_format = NONE;
 
-    time_t now;
-    struct tm *tm_now;
-
-    now = time ( NULL );
-    tm_now = localtime ( &now );
+    // Set local midnight time for calculation of system timecode
+    time_t utc = time(NULL);
+    struct tm local_tm;
+    localtime_r(&utc, &local_tm);
+    local_tm.tm_sec = 0;
+    local_tm.tm_min = 0;
+    local_tm.tm_hour = 0;
+    midnight_microseconds = INT64_C(1000000) * mktime(&local_tm);
 
     // process command-line args
     for (n = 1; n < argc; n++)
@@ -2753,34 +2754,6 @@ int main (int argc, char ** argv)
     }
     */
 
-    // Report on capture formats
-    logTF("Primary capture   %s, %s\n", Ingex::VideoRaster::Name(primary_video_raster).c_str(), Ingex::PixelFormat::Name(primary_pixel_format).c_str());
-    logTF("Secondary capture %s, %s\n", Ingex::VideoRaster::Name(secondary_video_raster).c_str(), Ingex::PixelFormat::Name(secondary_pixel_format).c_str());
-
-    if (master_channel > max_channels-1)
-    {
-        logTF("Master channel number (%d) greater than highest channel number (%d)\n", master_channel, max_channels-1);
-        return 1;
-    }
-
-    if (master_channel < 0)
-    {
-        logTF("Master timecode not used\n");
-    }
-    else
-    {
-        logTF("Master timecode type is %s using channel %d\n",
-            nexus_timecode_type_name(timecode_type), master_channel);
-    }
-
-    logTF("Using %s to determine number of frames to recover when video re-aquired\n",
-            nexus_timecode_type_name(timecode_type));
-
-    if (audio8ch)
-    {
-        logTF("Audio 8 channel mode enabled\n");
-    }
-
     // Ideally we would get the dma_video_size and audio_size parameters
     // from a fifo's pbuffer structure.  But you must complete a
     // successful sv_fifo_getbuffer() before those parameters are known.
@@ -2788,6 +2761,7 @@ int main (int argc, char ** argv)
     // to allocate buffers before successful dma transfers occur.
 
     // Need to know card type. (We assume all the same type.)
+    bool dvs_dummy = false;
     int sn = 0;
     sv_query(a_sv[0], SV_QUERY_SERIALNUMBER, 0, &sn);
     sn /= 1000000;
@@ -2795,6 +2769,9 @@ int main (int argc, char ** argv)
     switch (sn)
     {
     case 0:  // dvs_dummy
+        dvs_dummy = true;
+        extra_offset = 0;
+        break;
     case 11: // SDStationOEM
     case 19: // SDStationOEMII
         extra_offset = 0;
@@ -2823,6 +2800,45 @@ int main (int argc, char ** argv)
             break;
         }
         break;
+    }
+
+    // Report on capture formats
+    logTF("Primary capture   %s, %s\n", Ingex::VideoRaster::Name(primary_video_raster).c_str(), Ingex::PixelFormat::Name(primary_pixel_format).c_str());
+    logTF("Secondary capture %s, %s\n", Ingex::VideoRaster::Name(secondary_video_raster).c_str(), Ingex::PixelFormat::Name(secondary_pixel_format).c_str());
+
+    if (master_channel > max_channels-1)
+    {
+        logTF("Master channel number (%d) greater than highest channel number (%d)\n", master_channel, max_channels-1);
+        return 1;
+    }
+
+    if (dvs_dummy && master_channel >= 0)
+    {
+        logTF("Master timecode disabled in dvs_dummy mode\n");
+    }
+    else if (master_channel < 0)
+    {
+        logTF("Master timecode not used\n");
+    }
+    else
+    {
+        logTF("Master timecode type is %s using channel %d\n",
+            nexus_timecode_type_name(timecode_type), master_channel);
+    }
+
+    // Master timecode does not work particularly well in dummy mode and
+    // is not needed, so we disable it.
+    if (dvs_dummy)
+    {
+        master_channel = -1;
+    }
+
+    logTF("Using %s to determine number of frames to recover when video re-aquired\n",
+            nexus_timecode_type_name(timecode_type));
+
+    if (audio8ch)
+    {
+        logTF("Audio 8 channel mode enabled\n");
     }
 
     // Set the DMA size, taking into account the

@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.6 2010/06/02 10:52:38 philipn Exp $
+# $Id: Makefile,v 1.7 2010/07/06 14:15:13 john_f Exp $
 #
 # Makefile for building useful command-line tools
 #
@@ -21,17 +21,21 @@
 # 02110-1301, USA.
 #
 
-FLAGS=-Wall -W -Wno-unused-parameter -g -DDEBUG -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE
-OPT=-O3 -mmmx -msse2
-CFLAGS=$(FLAGS) $(OPT)
+CC = gcc
 
-MXF_INC=-I../../../libMXF/lib/include
-MXF_LIB=-L../../libMXF/examples/archive/write -L../../libMXF/lib -lwritearchivemxf -lMXF -luuid
+MXF_LIB = -L../../libMXF/examples/archive/write -L../../libMXF/lib -lwritearchivemxf -lMXF -luuid
+YUV_LIB = -L../YUVlib -lYUVlib
 
-INCLUDE=-I.. -I../YUVlib $(MXF_INC)
-LIB_COMMON=../libcommon.a
+INCLUDE = -I.. -I../YUVlib -I../../../libMXF/lib/include
 
-PROGS=convert_audio convert_10bit_video create_video_test_signal detect_digibeta_dropouts \
+CPPFLAGS = -Wall -W -Wno-unused-parameter -g -DDEBUG -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE $(INCLUDE)
+CFLAGS = -Wall -W -Wno-unused-parameter -g -O3
+CXXFLAGS = -Wall -W -Wno-unused-parameter -g -O3
+TARGET_ARCH = -mmmx -msse2
+
+LIB_COMMON = ../libcommon.a
+
+PROGS = convert_audio convert_10bit_video create_video_test_signal detect_digibeta_dropouts \
 	compare_archive_mxf clapperboard_avsync disk_rw_benchmark send_video receive_video \
 	create_audio_test_signal dump_vc3
 
@@ -42,36 +46,37 @@ all: $(PROGS) dvs_hardware
 dvs_hardware:
 	cd dvs_hardware && $(MAKE)
 
-convert_audio: convert_audio.c $(LIB_COMMON)
-	g++ $(CFLAGS) $(INCLUDE) $< $(LIB_COMMON) -o $@ -lm
+convert_audio: convert_audio.o $(LIB_COMMON)
+	$(CXX) $(CXXFLAGS) $(TARGET_ARCH) -o $@ $< $(LIB_COMMON) -lm
 
-convert_10bit_video: convert_10bit_video.c $(LIB_COMMON)
-	g++ $(CFLAGS) $(INCLUDE) $< $(LIB_COMMON) -o $@
+convert_10bit_video: convert_10bit_video.o $(LIB_COMMON)
+	$(CXX) $(CXXFLAGS) $(TARGET_ARCH) -o $@ $< $(LIB_COMMON)
 
-create_video_test_signal: create_video_test_signal.c $(LIB_COMMON)
-	g++ $(CFLAGS) $(INCLUDE) $< $(LIB_COMMON) -o $@
+create_video_test_signal: create_video_test_signal.o $(LIB_COMMON)
+	$(CXX) $(CXXFLAGS) $(TARGET_ARCH) -o $@ $< $(LIB_COMMON)
 
-create_audio_test_signal: create_audio_test_signal.c
-	g++ $(CFLAGS) -lm $< -o $@
+create_audio_test_signal: create_audio_test_signal.o
+	$(CC) $(CXXFLAGS) $(TARGET_ARCH) -o $@ $< -lm
 
-detect_digibeta_dropouts: detect_digibeta_dropouts.c $(LIB_COMMON)
-	g++ $(CFLAGS) $(INCLUDE) $< $(LIB_COMMON) -L../YUVlib -lYUVlib -o $@
+detect_digibeta_dropouts: detect_digibeta_dropouts.o $(LIB_COMMON)
+	$(CXX) $(CXXFLAGS) $(TARGET_ARCH) -o $@ $< $(LIB_COMMON) $(YUV_LIB)
 
-compare_archive_mxf: compare_archive_mxf.c $(LIB_COMMON)
-	g++ $(CFLAGS) $(INCLUDE) $< $(LIB_COMMON) -o $@
+compare_archive_mxf: compare_archive_mxf.o $(LIB_COMMON)
+	$(CXX) $(CXXFLAGS) $(TARGET_ARCH) -o $@ $< $(LIB_COMMON)
 
-clapperboard_avsync: clapperboard_avsync.c $(LIB_COMMON)
-	g++ $(CFLAGS) -I. $(INCLUDE) $< $(LIB_COMMON) $(MXF_LIB) -o $@ -lm
+clapperboard_avsync: clapperboard_avsync.o $(LIB_COMMON)
+	$(CXX) $(CXXFLAGS) $(TARGET_ARCH) -o $@ $< $(LIB_COMMON) $(MXF_LIB) -lm
 
-send_video: send_video.c $(LIB_COMMON)
-	g++ $(CFLAGS) $(INCLUDE) $< $(LIB_COMMON) -o $@ -L../YUVlib -lYUVlib -lpthread
+send_video: send_video.o $(LIB_COMMON)
+	$(CXX) $(CXXFLAGS) $(TARGET_ARCH) -o $@ $< $(LIB_COMMON) $(YUV_LIB) -lpthread
 
-receive_video: receive_video.c $(LIB_COMMON)
-	g++ $(CFLAGS) $(INCLUDE) $< $(LIB_COMMON) -o $@ -L../YUVlib -lYUVlib -lpthread -lm
+receive_video: receive_video.o $(LIB_COMMON)
+	$(CXX) $(CXXFLAGS) $(TARGET_ARCH) -o $@ $< $(LIB_COMMON) $(YUV_LIB) -lpthread -lm
 
-dump_vc3: dump_vc3.c
-	g++ $(CFLAGS) $< -o $@
+dump_vc3: dump_vc3.o
+	$(CC) $(CXXFLAGS) $(TARGET_ARCH) -o $@ $<
 
 clean:
 	cd dvs_hardware && $(MAKE) $@
 	rm -f $(PROGS)
+

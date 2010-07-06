@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorder.cpp,v 1.15 2010/06/17 17:27:34 john_f Exp $
+ * $Id: IngexRecorder.cpp,v 1.16 2010/07/06 14:15:13 john_f Exp $
  *
  * Class to manage an individual recording.
  *
@@ -22,6 +22,7 @@
  * 02110-1301, USA.
  */
 
+#define __STDC_CONSTANT_MACROS
 
 #include <iostream>
 #include <cstdio>
@@ -259,13 +260,13 @@ bool IngexRecorder::CheckStartTimecode(
             int diff = target_tc.FramesSinceMidnight() - tc.FramesSinceMidnight();
             if (diff == 0)
             {
-                mStartFrame[channel_i] = lastframe - i;
+                mStartFrame[channel_i] = frame;
                 found_target = true;
 
                 ACE_DEBUG((LM_DEBUG, ACE_TEXT("Found channel%d lf=%6d lf-i=%8d tc=%C\n"),
                     channel_i, lastframe, lastframe - i, tc.Text()));
             }
-            else if (i == 0 && diff < 0 && diff > 5)
+            else if (i == 0 && diff > 0 && diff < 5)
             {
                 // Target is slightly in the future.  We predict the start frame.
                 mStartFrame[channel_i] = frame + diff;
@@ -632,6 +633,11 @@ bool IngexRecorder::Stop(Ingex::Timecode & stop_timecode,
     {
         // Calculate capture length.
         capture_length = stop_timecode.FramesSinceMidnight() - mStartTimecode.FramesSinceMidnight() + post_roll;
+        if (capture_length < 0)
+        {
+            int frames_per_day = INT64_C(24 * 60 * 60) * stop_timecode.FrameRateNumerator() / stop_timecode.FrameRateDenominator();
+            capture_length += frames_per_day;
+        }
     }
 
     // Return the expected "out time" of the recording

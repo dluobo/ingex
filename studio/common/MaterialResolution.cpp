@@ -1,5 +1,5 @@
 /*
- * $Id: MaterialResolution.cpp,v 1.2 2010/06/14 15:40:32 john_f Exp $
+ * $Id: MaterialResolution.cpp,v 1.3 2010/07/06 14:15:13 john_f Exp $
  *
  * Material resolution codes and details
  *
@@ -225,7 +225,7 @@ void MaterialResolution::GetInfo(MaterialResolution::EnumType res, FileFormat::E
         break;
 
     case UNC_MXF_ATOM:
-        format = FileFormat::RAW;
+        format = FileFormat::MXF;
         op = OperationalPattern::OP_ATOM;
         break;
 

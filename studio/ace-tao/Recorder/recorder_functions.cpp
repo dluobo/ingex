@@ -1,5 +1,5 @@
 /*
- * $Id: recorder_functions.cpp,v 1.35 2010/06/25 14:22:21 philipn Exp $
+ * $Id: recorder_functions.cpp,v 1.36 2010/07/06 14:15:13 john_f Exp $
  *
  * Functions which execute in recording threads.
  *
@@ -976,8 +976,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     // Initialise last_tc which will be used to check for timecode discontinuities.
     // Timecode value from first track (usually video).
     HardwareTrack tc_hw = p_impl->TrackHwMap(mp_stc_dbids[0]);
-    framecount_t last_tc = IngexShm::Instance()->Timecode(tc_hw.channel, lastcoded[tc_hw.channel]).FramesSinceMidnight();
-    //framecount_t initial_tc = last_tc + 1;
+    Ingex::Timecode last_tc = IngexShm::Instance()->Timecode(tc_hw.channel, lastcoded[tc_hw.channel]);
 
     // Update Record info
     IngexShm::Instance()->InfoSetRecording(channel_i, p_opt->index, quad_video, true);
@@ -1140,20 +1139,21 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             }
 
             // Timecode value from first track (usually video)
-            Ingex::Timecode timecode_i = IngexShm::Instance()->Timecode(tc_hw.channel, frame[tc_hw.channel]);
-            framecount_t tc_i = timecode_i.FramesSinceMidnight();
+            Ingex::Timecode current_tc = IngexShm::Instance()->Timecode(tc_hw.channel, frame[tc_hw.channel]);
+            Ingex::Timecode expected_tc = last_tc + 1;
 
             // Check for timecode irregularities
-            framecount_t tc_diff = tc_i - (last_tc + 1); // difference from expected value
+            int tc_diff = current_tc.FramesSinceMidnight() - expected_tc.FramesSinceMidnight();
             //if (tc_diff != 0)
             if (tc_diff > 1 || tc_diff < -1)
             {
-                ACE_DEBUG((LM_ERROR, ACE_TEXT("%C thread %d Timecode discontinuity: %d frames missing at frame=%d tc=%C\n"),
+                ACE_DEBUG((LM_ERROR, ACE_TEXT("%C thread %d Timecode discontinuity: %d frames missing - current %C, last %C)\n"),
                     src_name.c_str(),
                     p_opt->index,
                     tc_diff,
-                    frame[tc_hw.channel],
-                    timecode_i.Text()));
+                    current_tc.Text(),
+                    last_tc.Text()
+                    ));
             }
 
             // Make quad split
@@ -1237,7 +1237,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             // Add timecode overlay
             if (bitc && p_inp_video)
             {
-                tc_overlay_setup(tco, tc_i);
+                tc_overlay_setup(tco, current_tc.FramesSinceMidnight());
 
                 // Need to copy video as can't overwrite shared memory
                 switch (pixel_format)
@@ -1408,7 +1408,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                 unsigned int ch = channels_in_use[i];
                 lastcoded[ch] = frame[ch];
             }
-            last_tc = tc_i;
+            last_tc = current_tc;
 
             // So now we have done or queued the encoding.
             // Next the writing to disc.

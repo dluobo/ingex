@@ -281,12 +281,18 @@ SELECT setval('mct_id_seq', max(mct_identifier)) FROM multicameratrackdef;
 -- mcs_identifier | mcs_index | mcs_multi_camera_track_def_id | mcs_source_id | mcs_source_track_id
 --
 
-INSERT INTO multicameraselectordef VALUES (100, 1, 1, 100, 1);
-INSERT INTO multicameraselectordef VALUES (101, 2, 1, 101, 1);
-INSERT INTO multicameraselectordef VALUES (102, 3, 1, 102, 1);
-INSERT INTO multicameraselectordef VALUES (103, 4, 1, 103, 1);
-INSERT INTO multicameraselectordef VALUES (104, 1, 2, 100, 2);
-INSERT INTO multicameraselectordef VALUES (105, 1, 3, 100, 3);
+INSERT INTO multicameraselectordef VALUES (101, 1, 1, 100, 1);
+INSERT INTO multicameraselectordef VALUES (102, 2, 1, 101, 1);
+INSERT INTO multicameraselectordef VALUES (103, 3, 1, 102, 1);
+INSERT INTO multicameraselectordef VALUES (104, 4, 1, 103, 1);
+INSERT INTO multicameraselectordef VALUES (201, 1, 2, 100, 2);
+INSERT INTO multicameraselectordef VALUES (202, 2, 2, 101, 2);
+INSERT INTO multicameraselectordef VALUES (203, 3, 2, 102, 2);
+INSERT INTO multicameraselectordef VALUES (204, 4, 2, 103, 2);
+INSERT INTO multicameraselectordef VALUES (301, 1, 3, 100, 3);
+INSERT INTO multicameraselectordef VALUES (302, 2, 3, 101, 3);
+INSERT INTO multicameraselectordef VALUES (303, 3, 3, 102, 3);
+INSERT INTO multicameraselectordef VALUES (304, 4, 3, 103, 3);
 
 SELECT setval('mcs_id_seq', max(mcs_identifier)) FROM multicameraselectordef;
 
@@ -323,7 +329,7 @@ INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_
     VALUES ('ENCODE2_COPY_PRIORITY', '2', 1, 10);
     
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('ENCODE3_RESOLUTION', '30', 1, 10);
+    VALUES ('ENCODE3_RESOLUTION', '32', 1, 10);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('ENCODE3_BITC', 'false', 1, 10);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)

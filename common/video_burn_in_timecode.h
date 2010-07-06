@@ -1,9 +1,9 @@
 /*
- * $Id: video_burn_in_timecode.h,v 1.1 2008/07/08 14:59:17 philipn Exp $
+ * $Id: video_burn_in_timecode.h,v 1.2 2010/07/06 14:15:13 john_f Exp $
  *
  * Quick and dirty timecode burning for testing purposes
  *
- * Copyright (C) 2005  Stuart Cunningham <stuart_hc@users.sourceforge.net>
+ * Copyright (C) 2010  British Broadcasting Corporation
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -24,17 +24,11 @@
 #ifndef __VIDEO_BURN_IN_TIMECODE_H__
 #define __VIDEO_BURN_IN_TIMECODE_H__
 
-#ifdef __cplusplus
-extern "C" 
-{
-#endif
+#include "Timecode.h"
 
-void burn_mask_yuv420(int frame_number, int x_offset, int y_offset, int frame_width, int frame_height, unsigned char *frame);
-void burn_mask_yuv422(int frame_number, int x_offset, int y_offset, int frame_width, int frame_height, unsigned char *frame);
-void burn_mask_uyvy(int frame_number, int x_offset, int y_offset, int frame_width, int frame_height, unsigned char *frame);
-
-#ifdef __cplusplus
-}
-#endif
+void burn_mask_yuv420(const Ingex::Timecode & timecode, int x_offset, int y_offset, int frame_width, int frame_height, unsigned char *frame);
+void burn_mask_yuv422(const Ingex::Timecode & timecode, int x_offset, int y_offset, int frame_width, int frame_height, unsigned char *frame);
+void burn_mask_uyvy(const Ingex::Timecode & timecode, int x_offset, int y_offset, int frame_width, int frame_height, unsigned char *frame);
 
 #endif
+

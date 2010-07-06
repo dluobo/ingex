@@ -1,5 +1,5 @@
 /*
- * $Id: create_aaf.cpp,v 1.19 2010/06/02 12:59:07 john_f Exp $
+ * $Id: create_aaf.cpp,v 1.20 2010/07/06 14:15:14 john_f Exp $
  *
  * Creates AAF files with clips extracted from the database
  *
@@ -721,7 +721,7 @@ int main(int argc, const char* argv[])
             else if (strcmp(argv[cmdlnIndex], "--mc-cuts-db") == 0)
             {
                 includeMCCutsSequence = true;
-                cmdlnIndex += 2;
+                cmdlnIndex += 1;
             }
             else if (strcmp(argv[cmdlnIndex], "--dbhost") == 0)
             {
@@ -1254,9 +1254,18 @@ int main(int argc, const char* argv[])
                     if (!donePackages.insert(topPackage1).second)
                     {
                         // already done this package
+                        if (verbose)
+                        {
+                            fprintf(stderr, "topPackage1 %s - already done\n", topPackage1->name.c_str());
+                        }
                         continue;
                     }
                     
+                    if (verbose)
+                    {
+                        fprintf(stderr, "topPackage1 %s\n", topPackage1->name.c_str());
+                    }
+
                     MaterialPackageSet materialPackages;
                     materialPackages.insert(topPackage1);
 
@@ -1272,9 +1281,11 @@ int main(int argc, const char* argv[])
                     
                     // add material to group that has same start time and creation date
                     MaterialPackageSet::iterator iter2;
-                    for (iter2 = iter1, iter2++; iter2 != material.topPackages.end(); iter2++)
+                    // first compare with itself (iter2 = iter1) so topPackage1 gets added
+                    for (iter2 = iter1; iter2 != material.topPackages.end(); iter2++)
                     {
                         MaterialPackage* topPackage2 = *iter2;
+                        //fprintf(stderr, "  topPackage2 %s\n", topPackage2->name.c_str());
                         
                         if (topPackage2->creationDate.year == topPackage1->creationDate.year &&
                             topPackage2->creationDate.month == topPackage1->creationDate.month &&
@@ -1289,6 +1300,7 @@ int main(int argc, const char* argv[])
                             int pos = topPackage2->name.find_first_of('.', 0);
                             string cam = topPackage2->name.substr(0, pos);
 							camSources.insert(cam);
+                            //fprintf(stderr, "  %s\n", cam.c_str());
                         }
                     }
 

@@ -10,7 +10,7 @@ COMPILE = $(CC) $(CFLAGS)
 
 INCLUDES = -I. -I$(DATABASELIB_DIR) -I$(COMMONLIB_DIR) -I$(STUDIOCOMMONLIB_DIR) -I$(AAFSDKINSTALL)/include
 LIB_DIRS = -L$(DATABASELIB_DIR) -L$(COMMONLIB_DIR) -L$(STUDIOCOMMONLIB_DIR)
-LIBS = -lprodautodb -lcommon -lstudiocommon -lpq -lpqxx -luuid -lpthread -lxerces-c
+LIBS = -lprodautodb -lcommon -lstudiocommon -lpqxx -luuid -lpthread -lxerces-c
 
 
 SOURCES = $(wildcard *.cpp)

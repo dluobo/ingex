@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_multicast.c,v 1.13 2010/06/25 14:22:21 philipn Exp $
+ * $Id: nexus_multicast.cpp,v 1.1 2010/07/06 14:15:13 john_f Exp $
  *
  * Utility to multicast video frames from dvs_sdi ring buffer to network
  *

@@ -1,5 +1,5 @@
 /*
- * $Id: psnr.c,v 1.1 2007/10/26 16:49:58 john_f Exp $
+ * $Id: psnr.c,v 1.2 2010/07/06 14:15:13 john_f Exp $
  *
  * Calculate Y, Cb and Cr PSNR figures from two uncompressed 'UYVY' files
  * as produced by e.g. mpeg2decode -o1 and Targa 3200 uncompressed capture.
@@ -8,8 +8,7 @@
  */
 
 /*
- * Copyright (C) 2003 Peter Brightwell <peter.brightwell@bbc.co.uk>
- * and Stuart Cunningham <stuart_hc@users.sourceforge.net>
+ * Copyright (C) 2003 British Braodcasting Corporation
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of version 2.1 of the GNU General Public

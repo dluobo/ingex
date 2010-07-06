@@ -1,5 +1,5 @@
 /*
- * $Id: video_burn_in_timecode.c,v 1.1 2008/07/08 14:59:17 philipn Exp $
+ * $Id: video_burn_in_timecode.cpp,v 1.1 2010/07/06 14:15:13 john_f Exp $
  *
  * Burn timecode digits into video.
  *
@@ -21,6 +21,7 @@
  * 02110-1301, USA.
  */
 
+#include "Timecode.h"
 #include "video_burn_in_timecode.h"
 
 #define max(a,b) (((a)>(b))?(a):(b))
@@ -316,6 +317,7 @@ static unsigned char tc_digit[10][18*24] = {
 }
 };
 
+/*
 typedef struct Timecode {
 	char Hours;
 	char Minutes;
@@ -335,6 +337,7 @@ static Timecode framesToTC(int frames)
 
 	return result;
 }
+*/
 
 void setup_tc_digit(int x_pos, int digit, unsigned char *p)
 {
@@ -358,37 +361,42 @@ void setup_colon(int x_pos, unsigned char *p)
 			p[j * 199 + x_pos + i] = *pd++;
 }
 
-static void setup_tc_mask(int frame_number, unsigned char *tc_mask)
+static void setup_tc_mask(const Ingex::Timecode & timecode, unsigned char *tc_mask)
 {
-	frame_number = frame_number % (24*60*60*25); // avoid overflow
-	Timecode timecode = framesToTC(frame_number);
-
 	// timecode is always HH:MM:SS:FF giving a mask 20+20+13+20+20+13+20+20+13+20+20 = 199
 	// by 24 pixels high
 
-	setup_tc_digit(0, timecode.Hours / 10, tc_mask);
-	setup_tc_digit(20, timecode.Hours % 10, tc_mask);
-	setup_tc_digit(53, timecode.Minutes / 10, tc_mask);
-	setup_tc_digit(73, timecode.Minutes % 10, tc_mask);
-	setup_tc_digit(106, timecode.Seconds / 10, tc_mask);
-	setup_tc_digit(126, timecode.Seconds % 10, tc_mask);
-	setup_tc_digit(159, timecode.Frames / 10, tc_mask);
-	setup_tc_digit(179, timecode.Frames % 10, tc_mask);
+	setup_tc_digit(0, timecode.Hours() / 10, tc_mask);
+	setup_tc_digit(20, timecode.Hours() % 10, tc_mask);
+	setup_tc_digit(53, timecode.Minutes() / 10, tc_mask);
+	setup_tc_digit(73, timecode.Minutes() % 10, tc_mask);
+	setup_tc_digit(106, timecode.Seconds() / 10, tc_mask);
+	setup_tc_digit(126, timecode.Seconds() % 10, tc_mask);
+	setup_tc_digit(159, timecode.Frames() / 10, tc_mask);
+	setup_tc_digit(179, timecode.Frames() % 10, tc_mask);
 	setup_colon(20+20+2, tc_mask);
 	setup_colon(20+20+13+20+20+2, tc_mask);
-	setup_colon(20+20+13+20+20+13+20+20+2, tc_mask);
+    if (timecode.DropFrame())
+    {
+        // should be semi-colon
+        setup_colon(20+20+13+20+20+13+20+20+2, tc_mask);
+    }
+    else
+    {
+        setup_colon(20+20+13+20+20+13+20+20+2, tc_mask);
+    }
 }
 
 //static const unsigned char		whiteU = 0x80, whiteY = 0xEB, whiteV = 0x80;
 static const unsigned char		maskU = 0x80, maskY = 0x10, maskV = 0x80;
 //static const unsigned char		blackU = 0x80, blackY = 0x10, blackV = 0x80;
 
-void burn_mask_yuv420(int frame_number, int x_offset, int y_offset,
+void burn_mask_yuv420(const Ingex::Timecode & timecode, int x_offset, int y_offset,
 							int frame_width, int frame_height, unsigned char *frame)
 {
 	int tc_width = 199, tc_height = 24;
 	unsigned char tc_mask[199 * 24] = {0};
-	setup_tc_mask(frame_number, tc_mask);
+	setup_tc_mask(timecode, tc_mask);
 
 	int i,j;
 	int m_width = tc_width;
@@ -420,12 +428,12 @@ void burn_mask_yuv420(int frame_number, int x_offset, int y_offset,
 	}
 }
 
-void burn_mask_yuv422(int frame_number, int x_offset, int y_offset,
+void burn_mask_yuv422(const Ingex::Timecode & timecode, int x_offset, int y_offset,
 							int frame_width, int frame_height, unsigned char *frame)
 {
 	int tc_width = 199, tc_height = 24;
 	unsigned char tc_mask[199 * 24] = {0};
-	setup_tc_mask(frame_number, tc_mask);
+	setup_tc_mask(timecode, tc_mask);
 
 	int i,j;
 	int m_width = tc_width;
@@ -457,12 +465,12 @@ void burn_mask_yuv422(int frame_number, int x_offset, int y_offset,
 	}
 }
 
-void burn_mask_uyvy(int frame_number, int x_offset, int y_offset,
+void burn_mask_uyvy(const Ingex::Timecode & timecode, int x_offset, int y_offset,
 							int frame_width, int frame_height, unsigned char *frame)
 {
 	int tc_width = 199, tc_height = 24;
 	unsigned char tc_mask[199 * 24] = {0};
-	setup_tc_mask(frame_number, tc_mask);
+	setup_tc_mask(timecode, tc_mask);
 
 	int i,j;
 	int m_width = tc_width;

@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.14 2010/06/15 08:00:13 john_f Exp $
+# $Id: Makefile,v 1.15 2010/07/06 14:15:13 john_f Exp $
 #
 # Makefile for building ingex server and utilities.
 #
@@ -33,11 +33,9 @@ else
   SDI_PROGS=dvs_dummy testgen
 endif
 
-CC = g++
-FLAGS = -Wall -g -O3 -DDEBUG -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE
-INCLUDES = -I../../common -I../common -I../database/src
-OPT = -mmmx -msse2
-CFLAGS = -DUSE_FFMPEG $(FLAGS) $(INCLUDES) $(OPT)
+CPPFLAGS = -DDEBUG -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE -DUSE_FFMPEG -I../../common -I../common -I../database/src
+CXXFLAGS = -Wall -g -O3
+TARGET_ARCH = -mmmx -msse2
 
 LIBS = -lstudiocommon -lcommon
 LIBPATHS = -L../common -L../../common
@@ -49,36 +47,36 @@ PROGS = $(SDI_PROGS) nexus_save nexus_xv nexus_stats nexus_web system_info_web n
 .PHONY: all
 all: $(PROGS)
 
-dvs_sdi: dvs_sdi.c
-	g++ $(CFLAGS) $(DVS_HARDWARE_INCLUDE) dvs_sdi.c $(DVS_HARDWARE_LIB) $(LIBS) $(LIBPATHS) -lpthread -o dvs_sdi $(FFMPEG_LIBS)
+dvs_sdi: dvs_sdi.cpp
+	$(CXX) $(CXXFLAGS) $(CPPFLAGS) $(TARGET_ARCH) $(DVS_HARDWARE_INCLUDE) $< $(DVS_HARDWARE_LIB) $(LIBS) $(LIBPATHS) -lpthread $(FFMPEG_LIBS) -o dvs_sdi
 
-dvs_dummy: dvs_sdi.c
-	g++ $(CFLAGS) $(DUMMY_HARDWARE_INCLUDE) dvs_sdi.c $(DUMMY_HARDWARE_LIB) $(LIBS) $(LIBPATHS) -lpthread -o dvs_dummy $(FFMPEG_LIBS)
+dvs_dummy: dvs_sdi.cpp
+	$(CXX) $(CXXFLAGS) $(CPPFLAGS) $(TARGET_ARCH) $(DUMMY_HARDWARE_INCLUDE) $< $(DUMMY_HARDWARE_LIB) $(LIBS) $(LIBPATHS) -lpthread $(FFMPEG_LIBS) -o dvs_dummy
 
-testgen: testgen.c
-	g++ $(CFLAGS) testgen.c $(LIBS) $(LIBPATHS) -lpthread -o testgen
+testgen: testgen.o
+	$(CXX) $(TARGET_ARCH) $< $(LIBPATHS) $(LIBS) -lpthread -o $@
 
-nexus_stats: nexus_stats.c
-	g++ $(CFLAGS) nexus_stats.c $(LIBS) $(LIBPATHS) -lpthread -o nexus_stats
+nexus_stats: nexus_stats.o
+	$(CXX) $(TARGET_ARCH) $< $(LIBPATHS) $(LIBS) -lpthread -o $@
 
-nexus_web: nexus_web.c
-	@if [ -r /usr/include/shttpd.h -o -r /usr/local/include/shttpd.h ] ; then set -x ; g++ $(CFLAGS) nexus_web.c $(LIBS) $(LIBPATHS) -lpthread -o nexus_web -lshttpd -ldl ; else echo "shttpd.h not found - nexus_web will not be built"; echo ; fi
+nexus_web: nexus_web.cpp
+	@if [ -r /usr/include/shttpd.h -o -r /usr/local/include/shttpd.h ] ; then set -x ; g++ $(CPPFLAGS) nexus_web.cpp $(LIBS) $(LIBPATHS) -lpthread -o nexus_web -lshttpd -ldl ; else echo "shttpd.h not found - nexus_web will not be built"; echo ; fi
 
-system_info_web: system_info_web.c
-	@if [ -r /usr/include/shttpd.h -o -r /usr/local/include/shttpd.h ] ; then set -x ; g++ $(CFLAGS) system_info_web.c -o system_info_web -lshttpd -ldl -lpthread ; else echo "shttpd.h not found - system_info_web_web will not be built"; echo ; fi
+system_info_web: system_info_web.cpp
+	@if [ -r /usr/include/shttpd.h -o -r /usr/local/include/shttpd.h ] ; then set -x ; g++ $(CPPFLAGS) system_info_web.cpp -o system_info_web -lshttpd -ldl -lpthread ; else echo "shttpd.h not found - system_info_web will not be built"; echo ; fi
 
-nexus_set_source: nexus_set_source.c
-	g++ $(CFLAGS) nexus_set_source.c $(LIBS) $(LIBPATHS) -lpthread -o nexus_set_source
+nexus_set_source: nexus_set_source.o
+	$(CXX) $(TARGET_ARCH) $< $(LIBPATHS) $(LIBS) -lpthread -o $@
 
 nexus_save: nexus_save.o
-	$(LINK.cpp) nexus_save.o -o nexus_save $(LIBS) $(LIBPATHS) $(FFMPEG_LIBS)
+	$(CXX) $(TARGET_ARCH) $< $(LIBPATHS) $(LIBS) $(FFMPEG_LIBS) -lpthread -o $@
 
 nexus_multicast: nexus_multicast.o multicast_compressed.o
-	$(LINK.cpp) $(CFLAGS) nexus_multicast.o multicast_compressed.o -o nexus_multicast $(LIBS) $(LIBPATHS) -L../../common/YUVlib -lYUVlib $(FFMPEG_LIBS)
+	$(CXX) $(TARGET_ARCH) nexus_multicast.o multicast_compressed.o -o $@ $(LIBPATHS) $(LIBS) -L../../common/YUVlib -lYUVlib $(FFMPEG_LIBS)
 
-nexus_xv: nexus_xv.c
-	g++ $(CFLAGS) nexus_xv.c -o nexus_xv $(LIBS) $(LIBPATHS) -L/usr/X11R6/lib -L/usr/X11R6/lib64 -lXv
+nexus_xv: nexus_xv.o
+	$(CXX) $(TARGET_ARCH) $< -o nexus_xv $(LIBPATHS) $(LIBS) -L/usr/X11R6/lib -L/usr/X11R6/lib64 -lXv
 
 clean:
-	rm -f core *.o dvs_sdi $(PROGS)
+	rm -f core *.o $(PROGS)
 

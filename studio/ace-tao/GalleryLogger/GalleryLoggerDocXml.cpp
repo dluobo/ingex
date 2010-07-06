@@ -1,5 +1,5 @@
 /*
- * $Id: GalleryLoggerDocXml.cpp,v 1.3 2009/09/18 15:59:05 john_f Exp $
+ * $Id: GalleryLoggerDocXml.cpp,v 1.4 2010/07/06 14:15:13 john_f Exp $
  *
  * Implementation of XML methods in the CGalleryLoggerDoc class.
  *
@@ -639,7 +639,7 @@ void CGalleryLoggerDoc::ExportToFcpOld(const char * filename)
 
     XmlTools::Initialise();
 
-    DOMBuilder * parser = 0;
+    FileToDomParser * parser = 0;
     DOMDocument * doc = 0;
     XmlTools::FileToDom("C:\\XML\\FinalCutPro\\sequence_skeleton.xml", parser, doc);
 

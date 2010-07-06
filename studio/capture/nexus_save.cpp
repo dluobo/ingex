@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_save.c,v 1.13 2010/06/25 14:22:21 philipn Exp $
+ * $Id: nexus_save.cpp,v 1.1 2010/07/06 14:15:13 john_f Exp $
  *
  * Utility to store video frames from dvs_sdi ring buffer to disk files
  *
@@ -21,10 +21,6 @@
  * 02110-1301, USA.
  */
 
-// compile with:
-// gcc -Wall -g -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE -O3 -o save_mem save_mem.c
-//
-//
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

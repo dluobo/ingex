@@ -20,7 +20,7 @@ LIB_DIRS = -L. \
 		   -L$(DATABASE_DIR) \
 		   -L$(COMMON_DIR) \
 		   -L$(STUDIOCOMMON_DIR)
-LIBS = -lprodautodb -lcommon -lstudiocommon -lpq -lpqxx \
+LIBS = -lprodautodb -lcommon -lstudiocommon -lpqxx \
 	   -lMXF++ -lMXF -luuid
 CFLAGS = -Wall -W -Wno-unused-parameter -Werror -g -O2 -D_FILE_OFFSET_BITS=64 \
 		 -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE

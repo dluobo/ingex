@@ -1,4 +1,4 @@
-# $Id: Makefile,v 1.10 2010/06/18 09:53:47 philipn Exp $
+# $Id: Makefile,v 1.11 2010/07/06 14:15:14 john_f Exp $
 #
 DATABASELIB_DIR = ../../database/src
 LIBMXF_DIR = ../../../libMXF
@@ -36,7 +36,7 @@ FFMPEG_LIBS = -lavformat -lavcodec -lavutil -lz -lbz2 -lmp3lame -lx264 -lfaac -l
 TRANSCODE_LIBS = -ljpeg $(FFMPEG_LIBS) -L$(STUDIOCOMMON_DIR) -lstudiocommon -L$(YUVLIB_DIR) -lYUVlib \
 	-L$(DATABASELIB_DIR) -lprodautodb -L$(COMMON_DIR) -lcommon -L$(STUDIOCOMMON_DIR) -lstudiocommon \
 	-L$(MXFWRITER_DIR) -lmxfwriter -L$(WRITEAVIDMXF_DIR) -lwriteavidmxf \
-	-L$(MXFREADER_DIR) -lMXFReader -L$(LIBMXF_DIR)/lib -lMXF -lpq -lpqxx -luuid -lpthread 
+	-L$(MXFREADER_DIR) -lMXFReader -L$(LIBMXF_DIR)/lib -lMXF -lpqxx -luuid -lpthread 
 
 
 .PHONY: all

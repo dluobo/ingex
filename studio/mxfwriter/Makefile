@@ -57,7 +57,7 @@ libmxfwriter.a: $(LIBOBJECTS)
 	
 	
 test_mxfwriter: libprodautodb.a libwriteavidmxf.a libMXF++.a libD10MXFOP1AWriter.a libMXF.a libmxfwriter.a .objs/test_mxfwriter.o 
-	$(CC) .objs/test_mxfwriter.o -L. -L$(DATABASELIB_DIR) -L$(COMMON_DIR) -L$(STUDIOCOMMON_DIR) -L$(WRITEAVIDMXF_DIR) -L$(LIBMXF_DIR)/lib -L$(LIBMXFPP_DIR)/libMXF++ -L$(D10WRITER_DIR) -lprodautodb -lcommon -lstudiocommon -lmxfwriter -lwriteavidmxf -lD10MXFOP1AWriter -lMXF++ -lMXF -lpq -lpqxx -luuid -lpthread -o $@
+	$(CC) .objs/test_mxfwriter.o -L. -L$(DATABASELIB_DIR) -L$(COMMON_DIR) -L$(STUDIOCOMMON_DIR) -L$(WRITEAVIDMXF_DIR) -L$(LIBMXF_DIR)/lib -L$(LIBMXFPP_DIR)/libMXF++ -L$(D10WRITER_DIR) -lprodautodb -lcommon -lstudiocommon -lmxfwriter -lwriteavidmxf -lD10MXFOP1AWriter -lMXF++ -lMXF -lpqxx -luuid -lpthread -o $@
 
 	
 .deps/%.d : %.cpp

@@ -38,7 +38,7 @@ $(STUDIOCOMMONLIB_DIR)/libstudiocommon.a:
 
 
 create_aaf: $(DATABASELIB_DIR)/libprodautodb.a $(STUDIOCOMMONLIB_DIR)/libstudiocommon.a $(OBJECTS)
-	$(LD) $(OBJECTS) -Xlinker -rpath -Xlinker . -L$(DATABASELIB_DIR) -L$(COMMONLIB_DIR) -L$(STUDIOCOMMONLIB_DIR) -L$(AAFSDKINSTALL)/lib/debug -lprodautodb -lcommon -lstudiocommon -laaflib -laafiid -lpq -lpqxx -luuid -lpthread -lxerces-c -o $@
+	$(LD) $(OBJECTS) -Xlinker -rpath -Xlinker . -L$(DATABASELIB_DIR) -L$(COMMONLIB_DIR) -L$(STUDIOCOMMONLIB_DIR) -L$(AAFSDKINSTALL)/lib/debug -lprodautodb -lcommon -lstudiocommon -laaflib -laafiid -lpqxx -luuid -lpthread -lxerces-c -o $@
 
 	
 .deps/%.d : %.cpp

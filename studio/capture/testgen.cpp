@@ -1,5 +1,5 @@
 /*
- * $Id: testgen.c,v 1.6 2010/06/25 14:22:21 philipn Exp $
+ * $Id: testgen.cpp,v 1.1 2010/07/06 14:15:13 john_f Exp $
  *
  * Dummy SDI input for testing shared memory video & audio interface.
  *

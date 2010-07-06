@@ -1,5 +1,5 @@
 /*
- * $Id: dvsoem_dummy.c,v 1.15 2010/06/25 14:41:54 philipn Exp $
+ * $Id: dvsoem_dummy.cpp,v 1.1 2010/07/06 14:15:13 john_f Exp $
  *
  * Implement a debug-only DVS hardware library for testing.
  *
@@ -37,6 +37,8 @@
 #include "audio_utils.h"
 #include "time_utils.h"
 
+#include "Timecode.h"
+
 #include "dummy_include/dvs_clib.h"
 #include "dummy_include/dvs_fifo.h"
 
@@ -72,7 +74,7 @@ typedef struct {
     int audio_channels;
     int frame_size;
     int frame_count;
-    int timecode;
+    Ingex::Timecode timecode;
     int dropped;
     int source_input_frames;
     DvsTcQuality tc_quality;
@@ -90,6 +92,8 @@ static inline void write_bcd(unsigned char* target, int val)
 {
     *target = ((val / 10) << 4) + (val % 10);
 }
+
+/*
 static int int_to_dvs_tc(int tc)
 {
     // e.g. turn 1020219 into hex 0x11200819
@@ -103,6 +107,23 @@ static int int_to_dvs_tc(int tc)
     write_bcd(raw_tc + 1, se);
     write_bcd(raw_tc + 2, mi);
     write_bcd(raw_tc + 3, hr);
+    int result = *(int *)(raw_tc);
+    return result;
+}
+*/
+
+static int timecode_to_dvs_tc(const Ingex::Timecode & tc)
+{
+    // e.g. turn 1020219 into hex 0x11200819
+    unsigned char raw_tc[4];
+    write_bcd(raw_tc + 0, tc.Frames());
+    write_bcd(raw_tc + 1, tc.Seconds());
+    write_bcd(raw_tc + 2, tc.Minutes());
+    write_bcd(raw_tc + 3, tc.Hours());
+    if (tc.DropFrame())
+    {
+        raw_tc[0] |= 0x00000040;
+    }
     int result = *(int *)(raw_tc);
     return result;
 }
@@ -279,7 +300,7 @@ static void setup_source_buf(DvsCard * dvs)
 
     // (Re)allocate buffer for the source video/audio.
     free(dvs->source_dmabuf);
-    dvs->source_dmabuf = malloc(dvs->frame_size * dvs->source_input_frames);
+    dvs->source_dmabuf = (unsigned char *)malloc(dvs->frame_size * dvs->source_input_frames);
 
     if (!fp_video) {
         unsigned char *video = dvs->source_dmabuf;
@@ -395,8 +416,8 @@ int sv_fifo_putbuffer(sv_handle * sv, sv_fifo * pfifo, sv_fifo_buffer * pbuffer,
 
     // Update frame count and timecodes
     dvs->frame_count++;
-    dvs->timecode++;
-    int dvs_tc = int_to_dvs_tc(dvs->timecode);
+    dvs->timecode += 1;
+    int dvs_tc = timecode_to_dvs_tc(dvs->timecode);
     pbuffer->timecode.vitc_tc = (dvs->tc_quality == DvsTcLTC) ? 0 : dvs_tc;
     pbuffer->timecode.vitc_tc2 = (dvs->tc_quality == DvsTcLTC) ? 0 : dvs_tc;
     pbuffer->timecode.ltc_tc = (dvs->tc_quality == DvsTcVITC) ? 0 : dvs_tc;
@@ -643,15 +664,13 @@ int sv_openex(sv_handle ** psv, char * setup, int openprogram, int opentype, int
     DvsCard * dvs = dvs_channel[channel_index];
     if (dvs == 0)
     {
-        // Allocate and zero struct
-        dvs = dvs_channel[channel_index] = malloc(sizeof(DvsCard));
-        memset(dvs, 0, sizeof(DvsCard));
+        // Allocate struct
+        dvs = dvs_channel[channel_index] = (DvsCard *)malloc(sizeof(DvsCard));
 
         // Initialise struct
         dvs->card = card;
         dvs->channel = channel;
         dvs->frame_count = 0;
-        dvs->timecode = 0;
         dvs->start_time.tv_sec = 0;
         dvs->start_time.tv_usec = 0;
         dvs->dropped = 0;
@@ -669,8 +688,7 @@ int sv_openex(sv_handle ** psv, char * setup, int openprogram, int opentype, int
         time_t tod_time = tod_tv.tv_sec;
         struct tm tod_tm;
         localtime_r(&tod_time, &tod_tm);
-        int secs = tod_tm.tm_hour * 60 * 60 + tod_tm.tm_min * 60 + tod_tm.tm_sec;
-        dvs->timecode = secs * dvs->frame_rate_numer / dvs->frame_rate_denom;
+        dvs->timecode = Ingex::Timecode(tod_tm.tm_hour, tod_tm.tm_min, tod_tm.tm_sec, 0, dvs->frame_rate_numer, dvs->frame_rate_denom, false);
 
         // Setup source audio/video
         setup_source_buf(dvs);
@@ -698,12 +716,17 @@ int sv_close(sv_handle * sv)
 
 char * sv_geterrortext(int code)
 {
-    static char *str = "Error string not implemented";
-    switch (code) {
-        case SV_ERROR_DEVICENOTFOUND:
-            return "SV_ERROR_DEVICENOTFOUND. The device could not be found.";
+    const char * str;
+    switch (code)
+    {
+    case SV_ERROR_DEVICENOTFOUND:
+        str = "SV_ERROR_DEVICENOTFOUND. The device could not be found.";
+        break;
+    default:
+        str = "Error string not implemented";
+        break;
     }
-    return str;
+    return (char *)str;
 }
 
 

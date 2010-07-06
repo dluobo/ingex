@@ -1,5 +1,5 @@
 /*
- * $Id: XmlTools.cpp,v 1.2 2009/09/18 16:25:48 philipn Exp $
+ * $Id: XmlTools.cpp,v 1.3 2010/07/06 14:15:13 john_f Exp $
  *
  * Utility class for handling XML.
  *
@@ -61,11 +61,19 @@ void XmlTools::DomToFile(DOMDocument * doc, const char * filename, bool pretty_p
 {
     try
     {
-        // Get a serializer, an instance of DOMWriter.
+        // Get a serializer
+        static const XMLCh gLS[] = { chLatin_L, chLatin_S, chNull };
+        DOMImplementation * impl = DOMImplementationRegistry::getDOMImplementation(gLS);
+#if XERCES_VERSION_MAJOR >= 3
+        DOMLSSerializer * theSerializer = ((DOMImplementationLS*)impl)->createLSSerializer();
+
+        DOMConfiguration *config = theSerializer->getDomConfig();
+
         XMLCh tempStr[100];
-        XMLString::transcode("LS", tempStr, 99);
-        DOMImplementation * impl          = DOMImplementationRegistry::getDOMImplementation(tempStr);
-        DOMWriter         * theSerializer = ((DOMImplementationLS*)impl)->createDOMWriter();
+        XMLString::transcode("format-pretty-print", tempStr, 99);
+        config->setParameter(tempStr, true);
+#else
+        DOMWriter * theSerializer = ((DOMImplementationLS*)impl)->createDOMWriter();
 
         // Set pretty print feature if available
         if (pretty_print &&
@@ -73,7 +81,6 @@ void XmlTools::DomToFile(DOMDocument * doc, const char * filename, bool pretty_p
         {
             theSerializer->setFeature(XMLUni::fgDOMWRTFormatPrettyPrint, true);
         }
-
 #if 0
         // set user specified output encoding
         theSerializer->setEncoding(gOutputEncoding);
@@ -110,6 +117,9 @@ void XmlTools::DomToFile(DOMDocument * doc, const char * filename, bool pretty_p
             theSerializer->setFeature(XMLUni::fgDOMWRTBOM, gWriteBOM);
 #endif
 
+#endif
+
+
         //
         // Plug in a format target to receive the resultant
         // XML stream from the serializer.
@@ -125,7 +135,16 @@ void XmlTools::DomToFile(DOMDocument * doc, const char * filename, bool pretty_p
         //
         // do the serialization through DOMWriter::writeNode();
         //
+#if XERCES_VERSION_MAJOR >= 3
+        DOMLSOutput * destination = ((DOMImplementationLS*)impl)->createLSOutput();
+        destination->setByteStream(myFormTarget);
+
+        theSerializer->write(doc, destination);
+
+        delete destination;
+#else
         theSerializer->writeNode(myFormTarget, *doc);
+#endif
 
         delete theSerializer;
 
@@ -158,7 +177,7 @@ void XmlTools::DomToFile(DOMDocument * doc, const char * filename, bool pretty_p
 /**
 Parse an XML file into a DOM document
 */
-void XmlTools::FileToDom(const char * filename, DOMBuilder * & parser, DOMDocument * & doc)
+void XmlTools::FileToDom(const char * filename, FileToDomParser * & parser, DOMDocument * & doc)
 {
     // Default settings
     AbstractDOMParser::ValSchemes valScheme = AbstractDOMParser::Val_Auto;
@@ -169,7 +188,39 @@ void XmlTools::FileToDom(const char * filename, DOMBuilder * & parser, DOMDocume
     // Instantiate the DOM parser.
     static const XMLCh gLS[] = { chLatin_L, chLatin_S, chNull };
     DOMImplementation *impl = DOMImplementationRegistry::getDOMImplementation(gLS);
-    //DOMBuilder        *parser = ((DOMImplementationLS*)impl)->createDOMBuilder(DOMImplementationLS::MODE_SYNCHRONOUS, 0);
+
+#if XERCES_VERSION_MAJOR >= 3
+    parser = ((DOMImplementationLS*)impl)->createLSParser(DOMImplementationLS::MODE_SYNCHRONOUS, 0);
+
+    DOMConfiguration *config = parser->getDomConfig();
+    
+    XMLCh tempStr[100];
+    XMLString::transcode("namespaces", tempStr, 99);
+    config->setParameter(tempStr, doNamespaces);
+    XMLString::transcode("http://apache.org/xml/features/validation/schema", tempStr, 99);
+    config->setParameter(tempStr, doSchema);
+    XMLString::transcode("http://apache.org/xml/features/validation/schema-full-checking", tempStr, 99);
+    config->setParameter(tempStr, schemaFullChecking);
+
+    if (valScheme == AbstractDOMParser::Val_Auto)
+    {
+        XMLString::transcode("validate-if-schema", tempStr, 99);
+        config->setParameter(tempStr, true);
+    }
+    else if (valScheme == AbstractDOMParser::Val_Never)
+    {
+        XMLString::transcode("validate", tempStr, 99);
+        config->setParameter(tempStr, false);
+    }
+    else if (valScheme == AbstractDOMParser::Val_Always)
+    {
+        XMLString::transcode("validate", tempStr, 99);
+        config->setParameter(tempStr, true);
+    }
+
+    XMLString::transcode("datatype-normalization", tempStr, 99);
+    config->setParameter(tempStr, true);
+#else
     parser = ((DOMImplementationLS*)impl)->createDOMBuilder(DOMImplementationLS::MODE_SYNCHRONOUS, 0);
 
     parser->setFeature(XMLUni::fgDOMNamespaces, doNamespaces);
@@ -191,6 +242,9 @@ void XmlTools::FileToDom(const char * filename, DOMBuilder * & parser, DOMDocume
 
     // enable datatype normalization - default is off
     parser->setFeature(XMLUni::fgDOMDatatypeNormalization, true);
+#endif
+
+
 
     // And create our error handler and install it
     //DOMCountErrorHandler errorHandler;
@@ -228,9 +282,5 @@ void XmlTools::FileToDom(const char * filename, DOMBuilder * & parser, DOMDocume
     {
         std::cerr << "\nUnexpected exception during parsing: '" << filename << "'\n";
     }
-//
-    //  Delete the parser itself.  Must be done prior to calling Terminate.
-    //
-    //parser->release(); 
 }
 

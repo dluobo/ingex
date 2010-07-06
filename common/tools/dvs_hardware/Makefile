@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.4 2009/01/29 07:02:25 stuart_hc Exp $
+# $Id: Makefile,v 1.5 2010/07/06 14:15:13 john_f Exp $
 #
 # Makefile for building DVS hardware capture & playout tools
 #
@@ -21,9 +21,10 @@
 # 02110-1301, USA.
 #
 
-CFLAGS=-Wall -g -DDEBUG -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE
+CC = gcc
+
+FLAGS=-Wall -g -DDEBUG -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE
 OPT=-O3 -mmmx -msse2
-FLAGS=$(CFLAGS) $(OPT)
 
 
 SDI_PROGS=recplay playout record record_mxf playout_non_mt check_inputs
@@ -40,31 +41,35 @@ endif
 
 INCLUDE=-I../.. -I.. $(DVS_HARDWARE_INCLUDE)
 
+CFLAGS = -std=gnu99 $(FLAGS) $(OPT) $(INCLUDE)
+CPPFLAGS = $(FLAGS) $(OPT) $(INCLUDE)
 
 .PHONY: all
 all: $(PROGS) libdvsoem_dummy.a
 
-libdvsoem_dummy.a: dvsoem_dummy.c
-	gcc $(FLAGS) $(INCLUDE) -c dvsoem_dummy.c
+libdvsoem_dummy.a: dvsoem_dummy.o
 	ar crv libdvsoem_dummy.a dvsoem_dummy.o
 	
-playout: playout.c
-	g++ $(FLAGS) $(INCLUDE) playout.c $(DVS_HARDWARE_LIB) -lpthread -o playout
+playout: playout.o
+	$(LINK.c) playout.o $(DVS_HARDWARE_LIB) -lpthread -o $@
 
-record: record.c ../../libcommon.a
-	g++ $(FLAGS) -I. $(INCLUDE) record.c ../../libcommon.a $(DVS_HARDWARE_LIB) -lpthread -o record
+record: record.o
+	$(LINK.cpp) record.c ../../libcommon.a $(DVS_HARDWARE_LIB) -lpthread -o $@
 
-record_mxf: record_mxf.c ../../libcommon.a
-	g++ $(FLAGS) -I. $(INCLUDE) -I../../../libMXF/lib/include -I../../../libMXF/examples/archive -I../../../libMXF/examples/archive/write record_mxf.c ../../libcommon.a $(DVS_HARDWARE_LIB) -lpthread -L../../../libMXF/examples/archive/write -L../../../libMXF/lib -lwritearchivemxf -lMXF -luuid -o record_mxf
+record_mxf.o: record_mxf.c
+	$(COMPILE.c) -c -I../../../libMXF/lib/include -I../../../libMXF/examples/archive -I../../../libMXF/examples/archive/write $< -o $@
 
-recplay: recplay.c ../../libcommon.a
-	g++ $(FLAGS) -I. $(INCLUDE) recplay.c ../../libcommon.a $(DVS_HARDWARE_LIB) -lpthread -lncurses -o recplay
+record_mxf: record_mxf.o
+	$(LINK.cpp) record_mxf.o ../../libcommon.a $(DVS_HARDWARE_LIB) -lpthread -L../../../libMXF/examples/archive/write -L../../../libMXF/lib -lwritearchivemxf -lMXF -luuid -o $@
 
-playout_non_mt: playout_non_mt.c
-	g++ $(FLAGS) $(INCLUDE) playout_non_mt.c $(DVS_HARDWARE_LIB) -lpthread -o playout_non_mt
+recplay: recplay.o
+	$(LINK.cpp)  recplay.o ../../libcommon.a $(DVS_HARDWARE_LIB) -lpthread -lncurses -o $@
 
-check_inputs: check_inputs.c
-	g++ $(FLAGS) $(INCLUDE) check_inputs.c $(DVS_HARDWARE_LIB) -o check_inputs
+playout_non_mt: playout_non_mt.o
+	$(LINK.c) playout_non_mt.o $(DVS_HARDWARE_LIB) -lpthread -o $@
+
+check_inputs: check_inputs.o
+	$(LINK.c) $< $(DVS_HARDWARE_LIB) -o $@
 
 clean:
 	rm -f $(SDI_PROGS) *.o libdvsoem_dummy.a

@@ -1,7 +1,7 @@
 #! /usr/bin/perl -w
 
 #/***************************************************************************
-# * $Id: xferserver.pl,v 1.15 2010/06/25 14:27:26 philipn Exp $             *
+# * $Id: xferserver.pl,v 1.16 2010/07/06 14:15:14 john_f Exp $             *
 # *                                                                         *
 # *   Copyright (C) 2008-2010 British Broadcasting Corporation              *
 # *   - all rights reserved.                                                *
@@ -39,7 +39,7 @@
 
 # Arguments after the client name and identifier should be supplied in groups of three: priority (a positive number), source path and destination path.  The script will attempt to copy all the files in all the path pairs at the highest priority (the smallest priority argument value) before moving on to the next, and so on.  (Offline files would normally be given higher priority [smaller argument value] than online files, because they are likely to be needed sooner and are smaller so will be copied more quickly.)  The script saves paths in file PATHS_FILE (unless overridden with the -a option) to allow copying to commence without client intervention when the script is (re)started.  When a client supplies paths, the copying cycle starts or restarts from the highest priority, letting any pending file copy finish first.  This minimises the delay in copying high-priority files without wasting any bandwidth by re-copying.
 
-# In each source directory and any subdirectories whose names match SUBDIRS, every file whose name begins with 8 digits and an underscore* and ends in ".mxf", ".mov" or ".xml" (case-insensitive) is examined.  If it does not exist in a subdirectory of the corresponding destination path, named after the first 8 digits of the filename*, it is copied using the COPY executable or curl (FTP mode), into <destination path>/<first 8 digits of filename>*/<source subdirectory if present>/<DEST_INCOMING>, creating directories if necessary.  After a successful copy, the file is moved up one directory level.  This prevents anything looking at the destination directories from seeing partial files.  At the end of each copying cycle, the (empty) DEST_INCOMING subdirectories are removed.  (* If option -d is provided, 8-digit subdirectories are not used and files do not have to start with 8 digits and an underscore.)
+# In each source directory and any subdirectories whose names match SUBDIRS, every file whose name begins with 8 digits and an underscore* and ends in one of the EXTNS (case-insensitive) is examined.  If it does not exist in a subdirectory of the corresponding destination path, named after the first 8 digits of the filename*, it is copied using the COPY executable or curl (FTP mode), into <destination path>/<first 8 digits of filename>*/<source subdirectory if present>/<DEST_INCOMING>, creating directories if necessary.  After a successful copy, the file is moved up one directory level.  This prevents anything looking at the destination directories from seeing partial files.  At the end of each copying cycle, the (empty) DEST_INCOMING subdirectories are removed.  (* If option -d is provided, 8-digit subdirectories are not used and files do not have to start with 8 digits and an underscore.)
 
 # If the file already exists in its final resting place, but is of a different length to the source file, a warning is issued and the destination file is renamed to allow copying without overwriting it.  (Copying is abandoned if there is already a file with the new name.)  If a file fails to copy, any partial file is deleted and no more files are copied from that source directory (because the order of copying must be maintained - see below).  Once a copy cycle has been successfully completed, the script sleeps until it receives further client connections.  If any files could not be copied, it re-awakes after RECHECK_INTERVAL to try again.
 # Because the script creates all required destination directories, it is recommended that mount points are made non-writeable so that non-mounted drives are detected rather than destination directories being created at, and data being copied to, the mount point, which may fill up a system drive.
@@ -62,7 +62,7 @@ use IO::Socket;
 use IO::Select;
 use IO::File;
 use Getopt::Std;
-our $VERSION = '$Revision: 1.15 $'; #used by Getopt in the case of --version or --help
+our $VERSION = '$Revision: 1.16 $'; #used by Getopt in the case of --version or --help
 $VERSION =~ s/\s*\$Revision:\s*//;
 $VERSION =~ s/\s*\$\s*$//;
 $Getopt::Std::STANDARD_HELP_VERSION = 1; #so it stops after version message
@@ -87,6 +87,7 @@ use constant FAST_LIMIT => 50000; #bandwidth limit kByte/s as supplied to COPY (
 use constant RECHECK_INTERVAL => 10; #time (seconds) between rechecks if something failed
 use constant PATHS_FILE => 'paths'; #name of file the script generates to save copying details for automatic resumption of copying after restarting
 use constant SUBDIRS => qw(xml); #list of subdirectories of each source directory to scan if found (can be empty); equivalent subdirectories are generated at the destination
+use constant EXTNS => qw(mxf mov xml mpg); #list of extensions of files to copy; they will be matched case-insensitively and should be in lower case here
 
 use constant FTP_ROOT => '';
 use constant FTP_SPEED => '20'; #Mbits/sec
@@ -104,7 +105,11 @@ use constant TC_COLOUR => 'on_yellow'; #for traffic control on/off messages
 use constant UP_TO_DATE => 0;
 use constant PROCESSING => 1;
 use constant STALE => 2;
-use vars qw($childPid %opts $curl $interface @ftpDetails $recSock $monSock $pathsFile $byAge);
+use vars qw($childPid %opts $curl $interface @ftpDetails $recSock $monSock $pathsFile $byAge %extns);
+
+foreach ((EXTNS)) {
+	$extns{$_} = 1;
+}
 
 sub HELP_MESSAGE { #given this name, getopts will call this subroutine if given "--help" as a command-line option.
  print STDERR "Usage: xferserver.pl [-a <path>] [-c] [-d] [-e <path>] [-f <server>] [-f '<server> <username> <password>'] [-g <path>] [-m] [-p] [-r] [-s] [-t] [-v]
@@ -599,25 +604,22 @@ sub ScanDir {
 				next;
 			}
 			#check filename and generate temp dest path
-			if ($opts{d}) { #don't use date subdirectories
-				if ($srcName =~ /\.[mM][xX][fF]$/ || $srcName =~ /\.[mM][oO][vV]$/  || $srcName =~ /\.[xX][mM][lL]$/) {
-					$normalDestPath = $subDir ? "$normalDestRoot/$subDir" : $normalDestRoot;
-					$extraDestPath = $subDir ? "$extraDestRoot/$subDir" : $extraDestRoot if defined $extraDestRoot;
-				}
-				else {
-					Report("- $srcName\n", 0, $share) if $opts{v} && $srcName !~ /^\.\.?$/;
-					next;
+			if (
+			 $srcName =~ /\.([^.]+)$/ && exists $extns{"\L$1\E"} #recognised extension
+			 && ($opts{d} || $srcName =~ /^(\d{8})_/) #date in filename if using date subdirectories
+			) {
+				$normalDestPath = $normalDestRoot;
+				$normalDestPath .= "/$1" unless $opts{d}; #add date subdirectory if being used
+				$normalDestPath .= "/$subDir" if $subDir;
+				if (defined $extraDestRoot) {
+					$extraDestPath = $extraDestRoot;
+					$extraDestPath .= "/$1" unless $opts{d}; #add date subdirectory if being used
+					$extraDestPath .= "/$subDir" if $subDir;
 				}
 			}
 			else {
-				if ($srcName =~ /^(\d{8})_.*\.[mM][xX][fF]$/ || $srcName =~ /^(\d{8})_.*\.[mM][oO][vV]$/ || $srcName =~ /^(\d{8})_.*\.[xX][mM][lL]$/) {
-					$normalDestPath = $subDir ? "$normalDestRoot/$1/$subDir" : "$normalDestRoot/$1";
-					$extraDestPath = $subDir ? "$extraDestRoot/$1/$subDir" : "$extraDestRoot/$1" if defined $extraDestRoot;
-				}
-				else {
-					Report("-  $srcName\n", 0, $share) if $opts{v} && $srcName !~ /^\.\.?$/;
-					next;
-				}
+				Report("-  $srcName\n", 0, $share) if $opts{v} && $srcName !~ /^\.\.?$/;
+				next;
 			}
 			$totalSrcFiles++;
 			#get info about the file
@@ -656,7 +658,9 @@ sub ScanDir {
 			if ($normalOK & !$copied) {
 				push @normalFiles, {
 					name => $srcName,
+					srcRoot => $srcRoot,
 					srcDir => $srcPath,
+					destRoot => $normalDestRoot,
 					destDir => $normalDestPath,
 					mtime => $mtime,
 					ctime => $ctime,
@@ -676,7 +680,9 @@ sub ScanDir {
 				if ($extraOK & !$extraCopied) {
 					push @extraFiles, {
 						name => $srcName,
+						srcRoot => $srcRoot,
 						srcDir => $srcPath,
+						destRoot => $extraDestRoot,
 						destDir => $extraDestPath,
 						mtime => $mtime,
 						ctime => $ctime,
@@ -957,15 +963,15 @@ sub childLoop {
 			}
 			my $latestCtimeCopied = $essenceFile->{extra} ? 'extraLatestCtimeCopied' : 'latestCtimeCopied';
 			my $ctimeCleared = $essenceFile->{extra} ? 'extraCtimeCleared' : 'normalCtimeCleared';
-			if (exists $pairs{$essenceFile->{srcDir}}{$latestCtimeCopied}) { #have already tried to copy something from this source dir
-				if (-1 == $pairs{$essenceFile->{srcDir}}{$latestCtimeCopied}) { #have had a problem with this source dir
+			if (exists $pairs{$essenceFile->{srcRoot}}{$latestCtimeCopied}) { #have already tried to copy something from this source root
+				if (-1 == $pairs{$essenceFile->{srcRoot}}{$latestCtimeCopied}) { #have had a problem with this source root
 					next; #ignore this source dir
 				}
-				elsif ($essenceFile->{ctime} > $pairs{$essenceFile->{srcDir}}{$latestCtimeCopied}) { #this file is newer than all files so far copied so all the files up to the age of the last one copied inclusive must have been copied
-					$pairs{$essenceFile->{srcDir}}{$ctimeCleared} = $pairs{$essenceFile->{srcDir}}{$latestCtimeCopied};
+				elsif ($essenceFile->{ctime} > $pairs{$essenceFile->{srcRoot}}{$latestCtimeCopied}) { #this file is newer than all files so far copied so all the files up to the age of the last one copied inclusive must have been copied
+					$pairs{$essenceFile->{srcRoot}}{$ctimeCleared} = $pairs{$essenceFile->{srcRoot}}{$latestCtimeCopied};
 					#update the saved configuration so if the script is stopped now it won't re-copy files which have disappeared from the server when restarted
-					if (exists $transfers->{transfers}{$priority}{$essenceFile->{srcDir}}{$ctimeCleared}) { #in case this directory pair has been moved to another priority
-						$transfers->{transfers}{$priority}{$essenceFile->{srcDir}}{$ctimeCleared} = $pairs{$essenceFile->{srcDir}}{$latestCtimeCopied};
+					if (exists $transfers->{transfers}{$priority}{$essenceFile->{srcRoot}}{$ctimeCleared}) { #in case this directory pair has been moved to another priority
+						$transfers->{transfers}{$priority}{$essenceFile->{srcRoot}}{$ctimeCleared} = $pairs{$essenceFile->{srcRoot}}{$latestCtimeCopied};
 						SaveConfig($transfers);
 					}
 				}
@@ -975,14 +981,14 @@ sub childLoop {
 				# check/create copy subdir
 				if (!-d $incomingPath && MakeDir($incomingPath)) {
 					Report("WARNING: Couldn't create '$incomingPath': $!\n", 1, $transfers, WARNING_COLOUR);
-					$pairs{$essenceFile->{srcDir}}{$latestCtimeCopied} = -1; #prevents any more transfers from this source directory/latestCtimeCopied, which would break the ctime order rule
+					$pairs{$essenceFile->{srcRoot}}{$latestCtimeCopied} = -1; #prevents any more transfers from this source root/latestCtimeCopied, which would break the ctime order rule
 					$retry = 1;
 					next;
 				}
 				# check free space
 				if ((my $free = dfportable($essenceFile->{destDir})->{bavail}) < $essenceFile->{size}) { #a crude test but which will catch most instances of insufficient space.  Assumes subdirs are all on the same partition
-					Report("Prio $priority: '$essenceFile->{destDir}' full ($free byte" . ($free == 1 ? '' : 's') . " free; file size $essenceFile->{size} bytes).\nAbandoning copying from '$essenceFile->{srcDir}/'\n", 1, $transfers, WARNING_COLOUR);
-					$pairs{$essenceFile->{srcDir}}{$latestCtimeCopied} = -1; #prevents any more transfers from this source directory/latestCtimeCopied, which would break the ctime order rule
+					Report("Prio $priority: '$essenceFile->{destDir}' full ($free byte" . ($free == 1 ? '' : 's') . " free; file size $essenceFile->{size} bytes).\nAbandoning copying from '$essenceFile->{srcRoot}/' and subdirectories\n", 1, $transfers, WARNING_COLOUR);
+					$pairs{$essenceFile->{srcRoot}}{$latestCtimeCopied} = -1; #prevents any more transfers from this source directory/latestCtimeCopied, which would break the ctime order rule
 					$retry = 1;
 					next;
 				}
@@ -1129,7 +1135,7 @@ sub childLoop {
 				$share->lock(LOCK_EX);
 				$transfers = thaw($share->fetch);
 				Report("WARNING: copy failed, exiting with value " . ($? >> 8) . ": $childMsgs\n", 1, $transfers, WARNING_COLOUR);
-				$pairs{$essenceFile->{srcDir}}{$latestCtimeCopied} = -1; #prevents any more transfers from this source directory/latestCtimeCopied, which would break the ctime order rule
+				$pairs{$essenceFile->{srcRoot}}{$latestCtimeCopied} = -1; #prevents any more transfers from this source root/latestCtimeCopied, which would break the ctime order rule
 				$retry = 1;
 				next;
 			}
@@ -1140,14 +1146,14 @@ sub childLoop {
 				if (!rename "$incomingPath/$essenceFile->{name}", "$essenceFile->{destDir}/$essenceFile->{name}") {
 					$share->lock(LOCK_EX);
 					$transfers = thaw($share->fetch);
-					Report("\nWARNING: Failed to move file to '$essenceFile->{destDir}/': $!\nAbandoning copying from '$essenceFile->{srcDir}/'\n", 1, $transfers, WARNING_COLOUR);
-					$pairs{$essenceFile->{srcDir}}{$latestCtimeCopied} = -1; #prevents any more transfers from this source directory/latestCtimeCopied, which would break the ctime order rule
+					Report("\nWARNING: Failed to move file to '$essenceFile->{destDir}/': $!\nAbandoning copying from '$essenceFile->{srcRoot}/' and subdirectories\n", 1, $transfers, WARNING_COLOUR);
+					$pairs{$essenceFile->{srcRoot}}{$latestCtimeCopied} = -1; #prevents any more transfers from this source root/latestCtimeCopied, which would break the ctime order rule
 					$retry = 1;
 					next;
 				}
 			}
 			Report(" Done\n", 0, $share, $essenceFile->{extra} ? EXTRA_COPY_COLOUR : MAIN_COPY_COLOUR, 1);
-			$pairs{$essenceFile->{srcDir}}{$latestCtimeCopied} = $essenceFile->{ctime};
+			$pairs{$essenceFile->{srcRoot}}{$latestCtimeCopied} = $essenceFile->{ctime};
 			# update stats
 			$share->lock(LOCK_EX);
 			$transfers = thaw($share->fetch);
@@ -1159,15 +1165,15 @@ sub childLoop {
 				$transfers->{current}{totalNormalFiles}--;
 				$transfers->{current}{totalNormalSize} -= $essenceFile->{size};
 			}
-			if (!--$pairs{$essenceFile->{srcDir}}{$essenceFile->{extra} ? 'extraNFiles' : 'normalNFiles'}) { #this set all copied
-				Report("All files from '$essenceFile->{srcDir}/' to '$essenceFile->{destDir}/' successfully copied.\n", 1, $transfers, $essenceFile->{extra} ? EXTRA_COPY_COLOUR : MAIN_COPY_COLOUR);
-				if (!exists $pairs{$essenceFile->{srcDir}}{$essenceFile->{extra} ? 'normalNFiles' : 'extraNFiles'} || !$pairs{$essenceFile->{srcDir}}{$essenceFile->{extra} ? 'normalNFiles' : 'extraNFiles'}) { #other set not present or all copied
+			if (!--$pairs{$essenceFile->{srcRoot}}{$essenceFile->{extra} ? 'extraNFiles' : 'normalNFiles'}) { #this set all copied
+				Report("All files from '$essenceFile->{srcRoot}/' and subdirectories successfully copied to '$essenceFile->{destRoot}/' / subdirectories.\n", 1, $transfers, $essenceFile->{extra} ? EXTRA_COPY_COLOUR : MAIN_COPY_COLOUR);
+				if (!exists $pairs{$essenceFile->{srcRoot}}{$essenceFile->{extra} ? 'normalNFiles' : 'extraNFiles'} || !$pairs{$essenceFile->{srcRoot}}{$essenceFile->{extra} ? 'normalNFiles' : 'extraNFiles'}) { #other set not present or all copied
 					#mark this source dir as up to date
-					if (exists $transfers->{transfers}{$priority}{$essenceFile->{srcDir}}) { #pair hasn't disappeared
-						if (PROCESSING == $transfers->{transfers}{$priority}{$essenceFile->{srcDir}}{stale}) { #new files haven't appeared since scanning
-							$transfers->{transfers}{$priority}{$essenceFile->{srcDir}}{stale} = UP_TO_DATE;
+					if (exists $transfers->{transfers}{$priority}{$essenceFile->{srcRoot}}) { #pair hasn't disappeared
+						if (PROCESSING == $transfers->{transfers}{$priority}{$essenceFile->{srcRoot}}{stale}) { #new files haven't appeared since scanning
+							$transfers->{transfers}{$priority}{$essenceFile->{srcRoot}}{stale} = UP_TO_DATE;
 						}
-						$transfers->{transfers}{$priority}{$essenceFile->{srcDir}}{$ctimeCleared} = $pairs{$essenceFile->{srcDir}}{latestCtime}; #use {latestCtime} rather than the ctime of the current file to ensure that the saved ctimeCleared reflects the age of the youngest scanned file even if this file has not been copied this time (ctimeCleared values in paths file reset and old but not newer files have been deleted off the server?)
+						$transfers->{transfers}{$priority}{$essenceFile->{srcRoot}}{$ctimeCleared} = $pairs{$essenceFile->{srcRoot}}{latestCtime}; #use {latestCtime} rather than the ctime of the current file to ensure that the saved ctimeCleared reflects the age of the youngest scanned file even if this file has not been copied this time (ctimeCleared values in paths file reset and old but not newer files have been deleted off the server?)
 						SaveConfig($transfers);
 					}
 					else {

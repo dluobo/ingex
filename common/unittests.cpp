@@ -76,8 +76,10 @@ int main(int argc, char *argv[])
 	uint8_t *frame10bit2 = (uint8_t*)malloc(frame_size_10bit);
 
 	// colourbars and timecode burning
+    Ingex::Timecode timecode(12, 34, 45, 00, 25, 1, false);
+
 	uyvy_color_bars(width, height, 1, frame);
-	burn_mask_uyvy(111222, 90, 90, 720, 576, frame);
+	burn_mask_uyvy(timecode, 90, 90, 720, 576, frame);
 	write_sample("c.uyvy", frame_size, frame);
 	uyvy_to_yuv422_nommx(width, height, 0, frame, frame2);
 	write_sample("c.uyvy.yuv", frame_size, frame2);
@@ -85,12 +87,12 @@ int main(int argc, char *argv[])
 	uyvy_to_yuv420_nommx(width, height, 0, frame, frame2);
 	write_sample("c.yuv", 720*576*3/2, frame2);
 
-	burn_mask_yuv420(111222, 90, 90, 720, 576, frame2);
+	burn_mask_yuv420(timecode, 90, 90, 720, 576, frame2);
 	write_sample("cb.yuv", 720*576*3/2, frame2);
 
 	uyvy_color_bars(width, height, 1, frame);
 	uyvy_to_yuv422_nommx(width, height, 0, frame, frame2);
-	burn_mask_yuv422(111222, 90, 90, 720, 576, frame2);
+	burn_mask_yuv422(timecode, 90, 90, 720, 576, frame2);
 	write_sample("c422.yuv", 720*576*2, frame2);
 
 	// Test creation of "NO VIDEO" uyvy caption frame

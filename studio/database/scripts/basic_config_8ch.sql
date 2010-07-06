@@ -15,11 +15,15 @@ SELECT setval('rlc_id_seq', max(rlc_identifier)) FROM recordinglocation;
 -- sourceconfig
 --
 
-INSERT INTO sourceconfig VALUES (100, 'VT1', 2, NULL, 10);
-INSERT INTO sourceconfig VALUES (101, 'VT2', 2, NULL, 10);
-INSERT INTO sourceconfig VALUES (102, 'VT3', 2, NULL, 10);
-INSERT INTO sourceconfig VALUES (103, 'VT4', 2, NULL, 10);
-INSERT INTO sourceconfig VALUES (104, 'Mixer Out', 2, NULL, 10);
+INSERT INTO sourceconfig VALUES (100, 'Cam1', 2, NULL, 10);
+INSERT INTO sourceconfig VALUES (101, 'Cam2', 2, NULL, 10);
+INSERT INTO sourceconfig VALUES (102, 'Cam3', 2, NULL, 10);
+INSERT INTO sourceconfig VALUES (103, 'Cam4', 2, NULL, 10);
+INSERT INTO sourceconfig VALUES (104, 'Cam5', 2, NULL, 10);
+INSERT INTO sourceconfig VALUES (105, 'Cam6', 2, NULL, 10);
+INSERT INTO sourceconfig VALUES (106, 'Cam7', 2, NULL, 10);
+INSERT INTO sourceconfig VALUES (107, 'Cam8', 2, NULL, 10);
+INSERT INTO sourceconfig VALUES (110, 'Mixer Out', 2, NULL, 10);
 
 SELECT setval('scf_id_seq', max(scf_identifier)) FROM sourceconfig;
 
@@ -28,7 +32,7 @@ SELECT setval('scf_id_seq', max(scf_identifier)) FROM sourceconfig;
 -- sourcetrackconfig
 --
 
--- VT1
+-- Cam1
 INSERT INTO sourcetrackconfig VALUES (200, 1, 1, 'V',  1, '(25,1)', 10800000, 100);
 INSERT INTO sourcetrackconfig VALUES (201, 2, 1, 'A1', 2, '(25,1)', 10800000, 100);
 INSERT INTO sourcetrackconfig VALUES (202, 3, 2, 'A2', 2, '(25,1)', 10800000, 100);
@@ -38,7 +42,7 @@ INSERT INTO sourcetrackconfig VALUES (205, 6, 5, 'A5', 2, '(25,1)', 10800000, 10
 INSERT INTO sourcetrackconfig VALUES (206, 7, 6, 'A6', 2, '(25,1)', 10800000, 100);
 INSERT INTO sourcetrackconfig VALUES (207, 8, 7, 'A7', 2, '(25,1)', 10800000, 100);
 INSERT INTO sourcetrackconfig VALUES (208, 9, 8, 'A8', 2, '(25,1)', 10800000, 100);
--- VT2
+-- Cam2
 INSERT INTO sourcetrackconfig VALUES (210, 1, 1, 'V',  1, '(25,1)', 10800000, 101);
 INSERT INTO sourcetrackconfig VALUES (211, 2, 1, 'A1', 2, '(25,1)', 10800000, 101);
 INSERT INTO sourcetrackconfig VALUES (212, 3, 2, 'A2', 2, '(25,1)', 10800000, 101);
@@ -48,7 +52,7 @@ INSERT INTO sourcetrackconfig VALUES (215, 6, 5, 'A5', 2, '(25,1)', 10800000, 10
 INSERT INTO sourcetrackconfig VALUES (216, 7, 6, 'A6', 2, '(25,1)', 10800000, 101);
 INSERT INTO sourcetrackconfig VALUES (217, 8, 7, 'A7', 2, '(25,1)', 10800000, 101);
 INSERT INTO sourcetrackconfig VALUES (218, 9, 8, 'A8', 2, '(25,1)', 10800000, 101);
--- VT3
+-- Cam3
 INSERT INTO sourcetrackconfig VALUES (220, 1, 1, 'V',  1, '(25,1)', 10800000, 102);
 INSERT INTO sourcetrackconfig VALUES (221, 2, 1, 'A1', 2, '(25,1)', 10800000, 102);
 INSERT INTO sourcetrackconfig VALUES (222, 3, 2, 'A2', 2, '(25,1)', 10800000, 102);
@@ -58,7 +62,7 @@ INSERT INTO sourcetrackconfig VALUES (225, 6, 5, 'A5', 2, '(25,1)', 10800000, 10
 INSERT INTO sourcetrackconfig VALUES (226, 7, 6, 'A6', 2, '(25,1)', 10800000, 102);
 INSERT INTO sourcetrackconfig VALUES (227, 8, 7, 'A7', 2, '(25,1)', 10800000, 102);
 INSERT INTO sourcetrackconfig VALUES (228, 9, 8, 'A8', 2, '(25,1)', 10800000, 102);
--- VT4
+-- Cam4
 INSERT INTO sourcetrackconfig VALUES (230, 1, 1, 'V',  1, '(25,1)', 10800000, 103);
 INSERT INTO sourcetrackconfig VALUES (231, 2, 1, 'A1', 2, '(25,1)', 10800000, 103);
 INSERT INTO sourcetrackconfig VALUES (232, 3, 2, 'A2', 2, '(25,1)', 10800000, 103);
@@ -68,8 +72,48 @@ INSERT INTO sourcetrackconfig VALUES (235, 6, 5, 'A5', 2, '(25,1)', 10800000, 10
 INSERT INTO sourcetrackconfig VALUES (236, 7, 6, 'A6', 2, '(25,1)', 10800000, 103);
 INSERT INTO sourcetrackconfig VALUES (237, 8, 7, 'A7', 2, '(25,1)', 10800000, 103);
 INSERT INTO sourcetrackconfig VALUES (238, 9, 8, 'A8', 2, '(25,1)', 10800000, 103);
--- Mixer Out
+-- Cam5
 INSERT INTO sourcetrackconfig VALUES (240, 1, 1, 'V',  1, '(25,1)', 10800000, 104);
+INSERT INTO sourcetrackconfig VALUES (241, 2, 1, 'A1', 2, '(25,1)', 10800000, 104);
+INSERT INTO sourcetrackconfig VALUES (242, 3, 2, 'A2', 2, '(25,1)', 10800000, 104);
+INSERT INTO sourcetrackconfig VALUES (243, 4, 3, 'A3', 2, '(25,1)', 10800000, 104);
+INSERT INTO sourcetrackconfig VALUES (244, 5, 4, 'A4', 2, '(25,1)', 10800000, 104);
+INSERT INTO sourcetrackconfig VALUES (245, 6, 5, 'A5', 2, '(25,1)', 10800000, 104);
+INSERT INTO sourcetrackconfig VALUES (246, 7, 6, 'A6', 2, '(25,1)', 10800000, 104);
+INSERT INTO sourcetrackconfig VALUES (247, 8, 7, 'A7', 2, '(25,1)', 10800000, 104);
+INSERT INTO sourcetrackconfig VALUES (248, 9, 8, 'A8', 2, '(25,1)', 10800000, 104);
+-- Cam6
+INSERT INTO sourcetrackconfig VALUES (250, 1, 1, 'V',  1, '(25,1)', 10800000, 105);
+INSERT INTO sourcetrackconfig VALUES (251, 2, 1, 'A1', 2, '(25,1)', 10800000, 105);
+INSERT INTO sourcetrackconfig VALUES (252, 3, 2, 'A2', 2, '(25,1)', 10800000, 105);
+INSERT INTO sourcetrackconfig VALUES (253, 4, 3, 'A3', 2, '(25,1)', 10800000, 105);
+INSERT INTO sourcetrackconfig VALUES (254, 5, 4, 'A4', 2, '(25,1)', 10800000, 105);
+INSERT INTO sourcetrackconfig VALUES (255, 6, 5, 'A5', 2, '(25,1)', 10800000, 105);
+INSERT INTO sourcetrackconfig VALUES (256, 7, 6, 'A6', 2, '(25,1)', 10800000, 105);
+INSERT INTO sourcetrackconfig VALUES (257, 8, 7, 'A7', 2, '(25,1)', 10800000, 105);
+INSERT INTO sourcetrackconfig VALUES (258, 9, 8, 'A8', 2, '(25,1)', 10800000, 105);
+-- Cam7
+INSERT INTO sourcetrackconfig VALUES (260, 1, 1, 'V',  1, '(25,1)', 10800000, 106);
+INSERT INTO sourcetrackconfig VALUES (261, 2, 1, 'A1', 2, '(25,1)', 10800000, 106);
+INSERT INTO sourcetrackconfig VALUES (262, 3, 2, 'A2', 2, '(25,1)', 10800000, 106);
+INSERT INTO sourcetrackconfig VALUES (263, 4, 3, 'A3', 2, '(25,1)', 10800000, 106);
+INSERT INTO sourcetrackconfig VALUES (264, 5, 4, 'A4', 2, '(25,1)', 10800000, 106);
+INSERT INTO sourcetrackconfig VALUES (265, 6, 5, 'A5', 2, '(25,1)', 10800000, 106);
+INSERT INTO sourcetrackconfig VALUES (266, 7, 6, 'A6', 2, '(25,1)', 10800000, 106);
+INSERT INTO sourcetrackconfig VALUES (267, 8, 7, 'A7', 2, '(25,1)', 10800000, 106);
+INSERT INTO sourcetrackconfig VALUES (268, 9, 8, 'A8', 2, '(25,1)', 10800000, 106);
+-- Cam8
+INSERT INTO sourcetrackconfig VALUES (270, 1, 1, 'V',  1, '(25,1)', 10800000, 107);
+INSERT INTO sourcetrackconfig VALUES (271, 2, 1, 'A1', 2, '(25,1)', 10800000, 107);
+INSERT INTO sourcetrackconfig VALUES (272, 3, 2, 'A2', 2, '(25,1)', 10800000, 107);
+INSERT INTO sourcetrackconfig VALUES (273, 4, 3, 'A3', 2, '(25,1)', 10800000, 107);
+INSERT INTO sourcetrackconfig VALUES (274, 5, 4, 'A4', 2, '(25,1)', 10800000, 107);
+INSERT INTO sourcetrackconfig VALUES (275, 6, 5, 'A5', 2, '(25,1)', 10800000, 107);
+INSERT INTO sourcetrackconfig VALUES (276, 7, 6, 'A6', 2, '(25,1)', 10800000, 107);
+INSERT INTO sourcetrackconfig VALUES (277, 8, 7, 'A7', 2, '(25,1)', 10800000, 107);
+INSERT INTO sourcetrackconfig VALUES (278, 9, 8, 'A8', 2, '(25,1)', 10800000, 107);
+-- Mixer Out
+INSERT INTO sourcetrackconfig VALUES (300, 1, 1, 'V',  1, '(25,1)', 10800000, 110);
 
 
 SELECT setval('sct_id_seq', max(sct_identifier)) FROM sourcetrackconfig;
@@ -343,6 +387,12 @@ SELECT setval('mcd_id_seq', max(mcd_identifier)) FROM multicameraclipdef;
 INSERT INTO multicameratrackdef VALUES (1, 1, 1, 10);
 INSERT INTO multicameratrackdef VALUES (2, 2, 1, 10);
 INSERT INTO multicameratrackdef VALUES (3, 3, 2, 10);
+INSERT INTO multicameratrackdef VALUES (4, 4, 3, 10);
+INSERT INTO multicameratrackdef VALUES (5, 5, 4, 10);
+INSERT INTO multicameratrackdef VALUES (6, 6, 5, 10);
+INSERT INTO multicameratrackdef VALUES (7, 7, 6, 10);
+INSERT INTO multicameratrackdef VALUES (8, 8, 7, 10);
+INSERT INTO multicameratrackdef VALUES (9, 9, 8, 10);
 
 SELECT setval('mct_id_seq', max(mct_identifier)) FROM multicameratrackdef;
 
@@ -352,12 +402,42 @@ SELECT setval('mct_id_seq', max(mct_identifier)) FROM multicameratrackdef;
 -- mcs_identifier | mcs_index | mcs_multi_camera_track_def_id | mcs_source_id | mcs_source_track_id
 --
 
-INSERT INTO multicameraselectordef VALUES (100, 1, 1, 100, 1);
-INSERT INTO multicameraselectordef VALUES (101, 2, 1, 101, 1);
-INSERT INTO multicameraselectordef VALUES (102, 3, 1, 102, 1);
-INSERT INTO multicameraselectordef VALUES (103, 4, 1, 103, 1);
-INSERT INTO multicameraselectordef VALUES (104, 1, 2, 100, 2);
-INSERT INTO multicameraselectordef VALUES (105, 1, 3, 100, 3);
+INSERT INTO multicameraselectordef VALUES (101, 1, 1, 100, 1);
+INSERT INTO multicameraselectordef VALUES (102, 2, 1, 101, 1);
+INSERT INTO multicameraselectordef VALUES (103, 3, 1, 102, 1);
+INSERT INTO multicameraselectordef VALUES (104, 4, 1, 103, 1);
+INSERT INTO multicameraselectordef VALUES (201, 1, 2, 100, 2);
+INSERT INTO multicameraselectordef VALUES (202, 2, 2, 101, 2);
+INSERT INTO multicameraselectordef VALUES (203, 3, 2, 102, 2);
+INSERT INTO multicameraselectordef VALUES (204, 4, 2, 103, 2);
+INSERT INTO multicameraselectordef VALUES (301, 1, 3, 100, 3);
+INSERT INTO multicameraselectordef VALUES (302, 2, 3, 101, 3);
+INSERT INTO multicameraselectordef VALUES (303, 3, 3, 102, 3);
+INSERT INTO multicameraselectordef VALUES (304, 4, 3, 103, 3);
+INSERT INTO multicameraselectordef VALUES (401, 1, 4, 100, 4);
+INSERT INTO multicameraselectordef VALUES (402, 2, 4, 101, 4);
+INSERT INTO multicameraselectordef VALUES (403, 3, 4, 102, 4);
+INSERT INTO multicameraselectordef VALUES (404, 4, 4, 103, 4);
+INSERT INTO multicameraselectordef VALUES (501, 1, 5, 100, 5);
+INSERT INTO multicameraselectordef VALUES (502, 2, 5, 101, 5);
+INSERT INTO multicameraselectordef VALUES (503, 3, 5, 102, 5);
+INSERT INTO multicameraselectordef VALUES (504, 4, 5, 103, 5);
+INSERT INTO multicameraselectordef VALUES (601, 1, 6, 100, 6);
+INSERT INTO multicameraselectordef VALUES (602, 2, 6, 101, 6);
+INSERT INTO multicameraselectordef VALUES (603, 3, 6, 102, 6);
+INSERT INTO multicameraselectordef VALUES (604, 4, 6, 103, 6);
+INSERT INTO multicameraselectordef VALUES (701, 1, 7, 100, 7);
+INSERT INTO multicameraselectordef VALUES (702, 2, 7, 101, 7);
+INSERT INTO multicameraselectordef VALUES (703, 3, 7, 102, 7);
+INSERT INTO multicameraselectordef VALUES (704, 4, 7, 103, 7);
+INSERT INTO multicameraselectordef VALUES (801, 1, 8, 100, 8);
+INSERT INTO multicameraselectordef VALUES (802, 2, 8, 101, 8);
+INSERT INTO multicameraselectordef VALUES (803, 3, 8, 102, 8);
+INSERT INTO multicameraselectordef VALUES (804, 4, 8, 103, 8);
+INSERT INTO multicameraselectordef VALUES (901, 1, 9, 100, 9);
+INSERT INTO multicameraselectordef VALUES (902, 2, 9, 101, 9);
+INSERT INTO multicameraselectordef VALUES (903, 3, 9, 102, 9);
+INSERT INTO multicameraselectordef VALUES (904, 4, 9, 103, 9);
 
 SELECT setval('mcs_id_seq', max(mcs_identifier)) FROM multicameraselectordef;
 
@@ -394,7 +474,7 @@ INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_
     VALUES ('ENCODE2_COPY_PRIORITY', '2', 1, 10);
     
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('ENCODE3_RESOLUTION', '30', 1, 10);
+    VALUES ('ENCODE3_RESOLUTION', '32', 1, 10);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('ENCODE3_BITC', 'false', 1, 10);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)

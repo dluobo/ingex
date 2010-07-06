@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_control.c,v 1.6 2010/06/25 13:51:28 philipn Exp $
+ * $Id: nexus_control.cpp,v 1.1 2010/07/06 14:15:13 john_f Exp $
  *
  * Module for creating and accessing nexus shared control memory
  *

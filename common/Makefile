@@ -1,9 +1,9 @@
 #
-# $Id: Makefile,v 1.9 2010/06/02 10:52:38 philipn Exp $
+# $Id: Makefile,v 1.10 2010/07/06 14:15:13 john_f Exp $
 #
 # Makefile for building common functions
 #
-# Copyright (C) 2005  Stuart Cunningham <stuart_hc@users.sourceforge.net>
+# Copyright (C) 2005 - 2010 British Broadcasting Corporation
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -21,11 +21,11 @@
 # 02110-1301, USA.
 #
 
-CC=g++
+CC=gcc
 OPT=-DNDEBUG -O3 -mmmx -msse2
 INCLUDES=-IYUVlib
 CFLAGS=-Wall -W -Wno-unused-parameter -g -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE $(OPT) $(INCLUDES)
-CPPFLAGS=-Wall -W -Wno-unused-parameter -g -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE $(OPT) $(INCLUDES)
+CXXFLAGS=-Wall -W -Wno-unused-parameter -g -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE $(OPT) $(INCLUDES)
 
 # Check for old-style FFMPEG header locations and if needed add -DFFMPEG_OLD_INCLUDE_PATHS
 FFMPEG_OLDSTYLE_INCLUDE := $(shell for f in /usr/local/include /usr/include; do test -e $$f/ffmpeg/avcodec.h && echo $$f && break; done)
@@ -52,8 +52,8 @@ all: YUVlib $(LIBCOMMON) $(PROGS) tools
 $(LIBCOMMON): $(OBJECTS)
 	ar rcv $(LIBCOMMON) $(OBJECTS)
 
-unittests: unittests.c $(LIBCOMMON)
-	g++ -Wall -W -g unittests.c -o unittests $(LIBCOMMON) -lm
+unittests: unittests.cpp $(LIBCOMMON)
+	g++ -Wall -W -g unittests.cpp -o unittests $(LIBCOMMON) -lm
 
 .PHONY: check
 check: all
@@ -76,3 +76,4 @@ YUVlib:
 .PHONY: tools
 tools:
 	cd tools && $(MAKE)
+
