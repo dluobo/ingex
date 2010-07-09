@@ -1,5 +1,5 @@
 /*
- * $Id: recorder_functions.cpp,v 1.36 2010/07/06 14:15:13 john_f Exp $
+ * $Id: recorder_functions.cpp,v 1.37 2010/07/09 15:24:43 john_f Exp $
  *
  * Functions which execute in recording threads.
  *
@@ -376,6 +376,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         mjpeg_res = MJPEG_3_1;
         break;
     case MaterialResolution::MJPEG101_MXF_ATOM:
+        encoder = ENCODER_MJPEG;
         mjpeg_res = MJPEG_10_1;
         break;
     case MaterialResolution::MJPEG151S_MXF_ATOM:
