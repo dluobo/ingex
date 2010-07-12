@@ -1,5 +1,5 @@
 /*
- * $Id: dvsoem_dummy.cpp,v 1.1 2010/07/06 14:15:13 john_f Exp $
+ * $Id: dvsoem_dummy.cpp,v 1.2 2010/07/12 09:30:45 john_f Exp $
  *
  * Implement a debug-only DVS hardware library for testing.
  *
@@ -299,7 +299,8 @@ static void setup_source_buf(DvsCard * dvs)
     }
 
     // (Re)allocate buffer for the source video/audio.
-    free(dvs->source_dmabuf);
+    if (dvs->source_dmabuf)
+        free(dvs->source_dmabuf);
     dvs->source_dmabuf = (unsigned char *)malloc(dvs->frame_size * dvs->source_input_frames);
 
     if (!fp_video) {
@@ -666,6 +667,7 @@ int sv_openex(sv_handle ** psv, char * setup, int openprogram, int opentype, int
     {
         // Allocate struct
         dvs = dvs_channel[channel_index] = (DvsCard *)malloc(sizeof(DvsCard));
+        memset(dvs, 0, sizeof(DvsCard));
 
         // Initialise struct
         dvs->card = card;
