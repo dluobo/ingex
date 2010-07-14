@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.14 2010/03/29 16:54:14 philipn Exp $
+# $Id: Makefile,v 1.15 2010/07/14 13:06:36 john_f Exp $
 #
 # Makefile for building IngexPlayer library
 #
@@ -23,14 +23,19 @@
 # 02110-1301, USA.
 #
 
+include ../../common/libmxf.mk
+
 C_INGEX_PLAYER_DIR = ../ingex_player
 COMMON_DIR = ../../common
-LIBMXF_DIR = ../../libMXF
-LIBMXF_ARCHIVE_DIR = $(LIBMXF_DIR)/examples/archive
-LIBMXF_READER_DIR = $(LIBMXF_DIR)/examples/reader
+
+ifneq ($(MAKECMDGOALS),clean)
+	ifneq ($(MAKECMDGOALS),install)
+		CHECK_LIB_AVAILABILITIES=1
+	endif
+endif
 
 
-ifneq "$(MAKECMDGOALS)" "clean"
+ifdef CHECK_LIB_AVAILABILITIES
 
 # dvs_sdk_paths.mk searches for sdk and sets DVS_HARDWARE_INCLUDE and DVS_HARDWARE_LIB
 # search is overridden by setting DVSSDK
@@ -68,10 +73,15 @@ endif
 CFLAGS = -Wall -W -Wno-unused-parameter -D_THREAD_SAFE
 OPT = -O3 -mmmx -msse2
 
-INCLUDEDIRS = -I. -I$(LIBMXF_DIR)/lib/include -I$(LIBMXF_ARCHIVE_DIR) -I$(LIBMXF_ARCHIVE_DIR)/info -I$(LIBMXF_READER_DIR) -I$(C_INGEX_PLAYER_DIR)
+INCLUDES = -I. -I/usr/local/include -I/usr/include/freetype2 -I/usr/include/fontconfig \
+	-I$(C_INGEX_PLAYER_DIR) \
+	$(LIBMXF_INCLUDE) $(ARCHIVEMXFINFO_INCLUDE) $(MXFREADER_INCLUDE) \
 
-LIBDIRS = -L$(C_INGEX_PLAYER_DIR) -L$(LIBMXF_DIR)/lib -L$(LIBMXF_ARCHIVE_DIR)/info -L$(LIBMXF_READER_DIR) -L$(COMMON_DIR) -L$(COMMON_DIR)/YUVlib -L/usr/X11R6/lib -L/usr/local/lib
-LIBS = -lX11 -lXv -lpthread -lfreetype -lfontconfig -luuid -lcommon -lYUVlib -larchivemxfinfo -lMXFReader -lMXF
+LIBS = -L. -L/usr/X11R6/lib -L/usr/local/lib -L/usr/X11R6/lib64 -L/usr/local/lib64 \
+	$(ARCHIVEMXFINFO_LIB) $(MXFREADER_LIB) $(LIBMXF_LIB) \
+	-L$(COMMON_DIR) -lcommon \
+	-L$(COMMON_DIR)/YUVlib -lYUVlib \
+	-lX11 -lXv -lpthread -lfreetype -lfontconfig
 
 
 ifdef DVS_HARDWARE_INCLUDE
@@ -117,8 +127,9 @@ else
 endif
 
 ifdef HAVE_PORTAUDIO
-	CFLAGS += -DHAVE_PORTAUDIO -I$(PORTAUDIO_INCLUDE_PATH)
+	INCLUDES += -I$(PORTAUDIO_INCLUDE_PATH)
 	LIBS += -lportaudio
+	CFLAGS += -DHAVE_PORTAUDIO
 endif
 
 ifndef TEST_SHM_PATH
@@ -150,17 +161,17 @@ libIngexPlayer.a: $(OBJECTS) $(C_INGEX_PLAYER_DIR)/libingexplayer.a
 .deps/%.d : %.cpp
 	@echo Generating dependency file for $<; \
 	mkdir -p .deps; \
-	$(CC) $(INCLUDEDIRS) -MM $< > $@.$$$$; \
+	$(CC) $(INCLUDES) -MM $< > $@.$$$$; \
 	sed 's,\($*\)\.o[ :]*,\.objs/\1.o $@ : ,g' < $@.$$$$ > $@; \
 	rm -f $@.$$$$
 
 .objs/%.o: %.cpp
 	@mkdir -p .objs
-	$(CC) -c $(INCLUDEDIRS) $< -o $@
+	$(CC) -c $(INCLUDES) $< -o $@
 
 
 test_IngexPlayer: .objs/test_IngexPlayer.o libIngexPlayer.a
-	$(CC) $(LIBDIRS) .objs/test_IngexPlayer.o libIngexPlayer.a $(LIBS) -o $@
+	$(CC) .objs/test_IngexPlayer.o libIngexPlayer.a $(LIBS) -o $@
 
 
 .PHONY: clean
@@ -170,7 +181,7 @@ clean:
 	@rm -fR .deps
 
 
-ifneq "$(MAKECMDGOALS)" "clean"
+ifneq ($(MAKECMDGOALS),clean)
 -include $(DEPENDENCIES)
 -include .deps/test_IngexPlayer.d
 endif

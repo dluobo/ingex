@@ -1,7 +1,7 @@
 #!/usr/bin/perl -wT
 
 #
-# $Id: creatercf.pl,v 1.1 2007/09/11 14:08:46 stuart_hc Exp $
+# $Id: creatercf.pl,v 1.2 2010/07/14 13:06:37 john_f Exp $
 #
 # 
 #
@@ -46,69 +46,65 @@ if (defined param("Cancel"))
 {
     redirect_to_page("recorder.pl");
 }
-if (!defined param("recid"))
-{
-    return_error_page("Missing 'recid' parameter");
-}
 
 
-my $rec = load_recorder($dbh, param("recid")) 
-    or return_error_page("failed to load recorder: $prodautodb::errstr");
+my $rcfs = load_recorder_configs($dbh)
+    or return_error_page("failed to load recorder configs: $prodautodb::errstr");
 
-my $rcfs = load_recorder_configs($dbh, param("recid")) 
-    or return_error_page("failed to load recorder configs for recorder: $prodautodb::errstr");
 
-my $drps = load_default_recorder_parameters($dbh) 
-    or return_error_page("failed to load default recorder parameters: $prodautodb::errstr");
-    
-    
 my $errorMessage;
 
 if (defined param("Create"))
 {
-    if (!($errorMessage = validate_params()))
+    if (!($errorMessage = validate_params($rcfs)))
     {
-        my $rcf = create_recorder_config(param("recid"), trim(param("name")), 
-            param("numinputs"), param("numtracks"), $drps);
+        my $rcf = create_recorder_config(trim(param("name")), get_template($rcfs));
 
         my $rcfId = save_recorder_config($dbh, $rcf) 
-            or return_create_page("failed to save recorder config to database: $prodautodb::errstr", $rec);
-        
-        if (!$rec->{"CONF_ID"})
-        {
-            $rec->{"CONF_ID"} = $rcfId;
-            if (!update_recorder($dbh, $rec))
-            {
-                return_create_page("failed to update recorder with new config: $prodautodb::errstr", $rec);
-            }
-        }
+            or return_create_page("failed to save recorder config to database: $prodautodb::errstr", $rcfs);
             
         redirect_to_page("editrcf.pl?id=$rcfId");
     }
 }
 
-return_create_page($errorMessage, $rec, $rcfs);
+return_create_page($errorMessage, $rcfs);
 
 
+sub get_template
+{
+    my ($rcfs) = @_;
+
+    foreach my $rcf (@{ $rcfs })
+    {
+        if ($rcf->{"config"}->{"ID"} == param("template"))
+        {
+            return $rcf;
+        }
+    }
+    
+    return undef;
+}
 
 sub validate_params
 {
-    return "Error: Empty name" if (!defined param("name") || param("name") =~ /^\s*$/);
-    
-    return "Error: Invalid number of inputs" if (!param("numinputs") || 
-        param("numinputs") !~ /^\d+$/);
-        
-    return "Error: Invalid number of tracks per input" if (!param("numtracks") || 
-        param("numtracks") !~ /^\d+$/);
+    my ($rcfs) = @_;
 
+    return "Error: Empty name" if (!defined param("name") || param("name") =~ /^\s*$/);
+
+    return "Error: Undefined template param" if (!defined param("template"));
+
+    my $template = get_template($rcfs);
+    return "Error: unknown recorder config template " . param("template")
+        if (!defined $template);
+    
     return undef;
 }
 
 sub return_create_page
 {
-    my ($errorMessage, $rec, $rcfs) = @_;
+    my ($errorMessage, $rcfs) = @_;
     
-    my $page = construct_page(get_create_content($errorMessage, $rec, $rcfs)) or
+    my $page = construct_page(get_create_content($errorMessage, $rcfs)) or
         return_error_page("failed to fill in content for create recorder config page");
        
     print header;
@@ -117,52 +113,9 @@ sub return_create_page
     exit(0);
 }
 
-sub get_num_tracks
-{
-    my ($rcfs) = @_;
-
-    # use previous    
-    if (defined param("numtracks"))
-    {
-        return param("numtracks");
-    }
-    
-    # use value in an existing input track    
-    foreach my $rcf (@{ $rcfs } )
-    {
-        foreach my $rcft (@{ $rcf->{"inputs"} } )
-        {
-            return scalar @{ $rcft->{"tracks"} };
-        }
-    }
-    
-    # use default    
-    return 5;
-}
-
-sub get_num_inputs
-{
-    my ($rcfs) = @_;
-
-    # use previous    
-    if (defined param("numinputs"))
-    {
-        return param("numinputs");
-    }
-    
-    # use value in an existing input    
-    foreach my $rcf (@{ $rcfs } )
-    {
-        return scalar @{ $rcf->{"inputs"} };
-    }
-    
-    # use default    
-    return 1;
-}
-
 sub get_create_content
 {
-    my ($message, $rec, $rcfs) = @_;
+    my ($message, $rcfs) = @_;
     
     
     my @pageContent;
@@ -173,39 +126,22 @@ sub get_create_content
     {
         push(@pageContent, p({-class=>"error"}, $message));
     }
-    
+
+
     push(@pageContent, start_form({-method=>"POST", -action=>"creatercf.pl"}));
 
-    
-    push(@pageContent, hidden(-name=>"recid", -value=>$rec->{"ID"}));
-
     my @tableRows;
-    
-    push(@tableRows,  
+    push(@tableRows,
         Tr({-align=>"left", -valign=>"top"}, [
-            td([div({-class=>"propHeading1"}, "Recorder:"), $rec->{"NAME"}]),
             td([div({-class=>"propHeading1"}, "Name:"), textfield("name")]),
-            td([div({-class=>"propHeading1"}, "# Inputs:"), 
-                textfield(
-                    -name => "numinputs", 
-                    -default => get_num_inputs($rcfs), 
-                    -override => 1
-                )
-            ]),
-            td([div({-class=>"propHeading1"}, "# Tracks per inputs:"), 
-                textfield(
-                    -name => "numtracks", 
-                    -default => get_num_tracks($rcfs),
-                    -override => 1
-                )
+            td([div({-class=>"propHeading1"}, "Template:"), 
+                get_recorder_config_popup("template", $rcfs, undef),
             ]),
         ])
     );
 
-
     push(@pageContent, table({-class=>"noBorderTable"}, @tableRows));
-    
-    
+
     push(@pageContent, 
         p(
             submit("Create"), 
@@ -215,7 +151,7 @@ sub get_create_content
 
     push(@pageContent, end_form);
 
-    
+
     return join("", @pageContent);
 }
 

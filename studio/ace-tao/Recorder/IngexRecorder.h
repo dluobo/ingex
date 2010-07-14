@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorder.h,v 1.13 2010/06/17 17:27:34 john_f Exp $
+ * $Id: IngexRecorder.h,v 1.14 2010/07/14 13:06:36 john_f Exp $
  *
  * Class to manage an individual recording.
  *
@@ -145,11 +145,16 @@ public:
         ACE_Guard<ACE_Thread_Mutex> guard(mDurationMutex);
         return mTargetDuration;
     }
+
     void TargetDuration(framecount_t d)
     {
         ACE_Guard<ACE_Thread_Mutex> guard(mDurationMutex);
         mTargetDuration = d;
     }
+
+    int FrameRateNumerator();
+    int FrameRateDenominator();
+    framecount_t RecordedDuration();
 
 private:
     prodauto::Recorder * Recorder() const { return mRecorder.get(); }

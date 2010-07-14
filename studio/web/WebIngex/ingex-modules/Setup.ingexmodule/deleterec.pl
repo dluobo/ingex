@@ -86,15 +86,18 @@ sub get_delete_content
     
     my @pageContent;
 
+    my $recHTML = htmlutil::get_recorder($rec, 1);
+    
     push(@pageContent, h1("Delete recorder"),
         start_form({-id=>"ingexForm", -action=>"javascript:sendForm('ingexForm','deleterec')"}),
-        hidden(-name=>"id", -default=>$rec->{"ID"}),
+        hidden(-name=>"id", -default=>$rec->{"recorder"}->{"ID"}),
         p("Please confirm"),
         submit({-onclick=>"whichPressed=this.name", -name=>"Delete"}),
         span(" "),
         submit({-onclick=>"whichPressed=this.name", -name=>"Cancel"}),
         end_form,
-        h2($rec->{"NAME"})
+        h2($rec->{"recorder"}->{"NAME"}),
+        $recHTML
     );
     
     

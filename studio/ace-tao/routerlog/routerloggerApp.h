@@ -1,5 +1,5 @@
 /*
- * $Id: routerloggerApp.h,v 1.7 2009/04/16 18:33:48 john_f Exp $
+ * $Id: routerloggerApp.h,v 1.8 2010/07/14 13:06:36 john_f Exp $
  *
  * Router recorder application class.
  *
@@ -27,7 +27,7 @@
 
 #include "App.h"
 
-#include "SimplerouterloggerImpl.h"
+#include "RouterRecorderImpl.h"
 #include "RecorderC.h"
 
 #include <ace/Thread_Mutex.h>
@@ -50,7 +50,7 @@ public:
     std::string db_file;
     std::string name_server;
     CosNaming::Name cosname;
-	SimplerouterloggerImpl * servant;
+	RouterRecorderImpl * servant;
 	ProdAuto::Recorder_var ref;
 };
 
@@ -100,7 +100,7 @@ private:
 
     // CORBA servants
     std::vector<ServantInfo *> mServantInfo;
-	//SimplerouterloggerImpl * mpServant;
+	//RouterRecorderImpl * mpServant;
 	//ProdAuto::Recorder_var mRef;
 	//CosNaming::Name mName;
 
@@ -110,3 +110,4 @@ private:
 };
 
 #endif //#ifndef routerloggerApp_h
+

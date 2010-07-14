@@ -595,7 +595,10 @@ void TickTreeCtrl::SetTrackStatus(const wxString & recorderName, bool recording,
 				}
 				if (found) { //have found the track node corresponding to the current track status index
 					//set the state
-					if ((!recording || ignoreIntendedState) && !trackStatus[index].rec && ((ItemData *) GetItemData(track))->GetBool()) {
+					if (trackStatus[index].rec_error) {
+						SetNodeState(track, PROBLEM, false, wxT("Recorder error"));
+					}
+					else if ((!recording || ignoreIntendedState) && !trackStatus[index].rec && ((ItemData *) GetItemData(track))->GetBool()) {
 						//not recording and not supposed to be, but enabled
 						SetNodeState(track, ENABLED);
 					}

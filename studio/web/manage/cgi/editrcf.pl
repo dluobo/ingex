@@ -1,7 +1,7 @@
 #!/usr/bin/perl -wT
 
 #
-# $Id: editrcf.pl,v 1.2 2008/05/16 17:00:47 john_f Exp $
+# $Id: editrcf.pl,v 1.3 2010/07/14 13:06:37 john_f Exp $
 #
 # 
 #
@@ -77,23 +77,6 @@ elsif (defined param("Done"))
         {
             $recParam->{"VALUE"} = param("param-$recParam->{'ID'}");
         }
-        
-        foreach my $input (@{ $rcf->{"inputs"} })
-        {
-            my $inputNameId = get_html_param_id([ "input", "name"  ], [ $input->{"config"}->{"ID"} ]);
-            $input->{"config"}->{"NAME"} = param($inputNameId);
-            
-            foreach my $track (@{ $input->{"tracks"} })
-            {
-                my $trackNumId = get_html_param_id([ "input", "track", "num" ], [ $input->{"config"}->{"ID"}, $track->{"ID"} ]);
-                $track->{"TRACK_NUMBER"} = param($trackNumId);
-
-                my $trackSourceId = get_html_param_id([ "input", "track", "source" ], [ $input->{"config"}->{"ID"}, $track->{"ID"} ]);
-                my @sourceTrack = parse_html_source_track(param($trackSourceId));
-                $track->{"SOURCE_ID"} = $sourceTrack[0];
-                $track->{"SOURCE_TRACK_ID"} = $sourceTrack[1];
-            }
-        }            
  
         if (!update_recorder_config($dbh, $rcf))
         {
@@ -134,34 +117,6 @@ sub validate_params
             if (!defined param("param-$recParam->{'ID'}"));
     }
     
-    foreach my $input (@{ $rcf->{"inputs"} })
-    {
-        my $inputNameId = get_html_param_id([ "input", "name"  ], [ $input->{"config"}->{"ID"} ]);
-        return "Error: empty name for input $input->{'config'}->{'INDEX'}" if (!defined param($inputNameId) ||
-            param($inputNameId) =~ /^\s*$/);
-            
-        foreach my $track (@{ $input->{"tracks"} })
-        {
-            my $trackNumId = get_html_param_id([ "input", "track", "num"  ], [ $input->{"config"}->{"ID"}, $track->{"ID"} ]);
-            return "Error: missing or invalid track number for input $input->{'config'}->{'INDEX'}, track $track->{'INDEX'}" 
-                if (!defined param($trackNumId) || 
-                    param($trackNumId) && param($trackNumId) !~ /^\d+$/);
-    
-            my $trackSourceId = get_html_param_id([ "input", "track", "source"  ], [ $input->{"config"}->{"ID"}, $track->{"ID"} ]);
-            return "Error: missing track source for input $input->{'config'}->{'INDEX'}, track $track->{'INDEX'}" 
-                if (!defined param($trackSourceId));
-    
-            my $trackSourceIdParam = param($trackSourceId);
-            my @sourceTrack = parse_html_source_track($trackSourceIdParam);
-            return "Error: invalid track source reference ('$trackSourceIdParam') for input $input->{'config'}->{'INDEX'}, track $track->{'INDEX'}"
-                if (scalar @sourceTrack != 2 || 
-                    (defined $sourceTrack[0] && $sourceTrack[0] !~ /^\d+$/) || 
-                    (defined $sourceTrack[1] && $sourceTrack[1] !~ /^\d+$/));
-        }
-            
-    }
-    
-    
     return undef;
 }
 
@@ -201,93 +156,14 @@ sub get_edit_content
     push(@topRows,  
         Tr({-align=>'left', -valign=>'top'}, [
             td([
-                div({-class=>"propHeading1"}, 'Recorder:'), 
-                $rcf->{'config'}->{'RECORDER_NAME'}
-            ]),
-        ]),
-        Tr({-align=>'left', -valign=>'top'}, [
-            td([
                 div({-class=>"propHeading1"}, 'Name:'), 
                 textfield('name', $rcf->{'config'}->{'NAME'})
             ]),
         ])
     );
 
-    my @inputRows;
-    foreach my $input (@{ $rcf->{'inputs'} })
-    {
-        push(@inputRows, 
-            Tr({-align=>'left', -valign=>'top'}, [
-                td([div({-class=>"propHeading2"}, 'Index:'), 
-                    div($input->{'config'}->{'INDEX'},
-                        hidden(
-                            get_html_param_id([ "input", "index" ], [ $input->{'config'}->{'ID'} ]), 
-                            $input->{'config'}->{'INDEX'}
-                        ),
-                    ),
-                 ]),
-            ]),
-            Tr({-align=>'left', -valign=>'top'}, [
-                td([div({-class=>"propHeading2"}, 'Name:'), 
-                    textfield(
-                        get_html_param_id([ "input", "name" ], [ $input->{'config'}->{'ID'} ]),
-                        $input->{'config'}->{'NAME'}
-                    ),
-                ]),
-            ]),
-        );
-
-        my @trackRows;
-        push(@trackRows, 
-            Tr({-align=>'left', -valign=>'top'}, [
-                th(['Index', 'Source', 'Clip Track Number']),
-            ])
-        );
-
-        foreach my $track (@{ $input->{'tracks'} })
-        {
-            push(@trackRows, 
-                Tr({-align=>'left', -valign=>'top'}, [
-                    td([div($track->{'INDEX'}, 
-                            hidden(
-                                get_html_param_id([ "input", "track", "index" ], [ $input->{'config'}->{'ID'}, $track->{'ID'} ]),
-                                $track->{'INDEX'}
-                            )
-                        ),
-                        get_sources_popup(
-                            get_html_param_id([ "input", "track", "source" ], [ $input->{'config'}->{'ID'}, $track->{'ID'} ]),
-                            load_source_config_refs($dbh),
-                            $track->{'SOURCE_ID'}, 
-                            $track->{'SOURCE_TRACK_ID'},
-                        ),
-                        textfield(
-                            get_html_param_id([ "input", "track", "num" ], [ $input->{'config'}->{'ID'}, $track->{'ID'} ]),
-                            $track->{'TRACK_NUMBER'}
-                        ),
-                    ]),
-                ]),
-            );
-        }
-
-        push(@inputRows,  
-            Tr({-align=>'left', -valign=>'top'}, [
-                td([div({-class=>"propHeading2"}, 'Tracks:'), 
-                    table({-class=>"borderTable"}, @trackRows),
-                ]),
-            ]),
-        );
-    }
-
-    push(@topRows,  
-        Tr({-align=>'left', -valign=>'top'}, [
-            td([div({-class=>"propHeading1"}, 'Inputs:'), 
-                table({-class=>"noBorderTable"}, @inputRows),
-            ]),
-        ]),
-    );
-
-    my @paramRows;
-    push(@paramRows,
+    my @configRows;
+    push(@configRows,
         Tr({-align=>"left", -valign=>"top"}, 
            th(["Name", "Value"]),
         )
@@ -313,7 +189,7 @@ sub get_edit_content
             );
         }
         
-        push(@paramRows,
+        push(@configRows,
             Tr({-align=>"left", -valign=>"top"}, 
                 td([$rp->{"NAME"}, $valueField]),
             )
@@ -322,8 +198,8 @@ sub get_edit_content
     
     push(@topRows,  
         Tr({-align=>'left', -valign=>'top'}, [
-            td([div({-class=>"propHeading1"}, "Parameters:"), 
-                table({-class=>"borderTable"}, @paramRows),
+            td([div({-class=>"propHeading1"}, "Config:"), 
+                table({-class=>"borderTable"}, @configRows),
             ]),
         ]),
     );

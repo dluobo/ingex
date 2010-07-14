@@ -49,19 +49,14 @@ if (($errorMessage = validate_params()) eq "ok")
 
 	my $comment = "";
 	if (defined param('comment')) { $comment = trim(param('comment')); }
-	
-	my $editratedenom = 1;
-	if (defined param('editratedenom')) {
-		$editratedenom = param('editratedenom');
-	}
-	
+		
 	my $resultID = 1;
 	if(param('result') eq "No Good") {
 		$resultID = 3;
 	} elsif (param('result') eq "Good") {
 		$resultID = 2;
 	}
-
+	
 	my $take = {
 		TAKENO => param('takeno'),
 		LOCATION => param('location'),
@@ -72,7 +67,6 @@ if (($errorMessage = validate_params()) eq "ok")
 		COMMENT => $comment,
 		ITEM => param('item'),
 		EDITRATE => param('editrate'),
-		EDITRATEDENOM => $editratedenom
 	};
 
 	my $takeid;

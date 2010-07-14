@@ -212,7 +212,7 @@ function init() {
 		    	{header: "Created", width: 115, sortable: true, dataIndex: 'created'},
 		    	{header: "Start", width: 70, sortable: true, dataIndex: 'start'},
 		    	{header: "End", width: 70, sortable: true, dataIndex: 'end'},
-		      	{header: "Duration", width: 55, sortable: true, dataIndex: 'duration'},
+		      	{header: "Duration", width: 70, sortable: true, dataIndex: 'duration'},
 		     	{header: "Format", width: 200, sortable: true, dataIndex: 'video'},
 		     	{header: "TapeID", width: 65, sortable: true, dataIndex: 'tapeid'}
 			],
@@ -243,7 +243,7 @@ function init() {
 		       		{header: "Created", width: 115, sortable: true, dataIndex: 'created'},
 		       		{header: "Start", width: 70, sortable: true, dataIndex: 'start'},
 		       		{header: "End", width: 70, sortable: true, dataIndex: 'end'},
-		       		{header: "Duration", width: 55, sortable: true, dataIndex: 'duration'},
+		       		{header: "Duration", width: 70, sortable: true, dataIndex: 'duration'},
 		       		{header: "Format", width: 200, sortable: true, dataIndex: 'video'},
 		       		{header: "TapeID", width: 65, sortable: true, dataIndex: 'tapeid'}
 				],

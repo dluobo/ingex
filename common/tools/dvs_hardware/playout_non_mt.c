@@ -1,5 +1,5 @@
 /*
- * $Id: playout_non_mt.c,v 1.4 2010/01/14 14:05:36 john_f Exp $
+ * $Id: playout_non_mt.c,v 1.5 2010/07/14 13:06:35 john_f Exp $
  *
  * Playout uncompressed video and audio files over SDI.
  *
@@ -490,7 +490,7 @@ int main (int argc, char ** argv)
 
     // Loop forever reading from file, writing to sv fifo
     card = 0;
-    sdi_monitor((void *)card);
+    sdi_monitor((void *)(long)card);
 
     return 0;
 }

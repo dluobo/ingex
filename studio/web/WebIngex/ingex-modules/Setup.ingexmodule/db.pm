@@ -51,7 +51,6 @@ BEGIN
         &save_recorder
         &update_recorder
         &delete_recorder
-        &load_default_recorder_parameters
         &load_recorder_configs
         &load_recorder_config
         &save_recorder_config
@@ -419,11 +418,70 @@ sub load_source_config_refs
 #
 ####################################
 
+sub _load_recorder_input_configs
+{
+    my ($dbh, $recId) = @_;
+    
+    my @ricfs;
+    eval
+    {
+        my $sth1 = $dbh->prepare("
+            SELECT ric_identifier AS id,
+                ric_index AS index,
+                ric_name AS name
+            FROM RecorderInputConfig
+                INNER JOIN Recorder ON (ric_recorder_id = rer_identifier)
+            WHERE
+                ric_recorder_id = ?
+            ORDER BY ric_index
+            ");
+        $sth1->bind_param(1, $recId);
+        $sth1->execute;
+
+        while (my $ricf = $sth1->fetchrow_hashref())
+        {
+            # load recorder input track configs
+        
+            my $sth2 = $dbh->prepare("
+                SELECT rtc_identifier AS id, 
+                    rtc_index AS index,
+                    rtc_track_number AS track_number,
+                    scf_name AS source_name,
+                    scf_identifier AS source_id,
+                    rtc_source_track_id AS source_track_id,
+                    sct_track_name AS source_track_name
+                FROM RecorderInputTrackConfig
+                    INNER JOIN RecorderInputConfig ON (rtc_recorder_input_id = ric_identifier)
+                    LEFT OUTER JOIN SourceConfig ON (rtc_source_id = scf_identifier)
+                    LEFT OUTER JOIN SourceTrackConfig ON (rtc_source_id = sct_source_id AND
+                        rtc_source_track_id = sct_track_id)
+                WHERE
+                    rtc_recorder_input_id = ?
+                ORDER BY rtc_index
+                ");
+            $sth2->bind_param(1, $ricf->{"ID"});
+            $sth2->execute;
+            
+            push(@ricfs, {
+                config => $ricf,
+                tracks => $sth2->fetchall_arrayref({})
+            });
+        }
+    };
+    if ($@)
+    {
+        $prodautodb::errstr = (defined $dbh->errstr) ? $dbh->errstr : "unknown error";
+        return undef;
+    }
+    
+    return \@ricfs;
+}
+
 sub load_recorders
 {
     my ($dbh) = @_;
 
-    my $recs;
+    my @recs;
     eval
     {
         my $sth = $dbh->prepare("
@@ -437,7 +495,15 @@ sub load_recorders
             ");
         $sth->execute;
 
-        $recs = $sth->fetchall_arrayref({});
+        while (my $rec = $sth->fetchrow_hashref())
+        {
+            my $ricfs = _load_recorder_input_configs($dbh, $rec->{"ID"});
+
+            push(@recs, {
+                    recorder => $rec,
+                    inputs   => $ricfs
+            });
+        }
     };
     if ($@)
     {
@@ -445,7 +511,7 @@ sub load_recorders
         return undef;
     }
     
-    return $recs;
+    return \@recs;
 }
 
 sub load_recorder
@@ -453,7 +519,7 @@ sub load_recorder
     my ($dbh, $recId) = @_;
 
     my $localError = "unknown error";
-    my $rec;
+    my %rec;
     eval
     {
         my $sth = $dbh->prepare("
@@ -470,11 +536,13 @@ sub load_recorder
         $sth->bind_param(1, $recId);
         $sth->execute;
 
-        if (!($rec = $sth->fetchrow_hashref()))
+        if (!($rec{"recorder"} = $sth->fetchrow_hashref()))
         {
             $localError = "Failed to load recorder with id $recId";
             die;
         }
+
+        $rec{"inputs"} = _load_recorder_input_configs($dbh, $rec{"recorder"}->{"ID"});
     };
     if ($@)
     {
@@ -482,7 +550,7 @@ sub load_recorder
         return undef;
     }
     
-    return $rec;
+    return \%rec;
 }
 
 sub save_recorder
@@ -501,10 +569,46 @@ sub save_recorder
                 (?, ?, ?)
             ");
         $sth->bind_param(1, $nextRecorderId, SQL_INTEGER);
-        $sth->bind_param(2, $rec->{"NAME"}, SQL_VARCHAR);
-        $sth->bind_param(3, $rec->{"RECORDER_CONF_ID"}, SQL_INTEGER);
+        $sth->bind_param(2, $rec->{"recorder"}->{"NAME"}, SQL_VARCHAR);
+        $sth->bind_param(3, $rec->{"recorder"}->{"CONF_ID"}, SQL_INTEGER);
         $sth->execute;
         
+        foreach my $input (@{ $rec->{"inputs"} })
+        {
+            my $nextInputId = prodautodb::_load_next_id($dbh, "ric_id_seq");
+        
+            my $sth = $dbh->prepare("
+                INSERT INTO RecorderInputConfig 
+                    (ric_identifier, ric_index, ric_name, ric_recorder_id)
+                VALUES
+                (?, ?, ?, ?)
+                ");
+            $sth->bind_param(1, $nextInputId, SQL_INTEGER);
+            $sth->bind_param(2, $input->{'config'}->{"INDEX"}, SQL_INTEGER);
+            $sth->bind_param(3, $input->{'config'}->{"NAME"}, SQL_VARCHAR);
+            $sth->bind_param(4, $nextRecorderId, SQL_INTEGER);
+            $sth->execute;
+
+            foreach my $track (@{ $input->{"tracks"} })
+            {
+                my $nextTrackId = prodautodb::_load_next_id($dbh, "rtc_id_seq");
+            
+                my $sth = $dbh->prepare("
+                    INSERT INTO RecorderInputTrackConfig 
+                        (rtc_identifier, rtc_index, rtc_source_id, rtc_source_track_id, 
+                        rtc_track_number, rtc_recorder_input_id)
+                    VALUES
+                    (?, ?, ?, ?, ?, ?)
+                    ");
+                $sth->bind_param(1, $nextTrackId, SQL_INTEGER);
+                $sth->bind_param(2, $track->{"INDEX"}, SQL_INTEGER);
+                $sth->bind_param(3, $track->{"SOURCE_ID"}, SQL_INTEGER);
+                $sth->bind_param(4, $track->{"SOURCE_TRACK_ID"}, SQL_INTEGER);
+                $sth->bind_param(5, $track->{"TRACK_NUMBER"}, SQL_INTEGER);
+                $sth->bind_param(6, $nextInputId, SQL_INTEGER);
+                $sth->execute;
+            }
+        }
         
         $dbh->commit;
     };
@@ -532,10 +636,50 @@ sub update_recorder
             WHERE
                 rer_identifier = ?
             ");
-        $sth->bind_param(1, $rec->{"NAME"}, SQL_VARCHAR);
-        $sth->bind_param(2, $rec->{"CONF_ID"}, SQL_INTEGER);
-        $sth->bind_param(3, $rec->{"ID"}, SQL_INTEGER);
+        $sth->bind_param(1, $rec->{"recorder"}->{"NAME"}, SQL_VARCHAR);
+        $sth->bind_param(2, $rec->{"recorder"}->{"CONF_ID"}, SQL_INTEGER);
+        $sth->bind_param(3, $rec->{"recorder"}->{"ID"}, SQL_INTEGER);
         $sth->execute;
+        
+        foreach my $input (@{ $rec->{"inputs"} })
+        {
+            my $sth = $dbh->prepare("
+                UPDATE RecorderInputConfig
+                SET
+                    ric_index = ?, 
+                    ric_name = ?, 
+                    ric_recorder_id = ?
+                WHERE
+                    ric_identifier = ?
+                ");
+            $sth->bind_param(1, $input->{'config'}->{"INDEX"}, SQL_INTEGER);
+            $sth->bind_param(2, $input->{'config'}->{"NAME"}, SQL_VARCHAR);
+            $sth->bind_param(3, $rec->{"recorder"}->{"ID"}, SQL_INTEGER);
+            $sth->bind_param(4, $input->{"config"}->{"ID"}, SQL_INTEGER);
+            $sth->execute;
+
+            foreach my $track (@{ $input->{"tracks"} })
+            {
+                my $sth = $dbh->prepare("
+                    UPDATE RecorderInputTrackConfig 
+                    SET
+                        rtc_index = ?, 
+                        rtc_source_id = ?, 
+                        rtc_source_track_id = ?, 
+                        rtc_track_number = ?, 
+                        rtc_recorder_input_id = ?
+                    WHERE
+                        rtc_identifier = ?
+                    ");
+                $sth->bind_param(1, $track->{"INDEX"}, SQL_INTEGER);
+                $sth->bind_param(2, $track->{"SOURCE_ID"}, SQL_INTEGER);
+                $sth->bind_param(3, $track->{"SOURCE_TRACK_ID"}, SQL_INTEGER);
+                $sth->bind_param(4, $track->{"TRACK_NUMBER"}, SQL_INTEGER);
+                $sth->bind_param(5, $input->{"config"}->{"ID"}, SQL_INTEGER);
+                $sth->bind_param(6, $track->{"ID"}, SQL_INTEGER);
+                $sth->execute;
+            }
+        }
         
         $dbh->commit;
     };
@@ -581,71 +725,22 @@ sub delete_recorder
 #
 ####################################
 
-sub load_default_recorder_parameters
-{
-    my ($dbh) = @_;
-    
-    my $drps;
-    eval
-    {
-        my $sth = $dbh->prepare("
-            SELECT drp_identifier AS id, 
-                drp_name AS name,
-                drp_value AS value,
-                drp_type AS type
-            FROM DefaultRecorderParameter
-            ");
-        $sth->execute;
-        
-        $drps = $sth->fetchall_arrayref({});
-    };
-    if ($@)
-    {
-        $prodautodb::errstr = (defined $dbh->errstr) ? $dbh->errstr : "unknown error";
-        return undef;
-    }
-    
-    return $drps;    
-}
-
 sub load_recorder_configs
 {
-    my ($dbh, $recId) = @_; # recId is optional
+    my ($dbh) = @_;
 
     my @rcfs;
     eval
     {
         my $sth;
         
-        if (defined $recId)
-        {
-            # configs associated with a specific recorder
-            $sth = $dbh->prepare("
-                SELECT rec_identifier AS id, 
-                    rec_name AS name,
-                    rec_recorder_id AS recorder_id,
-                    rer_name AS recorder_name
-                FROM RecorderConfig
-                    INNER JOIN Recorder ON (rec_recorder_id = rer_identifier)
-                WHERE
-                    rec_recorder_id = ?
-                ORDER BY rec_name
-                ");
-            $sth->bind_param(1, $recId);
-        }
-        else
-        {
-            # all configs
-            $sth = $dbh->prepare("
-                SELECT rec_identifier AS id, 
-                    rec_name AS name,
-                    rec_recorder_id AS recorder_id,
-                    rer_name AS recorder_name
-                FROM RecorderConfig
-                    INNER JOIN Recorder ON (rec_recorder_id = rer_identifier)
-                ORDER BY rec_name
-                ");
-        }
+        $sth = $dbh->prepare("
+            SELECT rec_identifier AS id,
+                rec_name AS name
+            FROM RecorderConfig
+            ORDER BY rec_name
+            ");
+
         $sth->execute;
 
         while (my $rcf = $sth->fetchrow_hashref())
@@ -653,7 +748,7 @@ sub load_recorder_configs
             # load recorder parameters
             
             my $sth2 = $dbh->prepare("
-                SELECT rep_identifier AS id, 
+                SELECT rep_identifier AS id,
                     rep_name AS name,
                     rep_value AS value,
                     rep_type AS type
@@ -668,58 +763,11 @@ sub load_recorder_configs
 
             my $rps = $sth2->fetchall_arrayref({});
 
-            # load recorder input configs
-            
-            my $sth3 = $dbh->prepare("
-                SELECT ric_identifier AS id, 
-                    ric_index AS index,
-                    ric_name AS name
-                FROM RecorderInputConfig
-                    INNER JOIN RecorderConfig ON (ric_recorder_conf_id = rec_identifier)
-                WHERE
-                    ric_recorder_conf_id = ?
-                ORDER BY ric_index
-                ");
-            $sth3->bind_param(1, $rcf->{"ID"});
-            $sth3->execute;
-
-            my @ricfs;            
-            while (my $ricf = $sth3->fetchrow_hashref())
-            {
-                # load recorder input track configs
-            
-                my $sth4 = $dbh->prepare("
-                    SELECT rtc_identifier AS id, 
-                        rtc_index AS index,
-                        rtc_track_number AS track_number,
-                        scf_name AS source_name,
-                        rtc_source_track_id AS source_track_id,
-                        sct_track_name AS source_track_name
-                    FROM RecorderInputTrackConfig
-                        INNER JOIN RecorderInputConfig ON (rtc_recorder_input_id = ric_identifier)
-                        LEFT OUTER JOIN SourceConfig ON (rtc_source_id = scf_identifier)
-                        LEFT OUTER JOIN SourceTrackConfig ON (rtc_source_id = sct_source_id AND
-                            rtc_source_track_id = sct_track_id)
-                    WHERE
-                        rtc_recorder_input_id = ?
-                    ORDER BY rtc_index
-                    ");
-                $sth4->bind_param(1, $ricf->{"ID"});
-                $sth4->execute;
-                
-                push(@ricfs, {
-                    config => $ricf,
-                    tracks => $sth4->fetchall_arrayref({})
-                });
-            }
-            
             push(@rcfs, {
                 config => $rcf,
                 parameters => $rps,
-                inputs => \@ricfs
-                });
+            });
         }
-    
     };
     if ($@)
     {
@@ -739,24 +787,21 @@ sub load_recorder_config
     eval
     {
         my $sth = $dbh->prepare("
-            SELECT rec_identifier AS id, 
-                rec_name AS name,
-                rec_recorder_id AS recorder_id,
-                rer_name AS recorder_name
+            SELECT rec_identifier AS id,
+                rec_name AS name
             FROM RecorderConfig
-                INNER JOIN Recorder ON (rec_recorder_id = rer_identifier)
             WHERE
                 rec_identifier = ?
             ");
         $sth->bind_param(1, $rcfId);
         $sth->execute;
 
-        if ($rcf{'config'} = $sth->fetchrow_hashref())
+        if ($rcf{"config"} = $sth->fetchrow_hashref())
         {
             # load recorder parameters
             
             my $sth2 = $dbh->prepare("
-                SELECT rep_identifier AS id, 
+                SELECT rep_identifier AS id,
                     rep_name AS name,
                     rep_value AS value,
                     rep_type AS type
@@ -770,62 +815,12 @@ sub load_recorder_config
             $sth2->execute;
 
             $rcf{"parameters"} = $sth2->fetchall_arrayref({});
-            
-            
-            # load recorder input configs
-            
-            my $sth3 = $dbh->prepare("
-                SELECT ric_identifier AS id, 
-                    ric_index AS index,
-                    ric_name AS name
-                FROM RecorderInputConfig
-                    INNER JOIN RecorderConfig ON (ric_recorder_conf_id = rec_identifier)
-                WHERE
-                    ric_recorder_conf_id = ?
-                ORDER BY ric_index
-                ");
-            $sth3->bind_param(1, $rcfId);
-            $sth3->execute;
-
-            my @ricfs;            
-            while (my $ricf = $sth3->fetchrow_hashref())
-            {
-                # load recorder input track configs
-            
-                my $sth4 = $dbh->prepare("
-                    SELECT rtc_identifier AS id, 
-                        rtc_index AS index,
-                        rtc_track_number AS track_number,
-                        rtc_source_id AS source_id,
-                        scf_name AS source_name,
-                        rtc_source_track_id AS source_track_id,
-                        sct_track_name AS source_track_name
-                    FROM RecorderInputTrackConfig
-                        INNER JOIN RecorderInputConfig ON (rtc_recorder_input_id = ric_identifier)
-                        LEFT OUTER JOIN SourceConfig ON (rtc_source_id = scf_identifier)
-                        LEFT OUTER JOIN SourceTrackConfig ON (rtc_source_id = sct_source_id AND
-                            rtc_source_track_id = sct_track_id)
-                    WHERE
-                        rtc_recorder_input_id = ?
-                    ORDER BY rtc_index
-                    ");
-                $sth4->bind_param(1, $ricf->{"ID"});
-                $sth4->execute;
-                
-                push(@ricfs, {
-                    config => $ricf,
-                    tracks => $sth4->fetchall_arrayref({})
-                });
-            }
-            
-            $rcf{'inputs'} = \@ricfs;
         }
         else
         {
             $localError = "Failed to load recorder config with id $rcfId";
             die;
         }
-    
     };
     if ($@)
     {
@@ -847,13 +842,12 @@ sub save_recorder_config
         
         my $sth = $dbh->prepare("
             INSERT INTO RecorderConfig 
-                (rec_identifier, rec_name, rec_recorder_id)
+                (rec_identifier, rec_name)
             VALUES
-                (?, ?, ?)
+                (?, ?)
             ");
         $sth->bind_param(1, $nextRecorderConfId, SQL_INTEGER);
         $sth->bind_param(2, $rcf->{"config"}->{"NAME"}, SQL_VARCHAR);
-        $sth->bind_param(3, $rcf->{"config"}->{"RECORDER_ID"}, SQL_INTEGER);
         $sth->execute;
         
         foreach my $param (@{ $rcf->{"parameters"} })
@@ -872,43 +866,6 @@ sub save_recorder_config
             $sth->bind_param(4, $param->{"TYPE"}, SQL_INTEGER);
             $sth->bind_param(5, $nextRecorderConfId, SQL_INTEGER);
             $sth->execute;
-        }
-        
-        foreach my $input (@{ $rcf->{"inputs"} })
-        {
-            my $nextInputId = prodautodb::_load_next_id($dbh, "ric_id_seq");
-        
-            my $sth = $dbh->prepare("
-                INSERT INTO RecorderInputConfig 
-                    (ric_identifier, ric_index, ric_name, ric_recorder_conf_id)
-                VALUES
-                (?, ?, ?, ?)
-                ");
-            $sth->bind_param(1, $nextInputId, SQL_INTEGER);
-            $sth->bind_param(2, $input->{'config'}->{"INDEX"}, SQL_INTEGER);
-            $sth->bind_param(3, $input->{'config'}->{"NAME"}, SQL_VARCHAR);
-            $sth->bind_param(4, $nextRecorderConfId, SQL_INTEGER);
-            $sth->execute;
-
-            foreach my $track (@{ $input->{"tracks"} })
-            {
-                my $nextTrackId = prodautodb::_load_next_id($dbh, "rtc_id_seq");
-            
-                my $sth = $dbh->prepare("
-                    INSERT INTO RecorderInputTrackConfig 
-                        (rtc_identifier, rtc_index, rtc_source_id, rtc_source_track_id, 
-                        rtc_track_number, rtc_recorder_input_id)
-                    VALUES
-                    (?, ?, ?, ?, ?, ?)
-                    ");
-                $sth->bind_param(1, $nextTrackId, SQL_INTEGER);
-                $sth->bind_param(2, $track->{"INDEX"}, SQL_INTEGER);
-                $sth->bind_param(3, $track->{"SOURCE_ID"}, SQL_INTEGER);
-                $sth->bind_param(4, $track->{"SOURCE_TRACK_ID"}, SQL_INTEGER);
-                $sth->bind_param(5, $track->{"TRACK_NUMBER"}, SQL_INTEGER);
-                $sth->bind_param(6, $nextInputId, SQL_INTEGER);
-                $sth->execute;
-            }
         }
         
         $dbh->commit;
@@ -932,14 +889,12 @@ sub update_recorder_config
         my $sth = $dbh->prepare("
             UPDATE RecorderConfig
             SET
-                rec_name = ?, 
-                rec_recorder_id = ? 
+                rec_name = ?
             WHERE
                 rec_identifier = ?
             ");
         $sth->bind_param(1, $rcf->{"config"}->{"NAME"}, SQL_VARCHAR);
-        $sth->bind_param(2, $rcf->{"config"}->{"RECORDER_ID"}, SQL_INTEGER);
-        $sth->bind_param(3, $rcf->{"config"}->{"ID"}, SQL_INTEGER);
+        $sth->bind_param(2, $rcf->{"config"}->{"ID"}, SQL_INTEGER);
         $sth->execute;
         
         foreach my $param (@{ $rcf->{"parameters"} })
@@ -960,46 +915,6 @@ sub update_recorder_config
             $sth->bind_param(4, $rcf->{"config"}->{"ID"}, SQL_INTEGER);
             $sth->bind_param(5, $param->{"ID"}, SQL_INTEGER);
             $sth->execute;
-        }
-        
-        foreach my $input (@{ $rcf->{"inputs"} })
-        {
-            my $sth = $dbh->prepare("
-                UPDATE RecorderInputConfig
-                SET
-                    ric_index = ?, 
-                    ric_name = ?, 
-                    ric_recorder_conf_id = ?
-                WHERE
-                    ric_identifier = ?
-                ");
-            $sth->bind_param(1, $input->{'config'}->{"INDEX"}, SQL_INTEGER);
-            $sth->bind_param(2, $input->{'config'}->{"NAME"}, SQL_VARCHAR);
-            $sth->bind_param(3, $rcf->{"config"}->{"ID"}, SQL_INTEGER);
-            $sth->bind_param(4, $input->{"config"}->{"ID"}, SQL_INTEGER);
-            $sth->execute;
-
-            foreach my $track (@{ $input->{"tracks"} })
-            {
-                my $sth = $dbh->prepare("
-                    UPDATE RecorderInputTrackConfig 
-                    SET
-                        rtc_index = ?, 
-                        rtc_source_id = ?, 
-                        rtc_source_track_id = ?, 
-                        rtc_track_number = ?, 
-                        rtc_recorder_input_id = ?
-                    WHERE
-                        rtc_identifier = ?
-                    ");
-                $sth->bind_param(1, $track->{"INDEX"}, SQL_INTEGER);
-                $sth->bind_param(2, $track->{"SOURCE_ID"}, SQL_INTEGER);
-                $sth->bind_param(3, $track->{"SOURCE_TRACK_ID"}, SQL_INTEGER);
-                $sth->bind_param(4, $track->{"TRACK_NUMBER"}, SQL_INTEGER);
-                $sth->bind_param(5, $input->{"config"}->{"ID"}, SQL_INTEGER);
-                $sth->bind_param(6, $track->{"ID"}, SQL_INTEGER);
-                $sth->execute;
-            }
         }
         
         $dbh->commit;

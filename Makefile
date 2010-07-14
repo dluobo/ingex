@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.3 2010/06/02 11:16:58 philipn Exp $
+# $Id: Makefile,v 1.4 2010/07/14 13:06:35 john_f Exp $
 #
 # Makefile for building the Ingex suite of applications
 #
@@ -21,35 +21,28 @@
 # 02110-1301, USA.
 #
 
-# archive is not included in 'all' until further testing is completed
 .PHONY: all
-all:
-	$(MAKE) -C libMXF
-	$(MAKE) -C libMXF++
-	$(MAKE) -C common
-	$(MAKE) -C player
-	$(MAKE) -C studio
+all: studio
 
 .PHONY: studio
 studio:
+ifndef USE_INSTALLED_LIBMXF
 	$(MAKE) -C libMXF
 	$(MAKE) -C libMXF++
+endif
 	$(MAKE) -C common
 	$(MAKE) -C player
 	$(MAKE) -C studio
 
 .PHONY: archive
 archive:
+ifndef USE_INSTALLED_LIBMXF
 	$(MAKE) -C libMXF
 	$(MAKE) -C libMXF++
+endif
 	$(MAKE) -C common
 	$(MAKE) -C player
 	$(MAKE) -C archive/src
-
-.PHONY: install
-install:
-	$(MAKE) -C libMXF $@
-	$(MAKE) -C libMXF++ $@
 
 # do 'realclean' for studio/ace-tao to delete files generated from IDL
 .PHONY: clean

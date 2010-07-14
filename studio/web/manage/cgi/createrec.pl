@@ -1,7 +1,7 @@
 #!/usr/bin/perl -wT
 
 #
-# $Id: createrec.pl,v 1.1 2007/09/11 14:08:46 stuart_hc Exp $
+# $Id: createrec.pl,v 1.2 2010/07/14 13:06:37 john_f Exp $
 #
 # 
 #
@@ -52,12 +52,13 @@ elsif (defined param("Create"))
 {
     if (!($errorMessage = validate_params()))
     {
-        my $rcf = create_recorder(trim(param("name")));
+        my $rec = create_recorder(trim(param("name")),
+                                  param("numinputs"), param("numtracks"));
 
-        my $rcfId = save_recorder($dbh, $rcf) 
+        my $recId = save_recorder($dbh, $rec)
             or return_create_page("failed to save recorder to database: $prodautodb::errstr");
         
-        redirect_to_page("recorder.pl");
+        redirect_to_page("editrec.pl?id=$recId");
     }
 }
 
@@ -68,6 +69,12 @@ return_create_page($errorMessage);
 sub validate_params
 {
     return "Error: Empty name" if (!defined param("name") || param("name") =~ /^\s*$/);
+    
+    return "Error: Invalid number of inputs" if (!param("numinputs") || 
+        param("numinputs") !~ /^\d+$/);
+        
+    return "Error: Invalid number of tracks per input" if (!param("numtracks") || 
+        param("numtracks") !~ /^\d+$/);
     
     return undef;
 }
@@ -85,6 +92,28 @@ sub return_create_page
     exit(0);
 }
 
+sub get_num_tracks
+{
+    # use previous if available
+    if (defined param("numtracks"))
+    {
+        return param("numtracks");
+    }
+
+    return 5;
+}
+
+sub get_num_inputs
+{
+    # use previous if available
+    if (defined param("numinputs"))
+    {
+        return param("numinputs");
+    }
+    
+    return 1;
+}
+
 sub get_create_content
 {
     my ($message) = @_;
@@ -98,16 +127,43 @@ sub get_create_content
     {
         push(@pageContent, p({-class=>"error"}, $message));
     }
-    
+
+
     push(@pageContent, start_form({-method=>"POST", -action=>"createrec.pl"}));
 
-    push(@pageContent, p("Name", textfield("name")));
+    my @tableRows;
+    push(@tableRows,
+        Tr({-align=>"left", -valign=>"top"}, [
+            td([div({-class=>"propHeading1"}, "Name:"), textfield("name")]),
+            td([div({-class=>"propHeading1"}, "# Inputs:"), 
+                textfield(
+                    -name => "numinputs", 
+                    -default => get_num_inputs(),
+                    -override => 1
+                )
+            ]),
+            td([div({-class=>"propHeading1"}, "# Tracks per inputs:"), 
+                textfield(
+                    -name => "numtracks", 
+                    -default => get_num_tracks(),
+                    -override => 1
+                )
+            ]),
+        ])
+    );
 
-    push(@pageContent, submit("Create"), span(" "), submit("Cancel"));
+    push(@pageContent, table({-class=>"noBorderTable"}, @tableRows));
+
+    push(@pageContent, 
+        p(
+            submit("Create"), 
+            span(" "), submit("Cancel")
+        )
+    );
 
     push(@pageContent, end_form);
 
-    
+
     return join("", @pageContent);
 }
 

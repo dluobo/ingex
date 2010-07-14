@@ -1,5 +1,5 @@
 /*
- * $Id: record.c,v 1.4 2010/06/18 08:50:41 john_f Exp $
+ * $Id: record.c,v 1.5 2010/07/14 13:06:35 john_f Exp $
  *
  * Record uncompressed SDI video and audio to disk.
  *
@@ -682,7 +682,7 @@ int main (int argc, char ** argv)
 
     // Loop forever capturing and writing to disk
     card = 0;
-    sdi_monitor((void *)card);
+    sdi_monitor((void *)(long)card);
 
     return 0;
 }

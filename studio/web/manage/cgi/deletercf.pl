@@ -1,7 +1,7 @@
 #!/usr/bin/perl -wT
 
 #
-# $Id: deletercf.pl,v 1.2 2008/05/16 17:00:47 john_f Exp $
+# $Id: deletercf.pl,v 1.3 2010/07/14 13:06:37 john_f Exp $
 #
 # 
 #
@@ -102,7 +102,8 @@ sub get_delete_content
         submit("Cancel"),
         end_form,
         h2($rcf->{'config'}->{'NAME'}),
-        $rcfHTML);
+        $rcfHTML
+    );
     
     
     return join('',@pageContent);

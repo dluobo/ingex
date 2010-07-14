@@ -1,5 +1,5 @@
 /*
- * $Id: recorder_functions.cpp,v 1.37 2010/07/09 15:24:43 john_f Exp $
+ * $Id: recorder_functions.cpp,v 1.38 2010/07/14 13:06:36 john_f Exp $
  *
  * Functions which execute in recording threads.
  *
@@ -166,15 +166,10 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     channel_i = p_opt->channel_num;
     // Set SourceConfig
     prodauto::Recorder * rec = p_rec->Recorder();
-    prodauto::RecorderConfig * rc = 0;
-    if (rec && rec->hasConfig())
-    {
-        rc = rec->getConfig();
-    }
     prodauto::RecorderInputConfig * ric = 0;
-    if (rc)
+    if (rec)
     {
-        ric = rc->getInputConfig(channel_i + 1); // index starts from 1
+        ric = rec->getInputConfig(channel_i + 1); // index starts from 1
     }
     prodauto::RecorderInputTrackConfig * ritc = 0;
     if (ric)
@@ -399,7 +394,6 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     case MaterialResolution::IMX50_MXF_ATOM:
     case MaterialResolution::IMX50_MXF_1A:
         encoder = ENCODER_FFMPEG;
-        filename_extension = ".m2v";
         break;
     // DNxHD formats
     case MaterialResolution::DNX36P_MXF_ATOM:
@@ -422,13 +416,14 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         mt_possible = true;
         break;
 	case MaterialResolution::XDCAMHD422_RAW:
-	//case MaterialResolution::XDCAMHD422_MXF_OP1A: TODO Not yet implemented
-		//pix_fmt = PIXFMT_422;
-		//codec_input_format = HD_422;
 		encoder = ENCODER_FFMPEG;
 		filename_extension = ".m2v";
-		
 		break;
+    /*
+	case MaterialResolution::XDCAMHD422_MXF_OP1A: TODO Not yet implemented
+		encoder = ENCODER_FFMPEG;
+		break;
+    */
 
     // Browse formats
     case MaterialResolution::DVD:
@@ -1786,13 +1781,13 @@ then perform completion tasks.
 */
 ACE_THR_FUNC_RETURN manage_record_thread(void *p_arg)
 {
-    IngexRecorder * p = (IngexRecorder *)p_arg;
+    IngexRecorder * p_rec = (IngexRecorder *)p_arg;
 
     ACE_DEBUG((LM_DEBUG, ACE_TEXT("manage_record_thread:\n")));
 
     // Wait for all threads to finish
     std::vector<ThreadParam>::iterator it;
-    for (it = p->mThreadParams.begin(); it != p->mThreadParams.end(); ++it)
+    for (it = p_rec->mThreadParams.begin(); it != p_rec->mThreadParams.end(); ++it)
     {
         if (it->id)
         {
@@ -1808,26 +1803,8 @@ ACE_THR_FUNC_RETURN manage_record_thread(void *p_arg)
         }
     }
 
-#if 0
-    // Set pathnames for metadata files
-    std::string vid_meta_name = p->mVideoPath;
-    vid_meta_name += "metadata.txt";
-    std::string dvd_meta_name = p->mDvdPath;
-    dvd_meta_name += "metadata.txt";
-
-    // Write metadata file alongside uncompressed video files
-    p->WriteMetadataFile(vid_meta_name.c_str());
-
-    // If dvd path is different, write another copy alongside
-    // the MPEG2 files.
-    if (dvd_meta_name != vid_meta_name)
-    {
-        p->WriteMetadataFile(dvd_meta_name.c_str());
-    }
-#endif
-
     // Signal completion of recording
-    p->DoCompletionCallback();
+    p_rec->DoCompletionCallback();
 
     return 0;
 }

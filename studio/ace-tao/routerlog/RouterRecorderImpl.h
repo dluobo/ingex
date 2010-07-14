@@ -1,5 +1,5 @@
 /*
- * $Id: SimplerouterloggerImpl.h,v 1.12 2010/06/02 13:09:53 john_f Exp $
+ * $Id: RouterRecorderImpl.h,v 1.1 2010/07/14 13:06:36 john_f Exp $
  *
  * Servant class for RouterRecorder.
  *
@@ -22,8 +22,8 @@
  * 02110-1301, USA.
  */
 
-#ifndef SimplerouterloggerImpl_h
-#define SimplerouterloggerImpl_h
+#ifndef RouterRecorderImpl_h
+#define RouterRecorderImpl_h
 
 #include <vector>
 #include <string>
@@ -56,17 +56,17 @@ public:
 
 class CutsDatabase;
 
-class  SimplerouterloggerImpl
+class  RouterRecorderImpl
   : public RouterObserver, public RecorderImpl
 {
 public:
   // Singelton accessor
-    //static SimplerouterloggerImpl * Instance() { return mInstance; }
+    //static RouterRecorderImpl * Instance() { return mInstance; }
   // Constructor 
-  SimplerouterloggerImpl (void);
+  RouterRecorderImpl (void);
   
   // Destructor 
-  virtual ~SimplerouterloggerImpl (void);
+  virtual ~RouterRecorderImpl (void);
 
 
   // Initialisation
@@ -116,6 +116,10 @@ public:
     throw (
       ::CORBA::SystemException
     );
+  
+  virtual
+  ::ProdAuto::MxfDuration RecordedDuration (
+      void);
   
   virtual
   ::ProdAuto::Recorder::ReturnCode Stop (
@@ -197,4 +201,5 @@ private:
 };
 
 
-#endif //#ifndef SimplerouterloggerImpl_h
+#endif //#ifndef RouterRecorderImpl_h
+

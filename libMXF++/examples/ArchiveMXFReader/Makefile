@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.1 2009/02/02 05:14:33 stuart_hc Exp $
+# $Id: Makefile,v 1.2 2010/07/14 13:06:36 john_f Exp $
 #
 #
 #
@@ -62,13 +62,6 @@ libArchiveMXFReader.a: $(OBJECTS) common
 test_archivemxfreader: .objs/test_archivemxfreader.o libArchiveMXFReader.a
 	$(COMPILE) .objs/test_archivemxfreader.o -L. -L$(LIBMXFPP_DIR)/libMXF++ -L$(LIBMXF_DIR)/lib -lArchiveMXFReader -lMXF++ -lMXF $(UUIDLIB) -o $@
 
-
-.PHONY: install
-install: all
-	mkdir -p $(INSTALL_PREFIX)/lib
-	cp libArchiveMXFReader.a $(INSTALL_PREFIX)/lib/
-	mkdir -p $(INSTALL_PREFIX)/include
-	cp *.h $(INSTALL_PREFIX)/include/
 
 .PHONY: clean
 clean:

@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.1 2009/02/02 05:14:33 stuart_hc Exp $
+# $Id: Makefile,v 1.2 2010/07/14 13:06:36 john_f Exp $
 #
 # 
 #
@@ -44,6 +44,11 @@ all: $(OBJECTS)
 	$(COMPILE) -c $(INCLUDES) $< -o $@	
 	
 	
+.PHONY: install
+install: all
+	mkdir -p $(INSTALL_PREFIX)/include/libMXF++/examples/Common
+	cp *.h $(INSTALL_PREFIX)/include/libMXF++/examples/Common/
+
 .PHONY: clean
 clean:
 	@rm -f *~

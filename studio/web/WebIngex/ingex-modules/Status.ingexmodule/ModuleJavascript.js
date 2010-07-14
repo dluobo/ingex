@@ -23,8 +23,7 @@
 var monitors; // Global object for handling all monitors
 
 // frame rate
-if(typeof editrate == "undefined") var editrate = 25;
-
+if(typeof Editrate == "undefined") var Editrate = 25;
 // Choose your logging level
 var logRequests = false;
 var logMemoryUsageChanges = false;
@@ -51,15 +50,15 @@ function Status_toCol (state) {
 	switch(state)
 	{
 		case 'info':
-			return '#e3e3ff';
+			return '#eaeaff';
 		case 'ok':
-			return '#e3ffe3';
+			return '#eaffea';
 		case 'warn':
 			return '#eeeea3';
 		case 'error':
 			return '#eec3c3';
 		case 'disabled':
-			return '#eee';
+			return '#ccc';
 		default:
 			return '#eaeaea';
 	}	
@@ -1082,7 +1081,7 @@ function ingexInstance (myName,myIP,myVolumes,myParentMonitor) {
 		this.xmlHttp.abort();
 		this.ajaxtimeout = false;
 		insole.error("AJAX timeout occurred when querying "+this.monitor.name+" on "+this.name+". readyState: "+stat);
-		this.monitor.draw(null,'Request timed out when contacing monitor. reasyState: '+stat,this.name);
+		this.monitor.draw(null,'Request timed out when contacing monitor. readyState: '+stat,this.name);
 		for(var leech in this.monitor.leeches){
 			this.monitor.myParent.m[leech].draw(null,'Request timed out when contacing monitor. readyState: '+stat,this.name);
 		}
@@ -1199,7 +1198,7 @@ function ingexTimecode (myField,myChannel,myRecorder) {
 	this.s = 0;
 	this.f = 0;
 	this.stopped = false;
-
+	
 	this.set = function(h,m,s,f,stopped) {
 		this.h = h;
 		this.m = m;
@@ -1214,8 +1213,8 @@ function ingexTimecode (myField,myChannel,myRecorder) {
 		if (this.field.monitor.visible && !this.stopped && !this.field.monitor.paused && !this.field.monitor.waitForNewData) {
 			// Do the actual incrementing
 			this.f += numToInc;
-			if (this.f > editrate) {
-				this.f -= editrate;
+			if (this.f > Editrate) {
+				this.f -= Editrate;
 				this.s++;
 				draw = true;
 				if (this.s > 59) {

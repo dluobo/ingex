@@ -1,5 +1,5 @@
 /*
- * $Id: routerloggerApp.cpp,v 1.12 2010/06/02 13:09:53 john_f Exp $
+ * $Id: routerloggerApp.cpp,v 1.13 2010/07/14 13:06:36 john_f Exp $
  *
  * Router recorder application class.
  *
@@ -29,7 +29,7 @@
 #include "Logfile.h"
 #include "DateTime.h"
 #include "routerloggerApp.h"
-#include "SimplerouterloggerImpl.h"
+#include "RouterRecorderImpl.h"
 #include "quartzRouter.h"
 #include "EasyReader.h"
 #include "ClockReader.h"
@@ -420,7 +420,7 @@ bool routerloggerApp::Init(int argc, char * argv[])
         ServantInfo * servant_info = *it;
 
         // Create object
-        servant_info->servant = new SimplerouterloggerImpl();
+        servant_info->servant = new RouterRecorderImpl();
 
         // Initialise
         if (servant_info->servant->Init(servant_info->name, servant_info->mc_clip_name, servant_info->db_file,

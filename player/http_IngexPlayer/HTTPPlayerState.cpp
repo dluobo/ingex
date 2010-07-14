@@ -1,5 +1,5 @@
 /*
- * $Id: HTTPPlayerState.cpp,v 1.1 2009/02/24 08:21:16 stuart_hc Exp $
+ * $Id: HTTPPlayerState.cpp,v 1.2 2010/07/14 13:06:36 john_f Exp $
  *
  * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
@@ -110,6 +110,24 @@ static bool parse_timecode_info(JSONObject* json, ::TimecodeInfo* timecodeInfo)
     return true;
 }
 
+static bool parse_mark_selection(JSONObject* json, ::FrameInfo* frameInfo, int index)
+{
+    int64_t iValue;
+
+    if (!json->getNumberValue2("markType", &iValue))
+    {
+        return false;
+    }
+    frameInfo->markTypes[index] = (unsigned int)iValue;
+    if (!json->getNumberValue2("markTypeMask", &iValue))
+    {
+        return false;
+    }
+    frameInfo->markTypeMasks[index] = (unsigned int)iValue;
+
+    return true;
+}
+
 static JSONObject* serialize_timecode(const ::Timecode* timecode)
 {
     auto_ptr<JSONObject> result(new JSONObject());
@@ -135,6 +153,16 @@ static JSONObject* serialize_timecode_info(const ::TimecodeInfo* timecodeInfo)
     return result.release();
 }
 
+static JSONObject* serialize_mark_selection(const ::FrameInfo* frameInfo, int index)
+{
+    auto_ptr<JSONObject> result(new JSONObject());
+
+    result->setNumber("markType", frameInfo->markTypes[index]);
+    result->setNumber("markTypeMask", frameInfo->markTypeMasks[index]);
+
+    return result.release();
+}
+
 
 
 bool ingex::parse_frame_info(JSONObject* json, ::FrameInfo* frameInfo)
@@ -142,6 +170,7 @@ bool ingex::parse_frame_info(JSONObject* json, ::FrameInfo* frameInfo)
     bool bValue;
     int64_t iValue;
     vector<JSONValue*>* timecodes;
+    vector<JSONValue*>* markSelections;
 
     if (!json->getNumberValue2("position", &frameInfo->position))
     {
@@ -193,20 +222,49 @@ bool ingex::parse_frame_info(JSONObject* json, ::FrameInfo* frameInfo)
         return false;
     }
     frameInfo->droppedFrame = bValue;
+    if (!json->getNumberValue2("vtrErrorLevel", &iValue))
+    {
+        return false;
+    }
+    frameInfo->vtrErrorLevel = (VTRErrorLevel)iValue;
     if (!json->getBoolValue2("isMarked", &bValue))
     {
         return false;
     }
     frameInfo->isMarked = bValue;
-    if (!json->getNumberValue2("markType", &iValue))
+    if (!json->getNumberValue2("vtrErrorCode", &iValue))
     {
         return false;
     }
-    frameInfo->markType = (int)iValue;
+    frameInfo->vtrErrorCode = iValue;
+
+    frameInfo->numMarkSelections = 0;
+    if (json->getArrayValue2("markSelections", &markSelections))
+    {
+        INGEX_CHECK(markSelections->size() < sizeof(frameInfo->markTypes) / sizeof(unsigned int));
+
+        vector<JSONValue*>::const_iterator iter;
+        for (iter = markSelections->begin(); iter != markSelections->end(); iter++)
+        {
+            JSONObject* obj = dynamic_cast<JSONObject*>(*iter);
+            if (obj == 0)
+            {
+                return false;
+            }
+            if (!parse_mark_selection(obj, frameInfo, frameInfo->numMarkSelections))
+            {
+                return false;
+            }
+
+            frameInfo->numMarkSelections++;
+        }
+    }
 
     frameInfo->numTimecodes = 0;
     if (json->getArrayValue2("timecodes", &timecodes))
     {
+        INGEX_CHECK(timecodes->size() < sizeof(frameInfo->timecodes) / sizeof(TimecodeInfo));
+
         vector<JSONValue*>::const_iterator iter;
         for (iter = timecodes->begin(); iter != timecodes->end(); iter++)
         {
@@ -328,6 +386,7 @@ JSONObject* ingex::serialize_frame_info(const ::FrameInfo* frameInfo)
 {
     int i;
     JSONArray* timecodeArray;
+    JSONArray* markSelectionArray;
     auto_ptr<JSONObject> result(new JSONObject());
 
     result->setNumber("position", frameInfo->position);
@@ -341,8 +400,14 @@ JSONObject* ingex::serialize_frame_info(const ::FrameInfo* frameInfo)
     result->setBool("muteAudio", frameInfo->muteAudio);
     result->setBool("locked", frameInfo->locked);
     result->setBool("droppedFrame", frameInfo->droppedFrame);
+    result->setNumber("vtrErrorLevel", frameInfo->vtrErrorLevel);
     result->setBool("isMarked", frameInfo->isMarked);
-    result->setNumber("markType", frameInfo->markType);
+    markSelectionArray = result->setArray("markSelections");
+    for (i = 0; i < frameInfo->numMarkSelections; i++)
+    {
+        markSelectionArray->appendObject(serialize_mark_selection(frameInfo, i));
+    }
+    result->setNumber("vtrErrorCode", frameInfo->vtrErrorCode);
 
     timecodeArray = result->setArray("timecodes");
     for (i = 0; i < frameInfo->numTimecodes; i++)

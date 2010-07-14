@@ -1,27 +1,24 @@
+include ../../common/libmxf.mk
+
 INSTALL_DIR ?= /usr/local
 
 INGEX_DIR = ../..
-LIBMXF_DIR = $(INGEX_DIR)/libMXF
-LIBMXFPP_DIR = $(INGEX_DIR)/libMXF++
 DATABASE_DIR = $(INGEX_DIR)/studio/database/src
 COMMON_DIR = $(INGEX_DIR)/common
 STUDIOCOMMON_DIR = $(INGEX_DIR)/studio/common
 
 
 INCLUDES = -I. \
-		   -I$(LIBMXFPP_DIR) \
-		   -I$(LIBMXF_DIR)/lib/include \
+		   $(LIBMXFPP_INCLUDE) \
+		   $(LIBMXF_INCLUDE) \
 		   -I$(DATABASE_DIR) \
 		   -I$(COMMON_DIR) \
 		   -I$(STUDIOCOMMON_DIR)
-LIB_DIRS = -L. \
-		   -L$(LIBMXFPP_DIR)/libMXF++ \
-		   -L$(LIBMXF_DIR)/lib \
-		   -L$(DATABASE_DIR) \
-		   -L$(COMMON_DIR) \
-		   -L$(STUDIOCOMMON_DIR)
-LIBS = -lprodautodb -lcommon -lstudiocommon -lpqxx \
-	   -lMXF++ -lMXF -luuid
+LIBS = -L. \
+	   -L$(DATABASE_DIR) -lprodautodb -lpqxx \
+	   -L$(COMMON_DIR) -lcommon \
+	   -L$(STUDIOCOMMON_DIR) -lstudiocommon \
+	   $(LIBMXFPP_LIB) $(LIBMXF_LIB)
 CFLAGS = -Wall -W -Wno-unused-parameter -Werror -g -O2 -D_FILE_OFFSET_BITS=64 \
 		 -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE
 
@@ -41,14 +38,6 @@ LIBOBJECTS -= .objs/import_mxf_info.o
 .PHONY: all
 all: libingexmxfinfo.a import_mxf_info mxf_info_to_xml
 
-
-.PHONY: libMXF.a
-libMXF.a:
-	@cd $(LIBMXF_DIR)/lib && $(MAKE) $@
-
-.PHONY: libMXF++.a
-libMXF++.a:
-	@cd $(LIBMXFPP_DIR)/libMXF++ && $(MAKE) $@
 
 .PHONY: libprodautodb.a
 libprodautodb.a:
@@ -73,11 +62,11 @@ libingexmxfinfo.a: $(LIBOBJECTS)
 
 
 
-import_mxf_info: libMXF.a libMXF++.a libprodautodb.a libingexmxfinfo.a .objs/import_mxf_info.o
-	$(COMPILE) .objs/import_mxf_info.o $(LIB_DIRS) -lingexmxfinfo $(LIBS) -o $@
+import_mxf_info: libprodautodb.a libingexmxfinfo.a .objs/import_mxf_info.o
+	$(COMPILE) .objs/import_mxf_info.o -lingexmxfinfo $(LIBS) -o $@
 
-mxf_info_to_xml: libMXF.a libMXF++.a libprodautodb.a libingexmxfinfo.a .objs/mxf_info_to_xml.o
-	$(COMPILE) .objs/mxf_info_to_xml.o $(LIB_DIRS) -lingexmxfinfo $(LIBS) -o $@
+mxf_info_to_xml: libprodautodb.a libingexmxfinfo.a .objs/mxf_info_to_xml.o
+	$(COMPILE) .objs/mxf_info_to_xml.o -lingexmxfinfo $(LIBS) -o $@
 
 
 .PHONY: install

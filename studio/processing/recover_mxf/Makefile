@@ -1,16 +1,14 @@
+include ../../../common/libmxf.mk
+
 INSTALL_DIR ?= /usr/local
 
 INGEX_DIR = ../../..
 
 COMMON_DIR = $(INGEX_DIR)/common
 STUDIOCOMMON_DIR = $(INGEX_DIR)/studio/common
-LIBMXF_DIR = $(INGEX_DIR)/libMXF
-LIBMXFPP_DIR = $(INGEX_DIR)/libMXF++
 DATABASE_DIR = $(INGEX_DIR)/studio/database/src
 INGEXMXFINFO_DIR = $(INGEX_DIR)/studio/mxfreader
 MXFWRITER_DIR = $(INGEX_DIR)/studio/mxfwriter
-OPATOMREADER_DIR = $(LIBMXFPP_DIR)/examples/OPAtomReader
-LIBMXF++_COMMON_DIR = $(LIBMXFPP_DIR)/examples/Common
 
 
 CC = g++
@@ -20,23 +18,23 @@ COMPILE = $(CC) $(CFLAGS)
 INCLUDES = -I. \
 		   -I$(COMMON_DIR) \
 		   -I$(STUDIOCOMMON_DIR) \
-		   -I$(LIBMXFPP_DIR) \
-		   -I$(LIBMXF_DIR)/lib/include \
+		   $(LIBMXFPP_INCLUDE) \
+		   $(LIBMXF_INCLUDE) \
 		   -I$(DATABASE_DIR) \
 		   -I$(INGEXMXFINFO_DIR) \
 		   -I$(MXFWRITER_DIR) \
-		   -I$(OPATOMREADER_DIR) \
-		   -I$(LIBMXF++_COMMON_DIR)
-LIB_DIRS = -L$(LIBMXFPP_DIR)/libMXF++ \
-		   -L$(LIBMXF_DIR)/lib \
-		   -L$(LIBMXF_DIR)/examples/writeavidmxf \
-		   -L$(DATABASE_DIR) \
-		   -L$(COMMON_DIR) \
-		   -L$(STUDIOCOMMON_DIR) \
-		   -L$(INGEXMXFINFO_DIR) \
-		   -L$(MXFWRITER_DIR) \
-		   -L$(OPATOMREADER_DIR) 
-LIBS = -lOPAtomReader -lingexmxfinfo -lmxfwriter -lprodautodb -lcommon -lstudiocommon -lpqxx -lMXF++ -lwriteavidmxf -lMXF -luuid -lpthread
+		   $(OPATOMREADER_INCLUDE) \
+		   $(LIBMXFPPEXAMPLESCOMMON_INCLUDE)
+LIBS = -L$(INGEXMXFINFO_DIR) -lingexmxfinfo \
+	   -L$(MXFWRITER_DIR) -lmxfwriter \
+	   -L$(DATABASE_DIR) -lprodautodb -lpqxx \
+	   -L$(COMMON_DIR) -lcommon \
+	   -L$(STUDIOCOMMON_DIR) -lstudiocommon \
+	   $(OPATOMREADER_LIB) \
+	   $(LIBMXFPP_LIB) \
+	   $(WRITEAVIDMXF_LIB) \
+	   $(LIBMXF_LIB) \
+	   -lpthread
 
 
 SOURCES = $(wildcard *.cpp)
@@ -47,14 +45,6 @@ DEPENDENCIES = $(patsubst %.cpp,.deps/%.d,$(SOURCES))
 .PHONY: all
 all: recover_mxf
 
-
-.PHONY: libMXF.a
-libMXF.a:
-	@cd $(LIBMXF_DIR)/lib && $(MAKE) $@
-
-.PHONY: libMXF++.a
-libMXF++.a:
-	@cd $(LIBMXFPP_DIR)/libMXF++ && $(MAKE) $@
 
 .PHONY: libprodautodb.a
 libprodautodb.a:
@@ -67,10 +57,6 @@ libingexmxfinfo.a:
 .PHONY: libmxfwriter.a
 libmxfwriter.a:
 	@cd $(MXFWRITER_DIR) && $(MAKE) $@
-
-.PHONY: libOPAtomReader.a
-libOPAtomReader.a:
-	@cd $(OPATOMREADER_DIR) && $(MAKE) $@
 
 
 .deps/%.d : %.cpp
@@ -85,8 +71,8 @@ libOPAtomReader.a:
 	$(COMPILE) -c $(INCLUDES) $< -o $@
 
 
-recover_mxf: libMXF.a libMXF++.a libprodautodb.a libingexmxfinfo.a libmxfwriter.a libOPAtomReader.a $(OBJECTS)
-	$(COMPILE) $(OBJECTS) $(LIB_DIRS) $(LIBS) -o $@
+recover_mxf: libprodautodb.a libingexmxfinfo.a libmxfwriter.a $(OBJECTS)
+	$(COMPILE) $(OBJECTS) $(LIBS) -o $@
 
 
 

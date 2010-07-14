@@ -68,108 +68,118 @@ exit(0);
 sub get_page_content
 {
     my ($recs, $rcfs, $vrs) = @_;
-    
+
     my @pageContent;
+
+
+    # list of recorders
     
     push(@pageContent, p({-id=>"recorderAboutCallout", -class=>"infoBox"}, "Info"));
     
     push(@pageContent, h1("Recorders"));
 
-    
     push(@pageContent, p(a({-id=>"recorderCreateCallout", -href=>"javascript:getContent('createrec')"}, "Create new")));
     
-    
     my @recorderRows;
-    my ($i, $j);
-    foreach my $rec (@{ $recs })
-    {    
-    	$i++;
-        my @configRows;
+    push(@recorderRows, 
+        Tr({-class=>"simpleTable", -align=>'left', -valign=>'top'}, [
+           th(['Name'])
+        ]));
 
-        foreach my $rcf (@{ $rcfs })
-        {   
-            my $rcfConfig = $rcf->{"config"};
-            
-            if ($rec->{"ID"} == $rcfConfig->{"RECORDER_ID"})
-            {
-            	$j++;
-                if (defined $rec->{"CONF_ID"} && $rec->{"CONF_ID"} == $rcfConfig->{"ID"})
-                {
-                    unshift(@configRows,
-                        Tr({-class=>"simpleTable", -align=>"left", -valign=>"top"}, [
-                            td([div({-class=>"propHeading2"}, "config:"), 
-                                a({-id=>"recorderViewConfigCallout_$j", -href=>"javascript:show('RecorderConfig-$rcfConfig->{'ID'}',true)"}, $rcfConfig->{"NAME"}),
-                            ]),
-                        ])
-                    );
-                }
-                else
-                {
-                    push(@configRows,
-                        Tr({-class=>"simpleTable", -align=>"left", -valign=>"top"}, [
-                            td([div({-class=>"propHeading2"}, "alternative:"), 
-                                a({-id=>"recorderViewConfigCallout_$j", -href=>"javascript:show('RecorderConfig-$rcfConfig->{'ID'}',true)"}, $rcfConfig->{"NAME"}),
-                            ]),
-                        ])
-                    );
-                }
-            }
-        }
-        
-        if (!defined $rec->{"CONF_ID"})
-        {
-            # not connected
-            unshift(@configRows,
-                Tr({-class=>"simpleTable", -align=>"left", -valign=>"top"}, [
-                    td([div({-class=>"propHeading2"}, "config:"), i("not set")]), 
-                ])
-            );
-        }
-        
+    foreach my $rec (
+        sort { $a->{"recorder"}->{"NAME"} cmp $b->{"recorder"}->{"NAME"} } 
+        (@{ $recs })
+    )
+    {
+        my $recIndex = $rec->{"recorder"}->{"ID"};
+
         push(@recorderRows, 
             Tr({-class=>"simpleTable", -align=>"left", -valign=>"top"},
-                td(b($rec->{"NAME"})),
-                td(
-                    small({-id=>"recorderManageCallout_$i"}, a({-class=>"simpleButton",-href=>"javascript:getContentWithVars('editrec','id=$rec->{'ID'}')"}, "Edit")),
-                    small({-id=>"recorderDeleteCallout_$i"}, a({-class=>"simpleButton",-href=>"javascript:getContentWithVars('deleterec','id=$rec->{'ID'}')"}, "Delete")),
-                ),
+                td([a({-href=>"javascript:show('Recorder-$recIndex',true)"}, $rec->{"recorder"}->{"NAME"})])
             ),
-			Tr({-class=>"simpleTable", -align=>"left", -valign=>"top"},
-                td(""),
-                td(small(a({-id=>"recorderCreateconfigCallout_$i", -href=>"javascript:getContentWithVars('creatercf','recid=$rec->{'ID'}')"}, "Create new config"))),
-            ),
+        );
+    }
+
+    push(@pageContent, table({-border=>0, -cellspacing=>3,-cellpadding=>3}, @recorderRows));
+
+
+    # list of recorder configs
+
+    push(@pageContent, h1("Recorder configurations"));
+
+    push(@pageContent, p(a({-id=>"recorderConfigCreateCallout", -href=>"javascript:getContent('creatercf')"}, "Create new")));
+    
+    my @recorderConfigRows;
+    push(@recorderConfigRows, 
+        Tr({-class=>"simpleTable", -align=>'left', -valign=>'top'}, [
+           th(['Name'])
+        ]));
+
+    foreach my $rcf (
+        sort { $a->{"config"}->{"NAME"} cmp $b->{"config"}->{"NAME"} } 
+        (@{ $rcfs })
+    )
+    {    
+        my $rcfIndex = $rcf->{"config"}->{"ID"};
+
+        push(@recorderConfigRows, 
             Tr({-class=>"simpleTable", -align=>"left", -valign=>"top"},
-                td(""),
-                td(table({-border=>0, -cellspacing=>3,-cellpadding=>3}, @configRows)),
+                td([a({-href=>"javascript:show('RecorderConfig-$rcfIndex',true)"}, $rcf->{"config"}->{"NAME"})])
             ),
         );
     }
     
-    push(@pageContent, table({-border=>0, -cellspacing=>3,-cellpadding=>3}, @recorderRows));
+    push(@pageContent, table({-border=>0, -cellspacing=>3,-cellpadding=>3}, @recorderConfigRows));
 
-	$i=0;
-	
-    # each recorder config    
+
+    # detail for each recorder
+
+    foreach my $rec (
+        sort { $a->{"recorder"}->{"NAME"} cmp $b->{"recorder"}->{"NAME"} } 
+        (@{ $recs })
+    )
+    {    
+        my $recHTML = htmlutil::get_recorder($rec);
+        my $recIndex = $rec->{"recorder"}->{"ID"};
+        
+        push(@pageContent,
+            div({-id=>"Recorder-$recIndex",-class=>"hidden simpleBlock"},
+                h2("$rec->{'recorder'}->{'NAME'}"),
+                p(
+                    small(a({-class=>"simpleButton",-href=>"javascript:getContentWithVars('editrec','id=$recIndex')"}, "Edit")),
+                    small(a({-class=>"simpleButton",-href=>"javascript:getContentWithVars('deleterec','id=$recIndex')"}, "Delete")),
+                ), 
+                $recHTML
+            )
+        );
+    }
+
+
+    # detail for each config
+
     foreach my $rcf (
-        sort { $a->{"config"}->{"RECORDER_NAME"} cmp $b->{"config"}->{"RECORDER_NAME"} } 
+        sort { $a->{"config"}->{"NAME"} cmp $b->{"config"}->{"NAME"} } 
         (@{ $rcfs })
     )
-    {
-    	$i++;    
+    {    
         my $rcfHTML = htmlutil::get_recorder_config($rcf, $vrs, $fmts, $ops);
+        my $rcfIndex = $rcf->{"config"}->{"ID"};
         
-        my $rcfConfig = $rcf->{"config"};
-        
-        push(@pageContent, 
-            div({-id=>"RecorderConfig-$rcfConfig->{'ID'}",-class=>"hidden simpleBlock"},
-            h2("$rcf->{'config'}->{'RECORDER_NAME'} - $rcf->{'config'}->{'NAME'}"),
-            p(
-                small({-id=>"recorderEditConfigCallout_$i"}, a({-class=>"simpleButton",-href=>"javascript:getContentWithVars('editrcf','id=$rcf->{'config'}->{'ID'}')"}, "Edit")),
-                small({-id=>"recorderDeleteConfigCallout_$i"}, a({-class=>"simpleButton",-href=>"javascript:getContentWithVars('deletercf','id=$rcf->{'config'}->{'ID'}')"}, "Delete")),
-            ), 
-            $rcfHTML));
+        push(@pageContent,
+            div({-id=>"RecorderConfig-$rcfIndex",-class=>"hidden simpleBlock"},
+                h2("$rcf->{'config'}->{'NAME'}"),
+                p(
+                    small(a({-class=>"simpleButton",-href=>"javascript:getContentWithVars('editrcf','id=$rcfIndex')"}, "Edit")),
+                    ($rcfIndex == 1 ? # 1 == default config which cannot be deleted
+                        ""
+                        : small(a({-class=>"simpleButton",-href=>"javascript:getContentWithVars('deletercf','id=$rcfIndex')"}, "Delete"))),
+                ), 
+                $rcfHTML
+            )
+        );
     }
-        
+
+
     return join("",@pageContent);
 }
 

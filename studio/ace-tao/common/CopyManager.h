@@ -1,5 +1,5 @@
 /*
- * $Id: CopyManager.h,v 1.4 2009/02/09 19:18:17 john_f Exp $
+ * $Id: CopyManager.h,v 1.5 2010/07/14 13:06:36 john_f Exp $
  *
  * Class to manage file copying in a separate process.
  *
@@ -48,7 +48,6 @@ private:
     void StopProcess();
 
     CopyMode::EnumType mMode;
-    bool mEnabled;
 	pid_t mPid;
     ACE_Process_Manager * mPm;
     ACE_Process_Options mOptions;

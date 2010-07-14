@@ -79,17 +79,21 @@ sub getTakes
 	my %t;
 	my $takesArray = load_takes($dbh,$itemId) 
 	    or return_error_page("failed to load takes: $prodautodb::errstr");
-
+		
 	foreach my $take (@$takesArray) {
 		%t = %$take;
+		#$t{'EDITRATE'} is of form (000,000) where there is a varying number of digits
+		#split into frameVals[1]=framerate Numerator, frameVals[2]=framerateDenominator
+		my @frameVals = split /(\d+),(\d+)/, $t{'EDITRATE'}, 2;
+		my $editrate = ($frameVals[1] / $frameVals[2]);
 		my $newTake = {
 			id=>$t{'ID'},
 			takeNo=>$t{'TAKENO'},
 			location=>$t{'LOCATION'},
 			date=>$t{'DATE'},
-			inpoint=>toTC($t{'START'}),
-			out=>toTC($t{'START'}+$t{'LENGTH'}),
-			duration=>toTC($t{'LENGTH'}),
+			inpoint=>toTC($t{'START'}, $editrate),
+			out=>toTC($t{'START'}+$t{'LENGTH'}, $editrate),
+			duration=>toTC($t{'LENGTH'}, $editrate),
 			result=>$t{'RESULT'},
 			comment=>$t{'COMMENT'},
 			uiProvider=>'take',

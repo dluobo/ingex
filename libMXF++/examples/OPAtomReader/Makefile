@@ -47,6 +47,13 @@ test_opatomreader: .objs/test_opatomreader.o libOPAtomReader.a
 	$(COMPILE) .objs/test_opatomreader.o -L. -L$(LIBMXFPP_DIR)/libMXF++ -L$(LIBMXF_DIR)/lib -lOPAtomReader -lMXF++ -lMXF $(UUIDLIB) -o $@
 
 
+.PHONY: install
+install: all
+	mkdir -p $(INSTALL_PREFIX)/lib
+	cp libOPAtomReader.a $(INSTALL_PREFIX)/lib/
+	mkdir -p $(INSTALL_PREFIX)/include/libMXF++/examples/OPAtomReader
+	cp *.h $(INSTALL_PREFIX)/include/libMXF++/examples/OPAtomReader/
+
 .PHONY: clean
 clean:
 	@rm -f *~ *.a test_opatomreader

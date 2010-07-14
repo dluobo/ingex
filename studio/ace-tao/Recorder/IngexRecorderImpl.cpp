@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorderImpl.cpp,v 1.18 2010/06/17 17:27:34 john_f Exp $
+ * $Id: IngexRecorderImpl.cpp,v 1.19 2010/07/14 13:06:36 john_f Exp $
  *
  * Servant class for Recorder.
  *
@@ -559,6 +559,26 @@ char * IngexRecorderImpl::RecordingFormat (
     return (ok ? ProdAuto::Recorder::SUCCESS : ProdAuto::Recorder::FAILURE);
 }
 
+::ProdAuto::MxfDuration IngexRecorderImpl::RecordedDuration (
+    void)
+{
+    ProdAuto::MxfDuration duration;
+    duration.edit_rate.numerator = 0;
+    duration.edit_rate.denominator = 0;
+    duration.samples = 0;
+    duration.undefined = 1;
+
+    if (mpIngexRecorder)
+    {
+        duration.edit_rate.numerator = mpIngexRecorder->FrameRateNumerator();
+        duration.edit_rate.denominator = mpIngexRecorder->FrameRateDenominator();
+        duration.samples = mpIngexRecorder->RecordedDuration();
+        duration.undefined = 0;
+    }
+
+    return duration;
+}
+
 ::ProdAuto::Recorder::ReturnCode IngexRecorderImpl::Stop (
     ::ProdAuto::MxfTimecode & mxf_stop_timecode,
     const ::ProdAuto::MxfDuration & mxf_post_roll,
@@ -633,13 +653,7 @@ char * IngexRecorderImpl::RecordingFormat (
     }
     mpIngexRecorder = 0;  // It will be deleted when it signals completion
 
-    // Update status to "not recording".
     mRecording = false;
-    for (CORBA::ULong i = 0; i < mTracksStatus->length(); ++i)
-    {
-        ProdAuto::TrackStatus & ts = mTracksStatus->operator[](i);
-        ts.rec = 0;
-    }
 
     // Debug to measure delay in responding to Stop command
     ACE_DEBUG((LM_DEBUG, ACE_TEXT("IngexRecorderImpl::Stop() Returning %C at time           %C\n"),
@@ -663,13 +677,7 @@ void IngexRecorderImpl::DoStop(Ingex::Timecode timecode, framecount_t post_roll)
     }
     mpIngexRecorder = 0;  // It will be deleted when it signals completion
 
-    // Update status to "not recording".
     mRecording = false;
-    for (CORBA::ULong i = 0; i < mTracksStatus->length(); ++i)
-    {
-        ProdAuto::TrackStatus & ts = mTracksStatus->operator[](i);
-        ts.rec = 0;
-    }
 }
 
 /**
@@ -715,6 +723,14 @@ void IngexRecorderImpl::NotifyCompletion(IngexRecorder * rec)
         mStatusDist.SendStatus("event", "recording completed ok");
     }
 
+    // Update status to "not recording".
+    for (CORBA::ULong i = 0; i < mTracksStatus->length(); ++i)
+    {
+        ProdAuto::TrackStatus & ts = mTracksStatus->operator[](i);
+        ts.rec = 0;
+        ts.rec_error = 0;
+    }
+
     this->StartCopying(rec->mIndex);
     
     // rec is about to get deleted so make sure mpIngexRecorder isn't
@@ -728,7 +744,7 @@ void IngexRecorderImpl::NotifyCompletion(IngexRecorder * rec)
 
 void IngexRecorderImpl::InitCopying()
 {
-    mCopyManager.Command(RecorderSettings::Instance()->copy_command);
+    //mCopyManager.Command(RecorderSettings::Instance()->copy_command);
     mCopyManager.ClearSrcDest();
     std::vector<EncodeParams> & encodings = RecorderSettings::Instance()->encodings;
 
@@ -755,18 +771,13 @@ void IngexRecorderImpl::UpdateShmSourceNames()
     const unsigned int max_inputs = IngexShm::Instance()->Channels();
     try
     {
-        prodauto::RecorderConfig * rc = 0;
-        if (mRecorder.get() && mRecorder->hasConfig())
+        if (mRecorder.get())
         {
-            rc = mRecorder->getConfig();
-        }
-        if (rc)
-        {
-            const unsigned int n_inputs = ACE_MIN((unsigned int)rc->recorderInputConfigs.size(), max_inputs);
+            const unsigned int n_inputs = ACE_MIN((unsigned int)mRecorder->recorderInputConfigs.size(), max_inputs);
 
             for (unsigned int i = 0; i < n_inputs; ++i)
             {
-                prodauto::RecorderInputConfig * ric = rc->getInputConfig(i + 1);
+                prodauto::RecorderInputConfig * ric = mRecorder->getInputConfig(i + 1);
 
                 prodauto::RecorderInputTrackConfig * ritc = 0;
                 if (ric)

@@ -1,5 +1,5 @@
 /*
- * $Id: Recorder.h,v 1.4 2010/06/18 08:25:14 john_f Exp $
+ * $Id: Recorder.h,v 1.5 2010/07/14 13:06:36 john_f Exp $
  *
  * Recorder and configuration
  *
@@ -36,9 +36,6 @@
 // parameter may not exceed this amount of characters
 #define MAX_PARAMETER_LENGTH        250
 
-
-
-// TODO: aspect ratio
 
 
 namespace prodauto
@@ -97,14 +94,6 @@ public:
     RecorderConfig();
     ~RecorderConfig();
     
-    SourceConfig* getSourceConfig(long sourceConfigID, uint32_t sourceTrackID);
-    
-    // note: the source config can be 0 if the input track is not connected
-    SourceConfig* getSourceConfig(uint32_t inputIndex, uint32_t inputTrackIndex);
-    
-    RecorderInputConfig* getInputConfig(uint32_t index);
-    
-    
     bool haveParam(std::string name);
 
     // if the parameter exists and is well formed then the value is returned 
@@ -126,8 +115,6 @@ public:
     
     
     std::string name;
-    std::vector<SourceConfig*> sourceConfigs;
-    std::vector<RecorderInputConfig*> recorderInputConfigs;
     std::map<std::string, RecorderParameter> parameters; 
 };
 
@@ -137,20 +124,21 @@ public:
     Recorder();
     ~Recorder();
 
-    void setConfig(RecorderConfig* config); // transfers ownership
-    void setAlternateConfig(RecorderConfig* config); // transfers ownership
-    bool hasConfig();
-    RecorderConfig* getConfig();
-    std::vector<RecorderConfig*>& getAllConfigs();
-
+    SourceConfig* getSourceConfig(long sourceConfigID, uint32_t sourceTrackID);
+    
+    // note: the source config can be 0 if the input track is not connected
+    SourceConfig* getSourceConfig(uint32_t inputIndex, uint32_t inputTrackIndex);
+    
+    RecorderInputConfig* getInputConfig(uint32_t index);
+    
+    
     Recorder* clone();
 
 
     std::string name;
-    
-private:
-    RecorderConfig* _config;
-    std::vector<RecorderConfig*> _allConfigs;
+    RecorderConfig* config;
+    std::vector<SourceConfig*> sourceConfigs;
+    std::vector<RecorderInputConfig*> recorderInputConfigs;
 };
 
 

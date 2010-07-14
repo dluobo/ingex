@@ -1,5 +1,5 @@
 /*
- * $Id: TcpPort.cpp,v 1.1 2008/04/18 16:03:30 john_f Exp $
+ * $Id: TcpPort.cpp,v 1.2 2010/07/14 13:06:36 john_f Exp $
  *
  * Communicate with remote TCP port.
  *
@@ -44,4 +44,5 @@ int TcpPort::Recv(void * buf, size_t n, const ACE_Time_Value * timeout)
 
 TcpPort::~TcpPort()
 {
+    mStream.close();
 }

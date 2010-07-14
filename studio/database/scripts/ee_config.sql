@@ -120,12 +120,12 @@ SELECT setval('sct_id_seq', max(sct_identifier)) FROM sourcetrackconfig;
 --
 -- rer_identifier | rer_name | rer_conf_id
 
-INSERT INTO recorder VALUES (1, 'Ingex-Lot', NULL);
-INSERT INTO recorder VALUES (2, 'Ingex-Stage', NULL);
-INSERT INTO recorder VALUES (3, 'Ingex-StudioA', NULL);
-INSERT INTO recorder VALUES (4, 'Router-Lot', NULL);
-INSERT INTO recorder VALUES (5, 'Router-Stage', NULL);
-INSERT INTO recorder VALUES (6, 'Router-StudioA', NULL);
+INSERT INTO recorder VALUES (1, 'Ingex-Lot');
+INSERT INTO recorder VALUES (2, 'Ingex-Stage');
+INSERT INTO recorder VALUES (3, 'Ingex-StudioA');
+INSERT INTO recorder VALUES (4, 'Router-Lot');
+INSERT INTO recorder VALUES (5, 'Router-Stage');
+INSERT INTO recorder VALUES (6, 'Router-StudioA');
 
 SELECT setval('rer_id_seq', max(rer_identifier)) FROM recorder;
 
@@ -135,12 +135,12 @@ SELECT setval('rer_id_seq', max(rer_identifier)) FROM recorder;
 --
 -- rec_identifier | rec_name | rec_recorder_id
 
-INSERT INTO recorderconfig VALUES (11, 'Lot', 1);
-INSERT INTO recorderconfig VALUES (12, 'Stage', 2);
-INSERT INTO recorderconfig VALUES (13, 'Studio A', 3);
-INSERT INTO recorderconfig VALUES (14, 'Lot Router', 4);
-INSERT INTO recorderconfig VALUES (15, 'Stage Router', 5);
-INSERT INTO recorderconfig VALUES (16, 'Studio A Router', 6);
+INSERT INTO recorderconfig VALUES (11, 'Lot');
+INSERT INTO recorderconfig VALUES (12, 'Stage');
+INSERT INTO recorderconfig VALUES (13, 'Studio A');
+INSERT INTO recorderconfig VALUES (14, 'Lot Router');
+INSERT INTO recorderconfig VALUES (15, 'Stage Router');
+INSERT INTO recorderconfig VALUES (16, 'Studio A Router');
 
 SELECT setval('rec_id_seq', max(rec_identifier)) FROM recorderconfig;
 
@@ -160,8 +160,6 @@ UPDATE recorder SET rer_conf_id=16 WHERE rer_identifier = 6;
 -- Lot
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('IMAGE_ASPECT', '16/9', 1, 11);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('COPY_COMMAND', '/home/ingex/ap-workspace/ingex/studio/processing/media_transfer/xferclient.pl', 1, 11);
     
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('ENCODE1_RESOLUTION', '4', 1, 11);
@@ -209,8 +207,6 @@ INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_
 -- Stage
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('IMAGE_ASPECT', '16/9', 1, 12);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('COPY_COMMAND', '/home/ingex/ap-workspace/ingex/studio/processing/media_transfer/xferclient.pl', 1, 12);
     
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('ENCODE1_RESOLUTION', '4', 1, 12);
@@ -259,8 +255,6 @@ INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_
 -- Studio A
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('IMAGE_ASPECT', '16/9', 1, 13);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('COPY_COMMAND', '/home/ingex/ap-workspace/ingex/studio/processing/media_transfer/xferclient.pl', 1, 13);
     
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('ENCODE1_RESOLUTION', '4', 1, 13);
@@ -309,8 +303,6 @@ INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_
 -- Lot Router
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('IMAGE_ASPECT', '16/9', 1, 14);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('COPY_COMMAND', '/home/ingex/ap-workspace/ingex/studio/processing/media_transfer/xferclient.pl', 1, 14);
     
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('ENCODE1_RESOLUTION', '50', 1, 14);
@@ -323,8 +315,6 @@ INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_
 -- Stage Router
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('IMAGE_ASPECT', '16/9', 1, 15);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('COPY_COMMAND', '/home/ingex/ap-workspace/ingex/studio/processing/media_transfer/xferclient.pl', 1, 15);
     
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('ENCODE1_RESOLUTION', '50', 1, 15);
@@ -337,8 +327,6 @@ INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_
 -- Studio A Router
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('IMAGE_ASPECT', '16/9', 1, 16);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('COPY_COMMAND', '/home/ingex/ap-workspace/ingex/studio/processing/media_transfer/xferclient.pl', 1, 16);
     
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('ENCODE1_RESOLUTION', '50', 1, 16);
@@ -355,31 +343,31 @@ INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_
 -- ric_identifier | ric_index | ric_name | ric_recorder_conf_id
 
 -- Ingex-Lot
-INSERT INTO recorderinputconfig VALUES (100, 1, 'Channel 0', 11);
-INSERT INTO recorderinputconfig VALUES (101, 2, 'Channel 1', 11);
-INSERT INTO recorderinputconfig VALUES (102, 3, 'Channel 2', 11);
-INSERT INTO recorderinputconfig VALUES (103, 4, 'Channel 3', 11);
+INSERT INTO recorderinputconfig VALUES (100, 1, 'Channel 0', 1);
+INSERT INTO recorderinputconfig VALUES (101, 2, 'Channel 1', 1);
+INSERT INTO recorderinputconfig VALUES (102, 3, 'Channel 2', 1);
+INSERT INTO recorderinputconfig VALUES (103, 4, 'Channel 3', 1);
 
 -- Ingex-Stage
-INSERT INTO recorderinputconfig VALUES (110, 1, 'Channel 0', 12);
-INSERT INTO recorderinputconfig VALUES (111, 2, 'Channel 1', 12);
-INSERT INTO recorderinputconfig VALUES (112, 3, 'Channel 2', 12);
-INSERT INTO recorderinputconfig VALUES (113, 4, 'Channel 3', 12);
+INSERT INTO recorderinputconfig VALUES (110, 1, 'Channel 0', 2);
+INSERT INTO recorderinputconfig VALUES (111, 2, 'Channel 1', 2);
+INSERT INTO recorderinputconfig VALUES (112, 3, 'Channel 2', 2);
+INSERT INTO recorderinputconfig VALUES (113, 4, 'Channel 3', 2);
 
 -- Ingex-StudioA
-INSERT INTO recorderinputconfig VALUES (120, 1, 'Channel 0', 13);
-INSERT INTO recorderinputconfig VALUES (121, 2, 'Channel 1', 13);
-INSERT INTO recorderinputconfig VALUES (122, 3, 'Channel 2', 13);
-INSERT INTO recorderinputconfig VALUES (123, 4, 'Channel 3', 13);
+INSERT INTO recorderinputconfig VALUES (120, 1, 'Channel 0', 3);
+INSERT INTO recorderinputconfig VALUES (121, 2, 'Channel 1', 3);
+INSERT INTO recorderinputconfig VALUES (122, 3, 'Channel 2', 3);
+INSERT INTO recorderinputconfig VALUES (123, 4, 'Channel 3', 3);
 
 -- Router-Lot
-INSERT INTO recorderinputconfig VALUES (130, 1, 'Channel 0', 14);
+INSERT INTO recorderinputconfig VALUES (130, 1, 'Channel 0', 4);
 
 -- Router-Stage
-INSERT INTO recorderinputconfig VALUES (140, 1, 'Channel 0', 15);
+INSERT INTO recorderinputconfig VALUES (140, 1, 'Channel 0', 5);
 
 -- Router-StudioA
-INSERT INTO recorderinputconfig VALUES (150, 1, 'Channel 0', 16);
+INSERT INTO recorderinputconfig VALUES (150, 1, 'Channel 0', 6);
 
 
 SELECT setval('ric_id_seq', max(ric_identifier)) FROM recorderinputconfig;

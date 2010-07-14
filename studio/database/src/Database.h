@@ -1,5 +1,5 @@
 /*
- * $Id: Database.h,v 1.12 2009/10/12 15:44:54 philipn Exp $
+ * $Id: Database.h,v 1.13 2010/07/14 13:06:36 john_f Exp $
  *
  * Provides access to the data in the database
  *
@@ -84,9 +84,14 @@ public:
 
     // Configurations
 
+    RecorderConfig* loadRecorderConfig(long databaseID, Transaction *transaction = 0);
+    RecorderConfig* loadDefaultRecorderConfig(Transaction *transaction = 0);
+    void saveRecorderConfig(RecorderConfig *config, Transaction *transaction = 0);
+    void deleteRecorderConfig(RecorderConfig *config, Transaction *transaction = 0);
+
     Recorder* loadRecorder(std::string name, Transaction *transaction = 0);
     void saveRecorder(Recorder *recorder, Transaction *transaction = 0);
-    // the source configs referenced by a recorder config will not be deleted
+    // the source and recorder configs referenced by a recorder config will not be deleted
     void deleteRecorder(Recorder *recorder, Transaction *transaction = 0);
 
     SourceConfig* loadSourceConfig(long databaseID, Transaction *transaction = 0);

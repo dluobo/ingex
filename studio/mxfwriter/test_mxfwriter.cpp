@@ -1,5 +1,5 @@
 /*
- * $Id: test_mxfwriter.cpp,v 1.12 2010/06/02 13:01:21 john_f Exp $
+ * $Id: test_mxfwriter.cpp,v 1.13 2010/07/14 13:06:36 john_f Exp $
  *
  * Tests the MXF writer
  *
@@ -431,7 +431,7 @@ static void* start_record_routine(void* data)
     
     try
     {
-        RecorderInputConfig *input_config = record_data->recorder->getConfig()->getInputConfig(record_data->inputIndex);
+        RecorderInputConfig *input_config = record_data->recorder->getInputConfig(record_data->inputIndex);
         PA_ASSERT(input_config->trackConfigs.size() > 0);
         SourceConfig *source_config = input_config->trackConfigs[0]->sourceConfig;
         PA_ASSERT(source_config);
@@ -777,12 +777,6 @@ int main(int argc, const char* argv[])
     {
         Database* database = Database::getInstance();
         recorder = auto_ptr<Recorder>(database->loadRecorder(recorderName));
-        if (!recorder->hasConfig())
-        {
-            fprintf(stderr, "Recorder '%s' has null config\n", recorderName);
-            Database::close();
-            return 1;
-        }
     }
     catch (const DBException& ex)
     {
@@ -816,8 +810,8 @@ int main(int argc, const char* argv[])
             Date now = generateDateNow();
             
             vector<SourceConfig*>::const_iterator iter;
-            for (iter = recorder->getConfig()->sourceConfigs.begin(); 
-                iter != recorder->getConfig()->sourceConfigs.end();
+            for (iter = recorder->sourceConfigs.begin(); 
+                iter != recorder->sourceConfigs.end();
                 iter++)
             {
                 SourceConfig* sourceConfig = *iter;
@@ -834,8 +828,8 @@ int main(int argc, const char* argv[])
             int i;
             char buf[16];
             vector<SourceConfig*>::const_iterator iter;
-            for (iter = recorder->getConfig()->sourceConfigs.begin(), i = 0; 
-                iter != recorder->getConfig()->sourceConfigs.end();
+            for (iter = recorder->sourceConfigs.begin(), i = 0; 
+                iter != recorder->sourceConfigs.end();
                 iter++, i++)
             {
                 SourceConfig* sourceConfig = *iter;
@@ -857,7 +851,7 @@ int main(int argc, const char* argv[])
     RecorderInputConfig* inputConfig[NUM_RECORDER_INPUTS];
     for (k = 0; k < NUM_RECORDER_INPUTS; k++)
     {
-        if ((inputConfig[k] = recorder.get()->getConfig()->getInputConfig(k + 1)) == 0)
+        if ((inputConfig[k] = recorder.get()->getInputConfig(k + 1)) == 0)
         {
             fprintf(stderr, "Unknown recorder input config %d\n", k + 1);
             Database::close();

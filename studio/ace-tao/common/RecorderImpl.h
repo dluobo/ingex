@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderImpl.h,v 1.14 2010/06/02 13:09:53 john_f Exp $
+ * $Id: RecorderImpl.h,v 1.15 2010/07/14 13:06:36 john_f Exp $
  *
  * Base class for Recorder servant.
  *
@@ -70,30 +70,6 @@ public:
   virtual
   ::ProdAuto::TrackList * Tracks (
       
-    )
-    throw (
-      ::CORBA::SystemException
-    );
-  
-  virtual
-  ::CORBA::StringSeq * Configs (
-      void
-    )
-    throw (
-      ::CORBA::SystemException
-    );
-  
-  virtual
-  char * CurrentConfig (
-      void
-    )
-    throw (
-      ::CORBA::SystemException
-    );
-  
-  virtual
-  ::CORBA::Boolean SelectConfig (
-      const char * config
     )
     throw (
       ::CORBA::SystemException

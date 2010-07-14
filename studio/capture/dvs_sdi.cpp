@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.cpp,v 1.1 2010/07/06 14:15:13 john_f Exp $
+ * $Id: dvs_sdi.cpp,v 1.2 2010/07/14 13:06:36 john_f Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -1583,9 +1583,9 @@ int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_from_vi
         else
         {
             // Selected timecode info
-            logTF("chan %d: lastframe=%6d tick/2=%7d hwdrop=%3d tc=%08x %s frames=%7d tc_err=%d\n",
+            logTF("chan %d: lastframe=%6d tick/2=%7d hwdrop=%3d tc=%s tc_err=%d\n",
                 chan, pc->lastframe, pbuffer->control.tick / 2, info.dropped,
-                tc_bits, tc_tc.Text(), tc_frames, tc_diff - 1);
+                tc_tc.Text(), tc_diff - 1);
         }
         PTHREAD_MUTEX_UNLOCK( &m_log )
     }

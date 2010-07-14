@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.5 2010/07/06 14:15:13 john_f Exp $
+# $Id: Makefile,v 1.6 2010/07/14 13:06:35 john_f Exp $
 #
 # Makefile for building DVS hardware capture & playout tools
 #
@@ -20,6 +20,8 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
 # 02110-1301, USA.
 #
+
+include ../../../common/libmxf.mk
 
 CC = gcc
 
@@ -57,10 +59,10 @@ record: record.o
 	$(LINK.cpp) record.c ../../libcommon.a $(DVS_HARDWARE_LIB) -lpthread -o $@
 
 record_mxf.o: record_mxf.c
-	$(COMPILE.c) -c -I../../../libMXF/lib/include -I../../../libMXF/examples/archive -I../../../libMXF/examples/archive/write $< -o $@
+	$(COMPILE.c) -c $(LIBMXF_INCLUDE) $(WRITEARCHIVEMXF_INCLUDE) $< -o $@
 
 record_mxf: record_mxf.o
-	$(LINK.cpp) record_mxf.o ../../libcommon.a $(DVS_HARDWARE_LIB) -lpthread -L../../../libMXF/examples/archive/write -L../../../libMXF/lib -lwritearchivemxf -lMXF -luuid -o $@
+	$(LINK.cpp) record_mxf.o ../../libcommon.a $(DVS_HARDWARE_LIB) -lpthread $(WRITEARCHIVEMXF_LIB) $(LIBMXF_LIB) -o $@
 
 recplay: recplay.o
 	$(LINK.cpp)  recplay.o ../../libcommon.a $(DVS_HARDWARE_LIB) -lpthread -lncurses -o $@

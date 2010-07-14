@@ -42,6 +42,7 @@ BEGIN
 }
 
 sub toTC {
+	#automatically assumes that the timecode is to be displayed in non-drop frame
 	my ($frames, $editrate) = @_;
 	if(!defined $editrate) { $editrate = 25; }
 	my $timecode;
@@ -49,15 +50,16 @@ sub toTC {
 	my $m;
 	my $s;
 	my $f;
+	if ($editrate eq (30000/1001)) { $editrate = (int(30000/1001) + 1); }
 	
 	$s = int($frames/$editrate);
 	$m = int($s/60);
 	$h = int($m/60);
 	
-	$f = $frames - ($editrate * $s);
+	$f =int($frames - ($editrate * $s));
 	$s = $s - (60 * $m);
 	$m = $m - (60 * $h);
-	
+		
 	if ($h < 10) { $h = "0".$h; }
 	if ($m < 10) { $m = "0".$m; }
 	if ($s < 10) { $s = "0".$s; }

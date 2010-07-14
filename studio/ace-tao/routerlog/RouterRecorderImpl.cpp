@@ -1,5 +1,5 @@
 /*
- * $Id: SimplerouterloggerImpl.cpp,v 1.15 2010/06/02 13:09:53 john_f Exp $
+ * $Id: RouterRecorderImpl.cpp,v 1.1 2010/07/14 13:06:36 john_f Exp $
  *
  * Servant class for RouterRecorder.
  *
@@ -29,7 +29,7 @@
 #include <sstream>
 #include <map>
 
-#include "SimplerouterloggerImpl.h"
+#include "RouterRecorderImpl.h"
 #include "routerloggerApp.h"
 #include "FileUtils.h"
 #include "ClockReader.h"
@@ -79,27 +79,27 @@ Vt::Vt(unsigned int rd, const std::string & n)
 {
 }
 
-//SimplerouterloggerImpl * SimplerouterloggerImpl::mInstance = 0;
+//RouterRecorderImpl * RouterRecorderImpl::mInstance = 0;
 
 
 // Implementation skeleton constructor
-SimplerouterloggerImpl::SimplerouterloggerImpl (void)
+RouterRecorderImpl::RouterRecorderImpl (void)
 : mpFile(0), mpCutsDatabase(0), mCopyManager(CopyMode::NEW), mRecIndex(0), mMixDestination(0), mMcTrackId(0), mLastSelectorIndex(0), mSaving(false)
 {
 }
 
 // Implementation skeleton destructor
-SimplerouterloggerImpl::~SimplerouterloggerImpl (void)
+RouterRecorderImpl::~RouterRecorderImpl (void)
 {
     delete mpCutsDatabase;
 }
 
 
 // Initialise the routerlogger
-bool SimplerouterloggerImpl::Init(const std::string & name, const std::string & mc_clip_name, const std::string & db_file,
+bool RouterRecorderImpl::Init(const std::string & name, const std::string & mc_clip_name, const std::string & db_file,
                                   unsigned int mix_dest, const std::vector<RouterDestination*> & dests)
 {
-    ACE_DEBUG((LM_DEBUG, ACE_TEXT("SimplerouterloggerImpl::Init() name \"%C\", mix_dest \"%C\" on %d\n"),
+    ACE_DEBUG((LM_DEBUG, ACE_TEXT("RouterRecorderImpl::Init() name \"%C\", mix_dest \"%C\" on %d\n"),
         name.c_str(), mc_clip_name.c_str(), mix_dest));
     bool ok = true;
 
@@ -210,7 +210,7 @@ bool SimplerouterloggerImpl::Init(const std::string & name, const std::string & 
     return ok;
 }
 
-::ProdAuto::MxfDuration SimplerouterloggerImpl::MaxPreRoll (
+::ProdAuto::MxfDuration RouterRecorderImpl::MaxPreRoll (
     
   )
   throw (
@@ -220,7 +220,7 @@ bool SimplerouterloggerImpl::Init(const std::string & name, const std::string & 
     return mMaxPreRoll;
 }
 
-::ProdAuto::MxfDuration SimplerouterloggerImpl::MaxPostRoll (
+::ProdAuto::MxfDuration RouterRecorderImpl::MaxPostRoll (
     
   )
   throw (
@@ -230,7 +230,7 @@ bool SimplerouterloggerImpl::Init(const std::string & name, const std::string & 
     return mMaxPostRoll;
 }
 
-::ProdAuto::Rational SimplerouterloggerImpl::EditRate (
+::ProdAuto::Rational RouterRecorderImpl::EditRate (
     
   )
   throw (
@@ -240,7 +240,7 @@ bool SimplerouterloggerImpl::Init(const std::string & name, const std::string & 
     return PA_EDIT_RATE;
 }
 
-::ProdAuto::TrackStatusList * SimplerouterloggerImpl::TracksStatus (
+::ProdAuto::TrackStatusList * RouterRecorderImpl::TracksStatus (
     
   )
   throw (
@@ -267,7 +267,7 @@ bool SimplerouterloggerImpl::Init(const std::string & name, const std::string & 
 /**
   Start
 */
-::ProdAuto::Recorder::ReturnCode SimplerouterloggerImpl::Start (
+::ProdAuto::Recorder::ReturnCode RouterRecorderImpl::Start (
     ::ProdAuto::MxfTimecode & start_timecode,
     const ::ProdAuto::MxfDuration & pre_roll,
     const ::CORBA::BooleanSeq & rec_enable,
@@ -282,7 +282,7 @@ bool SimplerouterloggerImpl::Init(const std::string & name, const std::string & 
     ACE_UNUSED_ARG (project);
     ACE_UNUSED_ARG (test_only);
 
-    ACE_DEBUG((LM_INFO, ACE_TEXT("%C SimplerouterloggerImpl::Start()\n"), mName.c_str()));
+    ACE_DEBUG((LM_INFO, ACE_TEXT("%C RouterRecorderImpl::Start()\n"), mName.c_str()));
 
     // Get current recorder settings
     RecorderSettings * settings = RecorderSettings::Instance();
@@ -361,10 +361,21 @@ bool SimplerouterloggerImpl::Init(const std::string & name, const std::string & 
     return ProdAuto::Recorder::SUCCESS;
 }
 
+::ProdAuto::MxfDuration RouterRecorderImpl::RecordedDuration (
+    void)
+{
+    ProdAuto::MxfDuration duration;
+
+    // Not implemented for router recorder
+    duration.undefined = 1;
+
+    return duration;
+}
+
 /**
   Stop
 */
-::ProdAuto::Recorder::ReturnCode SimplerouterloggerImpl::Stop (
+::ProdAuto::Recorder::ReturnCode RouterRecorderImpl::Stop (
     ::ProdAuto::MxfTimecode & mxf_stop_timecode,
     const ::ProdAuto::MxfDuration & mxf_post_roll,
     const char * description,
@@ -379,7 +390,7 @@ bool SimplerouterloggerImpl::Init(const std::string & name, const std::string & 
     ACE_UNUSED_ARG (description);
     ACE_UNUSED_ARG (locators);
 
-    ACE_DEBUG((LM_INFO, ACE_TEXT("%C SimplerouterloggerImpl::Stop()\n"), mName.c_str()));
+    ACE_DEBUG((LM_INFO, ACE_TEXT("%C RouterRecorderImpl::Stop()\n"), mName.c_str()));
 
     StopSaving();
 
@@ -411,7 +422,7 @@ bool SimplerouterloggerImpl::Init(const std::string & name, const std::string & 
 /**
 Means of externally forcing a re-reading of config from database.
 */
-void SimplerouterloggerImpl::UpdateConfig (
+void RouterRecorderImpl::UpdateConfig (
     
   )
   throw (
@@ -423,7 +434,7 @@ void SimplerouterloggerImpl::UpdateConfig (
     RecorderImpl::UpdateFromDatabase(max_inputs, max_tracks_per_input);
 }
 
-::ProdAuto::TrackList * SimplerouterloggerImpl::Tracks (
+::ProdAuto::TrackList * RouterRecorderImpl::Tracks (
     
   )
   throw (
@@ -437,18 +448,18 @@ void SimplerouterloggerImpl::UpdateConfig (
 
 // Non-IDL stuff follows
 
-void SimplerouterloggerImpl::SetTimecodePort(std::string tcp)
+void RouterRecorderImpl::SetTimecodePort(std::string tcp)
 {
     mTimecodePort = tcp;
 }
 
-void SimplerouterloggerImpl::SetRouterPort(std::string rp)
+void RouterRecorderImpl::SetRouterPort(std::string rp)
 {
     mRouterPort = rp;
 }
 
 
-void SimplerouterloggerImpl::StartSaving(const Ingex::Timecode & tc, const std::string & filename)
+void RouterRecorderImpl::StartSaving(const Ingex::Timecode & tc, const std::string & filename)
 {
 #if 0
     unsigned int src_index = mpRouter->CurrentSrc(mMixDestination);
@@ -629,7 +640,7 @@ void SimplerouterloggerImpl::StartSaving(const Ingex::Timecode & tc, const std::
     mSaving = true;
 }
 
-void SimplerouterloggerImpl::StopSaving()
+void RouterRecorderImpl::StopSaving()
 {
     if (mpFile)
     {
@@ -652,7 +663,7 @@ void SimplerouterloggerImpl::StopSaving()
     mSaving = false;
 }
 
-void SimplerouterloggerImpl::Observe(unsigned int src, unsigned int dest)
+void RouterRecorderImpl::Observe(unsigned int src, unsigned int dest)
 {
     // Get timecode
     std::string tc = routerloggerApp::Instance()->Timecode();
@@ -758,9 +769,9 @@ void SimplerouterloggerImpl::Observe(unsigned int src, unsigned int dest)
     }
 }
 
-void SimplerouterloggerImpl::StartCopying(unsigned int index)
+void RouterRecorderImpl::StartCopying(unsigned int index)
 {
-    mCopyManager.Command(RecorderSettings::Instance()->copy_command);
+    //mCopyManager.Command(RecorderSettings::Instance()->copy_command);
     mCopyManager.ClearSrcDest();
     std::vector<EncodeParams> & encodings = RecorderSettings::Instance()->encodings;
 
@@ -772,7 +783,7 @@ void SimplerouterloggerImpl::StartCopying(unsigned int index)
     mCopyManager.StartCopying(index);
 }
 
-void SimplerouterloggerImpl::StopCopying(unsigned int index)
+void RouterRecorderImpl::StopCopying(unsigned int index)
 {
     mCopyManager.StopCopying(index);
 }

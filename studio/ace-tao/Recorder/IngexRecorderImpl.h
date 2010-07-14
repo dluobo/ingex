@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorderImpl.h,v 1.9 2010/06/17 17:27:34 john_f Exp $
+ * $Id: IngexRecorderImpl.h,v 1.10 2010/07/14 13:06:36 john_f Exp $
  *
  * Servant class for Recorder.
  *
@@ -117,6 +117,10 @@ public:
     throw (
       ::CORBA::SystemException
     );
+  
+  virtual
+  ::ProdAuto::MxfDuration RecordedDuration (
+      void);
   
   virtual
   ::ProdAuto::Recorder::ReturnCode Stop (

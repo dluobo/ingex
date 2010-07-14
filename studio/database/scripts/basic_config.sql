@@ -1,12 +1,11 @@
 BEGIN;
 
 
-
 --
 -- recordinglocation
 --
 
-INSERT INTO recordinglocation VALUES (10, 'Studio A');
+INSERT INTO recordinglocation VALUES (10, 'Studio');
 
 SELECT setval('rlc_id_seq', max(rlc_identifier)) FROM recordinglocation;
 
@@ -38,227 +37,100 @@ INSERT INTO sourcetrackconfig VALUES (201, 2, 1, 'A1', 2, '(25,1)', 10800000, 10
 INSERT INTO sourcetrackconfig VALUES (202, 3, 2, 'A2', 2, '(25,1)', 10800000, 100);
 INSERT INTO sourcetrackconfig VALUES (203, 4, 3, 'A3', 2, '(25,1)', 10800000, 100);
 INSERT INTO sourcetrackconfig VALUES (204, 5, 4, 'A4', 2, '(25,1)', 10800000, 100);
+INSERT INTO sourcetrackconfig VALUES (205, 6, 5, 'A5', 2, '(25,1)', 10800000, 100);
+INSERT INTO sourcetrackconfig VALUES (206, 7, 6, 'A6', 2, '(25,1)', 10800000, 100);
+INSERT INTO sourcetrackconfig VALUES (207, 8, 7, 'A7', 2, '(25,1)', 10800000, 100);
+INSERT INTO sourcetrackconfig VALUES (208, 9, 8, 'A8', 2, '(25,1)', 10800000, 100);
 -- Cam2
 INSERT INTO sourcetrackconfig VALUES (210, 1, 1, 'V',  1, '(25,1)', 10800000, 101);
 INSERT INTO sourcetrackconfig VALUES (211, 2, 1, 'A1', 2, '(25,1)', 10800000, 101);
 INSERT INTO sourcetrackconfig VALUES (212, 3, 2, 'A2', 2, '(25,1)', 10800000, 101);
 INSERT INTO sourcetrackconfig VALUES (213, 4, 3, 'A3', 2, '(25,1)', 10800000, 101);
 INSERT INTO sourcetrackconfig VALUES (214, 5, 4, 'A4', 2, '(25,1)', 10800000, 101);
+INSERT INTO sourcetrackconfig VALUES (215, 6, 5, 'A5', 2, '(25,1)', 10800000, 101);
+INSERT INTO sourcetrackconfig VALUES (216, 7, 6, 'A6', 2, '(25,1)', 10800000, 101);
+INSERT INTO sourcetrackconfig VALUES (217, 8, 7, 'A7', 2, '(25,1)', 10800000, 101);
+INSERT INTO sourcetrackconfig VALUES (218, 9, 8, 'A8', 2, '(25,1)', 10800000, 101);
 -- Cam3
 INSERT INTO sourcetrackconfig VALUES (220, 1, 1, 'V',  1, '(25,1)', 10800000, 102);
 INSERT INTO sourcetrackconfig VALUES (221, 2, 1, 'A1', 2, '(25,1)', 10800000, 102);
 INSERT INTO sourcetrackconfig VALUES (222, 3, 2, 'A2', 2, '(25,1)', 10800000, 102);
 INSERT INTO sourcetrackconfig VALUES (223, 4, 3, 'A3', 2, '(25,1)', 10800000, 102);
 INSERT INTO sourcetrackconfig VALUES (224, 5, 4, 'A4', 2, '(25,1)', 10800000, 102);
+INSERT INTO sourcetrackconfig VALUES (225, 6, 5, 'A5', 2, '(25,1)', 10800000, 102);
+INSERT INTO sourcetrackconfig VALUES (226, 7, 6, 'A6', 2, '(25,1)', 10800000, 102);
+INSERT INTO sourcetrackconfig VALUES (227, 8, 7, 'A7', 2, '(25,1)', 10800000, 102);
+INSERT INTO sourcetrackconfig VALUES (228, 9, 8, 'A8', 2, '(25,1)', 10800000, 102);
 -- Cam4
 INSERT INTO sourcetrackconfig VALUES (230, 1, 1, 'V',  1, '(25,1)', 10800000, 103);
 INSERT INTO sourcetrackconfig VALUES (231, 2, 1, 'A1', 2, '(25,1)', 10800000, 103);
 INSERT INTO sourcetrackconfig VALUES (232, 3, 2, 'A2', 2, '(25,1)', 10800000, 103);
 INSERT INTO sourcetrackconfig VALUES (233, 4, 3, 'A3', 2, '(25,1)', 10800000, 103);
 INSERT INTO sourcetrackconfig VALUES (234, 5, 4, 'A4', 2, '(25,1)', 10800000, 103);
+INSERT INTO sourcetrackconfig VALUES (235, 6, 5, 'A5', 2, '(25,1)', 10800000, 103);
+INSERT INTO sourcetrackconfig VALUES (236, 7, 6, 'A6', 2, '(25,1)', 10800000, 103);
+INSERT INTO sourcetrackconfig VALUES (237, 8, 7, 'A7', 2, '(25,1)', 10800000, 103);
+INSERT INTO sourcetrackconfig VALUES (238, 9, 8, 'A8', 2, '(25,1)', 10800000, 103);
 -- Cam5
 INSERT INTO sourcetrackconfig VALUES (240, 1, 1, 'V',  1, '(25,1)', 10800000, 104);
 INSERT INTO sourcetrackconfig VALUES (241, 2, 1, 'A1', 2, '(25,1)', 10800000, 104);
 INSERT INTO sourcetrackconfig VALUES (242, 3, 2, 'A2', 2, '(25,1)', 10800000, 104);
 INSERT INTO sourcetrackconfig VALUES (243, 4, 3, 'A3', 2, '(25,1)', 10800000, 104);
 INSERT INTO sourcetrackconfig VALUES (244, 5, 4, 'A4', 2, '(25,1)', 10800000, 104);
+INSERT INTO sourcetrackconfig VALUES (245, 6, 5, 'A5', 2, '(25,1)', 10800000, 104);
+INSERT INTO sourcetrackconfig VALUES (246, 7, 6, 'A6', 2, '(25,1)', 10800000, 104);
+INSERT INTO sourcetrackconfig VALUES (247, 8, 7, 'A7', 2, '(25,1)', 10800000, 104);
+INSERT INTO sourcetrackconfig VALUES (248, 9, 8, 'A8', 2, '(25,1)', 10800000, 104);
 -- Cam6
 INSERT INTO sourcetrackconfig VALUES (250, 1, 1, 'V',  1, '(25,1)', 10800000, 105);
 INSERT INTO sourcetrackconfig VALUES (251, 2, 1, 'A1', 2, '(25,1)', 10800000, 105);
 INSERT INTO sourcetrackconfig VALUES (252, 3, 2, 'A2', 2, '(25,1)', 10800000, 105);
 INSERT INTO sourcetrackconfig VALUES (253, 4, 3, 'A3', 2, '(25,1)', 10800000, 105);
 INSERT INTO sourcetrackconfig VALUES (254, 5, 4, 'A4', 2, '(25,1)', 10800000, 105);
+INSERT INTO sourcetrackconfig VALUES (255, 6, 5, 'A5', 2, '(25,1)', 10800000, 105);
+INSERT INTO sourcetrackconfig VALUES (256, 7, 6, 'A6', 2, '(25,1)', 10800000, 105);
+INSERT INTO sourcetrackconfig VALUES (257, 8, 7, 'A7', 2, '(25,1)', 10800000, 105);
+INSERT INTO sourcetrackconfig VALUES (258, 9, 8, 'A8', 2, '(25,1)', 10800000, 105);
 -- Cam7
 INSERT INTO sourcetrackconfig VALUES (260, 1, 1, 'V',  1, '(25,1)', 10800000, 106);
 INSERT INTO sourcetrackconfig VALUES (261, 2, 1, 'A1', 2, '(25,1)', 10800000, 106);
 INSERT INTO sourcetrackconfig VALUES (262, 3, 2, 'A2', 2, '(25,1)', 10800000, 106);
 INSERT INTO sourcetrackconfig VALUES (263, 4, 3, 'A3', 2, '(25,1)', 10800000, 106);
 INSERT INTO sourcetrackconfig VALUES (264, 5, 4, 'A4', 2, '(25,1)', 10800000, 106);
+INSERT INTO sourcetrackconfig VALUES (265, 6, 5, 'A5', 2, '(25,1)', 10800000, 106);
+INSERT INTO sourcetrackconfig VALUES (266, 7, 6, 'A6', 2, '(25,1)', 10800000, 106);
+INSERT INTO sourcetrackconfig VALUES (267, 8, 7, 'A7', 2, '(25,1)', 10800000, 106);
+INSERT INTO sourcetrackconfig VALUES (268, 9, 8, 'A8', 2, '(25,1)', 10800000, 106);
 -- Cam8
 INSERT INTO sourcetrackconfig VALUES (270, 1, 1, 'V',  1, '(25,1)', 10800000, 107);
 INSERT INTO sourcetrackconfig VALUES (271, 2, 1, 'A1', 2, '(25,1)', 10800000, 107);
 INSERT INTO sourcetrackconfig VALUES (272, 3, 2, 'A2', 2, '(25,1)', 10800000, 107);
 INSERT INTO sourcetrackconfig VALUES (273, 4, 3, 'A3', 2, '(25,1)', 10800000, 107);
 INSERT INTO sourcetrackconfig VALUES (274, 5, 4, 'A4', 2, '(25,1)', 10800000, 107);
+INSERT INTO sourcetrackconfig VALUES (275, 6, 5, 'A5', 2, '(25,1)', 10800000, 107);
+INSERT INTO sourcetrackconfig VALUES (276, 7, 6, 'A6', 2, '(25,1)', 10800000, 107);
+INSERT INTO sourcetrackconfig VALUES (277, 8, 7, 'A7', 2, '(25,1)', 10800000, 107);
+INSERT INTO sourcetrackconfig VALUES (278, 9, 8, 'A8', 2, '(25,1)', 10800000, 107);
 -- Mixer Out
 INSERT INTO sourcetrackconfig VALUES (300, 1, 1, 'V',  1, '(25,1)', 10800000, 110);
+INSERT INTO sourcetrackconfig VALUES (301, 2, 1, 'A1', 2, '(25,1)', 10800000, 110);
+INSERT INTO sourcetrackconfig VALUES (302, 3, 2, 'A2', 2, '(25,1)', 10800000, 110);
+INSERT INTO sourcetrackconfig VALUES (303, 4, 3, 'A3', 2, '(25,1)', 10800000, 110);
+INSERT INTO sourcetrackconfig VALUES (304, 5, 4, 'A4', 2, '(25,1)', 10800000, 110);
+INSERT INTO sourcetrackconfig VALUES (305, 6, 5, 'A5', 2, '(25,1)', 10800000, 110);
+INSERT INTO sourcetrackconfig VALUES (306, 7, 6, 'A6', 2, '(25,1)', 10800000, 110);
+INSERT INTO sourcetrackconfig VALUES (307, 8, 7, 'A7', 2, '(25,1)', 10800000, 110);
+INSERT INTO sourcetrackconfig VALUES (308, 9, 8, 'A8', 2, '(25,1)', 10800000, 110);
 
 
 SELECT setval('sct_id_seq', max(sct_identifier)) FROM sourcetrackconfig;
 
 
 --
--- recorder
---
-
-INSERT INTO recorder VALUES (1, 'Ingex', NULL);
-INSERT INTO recorder VALUES (2, 'Ingex-HD', NULL);
-INSERT INTO recorder VALUES (3, 'Ingex-Router', NULL);
-
-SELECT setval('rer_id_seq', max(rer_identifier)) FROM recorder;
-
-
---
--- recorderconfig
---
-
-INSERT INTO recorderconfig VALUES (10, 'Ingex-MXF', 1);
-INSERT INTO recorderconfig VALUES (11, 'Ingex-Quicktime', 1);
-INSERT INTO recorderconfig VALUES (20, 'Ingex-HD-MXF', 2);
-INSERT INTO recorderconfig VALUES (21, 'Ingex-HD-Quicktime', 2);
-INSERT INTO recorderconfig VALUES (30, 'Ingex-Router-StudioA', 3);
-
-SELECT setval('rec_id_seq', max(rec_identifier)) FROM recorderconfig;
-
-
---
--- recorder current config
---
-
-UPDATE recorder SET rer_conf_id=10 WHERE rer_identifier = 1;
-UPDATE recorder SET rer_conf_id=20 WHERE rer_identifier = 2;
-UPDATE recorder SET rer_conf_id=30 WHERE rer_identifier = 3;
-
---
--- recorderinputconfig
---
-
--- Ingex-MXF
-INSERT INTO recorderinputconfig VALUES (100, 1, 'Input 0', 10);
-INSERT INTO recorderinputconfig VALUES (101, 2, 'Input 1', 10);
-INSERT INTO recorderinputconfig VALUES (102, 3, 'Input 2', 10);
-INSERT INTO recorderinputconfig VALUES (103, 4, 'Input 3', 10);
-
--- Ingex-Quicktime
-INSERT INTO recorderinputconfig VALUES (110, 1, 'Input 0', 11);
-INSERT INTO recorderinputconfig VALUES (111, 2, 'Input 1', 11);
-INSERT INTO recorderinputconfig VALUES (112, 3, 'Input 2', 11);
-INSERT INTO recorderinputconfig VALUES (113, 4, 'Input 3', 11);
-
--- Ingex-HD-MXF
-INSERT INTO recorderinputconfig VALUES (200, 1, 'Input 0', 20);
-INSERT INTO recorderinputconfig VALUES (201, 2, 'Input 1', 20);
-INSERT INTO recorderinputconfig VALUES (202, 3, 'Input 2', 20);
-INSERT INTO recorderinputconfig VALUES (203, 4, 'Input 3', 20);
-
--- Ingex-HD-Quicktime
-INSERT INTO recorderinputconfig VALUES (210, 1, 'Input 0', 21);
-INSERT INTO recorderinputconfig VALUES (211, 2, 'Input 1', 21);
-INSERT INTO recorderinputconfig VALUES (212, 3, 'Input 2', 21);
-INSERT INTO recorderinputconfig VALUES (213, 4, 'Input 3', 21);
-
--- Ingex-Router-StudioA
-INSERT INTO recorderinputconfig VALUES (300, 1, 'Input 0', 30);
-
-
-SELECT setval('ric_id_seq', max(ric_identifier)) FROM recorderinputconfig;
-
-
---
--- recorderinputtrackconfig
--- rtc_identifier | rtc_index | rtc_track_number | rtc_recorder_input_id | rtc_source_id | rtc_source_track_id
---
-
--- Ingex-MXF
-INSERT INTO recorderinputtrackconfig VALUES (100, 1, 1, 100, 100, 1);
-INSERT INTO recorderinputtrackconfig VALUES (101, 2, 1, 100, 100, 2);
-INSERT INTO recorderinputtrackconfig VALUES (102, 3, 2, 100, 100, 3);
-INSERT INTO recorderinputtrackconfig VALUES (103, 4, 0, 100, NULL, NULL);
-INSERT INTO recorderinputtrackconfig VALUES (104, 5, 0, 100, NULL, NULL);
-INSERT INTO recorderinputtrackconfig VALUES (110, 1, 1, 101, 101, 1);
-INSERT INTO recorderinputtrackconfig VALUES (111, 2, 1, 101, 101, 2);
-INSERT INTO recorderinputtrackconfig VALUES (112, 3, 2, 101, 101, 3);
-INSERT INTO recorderinputtrackconfig VALUES (113, 4, 0, 101, NULL, NULL);
-INSERT INTO recorderinputtrackconfig VALUES (114, 5, 0, 101, NULL, NULL);
-INSERT INTO recorderinputtrackconfig VALUES (120, 1, 1, 102, 102, 1);
-INSERT INTO recorderinputtrackconfig VALUES (121, 2, 1, 102, 102, 2);
-INSERT INTO recorderinputtrackconfig VALUES (122, 3, 2, 102, 102, 3);
-INSERT INTO recorderinputtrackconfig VALUES (123, 4, 0, 102, NULL, NULL);
-INSERT INTO recorderinputtrackconfig VALUES (124, 5, 0, 102, NULL, NULL);
-INSERT INTO recorderinputtrackconfig VALUES (130, 1, 1, 103, 103, 1);
-INSERT INTO recorderinputtrackconfig VALUES (131, 2, 1, 103, 103, 2);
-INSERT INTO recorderinputtrackconfig VALUES (132, 3, 2, 103, 103, 3);
-INSERT INTO recorderinputtrackconfig VALUES (133, 4, 0, 103, NULL, NULL);
-INSERT INTO recorderinputtrackconfig VALUES (134, 5, 0, 103, NULL, NULL);
-
--- Ingex-Quicktime
-INSERT INTO recorderinputtrackconfig VALUES (200, 1, 1, 110, 100, 1);
-INSERT INTO recorderinputtrackconfig VALUES (201, 2, 1, 110, 100, 2);
-INSERT INTO recorderinputtrackconfig VALUES (202, 3, 2, 110, 100, 3);
-INSERT INTO recorderinputtrackconfig VALUES (203, 4, 0, 110, NULL, NULL);
-INSERT INTO recorderinputtrackconfig VALUES (204, 5, 0, 110, NULL, NULL);
-INSERT INTO recorderinputtrackconfig VALUES (210, 1, 1, 111, 101, 1);
-INSERT INTO recorderinputtrackconfig VALUES (211, 2, 1, 111, 101, 2);
-INSERT INTO recorderinputtrackconfig VALUES (212, 3, 2, 111, 101, 3);
-INSERT INTO recorderinputtrackconfig VALUES (213, 4, 0, 111, NULL, NULL);
-INSERT INTO recorderinputtrackconfig VALUES (214, 5, 0, 111, NULL, NULL);
-INSERT INTO recorderinputtrackconfig VALUES (220, 1, 1, 112, 102, 1);
-INSERT INTO recorderinputtrackconfig VALUES (221, 2, 1, 112, 102, 2);
-INSERT INTO recorderinputtrackconfig VALUES (222, 3, 2, 112, 102, 3);
-INSERT INTO recorderinputtrackconfig VALUES (223, 4, 0, 112, NULL, NULL);
-INSERT INTO recorderinputtrackconfig VALUES (224, 5, 0, 112, NULL, NULL);
-INSERT INTO recorderinputtrackconfig VALUES (230, 1, 1, 113, 103, 1);
-INSERT INTO recorderinputtrackconfig VALUES (231, 2, 1, 113, 103, 2);
-INSERT INTO recorderinputtrackconfig VALUES (232, 3, 2, 113, 103, 3);
-INSERT INTO recorderinputtrackconfig VALUES (233, 4, 0, 113, NULL, NULL);
-INSERT INTO recorderinputtrackconfig VALUES (234, 5, 0, 113, NULL, NULL);
-
--- Ingex-HD-MXF
-INSERT INTO recorderinputtrackconfig VALUES (400, 1, 1, 200, 100, 1);
-INSERT INTO recorderinputtrackconfig VALUES (401, 2, 1, 200, 100, 2);
-INSERT INTO recorderinputtrackconfig VALUES (402, 3, 2, 200, 100, 3);
-INSERT INTO recorderinputtrackconfig VALUES (403, 4, 0, 200, NULL, NULL);
-INSERT INTO recorderinputtrackconfig VALUES (404, 5, 0, 200, NULL, NULL);
-INSERT INTO recorderinputtrackconfig VALUES (410, 1, 1, 201, 101, 1);
-INSERT INTO recorderinputtrackconfig VALUES (411, 2, 1, 201, 101, 2);
-INSERT INTO recorderinputtrackconfig VALUES (412, 3, 2, 201, 101, 3);
-INSERT INTO recorderinputtrackconfig VALUES (413, 4, 0, 201, NULL, NULL);
-INSERT INTO recorderinputtrackconfig VALUES (414, 5, 0, 201, NULL, NULL);
-INSERT INTO recorderinputtrackconfig VALUES (420, 1, 1, 202, 102, 1);
-INSERT INTO recorderinputtrackconfig VALUES (421, 2, 1, 202, 102, 2);
-INSERT INTO recorderinputtrackconfig VALUES (422, 3, 2, 202, 102, 3);
-INSERT INTO recorderinputtrackconfig VALUES (423, 4, 0, 202, NULL, NULL);
-INSERT INTO recorderinputtrackconfig VALUES (424, 5, 0, 202, NULL, NULL);
-INSERT INTO recorderinputtrackconfig VALUES (430, 1, 1, 203, 103, 1);
-INSERT INTO recorderinputtrackconfig VALUES (431, 2, 1, 203, 103, 2);
-INSERT INTO recorderinputtrackconfig VALUES (432, 3, 2, 203, 103, 3);
-INSERT INTO recorderinputtrackconfig VALUES (433, 4, 0, 203, NULL, NULL);
-INSERT INTO recorderinputtrackconfig VALUES (434, 5, 0, 203, NULL, NULL);
-
--- Ingex-HD-Quicktime
-INSERT INTO recorderinputtrackconfig VALUES (500, 1, 1, 210, 100, 1);
-INSERT INTO recorderinputtrackconfig VALUES (501, 2, 1, 210, 100, 2);
-INSERT INTO recorderinputtrackconfig VALUES (502, 3, 2, 210, 100, 3);
-INSERT INTO recorderinputtrackconfig VALUES (503, 4, 0, 210, NULL, NULL);
-INSERT INTO recorderinputtrackconfig VALUES (504, 5, 0, 210, NULL, NULL);
-INSERT INTO recorderinputtrackconfig VALUES (510, 1, 1, 211, 101, 1);
-INSERT INTO recorderinputtrackconfig VALUES (511, 2, 1, 211, 101, 2);
-INSERT INTO recorderinputtrackconfig VALUES (512, 3, 2, 211, 101, 3);
-INSERT INTO recorderinputtrackconfig VALUES (513, 4, 0, 211, NULL, NULL);
-INSERT INTO recorderinputtrackconfig VALUES (514, 5, 0, 211, NULL, NULL);
-INSERT INTO recorderinputtrackconfig VALUES (520, 1, 1, 212, 102, 1);
-INSERT INTO recorderinputtrackconfig VALUES (521, 2, 1, 212, 102, 2);
-INSERT INTO recorderinputtrackconfig VALUES (522, 3, 2, 212, 102, 3);
-INSERT INTO recorderinputtrackconfig VALUES (523, 4, 0, 212, NULL, NULL);
-INSERT INTO recorderinputtrackconfig VALUES (524, 5, 0, 212, NULL, NULL);
-INSERT INTO recorderinputtrackconfig VALUES (530, 1, 1, 213, 103, 1);
-INSERT INTO recorderinputtrackconfig VALUES (531, 2, 1, 213, 103, 2);
-INSERT INTO recorderinputtrackconfig VALUES (532, 3, 2, 213, 103, 3);
-INSERT INTO recorderinputtrackconfig VALUES (533, 4, 0, 213, NULL, NULL);
-INSERT INTO recorderinputtrackconfig VALUES (534, 5, 0, 213, NULL, NULL);
-
--- Ingex-Router-StudioA
-INSERT INTO recorderinputtrackconfig VALUES (600, 1, 1, 300, 110, 1);
-
-
-SELECT setval('rtc_id_seq', max(rtc_identifier)) FROM recorderinputtrackconfig;
-
-
---
 -- multicameraclipdef
 --
 
-INSERT INTO multicameraclipdef VALUES (10, 'StudioA multicam');
+INSERT INTO multicameraclipdef VALUES (10, 'Studio multicam');
 
 SELECT setval('mcd_id_seq', max(mcd_identifier)) FROM multicameraclipdef;
 
@@ -298,13 +170,210 @@ SELECT setval('mcs_id_seq', max(mcs_identifier)) FROM multicameraselectordef;
 
 
 --
--- Ingex-MXF
+-- recorder
+--
+
+INSERT INTO recorder VALUES (1, 'Ingex');
+INSERT INTO recorder VALUES (2, 'Ingex2');
+INSERT INTO recorder VALUES (4, 'Ingex-HD');
+INSERT INTO recorder VALUES (9, 'Ingex-Router');
+
+SELECT setval('rer_id_seq', max(rer_identifier)) FROM recorder;
+
+
+--
+-- recorderinputconfig
+--
+
+-- Ingex
+INSERT INTO recorderinputconfig VALUES (100, 1, 'Input 0', 1);
+INSERT INTO recorderinputconfig VALUES (101, 2, 'Input 1', 1);
+INSERT INTO recorderinputconfig VALUES (102, 3, 'Input 2', 1);
+INSERT INTO recorderinputconfig VALUES (103, 4, 'Input 3', 1);
+
+-- Ingex2
+INSERT INTO recorderinputconfig VALUES (200, 1, 'Input 0', 2);
+INSERT INTO recorderinputconfig VALUES (201, 2, 'Input 1', 2);
+INSERT INTO recorderinputconfig VALUES (202, 3, 'Input 2', 2);
+INSERT INTO recorderinputconfig VALUES (203, 4, 'Input 3', 2);
+
+-- Ingex-HD
+INSERT INTO recorderinputconfig VALUES (400, 1, 'Input 0', 4);
+INSERT INTO recorderinputconfig VALUES (401, 2, 'Input 1', 4);
+INSERT INTO recorderinputconfig VALUES (402, 3, 'Input 2', 4);
+INSERT INTO recorderinputconfig VALUES (403, 4, 'Input 3', 4);
+
+-- Ingex-Router
+INSERT INTO recorderinputconfig VALUES (900, 1, 'Input 0', 9);
+
+
+SELECT setval('ric_id_seq', max(ric_identifier)) FROM recorderinputconfig;
+
+
+--
+-- recorderinputtrackconfig
+-- rtc_identifier | rtc_index | rtc_track_number | rtc_recorder_input_id | rtc_source_id | rtc_source_track_id
+--
+
+-- Ingex
+INSERT INTO recorderinputtrackconfig VALUES (100, 1, 1, 100, 100, 1);
+INSERT INTO recorderinputtrackconfig VALUES (101, 2, 1, 100, 100, 2);
+INSERT INTO recorderinputtrackconfig VALUES (102, 3, 2, 100, 100, 3);
+INSERT INTO recorderinputtrackconfig VALUES (103, 4, 3, 100, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (104, 5, 4, 100, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (105, 6, 5, 100, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (106, 7, 6, 100, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (107, 8, 7, 100, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (108, 9, 8, 100, NULL, NULL);
+
+INSERT INTO recorderinputtrackconfig VALUES (110, 1, 1, 101, 101, 1);
+INSERT INTO recorderinputtrackconfig VALUES (111, 2, 1, 101, 101, 2);
+INSERT INTO recorderinputtrackconfig VALUES (112, 3, 2, 101, 101, 3);
+INSERT INTO recorderinputtrackconfig VALUES (113, 4, 3, 101, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (114, 5, 4, 101, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (115, 6, 5, 101, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (116, 7, 6, 101, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (117, 8, 7, 101, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (118, 9, 8, 101, NULL, NULL);
+
+INSERT INTO recorderinputtrackconfig VALUES (120, 1, 1, 102, 102, 1);
+INSERT INTO recorderinputtrackconfig VALUES (121, 2, 1, 102, 102, 2);
+INSERT INTO recorderinputtrackconfig VALUES (122, 3, 2, 102, 102, 3);
+INSERT INTO recorderinputtrackconfig VALUES (123, 4, 3, 102, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (124, 5, 4, 102, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (125, 6, 5, 102, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (126, 7, 6, 102, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (127, 8, 7, 102, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (128, 9, 8, 102, NULL, NULL);
+
+INSERT INTO recorderinputtrackconfig VALUES (130, 1, 1, 103, 103, 1);
+INSERT INTO recorderinputtrackconfig VALUES (131, 2, 1, 103, 103, 2);
+INSERT INTO recorderinputtrackconfig VALUES (132, 3, 2, 103, 103, 3);
+INSERT INTO recorderinputtrackconfig VALUES (133, 4, 3, 103, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (134, 5, 4, 103, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (135, 6, 5, 103, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (136, 7, 6, 103, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (137, 8, 7, 103, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (138, 9, 8, 103, NULL, NULL);
+
+-- Ingex2
+INSERT INTO recorderinputtrackconfig VALUES (200, 1, 1, 200, 104, 1);
+INSERT INTO recorderinputtrackconfig VALUES (201, 2, 1, 200, 104, 2);
+INSERT INTO recorderinputtrackconfig VALUES (202, 3, 2, 200, 104, 3);
+INSERT INTO recorderinputtrackconfig VALUES (203, 4, 3, 200, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (204, 5, 4, 200, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (205, 6, 5, 200, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (206, 7, 6, 200, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (207, 8, 7, 200, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (208, 9, 8, 200, NULL, NULL);
+
+INSERT INTO recorderinputtrackconfig VALUES (210, 1, 1, 201, 105, 1);
+INSERT INTO recorderinputtrackconfig VALUES (211, 2, 1, 201, 105, 2);
+INSERT INTO recorderinputtrackconfig VALUES (212, 3, 2, 201, 105, 3);
+INSERT INTO recorderinputtrackconfig VALUES (213, 4, 3, 201, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (214, 5, 4, 201, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (215, 6, 5, 201, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (216, 7, 6, 201, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (217, 8, 7, 201, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (218, 9, 8, 201, NULL, NULL);
+
+INSERT INTO recorderinputtrackconfig VALUES (220, 1, 1, 202, 106, 1);
+INSERT INTO recorderinputtrackconfig VALUES (221, 2, 1, 202, 106, 2);
+INSERT INTO recorderinputtrackconfig VALUES (222, 3, 2, 202, 106, 3);
+INSERT INTO recorderinputtrackconfig VALUES (223, 4, 3, 202, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (224, 5, 4, 202, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (225, 6, 5, 202, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (226, 7, 6, 202, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (227, 8, 7, 202, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (228, 9, 8, 202, NULL, NULL);
+
+INSERT INTO recorderinputtrackconfig VALUES (230, 1, 1, 203, 107, 1);
+INSERT INTO recorderinputtrackconfig VALUES (231, 2, 1, 203, 107, 2);
+INSERT INTO recorderinputtrackconfig VALUES (232, 3, 2, 203, 107, 3);
+INSERT INTO recorderinputtrackconfig VALUES (233, 4, 3, 203, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (234, 5, 4, 203, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (235, 6, 5, 203, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (236, 7, 6, 203, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (237, 8, 7, 203, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (238, 9, 8, 203, NULL, NULL);
+
+-- Ingex-HD
+INSERT INTO recorderinputtrackconfig VALUES (400, 1, 1, 400, 100, 1);
+INSERT INTO recorderinputtrackconfig VALUES (401, 2, 1, 400, 100, 2);
+INSERT INTO recorderinputtrackconfig VALUES (402, 3, 2, 400, 100, 3);
+INSERT INTO recorderinputtrackconfig VALUES (403, 4, 3, 400, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (404, 5, 4, 400, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (405, 6, 5, 400, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (406, 7, 6, 400, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (407, 8, 7, 400, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (408, 9, 8, 400, NULL, NULL);
+
+INSERT INTO recorderinputtrackconfig VALUES (410, 1, 1, 401, 101, 1);
+INSERT INTO recorderinputtrackconfig VALUES (411, 2, 1, 401, 101, 2);
+INSERT INTO recorderinputtrackconfig VALUES (412, 3, 2, 401, 101, 3);
+INSERT INTO recorderinputtrackconfig VALUES (413, 4, 3, 401, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (414, 5, 4, 401, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (415, 6, 5, 401, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (416, 7, 6, 401, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (417, 8, 7, 401, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (418, 9, 8, 401, NULL, NULL);
+
+INSERT INTO recorderinputtrackconfig VALUES (420, 1, 1, 402, 102, 1);
+INSERT INTO recorderinputtrackconfig VALUES (421, 2, 1, 402, 102, 2);
+INSERT INTO recorderinputtrackconfig VALUES (422, 3, 2, 402, 102, 3);
+INSERT INTO recorderinputtrackconfig VALUES (423, 4, 3, 402, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (424, 5, 4, 402, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (425, 6, 5, 402, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (426, 7, 6, 402, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (427, 8, 7, 402, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (428, 9, 8, 402, NULL, NULL);
+
+INSERT INTO recorderinputtrackconfig VALUES (430, 1, 1, 403, 103, 1);
+INSERT INTO recorderinputtrackconfig VALUES (431, 2, 1, 403, 103, 2);
+INSERT INTO recorderinputtrackconfig VALUES (432, 3, 2, 403, 103, 3);
+INSERT INTO recorderinputtrackconfig VALUES (433, 4, 3, 403, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (434, 5, 4, 403, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (435, 6, 5, 403, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (436, 7, 6, 403, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (437, 8, 7, 403, NULL, NULL);
+INSERT INTO recorderinputtrackconfig VALUES (438, 9, 8, 403, NULL, NULL);
+
+-- Ingex-Router
+INSERT INTO recorderinputtrackconfig VALUES (900, 1, 1, 900, 110, 1);
+
+
+SELECT setval('rtc_id_seq', max(rtc_identifier)) FROM recorderinputtrackconfig;
+
+
+
+--
+-- recorderconfig
+--
+
+INSERT INTO recorderconfig VALUES (10, 'MXF SD online/offline plus browse');
+INSERT INTO recorderconfig VALUES (11, 'Quicktime DV50');
+INSERT INTO recorderconfig VALUES (20, 'MXF HD online SD offline');
+INSERT INTO recorderconfig VALUES (21, 'HD Quicktime DVCPRO-HD');
+INSERT INTO recorderconfig VALUES (90, 'Router');
+
+SELECT setval('rec_id_seq', max(rec_identifier)) FROM recorderconfig;
+
+
+--
+-- Recorder current config
+--
+
+UPDATE recorder SET rer_conf_id=10 WHERE rer_identifier = 1;
+UPDATE recorder SET rer_conf_id=10 WHERE rer_identifier = 2;
+UPDATE recorder SET rer_conf_id=20 WHERE rer_identifier = 4;
+UPDATE recorder SET rer_conf_id=90 WHERE rer_identifier = 9;
+
+--
+-- MXF SD online/offline plus browse
 --
 
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('IMAGE_ASPECT', '16/9', 1, 10);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('COPY_COMMAND', '/home/ingex/ap-workspace/ingex/studio/processing/media_transfer/xferclient.pl', 1, 10);
     
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('ENCODE1_RESOLUTION', '12', 1, 10);
@@ -351,16 +420,14 @@ INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_
     VALUES ('QUAD_COPY_PRIORITY', '3', 1, 10);
 
 --
--- Ingex-Quicktime
+-- Quicktime DV50
 --
 
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('IMAGE_ASPECT', '16/9', 1, 11);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('COPY_COMMAND', '', 1, 11);
     
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('ENCODE1_RESOLUTION', '10', 1, 11);
+    VALUES ('ENCODE1_RESOLUTION', '8', 1, 11);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('ENCODE1_BITC', 'false', 1, 11);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
@@ -382,6 +449,17 @@ INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_
     VALUES ('ENCODE2_COPY_PRIORITY', '2', 1, 11);
     
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE3_RESOLUTION', '0', 1, 11);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE3_BITC', 'false', 1, 11);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE3_DIR', '/video/browse/', 1, 11);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE3_COPY_DEST', '/store/browse/', 1, 11);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE3_COPY_PRIORITY', '1', 1, 11);
+    
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('QUAD_RESOLUTION', '0', 1, 11);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('QUAD_BITC', 'true', 1, 11);
@@ -393,13 +471,11 @@ INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_
     VALUES ('QUAD_COPY_PRIORITY', '3', 1, 11);
 
 --
--- Ingex-HD-MXF
+-- MXF HD online SD offline
 --
 
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('IMAGE_ASPECT', '16/9', 1, 20);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('COPY_COMMAND', '/home/ingex/ap-workspace/ingex/studio/processing/media_transfer/xferclient.pl', 1, 20);
     
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('ENCODE1_RESOLUTION', '26', 1, 20);
@@ -446,13 +522,11 @@ INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_
     VALUES ('QUAD_COPY_PRIORITY', '3', 1, 20);
 
 --
--- Ingex-HD-Quicktime
+-- HD Quicktime DVCPRO-HD
 --
 
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('IMAGE_ASPECT', '16/9', 1, 21);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('COPY_COMMAND', '', 1, 21);
     
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('ENCODE1_RESOLUTION', '11', 1, 21);
@@ -477,6 +551,17 @@ INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_
     VALUES ('ENCODE2_COPY_PRIORITY', '2', 1, 21);
     
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE3_RESOLUTION', '0', 1, 21);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE3_BITC', 'false', 1, 21);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE3_DIR', '/video/browse/', 1, 21);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE3_COPY_DEST', '/store/browse/', 1, 21);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE3_COPY_PRIORITY', '1', 1, 21);
+    
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('QUAD_RESOLUTION', '0', 1, 21);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('QUAD_BITC', 'true', 1, 21);
@@ -486,6 +571,20 @@ INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_
     VALUES ('QUAD_COPY_DEST', '', 1, 21);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('QUAD_COPY_PRIORITY', '3', 1, 21);
+
+--
+-- Router
+--
+
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('IMAGE_ASPECT', '16/9', 1, 90);
+    
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE1_RESOLUTION', '34', 1, 90);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE1_DIR', '/video/cuts/', 1, 90);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE1_COPY_DEST', '/store/cuts/', 1, 90);
 
 
 

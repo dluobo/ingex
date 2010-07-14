@@ -1,5 +1,5 @@
 /*
- * $Id: Database.cpp,v 1.14 2010/04/22 08:39:29 john_f Exp $
+ * $Id: Database.cpp,v 1.15 2010/07/14 13:06:36 john_f Exp $
  *
  * Provides access to the data in the database
  *
@@ -35,6 +35,9 @@ using namespace pqxx;
 
 
 
+#define DEFAULT_RECORDER_CONFIG_ID  1
+
+
 #define COND_NUM_PARAM(cond, value) \
     (cond ? value : 0), cond
 
@@ -60,7 +63,7 @@ using namespace pqxx;
     }
 
 
-static const int g_compatibilityVersion = 8;
+static const int COMPATIBILITY_VERSION = 8;
 
     
 const char* const LOAD_REC_LOCATIONS_STMT = "load recording locations";
@@ -106,7 +109,7 @@ const char* const LOAD_RECORDER_CONFIG_SQL =
         rec_name \
     FROM RecorderConfig \
     WHERE \
-        rec_recorder_id= $1 \
+        rec_identifier= $1 \
 ";
 
 const char* const LOAD_RECORDER_PARAMS_STMT = "load recorder params";
@@ -131,7 +134,7 @@ const char* const LOAD_RECORDER_INPUT_CONFIG_SQL =
         ric_name \
     FROM RecorderInputConfig \
     WHERE \
-        ric_recorder_conf_id = $1 \
+        ric_recorder_id = $1 \
 ";
 
 const char* const LOAD_RECORDER_INPUT_TRACK_CONFIG_STMT = "load recorder input track config";
@@ -168,11 +171,10 @@ const char* const INSERT_RECORDER_CONFIG_SQL =
     INSERT INTO RecorderConfig \
     ( \
         rec_identifier, \
-        rec_name, \
-        rec_recorder_id \
+        rec_name \
     ) \
     VALUES \
-    ($1, $2, $3) \
+    ($1, $2) \
 ";
 
 const char* const INSERT_RECORDER_PARAM_STMT = "insert recorder param";
@@ -198,7 +200,7 @@ const char* const INSERT_RECORDER_INPUT_CONFIG_SQL =
         ric_identifier, \
         ric_index, \
         ric_name, \
-        ric_recorder_conf_id \
+        ric_recorder_id \
     ) \
     VALUES \
     ($1, $2, $3, $4) \
@@ -230,15 +232,6 @@ const char* const UPDATE_RECORDER_SQL =
         rer_identifier = $3 \
 ";
 
-const char* const UPDATE_ACTIVE_RECORDER_CONFIG_STMT = "update active recorder config";
-const char* const UPDATE_ACTIVE_RECORDER_CONFIG_SQL =
-" \
-    UPDATE Recorder \
-    SET rer_conf_id = $1 \
-    WHERE \
-        rer_identifier = $2 \
-";
-
 const char* const UPDATE_RECORDER_PARAM_STMT = "update recorder param";
 const char* const UPDATE_RECORDER_PARAM_SQL =
 " \
@@ -255,10 +248,9 @@ const char* const UPDATE_RECORDER_CONFIG_STMT = "update recorder config";
 const char* const UPDATE_RECORDER_CONFIG_SQL =
 " \
     UPDATE RecorderConfig \
-    SET rec_name = $1, \
-        rec_recorder_id = $2 \
+    SET rec_name = $1 \
     WHERE \
-        rec_identifier = $3 \
+        rec_identifier = $2 \
 ";
 
 const char* const UPDATE_RECORDER_INPUT_CONFIG_STMT = "update recorder input config";
@@ -267,7 +259,7 @@ const char* const UPDATE_RECORDER_INPUT_CONFIG_SQL =
     UPDATE RecorderInputConfig \
     SET ric_index = $1, \
         ric_name = $2, \
-        ric_recorder_conf_id = $3 \
+        ric_recorder_id = $3 \
     WHERE \
         ric_identifier = $4 \
 ";
@@ -284,6 +276,13 @@ const char* const UPDATE_RECORDER_INPUT_TRACK_CONFIG_SQL =
     WHERE \
         rtc_identifier = $6 \
 ";
+
+const char* const DELETE_RECORDER_CONFIG_STMT = "delete recorder config";
+const char* const DELETE_RECORDER_CONFIG_SQL =
+" \
+    DELETE FROM RecorderConfig WHERE rec_identifier = $1 \
+";
+
 
 const char* const DELETE_RECORDER_STMT = "delete recorder";
 const char* const DELETE_RECORDER_SQL =
@@ -1560,6 +1559,143 @@ long Database::saveLiveRecordingLocation(string name, Transaction *transaction)
     END_WORK("SaveLiveRecordingLocation")
 }
 
+RecorderConfig* Database::loadRecorderConfig(long database_id, Transaction *transaction)
+{
+    Transaction *ts = transaction;
+    auto_ptr<Transaction> local_ts;
+    if (!ts) {
+        local_ts = auto_ptr<Transaction>(getTransaction("LoadRecorderConfig"));
+        ts = local_ts.get();
+    }
+    
+    auto_ptr<RecorderConfig> config(new RecorderConfig());
+    
+    START_WORK
+    {
+        result res = ts->prepared(LOAD_RECORDER_CONFIG_STMT)(database_id).exec();
+        if (res.empty())
+            PA_LOGTHROW(DBException, ("Recorder config %ld does not exist in database", database_id));
+
+        config->wasLoaded(readId(res[0][0]));
+        config->name = readString(res[0][1]);
+
+        // load recorder parameters
+
+        res = ts->prepared(LOAD_RECORDER_PARAMS_STMT)(config->getDatabaseID()).exec();
+        result::size_type i;
+        for (i = 0; i < res.size(); i++) {
+            RecorderParameter rec_param;
+            rec_param.wasLoaded(readId(res[i][0]));
+            rec_param.name = readString(res[i][1]);
+            rec_param.value = readString(res[i][2]);
+            rec_param.type = readEnum(res[i][3]);
+            config->parameters.insert(make_pair(rec_param.name, rec_param));
+        }
+    }
+    END_WORK("LoadRecorderConfig")
+
+    return config.release();
+}
+
+RecorderConfig* Database::loadDefaultRecorderConfig(Transaction *transaction)
+{
+    return loadRecorderConfig(DEFAULT_RECORDER_CONFIG_ID, transaction);
+}
+
+void Database::saveRecorderConfig(RecorderConfig *config, Transaction *transaction)
+{
+    Transaction *ts = transaction;
+    auto_ptr<Transaction> local_ts;
+    if (!ts) {
+        local_ts = auto_ptr<Transaction>(getTransaction("SaveRecorderConfig"));
+        ts = local_ts.get();
+    }
+    
+    START_WORK
+    {
+        long next_recorder_config_database_id;
+
+        if (!config->isPersistent()) {
+            next_recorder_config_database_id = loadNextId("rec_id_seq", ts);
+
+            ts->registerCommitListener(next_recorder_config_database_id, config);
+            
+            ts->prepared(INSERT_RECORDER_CONFIG_STMT)
+                (next_recorder_config_database_id)
+                (config->name).exec(); 
+        } else {
+            next_recorder_config_database_id = config->getDatabaseID();
+
+            ts->prepared(UPDATE_RECORDER_CONFIG_STMT)
+                (config->name)
+                (next_recorder_config_database_id).exec();
+        }
+
+
+        // save the recorder parameters
+
+        map<string, RecorderParameter>::iterator iter;
+        for (iter = config->parameters.begin(); iter != config->parameters.end(); iter++) {
+            RecorderParameter &rec_parameter = iter->second; // using ref so that object in map is updated
+
+            long next_parameter_database_id;
+
+            if (!rec_parameter.isPersistent()) {
+                next_parameter_database_id = loadNextId("rep_id_seq", ts);
+    
+                ts->registerCommitListener(next_parameter_database_id, &rec_parameter);
+                
+                ts->prepared(INSERT_RECORDER_PARAM_STMT)
+                    (next_parameter_database_id)
+                    (rec_parameter.name)
+                    (rec_parameter.value)
+                    (rec_parameter.type)
+                    (next_recorder_config_database_id).exec(); 
+            } else {
+                next_parameter_database_id = rec_parameter.getDatabaseID();
+
+                ts->prepared(UPDATE_RECORDER_PARAM_STMT)
+                    (rec_parameter.name)
+                    (rec_parameter.value)
+                    (rec_parameter.type)
+                    (next_recorder_config_database_id)
+                    (next_parameter_database_id).exec();
+            }
+        }
+
+        if (!transaction)
+            ts->commit();
+    }
+    END_WORK("SaveRecorderConfig")
+}
+
+void Database::deleteRecorderConfig(RecorderConfig *config, Transaction *transaction)
+{
+    Transaction *ts = transaction;
+    auto_ptr<Transaction> local_ts;
+    if (!ts) {
+        local_ts = auto_ptr<Transaction>(getTransaction("DeleteRecorderConfig"));
+        ts = local_ts.get();
+    }
+    
+    START_WORK
+    {
+        ts->registerCommitListener(0, config);
+
+        // the database will cascade the delete down to the parameters
+        // so we register additional listeners for those objects
+        map<std::string, RecorderParameter>::iterator iter;
+        for (iter = config->parameters.begin(); iter != config->parameters.end(); iter++)
+            ts->registerCommitListener(0, &iter->second);
+
+        ts->prepared(DELETE_RECORDER_CONFIG_STMT)(config->getDatabaseID()).exec();
+
+        if (!transaction)
+            ts->commit();
+    }
+    END_WORK("DeleteRecorderConfig")
+}
+
 Recorder* Database::loadRecorder(string name, Transaction *transaction)
 {
     Transaction *ts = transaction;
@@ -1581,86 +1717,58 @@ Recorder* Database::loadRecorder(string name, Transaction *transaction)
 
         recorder->wasLoaded(readId(res1[0][0]));
         recorder->name = readString(res1[0][1]);
-        long active_recorder_config_id = readLong(res1[0][2], 0);
 
 
-        // load recorder configurations
+        // load recorder configuration
 
-        res1 = ts->prepared(LOAD_RECORDER_CONFIG_STMT)(recorder->getDatabaseID()).exec();
+        recorder->config = loadRecorderConfig(readLong(res1[0][2], 0), ts);
+
+
+        // load recorder input configurations
+
+        res1 = ts->prepared(LOAD_RECORDER_INPUT_CONFIG_STMT)(recorder->getDatabaseID()).exec();
         result::size_type i1;
         for (i1 = 0; i1 < res1.size(); i1++) {
-            RecorderConfig *recorder_config = new RecorderConfig();
-            recorder->setAlternateConfig(recorder_config);
-            recorder_config->wasLoaded(readId(res1[i1][0]));
-            recorder_config->name = readString(res1[i1][1]);
+            RecorderInputConfig *recorder_input_config = new RecorderInputConfig();
+            recorder->recorderInputConfigs.push_back(recorder_input_config);
+            recorder_input_config->wasLoaded(readId(res1[i1][0]));
+            recorder_input_config->index = readInt(res1[i1][1], 0);
+            recorder_input_config->name = readString(res1[i1][2]);
 
-            if (recorder_config->getDatabaseID() == active_recorder_config_id)
-                recorder->setConfig(recorder_config);
+            
+            // load track configurations
 
-
-            // load recorder parameters
-
-            result res2 = ts->prepared(LOAD_RECORDER_PARAMS_STMT)(recorder_config->getDatabaseID()).exec();
+            result res2 = ts->prepared(LOAD_RECORDER_INPUT_TRACK_CONFIG_STMT)
+                            (recorder_input_config->getDatabaseID()).exec();
 
             result::size_type i2;
             for (i2 = 0; i2 < res2.size(); i2++) {
-                RecorderParameter rec_param;
-                rec_param.wasLoaded(readId(res2[i2][0]));
-                rec_param.name = readString(res2[i2][1]);
-                rec_param.value = readString(res2[i2][2]);
-                rec_param.type = readEnum(res2[i2][3]);
-                recorder_config->parameters.insert(make_pair(rec_param.name, rec_param));
-            }
-
-            // load input configurations
-
-            res2 = ts->prepared(LOAD_RECORDER_INPUT_CONFIG_STMT)(recorder_config->getDatabaseID()).exec();
-
-            for (i2 = 0; i2 < res2.size(); i2++) {
-                RecorderInputConfig *recorder_input_config = new RecorderInputConfig();
-                recorder_config->recorderInputConfigs.push_back(recorder_input_config);
-                recorder_input_config->wasLoaded(readId(res2[i2][0]));
-                recorder_input_config->index = readInt(res2[i2][1], 0);
-                recorder_input_config->name = readString(res2[i2][2]);
-
+                RecorderInputTrackConfig *recorder_input_track_config = new RecorderInputTrackConfig();
+                recorder_input_config->trackConfigs.push_back(recorder_input_track_config);
+                recorder_input_track_config->wasLoaded(readId(res2[i2][0]));
+                recorder_input_track_config->index = readInt(res2[i2][1], 0);
+                recorder_input_track_config->number = readInt(res2[i2][2], 0);
                 
-                // load track configurations
+                long source_config_id = readLong(res2[i2][3], 0);
+                if (source_config_id != 0) {
+                    recorder_input_track_config->sourceTrackID = readInt(res2[i2][4], 0);
 
-                result res3 = ts->prepared(LOAD_RECORDER_INPUT_TRACK_CONFIG_STMT)
-                                (recorder_input_config->getDatabaseID()).exec();
-
-                result::size_type i3;
-                for (i3 = 0; i3 < res3.size(); i3++) {
-                    RecorderInputTrackConfig *recorder_input_track_config = new RecorderInputTrackConfig();
-                    recorder_input_config->trackConfigs.push_back(recorder_input_track_config);
-                    recorder_input_track_config->wasLoaded(readId(res3[i3][0]));
-                    recorder_input_track_config->index = readInt(res3[i3][1], 0);
-                    recorder_input_track_config->number = readInt(res3[i3][2], 0);
-                    
-                    long source_config_id = readLong(res3[i3][3], 0);
-                    if (source_config_id != 0) {
-                        recorder_input_track_config->sourceTrackID = readInt(res3[i3][4], 0);
-
-                        recorder_input_track_config->sourceConfig =
-                            recorder_config->getSourceConfig(source_config_id, recorder_input_track_config->sourceTrackID);
-                        if (!recorder_input_track_config->sourceConfig) {
-                            // load source config
-                            recorder_input_track_config->sourceConfig = loadSourceConfig(source_config_id, ts);
-                            recorder_config->sourceConfigs.push_back(recorder_input_track_config->sourceConfig);
-                            if (!recorder_input_track_config->sourceConfig->getTrackConfig(
-                                    recorder_input_track_config->sourceTrackID))
-                            {
-                                PA_LOGTHROW(DBException, ("Reference to non-existing track in recorder input track config"));
-                            }
+                    recorder_input_track_config->sourceConfig =
+                        recorder->getSourceConfig(source_config_id, recorder_input_track_config->sourceTrackID);
+                    if (!recorder_input_track_config->sourceConfig) {
+                        // load source config
+                        recorder_input_track_config->sourceConfig = loadSourceConfig(source_config_id, ts);
+                        recorder->sourceConfigs.push_back(recorder_input_track_config->sourceConfig);
+                        if (!recorder_input_track_config->sourceConfig->getTrackConfig(
+                                recorder_input_track_config->sourceTrackID))
+                        {
+                            PA_LOGTHROW(DBException, ("Reference to non-existing track in recorder input track config"));
                         }
                     }
                 }
             }
         }
 
-        if (active_recorder_config_id != 0 && !recorder->hasConfig())
-            PA_LOGTHROW(DBException, ("Recorder config with id '%ld' has incorrect link back "
-                                      "to recorder '%s'", active_recorder_config_id, name.c_str()));
     }
     END_WORK("LoadRecorder")
 
@@ -1680,6 +1788,14 @@ void Database::saveRecorder(Recorder *recorder, Transaction *transaction)
     {
         long next_recorder_database_id;
 
+        // save recorder configuration if not persistent
+        
+        if (!recorder->config)
+            PA_LOGTHROW(DBException, ("Cannot save recorder with null config"));
+        if (!recorder->config->isPersistent())
+            saveRecorderConfig(recorder->config, ts);
+
+
         // save recorder
         
         if (!recorder->isPersistent()) {
@@ -1690,150 +1806,78 @@ void Database::saveRecorder(Recorder *recorder, Transaction *transaction)
             ts->prepared(INSERT_RECORDER_STMT)
                 (next_recorder_database_id)
                 (recorder->name)
-                (COND_NUM_PARAM(recorder->hasConfig() && recorder->getConfig()->isPersistent(),
-                                recorder->getConfig()->getDatabaseID())).exec();
+                (COND_NUM_PARAM(recorder->config,
+                                recorder->config->getDatabaseID())).exec();
         } else {
             next_recorder_database_id = recorder->getDatabaseID();
             
             ts->prepared(UPDATE_RECORDER_STMT)
                 (recorder->name)
-                (COND_NUM_PARAM(recorder->hasConfig() && recorder->getConfig()->isPersistent(),
-                                recorder->getConfig()->getDatabaseID()))
+                (COND_NUM_PARAM(recorder->config,
+                                recorder->config->getDatabaseID()))
                 (next_recorder_database_id).exec();
         }
 
 
-        // save recorder configs
+        // save recorder input configs
         
-        vector<RecorderConfig*>::const_iterator iter1;
-        for (iter1 = recorder->getAllConfigs().begin(); iter1 != recorder->getAllConfigs().end(); iter1++) {
-            RecorderConfig *recorder_config = *iter1;
+        vector<RecorderInputConfig*>::const_iterator iter3;
+        for (iter3 = recorder->recorderInputConfigs.begin(); iter3 != recorder->recorderInputConfigs.end(); iter3++) {
+            RecorderInputConfig *input_config = *iter3;
 
-            long next_recorder_config_database_id;
+            long next_input_config_database_id;
 
-            if (!recorder_config->isPersistent()) {
-                next_recorder_config_database_id = loadNextId("rec_id_seq", ts);
+            if (!input_config->isPersistent()) {
+                next_input_config_database_id = loadNextId("ric_id_seq", ts);
     
-                ts->registerCommitListener(next_recorder_config_database_id, recorder_config);
+                ts->registerCommitListener(next_input_config_database_id, input_config);
                 
-                ts->prepared(INSERT_RECORDER_CONFIG_STMT)
-                    (next_recorder_config_database_id)
-                    (recorder_config->name)
-                    (next_recorder_database_id).exec(); 
-            } else {
-                next_recorder_config_database_id = recorder_config->getDatabaseID();
-    
-                ts->prepared(UPDATE_RECORDER_CONFIG_STMT)
-                    (recorder_config->name)
-                    (next_recorder_database_id)
-                    (next_recorder_config_database_id).exec();
-            }
-
-
-            // update the recorder if the recorder config is connected and is new
-            if (recorder->hasConfig() && recorder_config == recorder->getConfig()) {
-                ts->prepared(UPDATE_ACTIVE_RECORDER_CONFIG_STMT)
-                    (next_recorder_config_database_id)
+                ts->prepared(INSERT_RECORDER_INPUT_CONFIG_STMT)
+                    (next_input_config_database_id)
+                    (input_config->index)
+                    (input_config->name, !input_config->name.empty())
                     (next_recorder_database_id).exec();
+            } else {
+                next_input_config_database_id = input_config->getDatabaseID();
+
+                ts->prepared(UPDATE_RECORDER_INPUT_CONFIG_STMT)
+                    (input_config->index)
+                    (input_config->name, !input_config->name.empty())
+                    (next_recorder_database_id)
+                    (next_input_config_database_id).exec();
             }
 
 
-            // save the recorder parameters
-
-            map<string, RecorderParameter>::iterator iter2;
-            for (iter2 = recorder_config->parameters.begin(); iter2 != recorder_config->parameters.end(); iter2++) {
-                RecorderParameter &rec_parameter = iter2->second; // using ref so that object in map is updated
-
-                long next_parameter_database_id;
-
-                if (!rec_parameter.isPersistent()) {
-                    next_parameter_database_id = loadNextId("rep_id_seq", ts);
-        
-                    ts->registerCommitListener(next_parameter_database_id, &rec_parameter);
-                    
-                    ts->prepared(INSERT_RECORDER_PARAM_STMT)
-                        (next_parameter_database_id)
-                        (rec_parameter.name)
-                        (rec_parameter.value)
-                        (rec_parameter.type)
-                        (next_recorder_config_database_id).exec(); 
-                } else {
-                    next_parameter_database_id = rec_parameter.getDatabaseID();
-
-                    ts->prepared(UPDATE_RECORDER_PARAM_STMT)
-                        (rec_parameter.name)
-                        (rec_parameter.value)
-                        (rec_parameter.type)
-                        (next_recorder_config_database_id)
-                        (next_parameter_database_id).exec();
-                }
-            }
-
-
-            // save recorder input configs
+            // save recorder input track configs
             
-            vector<RecorderInputConfig*>::const_iterator iter3;
-            for (iter3 = recorder_config->recorderInputConfigs.begin();
-                 iter3 != recorder_config->recorderInputConfigs.end(); iter3++)
-            {
-                RecorderInputConfig *input_config = *iter3;
+            vector<RecorderInputTrackConfig*>::const_iterator iter4;
+            for (iter4 = input_config->trackConfigs.begin(); iter4 != input_config->trackConfigs.end(); iter4++) {
+                RecorderInputTrackConfig *input_track_config = *iter4;
 
-                long next_input_config_database_id;
+                long next_input_track_config_database_id;
 
-                if (!input_config->isPersistent()) {
-                    next_input_config_database_id = loadNextId("ric_id_seq", ts);
+                if (!input_track_config->isPersistent()) {
+                    next_input_track_config_database_id = loadNextId("rtc_id_seq", ts);
         
-                    ts->registerCommitListener(next_input_config_database_id, input_config);
+                    ts->registerCommitListener(next_input_track_config_database_id, input_track_config);
                     
-                    ts->prepared(INSERT_RECORDER_INPUT_CONFIG_STMT)
-                        (next_input_config_database_id)
-                        (input_config->index)
-                        (input_config->name, !input_config->name.empty())
-                        (next_recorder_config_database_id).exec();
-                } else {
-                    next_input_config_database_id = input_config->getDatabaseID();
-
-                    ts->prepared(UPDATE_RECORDER_INPUT_CONFIG_STMT)
-                        (input_config->index)
-                        (input_config->name, !input_config->name.empty())
-                        (next_recorder_config_database_id)
+                    ts->prepared(INSERT_RECORDER_INPUT_TRACK_CONFIG_STMT)
+                        (next_input_track_config_database_id)
+                        (input_track_config->index)
+                        (input_track_config->number)
+                        (COND_NUM_PARAM(input_track_config->sourceConfig, input_track_config->sourceConfig->getID()))
+                        (COND_NUM_PARAM(input_track_config->sourceConfig, input_track_config->sourceTrackID))
                         (next_input_config_database_id).exec();
-                }
+                } else {
+                    next_input_track_config_database_id = input_track_config->getDatabaseID();
 
-
-                // save recorder input track configs
-                
-                vector<RecorderInputTrackConfig*>::const_iterator iter4;
-                for (iter4 = input_config->trackConfigs.begin();
-                     iter4 != input_config->trackConfigs.end(); iter4++)
-                {
-                    RecorderInputTrackConfig *input_track_config = *iter4;
-
-                    long next_input_track_config_database_id;
-
-                    if (!input_track_config->isPersistent()) {
-                        next_input_track_config_database_id = loadNextId("rtc_id_seq", ts);
-            
-                        ts->registerCommitListener(next_input_track_config_database_id, input_track_config);
-                        
-                        ts->prepared(INSERT_RECORDER_INPUT_TRACK_CONFIG_STMT)
-                            (next_input_track_config_database_id)
-                            (input_track_config->index)
-                            (input_track_config->number)
-                            (COND_NUM_PARAM(input_track_config->sourceConfig, input_track_config->sourceConfig->getID()))
-                            (COND_NUM_PARAM(input_track_config->sourceConfig, input_track_config->sourceTrackID))
-                            (next_input_config_database_id).exec();
-                    } else {
-                        next_input_track_config_database_id = input_track_config->getDatabaseID();
-
-                        ts->prepared(UPDATE_RECORDER_INPUT_TRACK_CONFIG_STMT)
-                            (input_track_config->index)
-                            (input_track_config->number)
-                            (COND_NUM_PARAM(input_track_config->sourceConfig, input_track_config->sourceConfig->getID()))
-                            (COND_NUM_PARAM(input_track_config->sourceConfig, input_track_config->sourceTrackID))
-                            (next_input_config_database_id)
-                            (next_input_track_config_database_id).exec();
-                    }
+                    ts->prepared(UPDATE_RECORDER_INPUT_TRACK_CONFIG_STMT)
+                        (input_track_config->index)
+                        (input_track_config->number)
+                        (COND_NUM_PARAM(input_track_config->sourceConfig, input_track_config->sourceConfig->getID()))
+                        (COND_NUM_PARAM(input_track_config->sourceConfig, input_track_config->sourceTrackID))
+                        (next_input_config_database_id)
+                        (next_input_track_config_database_id).exec();
                 }
             }
         }
@@ -1859,31 +1903,15 @@ void Database::deleteRecorder(Recorder *recorder, Transaction *transaction)
         
         // the database will cascade the delete down to the recorder input track configs
         // so we register additional listeners for those objects
-        vector<RecorderConfig*>::const_iterator iter1;
-        for (iter1 = recorder->getAllConfigs().begin(); iter1 != recorder->getAllConfigs().end(); iter1++) {
-            RecorderConfig* recorder_config = *iter1;
-            
-            ts->registerCommitListener(0, recorder_config);
+        vector<RecorderInputConfig*>::const_iterator iter1;
+        for (iter1 = recorder->recorderInputConfigs.begin(); iter1 != recorder->recorderInputConfigs.end(); iter1++) {
+            RecorderInputConfig* input_config = *iter1;
+            ts->registerCommitListener(0, input_config);
 
-            map<string, RecorderParameter>::iterator iter2;
-            for (iter2 = recorder_config->parameters.begin(); iter2 != recorder_config->parameters.end(); iter2++) {
-                RecorderParameter &recParam = iter2->second; // using ref so that object in map is updated
-                ts->registerCommitListener(0, &recParam);
-            }
-
-            vector<RecorderInputConfig*>::const_iterator iter3;
-            for (iter3 = recorder_config->recorderInputConfigs.begin();
-                 iter3 != recorder_config->recorderInputConfigs.end(); iter3++)
-            {
-                RecorderInputConfig* input_config = *iter3;
-                ts->registerCommitListener(0, input_config);
-
-                vector<RecorderInputTrackConfig*>::const_iterator iter4;
-                for (iter4 = input_config->trackConfigs.begin(); iter4 != input_config->trackConfigs.end(); iter4++) {
-                    RecorderInputTrackConfig *track_config = *iter4;
-                    ts->registerCommitListener(0, track_config);
-
-                }
+            vector<RecorderInputTrackConfig*>::const_iterator iter2;
+            for (iter2 = input_config->trackConfigs.begin(); iter2 != input_config->trackConfigs.end(); iter2++) {
+                RecorderInputTrackConfig *track_config = *iter2;
+                ts->registerCommitListener(0, track_config);
             }
         }
 
@@ -4320,8 +4348,7 @@ connection* Database::openConnection(string hostname, string dbname, string user
 
         conn->prepare(INSERT_RECORDER_CONFIG_STMT, INSERT_RECORDER_CONFIG_SQL)
             ("integer", prepare::treat_direct)
-            ("varchar", prepare::treat_string)
-            ("integer", prepare::treat_direct);
+            ("varchar", prepare::treat_string);
 
         conn->prepare(INSERT_RECORDER_PARAM_STMT, INSERT_RECORDER_PARAM_SQL)
             ("integer", prepare::treat_direct)
@@ -4349,13 +4376,8 @@ connection* Database::openConnection(string hostname, string dbname, string user
             ("integer", prepare::treat_direct)
             ("integer", prepare::treat_direct);
 
-        conn->prepare(UPDATE_ACTIVE_RECORDER_CONFIG_STMT, UPDATE_ACTIVE_RECORDER_CONFIG_SQL)
-            ("integer", prepare::treat_direct)
-            ("integer", prepare::treat_direct);
-
         conn->prepare(UPDATE_RECORDER_CONFIG_STMT, UPDATE_RECORDER_CONFIG_SQL)
             ("varchar", prepare::treat_string)
-            ("integer", prepare::treat_direct)
             ("integer", prepare::treat_direct);
 
         conn->prepare(UPDATE_RECORDER_PARAM_STMT, UPDATE_RECORDER_PARAM_SQL)
@@ -4377,6 +4399,9 @@ connection* Database::openConnection(string hostname, string dbname, string user
             ("integer", prepare::treat_direct)
             ("integer", prepare::treat_direct)
             ("integer", prepare::treat_direct)
+            ("integer", prepare::treat_direct);
+
+        conn->prepare(DELETE_RECORDER_CONFIG_STMT, DELETE_RECORDER_CONFIG_SQL)
             ("integer", prepare::treat_direct);
 
         conn->prepare(DELETE_RECORDER_STMT, DELETE_RECORDER_SQL)
@@ -4830,10 +4855,10 @@ void Database::checkVersion(Transaction *transaction)
 
         int version = readInt(res[0][0], 0);
 
-        if (version != g_compatibilityVersion)
+        if (version != COMPATIBILITY_VERSION)
         {
             PA_LOGTHROW(DBException, ("Database version %d not equal to required version %d",
-                                      version, g_compatibilityVersion));
+                                      version, COMPATIBILITY_VERSION));
         }
     }
     END_WORK("CheckVersion")

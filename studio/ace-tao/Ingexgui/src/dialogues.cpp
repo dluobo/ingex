@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: dialogues.cpp,v 1.13 2010/06/02 13:09:25 john_f Exp $           *
+ *   $Id: dialogues.cpp,v 1.14 2010/07/14 13:06:36 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -2162,12 +2162,9 @@ SelectRecDlg::SelectRecDlg(wxWindow * parent) : wxDialog(parent, wxID_ANY, wxT("
 	SetMinSize(GetSize()); //stops window being shrunk far enough for controls to overlap
 }
 
-/// Displays dialogue.
+/// Populates and displays dialogue.
 int SelectRecDlg::ShowModal()
 {
-//	wxArrayString projects;
-//	wxDir::GetAllFiles(ROOT_DIR, &projects, wxEmptyString, wxDIR_FILES|wxDIR_DIRS);
-//	mProjectSelector->Append(projects);
 	wxDir offlineDir(wxString(RECORDING_SERVER_ROOT) + wxFileName::GetPathSeparator() + OFFLINE_SUBDIR);
 	if (offlineDir.IsOpened()) {
 		wxString project;
@@ -2385,10 +2382,11 @@ void SelectRecDlg::OnPreferOnline(wxCommandEvent & WXUNUSED(event))
 }
 
 /// Gets the paths of the files of the selected recording.
-/// @param paths Returns the full path of each file, unsorted.
+/// @param paths Returns the full path of each file, sorted alphabetically.
 /// @param selectOnline Forces online files to be returned; otherwise, online files are returned if PreferOnline button is pressed and at least one is available.
 void SelectRecDlg::GetPaths(wxArrayString & paths, bool selectOnline)
 {
+	paths.Clear();
 	wxString stem = wxString(RECORDING_SERVER_ROOT) + wxFileName::GetPathSeparator() + ((selectOnline || BUTTON_WARNING_COLOUR == mPreferOnline->GetBackgroundColour()) ? ONLINE_SUBDIR : OFFLINE_SUBDIR) + wxFileName::GetPathSeparator() + mSelectedProject + wxFileName::GetPathSeparator() + mSelectedDate;
 	wxDir::GetAllFiles(stem, &paths, wxEmptyString, wxDIR_FILES); //all files in the recording's directory
 	stem += wxFileName::GetPathSeparator() + mSelectedDate + wxT("_") + mSelectedRecording.Left(2) + mSelectedRecording.Mid(3, 2) + mSelectedRecording(6, 2) + mSelectedRecording(9, 2) + wxT("_") + mSelectedProject + wxT("_"); //common stem for all files in the wanted recording
@@ -2398,4 +2396,5 @@ void SelectRecDlg::GetPaths(wxArrayString & paths, bool selectOnline)
 			i--; //next value moved to this position
 		}
 	}
+	paths.Sort();
 }

@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: recordbutton.h,v 1.6 2010/03/30 07:47:52 john_f Exp $            *
+ *   $Id: recordbutton.h,v 1.7 2010/07/14 13:06:36 john_f Exp $            *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -25,6 +25,9 @@
 #define RECORD_BUTTON_H_
 
 #include <wx/wx.h>
+
+#define ENABLED_COLOUR wxColour(wxT("#B00000"))
+#define RECORDING_COLOUR wxColour(wxT("RED"))
 
 /// A derived button which has a bright red but disabled state for "recording".
 class RecordButton : public wxButton

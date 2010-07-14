@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.1 2010/02/12 13:52:49 philipn Exp $
+# $Id: Makefile,v 1.2 2010/07/14 13:06:36 john_f Exp $
 #
 # Copyright (C) 2010  British Broadcasting Corporation.
 # All Rights Reserved.
@@ -73,8 +73,8 @@ test_d10mxfop1awriter: .objs/test_d10mxfop1awriter.o libD10MXFOP1AWriter.a
 install: all
 	mkdir -p $(INSTALL_PREFIX)/lib
 	cp libD10MXFOP1AWriter.a $(INSTALL_PREFIX)/lib/
-	mkdir -p $(INSTALL_PREFIX)/include
-	cp *.h $(INSTALL_PREFIX)/include/
+	mkdir -p $(INSTALL_PREFIX)/include/libMXF++/examples/D10MXFOP1AWriter
+	cp *.h $(INSTALL_PREFIX)/include/libMXF++/examples/D10MXFOP1AWriter/
 
 .PHONY: clean
 clean:

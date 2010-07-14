@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: recordergroup.h,v 1.9 2010/06/02 13:09:25 john_f Exp $         *
+ *   $Id: recordergroup.h,v 1.10 2010/07/14 13:06:36 john_f Exp $         *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -117,18 +117,19 @@ class RecorderGroupCtrl : public wxListBox
 class RecorderData
 {
 	public:
-		RecorderData(ProdAuto::TrackStatusList_var trackStatusList, ProdAuto::TrackList_var trackList = 0) : mTrackStatusList(trackStatusList), mTrackList(trackList), mTimecode() {};
+		RecorderData(const ProdAuto::TrackStatusList_var & trackStatusList, const ProdAuto::TrackList_var & trackList) : mTrackStatusList(trackStatusList), mTrackList(trackList) {};
+		RecorderData(const ProdAuto::TrackStatusList_var & trackStatusList) : mTrackStatusList(trackStatusList) {};
 		RecorderData(ProdAuto::MxfTimecode tc) : mTimecode(tc) {};
 		RecorderData(ProdAuto::TrackList_var trackList, CORBA::StringSeq_var fileList, ProdAuto::MxfTimecode tc = InvalidMxfTimecode) : mTrackList(trackList), mFileList(fileList), mTimecode(tc) {};
-		ProdAuto::TrackList_var GetTrackList() {return mTrackList;};
-		ProdAuto::TrackStatusList_var GetTrackStatusList() {return mTrackStatusList;};
+		const ProdAuto::TrackList_var & GetTrackList() {return mTrackList;};
+		const ProdAuto::TrackStatusList_var & GetTrackStatusList() {return mTrackStatusList;};
 		CORBA::StringSeq_var GetFileList() {return mFileList;};
 		ProdAuto::MxfTimecode GetTimecode() {return mTimecode;};
 	private:
-		const ProdAuto::TrackStatusList_var mTrackStatusList;
-		const ProdAuto::TrackList_var mTrackList;
-		const CORBA::StringSeq_var mFileList;
-		const ProdAuto::MxfTimecode mTimecode;
+		ProdAuto::TrackStatusList_var mTrackStatusList;
+		ProdAuto::TrackList_var mTrackList;
+		CORBA::StringSeq_var mFileList;
+		ProdAuto::MxfTimecode mTimecode;
 };
 
 /// Class storing a recorder name and a controller object, to be attached to each entry in the list control.

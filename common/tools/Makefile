@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.7 2010/07/06 14:15:13 john_f Exp $
+# $Id: Makefile,v 1.8 2010/07/14 13:06:35 john_f Exp $
 #
 # Makefile for building useful command-line tools
 #
@@ -21,12 +21,11 @@
 # 02110-1301, USA.
 #
 
+include ../../common/libmxf.mk
+
 CC = gcc
 
-MXF_LIB = -L../../libMXF/examples/archive/write -L../../libMXF/lib -lwritearchivemxf -lMXF -luuid
-YUV_LIB = -L../YUVlib -lYUVlib
-
-INCLUDE = -I.. -I../YUVlib -I../../../libMXF/lib/include
+INCLUDE=-I.. -I../YUVlib $(LIBMXF_INCLUDE)
 
 CPPFLAGS = -Wall -W -Wno-unused-parameter -g -DDEBUG -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE $(INCLUDE)
 CFLAGS = -Wall -W -Wno-unused-parameter -g -O3
@@ -34,6 +33,7 @@ CXXFLAGS = -Wall -W -Wno-unused-parameter -g -O3
 TARGET_ARCH = -mmmx -msse2
 
 LIB_COMMON = ../libcommon.a
+YUV_LIB = -L../YUVlib -lYUVlib
 
 PROGS = convert_audio convert_10bit_video create_video_test_signal detect_digibeta_dropouts \
 	compare_archive_mxf clapperboard_avsync disk_rw_benchmark send_video receive_video \
@@ -65,7 +65,7 @@ compare_archive_mxf: compare_archive_mxf.o $(LIB_COMMON)
 	$(CXX) $(CXXFLAGS) $(TARGET_ARCH) -o $@ $< $(LIB_COMMON)
 
 clapperboard_avsync: clapperboard_avsync.o $(LIB_COMMON)
-	$(CXX) $(CXXFLAGS) $(TARGET_ARCH) -o $@ $< $(LIB_COMMON) $(MXF_LIB) -lm
+	$(CXX) $(CXXFLAGS) $(TARGET_ARCH) -o $@ $< $(LIB_COMMON) $(WRITEARCHIVEMXF_LIB) $(LIBMXF_LIB) -lm
 
 send_video: send_video.o $(LIB_COMMON)
 	$(CXX) $(CXXFLAGS) $(TARGET_ARCH) -o $@ $< $(LIB_COMMON) $(YUV_LIB) -lpthread

@@ -1,5 +1,5 @@
 /*
- * $Id: test.cpp,v 1.10 2010/06/02 13:04:40 john_f Exp $
+ * $Id: test.cpp,v 1.11 2010/07/14 13:06:36 john_f Exp $
  *
  * Tests the database library
  *
@@ -243,49 +243,41 @@ static void test_source_config()
 }
 
 
-static RecorderConfig* create_recorder_config(string name, long sourceConfigID)
+static RecorderConfig* create_recorder_config(string name)
 {
     Database* database = Database::getInstance();
     
-    auto_ptr<RecorderConfig> recorderConfig(new RecorderConfig());
+    auto_ptr<RecorderConfig> recorderConfigInDB(new RecorderConfig());
 
-    SourceConfig* sourceConfig;
-    RecorderInputConfig* inputConfig;
-    RecorderInputTrackConfig* inputTrackConfig;
+    try
+    {
+        recorderConfigInDB->name = name;
 
-    recorderConfig->name = name;
-    recorderConfig->setStringParam("string param", "string value");
-    recorderConfig->setIntParam("int param", 1);
-    recorderConfig->setBoolParam("bool param", true);
-    Rational rational = g_4x3ImageAspect;
-    recorderConfig->setRationalParam("rational param", rational);
-    
-    recorderConfig->sourceConfigs.push_back(database->loadSourceConfig(sourceConfigID));
-    sourceConfig = recorderConfig->sourceConfigs.back();        
-    
-    recorderConfig->recorderInputConfigs.push_back(new RecorderInputConfig());
-    inputConfig = recorderConfig->recorderInputConfigs.back();
-    inputConfig->index = 1;
-    inputConfig->name = "SDI Input A";
-    
-    inputConfig->trackConfigs.push_back(new RecorderInputTrackConfig());
-    inputTrackConfig = inputConfig->trackConfigs.back();
-    inputTrackConfig->index = 1;
-    inputTrackConfig->number = 2;
-    inputTrackConfig->sourceConfig = sourceConfig;
-    inputTrackConfig->sourceTrackID = 1;
-    
-    inputConfig->trackConfigs.push_back(new RecorderInputTrackConfig());
-    inputTrackConfig = inputConfig->trackConfigs.back();
-    inputTrackConfig->index = 2;
-    inputTrackConfig->number = 3;
-    inputTrackConfig->sourceConfig = 0;
-    inputTrackConfig->sourceTrackID = 0;
-    
-    return recorderConfig.release();
+        recorderConfigInDB->setStringParam("string param", "string value");
+        recorderConfigInDB->setIntParam("int param", 1);
+        recorderConfigInDB->setBoolParam("bool param", true);
+        Rational rational = g_4x3ImageAspect;
+        recorderConfigInDB->setRationalParam("rational param", rational);
+
+        database->saveRecorderConfig(recorderConfigInDB.get());
+    }
+    catch (...)
+    {
+        try
+        {
+            if (recorderConfigInDB.get() != 0 && recorderConfigInDB->isPersistent())
+            {
+                database->deleteRecorderConfig(recorderConfigInDB.get());
+            }
+        }
+        catch (...) {}
+        throw;        
+    }
+
+    return recorderConfigInDB.release();
 }
 
-static Recorder* create_recorder(long sourceConfigID)
+static Recorder* create_recorder(long sourceConfigID, long recorderConfigID)
 {
     Database* database = Database::getInstance();
     
@@ -294,9 +286,32 @@ static Recorder* create_recorder(long sourceConfigID)
     try
     {
         recorderInDB->name = "TestIngex";
-        recorderInDB->setConfig(create_recorder_config("TestIngexConfig1", sourceConfigID));
-        recorderInDB->setAlternateConfig(create_recorder_config("TestIngexConfig2", sourceConfigID));
-    
+
+        recorderInDB->config = database->loadRecorderConfig(recorderConfigID);
+
+        recorderInDB->sourceConfigs.push_back(database->loadSourceConfig(sourceConfigID));
+        SourceConfig* sourceConfig = recorderInDB->sourceConfigs.back();
+
+        recorderInDB->recorderInputConfigs.push_back(new RecorderInputConfig());
+        RecorderInputConfig* inputConfig = recorderInDB->recorderInputConfigs.back();
+        inputConfig->index = 1;
+        inputConfig->name = "SDI Input A";
+
+        inputConfig->trackConfigs.push_back(new RecorderInputTrackConfig());
+        RecorderInputTrackConfig* inputTrackConfig = inputConfig->trackConfigs.back();
+        inputTrackConfig->index = 1;
+        inputTrackConfig->number = 2;
+        inputTrackConfig->sourceConfig = sourceConfig;
+        inputTrackConfig->sourceTrackID = 1;
+
+        inputConfig->trackConfigs.push_back(new RecorderInputTrackConfig());
+        inputTrackConfig = inputConfig->trackConfigs.back();
+        inputTrackConfig->index = 2;
+        inputTrackConfig->number = 3;
+        inputTrackConfig->sourceConfig = 0;
+        inputTrackConfig->sourceTrackID = 0;
+
+
         database->saveRecorder(recorderInDB.get());
     }
     catch (...)
@@ -311,6 +326,7 @@ static Recorder* create_recorder(long sourceConfigID)
         catch (...) {}
         throw;        
     }
+
     return recorderInDB.release();
 }
 
@@ -319,61 +335,50 @@ static void test_recorder()
 {
     Database* database = Database::getInstance();
     auto_ptr<SourceConfig> sourceConfigInDB;
-    auto_ptr<Recorder> recorderInDB;;
+    auto_ptr<RecorderConfig> recorderConfigInDB;
+    auto_ptr<Recorder> recorderInDB;
 
     try
     {
         sourceConfigInDB = auto_ptr<SourceConfig>(create_source_config());
+        recorderConfigInDB = auto_ptr<RecorderConfig>(create_recorder_config("TestIngexConfig1"));
         
         // create
-        recorderInDB = auto_ptr<Recorder>(create_recorder(sourceConfigInDB->getID()));
+        recorderInDB = auto_ptr<Recorder>(create_recorder(sourceConfigInDB->getID(), recorderConfigInDB->getDatabaseID()));
 
         // try loading it back        
         auto_ptr<Recorder> recorder(database->loadRecorder(recorderInDB->name));
 
         CHECK(recorder->name == "TestIngex");
-        CHECK(recorder->getAllConfigs().size() == 2);
-        CHECK(recorder->hasConfig());
 
-        vector<RecorderConfig*>::const_iterator confIter = recorder->getAllConfigs().begin();
-        if (*confIter == recorder->getConfig())
-        {
-            confIter++;
-        }
-        RecorderConfig* recorderConfig = *confIter;
-        CHECK(recorderConfig->name == "TestIngexConfig2");
-
-        CHECK(recorderConfig->getStringParam("string param", "") == "string value");
-        CHECK(recorderConfig->getStringParam("not string param", "").length() == 0);
-        CHECK(recorderConfig->getIntParam("int param", 1) == 1);
-        CHECK(recorderConfig->getIntParam("not int param", 0) == 0);
-        CHECK(recorderConfig->getBoolParam("bool param", false) == true);
-        CHECK(recorderConfig->getBoolParam("not bool param", false) == false);
+        CHECK(recorder->config);
+        CHECK(recorder->config->name == "TestIngexConfig1");
+        CHECK(recorder->config->getStringParam("string param", "") == "string value");
+        CHECK(recorder->config->getStringParam("not string param", "").length() == 0);
+        CHECK(recorder->config->getIntParam("int param", 1) == 1);
+        CHECK(recorder->config->getIntParam("not int param", 0) == 0);
+        CHECK(recorder->config->getBoolParam("bool param", false) == true);
+        CHECK(recorder->config->getBoolParam("not bool param", false) == false);
         Rational rational = g_4x3ImageAspect;
-        CHECK(recorderConfig->getRationalParam("rational param", g_nullRational) == rational);
-        CHECK(recorderConfig->getRationalParam("not rational param", g_nullRational) == g_nullRational);
+        CHECK(recorder->config->getRationalParam("rational param", g_nullRational) == rational);
+        CHECK(recorder->config->getRationalParam("not rational param", g_nullRational) == g_nullRational);
 
-        CHECK(recorderConfig->recorderInputConfigs.size() == 1);
-
-        recorderConfig = recorder->getConfig();
-        CHECK(recorderConfig->name == "TestIngexConfig1");
-        CHECK(recorderConfig->recorderInputConfigs.size() == 1);
-        
-        RecorderInputConfig* inputConfig = recorderConfig->recorderInputConfigs.back();
+        CHECK(recorder->recorderInputConfigs.size() == 1);
+        RecorderInputConfig* inputConfig = recorder->recorderInputConfigs.back();
         CHECK(inputConfig->index == 1);        
         CHECK(inputConfig->name == "SDI Input A");
         CHECK(inputConfig->trackConfigs.size() == 2);
         
         vector<RecorderInputTrackConfig*>::const_iterator trackIter = inputConfig->trackConfigs.begin();
         RecorderInputTrackConfig* inputTrackConfig = (*trackIter++);
-        CHECK(inputTrackConfig->index == 1);        
-        CHECK(inputTrackConfig->number == 2);        
-        CHECK(inputTrackConfig->sourceTrackID == 1);        
+        CHECK(inputTrackConfig->index == 1);
+        CHECK(inputTrackConfig->number == 2);
+        CHECK(inputTrackConfig->sourceTrackID == 1);
         inputTrackConfig = (*trackIter++);
-        CHECK(inputTrackConfig->index == 2);        
-        CHECK(inputTrackConfig->number == 3);        
-        CHECK(inputTrackConfig->sourceConfig == 0);        
-        CHECK(inputTrackConfig->sourceTrackID == 0);        
+        CHECK(inputTrackConfig->index == 2);
+        CHECK(inputTrackConfig->number == 3);
+        CHECK(inputTrackConfig->sourceConfig == 0);
+        CHECK(inputTrackConfig->sourceTrackID == 0);
 
         
         // clean up
@@ -384,6 +389,10 @@ static void test_recorder()
         if (sourceConfigInDB.get() != 0 && sourceConfigInDB->isPersistent())
         {
             database->deleteSourceConfig(sourceConfigInDB.get());
+        }
+        if (recorderConfigInDB.get() != 0 && recorderConfigInDB->isPersistent())
+        {
+            database->deleteRecorderConfig(recorderConfigInDB.get());
         }
     }
     catch (...)
@@ -401,6 +410,14 @@ static void test_recorder()
             if (sourceConfigInDB.get() != 0 && sourceConfigInDB->isPersistent())
             {
                 database->deleteSourceConfig(sourceConfigInDB.get());
+            }
+        }
+        catch (...) {}
+        try
+        {
+            if (recorderConfigInDB.get() != 0 && recorderConfigInDB->isPersistent())
+            {
+                database->deleteRecorderConfig(recorderConfigInDB.get());
             }
         }
         catch (...) {}
@@ -430,12 +447,14 @@ static void test_source_session()
 {
     Database* database = Database::getInstance();
     auto_ptr<SourceConfig> sourceConfigInDB;
+    auto_ptr<RecorderConfig> recorderConfigInDB;
     auto_ptr<Recorder> recorderInDB;;
 
     try
     {
         sourceConfigInDB = auto_ptr<SourceConfig>(create_source_config());
-        recorderInDB = auto_ptr<Recorder>(create_recorder(sourceConfigInDB->getID()));
+        recorderConfigInDB = auto_ptr<RecorderConfig>(create_recorder_config("TestIngexConfig1"));
+        recorderInDB = auto_ptr<Recorder>(create_recorder(sourceConfigInDB->getID(), recorderConfigInDB->getDatabaseID()));
 
         // create old style using session start timestamp
         sourceConfigInDB->setSessionSourcePackage(g_palEditRate);
@@ -457,6 +476,10 @@ static void test_source_session()
         {
             database->deleteSourceConfig(sourceConfigInDB.get());
         }
+        if (recorderConfigInDB.get() != 0 && recorderConfigInDB->isPersistent())
+        {
+            database->deleteRecorderConfig(recorderConfigInDB.get());
+        }
     }
     catch (...)
     {
@@ -473,6 +496,14 @@ static void test_source_session()
             if (sourceConfigInDB.get() != 0 && sourceConfigInDB->isPersistent())
             {
                 database->deleteSourceConfig(sourceConfigInDB.get());
+            }
+        }
+        catch (...) {}
+        try
+        {
+            if (recorderConfigInDB.get() != 0 && recorderConfigInDB->isPersistent())
+            {
+                database->deleteRecorderConfig(recorderConfigInDB.get());
             }
         }
         catch (...) {}

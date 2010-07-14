@@ -46,15 +46,10 @@ if (($errorMessage = validate_params()) eq "ok")
 {
 	my $ok = "yes";
 
-	my $sequence = "";
-	if (defined param('sequence')) { 
-		$sequence = trim(param('sequence'));
-	}
-
 	my $item = {
 		ORDERINDEX => param('id'),
 		ITEMNAME => trim(param('name')),
-		SEQUENCE => $sequence,
+		SEQUENCE => trim(param('sequence')),
 		PROGRAMME => param('programme')
 	};
 
@@ -80,6 +75,7 @@ sub validate_params
 	return "No interface id (database orderindex) defined" if (!defined param('id') || param('id') =~ /^\s*$/);
 	return "No item name defined" if (!defined param('name') || param('name') =~ /^\s*$/);
 	return "No programme id defined" if (!defined param('programme') || param('programme') =~ /^\s*$/);
+	return "No sequence (script reference) defined" if(!defined param('sequence') || param('sequence') =~ /^\{\s*\}/);
 
     return "ok";
 }

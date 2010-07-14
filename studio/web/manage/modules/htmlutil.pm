@@ -1,5 +1,5 @@
 #
-# $Id: htmlutil.pm,v 1.2 2008/05/16 17:01:04 john_f Exp $
+# $Id: htmlutil.pm,v 1.3 2010/07/14 13:06:37 john_f Exp $
 #
 # 
 #
@@ -52,6 +52,7 @@ BEGIN
         &get_sources_popup
         &get_source_config
         &get_video_resolution_popup
+        &get_recorder
         &get_recorder_config_popup
         &get_recorder_config
         &get_proxy_def
@@ -333,6 +334,76 @@ sub get_source_config
 
 ####################################
 #
+# Recorder
+#
+####################################
+
+sub get_recorder
+{
+    my ($rec, $noLink) = @_;
+    
+    # stop the warnings about deep recursion
+    push(@CGI::Pretty::AS_IS, qw(div table th tr td));
+
+    
+    my @pageContent;
+
+    my @inputRows;
+    foreach my $ricf (@{ $rec->{"inputs"} })
+    {
+        my @trackRows;
+        push(@trackRows,
+            Tr({-align=>"left", -valign=>"top"}, 
+               th(["Id", "Source Name", "Source Track Name", "Clip Track Number"]),
+            )
+        );
+        foreach my $ritcf (@{ $ricf->{"tracks"} })
+        {
+            push(@trackRows, 
+                Tr({-align=>"left", -valign=>"top"}, 
+                    td([$ritcf->{"INDEX"}, 
+                        (defined $ritcf->{"SOURCE_NAME"}) ? $ritcf->{"SOURCE_NAME"} : "",
+                        (defined $ritcf->{"SOURCE_TRACK_NAME"}) ? $ritcf->{"SOURCE_TRACK_NAME"} : "",
+                        (defined $ritcf->{"TRACK_NUMBER"}) ? $ritcf->{"TRACK_NUMBER"} : "",
+                    ]),
+                )
+            );
+        }
+
+        push(@inputRows,
+            Tr({-align=>"left", -valign=>"top"}, [
+                td([div({-class=>"propHeading2"}, "Index:"), $ricf->{"config"}->{"INDEX"}]),
+                td([div({-class=>"propHeading2"}, "Name:"), $ricf->{"config"}->{"NAME"}]),
+                td([div({-class=>"propHeading2"}, "Tracks:"), 
+                    table({-class=>"borderTable"}, @trackRows)
+                ]),
+            ])
+        );
+    }
+
+    my @recRows;
+    push(@recRows,
+        Tr({-align=>"left", -valign=>"top"}, [
+            td([div({-class=>"propHeading1"}, "Name:"), $rec->{"recorder"}->{"NAME"}]),
+            td([div({-class=>"propHeading1"}, "Inputs:"),
+                table({-class=>"noBorderTable"}, @inputRows)
+            ]),
+            td([div({-class=>"propHeading1"}, "Config:"),
+                ($noLink ?
+                      $rec->{"recorder"}->{"CONF_NAME"}
+                    : a({-href=>"#RecorderConfig-$rec->{'recorder'}->{'CONF_ID'}"}, $rec->{"recorder"}->{"CONF_NAME"})),
+            ]),
+        ])
+    );
+
+    push(@pageContent, table({-class=>"noBorderTable"}, @recRows));
+
+
+    return join("", @pageContent);
+}
+
+####################################
+#
 # Recorder config
 #
 ####################################
@@ -346,11 +417,6 @@ sub get_recorder_config_popup
     my @values;
     my %labels;
 
-    # not set option
-    push(@values, 0);
-    $labels{0} = "not set";
-
-    # sources options
     foreach my $rcf (@{ $rcfs })
     {
         my $value = $rcf->{"config"}->{"ID"};
@@ -365,18 +431,21 @@ sub get_recorder_config_popup
         }
     }
     
-    # no default then is not set
     if (!defined $default)
     {
-        $default = 0;
+        return popup_menu(
+            -name => $paramId, 
+            -values => \@values,
+            -labels => \%labels);
     }
-    
-    
-    return popup_menu(
-        -name => $paramId, 
-        -default => $default,
-        -values => \@values,
-        -labels => \%labels);
+    else
+    {
+        return popup_menu(
+            -name => $paramId, 
+            -default => $default,
+            -values => \@values,
+            -labels => \%labels);
+    }
 }
 
 sub get_video_resolution_popup
@@ -429,39 +498,6 @@ sub get_recorder_config
     
     my @pageContent;
 
-    my @inputRows;
-    foreach my $ricf (@{ $rcf->{"inputs"} })
-    {
-        my @trackRows;
-        push(@trackRows,
-            Tr({-align=>"left", -valign=>"top"}, 
-               th(["Id", "Source Name", "Source Track Name", "Clip Track Number"]),
-            )
-        );
-        foreach my $ritcf (@{ $ricf->{"tracks"} })
-        {
-            push(@trackRows, 
-                Tr({-align=>"left", -valign=>"top"}, 
-                    td([$ritcf->{"INDEX"}, 
-                        (defined $ritcf->{"SOURCE_NAME"}) ? $ritcf->{"SOURCE_NAME"} : "",
-                        (defined $ritcf->{"SOURCE_TRACK_NAME"}) ? $ritcf->{"SOURCE_TRACK_NAME"} : "",
-                        (defined $ritcf->{"TRACK_NUMBER"}) ? $ritcf->{"TRACK_NUMBER"} : "",
-                    ]),
-                )
-            );
-        }
-
-        push(@inputRows,
-            Tr({-align=>"left", -valign=>"top"}, [
-                td([div({-class=>"propHeading2"}, "Index:"), $ricf->{"config"}->{"INDEX"}]),
-                td([div({-class=>"propHeading2"}, "Name:"), $ricf->{"config"}->{"NAME"}]),
-                td([div({-class=>"propHeading2"}, "Tracks:"), 
-                    table({-class=>"borderTable"}, @trackRows)
-                ]),
-            ])
-        );
-    }
-
     my @paramRows;
     push(@paramRows,
         Tr({-align=>"left", -valign=>"top"}, 
@@ -503,10 +539,6 @@ sub get_recorder_config
     push(@rcfRows,
         Tr({-align=>"left", -valign=>"top"}, [
             td([div({-class=>"propHeading1"}, "Name:"), $rcf->{"config"}->{"NAME"}]),
-            td([div({-class=>"propHeading1"}, "Recorder:"), $rcf->{"config"}->{"RECORDER_NAME"}]),
-            td([div({-class=>"propHeading1"}, "Inputs:"), 
-                table({-class=>"noBorderTable"}, @inputRows)
-            ]),
             td([div({-class=>"propHeading1"}, "Parameters:"), 
                 table({-class=>"noBorderTable"}, @paramRows)
             ]),

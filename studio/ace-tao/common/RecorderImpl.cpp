@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderImpl.cpp,v 1.15 2010/06/02 13:09:53 john_f Exp $
+ * $Id: RecorderImpl.cpp,v 1.16 2010/07/14 13:06:36 john_f Exp $
  *
  * Base class for Recorder servant.
  *
@@ -89,169 +89,6 @@ char * RecorderImpl::RecordingFormat (
     // Make a copy of tracks to return
     ProdAuto::TrackList_var tracks = mTracks;
     return tracks._retn();
-}
-
-::CORBA::StringSeq * RecorderImpl::Configs (
-    void
-  )
-  ACE_THROW_SPEC ((
-    ::CORBA::SystemException
-  ))
-{
-    CORBA::StringSeq_var config_list = new CORBA::StringSeq;
-
-    prodauto::Database * db = 0;
-    try
-    {
-        db = prodauto::Database::getInstance();
-    }
-    catch (const prodauto::DBException & dbe)
-    {
-        ACE_DEBUG((LM_ERROR, ACE_TEXT("Database Exception: %C\n"), dbe.getMessage().c_str()));
-    }
-
-    prodauto::Recorder * rec = 0;
-    if (db)
-    {
-        try
-        {
-            rec = db->loadRecorder(mName);
-        }
-        catch (const prodauto::DBException & dbe)
-        {
-            ACE_DEBUG((LM_ERROR, ACE_TEXT("Database Exception: %C\n"), dbe.getMessage().c_str()));
-        }
-    }
-    std::auto_ptr<prodauto::Recorder> recorder(rec); // so it gets deleted
-
-    if (rec)
-    {
-        try
-        {
-            std::vector<prodauto::RecorderConfig *> & configs = rec->getAllConfigs();
-            unsigned int n_configs = configs.size();
-            config_list->length(n_configs);
-            for (unsigned int i = 0; i < n_configs; ++i)
-            {
-                config_list->operator[](i) = CORBA::string_dup(configs[i]->name.c_str());
-            }
-              
-        }
-        catch (const prodauto::DBException & dbe)
-        {
-            ACE_DEBUG((LM_ERROR, ACE_TEXT("Database Exception: %C\n"), dbe.getMessage().c_str()));
-        }
-    }
-
-    return config_list._retn();
-}
-
-char * RecorderImpl::CurrentConfig (
-    void
-  )
-  ACE_THROW_SPEC ((
-    ::CORBA::SystemException
-  ))
-{
-    std::string config_name;
-    prodauto::Database * db = 0;
-    try
-    {
-        db = prodauto::Database::getInstance();
-    }
-    catch (const prodauto::DBException & dbe)
-    {
-        ACE_DEBUG((LM_ERROR, ACE_TEXT("Database Exception: %C\n"), dbe.getMessage().c_str()));
-    }
-
-    prodauto::Recorder * rec = 0;
-    if (db)
-    {
-        try
-        {
-            rec = db->loadRecorder(mName);
-        }
-        catch (const prodauto::DBException & dbe)
-        {
-            ACE_DEBUG((LM_ERROR, ACE_TEXT("Database Exception: %C\n"), dbe.getMessage().c_str()));
-        }
-    }
-    std::auto_ptr<prodauto::Recorder> recorder(rec); // so it gets deleted
-
-    if (rec)
-    {
-        try
-        {
-            prodauto::RecorderConfig * rc = rec->getConfig();
-            if (rc)
-            {
-                config_name = rc->name;
-            }
-        }
-        catch (const prodauto::DBException & dbe)
-        {
-            ACE_DEBUG((LM_ERROR, ACE_TEXT("Database Exception: %C\n"), dbe.getMessage().c_str()));
-        }
-    }
-
-    return CORBA::string_dup(config_name.c_str());
-}
-
-::CORBA::Boolean RecorderImpl::SelectConfig (
-    const char * config
-  )
-  ACE_THROW_SPEC ((
-    ::CORBA::SystemException
-  ))
-{
-    prodauto::Database * db = 0;
-    try
-    {
-        db = prodauto::Database::getInstance();
-    }
-    catch (const prodauto::DBException & dbe)
-    {
-        ACE_DEBUG((LM_ERROR, ACE_TEXT("Database Exception: %C\n"), dbe.getMessage().c_str()));
-    }
-
-    prodauto::Recorder * rec = 0;
-    if (db)
-    {
-        try
-        {
-            rec = db->loadRecorder(mName);
-        }
-        catch (const prodauto::DBException & dbe)
-        {
-            ACE_DEBUG((LM_ERROR, ACE_TEXT("Database Exception: %C\n"), dbe.getMessage().c_str()));
-        }
-    }
-    std::auto_ptr<prodauto::Recorder> recorder(rec); // so it gets deleted
-
-    bool found = false;
-    if (rec)
-    {
-        try
-        {
-            std::vector<prodauto::RecorderConfig *> & configs = rec->getAllConfigs();
-            for (std::vector<prodauto::RecorderConfig *>::const_iterator it = configs.begin();
-                !found && it != configs.end(); ++it)
-            {
-                if (ACE_OS::strcmp((*it)->name.c_str(), config) == 0)
-                {
-                    rec->setConfig(*it);
-                    found = true;
-                }
-            }
-              
-        }
-        catch (const prodauto::DBException & dbe)
-        {
-            ACE_DEBUG((LM_ERROR, ACE_TEXT("Database Exception: %C\n"), dbe.getMessage().c_str()));
-        }
-    }
-
-    return (found ? 1 : 0);
 }
 
 ::CORBA::StringSeq * RecorderImpl::ProjectNames (
@@ -351,18 +188,12 @@ bool RecorderImpl::SetSourcePackages()
     {
         prodauto::Recorder * rec = mRecorder.get();
 
-        prodauto::RecorderConfig * rc = 0;
-        if (rec && rec->hasConfig())
-        {
-            rc = rec->getConfig();
-        }
-
-        if (rc)
+        if (rec)
         {
             // Go through inputs
-            for (unsigned int i = 0; i < rc->recorderInputConfigs.size(); ++i)
+            for (unsigned int i = 0; i < rec->recorderInputConfigs.size(); ++i)
             {
-                prodauto::RecorderInputConfig * ric = rc->getInputConfig(i + 1);
+                prodauto::RecorderInputConfig * ric = rec->getInputConfig(i + 1);
 
                 // Go through tracks
                 for (unsigned int j = 0; ric && j < ric->trackConfigs.size(); ++j)
@@ -457,193 +288,177 @@ bool RecorderImpl::UpdateFromDatabase(unsigned int max_inputs, unsigned int max_
         mTrackIndexMap.clear();
         mRecordingLocationMap.clear();
 
-        prodauto::RecorderConfig * rc = 0;
-        if (rec && rec->hasConfig())
-        {
-            rc = rec->getConfig();
-        }
+        // Set the source track names
 
-        // Now we have RecorderConfig, we can set the source track names
-        if (rc)
+        const unsigned int n_inputs = ACE_MIN((unsigned int)rec->recorderInputConfigs.size(), max_inputs);
+        unsigned int track_i = 0;
+        unsigned int n_video_tracks = 0;
+        for (unsigned int i = 0; i < n_inputs; ++i)
         {
-            ACE_DEBUG((LM_INFO, ACE_TEXT("UpdateSources() loaded config \"%C\" of recorder \"%C\".\n"),
-                rc->name.c_str(), mRecorder->name.c_str()));
-
-            const unsigned int n_inputs = ACE_MIN((unsigned int)rc->recorderInputConfigs.size(), max_inputs);
-            unsigned int track_i = 0;
-            unsigned int n_video_tracks = 0;
-            for (unsigned int i = 0; i < n_inputs; ++i)
+            prodauto::RecorderInputConfig * ric = rec->getInputConfig(i + 1);
+            // We force number of tracks per input to be the hardware max because
+            // this makes it easier to map to hardware parameters when filling out
+            // tracks status with "signal present" etc.
+            //const unsigned int n_tracks = ACE_MIN(ric->trackConfigs.size(), mMaxTracksPerInput);
+            const unsigned int n_tracks = max_tracks_per_input;
+            for (unsigned int j = 0; j < n_tracks; ++j)
             {
-                prodauto::RecorderInputConfig * ric = rc->getInputConfig(i + 1);
-                // We force number of tracks per input to be the hardware max because
-                // this makes it easier to map to hardware parameters when filling out
-                // tracks status with "signal present" etc.
-                //const unsigned int n_tracks = ACE_MIN(ric->trackConfigs.size(), mMaxTracksPerInput);
-                const unsigned int n_tracks = max_tracks_per_input;
-                for (unsigned int j = 0; j < n_tracks; ++j)
+                prodauto::RecorderInputTrackConfig * ritc = 0;
+                if (ric && j < ric->trackConfigs.size())
                 {
-                    prodauto::RecorderInputTrackConfig * ritc = 0;
-                    if (ric && j < ric->trackConfigs.size())
-                    {
-                        ritc = ric->getTrackConfig(j + 1);
-                    }
-                    prodauto::SourceConfig * sc = 0;
-                    if (ritc)
-                    {
-                        sc = ritc->sourceConfig;
-                    }
-                    prodauto::SourceTrackConfig * stc = 0;
-                    if (sc)
-                    {
-                        stc = sc->getTrackConfig(ritc->sourceTrackID);
-                    }
-                
-                    // Update our set of SourceConfig.  Actually using
-                    // a map with database ID as the key, simply because
-                    // having a pointer as a key is not good practice.
-                    if (sc)
-                    {
-                        long id = sc->getDatabaseID();
-                        mSourceConfigs[id] = sc;
-                    }
+                    ritc = ric->getTrackConfig(j + 1);
+                }
+                prodauto::SourceConfig * sc = 0;
+                if (ritc)
+                {
+                    sc = ritc->sourceConfig;
+                }
+                prodauto::SourceTrackConfig * stc = 0;
+                if (sc)
+                {
+                    stc = sc->getTrackConfig(ritc->sourceTrackID);
+                }
+            
+                // Update our set of SourceConfig.  Actually using
+                // a map with database ID as the key, simply because
+                // having a pointer as a key is not good practice.
+                if (sc)
+                {
+                    long id = sc->getDatabaseID();
+                    mSourceConfigs[id] = sc;
+                }
 
-                    // Update our map of RecordingLocation names
-                    if (sc)
+                // Update our map of RecordingLocation names
+                if (sc)
+                {
+                    long id = sc->recordingLocation;
+                    if (id)
                     {
-                        long id = sc->recordingLocation;
-                        if (id)
+                        try
                         {
-                            try
-                            {
-                                mRecordingLocationMap[id] = prodauto::Database::getInstance()->loadLocationName(id);
-                                ACE_DEBUG((LM_DEBUG, ACE_TEXT("Location %d \"%C\"\n"), id, mRecordingLocationMap[id].c_str()));
-                            }
-                            catch (const prodauto::DBException & dbe)
-                            {
-                                ACE_DEBUG((LM_ERROR, ACE_TEXT("Database Exception: %C\n"), dbe.getMessage().c_str()));
-                            }
+                            mRecordingLocationMap[id] = prodauto::Database::getInstance()->loadLocationName(id);
+                            ACE_DEBUG((LM_DEBUG, ACE_TEXT("Location %d \"%C\"\n"), id, mRecordingLocationMap[id].c_str()));
+                        }
+                        catch (const prodauto::DBException & dbe)
+                        {
+                            ACE_DEBUG((LM_ERROR, ACE_TEXT("Database Exception: %C\n"), dbe.getMessage().c_str()));
                         }
                     }
+                }
 
-                    // Update map from source to hardware tracks
-                    if (stc)
-                    {
-                        long id = stc->getDatabaseID();
-                        HardwareTrack trk = {i, j};
-                        mTrackMap[id] = trk;
-                    }
+                // Update map from source to hardware tracks
+                if (stc)
+                {
+                    long id = stc->getDatabaseID();
+                    HardwareTrack trk = {i, j};
+                    mTrackMap[id] = trk;
+                }
 
-                    // Note that here we assemble our list of tracks in harware order.
-                    // An alternative would be to present them in source order.  The
-                    // GUI already re-orders them in source order and presents them to
-                    // the user in that form.
+                // Note that here we assemble our list of tracks in harware order.
+                // An alternative would be to present them in source order.  The
+                // GUI already re-orders them in source order and presents them to
+                // the user in that form.
 
-                    // Update map from source to mTracks index
-                    long stc_db_id = 0;
-                    if (stc)
+                // Update map from source to mTracks index
+                long stc_db_id = 0;
+                if (stc)
+                {
+                    stc_db_id = stc->getDatabaseID();
+                    // Check for duplicate input tracks
+                    if (mTrackIndexMap.find(stc_db_id) != mTrackIndexMap.end())
                     {
-                        stc_db_id = stc->getDatabaseID();
-                        // Check for duplicate input tracks
-                        if (mTrackIndexMap.find(stc_db_id) != mTrackIndexMap.end())
-                        {
-                            ACE_DEBUG((LM_WARNING, ACE_TEXT("Warning: Duplicate input tracks connected! This is likely to cause problems.\n")));
-                        }
-                        mTrackIndexMap[stc_db_id] = track_i;
+                        ACE_DEBUG((LM_WARNING, ACE_TEXT("Warning: Duplicate input tracks connected! This is likely to cause problems.\n")));
                     }
+                    mTrackIndexMap[stc_db_id] = track_i;
+                }
 
-                    mTracks->length(track_i + 1);
-                    ProdAuto::Track & track = mTracks->operator[](track_i);
+                mTracks->length(track_i + 1);
+                ProdAuto::Track & track = mTracks->operator[](track_i);
 
-                    // Set track type
-                    if (stc && stc->dataDef == PICTURE_DATA_DEFINITION)
-                    {
-                        track.type = ProdAuto::VIDEO;
-                        ++n_video_tracks;
-                    }
-                    else if (stc && stc->dataDef == SOUND_DATA_DEFINITION)
-                    {
-                        track.type = ProdAuto::AUDIO;
-                    }
-                    // If no source track, assume hardware track 0 is video
-                    else if (j == 0)
-                    {
-                        track.type = ProdAuto::VIDEO;
-                        ++n_video_tracks;
-                    }
-                    else
-                    {
-                        track.type = ProdAuto::AUDIO;
-                    }
+                // Set track type
+                if (stc && stc->dataDef == PICTURE_DATA_DEFINITION)
+                {
+                    track.type = ProdAuto::VIDEO;
+                    ++n_video_tracks;
+                }
+                else if (stc && stc->dataDef == SOUND_DATA_DEFINITION)
+                {
+                    track.type = ProdAuto::AUDIO;
+                }
+                // If no source track, assume hardware track 0 is video
+                else if (j == 0)
+                {
+                    track.type = ProdAuto::VIDEO;
+                    ++n_video_tracks;
+                }
+                else
+                {
+                    track.type = ProdAuto::AUDIO;
+                }
 
 #if 1
-                    // Name track by hardware input
-                    std::ostringstream s;
-                    if (track.type == ProdAuto::VIDEO)
-                    {
-                        s << "V";
-                    }
-                    else
-                    {
-                        track.type = ProdAuto::AUDIO;
-                        s << "A" << j;
-                    }
-                    s << "  (input " << i << ")";
-                    track.name = CORBA::string_dup(s.str().c_str());
+                // Name track by hardware input
+                std::ostringstream s;
+                if (track.type == ProdAuto::VIDEO)
+                {
+                    s << "V";
+                }
+                else
+                {
+                    track.type = ProdAuto::AUDIO;
+                    s << "A" << j;
+                }
+                s << "  (input " << i << ")";
+                track.name = CORBA::string_dup(s.str().c_str());
 #else
-                    // Name track by source track name
-                    if (stc)
-                    {
-                        track.name = CORBA::string_dup(stc->name.c_str());
-                    }
+                // Name track by source track name
+                if (stc)
+                {
+                    track.name = CORBA::string_dup(stc->name.c_str());
+                }
 #endif
 
-                    // Set track id
-                    //track.id = j; // Is this ever used?
-                    if (stc)
-                    {
-                        track.id = stc->getDatabaseID(); // Helps to have this as used as key for maps
-                    }
-                    else
-                    {
-                        // No source connected
-                        track.id = 0;
-                    }
+                // Set track id
+                if (stc)
+                {
+                    track.id = stc->getDatabaseID(); // Helps to have this as used as key for maps
+                }
+                else
+                {
+                    // No source connected
+                    track.id = 0;
+                }
 
-                    if (sc && stc)
+                if (sc && stc)
+                {
+                    track.has_source = 1;
+                    track.src.package_name = CORBA::string_dup(sc->name.c_str());
+                    prodauto::SourcePackage * sp = sc->getSourcePackage();
+                    if (sp)
                     {
-                        track.has_source = 1;
-                        track.src.package_name = CORBA::string_dup(sc->name.c_str());
-                        prodauto::SourcePackage * sp = sc->getSourcePackage();
-                        if (sp)
-                        {
-                            track.src.tape_name = CORBA::string_dup(sp->name.c_str());
-                        }
-                        else
-                        {
-                            track.src.tape_name = CORBA::string_dup("");
-                        }
-                        track.src.track_name = CORBA::string_dup(stc->name.c_str());
+                        track.src.tape_name = CORBA::string_dup(sp->name.c_str());
                     }
                     else
                     {
-                        // No connection to this input
-                        track.has_source = 0;
-                        track.src.package_name = CORBA::string_dup("zz No Connection");
                         track.src.tape_name = CORBA::string_dup("");
-                        track.src.track_name = CORBA::string_dup("");
                     }
-                    ACE_DEBUG((LM_DEBUG, ACE_TEXT("Input %d, track %d, databse id %3d, src.track_name \"%C\"\n"),
-                        i, j, stc_db_id, (const char *) track.src.track_name));
+                    track.src.track_name = CORBA::string_dup(stc->name.c_str());
+                }
+                else
+                {
+                    // No connection to this input
+                    track.has_source = 0;
+                    track.src.package_name = CORBA::string_dup("zz No Connection");
+                    track.src.tape_name = CORBA::string_dup("");
+                    track.src.track_name = CORBA::string_dup("");
+                }
+                ACE_DEBUG((LM_DEBUG, ACE_TEXT("Input %d, track %d, databse id %3d, src.track_name \"%C\"\n"),
+                    i, j, stc_db_id, (const char *) track.src.track_name));
 
-                    ++track_i;
-                } // tracks
-            } // inputs
-            //mVideoTrackCount = n_video_tracks;
-        }
-        else
-        {
-            ACE_DEBUG((LM_ERROR, ACE_TEXT("UpdateSources() failed to load recorder config!\n")));
-        }
+                ++track_i;
+            } // tracks
+        } // inputs
+        //mVideoTrackCount = n_video_tracks;
 
         // Re-initialise tracks status, if necessary.
         if (mTracksStatus->length() != mTracks->length())
@@ -660,6 +475,7 @@ bool RecorderImpl::UpdateFromDatabase(unsigned int max_inputs, unsigned int max_
                 //ts.timecode.edit_rate = mEditRate;
             }
         }
+        ACE_DEBUG((LM_INFO, ACE_TEXT("Updated sources for recorder \"%C\"\n"), mRecorder->name.c_str()));
     }
 
     // Set source package names (using tape names if available)

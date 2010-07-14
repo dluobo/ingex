@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderSettings.h,v 1.9 2010/06/02 13:09:53 john_f Exp $
+ * $Id: RecorderSettings.h,v 1.10 2010/07/14 13:06:36 john_f Exp $
  *
  * Recorder Configuration.
  *
@@ -58,12 +58,9 @@ public:
 
     // Methods
     bool Update(prodauto::Recorder * rec);
-    //const char *ResolutionName(int resolution);
 
     // Record Parameters
     prodauto::Rational image_aspect;
-    //int timecode_mode;
-    std::string copy_command;
 
     std::vector<EncodeParams> encodings;
 

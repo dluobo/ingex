@@ -142,52 +142,13 @@ sub _add_source_config_track
 #
 ####################################
 
-sub create_recorder
+sub _add_recorder_input_config
 {
-    my ($name) = @_;
-    
-    my $rec = {
-        NAME => $name,
-        CONF_ID => undef,
-    };
-    
-    return $rec;
-}
+    my ($rec, $index, $numTracks) = @_;
 
-####################################
-#
-# Recorder config
-#
-####################################
-
-sub create_recorder_config
-{
-    my ($recId, $name, $numInputs, $numTracks, $drps) = @_;
-    
-    my $rcf = {
-        config => 
-        {
-            NAME => $name,
-            RECORDER_ID => $recId,
-        },
-        parameters => $drps,
-    };
-    
-    foreach my $inputIndex (1..$numInputs)
+    if (!defined $rec->{"inputs"})
     {
-        _add_recorder_config_input($rcf, $inputIndex, $numTracks);
-    }
-
-    return $rcf;
-}
-
-sub _add_recorder_config_input
-{
-    my ($rcf, $index, $numTracks) = @_;
-
-    if (!defined $rcf->{"inputs"})
-    {
-        $rcf->{"inputs"} = ();
+        $rec->{"inputs"} = ();
     }
     
     my @tracks;        
@@ -201,14 +162,53 @@ sub _add_recorder_config_input
         });
     }
     
-    push (@{ $rcf->{"inputs"} }, {
+    push (@{ $rec->{"inputs"} }, {
         config => {
             INDEX => $index,
             NAME => "Input $index",
-            },
+        },
         tracks => \@tracks,
-        });
+    });
 
+}
+
+sub create_recorder
+{
+    my ($name, $numInputs, $numTracks) = @_;
+    
+    my $rec = {
+        recorder => {
+            NAME => $name,
+            CONF_ID => 1, # default
+        },
+    };
+
+    foreach my $inputIndex (1..$numInputs)
+    {
+        _add_recorder_input_config($rec, $inputIndex, $numTracks);
+    }
+
+    return $rec;
+}
+
+####################################
+#
+# Recorder config
+#
+####################################
+
+sub create_recorder_config
+{
+    my ($name, $template) = @_;
+    
+    my $rcf = {
+        config => {
+            NAME => $name,
+        },
+        parameters => $template->{"parameters"},
+    };
+    
+    return $rcf;
 }
 
 ####################################

@@ -858,15 +858,15 @@ sub save_take
             INSERT INTO Take
                 (tke_identifier, tke_number, tke_recording_location, tke_start_date, tke_start_position, tke_length, tke_result, tke_comment, tke_item_id, tke_edit_rate)
             VALUES
-                (?, ?, ?, ?, ?, ?, ?, ?, ?, (?,?))
+                (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ");
-        $sth->execute($nextId, $x->{"TAKENO"}, $x->{"LOCATION"}, $x->{"DATE"}, $x->{"START"}, $x->{"LENGTH"}, $x->{"RESULT"}, $x->{"COMMENT"}, $x->{"ITEM"}, $x->{"EDITRATE"}, $x->{"EDITRATEDENOM"},);
+        $sth->execute($nextId, $x->{"TAKENO"}, $x->{"LOCATION"}, $x->{"DATE"}, $x->{"START"}, $x->{"LENGTH"}, $x->{"RESULT"}, $x->{"COMMENT"},$x->{"ITEM"}, $x->{"EDITRATE"},);
         
         $dbh->commit;
     };
     if ($@)
     {
-        $errstr = (defined $dbh->errstr) ? $dbh->errstr : "INSERT INTO Take (tke_identifier, tke_number, tke_recording_location, tke_start_date, tke_start_position, tke_length, tke_result, tke_comment, tke_item_id, tke_edit_rate) VALUES ($nextId, $x->{'TAKENO'}, $x->{'LOCATION'}, '$x->{'DATE'}', $x->{'START'}, $x->{'LENGTH'}, $x->{'RESULT'}, '$x->{'COMMENT'}', $x->{'ITEM'}, ($x->{'EDITRATE'}, $x->{'EDITRATEDENOM'}));";
+        $errstr = (defined $dbh->errstr) ? $dbh->errstr : "INSERT INTO Take (tke_identifier, tke_number, tke_recording_location, tke_start_date, tke_start_position, tke_length, tke_result, tke_comment, tke_item_id, tke_edit_rate) VALUES ($nextId, $x->{'TAKENO'}, $x->{'LOCATION'}, '$x->{'DATE'}', $x->{'START'}, $x->{'LENGTH'}, $x->{'RESULT'}, '$x->{'COMMENT'}', $x->{'ITEM'}, $x->{'EDITRATE'}, );";
         eval { $dbh->rollback; };
         return undef;
     }
@@ -891,12 +891,12 @@ sub update_take
 				tke_length = ?,
 				tke_result = ?,
 				tke_comment = ?,
-				tke_edit_rate = ?,
-				tke_item_id = ?
+				tke_item_id = ?,
+				tke_edit_rate = ?
             WHERE
 				tke_identifier = ?
             ");
-        $sth->execute($x->{"TAKENO"}, $x->{"LOCATIONID"}, $x->{"DATE"}, $x->{"START"}, $x->{"LENGTH"}, $x->{"RESULTID"}, $x->{"COMMENT"}, $x->{"EDITRATE"}, $x->{"ITEM"}, $x->{"ID"});
+        $sth->execute($x->{"TAKENO"}, $x->{"LOCATIONID"}, $x->{"DATE"}, $x->{"START"}, $x->{"LENGTH"}, $x->{"RESULTID"}, $x->{"COMMENT"}, $x->{"ITEM"}, $x->{"ID"}, $x->{"EDITRATE"},);
         
         $dbh->commit;
     };

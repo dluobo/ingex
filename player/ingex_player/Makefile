@@ -1,12 +1,17 @@
+include ../../common/libmxf.mk
+
 PLAYER_INSTALL_PREFIX ?= /usr/local
 
 COMMON_DIR = ../../common
-LIBMXF_DIR = ../../libMXF
-LIBMXF_ARCHIVE_DIR = $(LIBMXF_DIR)/examples/archive
-LIBMXF_READER_DIR = $(LIBMXF_DIR)/examples/reader
+
+ifneq ($(MAKECMDGOALS),clean)
+	ifneq ($(MAKECMDGOALS),install)
+		CHECK_LIB_AVAILABILITIES=1
+	endif
+endif
 
 
-ifneq "$(MAKECMDGOALS)" "clean"
+ifdef CHECK_LIB_AVAILABILITIES
 
 # dvs_sdk_paths.mk searches for sdk and sets DVS_HARDWARE_INCLUDE and DVS_HARDWARE_LIB
 # search is overridden by setting DVSSDK
@@ -28,8 +33,6 @@ ifndef DISABLE_HTTP_ACCESS
 	ifeq "$(SHTTPD_PATH)" ""
 $(warning no shttpd library found - http access not available)
 	endif
-endif
-
 endif
 
 ifndef DISABLE_SHARED_MEM_SOURCE
@@ -62,6 +65,7 @@ $(warning no SDL library found - SDL sink not available)
     endif
 endif
 
+endif
 
 
 # -Werror removed since current ffmpeg header give "AVFrac is deprecated"
@@ -69,11 +73,12 @@ endif
 CFLAGS = -Wall -W -Wno-unused-parameter -D_THREAD_SAFE -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE
 OPT = -O3 -mmmx -msse2
 
-INCLUDEDIRS = -I. -I$(LIBMXF_DIR)/lib/include -I$(LIBMXF_ARCHIVE_DIR) -I$(LIBMXF_ARCHIVE_DIR)/info -I$(LIBMXF_READER_DIR) -I/usr/local/include -I/usr/include/freetype2 -I/usr/include/fontconfig
+INCLUDES = -I. -I/usr/local/include -I/usr/include/freetype2 -I/usr/include/fontconfig \
+	$(LIBMXF_INCLUDE) $(ARCHIVEMXFINFO_INCLUDE) $(MXFREADER_INCLUDE)
 
-LIBDIRS = -L. -L$(LIBMXF_DIR)/lib -L$(LIBMXF_ARCHIVE_DIR)/info -L$(LIBMXF_READER_DIR) -L/usr/X11R6/lib -L/usr/local/lib -L/usr/X11R6/lib64 -L/usr/local/lib64
-LIBS = -lX11 -lXv -lpthread -lfreetype -lfontconfig -luuid -larchivemxfinfo -lMXFReader -lMXF
-LIB_DEPS = $(LIBMXF_DIR)/lib/libMXF.a $(LIBMXF_ARCHIVE_DIR)/info/libarchivemxfinfo.a $(LIBMXF_READER_DIR)/libMXFReader.a
+LIBS = -L. -L/usr/X11R6/lib -L/usr/local/lib -L/usr/X11R6/lib64 -L/usr/local/lib64 \
+	$(ARCHIVEMXFINFO_LIB) $(MXFREADER_LIB) $(LIBMXF_LIB) \
+	-lX11 -lXv -lpthread -lfreetype -lfontconfig
 
 ifdef DISABLE_QC_LTO_ACCESS
 	CFLAGS += -DDISABLE_QC_LTO_ACCESS
@@ -86,7 +91,7 @@ $(warning sys/inotify.h not found - building QC player without LTO access)
 endif
 
 ifdef DVS_HARDWARE_INCLUDE
-  INCLUDEDIRS += $(DVS_HARDWARE_INCLUDE)
+  INCLUDES += $(DVS_HARDWARE_INCLUDE)
   LIBS += $(DVS_HARDWARE_LIB)
   CFLAGS += -DHAVE_DVS
 endif
@@ -130,15 +135,13 @@ else
 endif
 
 ifdef SHTTPD_PATH
-	INCLUDEDIRS += -I$(SHTTPD_PATH)/include
-	LIBDIRS += -L$(SHTTPD_PATH)/lib
-	LIBS += -lshttpd
+	INCLUDES += -I$(SHTTPD_PATH)/include
+	LIBS += -L$(SHTTPD_PATH)/lib -lshttpd
 	CFLAGS += -DHAVE_SHTTPD
 else
 	ifdef SHTTPD_INSTALL
-		INCLUDEDIRS += -I$(SHTTPD_INSTALL)/src
-		LIBDIRS += -L$(SHTTPD_INSTALL)/src
-		LIBS += -lshttpd
+		INCLUDES += -I$(SHTTPD_INSTALL)/src
+		LIBS += -L$(SHTTPD_INSTALL)/src -lshttpd
 		CFLAGS += -DHAVE_SHTTPD
 	endif
 endif
@@ -150,20 +153,19 @@ endif
 ifndef TEST_UDP_PATH
 	CFLAGS += -DDISABLE_UDP_SOURCE
 else
-	INCLUDEDIRS += -I$(COMMON_DIR) -I$(COMMON_DIR)/YUVlib
-	LIBDIRS += -L$(COMMON_DIR) -L$(COMMON_DIR)/YUVlib
-	LIBS += -lcommon -lYUVlib
-	LIB_DEPS += $(COMMON_DIR)/libcommon.a $(COMMON_DIR)/YUVlib/libYUVlib.a
+	INCLUDES += -I$(COMMON_DIR) -I$(COMMON_DIR)/YUVlib
+	LIBS += -L$(COMMON_DIR) -L$(COMMON_DIR)/YUVlib -lcommon -lYUVlib
 endif
 
 ifdef HAVE_PORTAUDIO
-	CFLAGS += -DHAVE_PORTAUDIO -I$(PORTAUDIO_INCLUDE_PATH)
+	INCLUDES += -I$(PORTAUDIO_INCLUDE_PATH)
 	LIBS += -lportaudio
+	CFLAGS += -DHAVE_PORTAUDIO
 endif
 
 ifdef HAVE_SDL
-	CFLAGS += -DHAVE_SDL
 	LIBS += -lSDL
+	CFLAGS += -DHAVE_SDL
 endif
 
 
@@ -194,88 +196,70 @@ DEPENDENCIES = $(patsubst %.c,.deps/%.d,$(SOURCES))
 all: libingexplayer.a player qc_player
 
 
-$(LIBMXF_DIR)/lib/libMXF.a:
-	cd $(LIBMXF_DIR)/lib && $(MAKE) libMXF.a
-
-$(LIBMXF_ARCHIVE_DIR)/info/libarchivemxfinfo.a:
-	cd $(LIBMXF_ARCHIVE_DIR)/info && $(MAKE) libarchivemxfinfo.a
-
-$(LIBMXF_READER_DIR)/libMXFReader.a:
-	cd $(LIBMXF_READER_DIR) && $(MAKE) libMXFReader.a
-
-$(COMMON_DIR)/libcommon.a:
-	cd $(COMMON_DIR) && $(MAKE) libcommon.a
-
-$(COMMON_DIR)/YUVlib/libYUVlib.a:
-	cd $(COMMON_DIR)/YUVlib && $(MAKE) all
-
-
-
 libingexplayer.a: $(OBJECTS)
 	$(AR) libingexplayer.a $(OBJECTS)
-
 
 
 .deps/%.d : %.c
 	@echo Generating dependency file for $<; \
 	mkdir -p .deps; \
-	$(CC) $(INCLUDEDIRS) -MM $< > $@.$$$$; \
+	$(CC) $(INCLUDES) -MM $< > $@.$$$$; \
 	sed 's,\($*\)\.o[ :]*,\.objs/\1.o $@ : ,g' < $@.$$$$ > $@; \
 	rm -f $@.$$$$
 
 .objs/%.o: %.c
 	@mkdir -p .objs
-	$(CC) -c $(INCLUDEDIRS) $< -o $@
+	$(CC) -c $(INCLUDES) $< -o $@
 
 
 
 .deps/player.d : player.c
 	@echo Generating dependency file for $<; \
 	mkdir -p .deps; \
-	$(CC) $(INCLUDEDIRS) -MM $< > $@.$$$$; \
+	$(CC) $(INCLUDES) -MM $< > $@.$$$$; \
 	sed 's,\($*\)\.o[ :]*,\.objs/\1.o $@ : ,g' < $@.$$$$ > $@; \
 	rm -f $@.$$$$
 
-player: .objs/player.o libingexplayer.a $(LIB_DEPS)
-	$(CC) -c $(INCLUDEDIRS) version.c -o .objs/version.o
-	$(CC) $(LIBDIRS) .objs/player.o .objs/version.o libingexplayer.a $(LIBS) -o $@
+player: .objs/player.o libingexplayer.a
+	$(CC) -c $(INCLUDES) version.c -o .objs/version.o
+	$(CC) .objs/player.o .objs/version.o libingexplayer.a $(LIBS) -o $@
 
 .deps/qc_player.d : qc_player.c
 	@echo Generating dependency file for $<; \
 	mkdir -p .deps; \
-	$(CC) $(INCLUDEDIRS) -MM $< > $@.$$$$; \
+	$(CC) $(INCLUDES) -MM $< > $@.$$$$; \
 	sed 's,\($*\)\.o[ :]*,\.objs/\1.o $@ : ,g' < $@.$$$$ > $@; \
 	rm -f $@.$$$$
 
-qc_player: .objs/qc_player.o libingexplayer.a $(LIB_DEPS)
-	$(CC) -c $(INCLUDEDIRS) version.c -o .objs/version.o
-	$(CC) $(LIBDIRS) .objs/qc_player.o .objs/version.o libingexplayer.a $(LIBS) -o $@
+qc_player: .objs/qc_player.o libingexplayer.a
+	$(CC) -c $(INCLUDES) version.c -o .objs/version.o
+	$(CC) .objs/qc_player.o .objs/version.o libingexplayer.a $(LIBS) -o $@
 
 
 
 TESTAPPS += test_shuttle_input
 test_shuttle_input: .objs/test_shuttle_input.o .objs/shuttle_input.o .objs/logging.o
-	$(CC) $(INCLUDEDIRS) .objs/test_shuttle_input.o .objs/shuttle_input.o .objs/logging.o -o test_shuttle_input
+	$(CC) $(INCLUDES) .objs/test_shuttle_input.o .objs/shuttle_input.o .objs/logging.o -o test_shuttle_input
 
 TESTAPPS += test_emulate_key
 test_emulate_key: .objs/test_emulate_key.o .objs/emulate_key.o .objs/logging.o
-	$(CC) $(INCLUDEDIRS) -L/usr/X11R6/lib -L/usr/X11R6/lib64 -lX11 .objs/test_emulate_key.o .objs/emulate_key.o .objs/logging.o -o test_emulate_key
+	$(CC) $(INCLUDES) -L/usr/X11R6/lib -L/usr/X11R6/lib64 -lX11 .objs/test_emulate_key.o .objs/emulate_key.o .objs/logging.o -o test_emulate_key
 
 TESTAPPS += test_media_control
 test_media_control: .objs/test_media_control.o .objs/media_control.o .objs/shuttle_input_connect.o .objs/shuttle_input.o .objs/x11_keyboard_input.o .objs/term_keyboard_input.o .objs/logging.o
-	$(CC) $(INCLUDEDIRS) -L/usr/X11R6/lib -L/usr/X11R6/lib64 -lX11 .objs/test_media_control.o .objs/media_control.o .objs/shuttle_input_connect.o .objs/shuttle_input.o .objs/x11_keyboard_input.o .objs/term_keyboard_input.o .objs/logging.o -o test_media_control
+	$(CC) $(INCLUDES) -L/usr/X11R6/lib -L/usr/X11R6/lib64 -lX11 .objs/test_media_control.o .objs/media_control.o .objs/shuttle_input_connect.o .objs/shuttle_input.o .objs/x11_keyboard_input.o .objs/term_keyboard_input.o .objs/logging.o -o test_media_control
 
 TESTAPPS += ffmpeg_shuttle_emu
 ffmpeg_shuttle_emu: .objs/ffmpeg_shuttle_emu.o .objs/emulate_key.o .objs/shuttle_input.o .objs/logging.o
-	$(CC) $(INCLUDEDIRS) -L/usr/X11R6/lib -L/usr/X11R6/lib64 -lX11 .objs/ffmpeg_shuttle_emu.o .objs/emulate_key.o .objs/shuttle_input.o .objs/logging.o -o ffmpeg_shuttle_emu
+	$(CC) $(INCLUDES) -L/usr/X11R6/lib -L/usr/X11R6/lib64 -lX11 .objs/ffmpeg_shuttle_emu.o .objs/emulate_key.o .objs/shuttle_input.o .objs/logging.o -o ffmpeg_shuttle_emu
 
 TESTAPPS += recorder_shuttle_emu
 recorder_shuttle_emu: .objs/recorder_shuttle_emu.o .objs/emulate_key.o .objs/shuttle_input.o .objs/logging.o .objs/utils.o
-	$(CC) $(INCLUDEDIRS) -L/usr/X11R6/lib -L/usr/X11R6/lib64 -lX11 .objs/recorder_shuttle_emu.o .objs/emulate_key.o .objs/shuttle_input.o .objs/logging.o .objs/utils.o -lm -lXtst -lpthread -o recorder_shuttle_emu
+	$(CC) $(INCLUDES) -L/usr/X11R6/lib -L/usr/X11R6/lib64 -lX11 .objs/recorder_shuttle_emu.o .objs/emulate_key.o .objs/shuttle_input.o .objs/logging.o .objs/utils.o -lm -lXtst -lpthread -o recorder_shuttle_emu
 
 TESTAPPS += test_video_switch_database
 test_video_switch_database: .objs/test_video_switch_database.o test_video_switch_database.c
-	$(CC) $(INCLUDEDIRS) .objs/test_video_switch_database.o .objs/video_switch_database.o .objs/logging.o -o $@
+	$(CC) $(INCLUDES) .objs/test_video_switch_database.o .objs/video_switch_database.o .objs/logging.o -o $@
 
 
 
@@ -298,7 +282,7 @@ clean:
 	@rm -Rf .deps
 
 
-ifneq "$(MAKECMDGOALS)" "clean"
+ifneq ($(MAKECMDGOALS),clean)
 -include $(DEPENDENCIES)
 -include .deps/player.d
 -include .deps/qc_player.d

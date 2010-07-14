@@ -1,7 +1,7 @@
 #!/usr/bin/perl -wT
 
 #
-# $Id: deleterec.pl,v 1.1 2007/09/11 14:08:46 stuart_hc Exp $
+# $Id: deleterec.pl,v 1.2 2010/07/14 13:06:37 john_f Exp $
 #
 # 
 #
@@ -88,15 +88,18 @@ sub get_delete_content
     
     my @pageContent;
 
+    my $recHTML = htmlutil::get_recorder($rec, 1);
+    
     push(@pageContent, h1("Delete recorder"),
         start_form({-method=>"POST", -action=>"deleterec.pl"}),
-        hidden(-name=>"id", -default=>$rec->{"ID"}),
+        hidden(-name=>"id", -default=>$rec->{"recorder"}->{"ID"}),
         p("Please confirm"),
         submit("Delete"),
         span(" "),
         submit("Cancel"),
         end_form,
-        h2($rec->{"NAME"})
+        h2($rec->{"recorder"}->{"NAME"}),
+        $recHTML,
     );
     
     

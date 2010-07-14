@@ -1,5 +1,5 @@
 /*
- * $Id: HTTPIngexPlayer.cpp,v 1.3 2009/10/26 09:33:20 john_f Exp $
+ * $Id: HTTPIngexPlayer.cpp,v 1.4 2010/07/14 13:06:36 john_f Exp $
  *
  * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
@@ -355,6 +355,11 @@ void HTTPIngexPlayer::progressBarPositionSet(float position)
 void HTTPIngexPlayer::mouseClicked(int imageWidth, int imageHeight, int xPos, int yPos)
 {
     // TODO: mouse clicks we want to support
+}
+
+void HTTPIngexPlayer::sourceNameChangeEvent(int sourceIndex, const char* name)
+{
+    // TODO
 }
 
 

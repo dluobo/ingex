@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.3 2010/01/12 17:12:23 john_f Exp $
+# $Id: Makefile,v 1.4 2010/07/14 13:06:36 john_f Exp $
 #
 # Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
 # Author: Philip de Nier
@@ -18,26 +18,33 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
+include ../../common/libmxf.mk
+
 C_INGEX_PLAYER_DIR = ../ingex_player
 INGEX_PLAYER_DIR = ../IngexPlayer
 COMMON_DIR = ../../common
-LIBMXF_DIR = ../../libMXF
-LIBMXF_ARCHIVE_DIR = $(LIBMXF_DIR)/examples/archive
-LIBMXF_READER_DIR = $(LIBMXF_DIR)/examples/reader
 
 
-ifneq "$(MAKECMDGOALS)" "clean"
+ifneq ($(MAKECMDGOALS),clean)
+	ifneq ($(MAKECMDGOALS),install)
+		CHECK_LIB_AVAILABILITIES=1
+	endif
+endif
+
+
+ifdef CHECK_LIB_AVAILABILITIES
+
+# dvs_sdk_paths.mk searches for sdk and sets DVS_HARDWARE_INCLUDE and DVS_HARDWARE_LIB
+# search is overridden by setting DVSSDK
+include ../../common/dvs_sdk_paths.mk
+
+ifndef DVS_HARDWARE_INCLUDE
+  $(warning no DVS available - set the DVSSDK environment variable to build with DVS hardware support)
+endif
 
 SHTTPD_PATH := $(shell for f in /usr/local/include /usr/include; do test -e $$f/shttpd.h && echo $$f && break; done)
 ifeq "$(SHTTPD_PATH)" ""
 $(error no shttpd library found)
-endif
-
-DVS_PATH := $(shell for f in /usr/local /usr; do test -e $$f/include/dvs_fifo.h && echo $$f && break; done)
-ifneq "$(DVS_INCLUDE_PATH)" ""
-	ifndef DVS_SDK_INSTALL
-$(warning no DVS available - set the DVS_SDK_INSTALL environment variable to the location of your installed DVS SDK files)
-	endif
 endif
 
 ifndef DISABLE_FFMPEG
@@ -61,34 +68,19 @@ endif
 CFLAGS = -Wall -W -Wno-unused-parameter -D_THREAD_SAFE
 OPT = -O3 -mmmx -msse2
 
-INCLUDEDIRS = -I. -I$(LIBMXF_DIR)/lib/include -I$(LIBMXF_ARCHIVE_DIR) -I$(LIBMXF_ARCHIVE_DIR)/info -I$(LIBMXF_READER_DIR) -I$(C_INGEX_PLAYER_DIR) -I$(INGEX_PLAYER_DIR)
+INCLUDES = -I. -I$(C_INGEX_PLAYER_DIR) -I$(INGEX_PLAYER_DIR) \
+	$(LIBMXF_INCLUDE) $(ARCHIVEMXFINFO_INCLUDE) $(MXFREADER_INCLUDE) \
 
-LIBDIRS = -L$(INGEX_PLAYER_DIR) -L$(LIBMXF_DIR)/lib -L$(LIBMXF_ARCHIVE_DIR)/info -L$(LIBMXF_READER_DIR) -L$(COMMON_DIR) -L$(COMMON_DIR)/YUVlib -L/usr/X11R6/lib -L/usr/local/lib
-LIBS =  -lIngexPlayer -lX11 -lXv -lpthread -lfreetype -lfontconfig -luuid -lcommon -lYUVlib -larchivemxfinfo -lMXFReader -lMXF -lshttpd
+LIBS = -L. -L$(INGEX_PLAYER_DIR) -lIngexPlayer \
+	$(ARCHIVEMXFINFO_LIB) $(MXFREADER_LIB) $(LIBMXF_LIB) \
+	-L$(COMMON_DIR) -lcommon \
+	-L$(COMMON_DIR)/YUVlib -lYUVlib \
+	-lshttpd -lX11 -lXv -lpthread -lfreetype -lfontconfig
 
 
-ifdef DVS_PATH
-	INCLUDEDIRS += -I$(DVS_PATH)/include
-	LIBDIRS += -L$(DVS_PATH)/lib -L$(DVS_PATH)/lib64
-	LIBS += -ldvsoem
-	CFLAGS += -DHAVE_DVS
-else
-	ifdef DVSSDK
-		# DVS SDK version 3
-		INCLUDEDIRS += -I$(DVSSDK)/development/header
-		LIBDIRS += -L$(DVSSDK)/linux-x86/lib -L$(DVSSDK)/linux-x86_64/lib
-		LIBS += -ldvsoem
-		CFLAGS += -DHAVE_DVS
-	else
-		ifdef DVS_SDK_INSTALL
-			INCLUDEDIRS += -I$(DVS_SDK_INSTALL)/development/header
-			LIBDIRS += -L$(DVS_SDK_INSTALL)/linux/lib
-			LIBS += -ldvsoem
-			CFLAGS += -DHAVE_DVS
-		endif
-	endif
+ifdef DVS_HARDWARE_INCLUDE
+  LIBS += $(DVS_HARDWARE_LIB)
 endif
-
 
 ifdef FFMPEG_INCLUDE_PATH
 
@@ -129,8 +121,9 @@ else
 endif
 
 ifdef HAVE_PORTAUDIO
-	CFLAGS += -DHAVE_PORTAUDIO -I$(PORTAUDIO_INCLUDE_PATH)
+	INCLUDES += -I$(PORTAUDIO_INCLUDE_PATH)
 	LIBS += -lportaudio
+	CFLAGS += -DHAVE_PORTAUDIO
 endif
 
 
@@ -151,17 +144,17 @@ all: http_player
 .deps/%.d : %.cpp
 	@echo Generating dependency file for $<; \
 	mkdir -p .deps; \
-	$(CC) $(INCLUDEDIRS) -MM $< > $@.$$$$; \
+	$(CC) $(INCLUDES) -MM $< > $@.$$$$; \
 	sed 's,\($*\)\.o[ :]*,\.objs/\1.o $@ : ,g' < $@.$$$$ > $@; \
 	rm -f $@.$$$$
 
 .objs/%.o: %.cpp
 	@mkdir -p .objs
-	$(CC) -c $(INCLUDEDIRS) $< -o $@
+	$(CC) -c $(INCLUDES) $< -o $@
 
 
 http_player: $(OBJECTS)
-	$(CC) $(OBJECTS) $(LIBDIRS) $(LIBS) -o $@
+	$(CC) $(OBJECTS) $(LIBS) -o $@
 
 
 
@@ -172,6 +165,6 @@ clean:
 	@rm -fR .deps
 
 
-ifneq "$(MAKECMDGOALS)" "clean"
+ifneq ($(MAKECMDGOALS),clean)
 -include $(DEPENDENCIES)
 endif

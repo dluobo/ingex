@@ -1,5 +1,5 @@
 /*
- * $Id: CopyManager.cpp,v 1.7 2009/04/16 17:54:34 john_f Exp $
+ * $Id: CopyManager.cpp,v 1.8 2010/07/14 13:06:36 john_f Exp $
  *
  * Class to manage file copying in a separate process.
  *
@@ -23,12 +23,13 @@
  */
 
 #include "CopyManager.h"
+#include "TcpPort.h"
 
 #include <ace/Log_Msg.h>
 #include <sstream>
 
 CopyManager::CopyManager(CopyMode::EnumType mode)
-: mMode(mode), mEnabled(false), mPid(0)
+: mMode(mode), mPid(0)
 {
     // Get the processwide process manager.
     mPm = ACE_Process_Manager::instance();
@@ -36,25 +37,16 @@ CopyManager::CopyManager(CopyMode::EnumType mode)
 
 void CopyManager::Command(const std::string & command)
 {
-    if (command.empty())
+    switch (mMode)
     {
-        mEnabled = false;
-    }
-    else
-    {
-        mEnabled = true;
-        switch (mMode)
-        {
-        case CopyMode::OLD:
-            // Create options for copy process.
-            mOptions.command_line (ACE_TEXT_CHAR_TO_TCHAR(command.c_str()));
-            break;
+    case CopyMode::OLD:
+        // Store command
+        mCommand = command;
+        break;
 
-        case CopyMode::NEW:
-            // Store command
-            mCommand = command;
-            break;
-        }
+    case CopyMode::NEW:
+        // Command not used
+        break;
     }
 }
 
@@ -72,23 +64,22 @@ void CopyManager::ClearSrcDest()
 
 void CopyManager::AddSrcDest(const std::string & src, const std::string & dest, int priority)
 {
-    // Only applicable to CopyMode::NEW
-    // priority not yet supported
     if (!src.empty() && !dest.empty())
     {
-#if 1
-    // with priority
         std::ostringstream ss;
-        ss << " " << priority << " \"" << src << "\" \"" << dest << "\"";
-        mArgs += ss.str();
-#else
-    // old way without priority
-        mArgs += " \"";
-        mArgs += src;
-        mArgs += "\" \"";
-        mArgs += dest;
-        mArgs += "\"";
-#endif
+        switch (mMode)
+        {
+        case CopyMode::OLD:
+            ss << " " << priority << " \"" << src << "\" \"" << dest << "\"";
+            mArgs += ss.str();
+            break;
+        case CopyMode::NEW:
+            ss << priority << "\n"
+                << src << "\n"
+                << dest << "\n";
+            mArgs += ss.str();
+            break;
+        }
     }
 }
 
@@ -101,16 +92,7 @@ void CopyManager::StartCopying(unsigned int index)
     {
     case CopyMode::OLD:
         // Spawn child process.
-        if (mEnabled && mPm)
-        {
-            mPid = mPm->spawn(mOptions);
-            ACE_DEBUG(( LM_DEBUG, ACE_TEXT("Started process %d\n"), mPid ));
-        }
-        break;
-
-    case CopyMode::NEW:
-        // Spawn child process.
-        if (mEnabled && mPm)
+        if (!mCommand.empty() && !mArgs.empty() && mPm)
         {
             // command plus src/dest args
             std::ostringstream ss;
@@ -119,6 +101,25 @@ void CopyManager::StartCopying(unsigned int index)
             ACE_DEBUG(( LM_DEBUG, ACE_TEXT("Spawning command \"%s\"\n"), mOptions.command_line_buf() ));
             mPid = mPm->spawn(mOptions);
             ACE_DEBUG(( LM_DEBUG, ACE_TEXT("Started process %d\n"), mPid ));
+        }
+        break;
+
+    case CopyMode::NEW:
+        if (!mArgs.empty())
+        {
+            // Create command
+            std::ostringstream ss;
+            ss << mRecorderName << "\n" << index << "\n" << mArgs;
+            // Send it
+            TcpPort port;
+            if (port.Connect("127.0.0.1:2000"))
+            {
+                port.Send(ss.str().c_str(), ss.str().size());
+            }
+            else
+            {
+                ACE_DEBUG((LM_WARNING, ACE_TEXT("CopyManager failed to connect to xferserver.\n")));
+            }
         }
         break;
     }
@@ -131,10 +132,7 @@ void CopyManager::StopCopying(unsigned int index)
     switch (mMode)
     {
     case CopyMode::OLD:
-        break;
-
-    case CopyMode::NEW:
-        if (mEnabled && mPm)
+        if (!mCommand.empty() && !mArgs.empty() && mPm)
         {
             // command only
             std::ostringstream ss;
@@ -143,6 +141,25 @@ void CopyManager::StopCopying(unsigned int index)
             ACE_DEBUG(( LM_DEBUG, ACE_TEXT("Spawning command \"%s\"\n"), mOptions.command_line_buf() ));
             mPid = mPm->spawn(mOptions);
             ACE_DEBUG(( LM_DEBUG, ACE_TEXT("Started process %d\n"), mPid ));
+        }
+        break;
+
+    case CopyMode::NEW:
+        if (!mArgs.empty())
+        {
+            // Create command
+            std::ostringstream ss;
+            ss << mRecorderName << "\n" << index << "\n";
+            // Send it
+            TcpPort port;
+            if (port.Connect("127.0.0.1:2000"))
+            {
+                port.Send(ss.str().c_str(), ss.str().size());
+            }
+            else
+            {
+                ACE_DEBUG((LM_WARNING, ACE_TEXT("CopyManager failed to connect to xferserver.\n")));
+            }
         }
         break;
     }

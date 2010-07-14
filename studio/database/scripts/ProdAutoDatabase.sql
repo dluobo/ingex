@@ -430,19 +430,6 @@ CREATE TABLE SourceTrackConfig
 
 
 
--- RECORDER
-
-CREATE SEQUENCE rer_id_seq;
-CREATE TABLE Recorder
-(
-    rer_identifier INTEGER DEFAULT nextval('rer_id_seq') NOT NULL,
-    rer_name VARCHAR(256) NOT NULL,
-    rer_conf_id INTEGER DEFAULT NULL,
-    CONSTRAINT rer_name_key UNIQUE (rer_name),
-    CONSTRAINT rer_pkey PRIMARY KEY (rer_identifier)
-) WITHOUT OIDS;
-
-
 -- RECORDER CONFIG
 
 CREATE SEQUENCE rec_id_seq;
@@ -450,10 +437,7 @@ CREATE TABLE RecorderConfig
 (
     rec_identifier INTEGER DEFAULT nextval('rec_id_seq') NOT NULL,
     rec_name VARCHAR(256) NOT NULL,
-    rec_recorder_id INTEGER NOT NULL,
     CONSTRAINT rec_key UNIQUE (rec_name),
-    CONSTRAINT rec_recorder_fkey FOREIGN KEY (rec_recorder_id) REFERENCES Recorder (rer_identifier)
-        ON DELETE CASCADE,
     CONSTRAINT rec_pkey PRIMARY KEY (rec_identifier)
 ) WITHOUT OIDS;
 
@@ -464,16 +448,6 @@ CREATE TABLE RecorderParameterType
     rpt_name VARCHAR(256) NOT NULL,
     CONSTRAINT rpt_key UNIQUE (rpt_name),
     CONSTRAINT rpt_pkey PRIMARY KEY (rpt_identifier)
-) WITHOUT OIDS;
-
-CREATE TABLE DefaultRecorderParameter
-(
-    drp_identifier INTEGER NOT NULL,
-    drp_name VARCHAR(256) NOT NULL,
-    drp_value VARCHAR(256) NOT NULL,
-    drp_type VARCHAR(256) NOT NULL,
-    CONSTRAINT drp_key UNIQUE (drp_name),
-    CONSTRAINT drp_pkey PRIMARY KEY (drp_identifier)
 ) WITHOUT OIDS;
 
 CREATE SEQUENCE rep_id_seq;
@@ -491,14 +465,20 @@ CREATE TABLE RecorderParameter
 ) WITHOUT OIDS;
 
 
+-- RECORDER
 
--- complete RECORDER
+CREATE SEQUENCE rer_id_seq;
+CREATE TABLE Recorder
+(
+    rer_identifier INTEGER DEFAULT nextval('rer_id_seq') NOT NULL,
+    rer_name VARCHAR(256) NOT NULL,
+    rer_conf_id INTEGER DEFAULT 1 NOT NULL, -- 1 == the default recorder config
+    CONSTRAINT rer_name_key UNIQUE (rer_name),
+    CONSTRAINT rer_conf_fkey FOREIGN KEY (rer_conf_id) REFERENCES RecorderConfig (rec_identifier),
+    CONSTRAINT rer_pkey PRIMARY KEY (rer_identifier)
+) WITHOUT OIDS;
 
-ALTER TABLE Recorder 
-    ADD CONSTRAINT rer_conf_fkey FOREIGN KEY (rer_conf_id) REFERENCES RecorderConfig (rec_identifier)
-        ON DELETE SET NULL;
 
-        
 -- RECORDER INPUT CONFIG
 
 CREATE SEQUENCE ric_id_seq;
@@ -507,8 +487,8 @@ CREATE TABLE RecorderInputConfig
     ric_identifier INTEGER DEFAULT nextval('ric_id_seq') NOT NULL,
     ric_index INTEGER NOT NULL,
     ric_name VARCHAR(256),
-    ric_recorder_conf_id INTEGER NOT NULL,
-    CONSTRAINT ric_recorder_conf_fkey FOREIGN KEY (ric_recorder_conf_id) REFERENCES RecorderConfig (rec_identifier)
+    ric_recorder_id INTEGER NOT NULL,
+    CONSTRAINT ric_recorder_fkey FOREIGN KEY (ric_recorder_id) REFERENCES Recorder (rer_identifier)
         ON DELETE CASCADE,
     CONSTRAINT ric_pkey PRIMARY KEY (ric_identifier)
 ) WITHOUT OIDS;
@@ -756,14 +736,12 @@ CREATE VIEW ConfigInfoView AS
         sct_track_length AS "length" 
     FROM 
         Recorder,
-        RecorderConfig,
         RecorderInputConfig, 
         RecorderInputTrackConfig, 
         SourceConfig, 
         SourceTrackConfig
     WHERE
-        rec_recorder_id = rer_identifier AND
-        ric_recorder_conf_id = rec_identifier AND 
+        ric_recorder_id = rer_identifier AND 
         rtc_recorder_input_id = ric_identifier AND 
         rtc_source_id = scf_identifier AND 
         rtc_source_track_id = sct_track_id AND 
@@ -1095,57 +1073,6 @@ INSERT INTO UserCommentColour (ucc_identifier, ucc_name) VALUES (8, 'Black');
 
 INSERT INTO RecorderParameterType (rpt_identifier, rpt_name) VALUES (1, 'Any');
 
--- defaultrecorderparameters
-
-INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
-    VALUES (1, 'IMAGE_ASPECT', '16/9', 1);
-INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
-    VALUES (2, 'COPY_COMMAND', '', 1);
-    
-INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
-    VALUES (10, 'ENCODE1_RESOLUTION', '12', 1);
-INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
-    VALUES (12, 'ENCODE1_BITC', 'false', 1);
-INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
-    VALUES (13, 'ENCODE1_DIR', '/video/mxf_online/', 1);
-INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
-    VALUES (14, 'ENCODE1_COPY_DEST', '/store/mxf_online/', 1);
-INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
-    VALUES (15, 'ENCODE1_COPY_PRIORITY', '3', 1);
-    
-INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
-    VALUES (20, 'ENCODE2_RESOLUTION', '17', 1);
-INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
-    VALUES (22, 'ENCODE2_BITC', 'false', 1);
-INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
-    VALUES (23, 'ENCODE2_DIR', '/video/mxf_offline/', 1);
-INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
-    VALUES (24, 'ENCODE2_COPY_DEST', '/store/mxf_offline/', 1);
-INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
-    VALUES (25, 'ENCODE2_COPY_PRIORITY', '2', 1);
-    
-INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
-    VALUES (30, 'ENCODE3_RESOLUTION', '30', 1);
-INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
-    VALUES (32, 'ENCODE3_BITC', 'false', 1);
-INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
-    VALUES (33, 'ENCODE3_DIR', '/video/browse/', 1);
-INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
-    VALUES (34, 'ENCODE3_COPY_DEST', '/store/browse/', 1);
-INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
-    VALUES (35, 'ENCODE3_COPY_PRIORITY', '1', 1);
-    
-INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
-    VALUES (40, 'QUAD_RESOLUTION', '0', 1);
-INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
-    VALUES (42, 'QUAD_BITC', 'true', 1);
-INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
-    VALUES (43, 'QUAD_DIR', '/video/browse/', 1);
-INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
-    VALUES (44, 'QUAD_COPY_DEST', '', 1);
-INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
-    VALUES (45, 'QUAD_COPY_PRIORITY', '3', 1);
-
 
 -- extensible enumerations
 
@@ -1154,4 +1081,74 @@ SELECT setval('rlc_id_seq', max(rlc_identifier)) FROM RecordingLocation;
 
 
 
+-- default recorder config
+
+INSERT INTO RecorderConfig VALUES (1, 'Default');
+
+SELECT setval('rec_id_seq', max(rec_identifier)) FROM RecorderConfig;
+
+
+INSERT INTO RecorderParameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('IMAGE_ASPECT', '16/9', 1, 1);
+    
+INSERT INTO RecorderParameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE1_RESOLUTION', '12', 1, 1);
+INSERT INTO RecorderParameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE1_BITC', 'false', 1, 1);
+INSERT INTO RecorderParameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE1_DIR', '/video/mxf_online/', 1, 1);
+INSERT INTO RecorderParameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE1_COPY_DEST', '/store/mxf_online/', 1, 1);
+INSERT INTO RecorderParameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE1_COPY_PRIORITY', '3', 1, 1);
+    
+INSERT INTO RecorderParameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE2_RESOLUTION', '17', 1, 1);
+INSERT INTO RecorderParameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE2_BITC', 'false', 1, 1);
+INSERT INTO RecorderParameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE2_DIR', '/video/mxf_offline/', 1, 1);
+INSERT INTO RecorderParameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE2_COPY_DEST', '/store/mxf_offline/', 1, 1);
+INSERT INTO RecorderParameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE2_COPY_PRIORITY', '2', 1, 1);
+    
+INSERT INTO RecorderParameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE3_RESOLUTION', '32', 1, 1);
+INSERT INTO RecorderParameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE3_BITC', 'false', 1, 1);
+INSERT INTO RecorderParameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE3_DIR', '/video/browse/', 1, 1);
+INSERT INTO RecorderParameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE3_COPY_DEST', '/store/browse/', 1, 1);
+INSERT INTO RecorderParameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE3_COPY_PRIORITY', '1', 1, 1);
+    
+INSERT INTO RecorderParameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('QUAD_RESOLUTION', '0', 1, 1);
+INSERT INTO RecorderParameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('QUAD_BITC', 'true', 1, 1);
+INSERT INTO RecorderParameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('QUAD_DIR', '/video/browse/', 1, 1);
+INSERT INTO RecorderParameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('QUAD_COPY_DEST', '', 1, 1);
+INSERT INTO RecorderParameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('QUAD_COPY_PRIORITY', '3', 1, 1);
+
+
+-- make sure the default recorder config is not deleted
+
+CREATE OR REPLACE FUNCTION check_recorder_config_delete() RETURNS TRIGGER AS $$
+BEGIN
+	IF OLD.rec_identifier = 1 THEN
+		RAISE EXCEPTION 'Cannot delete default recorder config';
+	END IF;
+	
+	RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER check_recorder_config_delete_trigger
+	BEFORE DELETE ON RecorderConfig
+    FOR EACH ROW EXECUTE PROCEDURE check_recorder_config_delete();
 

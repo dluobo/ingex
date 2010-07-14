@@ -1,5 +1,5 @@
 /*
- * $Id: HTTPIngexPlayer.h,v 1.1 2009/02/24 08:21:16 stuart_hc Exp $
+ * $Id: HTTPIngexPlayer.h,v 1.2 2010/07/14 13:06:36 john_f Exp $
  *
  * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
@@ -55,6 +55,7 @@ public:
     virtual void keyReleased(int key, int modifier);
     virtual void progressBarPositionSet(float position);
     virtual void mouseClicked(int imageWidth, int imageHeight, int xPos, int yPos);
+    virtual void sourceNameChangeEvent(int sourceIndex, const char* name);
 
 
     void ping(HTTPConnection* connection);

@@ -1,5 +1,5 @@
 /*
- * $Id: Timecode.idl,v 1.2 2010/06/02 13:08:58 john_f Exp $
+ * $Id: Timecode.idl,v 1.3 2010/07/14 13:06:36 john_f Exp $
  *
  * Timecode structure definitions.
  *
@@ -31,19 +31,6 @@
 
 module ProdAuto
 {
-    enum EnumeratedFrameRate { TC25, TC30, TC30DF };
-
-    struct SmpteTimecode
-    {
-        EnumeratedFrameRate frame_rate;
-        unsigned short hours;
-        unsigned short minutes;
-        unsigned short seconds;
-        unsigned short frames;
-
-        boolean undefined; ///< True for an invalid or unavailable timecode
-    };
-
     /**
     This is a duration defined in terms of a number of samples.
     The samples would typically be video frames.

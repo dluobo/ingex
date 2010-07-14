@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorder.cpp,v 1.16 2010/07/06 14:15:13 john_f Exp $
+ * $Id: IngexRecorder.cpp,v 1.17 2010/07/14 13:06:36 john_f Exp $
  *
  * Class to manage an individual recording.
  *
@@ -673,70 +673,35 @@ Ingex::Timecode IngexRecorder::OutTime()
     return out;
 }
 
-
-#if 0
-/**
-Write a metadata file alongside the media files.
-This is maintained for compatibility with an earlier version of the recorder
-but is not ideal as this file can become inconsistent with the "true" metadata.
-Can perhaps be used to determine when the recorded files are complete.
-*/
-bool IngexRecorder::WriteMetadataFile(const char * meta_name)
+int IngexRecorder::FrameRateNumerator()
 {
-    FILE *fp_meta = NULL;
-    char tmp_meta_name[FILENAME_MAX];
-    strcpy(tmp_meta_name, meta_name);
-    strcat(tmp_meta_name, ".tmp");
-
-    if ((fp_meta = fopen(tmp_meta_name, "wb")) == NULL)
-    {
-        ACE_DEBUG((LM_ERROR, ACE_TEXT("Could not open for write: %C %p\n"), tmp_meta_name, ACE_TEXT("fopen")));
-        return false;
-    }
-    fprintf(fp_meta, "path=%s\n", meta_name);
-    //fprintf(fp_meta, "a_tape=");
-    //for (int i = 0; i < mChannels; i++)
-    //{
-    //  fprintf(fp_meta, "%s%s", record_opt[i].tapename.c_str(), i == MAX_CHANNELS - 1 ? "\n" : ",");
-    //}
-    fprintf(fp_meta, "enabled=");
-    for (int i = 0; i < MAX_RECORD; i++)
-    {
-        fprintf(fp_meta, "%d%s", record_opt[i].enabled, i == MAX_RECORD - 1 ? "\n" : ",");
-    }
-    fprintf(fp_meta, "start_tc=%d\n", mStartTimecode);
-    fprintf(fp_meta, "start_tc_str=%s\n", Timecode(mStartTimecode, mFps, mDf).Text());
-    fprintf(fp_meta, "capture_length=%d\n", record_opt[0].FramesWritten());
-#if 0
-    fprintf(fp_meta, "a_start_tc=");
-    for (int i = 0; i < mChannels + 1; i++)
-    {
-        fprintf(fp_meta, "%d%s", record_opt[i].start_tc, i == mChannels ? "\n" : " ");
-    }
-    fprintf(fp_meta, "a_start_tc_str=");
-    for (int i = 0; i < mChannels + 1; i++)
-    {
-        fprintf(fp_meta, "%s%s", framesToStr(record_opt[i].start_tc, tmpstr), i == mChannels ? "\n" : " ");
-    }
-    fprintf(fp_meta, "a_duration=");
-    for (int i = 0; i < mChannels + 1; i++)
-    {
-        fprintf(fp_meta, "%d%s", record_opt[i].FramesWritten(), i == mChannels ? "\n" : " ");
-    }
-    fprintf(fp_meta, "description=%s\n", ""); // not necessarily known at this time
-#endif
-    fclose(fp_meta);
-
-    if (rename(tmp_meta_name, meta_name) != 0)
-    {
-        ACE_DEBUG((LM_ERROR, ACE_TEXT( "Could not rename %s to %s %p\n"), tmp_meta_name, meta_name, ACE_TEXT("rename")));
-        perror("rename");
-        return false;
-    }
-
-    return true;
+    return mStartTimecode.FrameRateNumerator();
 }
-#endif
+
+int IngexRecorder::FrameRateDenominator()
+{
+    return mStartTimecode.FrameRateDenominator();
+}
+
+/**
+Return greatest current duration from the record threads.
+*/
+framecount_t IngexRecorder::RecordedDuration()
+{
+    framecount_t duration = 0;
+    for (std::vector<ThreadParam>::const_iterator
+        it = mThreadParams.begin(); it != mThreadParams.end(); ++it)
+    {
+        RecordOptions * opt = it->p_opt;
+        framecount_t thread_duration = opt->FramesWritten() + opt->FramesDropped();
+        if (duration < thread_duration)
+        {
+            duration = thread_duration;
+        }
+    }
+    return duration;
+}
+
 
 bool IngexRecorder::GetProjectFromDb(const std::string & name, prodauto::ProjectName & project_name)
 {

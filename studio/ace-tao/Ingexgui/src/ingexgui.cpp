@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: ingexgui.cpp,v 1.24 2010/06/02 13:09:25 john_f Exp $           *
+ *   $Id: ingexgui.cpp,v 1.25 2010/07/14 13:06:36 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -1191,7 +1191,7 @@ void IngexguiFrame::OnRecorderGroupEvent(wxCommandEvent& event) {
 					mEventList->AddEvent(EventList::STOP, &tc, mTimepos->GetFrameCount(), mRecorderGroup->GetCurrentDescription());
 					SetStatus(STOPPED);
 				}
-				if (((RecorderData *) event.GetClientData())->GetTrackList() && !mTree->IsRouterRecorder(event.GetString())) {
+				if (((RecorderData *) event.GetClientData())->GetTrackList().operator->() && !mTree->IsRouterRecorder(event.GetString())) {
 					//Add the recorded files to the take info (do this after AddEvent so mEventList knows if it's a chunk or not and therefore which ChunkInfo to add it to)
 					mEventList->AddRecorderData((RecorderData *) event.GetClientData());
 					//need to reload the player as more files have appeared
@@ -1205,7 +1205,7 @@ void IngexguiFrame::OnRecorderGroupEvent(wxCommandEvent& event) {
 			delete (RecorderData *) event.GetClientData();
 			break;
 		case RecorderGroupCtrl::SET_TRIGGER :
-			mTimepos->SetTrigger((ProdAuto::MxfTimecode *) event.GetClientData(), mRecorderGroup);
+			mTimepos->SetTrigger((ProdAuto::MxfTimecode *) event.GetClientData(), mRecorderGroup, true); //trigger immediately if in the past
 			mEventList->AddEvent(EventList::CHUNK, (ProdAuto::MxfTimecode *) event.GetClientData(), mTimepos->GetFrameCount(), mRecorderGroup->GetCurrentDescription());
 			break;
 		case RecorderGroupCtrl::TRACK_STATUS :

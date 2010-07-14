@@ -1,5 +1,5 @@
 /*
- * $Id: recplay.c,v 1.2 2010/01/14 14:05:36 john_f Exp $
+ * $Id: recplay.c,v 1.3 2010/07/14 13:06:35 john_f Exp $
  *
  * Record uncompressed SDI video and audio to disk.
  *
@@ -822,7 +822,7 @@ int main (int argc, char ** argv)
 
     // Loop forever capturing and writing to disk
     card = 0;
-    sdi_monitor((void *)card);
+    sdi_monitor((void *)(long)card);
 
     return 0;
 }

@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.3 2010/02/12 13:52:46 philipn Exp $
+# $Id: Makefile,v 1.4 2010/07/14 13:06:36 john_f Exp $
 #
 # Makefile for building the examples
 #
@@ -33,8 +33,7 @@ all:
 
 .PHONY: install
 install:
-	$(MAKE) -C ArchiveMXFReader $@
-	$(MAKE) -C ArchiveMXFWriter $@
+	$(MAKE) -C Common $@
 	$(MAKE) -C AvidClipWriter $@
 	$(MAKE) -C OPAtomReader $@
 	$(MAKE) -C D10MXFOP1AWriter $@

@@ -19,6 +19,7 @@
  */
 
 
+/*heading (h1) */
 #logging h1 {
 	margin: 0px;
 	margin-bottom: 5px;
@@ -27,90 +28,142 @@
 	border-bottom: 1px solid #aaa;
 }
 
-#logging #leftColumn {
-	float: left;
-	width: 132px;
-	margin: 0px;
-	padding: 0px;
-}
-
+/*series,programme selector and director/prod/pa text input boxes area*/
 #logging #programmeInfo {
 	margin: 0px;
 	border: 1px solid black;
 	background-color: #eef;
 	padding: 5px;
 	margin-bottom: 8px;
-	width: 100%;
+	width: 1000px
 }
 
-#logging #currentTC {
-	margin: 0px;
+/*takes tree and refresh data and duplicate items area*/
+#logging #takes {
+	margin-left: 0px;
 	border: 1px solid black;
-	background-color: #eef;
+	background-color: #f6f6f6;
 	padding: 5px;
 	margin-bottom: 8px;
-	width: 100%;
+	width: 1000px;
 }
 
-#logging #actions {
-	margin: 0px;
+/* new Take area*/
+#logging #newTake {
 	border: 1px solid black;
-	background-color: #eef;
+	background-color: #ffe;
 	padding: 5px;
 	margin-bottom: 8px;
-	width: 100%;
+	width: 850px;
 }
 
+/*recorder selction area*/
 #logging #recorderSelect {
 	margin: 0px;
 	border: 1px solid black;
 	background-color: #eef;
 	padding: 5px;
 	margin-bottom: 8px;
+	width: 150px;
+}
+
+/*main timecode display*/
+#logging #currentTC {
+	margin: 0px;
+	border: 1px solid black;
+	background-color: #eef;
+	padding: 5px;
+	margin-bottom: 8px;
+	width: 150px;
+}
+/*location and item info area*/
+#logging #takeInfo {
+	margin: 0px;
+	margin-bottom: 8px;
+
+}
+
+/* inpoint, out, duration area */
+#logging #takeDetails {
+	margin: 0px;
+	margin-bottom: 8px;
+
+}
+
+/*New Item area*/
+#logging #newItem{
+	margin-left: 20px;
+	border: 1px solid black;
+	background-color: #efe;
+	padding: 5px;
+	margin-bottom: 8px;
+	width: 400px;
+}
+
+/*action button area (import, print etc)*/
+#logging #actions {
+	text-align: middle;
+	margin: 0px;
+	border: 1px solid black;
+	background-color: #eef;
+	padding: 5px;
+	margin-bottom: 8px;
+	width: 200px;
+}
+
+/*selectors within recorder selection area*/
+#logging #recorderSelect select {
+	width: 150px;
+}
+
+/*selectors within location and item selection area*/
+#logging #takeInfo select {
+	width: 200px;
+}
+
+/*comment box within new take area*/
+#logging #newTake textarea {
+	height: 100px;
 	width: 100%;
+	
 }
 
-#logging #takes {
-	margin-left: 150px;
-	border: 1px solid black;
-	background-color: #f6f6f6;
-	padding: 5px;
-	margin-bottom: 8px;
-	width: 800px;
+/***** classes ******/
+
+/* new item input boxes */
+#logging  .itemInfoFormElement {
+	font-size: 100%;
+	width: 110px;
 }
 
-#logging #newTake {
-	margin-left: 150px;
-	border: 1px solid black;
-	background-color: #ffe;
-	padding: 5px;
-	margin-bottom: 8px;
-	width: 800px;
-}
-
-#logging .takeInfo{
-	width: 250px;
-}
-
+/*series/programme information elements*/
 #logging .progInfoFormElement {
 	width: 122px;
 	margin-top: 2px;
 	margin-bottom: 5px;
 }
 
-#logging #newTake .progInfoFormElement {
+/*recorder selector */
+#logging .recInfoFormElement {
+	font-size: 100%;
+}
+
+/*location and item selector*/
+#logging .takeInfoFormElement {
 	font-size: 120%;
-}
-
-#logging #newTake select {
-	width: 250px;
-}
-
-#logging textarea {
 	width: 100%;
-	height: 100%;
+	
 }
 
+/*take Details section*/
+#logging .takeDetailsFormElement {
+	font-size: 120%;
+	width: 110px;
+}
+
+
+
+/*buttons within take tree area*/
 #logging .rightButtons {
 	text-align: right;
 	margin-top: 8px;
@@ -132,20 +185,23 @@
 	line-height: 25px;
 }
 
+/*text colour when take described as Good*/
 #logging .good {
 	color: #383;
 }
-
+/*text colour when take described as Nogood*/
 #logging .noGood {
 	color: #f33;
 }
 
+/*general table settings*/
 #logging .alignmentTable{
 	width: 100%;
 	padding: 0px;
 	border-spacing: 0px;
 }
 
+/*table heading settings*/
 #logging .alignmentTable th{
 	font-size: 0.8em;
 	padding: 0px;
@@ -153,11 +209,13 @@
 	padding-right: 5px;
 	vertical-align: middle;
 }
-	
+
+/*table row settings*/
 #logging .alignmentTable tr{
 	padding: 0px;
+	
 }
-
+/*table column settings*/
 #logging .alignmentTable td{
 	padding: 0px;
 	padding-left: 3px;
@@ -169,8 +227,6 @@
 	clear: both;
 	line-height: 0.3em;
 }
-
-
 
 /* Make up for bits that I've disabled on a global scope in ext-all.css */
 #logging ol, #logging ul{list-style:none; margin:0;padding:0;}

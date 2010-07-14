@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderSettings.cpp,v 1.11 2010/06/02 13:09:53 john_f Exp $
+ * $Id: RecorderSettings.cpp,v 1.12 2010/07/14 13:06:36 john_f Exp $
  *
  * Recorder Configuration.
  *
@@ -31,8 +31,6 @@
 // config cannot be read from the database.
 
 const prodauto::Rational    IMAGE_ASPECT    = prodauto::g_16x9ImageAspect;
-//const int                   TIMECODE_MODE   = LTC_PARAMETER_VALUE;
-const char * const          COPY_COMMAND    = "";
 
 const int           ENCODE1_RESOLUTION      = MaterialResolution::MJPEG21_MXF_ATOM;
 const bool          ENCODE1_BITC            = false;
@@ -87,8 +85,6 @@ RecorderSettings * RecorderSettings::Instance()
 // Constructor
 RecorderSettings::RecorderSettings() :
     image_aspect(IMAGE_ASPECT),
-    //timecode_mode(TIMECODE_MODE),
-    copy_command(COPY_COMMAND),
     browse_audio(BROWSE_AUDIO),
     mpeg2_bitrate(MPEG2_BITRATE),
     raw_audio_bits(RAW_AUDIO_BITS),
@@ -108,9 +104,9 @@ bool RecorderSettings::Update(prodauto::Recorder * rec)
     // NB. Do we need a freah instance of rec here to
     // catch any changes/
     prodauto::RecorderConfig * rc = 0;
-    if (rec && rec->hasConfig())
+    if (rec)
     {
-        rc = rec->getConfig();
+        rc = rec->config;
     }
 
     int encode1_resolution;
@@ -140,8 +136,6 @@ bool RecorderSettings::Update(prodauto::Recorder * rec)
     if (rc)
     {
         image_aspect = rc->getRationalParam("IMAGE_ASPECT", IMAGE_ASPECT);
-        //timecode_mode = rc->getIntParam("TIMECODE_MODE", TIMECODE_MODE);
-        copy_command = rc->getStringParam("COPY_COMMAND", COPY_COMMAND);
 
         encode1_resolution = rc->getIntParam("ENCODE1_RESOLUTION", ENCODE1_RESOLUTION);
         encode1_bitc = rc->getBoolParam("ENCODE1_BITC", ENCODE1_BITC);
@@ -166,12 +160,12 @@ bool RecorderSettings::Update(prodauto::Recorder * rec)
         quad_dir = rc->getStringParam("QUAD_DIR", QUAD_DIR);
         quad_copy_dest = rc->getStringParam("QUAD_COPY_DEST", QUAD_COPY_DEST);
         quad_copy_priority = rc->getIntParam("QUAD_COPY_PRIORITY", QUAD_COPY_PRIORITY);
+
+        ACE_DEBUG((LM_INFO, ACE_TEXT("Updated settings for config \"%C\"\n"), rc->name.c_str()));
     }
     else
     {
         image_aspect = IMAGE_ASPECT;
-        //timecode_mode = TIMECODE_MODE;
-        copy_command = COPY_COMMAND;
 
         encode1_resolution = ENCODE1_RESOLUTION;
         encode1_bitc = ENCODE1_BITC;
@@ -243,20 +237,6 @@ bool RecorderSettings::Update(prodauto::Recorder * rec)
         ep.copy_priority = quad_copy_priority;
         encodings.push_back(ep);
     }
-#if 0
-    if (quad_resolution) // bodge for browse tracks
-    {
-        EncodeParams ep;
-        ep.resolution = quad_resolution;
-        ep.file_format = quad_file_format;
-        ep.op = quad_op;
-        ep.source = Input::NORMAL;
-        ep.bitc = quad_bitc;
-        ep.dir = quad_dir;
-        ep.copy_dest = quad_copy_dest;
-        encodings.push_back(ep);
-    }
-#endif
 
     return true;
 }

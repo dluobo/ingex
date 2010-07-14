@@ -1,5 +1,5 @@
 /*
- * $Id: Recorder.idl,v 1.5 2010/06/02 13:08:17 john_f Exp $
+ * $Id: Recorder.idl,v 1.6 2010/07/14 13:06:36 john_f Exp $
  *
  * Interface for Recorder.
  *
@@ -88,15 +88,6 @@ module ProdAuto
         /// Status of inputs
         readonly attribute TrackStatusList TracksStatus;
 
-        /// List available recorder configs
-        readonly attribute CORBA::StringSeq Configs;
-
-        /// Current config
-        readonly attribute string CurrentConfig;
-
-        /// Select recorder config
-        boolean SelectConfig(in string config);
-
         /// List currently existing project names
         readonly attribute CORBA::StringSeq ProjectNames;
 
@@ -124,6 +115,9 @@ module ProdAuto
             in string project,
             in boolean test_only
         );
+
+        /// Approximate duration of current in-progress recording
+        readonly attribute MxfDuration RecordedDuration;
 
         /// Stop recording.
         /// @param stop_timecode Timecode to select the first frame of the post-roll period

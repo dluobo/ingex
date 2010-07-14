@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_web.cpp,v 1.1 2010/07/06 14:15:13 john_f Exp $
+ * $Id: nexus_web.cpp,v 1.2 2010/07/14 13:06:36 john_f Exp $
  *
  * Stand-alone web server to monitor and control nexus applications
  *
@@ -48,7 +48,7 @@ int verbose = 1;
 int show_audio34 = 0;
 
 
-struct NexusTC {
+/*struct NexusTC {
     int h;
     int m;
     int s;
@@ -62,7 +62,7 @@ static void framesToTC(int tc, NexusTC *p)
     p->m = (int)((tc - (p->h * 60 * 60 * 25)) / (60 * 25));
     p->s = (int)((tc - (p->h * 60 * 60 * 25) - (p->m * 60 * 25)) / 25);
 }
-
+*/
 static int64_t tv_diff_microsecs(const struct timeval* a, const struct timeval* b)
 {
     int64_t diff = (b->tv_sec - a->tv_sec) * 1000000 + b->tv_usec - a->tv_usec;
@@ -194,13 +194,13 @@ static void nexus_state(struct shttpd_arg* arg)
 
     // Display info for all channels being captured
     for (i = 0; i < pctl->channels; i++) {
-        NexusTC tc;
-        const NexusBufCtl *pc = &pctl->channel[i];
-        int lastframe = nexus_lastframe(pctl, i);
-        int ltc = nexus_tc(pctl, ring, i, lastframe, NexusTC_DEFAULT);
-        int sok = nexus_signal_ok(pctl, ring, i, lastframe);
-        framesToTC(ltc, &tc);
+        
 
+	const NexusBufCtl *pc = &pctl->channel[i];
+        int lastframe = nexus_lastframe(pctl, i);
+       	int sok = nexus_signal_ok(pctl, ring, i, lastframe);
+	Ingex::Timecode tcObj = nexus_timecode(pctl, ring, i, lastframe, NexusTC_DEFAULT);
+ 	int dropFrame = (tcObj.DropFrame()) ? 1 : 0;
         // Setup array of 4 channels of audio peak power data
         double audio_peak_power[4];
         get_audio_peak_power(pctl, ring, i, lastframe, audio_peak_power);
@@ -210,7 +210,7 @@ static void nexus_state(struct shttpd_arg* arg)
         shttpd_printf(arg, "\n\t\t\t\"source_name\": \"%s\",", pc->source_name);
         shttpd_printf(arg, "\n\t\t\t\"lastframe\": %d,", pc->lastframe);
         shttpd_printf(arg, "\n\t\t\t\"signal_ok\": %d,", sok);
-        shttpd_printf(arg, "\n\t\t\t\"tc\": { \"h\": %d, \"m\": %d, \"s\": %d, \"f\": %d, \"stopped\": %d },", tc.h, tc.m, tc.s, tc.f, tc_stuck[i]);
+        shttpd_printf(arg, "\n\t\t\t\"tc\": { \"h\": %d, \"m\": %d, \"s\": %d, \"f\": %d, \"frameNumer\": %d , \"frameDenom\" : %d, \"framesSinceMidnight\" : %d, \"dropFrame\":%d, \"stopped\" : %d },", tcObj.Hours(), tcObj.Minutes(), tcObj.Seconds(), tcObj.Frames(),tcObj.FrameRateNumerator(), tcObj.FrameRateDenominator(), tcObj.FramesSinceMidnight(), dropFrame, tc_stuck[i]);
         shttpd_printf(arg, "\n\t\t\t\"audio_power\": [ %3.0f, %3.0f", audio_peak_power[0], audio_peak_power[1]);
         if (show_audio34) {
             shttpd_printf(arg, ", %3.0f, %3.0f", audio_peak_power[2], audio_peak_power[3]);
@@ -361,7 +361,7 @@ static void timecode(struct shttpd_arg* arg)
     int tc_stuck = 0;// initialise to good tc
     gettimeofday(&now, NULL);
     int lastframe = nexus_lastframe(pctl, 0);
-    int lasttc = nexus_tc(pctl, ring, 0, lastframe, NexusTC_LTC);
+    int lasttc = nexus_tc(pctl, ring, 0, lastframe, NexusTC_DEFAULT);
     if (p->tcinfo.lasttc[0] != lasttc) {
         // timecodes differ (good) so update lasttc and continue
         p->tcinfo.lasttc[0] = lasttc;
@@ -374,10 +374,9 @@ static void timecode(struct shttpd_arg* arg)
     // Display output as JSON
     shttpd_printf(arg, "{");
 
-    NexusTC tc;
-    int ltc = nexus_tc(pctl, ring, 0, lastframe, NexusTC_LTC);
-    framesToTC(ltc, &tc);
-    shttpd_printf(arg, "\n\t\"tc\": { \"h\": %d, \"m\": %d, \"s\": %d, \"f\": %d, \"stopped\": %d }", tc.h, tc.m, tc.s, tc.f, tc_stuck);
+    Ingex::Timecode tcObject = nexus_timecode(pctl, ring, 0, lastframe, NexusTC_DEFAULT);
+    int dropFrame = (tcObject.DropFrame()) ? 1 : 0;
+    shttpd_printf(arg, "\n\t\"tc\":{\"h\": %d , \"m\": %d , \"s\":%d , \"f\": %d ,\"frameNumer\": %d , \"frameDenom\" : %d, \"framesSinceMidnight\" : %d, \"dropFrame\":%d, \"stopped\" : %d }",tcObject.Hours(), tcObject.Minutes(), tcObject.Seconds(), tcObject.Frames() ,tcObject.FrameRateNumerator(), tcObject.FrameRateDenominator(), tcObject.FramesSinceMidnight(), dropFrame, tc_stuck);
     
     shttpd_printf(arg,"\n}\n"); // end whole thing
     arg->flags |= SHTTPD_END_OF_OUTPUT;

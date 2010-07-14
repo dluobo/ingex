@@ -1,4 +1,5 @@
 {
 	'createrecNameCallout':'Enter a unique name for this recorderCreate configurations for a completely new recorder.',
-	
+	'createrecNumInputsCallout':'Total number of video inputs, ie. 1 to 4',
+	'createrecNumTracksCallout':'Total number of tracks for each input; likely to be 5 (eg. V1, A1-4) or 9 (eg. V1, A1-8)',
 }

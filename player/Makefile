@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.4 2010/06/02 11:12:13 philipn Exp $
+# $Id: Makefile,v 1.5 2010/07/14 13:06:36 john_f Exp $
 #
 # Makefile for building Ingex player and related libraries and utilities
 #
@@ -27,10 +27,12 @@ all:
 	$(MAKE) -C ingex_player
 	$(MAKE) -C IngexPlayer
 	$(MAKE) -C jogshuttle
+	$(MAKE) -C http_IngexPlayer
 
 .PHONY: clean
 clean:
 	$(MAKE) -C ingex_player $@
 	$(MAKE) -C IngexPlayer $@
 	$(MAKE) -C jogshuttle $@
+	$(MAKE) -C http_IngexPlayer $@
 
