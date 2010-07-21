@@ -50,7 +50,7 @@ class TickTreeCtrl : public wxTreeCtrl
 
 		void Clear();
 		void EnableChanges(bool = true);
-		bool GetRecordEnables(const wxString &, CORBA::BooleanSeq &);
+		bool GetRecordEnables(const wxString &, CORBA::BooleanSeq &, bool);
 		void SetTrackStatus(const wxString &, bool, bool, ProdAuto::TrackStatusList_var);
 		bool SomeEnabled();
 		bool IsRecording();

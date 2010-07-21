@@ -15,7 +15,7 @@ INCLUDES = -I. \
 		   -I$(COMMON_DIR) \
 		   -I$(STUDIOCOMMON_DIR)
 LIBS = -L. \
-	   -L$(DATABASE_DIR) -lprodautodb -lpqxx \
+	   -L$(DATABASE_DIR) -lprodautodb -lpqxx -lxerces-c \
 	   -L$(COMMON_DIR) -lcommon \
 	   -L$(STUDIOCOMMON_DIR) -lstudiocommon \
 	   $(LIBMXFPP_LIB) $(LIBMXF_LIB)

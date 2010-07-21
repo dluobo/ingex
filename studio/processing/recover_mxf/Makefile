@@ -27,7 +27,7 @@ INCLUDES = -I. \
 		   $(LIBMXFPPEXAMPLESCOMMON_INCLUDE)
 LIBS = -L$(INGEXMXFINFO_DIR) -lingexmxfinfo \
 	   -L$(MXFWRITER_DIR) -lmxfwriter \
-	   -L$(DATABASE_DIR) -lprodautodb -lpqxx \
+	   -L$(DATABASE_DIR) -lprodautodb -lpqxx -lxerces-c \
 	   -L$(COMMON_DIR) -lcommon \
 	   -L$(STUDIOCOMMON_DIR) -lstudiocommon \
 	   $(OPATOMREADER_LIB) \

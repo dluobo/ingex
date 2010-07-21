@@ -1,5 +1,5 @@
 /*
- * $Id: Package.h,v 1.9 2010/06/02 13:04:40 john_f Exp $
+ * $Id: Package.h,v 1.10 2010/07/21 16:29:34 john_f Exp $
  *
  * A MXF/AAF Package
  *
@@ -33,6 +33,7 @@
 #include "Track.h"
 #include "DatabaseEnums.h"
 #include "PackageXMLWriter.h"
+#include "PackageXMLReader.h"
 
 
 // standard names for Avid user comments (tagged values)
@@ -88,7 +89,7 @@ public:
     int colour;
 };
 
-class Package : public DatabaseObject
+class Package : public DatabaseObject, protected PackageXMLChildParser
 {
 public:
     friend class Database; // allow access to _taggedValueLinks
@@ -113,6 +114,7 @@ public:
     virtual Package* clone() = 0;
     
     virtual void toXML(PackageXMLWriter *xml_writer);
+    virtual void fromXML(PackageXMLReader *xml_reader);
 
 
     UMID uid;
@@ -124,6 +126,10 @@ public:
 protected:
     void clone(Package *clone);
     
+protected:
+    // from PackageXMLChildParser
+    virtual void ParseXMLChild(PackageXMLReader *xml_reader, std::string name);
+
 private:
     std::vector<UserComment> _userComments;
 };
@@ -143,6 +149,7 @@ public:
     virtual Package* clone();
     
     virtual void toXML(PackageXMLWriter *xml_writer);
+    virtual void fromXML(PackageXMLReader *xml_reader);
 
 
     int op;
@@ -159,6 +166,7 @@ public:
     virtual int getType() = 0;
     virtual EssenceDescriptor* clone() = 0;
     virtual void toXML(PackageXMLWriter *xml_writer) = 0;
+    virtual void fromXML(PackageXMLReader *xml_reader) = 0;
 };
 
 class SourcePackage : public Package
@@ -175,11 +183,16 @@ public:
     virtual Package* clone();
 
     virtual void toXML(PackageXMLWriter *xml_writer);
+    virtual void fromXML(PackageXMLReader *xml_reader);
     
     
     EssenceDescriptor* descriptor;
     std::string sourceConfigName; // file SourcePackage only
     bool dropFrameFlag; // only relevant for tape source package
+    
+protected:
+    // from PackageXMLChildParser
+    virtual void ParseXMLChild(PackageXMLReader *xml_reader, std::string name);
 };
 
 
@@ -192,11 +205,14 @@ public:
     virtual int getType() { return FILE_ESSENCE_DESC_TYPE; };
     virtual EssenceDescriptor* clone();
     virtual void toXML(PackageXMLWriter *xml_writer);
+    virtual void fromXML(PackageXMLReader *xml_reader);
     
     std::string fileLocation;
     int fileFormat;
     int videoResolutionID;
     Rational imageAspectRatio;
+    uint32_t storedWidth;
+    uint32_t storedHeight; // equals field height for separate field video
     uint32_t audioQuantizationBits;
 };
 
@@ -208,6 +224,7 @@ public:
     virtual int getType() { return TAPE_ESSENCE_DESC_TYPE; };
     virtual EssenceDescriptor* clone();
     virtual void toXML(PackageXMLWriter *xml_writer);
+    virtual void fromXML(PackageXMLReader *xml_reader);
     
     std::string spoolNumber;
 };
@@ -220,6 +237,7 @@ public:
     virtual int getType() { return LIVE_ESSENCE_DESC_TYPE; };
     virtual EssenceDescriptor* clone();
     virtual void toXML(PackageXMLWriter *xml_writer);
+    virtual void fromXML(PackageXMLReader *xml_reader);
     
     long recordingLocation;
 };

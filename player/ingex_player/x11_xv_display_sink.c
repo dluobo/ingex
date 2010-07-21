@@ -1,5 +1,5 @@
 /*
- * $Id: x11_xv_display_sink.c,v 1.13 2010/06/02 11:12:14 philipn Exp $
+ * $Id: x11_xv_display_sink.c,v 1.14 2010/07/21 16:29:34 john_f Exp $
  *
  *
  *
@@ -336,11 +336,8 @@ static void reset_streams(X11DisplayFrame* frame)
 
 static int init_display(X11XVDisplaySink* sink, const StreamInfo* streamInfo)
 {
-    int screenWidth;
-    int screenHeight;
     double wFactor;
-    int widthForAspectRatio;
-    int heightForAspectRatio;
+    Rational sampleAspectRatio;
 
     if (!sink->displayInitialised)
     {
@@ -371,57 +368,47 @@ static int init_display(X11XVDisplaySink* sink, const StreamInfo* streamInfo)
     {
         sink->aspectRatio = streamInfo->aspectRatio;
 
-        /* TODO: we shouldn't assume 702 for 720x576/592 */
-        if (sink->aspectRatio.num == 4 && sink->aspectRatio.den == 3 &&
-            sink->width == 720 &&
-            (sink->height == 576 || sink->height == 592))
+        /* default to square pixels */
+        sampleAspectRatio = (Rational){1, 1};
+    
+        if (sink->inputWidth == 720 || sink->inputWidth == 702 || sink->inputWidth == 704 ||
+            sink->inputWidth == 360 || sink->inputWidth == 351 || sink->inputWidth == 352)
         {
-            widthForAspectRatio = 702;
-        }
-        else
-        {
-            widthForAspectRatio = sink->width;
-        }
-
-        if (sink->width == 720 && sink->height == 592)
-        {
-            /* don't include the VBI */
-            heightForAspectRatio = 576;
-        }
-        else
-        {
-            heightForAspectRatio = sink->height;
-        }
-
-        if (sink->pixelAspectRatio.num <= 0 || sink->pixelAspectRatio.den <= 0)
-        {
-            CHK_OFAIL(x11c_get_screen_dimensions(&sink->x11Common, &screenWidth, &screenHeight));
-
-            /* take into account monitor pixel aspect ratio,
-            intended output aspect ratio (sink->aspectRatio)
-            and the image dimensions (sink->width and sink->height) */
-
-            if (sink->monitorAspectRatio.num > 0 && sink->monitorAspectRatio.den > 0)
-            {
-                wFactor = (sink->monitorAspectRatio.den * screenWidth * sink->aspectRatio.num * heightForAspectRatio) /
-                        (double)(sink->monitorAspectRatio.num * screenHeight * sink->aspectRatio.den * widthForAspectRatio);
-            }
-            else
-            {
-                /* assume 4:3 monitor aspect ratio */
-                wFactor = (3 * screenWidth * sink->aspectRatio.num * heightForAspectRatio) /
-                        (double)(4 * screenHeight * sink->aspectRatio.den * widthForAspectRatio);
+            /* assume rec. 601 non-square pixels */
+            if (streamInfo->frameRate.num == 25 && streamInfo->frameRate.den == 1) {
+                if (streamInfo->aspectRatio.num == 4 && streamInfo->aspectRatio.den == 3) {
+                    /* 4:3 625 line */
+                    sampleAspectRatio = (Rational){59, 54};
+                }
+                else if (streamInfo->aspectRatio.num == 16 && streamInfo->aspectRatio.den == 9) {
+                    /* 16:9 625 line */
+                    sampleAspectRatio = (Rational){118, 81};
+                }
+            } else if (streamInfo->frameRate.num == 30000 && streamInfo->frameRate.den == 1001) {
+                if (streamInfo->aspectRatio.num == 4 && streamInfo->aspectRatio.den == 3) {
+                    /* 4:3 525 line */
+                    sampleAspectRatio = (Rational){10, 11};
+                }
+                else if (streamInfo->aspectRatio.num == 16 && streamInfo->aspectRatio.den == 9) {
+                    /* 16:9 525 line */
+                    sampleAspectRatio = (Rational){40, 33};
+                }
             }
         }
-        else
+        else if (((sink->inputHeight == 1080 && sink->inputWidth == 1440) ||
+                  (sink->inputHeight == 1080 && sink->inputWidth == 1280) ||
+                  (sink->inputHeight == 720 && sink->inputWidth == 960)) &&
+                    streamInfo->aspectRatio.num == 4 && streamInfo->aspectRatio.den == 3)
         {
-            /* take into account monitor pixel aspect ratio,
-            intended output aspect ratio (sink->aspectRatio)
-            and the image dimensions (sink->width and sink->height) */
-            wFactor = (sink->pixelAspectRatio.den * sink->aspectRatio.num * heightForAspectRatio) /
-                    (double)(sink->pixelAspectRatio.num * sink->aspectRatio.den * widthForAspectRatio);
+            /* DVCPro-HD */
+            sampleAspectRatio = (Rational){4, 3};
         }
-
+        
+        sampleAspectRatio.num *= sink->pixelAspectRatio.den;
+        sampleAspectRatio.den *= sink->pixelAspectRatio.num;
+        
+        wFactor = (sampleAspectRatio.num * sink->pixelAspectRatio.den) /
+                (double)(sampleAspectRatio.den * sink->pixelAspectRatio.num);
 
         /* scale in horizontal direction only to avoid dealing with interlacing */
         sink->initialDisplayWidth = (int)(wFactor * sink->width);
@@ -432,8 +419,7 @@ static int init_display(X11XVDisplaySink* sink, const StreamInfo* streamInfo)
     }
     else
     {
-        sink->aspectRatio.num = 4;
-        sink->aspectRatio.den = 3;
+        sink->aspectRatio = (Rational){4, 3};
 
         sink->initialDisplayWidth = sink->width;
         sink->initialDisplayHeight = sink->height;

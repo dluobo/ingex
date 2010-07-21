@@ -1,5 +1,5 @@
 /*
- * $Id: FixedSizeEssenceParser.cpp,v 1.2 2009/10/23 09:05:21 philipn Exp $
+ * $Id: FixedSizeEssenceParser.cpp,v 1.3 2010/07/21 16:29:34 john_f Exp $
  *
  * Parse raw essence data with fixed frame size
  *
@@ -46,7 +46,8 @@ FixedSizeEssenceParser::FixedSizeEssenceParser(File *file, int64_t essence_lengt
     
     if (frame_size == 0 &&
         (mxf_equals_ul(&essence_label, &MXF_EC_L(SD_Unc_625_50i_422_135_ClipWrapped)) ||
-            mxf_equals_ul(&essence_label, &MXF_EC_L(HD_Unc_1080_50i_422_ClipWrapped))))
+            mxf_equals_ul(&essence_label, &MXF_EC_L(HD_Unc_1080_50i_422_ClipWrapped)) ||
+            mxf_equals_ul(&essence_label, &MXF_EC_L(HD_Unc_720_50p_422_ClipWrapped))))
     {
         DetermineUncFrameSize(file_descriptor);
     }

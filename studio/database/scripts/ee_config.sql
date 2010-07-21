@@ -162,7 +162,7 @@ INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_
     VALUES ('IMAGE_ASPECT', '16/9', 1, 11);
     
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('ENCODE1_RESOLUTION', '4', 1, 11);
+    VALUES ('ENCODE1_RESOLUTION', '50', 1, 11);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('ENCODE1_WRAPPING', '2', 1, 11);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
@@ -177,7 +177,7 @@ INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_
     VALUES ('ENCODE1_COPY_PRIORITY', '2', 1, 11);
     
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('ENCODE2_RESOLUTION', '6', 1, 11);
+    VALUES ('ENCODE2_RESOLUTION', '54', 1, 11);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('ENCODE2_WRAPPING', '2', 1, 11);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
@@ -209,7 +209,7 @@ INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_
     VALUES ('IMAGE_ASPECT', '16/9', 1, 12);
     
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('ENCODE1_RESOLUTION', '4', 1, 12);
+    VALUES ('ENCODE1_RESOLUTION', '50', 1, 12);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('ENCODE1_WRAPPING', '2', 1, 12);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
@@ -224,7 +224,7 @@ INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_
     VALUES ('ENCODE1_COPY_PRIORITY', '2', 1, 12);
     
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('ENCODE2_RESOLUTION', '6', 1, 12);
+    VALUES ('ENCODE2_RESOLUTION', '54', 1, 12);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('ENCODE2_WRAPPING', '2', 1, 12);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
@@ -257,7 +257,7 @@ INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_
     VALUES ('IMAGE_ASPECT', '16/9', 1, 13);
     
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('ENCODE1_RESOLUTION', '4', 1, 13);
+    VALUES ('ENCODE1_RESOLUTION', '50', 1, 13);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('ENCODE1_WRAPPING', '2', 1, 13);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
@@ -272,7 +272,7 @@ INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_
     VALUES ('ENCODE1_COPY_PRIORITY', '2', 1, 13);
     
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('ENCODE2_RESOLUTION', '6', 1, 13);
+    VALUES ('ENCODE2_RESOLUTION', '54', 1, 13);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('ENCODE2_WRAPPING', '2', 1, 13);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
@@ -305,7 +305,7 @@ INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_
     VALUES ('IMAGE_ASPECT', '16/9', 1, 14);
     
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('ENCODE1_RESOLUTION', '50', 1, 14);
+    VALUES ('ENCODE1_RESOLUTION', '400', 1, 14);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('ENCODE1_DIR', '/video/cuts/', 1, 14);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
@@ -317,7 +317,7 @@ INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_
     VALUES ('IMAGE_ASPECT', '16/9', 1, 15);
     
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('ENCODE1_RESOLUTION', '50', 1, 15);
+    VALUES ('ENCODE1_RESOLUTION', '400', 1, 15);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('ENCODE1_DIR', '/video/cuts/', 1, 15);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
@@ -329,7 +329,7 @@ INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_
     VALUES ('IMAGE_ASPECT', '16/9', 1, 16);
     
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('ENCODE1_RESOLUTION', '50', 1, 16);
+    VALUES ('ENCODE1_RESOLUTION', '400', 1, 16);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('ENCODE1_DIR', '/video/cuts/', 1, 16);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)

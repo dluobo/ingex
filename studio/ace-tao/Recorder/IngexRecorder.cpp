@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorder.cpp,v 1.17 2010/07/14 13:06:36 john_f Exp $
+ * $Id: IngexRecorder.cpp,v 1.18 2010/07/21 16:29:34 john_f Exp $
  *
  * Class to manage an individual recording.
  *
@@ -329,34 +329,12 @@ void IngexRecorder::Setup(
 {
     ACE_DEBUG((LM_DEBUG, ACE_TEXT("IngexRecorder::Setup()\n")));
 
-    // Get ProjectName associated with supplied name.
-    //prodauto::ProjectName project_name;
-    //GetProjectFromDb(project, project_name);
-
     // Store project name
     mProjectName = project_name;
 
 
     // Get current recorder settings
     RecorderSettings * settings = RecorderSettings::Instance();
-    settings->Update(mpImpl->Recorder());
-
-    /*
-    switch (settings->timecode_mode)
-    {
-    case LTC_PARAMETER_VALUE:
-        IngexShm::Instance()->TcMode(IngexShm::LTC);
-        ACE_DEBUG((LM_DEBUG, ACE_TEXT("LTC mode\n")));
-        break;
-    case VITC_PARAMETER_VALUE:
-        IngexShm::Instance()->TcMode(IngexShm::VITC);
-        ACE_DEBUG((LM_DEBUG, ACE_TEXT("VITC mode\n")));
-        break;
-    default:
-        ACE_DEBUG((LM_ERROR, ACE_TEXT("Unexpected timecode mode\n")));
-        break;
-    }
-    */
 
     //unsigned int n_channels = IngexShm::Instance()->Channels();
     // Tracks per channel
@@ -374,50 +352,42 @@ void IngexRecorder::Setup(
         }
     }
 
+    // Store project sub-directory (if using)
+    std::string project_subdir;
+    if (USE_PROJECT_SUBDIR)
+    {
+        project_subdir = mProjectName.name;
+        clean_filename(project_subdir);
+        settings->project_subdir = project_subdir;
+    }
+
     // Create any needed paths.
     // NB. Paths need to be same as those used in recorder_fucntions.cpp
     for (std::vector<EncodeParams>::iterator it = settings->encodings.begin();
         it != settings->encodings.end(); ++it)
     {
-        if (USE_PROJECT_SUBDIR)
+        std::string path = it->dir;
+        if (!project_subdir.empty())
         {
-            std::string project_subdir = mProjectName.name;
-            clean_filename(project_subdir);
-            it->dir += PATH_SEPARATOR;
-            it->dir += project_subdir;
-            it->copy_dest += PATH_SEPARATOR;
-            it->copy_dest += project_subdir;
+            path += PATH_SEPARATOR;
+            path += project_subdir;
         }
-
-        FileUtils::CreatePath(it->dir);
+        FileUtils::CreatePath(path);
 
         FileFormat::EnumType format;
         OperationalPattern::EnumType pattern;
         MaterialResolution::GetInfo(MaterialResolution::EnumType(it->resolution), format, pattern);
 
-        if (FileFormat::MXF == format)
-        {
-            // Make Creating, Failures and Metadata subdirs for MXF
-            std::ostringstream creating_path;
-            creating_path << it->dir << PATH_SEPARATOR << settings->mxf_subdir_creating;
-            FileUtils::CreatePath(creating_path.str());
-            std::ostringstream failures_path;
-            failures_path << it->dir << PATH_SEPARATOR << settings->mxf_subdir_failures;
-            FileUtils::CreatePath(failures_path.str());
-            std::ostringstream metadata_path;
-            metadata_path << it->dir << PATH_SEPARATOR << settings->mxf_subdir_metadata;
-            FileUtils::CreatePath(metadata_path.str());
-        }
-        else
-        {
-            // Make Creating and Metadata subdir for other formats
-            std::ostringstream creating_path;
-            creating_path << it->dir << PATH_SEPARATOR << CREATING_SUBDIR;
-            FileUtils::CreatePath(creating_path.str());
-            std::ostringstream metadata_path;
-            metadata_path << it->dir << PATH_SEPARATOR << METADATA_SUBDIR;
-            FileUtils::CreatePath(metadata_path.str());
-        }
+        // Make Creating, Failures and Metadata subdirs
+        std::ostringstream creating_path;
+        creating_path << path << PATH_SEPARATOR << settings->mxf_subdir_creating;
+        FileUtils::CreatePath(creating_path.str());
+        std::ostringstream failures_path;
+        failures_path << path << PATH_SEPARATOR << settings->mxf_subdir_failures;
+        FileUtils::CreatePath(failures_path.str());
+        std::ostringstream metadata_path;
+        metadata_path << path << PATH_SEPARATOR << settings->mxf_subdir_metadata;
+        FileUtils::CreatePath(metadata_path.str());
     }
 
     // Set up encoding threads
@@ -441,6 +411,11 @@ void IngexRecorder::Setup(
                     tp.p_opt->resolution = it->resolution;
                     tp.p_opt->bitc = it->bitc;
                     tp.p_opt->dir = it->dir;
+                    if (!project_subdir.empty())
+                    {
+                        tp.p_opt->dir += PATH_SEPARATOR;
+                        tp.p_opt->dir += settings->project_subdir;
+                    }
 
                     mThreadParams.push_back(tp);
                 }

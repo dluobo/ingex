@@ -1,5 +1,5 @@
 /*
- * $Id: PackageXMLWriter.h,v 1.1 2010/06/02 13:04:40 john_f Exp $
+ * $Id: PackageXMLWriter.h,v 1.2 2010/07/21 16:29:34 john_f Exp $
  *
  * Copyright (C) 2010  British Broadcasting Corporation.
  * All Rights Reserved.
@@ -36,10 +36,13 @@ namespace prodauto
 {
 
 
+class DatabaseCache;
+
+
 class PackageXMLWriter : public XMLWriter
 {
 public:
-    PackageXMLWriter(FILE *mxf_file);
+    PackageXMLWriter(FILE *xml_file, DatabaseCache *db_cache);
     virtual ~PackageXMLWriter();
     
     void DeclareDefaultNamespace();
@@ -50,6 +53,7 @@ public:
     
     void WriteBoolAttribute(std::string local_name, bool value);
     void WriteIntAttribute(std::string local_name, int value);
+    void WriteLongAttribute(std::string local_name, long value);
     void WriteUInt32Attribute(std::string local_name, uint32_t value);
     void WriteInt64Attribute(std::string local_name, int64_t value);
     void WriteRationalAttribute(std::string local_name, const Rational &value);
@@ -57,6 +61,12 @@ public:
     void WriteTimestampAttribute(std::string local_name, const Timestamp &value);
     void WriteColourAttribute(std::string local_name, int colour);
     void WriteOPAttribute(std::string local_name, int op);
+
+    bool HaveDatabaseCache() { return mDatabaseCache != 0; }
+    DatabaseCache* GetDatabaseCache() { return mDatabaseCache; }
+
+protected:
+    DatabaseCache *mDatabaseCache;
 };
 
 

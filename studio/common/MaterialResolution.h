@@ -1,5 +1,5 @@
 /*
- * $Id: MaterialResolution.h,v 1.3 2010/06/25 14:26:00 philipn Exp $
+ * $Id: MaterialResolution.h,v 1.4 2010/07/21 16:29:34 john_f Exp $
  *
  * Material resolution codes and details
  *
@@ -38,12 +38,10 @@ public:
         RAW,
         MXF,
         MOV,
-        MPG,
-
-        END
+        MPG
     };
 
-    static void GetInfo(FileFormat::EnumType format, std::string & name);
+    static std::string Name(FileFormat::EnumType format);
 };
 
 class OperationalPattern
@@ -54,12 +52,10 @@ public:
         NONE = 0,
 
         OP_ATOM,
-        OP_1A,
-
-        END
+        OP_1A
     };
 
-    static void GetInfo(OperationalPattern::EnumType pattern, std::string & name);
+    static std::string Name(OperationalPattern::EnumType pattern);
 };
 
 class MaterialResolution
@@ -69,49 +65,49 @@ public:
     {
         NONE = 0,
 
-        UNC_RAW,
-        UNC_MXF_ATOM,
+        UNC_RAW = 10,
+        UNC_MXF_ATOM = 12,
 
-        DV25_RAW,
-        DV25_MXF_ATOM,
-        DV25_MOV,
-        DV50_RAW,
-        DV50_MXF_ATOM,
-        DV50_MOV,
-        DV100_RAW,
-        DV100_MXF_ATOM,
-        DV100_MOV,
+        DV25_RAW = 20,
+        DV25_MXF_ATOM = 22,
+        DV25_MOV = 24,
+        DV50_RAW = 30,
+        DV50_MXF_ATOM = 32,
+        DV50_MOV = 34,
+        DV100_RAW = 40,
+        DV100_MXF_ATOM = 42,
+        DV100_MOV = 44,
 
-        MJPEG21_MXF_ATOM,
-        MJPEG31_MXF_ATOM,
-        MJPEG101_MXF_ATOM,
-        MJPEG101M_MXF_ATOM,
-        MJPEG151S_MXF_ATOM,
-        MJPEG201_MXF_ATOM,
+        MJPEG21_MXF_ATOM = 50,
+        MJPEG31_MXF_ATOM = 52,
+        MJPEG101_MXF_ATOM = 54,
+        MJPEG101M_MXF_ATOM = 56,
+        MJPEG151S_MXF_ATOM = 58,
+        MJPEG201_MXF_ATOM = 60,
 
-        IMX30_MXF_ATOM,
-        IMX40_MXF_ATOM,
-        IMX50_MXF_ATOM,
-        IMX30_MXF_1A,
-        IMX40_MXF_1A,
-        IMX50_MXF_1A,
+        IMX30_MXF_ATOM = 70,
+        IMX40_MXF_ATOM = 72,
+        IMX50_MXF_ATOM = 74,
+        IMX30_MXF_1A = 80,
+        IMX40_MXF_1A = 82,
+        IMX50_MXF_1A = 84,
 
-        DNX36P_MXF_ATOM,
-        DNX120I_MXF_ATOM,
-        DNX185I_MXF_ATOM,
-        DNX120P_MXF_ATOM,
-        DNX185P_MXF_ATOM,
+        DNX36P_MXF_ATOM = 100,
+        DNX120I_MXF_ATOM = 102,
+        DNX185I_MXF_ATOM = 104,
+        DNX120P_MXF_ATOM = 106,
+        DNX185P_MXF_ATOM = 108,
 
-        XDCAMHD422_RAW,
-        XDCAMHD422_MOV,
+        XDCAMHD422_RAW = 120,
+        //XDCAMHD422_MXF = 122,
+        XDCAMHD422_MOV = 124,
 
-        DVD,
-        MPEG4_MOV,
-        MP3,
+        DVD = 200,
+        MPEG4_MOV = 210,
 
-        CUTS,
+        MP3 = 300,
 
-        END
+        CUTS = 400
     };
 
     static std::string Name(MaterialResolution::EnumType res);

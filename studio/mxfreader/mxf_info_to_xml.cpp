@@ -1,5 +1,5 @@
 /*
- * $Id: mxf_info_to_xml.cpp,v 1.1 2010/06/02 10:47:14 john_f Exp $
+ * $Id: mxf_info_to_xml.cpp,v 1.2 2010/07/21 16:29:34 john_f Exp $
  *
  * Read MXF files and dump metadata to XML file
  *
@@ -276,7 +276,7 @@ int main(int argc, const char **argv)
                 continue;
             }
             
-            clips[c]->GetPackageGroup()->SaveToFile(get_xml_filename(output_dirname, a_filename));
+            clips[c]->GetPackageGroup()->SaveToFile(get_xml_filename(output_dirname, a_filename), 0);
         }
         catch (const prodauto::ProdAutoException &ex)
         {

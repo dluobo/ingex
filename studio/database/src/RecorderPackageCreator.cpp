@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderPackageCreator.cpp,v 1.3 2010/06/02 13:04:40 john_f Exp $
+ * $Id: RecorderPackageCreator.cpp,v 1.4 2010/07/21 16:29:34 john_f Exp $
  *
  * Recorder package group creator
  *
@@ -46,6 +46,8 @@ RecorderPackageCreator::RecorderPackageCreator(bool is_pal_project, OperationalP
     mFileLocationPrefix = "ingex";
     mImageAspectRatio = g_16x9ImageAspect;
     mVideoResolutionId = MaterialResolution::UNC_MXF_ATOM;
+    mStoredWidth = 720;
+    mStoredHeight = 576;
     mAudioQuantizationBits = 16;
 }
 
@@ -109,6 +111,12 @@ void RecorderPackageCreator::SetImageAspectRatio(Rational image_aspect_ratio)
 void RecorderPackageCreator::SetVideoResolutionID(int video_resolution_id)
 {
     mVideoResolutionId = video_resolution_id;
+}
+
+void RecorderPackageCreator::SetStoredDimensions(int width, int height)
+{
+    mStoredWidth = width;
+    mStoredHeight = height;
 }
 
 void RecorderPackageCreator::SetAudioQuantBits(uint32_t bits)

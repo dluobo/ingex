@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder.cpp,v 1.2 2010/06/25 14:23:59 philipn Exp $
+ * $Id: ffmpeg_encoder.cpp,v 1.3 2010/07/21 16:29:34 john_f Exp $
  *
  * Encode uncompressed video to DV using libavcodec
  *
@@ -178,50 +178,6 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init(MaterialResolution::EnumType res, 
     get_ffmpeg_params(res, raster, codec_id, codec_type, pix_fmt);
     //fprintf(stderr, "res = %d, codec_id = %d, codec_type = %d, pix_fmt = %d\n", res, codec_id, codec_type, pix_fmt);
 
-    /*
-    int imx = 0;
-    switch (res)
-    {
-    case FF_ENCODER_RESOLUTION_DV25:
-    case FF_ENCODER_RESOLUTION_DV50:
-    case FF_ENCODER_RESOLUTION_DV100_1080i50:
-    case FF_ENCODER_RESOLUTION_DV100_720p50:
-        codec_id = CODEC_ID_DVVIDEO;
-        codec_type = CODEC_TYPE_VIDEO;
-        break;
-    case FF_ENCODER_RESOLUTION_IMX30:
-    case FF_ENCODER_RESOLUTION_IMX40:
-    case FF_ENCODER_RESOLUTION_IMX50:
-        codec_id = CODEC_ID_MPEG2VIDEO;
-        codec_type = CODEC_TYPE_VIDEO;
-        imx = 1;
-        break;
-    case FF_ENCODER_RESOLUTION_DNX36p:
-    case FF_ENCODER_RESOLUTION_DNX120p:
-    case FF_ENCODER_RESOLUTION_DNX185p:
-    case FF_ENCODER_RESOLUTION_DNX120i:
-    case FF_ENCODER_RESOLUTION_DNX185i:
-        codec_id = CODEC_ID_DNXHD;
-        codec_type = CODEC_TYPE_VIDEO;
-        break;
-    case FF_ENCODER_RESOLUTION_DMIH264:
-        codec_id = CODEC_ID_H264;
-        codec_type = CODEC_TYPE_VIDEO;
-        break;
-    case FF_ENCODER_RESOLUTION_JPEG:
-        codec_id = CODEC_ID_MJPEG;
-        codec_type = CODEC_TYPE_VIDEO;
-        break;
-    case FF_ENCODER_RESOLUTION_MP3:
-        codec_id = CODEC_ID_MP3;
-        codec_type = CODEC_TYPE_AUDIO;
-        break;
-    default:
-        codec_id = CODEC_ID_NONE;
-        codec_type = CODEC_TYPE_UNKNOWN;
-    }
-    */
-
     encoder->codec = avcodec_find_encoder(codec_id);
     if (! encoder->codec)
     {
@@ -247,31 +203,13 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init(MaterialResolution::EnumType res, 
         encoder->codec_context->pix_fmt = pix_fmt;
         encoder->codec_context->time_base.num = fps_den;
         encoder->codec_context->time_base.den = fps_num;
-        /*
-        switch (res)
-        {
-        case FF_ENCODER_RESOLUTION_DV25:
-        case FF_ENCODER_RESOLUTION_DMIH264:
-            encoder->codec_context->pix_fmt = PIX_FMT_YUV420P;
-            break;
-        case FF_ENCODER_RESOLUTION_JPEG:
-            encoder->codec_context->pix_fmt = PIX_FMT_YUVJ422P;
-            break;
-        case FF_ENCODER_RESOLUTION_DV100_720p50:
-            encoder->codec_context->time_base.num = 1;
-            encoder->codec_context->time_base.den = 50;
-            break;
-        default:
-            break;
-        }
-        */
         
         encoder->input_width = width;
         encoder->input_height = height;
 
         // Set interlace parameters
-        int top_field_first = 1;
-        int interlaced = 1;
+        int top_field_first;
+        int interlaced;
         switch (interlace)
         {
         case Ingex::Interlace::TOP_FIELD_FIRST:
@@ -283,8 +221,14 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init(MaterialResolution::EnumType res, 
             top_field_first = 0;
             break;
         case Ingex::Interlace::NONE:
+        default:
             interlaced = 0;
             top_field_first = 0;
+        }
+
+        if (interlaced)
+        {
+            encoder->codec_context->flags |= CODEC_FLAG_INTERLACED_DCT;
         }
 
         int bit_rate = 0;
@@ -338,10 +282,6 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init(MaterialResolution::EnumType res, 
         case MaterialResolution::DNX120P_MXF_ATOM:
             encoder->codec_context->bit_rate = 120 * 1000000;
             encoder->codec_context->qmax = 1024;
-            if (interlaced)
-            {
-                encoder->codec_context->flags |= CODEC_FLAG_INTERLACED_DCT;
-            }
             encoded_frame_size = 606208;        // from VC-3 spec
 #if defined(CODEC_FLAG2_AVID_COMPAT)
             // to support Avid Nitris decoder
@@ -352,10 +292,6 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init(MaterialResolution::EnumType res, 
         case MaterialResolution::DNX185P_MXF_ATOM:
             encoder->codec_context->bit_rate = 185 * 1000000;
             encoder->codec_context->qmax = 1024;
-            if (interlaced)
-            {
-                encoder->codec_context->flags |= CODEC_FLAG_INTERLACED_DCT;
-            }
             encoded_frame_size = 917504;        // from VC-3 spec
 #if defined(CODEC_FLAG2_AVID_COMPAT)
             // to support Avid Nitris decoder
@@ -412,7 +348,6 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init(MaterialResolution::EnumType res, 
             encoder->codec_context->rc_min_rate = 0;
             encoder->codec_context->rc_buffer_size = 50000000; 
             encoder->codec_context->rc_initial_buffer_occupancy = 50000000;
-            encoder->codec_context->flags |= CODEC_FLAG_INTERLACED_DCT;
             encoder->codec_context->flags |= CODEC_FLAG_ALT_SCAN;
             encoder->codec_context->flags |= CODEC_FLAG_CLOSED_GOP;
             encoder->codec_context->flags2 |= CODEC_FLAG2_NON_LINEAR_QUANT;
@@ -515,8 +450,7 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init(MaterialResolution::EnumType res, 
             encoder->codec_context->rc_min_vbv_overflow_use = 1;
 #endif
 
-            encoder->codec_context->flags |=
-                CODEC_FLAG_INTERLACED_DCT | CODEC_FLAG_LOW_DELAY;
+            encoder->codec_context->flags |= CODEC_FLAG_LOW_DELAY;
 
             // See SMPTE 356M Type D-10 Stream Specifications
 
@@ -796,3 +730,4 @@ extern int ffmpeg_encoder_close (ffmpeg_encoder_t * in_encoder)
 
     return 0;
 }
+

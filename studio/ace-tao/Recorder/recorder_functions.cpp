@@ -1,5 +1,5 @@
 /*
- * $Id: recorder_functions.cpp,v 1.38 2010/07/14 13:06:36 john_f Exp $
+ * $Id: recorder_functions.cpp,v 1.39 2010/07/21 16:29:34 john_f Exp $
  *
  * Functions which execute in recording threads.
  *
@@ -50,6 +50,7 @@
 #include "DataTypes.h"
 #include "OPAtomPackageCreator.h"
 #include "OP1APackageCreator.h"
+#include "DatabaseCache.h"
 
 // prodauto mxfwriter
 #include "MXFOPAtomWriter.h"
@@ -457,6 +458,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
 
     // Check which capture buffer has suitable format
     bool use_primary_video = true;
+    bool incompatible_format = false;
     if (MaterialResolution::CheckVideoFormat(resolution, primary_video_raster, primary_pixel_format))
     {
         // Primary buffer is suitable
@@ -473,6 +475,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     {
         ACE_DEBUG((LM_ERROR, ACE_TEXT("Capture format(s) not suitable for %C\n"), resolution_name.c_str()));
         p_rec->NoteFailure();
+        incompatible_format = true;
     }
 
     // Set image parameters
@@ -638,11 +641,11 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     package_creator->SetClipName(clip_name);
     package_creator->SetImageAspectRatio(image_aspect);
     package_creator->SetVideoResolutionID(resolution);
+    package_creator->SetStoredDimensions(WIDTH, HEIGHT);
     package_creator->SetAudioQuantBits(mxf_audio_bits);
     
     package_creator->CreatePackageGroup(sc, track_enables, prodauto::Database::getInstance()->getUMIDGenOffset());
     
-
     // Count audio tracks to be recorded
     unsigned int num_audio_tracks = 0;
     
@@ -680,6 +683,15 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     {
         ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C thread %d mp_hw_trks: %u %u\n"),
             src_name.c_str(), p_opt->index, it->channel, it->track));
+    }
+
+    // Set error flag for GUI if capture format not suitable
+    if (incompatible_format)
+    {
+        for (unsigned int i = 0; i < package_creator->GetMaterialPackage()->tracks.size(); ++i)
+        {
+            p_impl->NoteRecError(mp_stc_dbids[i]);
+        }
     }
 
 
@@ -1061,6 +1073,11 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             p_opt->IncFramesDropped(drop);
             p_rec->NoteDroppedFrames();
             IngexShm::Instance()->InfoSetFramesDropped(channel_i, p_opt->index, quad_video, p_opt->FramesDropped());
+            for (unsigned int i = 0; i < package_creator->GetMaterialPackage()->tracks.size(); ++i)
+            {
+                p_impl->NoteRecError(mp_stc_dbids[i]);
+            }
+
             ACE_DEBUG((LM_ERROR, ACE_TEXT("%C dropped %d frames!\n"),
                 src_name.c_str(), drop));
         }
@@ -1483,6 +1500,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                             {
                                 LOG_RECORD_ERROR("MXFWriterException: %C\n", e.getMessage().c_str());
                                 p_rec->NoteFailure();
+                                p_impl->NoteRecError(mp_stc_dbids[i]);
                             }
                         }
 
@@ -1726,7 +1744,8 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                                  p_opt->file_ident << ".xml";
 
             // save to creating directory and then move to the metadata directory
-            package_creator->SaveToFile(creating_metadata_filename.str());
+            prodauto::DatabaseCache db_cache;
+            package_creator->SaveToFile(creating_metadata_filename.str(), &db_cache);
             if (rename(creating_metadata_filename.str().c_str(), metadata_filename.str().c_str()) != 0)
             {
                 ACE_DEBUG((LM_ERROR, ACE_TEXT("Failed to rename metadata file from '%C' to '%C': %C\n"),
@@ -1770,7 +1789,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     delete package_creator;
 
     // All done
-    ACE_DEBUG((LM_INFO, ACE_TEXT("%C record thread %d exiting\n"), src_name.c_str(), p_opt->index));
+    ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C record thread %d exiting\n"), src_name.c_str(), p_opt->index));
     return 0;
 }
 
@@ -1808,6 +1827,5 @@ ACE_THR_FUNC_RETURN manage_record_thread(void *p_arg)
 
     return 0;
 }
-
 
 

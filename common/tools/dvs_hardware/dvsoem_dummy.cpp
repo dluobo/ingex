@@ -1,5 +1,5 @@
 /*
- * $Id: dvsoem_dummy.cpp,v 1.2 2010/07/12 09:30:45 john_f Exp $
+ * $Id: dvsoem_dummy.cpp,v 1.3 2010/07/21 16:29:33 john_f Exp $
  *
  * Implement a debug-only DVS hardware library for testing.
  *
@@ -438,13 +438,14 @@ int sv_fifo_putbuffer(sv_handle * sv, sv_fifo * pfifo, sv_fifo_buffer * pbuffer,
     //  802, 800, 802, 800, 800     - SMPTE296/59P (1280x720p59.94)
     int num_samples = 1920;
     switch (dvs->videomode & SV_MODE_MASK) {
-        case SV_MODE_NTSC:
-            num_samples = (dvs->frame_count % 5 == 0) ? 1600 : 1602;
-            break;
+        case SV_MODE_PAL:
         case SV_MODE_SMPTE274_25I:
+        case SV_MODE_SMPTE274_25sF:
             num_samples = 1920;
             break;
+        case SV_MODE_NTSC:
         case SV_MODE_SMPTE274_29I:
+        case SV_MODE_SMPTE274_29sF:
             num_samples = (dvs->frame_count % 5 == 0) ? 1600 : 1602;
             break;
         case SV_MODE_SMPTE274_30I:
@@ -594,12 +595,14 @@ int sv_videomode(sv_handle * sv, int videomode)
         dvs->frame_rate_denom = 1001;
         break;
     case SV_MODE_SMPTE274_25I:
+    case SV_MODE_SMPTE274_25sF:
         dvs->width = 1920;
         dvs->height = 1080;
         dvs->frame_rate_numer = 25;
         dvs->frame_rate_denom = 1;
         break;
-    case SV_MODE_SMPTE274_30I:
+    case SV_MODE_SMPTE274_29I:
+    case SV_MODE_SMPTE274_29sF:
         dvs->width = 1920;
         dvs->height = 1080;
         dvs->frame_rate_numer = 30000;

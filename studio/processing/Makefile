@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.3 2010/06/02 12:59:07 john_f Exp $
+# $Id: Makefile,v 1.4 2010/07/21 16:29:34 john_f Exp $
 #
 # Makefile for building Ingex media processing tools
 #
@@ -28,6 +28,7 @@ all:
 	$(MAKE) -C createaaf
 	$(MAKE) -C recover_mxf
 	$(MAKE) -C import_cuts
+	$(MAKE) -C import_material
 	$(MAKE) -C deletepkg
 
 .PHONY: clean
@@ -37,4 +38,5 @@ clean:
 	$(MAKE) -C createaaf $@
 	$(MAKE) -C recover_mxf $@
 	$(MAKE) -C import_cuts $@
+	$(MAKE) -C import_material $@
 	$(MAKE) -C deletepkg $@

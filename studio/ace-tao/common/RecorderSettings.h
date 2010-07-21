@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderSettings.h,v 1.10 2010/07/14 13:06:36 john_f Exp $
+ * $Id: RecorderSettings.h,v 1.11 2010/07/21 16:29:34 john_f Exp $
  *
  * Recorder Configuration.
  *
@@ -71,6 +71,7 @@ public:
     int mxf_audio_bits;
     int browse_audio_bits;
 
+    std::string project_subdir;
     std::string mxf_subdir_creating;
     std::string mxf_subdir_failures;
     std::string mxf_subdir_metadata;

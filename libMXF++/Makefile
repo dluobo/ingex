@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.1 2009/02/02 05:14:32 stuart_hc Exp $
+# $Id: Makefile,v 1.2 2010/07/21 16:29:33 john_f Exp $
 #
 # Makefile for building everything
 #
@@ -30,6 +30,11 @@ all:
 
 .PHONY: install
 install: all
+	$(MAKE) -C libMXF++ $@
+	$(MAKE) -C examples $@
+
+.PHONY: uninstall
+uninstall:
 	$(MAKE) -C libMXF++ $@
 	$(MAKE) -C examples $@
 

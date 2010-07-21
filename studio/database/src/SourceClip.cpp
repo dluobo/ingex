@@ -1,5 +1,5 @@
 /*
- * $Id: SourceClip.cpp,v 1.3 2010/06/02 13:04:40 john_f Exp $
+ * $Id: SourceClip.cpp,v 1.4 2010/07/21 16:29:34 john_f Exp $
  *
  * A Source Clip in a Track referencing a Package or null
  *
@@ -84,5 +84,13 @@ void SourceClip::toXML(PackageXMLWriter *xml_writer)
     xml_writer->WriteInt64Attribute("length", length);
     xml_writer->WriteInt64Attribute("position", position);
     xml_writer->WriteElementEnd();
+}
+
+void SourceClip::fromXML(PackageXMLReader *xml_reader)
+{
+    sourcePackageUID = xml_reader->ParseUMIDAttr("sourcePackageUID");
+    sourceTrackID = xml_reader->ParseUInt32Attr("sourceTrackID");
+    length = xml_reader->ParseInt64Attr("length");
+    position = xml_reader->ParseInt64Attr("position");
 }
 

@@ -1,5 +1,5 @@
 /*
- * $Id: Database.cpp,v 1.15 2010/07/14 13:06:36 john_f Exp $
+ * $Id: Database.cpp,v 1.16 2010/07/21 16:29:34 john_f Exp $
  *
  * Provides access to the data in the database
  *
@@ -63,7 +63,7 @@ using namespace pqxx;
     }
 
 
-static const int COMPATIBILITY_VERSION = 8;
+static const int COMPATIBILITY_VERSION = 10;
 
     
 const char* const LOAD_REC_LOCATIONS_STMT = "load recording locations";
@@ -1016,6 +1016,8 @@ const char* const LOAD_ESSENCE_DESCRIPTOR_SQL =
         eds_video_resolution_id, \
         (eds_image_aspect_ratio).numerator, \
         (eds_image_aspect_ratio).denominator, \
+        eds_stored_width, \
+        eds_stored_height, \
         eds_audio_quantization_bits, \
         eds_spool_number, \
         eds_recording_location \
@@ -1134,12 +1136,14 @@ const char* const INSERT_ESSENCE_DESCRIPTOR_SQL =
         eds_file_format, \
         eds_video_resolution_id, \
         eds_image_aspect_ratio, \
+        eds_stored_width, \
+        eds_stored_height, \
         eds_audio_quantization_bits, \
         eds_spool_number, \
         eds_recording_location \
     ) \
     VALUES \
-    ($1, $2, $3, $4, $5, ($6, $7), $8, $9, $10) \
+    ($1, $2, $3, $4, $5, ($6, $7), $8, $9, $10, $11, $12) \
 ";
 
 const char* const UPDATE_ESSENCE_DESCRIPTOR_STMT = "update essence descriptor";
@@ -1151,11 +1155,13 @@ const char* const UPDATE_ESSENCE_DESCRIPTOR_SQL =
         eds_file_format = $3, \
         eds_video_resolution_id = $4, \
         eds_image_aspect_ratio = ($5, $6), \
-        eds_audio_quantization_bits = $7, \
-        eds_spool_number = $8, \
-        eds_recording_location = $9 \
+        eds_stored_width = $7, \
+        eds_stored_height = $8, \
+        eds_audio_quantization_bits = $9, \
+        eds_spool_number = $10, \
+        eds_recording_location = $11 \
     WHERE \
-        eds_identifier = $10 \
+        eds_identifier = $12 \
 ";
 
 const char* const INSERT_TRACK_STMT = "insert track";
@@ -3521,11 +3527,14 @@ void Database::loadPackage(Transaction *transaction, const result::tuple &tup, P
                 file_ess_descriptor->fileLocation = readString(res[0][2]);
                 file_ess_descriptor->fileFormat = readEnum(res[0][3]);
                 file_ess_descriptor->videoResolutionID = readEnum(res[0][4]);
-                if (file_ess_descriptor->videoResolutionID == 0)
+                if (file_ess_descriptor->videoResolutionID == 0) {
                     file_ess_descriptor->imageAspectRatio = g_nullRational;
-                else
+                } else {
                     file_ess_descriptor->imageAspectRatio = readRational(res[0][5], res[0][6]);
-                file_ess_descriptor->audioQuantizationBits = readInt(res[0][7], 0);
+                    file_ess_descriptor->storedWidth = readInt(res[0][7], 0);
+                    file_ess_descriptor->storedHeight = readInt(res[0][8], 0);
+                }
+                file_ess_descriptor->audioQuantizationBits = readInt(res[0][9], 0);
                 break;
             }
     
@@ -3533,7 +3542,7 @@ void Database::loadPackage(Transaction *transaction, const result::tuple &tup, P
             {
                 TapeEssenceDescriptor *tape_ess_descriptor = new TapeEssenceDescriptor();
                 source_package->descriptor = tape_ess_descriptor;
-                tape_ess_descriptor->spoolNumber = readString(res[0][8]);
+                tape_ess_descriptor->spoolNumber = readString(res[0][10]);
                 break;
             }
     
@@ -3541,7 +3550,7 @@ void Database::loadPackage(Transaction *transaction, const result::tuple &tup, P
             {
                 LiveEssenceDescriptor *live_ess_descriptor = new LiveEssenceDescriptor();
                 source_package->descriptor = live_ess_descriptor;
-                live_ess_descriptor->recordingLocation = readId(res[0][9]);
+                live_ess_descriptor->recordingLocation = readId(res[0][11]);
                 break;
             }
     
@@ -3651,6 +3660,10 @@ void Database::savePackage(Package *package, Transaction *transaction)
                                             file_ess_descriptor->imageAspectRatio.numerator))
                             (COND_NUM_PARAM(file_ess_descriptor->videoResolutionID != 0,
                                             file_ess_descriptor->imageAspectRatio.denominator))
+                            (COND_NUM_PARAM(file_ess_descriptor->storedWidth != 0,
+                                            file_ess_descriptor->storedWidth))
+                            (COND_NUM_PARAM(file_ess_descriptor->storedHeight != 0,
+                                            file_ess_descriptor->storedHeight))
                             (COND_NUM_PARAM(file_ess_descriptor->audioQuantizationBits != 0,
                                             file_ess_descriptor->audioQuantizationBits))
                             ()
@@ -3672,6 +3685,8 @@ void Database::savePackage(Package *package, Transaction *transaction)
                             ()
                             ()
                             ()
+                            ()
+                            ()
                             (tape_ess_descriptor->spoolNumber)
                             ().exec();
                         break;
@@ -3685,6 +3700,8 @@ void Database::savePackage(Package *package, Transaction *transaction)
                         ts->prepared(INSERT_ESSENCE_DESCRIPTOR_STMT)
                             (next_descriptor_database_id)                    
                             (source_package->descriptor->getType())
+                            ()
+                            ()
                             ()
                             ()
                             ()
@@ -3718,6 +3735,10 @@ void Database::savePackage(Package *package, Transaction *transaction)
                                             file_ess_descriptor->imageAspectRatio.numerator))
                             (COND_NUM_PARAM(file_ess_descriptor->videoResolutionID != 0,
                                             file_ess_descriptor->imageAspectRatio.denominator))
+                            (COND_NUM_PARAM(file_ess_descriptor->storedWidth != 0,
+                                            file_ess_descriptor->storedWidth))
+                            (COND_NUM_PARAM(file_ess_descriptor->storedHeight != 0,
+                                            file_ess_descriptor->storedHeight))
                             (COND_NUM_PARAM(file_ess_descriptor->audioQuantizationBits != 0,
                                             file_ess_descriptor->audioQuantizationBits))
                             ()
@@ -3739,6 +3760,8 @@ void Database::savePackage(Package *package, Transaction *transaction)
                             ()
                             ()
                             ()
+                            ()
+                            ()
                             (tape_ess_descriptor->spoolNumber)
                             ()
                             (next_descriptor_database_id).exec();
@@ -3752,6 +3775,8 @@ void Database::savePackage(Package *package, Transaction *transaction)
     
                         ts->prepared(UPDATE_ESSENCE_DESCRIPTOR_STMT)
                             (source_package->descriptor->getType())
+                            ()
+                            ()
                             ()
                             ()
                             ()
@@ -4728,12 +4753,16 @@ connection* Database::openConnection(string hostname, string dbname, string user
             ("integer", prepare::treat_direct)
             ("integer", prepare::treat_direct)
             ("integer", prepare::treat_direct)
+            ("integer", prepare::treat_direct)
+            ("integer", prepare::treat_direct)
             ("varchar", prepare::treat_string)
             ("integer", prepare::treat_direct);
 
         conn->prepare(UPDATE_ESSENCE_DESCRIPTOR_STMT, UPDATE_ESSENCE_DESCRIPTOR_SQL)
             ("integer", prepare::treat_direct)
             ("varchar", prepare::treat_string)
+            ("integer", prepare::treat_direct)
+            ("integer", prepare::treat_direct)
             ("integer", prepare::treat_direct)
             ("integer", prepare::treat_direct)
             ("integer", prepare::treat_direct)

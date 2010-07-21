@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderPackageCreator.h,v 1.2 2010/06/02 13:04:40 john_f Exp $
+ * $Id: RecorderPackageCreator.h,v 1.3 2010/07/21 16:29:34 john_f Exp $
  *
  * Recorder package group creator
  *
@@ -60,6 +60,7 @@ public:
     void SetClipName(std::string clip_name); // default: file location prefix minus the directory path
     void SetImageAspectRatio(Rational image_aspect_ratio); // default: 16:9
     void SetVideoResolutionID(int video_resolution_id); // default: UNC_MATERIAL_RESOLUTION
+    void SetStoredDimensions(int width, int height);  // default: 720x576
     void SetAudioQuantBits(uint32_t bits); // default: 16
     
 public:
@@ -101,6 +102,8 @@ protected:
     std::string mClipName;
     Rational mImageAspectRatio;
     int mVideoResolutionId;
+    int mStoredWidth;
+    int mStoredHeight;
     uint32_t mAudioQuantizationBits;
 
     std::map<uint32_t, uint32_t> mTrackMap;

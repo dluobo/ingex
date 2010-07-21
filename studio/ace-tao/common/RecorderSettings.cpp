@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderSettings.cpp,v 1.12 2010/07/14 13:06:36 john_f Exp $
+ * $Id: RecorderSettings.cpp,v 1.13 2010/07/21 16:29:34 john_f Exp $
  *
  * Recorder Configuration.
  *
@@ -97,12 +97,10 @@ RecorderSettings::RecorderSettings() :
 }
 
 /**
-Update the configuration parameters, for example from a database.
+Read the configuration parameters from the Recorder object.
 */
 bool RecorderSettings::Update(prodauto::Recorder * rec)
 {
-    // NB. Do we need a freah instance of rec here to
-    // catch any changes/
     prodauto::RecorderConfig * rc = 0;
     if (rec)
     {
@@ -161,7 +159,7 @@ bool RecorderSettings::Update(prodauto::Recorder * rec)
         quad_copy_dest = rc->getStringParam("QUAD_COPY_DEST", QUAD_COPY_DEST);
         quad_copy_priority = rc->getIntParam("QUAD_COPY_PRIORITY", QUAD_COPY_PRIORITY);
 
-        ACE_DEBUG((LM_INFO, ACE_TEXT("Updated settings for config \"%C\"\n"), rc->name.c_str()));
+        ACE_DEBUG((LM_INFO, ACE_TEXT("Read settings for config \"%C\"\n"), rc->name.c_str()));
     }
     else
     {

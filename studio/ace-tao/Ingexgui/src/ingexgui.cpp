@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: ingexgui.cpp,v 1.25 2010/07/14 13:06:36 john_f Exp $           *
+ *   $Id: ingexgui.cpp,v 1.26 2010/07/21 16:29:34 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -401,7 +401,10 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
 	sizer2cH->Add(recordButton, 0, wxALL, CONTROL_BORDER);
 	sizer2cH->Add(new wxButton(this, BUTTON_MENU_Stop, wxT("Stop")), 0, wxALL, CONTROL_BORDER);
 	sizer2cH->Add(new wxButton(this, BUTTON_Cue, wxT("Mark Cue")), 0, wxALL, CONTROL_BORDER);
-	sizer2cH->Add(new wxButton(this, BUTTON_Chunk, wxT("")), 0, wxALL, CONTROL_BORDER); //label set by mChunkingDlg
+	wxButton* chunkButton = new wxButton(this, BUTTON_Chunk, wxT("Chunk ???:??")); //to set a minimum size
+	chunkButton->SetMinSize(chunkButton->GetSize());
+	sizer2cH->Add(chunkButton, 0, wxALL, CONTROL_BORDER);
+	recordButton->SetMinSize(recordButton->GetSize());
 	//splitter window containing everything else
 	wxSplitterWindow * splitterWindow = new wxSplitterWindow(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxSP_3D);
 	sizer1V->Add(splitterWindow, 1, wxEXPAND | wxALL);
@@ -1074,6 +1077,7 @@ void IngexguiFrame::TextFieldHasFocus(const bool hasFocus)
 ///		Event client data: Ptr to a RecorderData object, containing a track list and a track status list.  Deletes this.
 ///	REQUEST_RECORD: Asks the source tree for a list of enable states and passes it to the recorder group.
 ///		Event string: The recorder name (an event will be received for each recorder).
+///		Event int: Non-zero to ignore current recording state on determining whether there's anything to record.
 ///	RECORDING: If successful, set status to recording and set timecode counter to given timecode if not already recording.
 ///		Otherwise, report failure.
 ///		Event string: The recorder name.
@@ -1137,7 +1141,7 @@ void IngexguiFrame::OnRecorderGroupEvent(wxCommandEvent& event) {
 		case RecorderGroupCtrl::REQUEST_RECORD : {
 				//record enable list required
 				CORBA::BooleanSeq enableList;
-				if (mTree->GetRecordEnables(event.GetString(), enableList)) { //something's enabled for recording, and not already recording
+				if (mTree->GetRecordEnables(event.GetString(), enableList, event.GetInt())) { //something's enabled for recording, and not already recording (unless event int is non-zero)
 					Log(wxT("REQUEST_RECORD for \"") + event.GetString() + wxT("\" and track(s) enabled to record"));
 					mRecorderGroup->Record(event.GetString(), enableList);
 					mTree->SetRecorderStateUnknown(event.GetString(), wxT("Awaiting response..."));
@@ -1205,7 +1209,7 @@ void IngexguiFrame::OnRecorderGroupEvent(wxCommandEvent& event) {
 			delete (RecorderData *) event.GetClientData();
 			break;
 		case RecorderGroupCtrl::SET_TRIGGER :
-			mTimepos->SetTrigger((ProdAuto::MxfTimecode *) event.GetClientData(), mRecorderGroup, true); //trigger immediately if in the past
+			mTimepos->SetTrigger((ProdAuto::MxfTimecode *) event.GetClientData(), mRecorderGroup, false); //allow trigger to be in the past (whereupon it will happen immediately)
 			mEventList->AddEvent(EventList::CHUNK, (ProdAuto::MxfTimecode *) event.GetClientData(), mTimepos->GetFrameCount(), mRecorderGroup->GetCurrentDescription());
 			break;
 		case RecorderGroupCtrl::TRACK_STATUS :
@@ -1773,6 +1777,7 @@ void IngexguiFrame::OnUpdateUI(wxUpdateUIEvent& event)
 		case BUTTON_Chunk:
 			event.SetText(mChunkingDlg->GetChunkButtonLabel());
 			((wxButton*) event.GetEventObject())->SetToolTip(mChunkingDlg->GetChunkButtonToolTip());
+			((wxButton*) event.GetEventObject())->SetBackgroundColour(mChunkingDlg->GetChunkButtonColour());
 			break;
 		case MENU_PlayerDisable:
 			event.Check(!mPlayer->IsEnabled());

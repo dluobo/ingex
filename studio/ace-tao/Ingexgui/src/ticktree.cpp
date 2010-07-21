@@ -473,8 +473,9 @@ void TickTreeCtrl::EnableChanges(bool enable)
 /// Provides record enable data for a recorder.
 /// @param recorderName The recorder.
 /// @param enableList Returns enable/disable state for each track, in recorder track order.
-/// @return True if any tracks are enabled but not recording.
-bool TickTreeCtrl::GetRecordEnables(const wxString & recorderName, CORBA::BooleanSeq & enableList)
+/// @param ignoreRecordingState See return value.
+/// @return True if any tracks are enabled and if ignoreRecordingState is false, not recording.
+bool TickTreeCtrl::GetRecordEnables(const wxString & recorderName, CORBA::BooleanSeq & enableList, bool ignoreRecordingState)
 {
 	wxTreeItemId recorder = FindRecorder(recorderName);
 	bool someEnabled = false;
@@ -493,7 +494,7 @@ bool TickTreeCtrl::GetRecordEnables(const wxString & recorderName, CORBA::Boolea
 			while (track.IsOk()) {
 				ItemData * itemData = (ItemData*) GetItemData(track);
 				enableList[itemData->GetInt()] = itemData->GetBool();
-				someEnabled |= (itemData->GetBool() && RECORDING != GetItemImage(track));
+				someEnabled |= (itemData->GetBool() && (RECORDING != GetItemImage(track) || ignoreRecordingState));
 				track = GetNextChild(package, trackCookie);
 			}
 			package = GetNextChild(recorder, packageCookie);
@@ -603,7 +604,7 @@ void TickTreeCtrl::SetTrackStatus(const wxString & recorderName, bool recording,
 						SetNodeState(track, ENABLED);
 					}
 					else if (!trackStatus[index].rec && !((ItemData *) GetItemData(track))->GetBool()) {
-						//not recording and not supposed to be (via being disabled - overall record state irrelavant)
+						//not recording and not supposed to be (via being disabled - overall record state irrelevant)
 						SetNodeState(track, DISABLED);
 					}
 					else if ((recording || ignoreIntendedState) && trackStatus[index].rec && ((ItemData *) GetItemData(track))->GetBool()) {

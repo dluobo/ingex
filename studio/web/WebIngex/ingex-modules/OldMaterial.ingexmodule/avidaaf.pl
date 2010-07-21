@@ -594,7 +594,7 @@ sub get_page_content
             "Video resolution:",
             popup_menu({
                 -name => "vres", 
-                -default => 8,
+                -default => 50,
                 -values => \@vresValues,
                 -labels => \%vresLabels,
             }),

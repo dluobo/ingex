@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_resolutions.cpp,v 1.2 2010/06/25 14:24:33 philipn Exp $
+ * $Id: ffmpeg_resolutions.cpp,v 1.3 2010/07/21 16:29:34 john_f Exp $
  *
  * Info on ffmpeg parameters for a particular MaterialResolution
  *
@@ -104,8 +104,10 @@ void get_ffmpeg_params(MaterialResolution::EnumType res, Ingex::VideoRaster::Enu
         switch (raster)
         {
         case Ingex::VideoRaster::SMPTE274_25I:
+        case Ingex::VideoRaster::SMPTE274_25PSF:
         case Ingex::VideoRaster::SMPTE274_25P:
         case Ingex::VideoRaster::SMPTE274_29I:
+        case Ingex::VideoRaster::SMPTE274_29PSF:
         case Ingex::VideoRaster::SMPTE274_29P:
             codec_id = CODEC_ID_DNXHD;
             codec_type = CODEC_TYPE_VIDEO;

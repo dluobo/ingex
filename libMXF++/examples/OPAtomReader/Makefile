@@ -52,7 +52,19 @@ install: all
 	mkdir -p $(INSTALL_PREFIX)/lib
 	cp libOPAtomReader.a $(INSTALL_PREFIX)/lib/
 	mkdir -p $(INSTALL_PREFIX)/include/libMXF++/examples/OPAtomReader
-	cp *.h $(INSTALL_PREFIX)/include/libMXF++/examples/OPAtomReader/
+	cp FrameOffsetIndexTable.h $(INSTALL_PREFIX)/include/libMXF++/examples/OPAtomReader/
+	cp OPAtomClipReader.h $(INSTALL_PREFIX)/include/libMXF++/examples/OPAtomReader/
+	cp OPAtomContentPackage.h $(INSTALL_PREFIX)/include/libMXF++/examples/OPAtomReader/
+	cp OPAtomTrackReader.h $(INSTALL_PREFIX)/include/libMXF++/examples/OPAtomReader/
+	cp PCMEssenceParser.h $(INSTALL_PREFIX)/include/libMXF++/examples/OPAtomReader/
+	cp RawEssenceParser.h $(INSTALL_PREFIX)/include/libMXF++/examples/OPAtomReader/
+	cp FixedSizeEssenceParser.h $(INSTALL_PREFIX)/include/libMXF++/examples/OPAtomReader/
+	cp VariableSizeEssenceParser.h $(INSTALL_PREFIX)/include/libMXF++/examples/OPAtomReader/
+
+.PHONY: uninstall
+uninstall:
+	rm -f $(INSTALL_PREFIX)/lib/libOPAtomReader.a
+	rm -Rf $(INSTALL_PREFIX)/include/libMXF++/examples/OPAtomReader
 
 .PHONY: clean
 clean:

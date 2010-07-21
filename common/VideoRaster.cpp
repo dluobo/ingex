@@ -1,5 +1,5 @@
 /*
- * $Id: VideoRaster.cpp,v 1.1 2010/06/02 10:52:38 philipn Exp $
+ * $Id: VideoRaster.cpp,v 1.2 2010/07/21 16:29:33 john_f Exp $
  *
  * Video raster codes and details
  *
@@ -101,6 +101,12 @@ std::string Ingex::VideoRaster::Name(Ingex::VideoRaster::EnumType e)
     case SMPTE274_29I:
         name = "1920x1080 29.97i";
         break;
+    case SMPTE274_25PSF:
+        name = "1920x1080 25p (segmented frame)";
+        break;
+    case SMPTE274_29PSF:
+        name = "1920x1080 29.97p (segmented frame)";
+        break;
     case SMPTE274_25P:
         name = "1920x1080 25p";
         break;
@@ -169,7 +175,7 @@ void Ingex::VideoRaster::GetInfo(Ingex::VideoRaster::EnumType raster,
         break;
     case NTSC:
         width = 720;
-        height = 480;
+        height = 486;
         fps_num = 30000;
         fps_den = 1001;
         interlace = Ingex::Interlace::BOTTOM_FIELD_FIRST;
@@ -188,17 +194,19 @@ void Ingex::VideoRaster::GetInfo(Ingex::VideoRaster::EnumType raster,
         fps_den = 1001;
         interlace = Ingex::Interlace::BOTTOM_FIELD_FIRST;
         break;
+    case SMPTE274_25PSF:
     case SMPTE274_25P:
         width = 1920;
         height = 1080;
-        fps_num = 50;
+        fps_num = 25;
         fps_den = 1;
         interlace = Ingex::Interlace::NONE;
         break;
+    case SMPTE274_29PSF:
     case SMPTE274_29P:
         width = 1920;
         height = 1080;
-        fps_num = 60000;
+        fps_num = 30000;
         fps_den = 1001;
         interlace = Ingex::Interlace::NONE;
         break;

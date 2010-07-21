@@ -1,5 +1,5 @@
 /*
- * $Id: RouterRecorderImpl.cpp,v 1.1 2010/07/14 13:06:36 john_f Exp $
+ * $Id: RouterRecorderImpl.cpp,v 1.2 2010/07/21 16:29:34 john_f Exp $
  *
  * Servant class for RouterRecorder.
  *
@@ -25,6 +25,7 @@
 #include "integer_types.h"
 
 #include <ace/Log_Msg.h>
+#include <ace/OS_NS_stdio.h>
 
 #include <sstream>
 #include <map>
@@ -51,6 +52,9 @@ const bool USE_PROJECT_SUBDIR = true;
 
 // Path separator.  It would be different for Windows.
 const char PATH_SEPARATOR = '/';
+
+// Subdirectory to use while creating the recording
+const char * const CREATING_SUBDIR = "Creating";
 
 // Format in cut recording file
 const char * const mccut_fmt = "<McCut ClipName=\"%s\" SelectorIndex=\"%d\" "
@@ -284,28 +288,6 @@ bool RouterRecorderImpl::Init(const std::string & name, const std::string & mc_c
 
     ACE_DEBUG((LM_INFO, ACE_TEXT("%C RouterRecorderImpl::Start()\n"), mName.c_str()));
 
-    // Get current recorder settings
-    RecorderSettings * settings = RecorderSettings::Instance();
-    settings->Update(this->Recorder());
-
-    // Create any needed paths.
-    // NB. Paths need to be same as those used in recorder_fucntions.cpp
-    for (std::vector<EncodeParams>::iterator it = settings->encodings.begin();
-        it != settings->encodings.end(); ++it)
-    {
-        if (USE_PROJECT_SUBDIR)
-        {
-            std::string project_subdir = project;
-            clean_filename(project_subdir);
-            it->dir += PATH_SEPARATOR;
-            it->dir += project_subdir;
-            it->copy_dest += PATH_SEPARATOR;
-            it->copy_dest += project_subdir;
-        }
-
-        FileUtils::CreatePath(it->dir);
-    }
-
     // Calculate start timecode
     Ingex::Timecode tc;
     if (start_timecode.undefined)
@@ -318,6 +300,43 @@ bool RouterRecorderImpl::Init(const std::string & name, const std::string & mc_c
         // Start at start - pre-roll
         tc = Ingex::Timecode(start_timecode.samples - pre_roll.samples, pa_EDIT_RATE.numerator, pa_EDIT_RATE.denominator, DROP_FRAME);
     }
+
+    // Get current recorder settings
+    RecorderSettings * settings = RecorderSettings::Instance();
+    settings->Update(this->Recorder());
+
+    // Set up the needed paths.
+    for (std::vector<EncodeParams>::iterator it = settings->encodings.begin();
+        it != settings->encodings.end(); ++it)
+    {
+        if (USE_PROJECT_SUBDIR)
+        {
+            std::string project_subdir = project;
+            clean_filename(project_subdir);
+            it->dir += PATH_SEPARATOR;
+            it->dir += project_subdir;
+            it->copy_dest += PATH_SEPARATOR;
+            it->copy_dest += project_subdir;
+        }
+    }
+
+    // (There should just be the one encoding.)
+    std::string pathname;
+    if (settings->encodings.size() > 0)
+    {
+        pathname = settings->encodings.begin()->dir;
+        pathname += PATH_SEPARATOR;
+    }
+    else
+    {
+        pathname = "./";
+    }
+    mFileDestinationDir = pathname;
+    pathname += CREATING_SUBDIR;
+    mFileCreatingDir = pathname;
+
+    // Make required directory
+    FileUtils::CreatePath(mFileCreatingDir);
 
     // Generate filename for the recording
     std::ostringstream ss;
@@ -332,20 +351,13 @@ bool RouterRecorderImpl::Init(const std::string & name, const std::string & mc_c
 
     std::string filename = ss.str();
     clean_filename(filename);
-
-    std::string pathname;
-    if (settings->encodings.size() > 0)
-    {
-        pathname = settings->encodings.begin()->dir;
-        pathname += PATH_SEPARATOR;
-    }
-    pathname += filename;
+    mFilename = filename;
 
     // Enable traffic control on copy process.
     this->StopCopying(++mRecIndex);
 
     // Start saving to cuts database
-    StartSaving(tc, pathname);
+    StartSaving(tc);
 
     ProdAuto::TrackStatus & ts = mTracksStatus->operator[](0);
     ts.rec = 1;
@@ -459,7 +471,7 @@ void RouterRecorderImpl::SetRouterPort(std::string rp)
 }
 
 
-void RouterRecorderImpl::StartSaving(const Ingex::Timecode & tc, const std::string & filename)
+void RouterRecorderImpl::StartSaving(const Ingex::Timecode & tc)
 {
 #if 0
     unsigned int src_index = mpRouter->CurrentSrc(mMixDestination);
@@ -474,11 +486,14 @@ void RouterRecorderImpl::StartSaving(const Ingex::Timecode & tc, const std::stri
 #endif
 
     // Open file
-    mpFile = ACE_OS::fopen (filename.c_str(), ACE_TEXT ("w+"));
+    std::string pathname = mFileCreatingDir;
+    pathname += PATH_SEPARATOR;
+    pathname += mFilename;
+    mpFile = ACE_OS::fopen (pathname.c_str(), ACE_TEXT ("w+"));
 
     if (mpFile == 0)
     {
-        ACE_DEBUG((LM_ERROR, ACE_TEXT ("problem with filename %p\n"), ACE_TEXT (filename.c_str()) ));
+        ACE_DEBUG((LM_ERROR, ACE_TEXT ("problem opening filename %p\n"), ACE_TEXT (mFilename.c_str()) ));
     }
     else
     {
@@ -650,9 +665,21 @@ void RouterRecorderImpl::StopSaving()
         // Close file
         if (ACE_OS::fclose (mpFile) == -1)
         {
-            ACE_DEBUG((LM_DEBUG, ACE_TEXT ("problem closing file\n")));
+            ACE_DEBUG((LM_ERROR, ACE_TEXT ("problem closing file\n")));
         }
         mpFile = 0;
+
+        // Move file out of creating subdirectory
+        std::string creating = mFileCreatingDir;
+        creating += PATH_SEPARATOR;
+        creating += mFilename;
+        std::string destination = mFileDestinationDir;
+        destination += PATH_SEPARATOR;
+        destination += mFilename;
+        if (ACE_OS::rename(creating.c_str(), destination.c_str()) != 0)
+        {
+            ACE_DEBUG((LM_ERROR, ACE_TEXT ("problem moving file\n")));
+        }
     }
 
     if (mpCutsDatabase)

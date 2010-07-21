@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_source.c,v 1.7 2010/06/02 11:12:14 philipn Exp $
+ * $Id: ffmpeg_source.c,v 1.8 2010/07/21 16:29:34 john_f Exp $
  *
  *
  *
@@ -64,6 +64,7 @@ extern "C" {
 
 #include "ffmpeg_source.h"
 #include "video_conversion.h"
+#include "mov_helper.h"
 #include "utils.h"
 #include "logging.h"
 #include "macros.h"
@@ -455,6 +456,7 @@ static int open_video_stream(FFMPEGSource* source, int sourceId, int avStreamInd
     const double imageAspectRatio4By3 = 4 / (double)3;
     const double imageAspectRatio16By9 = 16 / (double)9;
     double imageAspectRatio;
+    AVRational sampleAspectRatio;
 
     if (source->numVideoStreams + 1 >= (int)(sizeof(source->videoStreams) / sizeof(VideoStream)))
     {
@@ -553,39 +555,63 @@ static int open_video_stream(FFMPEGSource* source, int sourceId, int avStreamInd
         return 0;
     }
 
-    if (codecContext->sample_aspect_ratio.num == 0 || codecContext->sample_aspect_ratio.den == 0)
+    if (stream->sample_aspect_ratio.num && stream->sample_aspect_ratio.den)
+    {
+        sampleAspectRatio = stream->sample_aspect_ratio;
+    }
+    else
+    {
+        sampleAspectRatio = codecContext->sample_aspect_ratio;
+    }
+        
+    if (sampleAspectRatio.num == 0 || sampleAspectRatio.den == 0)
     {
         /* assume 4:3 */
         videoStream->outputStream.streamInfo.aspectRatio = (Rational){4, 3};
     }
+    else if (sampleAspectRatio.num == 1 || sampleAspectRatio.den == 1)
+    {
+        if (codecContext->codec_id == CODEC_ID_DVVIDEO &&
+            (codecContext->height == 1080 || codecContext->height == 720))
+        {
+            /* DVCPro-HD */
+            /* use the aspect ratio to indicate that the image has been scaled */
+            videoStream->outputStream.streamInfo.aspectRatio = (Rational){4, 3};
+        }
+        else
+        {
+            /* square */
+            videoStream->outputStream.streamInfo.aspectRatio = (Rational){1, 1};
+        }
+    }
     else
     {
         if (source->isPAL &&
-            ((codecContext->sample_aspect_ratio.num == 16 && codecContext->sample_aspect_ratio.den == 15) ||
-                (codecContext->sample_aspect_ratio.num == 12 && codecContext->sample_aspect_ratio.den == 11) ||
-                (codecContext->sample_aspect_ratio.num == 59 && codecContext->sample_aspect_ratio.den == 54)))
+            ((sampleAspectRatio.num == 16 && sampleAspectRatio.den == 15) ||
+                (sampleAspectRatio.num == 12 && sampleAspectRatio.den == 11) ||
+                (sampleAspectRatio.num == 59 && sampleAspectRatio.den == 54)))
         {
             /* 4:3 PAL */
             videoStream->outputStream.streamInfo.aspectRatio = (Rational){4, 3};
         }
         else if (source->isPAL &&
-            ((codecContext->sample_aspect_ratio.num == 64 && codecContext->sample_aspect_ratio.den == 45) ||
-                (codecContext->sample_aspect_ratio.num == 16 && codecContext->sample_aspect_ratio.den == 11) ||
-                (codecContext->sample_aspect_ratio.num == 118 && codecContext->sample_aspect_ratio.den == 81)))
+            ((sampleAspectRatio.num == 64 && sampleAspectRatio.den == 45) ||
+                (sampleAspectRatio.num == 16 && sampleAspectRatio.den == 11) ||
+                (sampleAspectRatio.num == 118 && sampleAspectRatio.den == 81)))
         {
             /* 16:9 PAL */
             videoStream->outputStream.streamInfo.aspectRatio = (Rational){16, 9};
         }
         else if (!source->isPAL &&
-            ((codecContext->sample_aspect_ratio.num == 8 && codecContext->sample_aspect_ratio.den == 9) ||
-                (codecContext->sample_aspect_ratio.num == 10 && codecContext->sample_aspect_ratio.den == 11)))
+            ((sampleAspectRatio.num == 8 && sampleAspectRatio.den == 9) ||
+                (sampleAspectRatio.num == 10 && sampleAspectRatio.den == 11)))
         {
             /* 4:3 NTSC */
             videoStream->outputStream.streamInfo.aspectRatio = (Rational){4, 3};
         }
         else if (!source->isPAL &&
-            ((codecContext->sample_aspect_ratio.num == 32 && codecContext->sample_aspect_ratio.den == 27) ||
-                (codecContext->sample_aspect_ratio.num == 40 && codecContext->sample_aspect_ratio.den == 33)))
+            ((sampleAspectRatio.num == 32 && sampleAspectRatio.den == 27) ||
+                (sampleAspectRatio.num == 40 && sampleAspectRatio.den == 33)))
         {
             /* 16:9 NTSC */
             videoStream->outputStream.streamInfo.aspectRatio = (Rational){16, 9};
@@ -594,8 +620,8 @@ static int open_video_stream(FFMPEGSource* source, int sourceId, int avStreamInd
         {
             /* TODO: is this code correct? */
 
-            imageAspectRatio = (codecContext->width * codecContext->sample_aspect_ratio.num) /
-                (double)(codecContext->height * codecContext->sample_aspect_ratio.den);
+            imageAspectRatio = (codecContext->width * sampleAspectRatio.num) /
+                (double)(codecContext->height * sampleAspectRatio.den);
             if (imageAspectRatio <= imageAspectRatio4By3 + 0.01 && imageAspectRatio >= imageAspectRatio4By3 - 0.01)
             {
                 videoStream->outputStream.streamInfo.aspectRatio = (Rational){4, 3};
@@ -606,7 +632,7 @@ static int open_video_stream(FFMPEGSource* source, int sourceId, int avStreamInd
             }
             else
             {
-                ml_log_warn("Unknown sample aspect ratio %d/%d; assuming 4:3\n", codecContext->sample_aspect_ratio.num, codecContext->sample_aspect_ratio.den);
+                ml_log_warn("Unknown sample aspect ratio %d/%d; assuming 4:3\n", sampleAspectRatio.num, sampleAspectRatio.den);
                 videoStream->outputStream.streamInfo.aspectRatio = (Rational){4, 3};
             }
         }
@@ -885,7 +911,7 @@ static void close_audio_stream(FFMPEGSource* source, AudioStream* audioStream)
     avcodec_close(codecContext);
 }
 
-static int open_timecode_stream(FFMPEGSource* source, int sourceId, int* outputStreamIndex)
+static int open_timecode_stream(FFMPEGSource* source, int64_t start_timecode, int sourceId, int* outputStreamIndex)
 {
     source->timecodeStream.outputStream.streamIndex = (*outputStreamIndex)++;
 
@@ -895,7 +921,11 @@ static int open_timecode_stream(FFMPEGSource* source, int sourceId, int* outputS
     source->timecodeStream.outputStream.streamInfo.timecodeType = SOURCE_TIMECODE_TYPE;
     source->timecodeStream.outputStream.streamInfo.timecodeSubType = NO_TIMECODE_SUBTYPE;
 
-    if (source->formatContext->start_time != (int64_t)AV_NOPTS_VALUE)
+    if (start_timecode >= 0)
+    {
+        source->timecodeStream.startTimecode = start_timecode;
+    }
+    else if (source->formatContext->start_time != (int64_t)AV_NOPTS_VALUE)
     {
         source->timecodeStream.startTimecode = (int64_t)(source->formatContext->start_time / ((double)AV_TIME_BASE) *
             source->frameRate.num / (double)source->frameRate.den + 0.5);
@@ -2013,10 +2043,24 @@ int fms_open(const char* filename, int threadCount, int forceUYVYFormat, MediaSo
     int j;
     int outputStreamIndex = 0;
     int sourceId;
+    int64_t start_timecode = -1;
+    uint32_t mov_start_timecode = 0;
 
     memset(&formatParams, 0, sizeof(formatParams));
 
     av_register_all();
+
+    /* read the start timecode from Quicktime files */
+    result = mvh_read_start_timecode(filename, &mov_start_timecode);
+    if (result == -2)
+    {
+        /* failure to open file has already being logged */
+        return 0;
+    }
+    else if (result == 0)
+    {
+        start_timecode = mov_start_timecode;
+    }
 
 
     CALLOC_ORET(newSource, FFMPEGSource, 1);
@@ -2105,7 +2149,7 @@ int fms_open(const char* filename, int threadCount, int forceUYVYFormat, MediaSo
                 break;
         }
     }
-    CHK_OFAIL(open_timecode_stream(newSource, sourceId, &outputStreamIndex));
+    CHK_OFAIL(open_timecode_stream(newSource, start_timecode, sourceId, &outputStreamIndex));
 
     /* set the frame rate in the audio streams and timecode stream */
 

@@ -1,5 +1,5 @@
 /*
- * $Id: MaterialResolution.cpp,v 1.3 2010/07/06 14:15:13 john_f Exp $
+ * $Id: MaterialResolution.cpp,v 1.4 2010/07/21 16:29:34 john_f Exp $
  *
  * Material resolution codes and details
  *
@@ -24,10 +24,13 @@
 #include "MaterialResolution.h"
 
 // Get FileFormat name
-void FileFormat::GetInfo(FileFormat::EnumType format, std::string & name)
+std::string FileFormat::Name(FileFormat::EnumType format)
 {
+    std::string name;
     switch (format)
     {
+    case NONE:
+        name = "None";
     case RAW:
         name = "Raw";
         break;
@@ -44,13 +47,17 @@ void FileFormat::GetInfo(FileFormat::EnumType format, std::string & name)
         name = "Unknown";
         break;
     }
+    return name;
 }
 
 // Get OperationalPattern name
-void OperationalPattern::GetInfo(OperationalPattern::EnumType pattern, std::string & name)
+std::string OperationalPattern::Name(OperationalPattern::EnumType pattern)
 {
+    std::string name;
     switch (pattern)
     {
+    case NONE:
+        name = "None";
     case OP_ATOM:
         name = "OP-Atom";
         break;
@@ -61,6 +68,7 @@ void OperationalPattern::GetInfo(OperationalPattern::EnumType pattern, std::stri
         name = "Unknown";
         break;
     }
+    return name;
 }
 
 /// Get MaterialResolution name
@@ -70,6 +78,9 @@ std::string MaterialResolution::Name(MaterialResolution::EnumType res)
 
     switch (res)
     {
+    case NONE:
+        name = "None";
+
     case UNC_RAW:
         name = "Uncompressed UYVY";
         break;
@@ -198,13 +209,13 @@ std::string MaterialResolution::Name(MaterialResolution::EnumType res)
         name = "Vision Cuts";
         break;
 
-	case XDCAMHD422_RAW:
-		name = "XDCAMHD422 Raw";
-		break;
-	
-	case XDCAMHD422_MOV:
-		name = "XDCAMHD422 Quicktime";
-		break;
+    case XDCAMHD422_RAW:
+        name = "MPEG2 422 Long GOP 50 Mbit/s Raw";
+        break;
+    
+    case XDCAMHD422_MOV:
+        name = "MPEG2 422 Long GOP 50 Mbit/s Quicktime";
+        break;
 
     default:
         name = "Unknown";
@@ -303,19 +314,18 @@ void MaterialResolution::GetInfo(MaterialResolution::EnumType res, FileFormat::E
         format = FileFormat::RAW;
         op = OperationalPattern::OP_ATOM;
         break;
-	
-	case XDCAMHD422_RAW:
-		format = FileFormat::RAW;
-		op = OperationalPattern::OP_1A;
-		break;
+    
+    case XDCAMHD422_RAW:
+        format = FileFormat::RAW;
+        op = OperationalPattern::OP_1A;
+        break;
 
-	case XDCAMHD422_MOV:
-		format = FileFormat::MOV;
-		op = OperationalPattern::OP_1A;
-		break;
+    case XDCAMHD422_MOV:
+        format = FileFormat::MOV;
+        op = OperationalPattern::OP_1A;
+        break;
 
     case NONE:
-    case END:
         format = FileFormat::NONE;
         op = OperationalPattern::NONE;
         break;
@@ -352,10 +362,21 @@ bool MaterialResolution::CheckVideoFormat(MaterialResolution::EnumType res,
     case MaterialResolution::DV100_RAW:
     case MaterialResolution::DV100_MXF_ATOM:
     case MaterialResolution::DV100_MOV:
-        if ((Ingex::VideoRaster::SMPTE274_25I == raster && Ingex::PixelFormat::YUV_PLANAR_422 == format)
-            || (Ingex::VideoRaster::SMPTE274_29I == raster && Ingex::PixelFormat::YUV_PLANAR_422 == format))
+        if (Ingex::PixelFormat::YUV_PLANAR_422 == format)
         {
-            result = true;
+            switch (raster)
+            {
+            case Ingex::VideoRaster::SMPTE274_25I:
+            case Ingex::VideoRaster::SMPTE274_25PSF:
+            case Ingex::VideoRaster::SMPTE274_25P:
+            case Ingex::VideoRaster::SMPTE274_29I:
+            case Ingex::VideoRaster::SMPTE274_29PSF:
+            case Ingex::VideoRaster::SMPTE274_29P:
+                result = true;
+                break;
+            default:
+                break;
+            }
         }
         break;
     case MaterialResolution::IMX30_MXF_ATOM:
@@ -385,37 +406,74 @@ bool MaterialResolution::CheckVideoFormat(MaterialResolution::EnumType res,
         }
         break;
     case MaterialResolution::DNX36P_MXF_ATOM:
-        if ((Ingex::VideoRaster::SMPTE274_25I == raster && Ingex::PixelFormat::YUV_PLANAR_422 == format)
-            || (Ingex::VideoRaster::SMPTE274_29I == raster && Ingex::PixelFormat::YUV_PLANAR_422 == format)
-            || (Ingex::VideoRaster::SMPTE274_25P == raster && Ingex::PixelFormat::YUV_PLANAR_422 == format)
-            || (Ingex::VideoRaster::SMPTE274_29P == raster && Ingex::PixelFormat::YUV_PLANAR_422 == format))
+        if (Ingex::PixelFormat::YUV_PLANAR_422 == format)
         {
-            result = true;
+            switch (raster)
+            {
+            case Ingex::VideoRaster::SMPTE274_25I:
+            case Ingex::VideoRaster::SMPTE274_25PSF:
+            case Ingex::VideoRaster::SMPTE274_25P:
+            case Ingex::VideoRaster::SMPTE274_29I:
+            case Ingex::VideoRaster::SMPTE274_29PSF:
+            case Ingex::VideoRaster::SMPTE274_29P:
+                result = true;
+                break;
+            default:
+                break;
+            }
         }
         break;
     case MaterialResolution::DNX120I_MXF_ATOM:
     case MaterialResolution::DNX185I_MXF_ATOM:
-        if ((Ingex::VideoRaster::SMPTE274_25I == raster && Ingex::PixelFormat::YUV_PLANAR_422 == format)
-            || (Ingex::VideoRaster::SMPTE274_29I == raster && Ingex::PixelFormat::YUV_PLANAR_422 == format))
+        if (Ingex::PixelFormat::YUV_PLANAR_422 == format)
         {
-            result = true;
+            switch (raster)
+            {
+            case Ingex::VideoRaster::SMPTE274_25I:
+            case Ingex::VideoRaster::SMPTE274_29I:
+                result = true;
+                break;
+            default:
+                break;
+            }
         }
         break;
     case MaterialResolution::DNX120P_MXF_ATOM:
     case MaterialResolution::DNX185P_MXF_ATOM:
-        if ((Ingex::VideoRaster::SMPTE274_25P == raster && Ingex::PixelFormat::YUV_PLANAR_422 == format)
-            || (Ingex::VideoRaster::SMPTE274_29P == raster && Ingex::PixelFormat::YUV_PLANAR_422 == format))
+        if (Ingex::PixelFormat::YUV_PLANAR_422 == format)
         {
-            result = true;
-        }	
-		break;
-
-	case MaterialResolution::XDCAMHD422_RAW:
-	case MaterialResolution::XDCAMHD422_MOV:
-	if (Ingex::VideoRaster::SMPTE274_25I == raster && Ingex::PixelFormat::YUV_PLANAR_422 == format)
-			result = true;
+            switch (raster)
+            {
+            case Ingex::VideoRaster::SMPTE274_25PSF:
+            case Ingex::VideoRaster::SMPTE274_25P:
+            case Ingex::VideoRaster::SMPTE274_29PSF:
+            case Ingex::VideoRaster::SMPTE274_29P:
+                result = true;
+                break;
+            default:
+                break;
+            }
+        }
         break;
-
+    case MaterialResolution::XDCAMHD422_RAW:
+    case MaterialResolution::XDCAMHD422_MOV:
+        if (Ingex::PixelFormat::YUV_PLANAR_422 == format)
+        {
+            switch (raster)
+            {
+            case Ingex::VideoRaster::SMPTE274_25I:
+            case Ingex::VideoRaster::SMPTE274_25PSF:
+            case Ingex::VideoRaster::SMPTE274_25P:
+            case Ingex::VideoRaster::SMPTE274_29I:
+            case Ingex::VideoRaster::SMPTE274_29PSF:
+            case Ingex::VideoRaster::SMPTE274_29P:
+                result = true;
+                break;
+            default:
+                break;
+            }
+        }
+        break;
     case MaterialResolution::DVD:
     case MaterialResolution::MPEG4_MOV:
         if ((Ingex::VideoRaster::PAL == raster && Ingex::PixelFormat::YUV_PLANAR_420_MPEG == format)
@@ -428,7 +486,17 @@ bool MaterialResolution::CheckVideoFormat(MaterialResolution::EnumType res,
     case MaterialResolution::UNC_MXF_ATOM:
         if (Ingex::PixelFormat::UYVY_422 == format)
         {
-            result = true;
+            switch (raster)
+            {
+            case Ingex::VideoRaster::PAL:
+            case Ingex::VideoRaster::NTSC:
+            case Ingex::VideoRaster::SMPTE274_25I:
+            case Ingex::VideoRaster::SMPTE274_29I:
+                result = true;
+                break;
+            default:
+                break;
+            }
         }
         break;
     case MaterialResolution::MP3:

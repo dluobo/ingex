@@ -1,5 +1,5 @@
 /*
- * $Id: on_screen_display.c,v 1.15 2010/06/18 09:44:51 philipn Exp $
+ * $Id: on_screen_display.c,v 1.16 2010/07/21 16:29:34 john_f Exp $
  *
  *
  *
@@ -864,7 +864,7 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
         min = frameInfo->timecodes[osdd->state->timecodeIndex].timecode.min;
         sec = frameInfo->timecodes[osdd->state->timecodeIndex].timecode.sec;
         frame = frameInfo->timecodes[osdd->state->timecodeIndex].timecode.frame;
-        if (hour < 0 || hour > 23 || min < 0 || min > 59 || sec < 0 || sec > 59 || frame < 0 ||
+        if (hour < 0 || min < 0 || min > 59 || sec < 0 || sec > 59 || frame < 0 ||
             (frame_is_pal_frame_rate(frameInfo) && frame > 24) || (frame_is_ntsc_frame_rate(frameInfo) && frame > 29))
         {
             hour = 0;
@@ -872,6 +872,10 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
             sec = 0;
             frame = 0;
             /* TODO: log warning ? */
+        }
+        else if (hour > 23)
+        {
+            hour %= 24;
         }
 
         if (frameInfo->timecodes[osdd->state->timecodeIndex].timecodeType == CONTROL_TIMECODE_TYPE)

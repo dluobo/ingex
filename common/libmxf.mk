@@ -1,5 +1,5 @@
 #
-# $Id: libmxf.mk,v 1.1 2010/07/14 13:06:35 john_f Exp $
+# $Id: libmxf.mk,v 1.2 2010/07/21 16:29:33 john_f Exp $
 #
 # Setup libMXF and libMXF++ includes and libs
 #
@@ -29,7 +29,7 @@ ifdef USE_INSTALLED_LIBMXF
 
     LIBMXF_INCLUDE_PATH = $(shell for f in /usr/local/include /usr/include; do test -e $$f/mxf/mxf.h && echo $$f && break; done)
     ifeq "$(LIBMXF_INCLUDE_PATH)" ""
-        $(error libMXF not installed. Install libMXF or set USE_SOURCE_LIBMXF environment variable)
+        $(error libMXF not installed. Install libMXF or unset USE_INSTALLED_LIBMXF environment variable)
     endif
     LIBMXF_EXAMPLES_INCLUDE_PATH = $(LIBMXF_INCLUDE_PATH)/mxf/examples
 
@@ -73,29 +73,29 @@ else
 
 
     LIBMXF_INCLUDE = -I$(INGEX_ROOT)/libMXF/lib/include
-    LIBMXF_LIB = -L$(INGEX_ROOT)/libMXF/lib -lMXF -luuid
+    LIBMXF_LIB = $(INGEX_ROOT)/libMXF/lib/libMXF.a -luuid
     LIBMXFPP_INCLUDE = -I$(INGEX_ROOT)/libMXF++
-    LIBMXFPP_LIB = -L$(INGEX_ROOT)/libMXF++/libMXF++ -lMXF++
+    LIBMXFPP_LIB = $(INGEX_ROOT)/libMXF++/libMXF++/libMXF++.a
 
     ARCHIVEMXF_INCLUDE = -I$(LIBMXF_EXAMPLES_PATH)/archive
-    WRITEARCHIVEMXF_LIB = -L$(LIBMXF_EXAMPLES_PATH)/archive/write -lwritearchivemxf
+    WRITEARCHIVEMXF_LIB = $(LIBMXF_EXAMPLES_PATH)/archive/write/libwritearchivemxf.a
     WRITEARCHIVEMXF_INCLUDE = $(ARCHIVEMXF_INCLUDE) -I$(LIBMXF_EXAMPLES_PATH)/archive/write
-    ARCHIVEMXFINFO_LIB = -L$(LIBMXF_EXAMPLES_PATH)/archive/info -larchivemxfinfo
+    ARCHIVEMXFINFO_LIB = $(LIBMXF_EXAMPLES_PATH)/archive/info/libarchivemxfinfo.a
     ARCHIVEMXFINFO_INCLUDE = $(ARCHIVEMXF_INCLUDE) -I$(LIBMXF_EXAMPLES_PATH)/archive/info
 
     MXFREADER_INCLUDE = -I$(LIBMXF_EXAMPLES_PATH)/reader
-    MXFREADER_LIB = -L$(LIBMXF_EXAMPLES_PATH)/reader -lMXFReader
+    MXFREADER_LIB = $(LIBMXF_EXAMPLES_PATH)/reader/libMXFReader.a
 
     WRITEAVIDMXF_INCLUDE = -I$(LIBMXF_EXAMPLES_PATH)/writeavidmxf
-    WRITEAVIDMXF_LIB = -L$(LIBMXF_EXAMPLES_PATH)/writeavidmxf -lwriteavidmxf
+    WRITEAVIDMXF_LIB = $(LIBMXF_EXAMPLES_PATH)/writeavidmxf/libwriteavidmxf.a
     
     LIBMXFPPEXAMPLESCOMMON_INCLUDE = -I$(LIBMXFPP_EXAMPLES_PATH)/Common
 
     D10MXFOP1AWRITER_INCLUDE = -I$(LIBMXFPP_EXAMPLES_PATH)/D10MXFOP1AWriter
-    D10MXFOP1AWRITER_LIB = -L$(LIBMXFPP_EXAMPLES_PATH)/D10MXFOP1AWriter -lD10MXFOP1AWriter
+    D10MXFOP1AWRITER_LIB = $(LIBMXFPP_EXAMPLES_PATH)/D10MXFOP1AWriter/libD10MXFOP1AWriter.a
     
     OPATOMREADER_INCLUDE = -I$(LIBMXFPP_EXAMPLES_PATH)/OPAtomReader
-    OPATOMREADER_LIB = -L$(LIBMXFPP_EXAMPLES_PATH)/OPAtomReader -lOPAtomReader
+    OPATOMREADER_LIB = $(LIBMXFPP_EXAMPLES_PATH)/OPAtomReader/libOPAtomReader.a
 
 endif
 

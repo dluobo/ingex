@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorderImpl.cpp,v 1.19 2010/07/14 13:06:36 john_f Exp $
+ * $Id: IngexRecorderImpl.cpp,v 1.20 2010/07/21 16:29:34 john_f Exp $
  *
  * Servant class for Recorder.
  *
@@ -80,102 +80,10 @@ bool IngexRecorderImpl::Init()
     // Shared memory initialisation
     IngexShm::Instance()->RecorderName(mName);
 
-    // Get frame rate
-    /*
-    if (ok)
-    {
-        mEditRate.numerator = IngexShm::Instance()->FrameRateNumerator();
-        mEditRate.denominator = IngexShm::Instance()->FrameRateDenominator();
-        if (mEditRate.numerator == 0 || mEditRate.denominator == 0)
-        {
-            ACE_DEBUG((LM_ERROR, ACE_TEXT("Problem with edit rate %d/%d!\n"),
-                mEditRate.numerator, mEditRate.denominator));
-            ok = false;
-        }
-    }
-    if (ok)
-    {
-        mFps = mEditRate.numerator / mEditRate.denominator;
-        if (mEditRate.numerator % mEditRate.denominator)
-        {
-            mDf = true;
-            mFps += 1;
-        }
-        ACE_DEBUG((LM_DEBUG, ACE_TEXT("Frame rate %d/%d, %d%C\n"),
-            mEditRate.numerator, mEditRate.denominator, mFps,
-            (mDf ? " DF" : "")));
-    }
-    */
-
     // Base class initialisation
     RecorderImpl::Init(mName);
 
-
-    /*
-    // Store video source names in shared memory
-    UpdateShmSourceNames();
-
-    // Setup pre-roll
-    mMaxPreRoll.undefined = false;
-    mMaxPreRoll.edit_rate = mEditRate;
-    if (IngexShm::Instance()->RingLength() > (SEARCH_GUARD + 1))
-    {
-        mMaxPreRoll.samples = IngexShm::Instance()->RingLength() - (SEARCH_GUARD + 1);
-    }
-    else
-    {
-        mMaxPreRoll.samples = 0;
-    }
-
-
-    // Setup post-roll
-    mMaxPostRoll.undefined = true; // no limit to post-roll
-    mMaxPostRoll.edit_rate = mEditRate;
-    mMaxPostRoll.samples = 0;
-
-    RecorderSettings * settings = RecorderSettings::Instance();
-    if (settings && mRecorder.get())
-    {
-        settings->Update(mRecorder.get());
-
-        // Register this Recorder in the monitoring area of shared memory
-        // and initialise encoding enabled/disabled flags for all channels and encodings
-        IngexShm::Instance()->InfoSetup(mRecorder->name);
-        for (unsigned int channel_i = 0; channel_i < IngexShm::Instance()->Channels(); ++channel_i)
-        {
-            int enc_idx = 0;
-            for (std::vector<EncodeParams>::const_iterator it = settings->encodings.begin(); it != settings->encodings.end(); ++it, ++enc_idx)
-            {
-                bool quad_video = it->source == Input::QUAD;
-                IngexShm::Instance()->InfoSetEnabled(channel_i, enc_idx, quad_video, true);
-                IngexShm::Instance()->InfoSetDesc(channel_i, enc_idx, quad_video,
-                    "%s%s %s",
-                    DatabaseEnums::Instance()->ResolutionName(it->resolution).c_str(),
-                    //(settings->ResolutionName(it->resolution)),
-                    quad_video ? "(quad)" : "",
-                    it->file_format == MXF_FILE_FORMAT_TYPE ? "MXF" : "OTHER"
-                    );
-
-            }
-        }
-    }
-
-
-    // Set timecode mode
-    switch (settings->timecode_mode)
-    {
-    case LTC_PARAMETER_VALUE:
-        IngexShm::Instance()->TcMode(IngexShm::LTC);
-        break;
-    case VITC_PARAMETER_VALUE:
-        IngexShm::Instance()->TcMode(IngexShm::VITC);
-        break;
-    default:
-        ACE_DEBUG((LM_ERROR, ACE_TEXT("Unexpected timecode mode\n")));
-        break;
-    }
-    */
-
+    // Get hostname
     char buf[256];
     if (ACE_OS::hostname(buf, 256) == 0)
     {
@@ -724,11 +632,15 @@ void IngexRecorderImpl::NotifyCompletion(IngexRecorder * rec)
     }
 
     // Update status to "not recording".
-    for (CORBA::ULong i = 0; i < mTracksStatus->length(); ++i)
+    // But only if we haven't started another recording in the meantime
+    if (0 == mpIngexRecorder)
     {
-        ProdAuto::TrackStatus & ts = mTracksStatus->operator[](i);
-        ts.rec = 0;
-        ts.rec_error = 0;
+        for (CORBA::ULong i = 0; i < mTracksStatus->length(); ++i)
+        {
+            ProdAuto::TrackStatus & ts = mTracksStatus->operator[](i);
+            ts.rec = 0;
+            ts.rec_error = 0;
+        }
     }
 
     this->StartCopying(rec->mIndex);
@@ -746,11 +658,20 @@ void IngexRecorderImpl::InitCopying()
 {
     //mCopyManager.Command(RecorderSettings::Instance()->copy_command);
     mCopyManager.ClearSrcDest();
-    std::vector<EncodeParams> & encodings = RecorderSettings::Instance()->encodings;
+    RecorderSettings * settings = RecorderSettings::Instance();
 
-    for (std::vector<EncodeParams>::const_iterator it = encodings.begin(); it != encodings.end(); ++it)
+    for (std::vector<EncodeParams>::const_iterator it = settings->encodings.begin(); it != settings->encodings.end(); ++it)
     {
-        mCopyManager.AddSrcDest(it->dir, it->copy_dest, it->copy_priority);
+        std::string src = it->dir;
+        std::string dest = it->copy_dest;
+        if (!settings->project_subdir.empty())
+        {
+            src += PATH_SEPARATOR;
+            src += settings->project_subdir;
+            dest += PATH_SEPARATOR;
+            dest += settings->project_subdir;
+        }
+        mCopyManager.AddSrcDest(src, dest, it->copy_priority);
     }
 }
 

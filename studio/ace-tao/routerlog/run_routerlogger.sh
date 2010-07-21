@@ -6,16 +6,18 @@ LOCATION=studio
 
 if [ "$LOCATION" = "studio" ]
 then
-# StudioA
-./routerlogger -v -r 192.168.1.246:4098 -s -l \
-  -n Router-StudioA \
+# Studio
+./routerlogger --dbuser bamzooki --dbpass bamzooki \
+  -v \
+  -r /dev/ttyS0 -l \
+  -n Ingex-Router \
   -m 9 \
-  -d "StudioA-VT1" -p 1 \
-  -d "StudioA-VT2" -p 2 \
-  -d "StudioA-VT3" -p 3 \
-  -d "StudioA-VT4" -p 4 \
-  -c "StudioA multi-camera clip" \
-  -a corbaloc:iiop:192.168.1.136:8888/NameService \
+  -d "Cam1" -p 1 \
+  -d "Cam2" -p 2 \
+  -d "Cam3" -p 3 \
+  -d "Cam4" -p 4 \
+  -c "Studio multicam" \
+  -a corbaloc:iiop:172.29.154.23:8888/NameService \
   -ORBDottedDecimalAddresses 1
 
 elif [ "$LOCATION" = "stage" ]
@@ -23,7 +25,9 @@ then
 
 # Lot and Stage
 #./routerlogger -r /dev/ttyS0 -t /dev/ttyS1 \
-./routerlogger -v -r 192.168.1.252:4098 -s  \
+./routerlogger --dbuser bamzooki --dbpass bamzooki \
+  -v \
+  -r 192.168.1.252:4098 -s \
   -n Router-Lot \
   -m 12 \
   -d "Lot-VT1" -p 5 \

@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.4 2010/07/14 13:06:36 john_f Exp $
+# $Id: Makefile,v 1.5 2010/07/21 16:29:34 john_f Exp $
 #
 # Makefile for building the examples
 #
@@ -37,6 +37,14 @@ install:
 	$(MAKE) -C AvidClipWriter $@
 	$(MAKE) -C OPAtomReader $@
 	$(MAKE) -C D10MXFOP1AWriter $@
+
+.PHONY: uninstall
+uninstall:
+	$(MAKE) -C Common $@
+	$(MAKE) -C AvidClipWriter $@
+	$(MAKE) -C OPAtomReader $@
+	$(MAKE) -C D10MXFOP1AWriter $@
+	rm -Rf $(INSTALL_PREFIX)/include/libMXF++/examples
 
 .PHONY: clean
 clean:

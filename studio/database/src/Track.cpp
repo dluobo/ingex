@@ -1,5 +1,5 @@
 /*
- * $Id: Track.cpp,v 1.5 2010/06/02 13:04:40 john_f Exp $
+ * $Id: Track.cpp,v 1.6 2010/07/21 16:29:34 john_f Exp $
  *
  * A Track in a Package
  *
@@ -130,5 +130,37 @@ void Track::toXML(PackageXMLWriter *xml_writer)
         sourceClip->toXML(xml_writer);
     
     xml_writer->WriteElementEnd();
+}
+
+void Track::fromXML(PackageXMLReader *xml_reader)
+{
+    id = xml_reader->ParseUInt32Attr("id");
+    number = xml_reader->ParseUInt32Attr("number");
+    name = xml_reader->ParseStringAttr("name");
+    editRate = xml_reader->ParseRationalAttr("editRate");
+    origin = xml_reader->ParseInt64Attr("origin");
+
+    string data_def_str = xml_reader->ParseStringAttr("dataDef");
+    if (data_def_str == "Picture")
+        dataDef = PICTURE_DATA_DEFINITION;
+    else if (data_def_str == "Sound")
+        dataDef = SOUND_DATA_DEFINITION;
+    else
+        throw ProdAutoException("Unknown data definition '%s'\n", data_def_str.c_str());
+
+
+    xml_reader->ParseChildElements(this);
+}
+
+void Track::ParseXMLChild(PackageXMLReader *xml_reader, string name)
+{
+    if (name == "SourceClip") {
+        if (sourceClip)
+            throw ProdAutoException("Multiple SourceClips\n");
+
+        auto_ptr<SourceClip> new_source_clip(new SourceClip());
+        new_source_clip->fromXML(xml_reader);
+        sourceClip = new_source_clip.release();
+    }
 }
 

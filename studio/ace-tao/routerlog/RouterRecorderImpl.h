@@ -1,5 +1,5 @@
 /*
- * $Id: RouterRecorderImpl.h,v 1.1 2010/07/14 13:06:36 john_f Exp $
+ * $Id: RouterRecorderImpl.h,v 1.2 2010/07/21 16:29:34 john_f Exp $
  *
  * Servant class for RouterRecorder.
  *
@@ -164,7 +164,7 @@ public:
 
 private:
     // Methods
-    void StartSaving(const Ingex::Timecode & tc, const std::string & filename);
+    void StartSaving(const Ingex::Timecode & tc);
     void StopSaving();
     void StartCopying(unsigned int index);
     void StopCopying(unsigned int index);
@@ -173,7 +173,11 @@ private:
     ProdAuto::MxfDuration mMaxPreRoll;
     ProdAuto::MxfDuration mMaxPostRoll;
 
+    std::string mFilename;
+    std::string mFileCreatingDir;
+    std::string mFileDestinationDir;
     FILE * mpFile;
+
     std::string mRouterPort;
     std::string mTimecodePort;
 

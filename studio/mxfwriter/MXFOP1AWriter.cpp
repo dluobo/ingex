@@ -1,5 +1,5 @@
 /*
- * $Id: MXFOP1AWriter.cpp,v 1.2 2010/06/02 13:01:21 john_f Exp $
+ * $Id: MXFOP1AWriter.cpp,v 1.3 2010/07/21 16:29:34 john_f Exp $
  *
  * MXF OP-1A writer
  *
@@ -335,6 +335,8 @@ void MXFOP1AWriter::PrepareToWrite(PackageGroup *package_group, bool take_owners
             memset(mContentPackage->mAudio[i], 0, mContentPackage->mAudioAllocatedSize);
         }
     }
+    
+    package_group->UpdateStoredDimensions(mD10Writer->GetStoredWidth(), mD10Writer->GetStoredHeight());
 }
 
 void MXFOP1AWriter::WriteSamples(uint32_t mp_track_id, uint32_t num_samples, const uint8_t *data, uint32_t data_size)

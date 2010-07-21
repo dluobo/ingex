@@ -1,5 +1,5 @@
 /*
- * $Id: D10MXFOP1AWriter.h,v 1.5 2010/06/18 09:32:00 philipn Exp $
+ * $Id: D10MXFOP1AWriter.h,v 1.6 2010/07/21 16:29:34 john_f Exp $
  *
  * D10 MXF OP-1A writer
  *
@@ -110,6 +110,8 @@ public:
     int64_t GetFileSize() const;
     mxfUMID GetMaterialPackageUID() const { return mMaterialPackageUID; }
     mxfUMID GetFileSourcePackageUID() const { return mFileSourcePackageUID; }
+    uint32_t GetStoredWidth() const;
+    uint32_t GetStoredHeight() const;
     
     
     // optional update of header metadata and complete writing file

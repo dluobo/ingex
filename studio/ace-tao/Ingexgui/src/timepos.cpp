@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: timepos.cpp,v 1.7 2010/06/02 13:09:26 john_f Exp $           *
+ *   $Id: timepos.cpp,v 1.8 2010/07/21 16:29:34 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -23,6 +23,7 @@
 
 #include "timepos.h"
 #include "Timecode.h"
+#include "ingexgui.h"
 
 DEFINE_EVENT_TYPE(EVT_TIMEPOS_EVENT)
 
@@ -34,7 +35,7 @@ END_EVENT_TABLE()
 /// @param timecodeDisplay The studio timecode display control.
 /// @param positionDisplay The position display control.
 Timepos::Timepos(wxEvtHandler * parent, wxStaticText * timecodeDisplay, wxStaticText * positionDisplay)
-: mTimecodeDisplay(timecodeDisplay), mPositionDisplay(positionDisplay)
+: mTimecodeDisplay(timecodeDisplay), mPositionDisplay(positionDisplay), mTriggerTimecode(InvalidMxfTimecode), mLastDisplayedTimecode(InvalidMxfTimecode)
 {
 	SetNextHandler(parent);
 	Reset();
@@ -45,9 +46,11 @@ Timepos::Timepos(wxEvtHandler * parent, wxStaticText * timecodeDisplay, wxStatic
 /// Responds to the update timer event.
 /// If timecode is running, updates the timecode display based the time since SetTimecode() was called.
 /// If the position display is running, updates it based on the time since Record() was called, or if the end of postroll has been reached, stops it and displays the no position indication.
+/// If a trigger is active and its time has been reached, despatch it.
 /// @param event The timer event.
 void Timepos::OnRefreshTimer(wxTimerEvent& WXUNUSED(event))
 {
+	bool justWrapped = false;
 	if (mTimecodeRunning && mLastKnownTimecode.edit_rate.denominator) { //latter a sanity check
 		wxDateTime now = wxDateTime::UNow();
 		wxDateTime midnight = now;
@@ -56,6 +59,8 @@ void Timepos::OnRefreshTimer(wxTimerEvent& WXUNUSED(event))
 		ProdAuto::MxfTimecode tc = mLastKnownTimecode;
 		tc.samples = sinceMidnight.GetMilliseconds().GetLo() * mLastKnownTimecode.edit_rate.numerator / mLastKnownTimecode.edit_rate.denominator / 1000;
 		mTimecodeDisplay->SetLabel(FormatTimecode(tc));
+		justWrapped = tc.samples < mLastDisplayedTimecode.samples; //has crossed midnight
+		mLastDisplayedTimecode = tc;
 	}
 	if (mPositionRunning) {
 		if (mPostrolling && wxDateTime::UNow() >= mStopTime) { //finished postrolling
@@ -69,31 +74,59 @@ void Timepos::OnRefreshTimer(wxTimerEvent& WXUNUSED(event))
 			mPositionDisplay->SetLabel(FormatPosition(wxDateTime::UNow() - TimeFromTimecode(mStartTimecode), mLastKnownTimecode)); //use TimeFromTimecode every time to take into account system clock drift
 		}
 	}
-	if (!mTriggerTimecode.undefined && wxDateTime::UNow() >= TimeFromTimecode(mTriggerTimecode, mTriggerWrap)) { //use TimeFromTimecode every time to take into account system clock drift
-		wxCommandEvent event(EVT_TIMEPOS_EVENT);
-		ProdAuto::MxfTimecode * tc = new ProdAuto::MxfTimecode(mTriggerTimecode); //deleted by event handler
-		event.SetClientData(tc);
-		mTriggerHandler->AddPendingEvent(event);
-		mTriggerTimecode.undefined = true;
+	if (
+	 !mTriggerTimecode.undefined //there's an active trigger
+	 && !mTriggerCarry //it's happening today
+	 && (
+	  mLastDisplayedTimecode.samples >= mTriggerTimecode.samples //have reached the trigger timecode
+	  || justWrapped //it happened very late yesterday
+	 )
+	) {
+		Trigger();
 	}
+	if (justWrapped) mTriggerCarry = false; //it's now the day of the trigger
 }
 
-/// Sets the timecode for an event to be triggered.
-/// @param tc Timecode when trigger will happen.  Can have undefined flag set to stop a pending trigger.
-/// @param handler Event handler where event will be sent to.  If a trigger is already set, tc is defined and the handler is the same, the existing trigger will NOT be changed
-/// @param wrap True to indicate the timecode has wrapped around midnight
-/// @return True if trigger was set
-bool Timepos::SetTrigger(const ProdAuto::MxfTimecode * tc, wxEvtHandler * handler, bool wrap)
+/// Sends a trigger event and sets the trigger timecode to undefined to prevent repeat triggering
+void Timepos::Trigger()
 {
-	if (!mTriggerTimecode.undefined && !tc->undefined && handler == mTriggerHandler) {
-		return false;
+	wxCommandEvent event(EVT_TIMEPOS_EVENT);
+	ProdAuto::MxfTimecode * tc = new ProdAuto::MxfTimecode(mTriggerTimecode); //deleted by event handler
+	event.SetClientData(tc);
+	mTriggerHandler->AddPendingEvent(event);
+	mTriggerTimecode.undefined = true; //prevent trigger happening again
+}
+
+/// Sets the timecode for an event to be triggered or cancels a pending trigger.
+/// @param tc Timecode when trigger will happen.  If undefined flag is set, stops a pending trigger.
+/// @param handler Event handler where event will be sent to.  If a trigger is already set, tc is defined and the handler is the same, the existing trigger will NOT be changed.
+/// @param alwaysInFuture True to indicate the timecode is always in the future (even if its sample value is less than the current timecode).  If false, trigger timecode will be considered to be in the past if it is up to a minute before the current timecode, whereupon a trigger will occur immediately
+/// @return True if trigger was set
+bool Timepos::SetTrigger(const ProdAuto::MxfTimecode * tc, wxEvtHandler * handler, bool alwaysInFuture)
+{
+	bool ok = true;
+	mTriggerTimecode = *tc;
+	if (mTriggerTimecode.undefined || !mTriggerTimecode.edit_rate.numerator) { //latter a sanity check
+		ok = false;
 	}
 	else {
 		mTriggerTimecode = *tc;
 		mTriggerHandler = handler;
-		mTriggerWrap = wrap;
-		return true;
+		//If it looks like the trigger timecode is earlier in the day or now, set the carry flag which will prevent a trigger until after the displayed timecode wraps at midnight
+		mTriggerCarry = mLastDisplayedTimecode.samples >= mTriggerTimecode.samples;
+		//If triggers in the past are allowed, trigger immediately if trigger timecode is up to a minute before the last displayed timecode
+		if (!alwaysInFuture) {
+			if (mLastDisplayedTimecode.samples > mTriggerTimecode.samples) {
+				//assume last displayed timecode hasn't wrapped relative to trigger timecode
+		   		if ((mLastDisplayedTimecode.samples - mTriggerTimecode.samples) / mTriggerTimecode.edit_rate.numerator * mTriggerTimecode.edit_rate.denominator < 60) Trigger(); //trigger if trigger timecode is less than a minute behind last displayed timecode
+			}
+			else {
+				//assume last displayed timecode has wrapped relative to trigger timecode
+		   		if ((mLastDisplayedTimecode.samples - mTriggerTimecode.samples) / mTriggerTimecode.edit_rate.numerator * mTriggerTimecode.edit_rate.denominator + 86400 < 60) Trigger(); //trigger if trigger timecode is less than a minute behind last displayed timecode
+			}
+		}
 	}
+	return ok;
 }
 
 /// Gets the position display as a frame number, or returns 0 if the position display is not running.
@@ -126,6 +159,7 @@ const wxString Timepos::FormatPosition(const ProdAuto::MxfDuration duration)
 }
 
 /// Converts a time span object into a string for display.
+/// If negative, a day is added to wrap it.
 /// @param timespan Contains the duration.
 /// @param editRate Contains edit rate needed for conversion, checked to prevent divide by zero.
 const wxString Timepos::FormatPosition(const wxTimeSpan timespan, const ProdAuto::MxfTimecode editRate)
@@ -135,12 +169,14 @@ const wxString Timepos::FormatPosition(const wxTimeSpan timespan, const ProdAuto
 		msg = UNKNOWN_POSITION;
 	}
 	else {
+		wxTimeSpan positive = timespan;
+		if (positive < 0) positive += wxTimeSpan::Day();
 		//minutes
-		msg = timespan.GetMinutes() ? wxString::Format(wxT(" %02d:"), timespan.GetMinutes()) : wxT("    "); //Minutes count to >59
+		msg = positive.GetMinutes() ? wxString::Format(wxT(" %02d:"), positive.GetMinutes()) : wxT("    "); //Minutes count to >59
 		//seconds
-		msg += wxString::Format(wxT("%02d:"), (int) (timespan.GetSeconds().GetLo() % 60));
+		msg += wxString::Format(wxT("%02d:"), (int) (positive.GetSeconds().GetLo() % 60));
 		//frames
-		msg += wxString::Format(wxT("%02d"), (int) (timespan.GetMilliseconds().GetLo() % 1000 * editRate.edit_rate.numerator / editRate.edit_rate.denominator / 1000));
+		msg += wxString::Format(wxT("%02d"), (int) (positive.GetMilliseconds().GetLo() % 1000 * editRate.edit_rate.numerator / editRate.edit_rate.denominator / 1000));
 	}
 	return msg;
 }

@@ -1,5 +1,5 @@
 /*
- * $Id: AAFFile.cpp,v 1.11 2010/06/02 12:59:07 john_f Exp $
+ * $Id: AAFFile.cpp,v 1.12 2010/07/21 16:29:34 john_f Exp $
  *
  * AAF file for defining clips, multi-camera clips, etc
  *
@@ -2151,21 +2151,67 @@ void AAFFile::mapFileSourceMob(SourcePackage* sourcePackage)
             }
             else if (fileDescriptor->videoResolutionID == MaterialResolution::UNC_MXF_ATOM)
             {
-                AAF_CHECK(pCDCIDescriptor2->SetHorizontalSubsampling(2));
-                AAF_CHECK(pCDCIDescriptor2->SetVerticalSubsampling(1));
-                AAF_CHECK(pDigitalImageDescriptor2->SetStoredView(592, 720));
-                AAF_CHECK(pDigitalImageDescriptor2->SetDisplayView(576, 720, 0, 16));
-                AAF_CHECK(pDigitalImageDescriptor2->SetFrameLayout(kAAFMixedFields));
-                aafInt32 videoLineMap[2] = {15, 328};
-                AAF_CHECK(pDigitalImageDescriptor2->SetVideoLineMap(2, videoLineMap));
-                AAF_CHECK(pDigitalImageDescriptor2->SetImageAlignmentFactor(8192));
-                AAF_CHECK(pDigitalImageDescriptor2->SetFieldStartOffset(7680));
-                setDIDInt32Property(pCDDigitalImageDescriptor, pDigitalImageDescriptor2,
-                    kAAFPropID_DIDFrameSampleSize, 860160); // aligned frame size
-                setDIDInt32Property(pCDDigitalImageDescriptor, pDigitalImageDescriptor2,
-                    kAAFPropID_DIDImageSize, track->sourceClip->length * 860160);
-                setDIDInt32Property(pCDDigitalImageDescriptor, pDigitalImageDescriptor2,
-                    kAAFPropID_DIDResolutionID, 0xaa);
+                if (fileDescriptor->storedWidth == 720)
+                {
+                    /* SD */
+                    AAF_CHECK(pCDCIDescriptor2->SetHorizontalSubsampling(2));
+                    AAF_CHECK(pCDCIDescriptor2->SetVerticalSubsampling(1));
+                    AAF_CHECK(pDigitalImageDescriptor2->SetStoredView(592, 720));
+                    AAF_CHECK(pDigitalImageDescriptor2->SetDisplayView(576, 720, 0, 16));
+                    AAF_CHECK(pDigitalImageDescriptor2->SetFrameLayout(kAAFMixedFields));
+                    aafInt32 videoLineMap[2] = {15, 328};
+                    AAF_CHECK(pDigitalImageDescriptor2->SetVideoLineMap(2, videoLineMap));
+                    AAF_CHECK(pDigitalImageDescriptor2->SetImageAlignmentFactor(8192));
+                    AAF_CHECK(pDigitalImageDescriptor2->SetFieldStartOffset(7680));
+                    setDIDInt32Property(pCDDigitalImageDescriptor, pDigitalImageDescriptor2,
+                        kAAFPropID_DIDFrameSampleSize, 860160); // aligned frame size
+                    setDIDInt32Property(pCDDigitalImageDescriptor, pDigitalImageDescriptor2,
+                        kAAFPropID_DIDImageSize, track->sourceClip->length * 860160);
+                    setDIDInt32Property(pCDDigitalImageDescriptor, pDigitalImageDescriptor2,
+                        kAAFPropID_DIDResolutionID, 0xaa);
+                }
+                else
+                {
+                    AAF_CHECK(fileDescriptor->storedWidth == 1920);
+
+                    /* HD - 1080i */
+                    AAF_CHECK(pCDCIDescriptor2->SetHorizontalSubsampling(2));
+                    AAF_CHECK(pCDCIDescriptor2->SetVerticalSubsampling(1));
+                    AAF_CHECK(pDigitalImageDescriptor2->SetStoredView(1080, 1920));
+                    AAF_CHECK(pDigitalImageDescriptor2->SetDisplayView(1080, 1920, 0, 0));
+                    AAF_CHECK(pDigitalImageDescriptor2->SetFrameLayout(kAAFMixedFields));
+                    aafInt32 videoLineMap[2] = {21, 584};
+                    AAF_CHECK(pDigitalImageDescriptor2->SetVideoLineMap(2, videoLineMap));
+                    AAF_CHECK(pDigitalImageDescriptor2->SetImageAlignmentFactor(8192));
+                    AAF_CHECK(pDigitalImageDescriptor2->SetFieldStartOffset(6144));
+                    AAF_CHECK(pDigitalImageDescriptor2->SetCodingEquations(kAAFCodingEquations_ITU709));
+                    setDIDInt32Property(pCDDigitalImageDescriptor, pDigitalImageDescriptor2,
+                        kAAFPropID_DIDFrameSampleSize, 4153344); // aligned frame size
+                    setDIDInt32Property(pCDDigitalImageDescriptor, pDigitalImageDescriptor2,
+                        kAAFPropID_DIDImageSize, track->sourceClip->length * 4153344);
+                    // no ResolutionID property found in sample file (Avid MC 3.0)
+                }
+#if 0 // 720p50 not yet supported
+                {
+                    AAF_CHECK(fileDescriptor->storedWidth == 1280);
+                    
+                    /* HD - 720p50 */
+                    AAF_CHECK(pCDCIDescriptor2->SetHorizontalSubsampling(2));
+                    AAF_CHECK(pCDCIDescriptor2->SetVerticalSubsampling(1));
+                    AAF_CHECK(pDigitalImageDescriptor2->SetStoredView(720, 1280));
+                    AAF_CHECK(pDigitalImageDescriptor2->SetDisplayView(720, 1280, 0, 0));
+                    AAF_CHECK(pDigitalImageDescriptor2->SetFrameLayout(kAAFFullFrame));
+                    aafInt32 videoLineMap[1] = {26};
+                    AAF_CHECK(pDigitalImageDescriptor2->SetVideoLineMap(1, videoLineMap));
+                    AAF_CHECK(pDigitalImageDescriptor2->SetImageAlignmentFactor(8192));
+                    AAF_CHECK(pDigitalImageDescriptor2->SetCodingEquations(kAAFCodingEquations_ITU709));
+                    setDIDInt32Property(pCDDigitalImageDescriptor, pDigitalImageDescriptor2,
+                        kAAFPropID_DIDFrameSampleSize, 1843200);
+                    setDIDInt32Property(pCDDigitalImageDescriptor, pDigitalImageDescriptor2,
+                        kAAFPropID_DIDImageSize, track->sourceClip->length * 1843200);
+                    // no ResolutionID property found in sample file (Avid MC 3.0)
+                }
+#endif
             }
             else if (fileDescriptor->videoResolutionID == MaterialResolution::MJPEG21_MXF_ATOM)
             {

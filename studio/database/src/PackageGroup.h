@@ -1,5 +1,5 @@
 /*
- * $Id: PackageGroup.h,v 1.4 2010/06/02 13:04:40 john_f Exp $
+ * $Id: PackageGroup.h,v 1.5 2010/07/21 16:29:34 john_f Exp $
  *
  * Package group
  *
@@ -31,14 +31,18 @@
 
 #include "Package.h"
 #include "MaterialResolution.h"
+#include "PackageXMLReader.h"
+#include "Transaction.h"
+
 
 
 namespace prodauto
 {
 
-class PackageGroup
+class PackageGroup : protected PackageXMLChildParser
 {
 public:
+    PackageGroup();
     PackageGroup(bool is_pal_project, int op);
     virtual ~PackageGroup();
 
@@ -56,7 +60,10 @@ public:
     void UpdateFileLocation(uint32_t mp_track_id, std::string file_location);
     void UpdateFileLocation(std::string file_location); // use for OP-1A only
     void UpdateAllFileLocations(std::string prefix);
-    
+
+    void UpdateStoredDimensions(uint32_t mp_track_id, uint32_t stored_width, uint32_t stored_height);
+    void UpdateStoredDimensions(uint32_t stored_width, uint32_t stored_height); // use for OP-1A only
+
     MaterialPackage* GetMaterialPackage() { return mMaterialPackage; }
     std::vector<SourcePackage*>& GetFileSourcePackages() { return mFileSourcePackages; }
     SourcePackage* GetFileSourcePackage(); // use for OP-1A only
@@ -79,9 +86,10 @@ public:
     
     PackageGroup* Clone();
     
-    void SaveToDatabase();
+    void SaveToDatabase(Transaction *transaction = 0);
     
-    void SaveToFile(std::string filename);
+    void SaveToFile(std::string filename, DatabaseCache *db_cache);
+    void RestoreFromFile(std::string filename, DatabaseCache *db_cache);
     
 public:
     void SetMaterialPackage(MaterialPackage *material_package);
@@ -91,6 +99,10 @@ public:
 
 public:
     virtual void ClearPackages();
+
+protected:
+    // from PackageXMLChildParser
+    virtual void ParseXMLChild(PackageXMLReader *reader, std::string name);
 
 protected:
     std::string CreatePrefixFileLocation(std::string prefix, std::string file_path);

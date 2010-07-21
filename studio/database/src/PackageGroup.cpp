@@ -1,5 +1,5 @@
 /*
- * $Id: PackageGroup.cpp,v 1.4 2010/06/02 13:04:40 john_f Exp $
+ * $Id: PackageGroup.cpp,v 1.5 2010/07/21 16:29:34 john_f Exp $
  *
  * Package group
  *
@@ -40,6 +40,17 @@ using namespace std;
 using namespace prodauto;
 
 
+
+PackageGroup::PackageGroup()
+{
+    mPALProject = true;
+    mOP = OperationalPattern::OP_ATOM;
+    mProjectEditRate = g_palEditRate;
+    mMaterialPackage = 0;
+    mTapeSourcePackage = 0;
+    mOwnTapeSourcePackage = false;
+}
+
 PackageGroup::PackageGroup(bool is_pal_project, int op)
 {
     mPALProject = is_pal_project;
@@ -48,7 +59,6 @@ PackageGroup::PackageGroup(bool is_pal_project, int op)
     mMaterialPackage = 0;
     mTapeSourcePackage = 0;
     mOwnTapeSourcePackage = false;
-
 }
 
 PackageGroup::~PackageGroup()
@@ -121,6 +131,27 @@ void PackageGroup::UpdateAllFileLocations(string prefix)
     }
 }
 
+void PackageGroup::UpdateStoredDimensions(uint32_t mp_track_id, uint32_t stored_width, uint32_t stored_height)
+{
+    SourcePackage *fsp = GetFileSourcePackage(mp_track_id);
+    
+    PA_ASSERT(fsp->descriptor->getType() == FILE_ESSENCE_DESC_TYPE);
+    FileEssenceDescriptor *file_descriptor = dynamic_cast<FileEssenceDescriptor*>(fsp->descriptor);
+    file_descriptor->storedWidth = stored_width;
+    file_descriptor->storedHeight = stored_height;
+}
+
+void PackageGroup::UpdateStoredDimensions(uint32_t stored_width, uint32_t stored_height)
+{
+    PA_ASSERT(mFileSourcePackages.size() == 1);
+    SourcePackage *fsp = mFileSourcePackages[0];
+    
+    PA_ASSERT(fsp->descriptor->getType() == FILE_ESSENCE_DESC_TYPE);
+    FileEssenceDescriptor *file_descriptor = dynamic_cast<FileEssenceDescriptor*>(fsp->descriptor);
+    file_descriptor->storedWidth = stored_width;
+    file_descriptor->storedHeight = stored_height;
+}
+
 SourcePackage* PackageGroup::GetFileSourcePackage()
 {
     PA_ASSERT(mOP == OperationalPattern::OP_1A);
@@ -138,8 +169,7 @@ MaterialResolution::EnumType PackageGroup::GetMaterialResolution()
     for (i = 0; i < mFileSourcePackages.size(); i++) {
         file_descriptor = dynamic_cast<FileEssenceDescriptor*>(mFileSourcePackages[i]->descriptor);
         if (file_descriptor->videoResolutionID != 0) {
-            PA_ASSERT(file_descriptor->videoResolutionID > 0 &&
-                      file_descriptor->videoResolutionID < MaterialResolution::END);
+            PA_ASSERT(file_descriptor->videoResolutionID > 0);
             return static_cast<MaterialResolution::EnumType>(file_descriptor->videoResolutionID);
         }
     }
@@ -327,31 +357,38 @@ PackageGroup* PackageGroup::Clone()
     return cloned_group;
 }
 
-void PackageGroup::SaveToDatabase()
+void PackageGroup::SaveToDatabase(Transaction *transaction)
 {
     Database *database = Database::getInstance();
-    auto_ptr<Transaction> transaction(database->getTransaction("SavePackageGroup"));
+
+    Transaction *ts = transaction;
+    auto_ptr<Transaction> local_ts;
+    if (!transaction) {
+        local_ts = auto_ptr<Transaction>(database->getTransaction("SavePackageGroup"));
+        ts = local_ts.get();
+    }
 
     if (!mTapeSourcePackage->isPersistent())
-        database->savePackage(mTapeSourcePackage, transaction.get());
+        database->savePackage(mTapeSourcePackage, ts);
 
     size_t i;
     for (i = 0; i < mFileSourcePackages.size(); i++)
-        database->savePackage(mFileSourcePackages[i], transaction.get());
+        database->savePackage(mFileSourcePackages[i], ts);
     
-    database->savePackage(mMaterialPackage, transaction.get());
+    database->savePackage(mMaterialPackage, ts);
     
-    transaction->commit();
+    if (!transaction)
+        ts->commit();
 }
 
-void PackageGroup::SaveToFile(string filename)
+void PackageGroup::SaveToFile(string filename, DatabaseCache *db_cache)
 {
     FILE *xml_file = fopen(filename.c_str(), "wb");
     if (!xml_file)
         PA_LOGTHROW(ProdAutoException, ("Failed to open MXF file '%s': %s\n", filename.c_str(), strerror(errno)));
     
     
-    PackageXMLWriter writer(xml_file);
+    PackageXMLWriter writer(xml_file, db_cache);
     writer.WriteDocumentStart();
     
     writer.WriteElementStart("PackageGroup");
@@ -373,6 +410,24 @@ void PackageGroup::SaveToFile(string filename)
     writer.WriteElementEnd();
     
     writer.WriteDocumentEnd();
+}
+
+void PackageGroup::RestoreFromFile(string filename, DatabaseCache *db_cache)
+{
+    ClearPackages();
+
+    PackageXMLReader reader(db_cache);
+    reader.Parse(filename, this);
+
+    string root_name = reader.GetCurrentElementName();
+    if (root_name != "PackageGroup")
+        throw ProdAutoException("Root element name %s is not 'PackageGroup'\n", root_name.c_str());
+
+    mPALProject = reader.ParseBoolAttr("isPALProject");
+    mOP = reader.ParseOPAttr("op");
+    mProjectEditRate = reader.ParseRationalAttr("projectEditRate");
+
+    reader.ParseChildElements(this);
 }
 
 void PackageGroup::SetMaterialPackage(MaterialPackage *material_package)
@@ -419,6 +474,33 @@ void PackageGroup::ClearPackages()
         delete mTapeSourcePackage;
     mTapeSourcePackage = 0;
     mOwnTapeSourcePackage = false;
+}
+
+void PackageGroup::ParseXMLChild(PackageXMLReader *reader, string name)
+{
+    if (name == "MaterialPackage") {
+        if (mMaterialPackage)
+            throw ProdAutoException("Multiple material packages\n");
+
+        auto_ptr<MaterialPackage> material_package(new MaterialPackage());
+        material_package->fromXML(reader);
+
+        mMaterialPackage = material_package.release();
+    } else if (name == "SourcePackage") {
+        auto_ptr<SourcePackage> source_package(new SourcePackage());
+        source_package->fromXML(reader);
+        
+        PA_CHECK(source_package->descriptor);
+        if (source_package->descriptor->getType() == FILE_ESSENCE_DESC_TYPE) {
+            mFileSourcePackages.push_back(source_package.release());
+        } else {
+            if (mTapeSourcePackage)
+                throw ProdAutoException("Multiple tape source packages\n");
+
+            mTapeSourcePackage = source_package.release();
+            mOwnTapeSourcePackage = true;
+        }
+    }
 }
 
 string PackageGroup::CreatePrefixFileLocation(string prefix, string file_path)

@@ -1,5 +1,5 @@
 /*
- * $Id: D10MXFOP1AWriter.cpp,v 1.5 2010/06/18 09:32:00 philipn Exp $
+ * $Id: D10MXFOP1AWriter.cpp,v 1.6 2010/07/21 16:29:34 john_f Exp $
  *
  * D10 MXF OP-1A writer
  *
@@ -529,9 +529,9 @@ HeaderMetadata* D10MXFOP1AWriter::CreateHeaderMetadata()
     cdciDescriptor->setPictureEssenceCoding(picture_essence_coding_ul);
     cdciDescriptor->setSignalStandard(0x01); // Rec. 601
     cdciDescriptor->setFrameLayout(0x01); // Separate fields
+    cdciDescriptor->setStoredWidth(GetStoredWidth());
+    cdciDescriptor->setStoredHeight(GetStoredHeight());
     if (mSampleRate == D10_SAMPLE_RATE_625_50I) {
-        cdciDescriptor->setStoredWidth(720);
-        cdciDescriptor->setStoredHeight(304);
         cdciDescriptor->setSampledWidth(720);
         cdciDescriptor->setSampledHeight(304);
         cdciDescriptor->setDisplayWidth(720);
@@ -541,8 +541,6 @@ HeaderMetadata* D10MXFOP1AWriter::CreateHeaderMetadata()
         cdciDescriptor->appendVideoLineMap(7);
         cdciDescriptor->appendVideoLineMap(320);
     } else {
-        cdciDescriptor->setStoredWidth(720);
-        cdciDescriptor->setStoredHeight(256);
         cdciDescriptor->setSampledWidth(720);
         cdciDescriptor->setSampledHeight(256);
         cdciDescriptor->setDisplayWidth(720);
@@ -746,6 +744,19 @@ void D10MXFOP1AWriter::WriteContentPackage(const D10ContentPackage *content_pack
 int64_t D10MXFOP1AWriter::GetFileSize() const
 {
     return mMXFFile->size();
+}
+
+uint32_t D10MXFOP1AWriter::GetStoredWidth() const
+{
+    return 720;
+}
+
+uint32_t D10MXFOP1AWriter::GetStoredHeight() const
+{
+    if (mSampleRate == D10_SAMPLE_RATE_625_50I)
+        return 304;
+    else
+        return 256;
 }
 
 void D10MXFOP1AWriter::UpdateStartTimecode(int64_t count)

@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.2 2010/07/14 13:06:36 john_f Exp $
+# $Id: Makefile,v 1.3 2010/07/21 16:29:34 john_f Exp $
 #
 # 
 #
@@ -47,7 +47,12 @@ all: $(OBJECTS)
 .PHONY: install
 install: all
 	mkdir -p $(INSTALL_PREFIX)/include/libMXF++/examples/Common
-	cp *.h $(INSTALL_PREFIX)/include/libMXF++/examples/Common/
+	cp CommonTypes.h $(INSTALL_PREFIX)/include/libMXF++/examples/Common/
+	cp DynamicByteArray.h $(INSTALL_PREFIX)/include/libMXF++/examples/Common/
+
+.PHONY: uninstall
+uninstall:
+	rm -Rf $(INSTALL_PREFIX)/include/libMXF++/examples/Common
 
 .PHONY: clean
 clean:

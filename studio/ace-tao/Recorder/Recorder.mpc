@@ -1,5 +1,8 @@
 
 project(Recorder): taoserver, naming, messaging, valuetype {
+  verbatim(gnuace, top) {
+    include ../../../common/libmxf.mk
+  }
   exename = Recorder
   macros += _FILE_OFFSET_BITS=64 _LARGEFILE_SOURCE _LARGEFILE64_SOURCE
   includes += ../IDL
@@ -19,17 +22,18 @@ project(Recorder): taoserver, naming, messaging, valuetype {
   //libs += jpeg-mmx
   libs += uuid
   libs += pqxx
+  libs += xerces-c
   libs += common
   libs += prodautodb
   libs += acetaocommon
   libs += YUVlib
   libs += studiocommon
-  libs += MXF
-  libs += writeavidmxf
-  libs += MXF++
-  libs += D10MXFOP1AWriter
   libs += mxfwriter
   libs += idl
+  pure_libs += $(LIBMXF_LIB)
+  pure_libs += $(LIBMXFPP_LIB)
+  pure_libs += $(WRITEAVIDMXF_LIB)
+  pure_libs += $(D10MXFOP1AWRITER_LIB)
   libpaths += ../common
   libpaths += ../../common
   libpaths += ../../../common
@@ -37,10 +41,6 @@ project(Recorder): taoserver, naming, messaging, valuetype {
   libpaths += ../../processing/offline
   libpaths += ../../mxfwriter
   libpaths += ../../database/src
-  libpaths += ../../../libMXF/examples/writeavidmxf
-  libpaths += ../../../libMXF/lib
-  libpaths += ../../../libMXF++/examples/D10MXFOP1AWriter
-  libpaths += ../../../libMXF++/libMXF++
   libpaths += ../IDL
   libpaths += /usr/local/lib
   libpaths += /usr/local/lib64

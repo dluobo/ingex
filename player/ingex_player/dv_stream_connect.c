@@ -1,5 +1,5 @@
 /*
- * $Id: dv_stream_connect.c,v 1.8 2010/06/02 11:12:14 philipn Exp $
+ * $Id: dv_stream_connect.c,v 1.9 2010/07/21 16:29:34 john_f Exp $
  *
  *
  *
@@ -750,10 +750,19 @@ int dv_connect_accept(MediaSink* sink, const StreamInfo* streamInfo)
 
         result = msk_accept_stream(sink, &decodedStreamInfo);
     }
-    else /* DV50_FORMAT or DV100_FORMAT */
+    else if (streamInfo->format == DV50_FORMAT)
     {
         decodedStreamInfo = *streamInfo;
         decodedStreamInfo.format = YUV422_FORMAT;
+
+        result = msk_accept_stream(sink, &decodedStreamInfo);
+    }
+    else /* DV100_FORMAT */
+    {
+        decodedStreamInfo = *streamInfo;
+        decodedStreamInfo.format = YUV422_FORMAT;
+        decodedStreamInfo.aspectRatio.num = 4;
+        decodedStreamInfo.aspectRatio.den = 3;
 
         result = msk_accept_stream(sink, &decodedStreamInfo);
     }
@@ -761,7 +770,6 @@ int dv_connect_accept(MediaSink* sink, const StreamInfo* streamInfo)
     /* try UYVY if default format is not accepted */
     if (!result)
     {
-        decodedStreamInfo = *streamInfo;
         decodedStreamInfo.format = UYVY_FORMAT;
 
         result = msk_accept_stream(sink, &decodedStreamInfo);
@@ -792,10 +800,19 @@ int create_dv_connect(MediaSink* sink, int sinkStreamId, int sourceStreamId,
 
         result = msk_accept_stream(sink, &decodedStreamInfo);
     }
-    else /* streamInfo->format == DV50_FORMAT || streamInfo->format == DV100_FORMAT */
+    else if (streamInfo->format == DV50_FORMAT)
     {
         decodedStreamInfo = *streamInfo;
         decodedStreamInfo.format = YUV422_FORMAT;
+
+        result = msk_accept_stream(sink, &decodedStreamInfo);
+    }
+    else /* DV100_FORMAT */
+    {
+        decodedStreamInfo = *streamInfo;
+        decodedStreamInfo.format = YUV422_FORMAT;
+        decodedStreamInfo.aspectRatio.num = 4;
+        decodedStreamInfo.aspectRatio.den = 3;
 
         result = msk_accept_stream(sink, &decodedStreamInfo);
     }
@@ -803,7 +820,6 @@ int create_dv_connect(MediaSink* sink, int sinkStreamId, int sourceStreamId,
     /* try UYVY if default format is not accepted */
     if (!result)
     {
-        decodedStreamInfo = *streamInfo;
         decodedStreamInfo.format = UYVY_FORMAT;
 
         result = msk_accept_stream(sink, &decodedStreamInfo);

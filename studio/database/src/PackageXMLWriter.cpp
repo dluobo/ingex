@@ -1,5 +1,5 @@
 /*
- * $Id: PackageXMLWriter.cpp,v 1.1 2010/06/02 13:04:40 john_f Exp $
+ * $Id: PackageXMLWriter.cpp,v 1.2 2010/07/21 16:29:34 john_f Exp $
  *
  * Copyright (C) 2010  British Broadcasting Corporation.
  * All Rights Reserved.
@@ -25,6 +25,7 @@
 #define __STDC_FORMAT_MACROS    1
 
 #include "PackageXMLWriter.h"
+#include "DatabaseCache.h"
 #include "DatabaseEnums.h"
 #include "MaterialResolution.h"
 #include "Logging.h"
@@ -38,9 +39,10 @@ static const char *DEFAULT_NAMESPACE = "http://bbc.co.uk/rd/ingex";
 
 
 
-PackageXMLWriter::PackageXMLWriter(FILE *mxf_file)
-: XMLWriter(mxf_file)
+PackageXMLWriter::PackageXMLWriter(FILE *xml_file, DatabaseCache *db_cache)
+: XMLWriter(xml_file)
 {
+    mDatabaseCache = db_cache;
 }
 
 PackageXMLWriter::~PackageXMLWriter()
@@ -79,6 +81,13 @@ void PackageXMLWriter::WriteIntAttribute(string local_name, int value)
 {
     char buffer[32];
     sprintf(buffer, "%d", value);
+    WriteAttribute(local_name, buffer);
+}
+
+void PackageXMLWriter::WriteLongAttribute(string local_name, long value)
+{
+    char buffer[32];
+    sprintf(buffer, "%ld", value);
     WriteAttribute(local_name, buffer);
 }
 

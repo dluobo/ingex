@@ -1,4 +1,4 @@
-# $Id: Makefile,v 1.12 2010/07/14 13:06:36 john_f Exp $
+# $Id: Makefile,v 1.13 2010/07/21 16:29:34 john_f Exp $
 #
 
 include ../../../common/libmxf.mk
@@ -36,7 +36,7 @@ DEPENDENCIES = $(subst .cpp,.d,$(SOURCES))
 FFMPEG_LIBS = -lavformat -lavcodec -lavutil -lz -lbz2 -lmp3lame -lx264 -lfaac -lfaad -lm
 
 TRANSCODE_LIBS = -ljpeg $(FFMPEG_LIBS) -L$(STUDIOCOMMON_DIR) -lstudiocommon -L$(YUVLIB_DIR) -lYUVlib \
-	-L$(DATABASELIB_DIR) -lprodautodb -lpqxx -L$(COMMON_DIR) -lcommon -L$(STUDIOCOMMON_DIR) -lstudiocommon \
+	-L$(DATABASELIB_DIR) -lprodautodb -lpqxx -lxerces-c -L$(COMMON_DIR) -lcommon -L$(STUDIOCOMMON_DIR) -lstudiocommon \
 	-L$(MXFWRITER_DIR) -lmxfwriter $(WRITEAVIDMXF_LIB) \
 	$(MXFREADER_LIB) $(LIBMXF_LIB) -lpthread
 

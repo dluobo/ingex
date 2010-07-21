@@ -1,5 +1,5 @@
 /*
- * $Id: MXFOPAtomWriter.cpp,v 1.4 2010/06/02 13:01:21 john_f Exp $
+ * $Id: MXFOPAtomWriter.cpp,v 1.5 2010/07/21 16:29:34 john_f Exp $
  *
  * MXF OP-Atom writer
  *
@@ -132,7 +132,7 @@ void MXFOPAtomWriter::PrepareToWrite(PackageGroup *package_group, bool take_owne
     CHECK(create_clip_writer(mPackageGroup->GetMaterialPackage()->projectName.name.c_str(), project_format,
                              project_edit_rate, drop_frame_flag, false, mPackageDefinitions, &mClipWriter));
 
-    // update the file locations in the prodauto file source packages
+    // update the file locations and picture dimensions in the prodauto file source packages
     MXFListIterator mp_track_iter;
     mxf_initialise_list_iter(&mp_track_iter, &mPackageDefinitions->materialPackage->tracks);
     while (mxf_next_list_iter_element(&mp_track_iter))
@@ -155,10 +155,17 @@ void MXFOPAtomWriter::PrepareToWrite(PackageGroup *package_group, bool take_owne
         // file source package could be null if the prodauto package_group didn't include a file source package
         // for this material package track
         
-        if (fs_package)
+        if (fs_package) {
             mPackageGroup->UpdateFileLocation(mp_track->id, fs_package->filename);
-        else
+            
+            if (mp_track->isPicture) {
+                uint32_t stored_width, stored_height;
+                CHECK(get_stored_dimensions(mClipWriter, mp_track->id, &stored_width, &stored_height));
+                mPackageGroup->UpdateStoredDimensions(mp_track->id, stored_width, stored_height);
+            }
+        } else {
             Logging::warning("Missing file source package for material track %d\n", mp_track->id);
+        }
     }
 }
 
@@ -361,7 +368,12 @@ void MXFOPAtomWriter::CreatePackageDefinitions()
             switch (descriptor->videoResolutionID)
             {
                 case MaterialResolution::UNC_MXF_ATOM:
-                    essence_type = UncUYVY;
+                    if (descriptor->storedWidth == 720) {
+                        essence_type = UncUYVY;
+                    } else {
+                        PA_ASSERT(descriptor->storedWidth == 1920);
+                        essence_type = Unc1080iUYVY;
+                    }
                     break;
                 case MaterialResolution::DV25_MXF_ATOM:
                     essence_type = IECDV25;

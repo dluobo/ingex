@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.1 2009/02/02 05:14:33 stuart_hc Exp $
+# $Id: Makefile,v 1.2 2010/07/21 16:29:34 john_f Exp $
 #
 #
 #
@@ -67,6 +67,10 @@ avidclipwriter: .objs/main.o libAvidClipWriter.a
 install: all
 	mkdir -p $(INSTALL_PREFIX)/bin
 	cp avidclipwriter $(INSTALL_PREFIX)/bin/
+
+.PHONY: uninstall
+uninstall:
+	rm -f $(INSTALL_PREFIX)/bin/avidclipwriter
 
 .PHONY: clean
 clean:

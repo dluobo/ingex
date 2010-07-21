@@ -1,5 +1,5 @@
 /*
- * $Id: IngexMXFInfo.cpp,v 1.4 2010/06/02 13:01:45 john_f Exp $
+ * $Id: IngexMXFInfo.cpp,v 1.5 2010/07/21 16:29:34 john_f Exp $
  *
  * Extract information from Ingex MXF files.
  *
@@ -681,6 +681,15 @@ void IngexMXFInfo::extractFileSourcePackageInfo(SourcePackage *mxf_package, mxfU
         
         if (mxf_picture_descriptor->haveAspectRatio())
             convert_rational(mxf_picture_descriptor->getAspectRatio(), &descriptor->imageAspectRatio);
+        
+        if (mxf_picture_descriptor->haveStoredWidth())
+            descriptor->storedWidth = mxf_picture_descriptor->getStoredWidth();
+        else
+            descriptor->storedWidth = 0;
+        if (mxf_picture_descriptor->haveStoredHeight())
+            descriptor->storedHeight = mxf_picture_descriptor->getStoredHeight();
+        else
+            descriptor->storedHeight = 0;
         
     } else if (mxf_sound_descriptor) {
         if (mxf_sound_descriptor->haveQuantizationBits())

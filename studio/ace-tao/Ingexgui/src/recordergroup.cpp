@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: recordergroup.cpp,v 1.11 2010/06/02 13:09:25 john_f Exp $       *
+ *   $Id: recordergroup.cpp,v 1.12 2010/07/21 16:29:34 john_f Exp $       *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -530,8 +530,8 @@ void RecorderGroupCtrl::SetTapeIds(const wxString & recorderName, const CORBA::S
 void RecorderGroupCtrl::OnTimeposEvent(wxCommandEvent & event)
 {
 	if (WAITING == mChunking) {
-		RecordAll(mStartTimecode); //timecode has already been set to be the frame after the recordings stopped
 		mChunking = RECORDING_CHUNK;
+		RecordAll(mStartTimecode); //timecode has already been set to be the frame after the recordings stopped
 	}
 	delete (ProdAuto::MxfTimecode *) event.GetClientData();
 }
@@ -547,6 +547,7 @@ void RecorderGroupCtrl::RecordAll(const ProdAuto::MxfTimecode startTimecode)
 		if (GetController(i) && GetController(i)->IsOK()) {
 			wxCommandEvent event(EVT_RECORDERGROUP_MESSAGE, REQUEST_RECORD);
 			event.SetString(GetName(i));
+			event.SetInt(RECORDING_CHUNK == mChunking); //ignore the fact that tracks are still recording
 			AddPendingEvent(event);
 		}
 	}

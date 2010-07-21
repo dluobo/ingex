@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.2 2010/07/14 13:06:36 john_f Exp $
+# $Id: Makefile,v 1.3 2010/07/21 16:29:34 john_f Exp $
 #
 # Copyright (C) 2010  British Broadcasting Corporation.
 # All Rights Reserved.
@@ -74,7 +74,13 @@ install: all
 	mkdir -p $(INSTALL_PREFIX)/lib
 	cp libD10MXFOP1AWriter.a $(INSTALL_PREFIX)/lib/
 	mkdir -p $(INSTALL_PREFIX)/include/libMXF++/examples/D10MXFOP1AWriter
-	cp *.h $(INSTALL_PREFIX)/include/libMXF++/examples/D10MXFOP1AWriter/
+	cp D10ContentPackage.h $(INSTALL_PREFIX)/include/libMXF++/examples/D10MXFOP1AWriter/
+	cp D10MXFOP1AWriter.h $(INSTALL_PREFIX)/include/libMXF++/examples/D10MXFOP1AWriter/
+
+.PHONY: uninstall
+uninstall:
+	rm -f $(INSTALL_PREFIX)/lib/libD10MXFOP1AWriter.a
+	rm -Rf $(INSTALL_PREFIX)/include/libMXF++/examples/D10MXFOP1AWriter
 
 .PHONY: clean
 clean:

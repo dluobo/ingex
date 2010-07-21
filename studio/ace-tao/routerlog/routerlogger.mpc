@@ -12,6 +12,7 @@ project(routerlogger): taoserver, naming, messaging, valuetype {
   }
 
   libs += pqxx
+  libs += xerces-c
   libs += common
   libs += studiocommon
   libs += prodautodb

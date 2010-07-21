@@ -1,5 +1,5 @@
 /*
- * $Id: OP1APackageCreator.cpp,v 1.2 2010/06/02 13:04:40 john_f Exp $
+ * $Id: OP1APackageCreator.cpp,v 1.3 2010/07/21 16:29:34 john_f Exp $
  *
  * OP-1A package group creator
  *
@@ -84,6 +84,9 @@ void OP1APackageCreator::CreatePackageGroup(SourceConfig *source_config, vector<
     descriptor->fileLocation = CreateFileLocation();
     descriptor->imageAspectRatio = mImageAspectRatio;
     descriptor->videoResolutionID = mVideoResolutionId;
+    // the writer can update these later on
+    descriptor->storedWidth = mStoredWidth;
+    descriptor->storedHeight = mStoredHeight;
     descriptor->audioQuantizationBits = mAudioQuantizationBits;
     
     CreateTapeSourcePackage(source_config);

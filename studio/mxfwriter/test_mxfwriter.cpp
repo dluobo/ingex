@@ -1,5 +1,5 @@
 /*
- * $Id: test_mxfwriter.cpp,v 1.13 2010/07/14 13:06:36 john_f Exp $
+ * $Id: test_mxfwriter.cpp,v 1.14 2010/07/21 16:29:34 john_f Exp $
  *
  * Tests the MXF writer
  *
@@ -496,6 +496,7 @@ static void* start_record_routine(void* data)
                 package_group->SetVideoResolutionID(MaterialResolution::UNC_MXF_ATOM);
             }
         }
+        package_group->SetStoredDimensions(720, 576);
         
         vector<bool> enabled_tracks;
         enabled_tracks.assign(source_config->trackConfigs.size(), true);

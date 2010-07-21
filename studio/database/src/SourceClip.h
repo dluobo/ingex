@@ -1,5 +1,5 @@
 /*
- * $Id: SourceClip.h,v 1.3 2010/06/02 13:04:40 john_f Exp $
+ * $Id: SourceClip.h,v 1.4 2010/07/21 16:29:34 john_f Exp $
  *
  * A Source Clip in a Track referencing a Package or null
  *
@@ -29,6 +29,7 @@
 #include "DatabaseObject.h"
 #include "DataTypes.h"
 #include "PackageXMLWriter.h"
+#include "PackageXMLReader.h"
 
 
 
@@ -46,6 +47,7 @@ public:
     virtual void cloneInPlace(bool resetLength);
     SourceClip* clone();
     void toXML(PackageXMLWriter *xml_writer);
+    void fromXML(PackageXMLReader *xml_reader);
 
     UMID sourcePackageUID;
     uint32_t sourceTrackID;

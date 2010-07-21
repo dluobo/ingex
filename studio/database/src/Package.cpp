@@ -1,5 +1,5 @@
 /*
- * $Id: Package.cpp,v 1.8 2010/06/02 13:04:40 john_f Exp $
+ * $Id: Package.cpp,v 1.9 2010/07/21 16:29:34 john_f Exp $
  *
  * A MXF/AAF Package
  *
@@ -24,6 +24,7 @@
 #include <sstream>
 
 #include "Package.h"
+#include "DatabaseCache.h"
 #include "MaterialResolution.h"
 #include "Utilities.h"
 #include "ProdAutoException.h"
@@ -236,7 +237,8 @@ void Package::toXML(PackageXMLWriter *xml_writer)
     xml_writer->WriteUMIDAttribute("uid", uid);
     xml_writer->WriteAttribute("name", name);
     xml_writer->WriteTimestampAttribute("creationDate", creationDate);
-    xml_writer->WriteAttribute("projectName", projectName.name);
+    if (!projectName.name.empty())
+        xml_writer->WriteAttribute("projectName", projectName.name);
     
     if (!_userComments.empty()) {
         xml_writer->WriteElementStart("UserComments");
@@ -264,6 +266,48 @@ void Package::toXML(PackageXMLWriter *xml_writer)
             tracks[i]->toXML(xml_writer);
 
         xml_writer->WriteElementEnd();
+    }
+}
+
+void Package::fromXML(PackageXMLReader *xml_reader)
+{
+    uid = xml_reader->ParseUMIDAttr("uid");
+    name = xml_reader->ParseStringAttr("name");
+    creationDate = xml_reader->ParseTimestampAttr("creationDate");
+    if (xml_reader->HaveAttr("projectName", false)) {
+        if (xml_reader->HaveDatabaseCache()) {
+            projectName = xml_reader->GetDatabaseCache()->LoadOrCreateProjectName(
+                    xml_reader->ParseStringAttr("projectName"));
+        } else {
+            projectName.name = xml_reader->ParseStringAttr("projectName");
+            Logging::warning("Parsed Package::projectName from XML but have not persisted it to the database\n");
+        }
+    }
+
+    // MaterialPackage/SourcePackage subclass will call xml_reader->ParseChildElements()
+}
+
+void Package::ParseXMLChild(PackageXMLReader *xml_reader, string name)
+{
+    if (name == "Tracks") {
+        xml_reader->ParseChildElements(this);
+    } else if (name == "Track") {
+        auto_ptr<Track> track(new Track());
+        track->fromXML(xml_reader);
+        tracks.push_back(track.release());
+    } else if (name == "UserComments") {
+        xml_reader->ParseChildElements(this);
+    } else if (name == "UserComment") {
+        UserComment user_comment;
+        user_comment.name = xml_reader->ParseStringAttr("name");
+        user_comment.value = xml_reader->ParseStringAttr("value");
+        if (xml_reader->HaveAttr("position", false)) {
+            user_comment.position = xml_reader->ParseInt64Attr("position");
+            user_comment.colour = xml_reader->ParseColourAttr("colour");
+        } else {
+            user_comment.position = STATIC_COMMENT_POSITION;
+        }
+        _userComments.push_back(user_comment);
     }
 }
 
@@ -317,6 +361,15 @@ void MaterialPackage::toXML(PackageXMLWriter *xml_writer)
     xml_writer->WriteElementEnd();
 }
 
+void MaterialPackage::fromXML(PackageXMLReader *xml_reader)
+{
+    Package::fromXML(xml_reader);
+
+    op = xml_reader->ParseOPAttr("op");
+
+    xml_reader->ParseChildElements(this);
+}
+
 
 
 SourcePackage::SourcePackage()
@@ -345,6 +398,7 @@ string SourcePackage::toString()
             packageStr << "Video resolution ID = " << fileDesc->videoResolutionID << endl;
             packageStr << "Image aspect ratio = " << fileDesc->imageAspectRatio.numerator 
                 << ":" << fileDesc->imageAspectRatio.denominator << endl;
+            packageStr << "Stored dimensions = " << fileDesc->storedWidth << "x" << fileDesc->storedHeight << endl;
         }
         if (fileDesc->audioQuantizationBits != 0)
         {
@@ -391,6 +445,7 @@ Package* SourcePackage::clone()
     {
         clonedPackage->descriptor = descriptor->clone();
     }
+    clonedPackage->sourceConfigName = sourceConfigName;
     clonedPackage->dropFrameFlag = dropFrameFlag;
     
     return clonedPackage;
@@ -403,22 +458,56 @@ void SourcePackage::toXML(PackageXMLWriter *xml_writer)
     {
         case FILE_ESSENCE_DESC_TYPE:
             xml_writer->WriteAttribute("type", "File");
+            xml_writer->WriteAttribute("sourceConfigName", sourceConfigName);
             break;
         case TAPE_ESSENCE_DESC_TYPE:
             xml_writer->WriteAttribute("type", "Tape");
+            xml_writer->WriteBoolAttribute("dropFrameFlag", dropFrameFlag);
             break;
         case LIVE_ESSENCE_DESC_TYPE:
             xml_writer->WriteAttribute("type", "Live");
+            xml_writer->WriteBoolAttribute("dropFrameFlag", dropFrameFlag);
             break;
         default:
             PA_ASSERT(false);
     }
-    
+
     Package::toXML(xml_writer);
     
     descriptor->toXML(xml_writer);
     
     xml_writer->WriteElementEnd();
+}
+
+void SourcePackage::fromXML(PackageXMLReader *xml_reader)
+{
+    Package::fromXML(xml_reader);
+
+    if (xml_reader->HaveAttr("sourceConfigName", false))
+        sourceConfigName = xml_reader->ParseStringAttr("sourceConfigName");
+    if (xml_reader->HaveAttr("dropFrameFlag", false))
+        dropFrameFlag = xml_reader->ParseBoolAttr("dropFrameFlag");
+
+    xml_reader->ParseChildElements(this);
+}
+
+void SourcePackage::ParseXMLChild(PackageXMLReader *xml_reader, string name)
+{
+    auto_ptr<EssenceDescriptor> new_descriptor;
+    if (name == "FileEssenceDescriptor") {
+        new_descriptor = auto_ptr<EssenceDescriptor>(new FileEssenceDescriptor());
+    } else if (name == "TapeEssenceDescriptor") {
+        new_descriptor = auto_ptr<EssenceDescriptor>(new TapeEssenceDescriptor());
+    } else if (name == "LiveEssenceDescriptor") {
+        new_descriptor = auto_ptr<EssenceDescriptor>(new LiveEssenceDescriptor());
+    } else {
+        Package::ParseXMLChild(xml_reader, name);
+        return;
+    }
+    
+    new_descriptor->fromXML(xml_reader);
+    
+    descriptor = new_descriptor.release();
 }
 
 
@@ -430,7 +519,7 @@ EssenceDescriptor::EssenceDescriptor()
 
 FileEssenceDescriptor::FileEssenceDescriptor()
 : EssenceDescriptor(), fileFormat(0), videoResolutionID(0), imageAspectRatio(g_nullRational),
-  audioQuantizationBits(0)
+  storedWidth(0), storedHeight(0), audioQuantizationBits(0)
 {}
 
 EssenceDescriptor* FileEssenceDescriptor::clone()
@@ -441,6 +530,8 @@ EssenceDescriptor* FileEssenceDescriptor::clone()
     clonedDescriptor->fileFormat = fileFormat;
     clonedDescriptor->videoResolutionID = videoResolutionID;
     clonedDescriptor->imageAspectRatio = imageAspectRatio;
+    clonedDescriptor->storedWidth = storedWidth;
+    clonedDescriptor->storedHeight = storedHeight;
     clonedDescriptor->audioQuantizationBits = audioQuantizationBits;
     
     return clonedDescriptor;
@@ -448,30 +539,46 @@ EssenceDescriptor* FileEssenceDescriptor::clone()
 
 void FileEssenceDescriptor::toXML(PackageXMLWriter *xml_writer)
 {
-    string file_format_name;
+    string name;
     
     xml_writer->WriteElementStart("FileEssenceDescriptor");
     xml_writer->WriteAttribute("fileLocation", fileLocation);
     xml_writer->WriteIntAttribute("fileFormat", fileFormat);
-    if (fileFormat >= 0 && fileFormat < FileFormat::END) {
-        FileFormat::GetInfo((FileFormat::EnumType)fileFormat, file_format_name);
-        xml_writer->WriteAttribute("fileFormatName", file_format_name);
+    name = FileFormat::Name((FileFormat::EnumType)fileFormat);
+    if (name != "Unknown") {
+        xml_writer->WriteAttribute("fileFormatName", name);
     } else {
         Logging::warning("Unknown name for file format %d\n", fileFormat);
     }
     if (videoResolutionID != 0) {
         xml_writer->WriteIntAttribute("videoResolutionID", videoResolutionID);
-        if (videoResolutionID >= 0 && videoResolutionID < MaterialResolution::END) {
-            xml_writer->WriteAttribute("videoResolutionName",
-                                       MaterialResolution::Name((MaterialResolution::EnumType)videoResolutionID));
+        name = MaterialResolution::Name((MaterialResolution::EnumType)videoResolutionID);
+        if (name != "Unknown") {
+            xml_writer->WriteAttribute("videoResolutionName", name);
         } else {
             Logging::warning("Unknown name for video resolution %d\n", videoResolutionID);
         }
         xml_writer->WriteRationalAttribute("imageAspectRatio", imageAspectRatio);
+        xml_writer->WriteUInt32Attribute("storedWidth", storedWidth);
+        xml_writer->WriteUInt32Attribute("storedHeight", storedHeight);
     } else {
         xml_writer->WriteUInt32Attribute("audioQuantizationBits", audioQuantizationBits);
     }
     xml_writer->WriteElementEnd();
+}
+
+void FileEssenceDescriptor::fromXML(PackageXMLReader *xml_reader)
+{
+    fileLocation = xml_reader->ParseStringAttr("fileLocation");
+    fileFormat = xml_reader->ParseIntAttr("fileFormat");
+    if (xml_reader->HaveAttr("videoResolutionID", false)) {
+        videoResolutionID = xml_reader->ParseIntAttr("videoResolutionID");
+        imageAspectRatio = xml_reader->ParseRationalAttr("imageAspectRatio");
+        storedWidth = xml_reader->ParseUInt32Attr("storedWidth");
+        storedHeight = xml_reader->ParseUInt32Attr("storedHeight");
+    } else {
+        audioQuantizationBits = xml_reader->ParseUInt32Attr("audioQuantizationBits");
+    }
 }
 
 
@@ -496,6 +603,11 @@ void TapeEssenceDescriptor::toXML(PackageXMLWriter *xml_writer)
     xml_writer->WriteElementEnd();
 }
 
+void TapeEssenceDescriptor::fromXML(PackageXMLReader *xml_reader)
+{
+    spoolNumber = xml_reader->ParseStringAttr("spoolNumber");
+}
+
 
 LiveEssenceDescriptor::LiveEssenceDescriptor()
 : EssenceDescriptor(), recordingLocation(0)
@@ -513,7 +625,18 @@ EssenceDescriptor* LiveEssenceDescriptor::clone()
 void LiveEssenceDescriptor::toXML(PackageXMLWriter *xml_writer)
 {
     xml_writer->WriteElementStart("LiveEssenceDescriptor");
-    xml_writer->WriteIntAttribute("recordingLocation", recordingLocation);
+    if (xml_writer->HaveDatabaseCache() && recordingLocation != 0) {
+        xml_writer->WriteAttribute("recordingLocation",
+                                   xml_writer->GetDatabaseCache()->GetLiveRecordingLocation(recordingLocation));
+    }
     xml_writer->WriteElementEnd();
+}
+
+void LiveEssenceDescriptor::fromXML(PackageXMLReader *xml_reader)
+{
+    if (xml_reader->HaveDatabaseCache() && xml_reader->HaveAttr("recordingLocation", false)) {
+        recordingLocation = xml_reader->GetDatabaseCache()->LoadOrCreateLiveRecordingLocation(
+                xml_reader->ParseStringAttr("recordingLocation"));
+    }
 }
 

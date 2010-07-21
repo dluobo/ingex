@@ -1,5 +1,5 @@
 /*
- * $Id: ProdAutoException.h,v 1.2 2009/10/12 15:44:56 philipn Exp $
+ * $Id: ProdAutoException.h,v 1.3 2010/07/21 16:29:34 john_f Exp $
  *
  * General exception class
  *
@@ -37,6 +37,12 @@
 #define PA_ASSERT(cond) \
     assert(cond)
 #endif
+
+#define PA_CHECK(cond) \
+    if (!(cond)) \
+    {\
+        PA_LOGTHROW(ProdAutoException, ("'%s' check failed", #cond)); \
+    }
 
 
 

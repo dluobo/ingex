@@ -1,7 +1,6 @@
 /*
  * Copyright (C) 2008  British Broadcasting Corporation
- * Author: Rowan de Pomerai <rdepom@users.sourceforge.net>
- *
+ * Authors: Rowan de Pomerai, Tom Cox
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
  * as published by the Free Software Foundation; either version 2
@@ -24,13 +23,35 @@
 // queryLoc defines the location to query for a timecode. e.g. if host name for the recorder is 192.168.1.10 and
 // queryLoc = ":7000/tc" then timecode requests will be made to 192.168.1.10:7000/tc
 var queryLoc = ":7000/tc";
+//holds the frame rate fraction
+var frameDenom;
+var frameNumer;
 // Frame rate
-var editrate = 25;
+var editrate;
+//whether is using dropFrame or not (true = using dropFrame)
+var dropFrame;
+//29.97002997
+var ntscFps = (30000/1001);
+//the number of recorders
+var numOfRecs;
+//the number of system time options
+var numOfSysTimeOpts = 4;
 
+//stores the list of series and programmes
+var ILseriesData = new Object();
 
 var tree = false;
 var treeLoader = false;
 var renderedExt;
+var rootNode;
+
+
+//constants for 29.97 drop frame
+var FRAMES_PER_DF_MIN = (60*30)-2; //1798 
+var FRAMES_PER_DF_TENMIN = (10 * FRAMES_PER_DF_MIN) + 2;//17982
+var FRAMES_PER_DF_HOUR = (6 * FRAMES_PER_DF_TENMIN);//107892
+
+var serverUpdatePeriod = 2000; //the number of milliseconds between each update from server.
 
 var onLoad_Logging = function() {
 	checkJSLoaded(function(){
@@ -41,6 +62,8 @@ var onLoad_Logging = function() {
 }
 loaderFunctions.Logging = onLoad_Logging;
 
+//set ext spacer image to a local file instead of a remote url
+Ext.BLANK_IMAGE_URL = "../ingex/ext/resources/images/default/tree/s.gif";
 var ILtc = false;
 /// Initialise the interface, set up the tree, the editors etc, plus the KeyMap to enable keyboard shortcuts
 function Logging_init () {
@@ -49,7 +72,6 @@ function Logging_init () {
 
 //check to see if tree exists/is already rendered 	
 if($('takesList').innerHTML){renderedExt = true;}
-
 
 	treeLoader = new Ext.tree.TreeLoader({
 		dataUrl : "/cgi-bin/ingex-modules/Logging.ingexmodule/data/getProgramme.pl",
@@ -66,27 +88,40 @@ if($('takesList').innerHTML){renderedExt = true;}
 				treeLoader.baseParams.progid = -1;
 			}
 	    });
-	
 
 if(!renderedExt){ //ensure that only loads tree once
 
+		// root node	 
+		rootNode = new Ext.tree.AsyncTreeNode({
+			allowChildren: true,
+			id: '0',	//level depth
+		});
+
 	tree = new Ext.tree.ColumnTree({
-		width: '100%',
+		width:'100%',
 		height: 300,
 		rootVisible:false,
 		autoScroll:true,
-		enableDD:true,
+		enableDD: true, /* required as of MultiSelectTree v 1.1 */
 		ddAppendOnly: true,
 		// title: 'Takes',
 		renderTo: 'takesList',
 		
 		columns:[{
-			header:'Take Num.',
+			header:'Name',
+			width:180,
+			dataIndex:'itemName'
+		},{
+			header:'Sequence',
 			width:80,
+			dataIndex:'sequence'
+		},{
+			header:'Take Num.',
+			width:60,
 			dataIndex:'takeNo'
 		},{
 			header:'Location',
-			width:100,
+			width:60,
 			dataIndex:'location'
 		},{
 			header:'Date',
@@ -106,7 +141,7 @@ if(!renderedExt){ //ensure that only loads tree once
 			dataIndex:'duration'
 		},{
 			header:'Result',
-			width:80,
+			width:60,
 			dataIndex:'result'
 		},{
 			header:'Comment',
@@ -116,15 +151,17 @@ if(!renderedExt){ //ensure that only loads tree once
 
 		loader: treeLoader,
 		
-		root: new Ext.tree.AsyncTreeNode({
-			id: 0
-		})
+		root: rootNode
 	});
-
+/*
 	var treeSorter = new Ext.tree.TreeSorter(tree, {
-		sortType: ILgetFramesTotal
+		//folderSort:true,
+		//dir: "desc",
+		//leafAttr: parseInt(takeNo),
+		//sortType: ILgetFramesTotal
+		
 	});
-	
+	*/
 	// render the tree
 	tree.render();
 
@@ -135,17 +172,21 @@ if(!renderedExt){ //ensure that only loads tree once
 		editDelay: 0
 	});
 	
-	tree.on("valuechange", treeSorter.updateSortParent, treeSorter);
-	tree.on("valuechange", ILpopulateItemList);
-	tree.on("append", ILpopulateItemListNew);
+	// TODO this ?
+	//tree.on("valuechange", treeSorter.updateSortParent, treeSorter);
+	//these add new item/scene options to the selection dropdown on any change
+	
+	/*tree.on("valuechange", ILpopulateItemList);
+	tree.on("append", ILpopulateItemList);
 	tree.on("remove", ILpopulateItemList);
-	tree.on("valuechange", ILupdateTakeNumbering);
+	*/
+	//this ensures that takes cannot have the same number and reorders them based on start point
+	/*tree.on("valuechange", ILupdateTakeNumbering);
 	tree.on("append", ILupdateTakeNumbering);
-	tree.on("remove", ILupdateTakeNumbering);
-	tree.on("valuechange", ILupdateNodeInDB);
+	tree.on("remove", ILupdateTakeNumbering);*/
 	
-	ILpopulateItemList();
-	
+	//this updates the nodes within the database on any change
+	//tree.on("valuechange", ILupdateNodeInDB);
 }
 	Ext.getDoc().addKeyMap([
 		{
@@ -210,6 +251,7 @@ if(!renderedExt){ //ensure that only loads tree once
 			stopEvent: true
 		}, {
 			key: Ext.EventObject.DELETE,
+			ctrl:true,
 			fn: ILdeleteNode,
 			stopEvent: true
 		}, {
@@ -231,105 +273,367 @@ if(!renderedExt){ //ensure that only loads tree once
 		}
 	]);
 
+	//gets the available recorders
 	ILdiscoverRecorders();
+	//gets the recorder locations, series and the programmes within the series
 	ILpopulateProgRecInfo();
-
+	
 	ILtc = new ingexLoggingTimecode();
 	
 }
 
 /// Start/stop take timecode updates
-function ILstartStop () {
-	if(!ILtc.takeRunning) {
-		// START
-		$('startStopButton').innerHTML = 'Stop';
-		ILtc.startTake();
-	} else {
-		// STOP
-		$('startStopButton').innerHTML = 'Start';
-		ILtc.stopTake();
+function ILstartStop (){
+	var recSel = $('recorderSelector');
+	//insole.warn("takeRunning = "+ILtc.takeRunning);
+	if(ILtc.takeRunning == false){
+		//if no recorder is selected
+		if(recSel.options[recSel.selectedIndex].value == -1){
+			Ext.MessageBox.alert('ERROR starting take!', 'Unable to start take : Please select a Recorder before starting a take');
+		}else{
+			// START
+			//insole.warn("calling start function");
+			$('startStopButton').innerHTML = 'Stop';
+			ILtc.startTake();
+		}
+	}else{
+		if(recSel.options[recSel.selectedIndex].value == -1){
+			Ext.MessageBox.alert('ERROR stopping take!', 'incorrect stopping of take : Please ensure a Recorder is selected before stopping a take');
+			$('startStopButton').innerHTML = 'Start';
+			
+		}else{
+			// STOP
+			//insole.warn("calling stop function");
+			$('startStopButton').innerHTML = 'Start';
+			ILtc.stopTake();
+		}
 	}
 }
 
 /// Examine a node's inpoint and convert it to a number of frames
 /// @param node the node to examine
 /// @return the number of frames
-function ILgetFramesTotal (node) {
+
+/*function ILgetFramesTotal (node) {
+	
+	//insole.warn("getFRamesTotal needs fixing");
 	if(typeof node.attributes.inpoint != "undefined") {
-		var chunks = node.attributes.inpoint.split(":");
+		
+		if(dropFrame){
+		        //insole.warn("splitting by semicolon getframestotal");
+			var chunks = node.attributes.inpoint.split(";");
+		}else{
+			//insole.warn("splitting by colon getFramestotal")
+			var chunks = node.attributes.inpoint.split(":");
+		}
+		
 		var h = parseInt(chunks[0], 10);
 		var m = parseInt(chunks[1], 10);
 		var s = parseInt(chunks[2], 10);
 		var f = parseInt(chunks[3], 10);
-		return f+(editrate*s)+(60*editrate*m)+(60*60*editrate*h);
+		insole.warn("from get frames total"+h+":"+m+":"+s+":"+f+"  with editrate"+editrate);
+		var totframes = (Math.floor(h*60*60*editrate) + Math.floor(m*60*editrate) + Math.floor(s*editrate) + f);
+		insole.warn("total frames = "+totframes)
+
+		return (Math.floor(h*60*60*editrate) + Math.floor(m*60*editrate) + Math.floor(s*editrate) + f);
 	} else {
 		return -1;
 	}
 }
+*/
 
 /// Convert a textual timecode string (aa:bb:cc:dd) to a number of frames
 /// @param text the timecode string
 /// @return the number of frames
-function ILgetFramesTotalFromText (text) {
-	var chunks = text.split(":");
+function ILgetFramesTotalFromText (text, frameDrop) {
+	//insole.warn("text to convert ="+text);
+	if(frameDrop){
+		//insole.warn("splitting by semicolon framestotalfrom text");
+		var chunks = text.split(";");
+	}else{
+		var chunks = text.split(":");
+	}
 	var h = parseInt(chunks[0], 10);
 	var m = parseInt(chunks[1], 10);
 	var s = parseInt(chunks[2], 10);
 	var f = parseInt(chunks[3], 10);
-	return f+(editrate*s)+(60*editrate*m)+(60*60*editrate*h);
+
+	if(frameDrop){
+		//nominal fps = 30 for 29.97
+		//insole.warn("total from text"+h+":"+m+":"+s+":"+f+"  witheditrate="+editrate);
+		var totFrames =  (f
+			+ (s * Math.round(editrate))
+                	+ ((m % 10) * FRAMES_PER_DF_MIN)
+			+ ((m / 10) * FRAMES_PER_DF_TEN_MIN)
+                	+ (h * FRAMES_PER_DF_HOUR));
+		//insole.warn("framecount returned="+totFrames);
+		return (f
+			+ (s * Math.round(editrate))
+                	+ ((m % 10) * FRAMES_PER_DF_MIN)
+			+ ((m / 10) * FRAMES_PER_DF_TEN_MIN)
+                	+ (h * FRAMES_PER_DF_HOUR));
+		
+	}else{
+		//for 29.97 have to use base 30 for tc
+		if (editrate == ntscFps)
+		{
+			//insole.warn("total from text"+h+":"+m+":"+s+":"+f+"  witheditrate="+editrate);
+			var totFrames = (Math.floor(h*60*60* Math.round(editrate) ) + Math.floor(m*60* Math.round(editrate) ) + Math.floor(s* Math.round(editrate)) + f);
+			//insole.warn("framecount returned="+totFrames);
+			return (Math.floor(h*60*60* Math.round(editrate) ) + Math.floor(m*60* Math.round(editrate) ) + Math.floor(s* Math.round(editrate)) + f);
+		}else{
+			//insole.warn("total from text"+h+":"+m+":"+s+":"+f+"  witheditrate="+editrate);
+			var totFrames = (Math.floor(h*60*60*editrate) + Math.floor(m*60*editrate) + Math.floor(s*editrate) + f);
+			//insole.warn("framecount returned="+totFrames);
+			return (Math.floor(h*60*60*editrate) + Math.floor(m*60*editrate) + Math.floor(s*editrate) + f);
+		}
+	}
+	
 }
 
 /// Convert a number of frames to a timecode string
 /// @param length the number of frames
 /// @return the timecode string
-function ILgetTextFromFramesTotal (clipLength) {
+function ILgetTextFromFramesTotal (clipLength, timEditRate) {
 	var h; var m; var s; var f;
-	s = Math.floor(clipLength/editrate);
+	//insole.alert("get text from frames total needs fixing");
+	
+	//insole.warn("framecount ="+clipLength+"edit rate="+timEditRate);
+	
+	s = Math.floor(clipLength/timEditRate);
 	m = Math.floor(s/60);
 	h = Math.floor(m/60);
-	f = clipLength - (editrate * s);
+	//insole.warn("frameCount="+frameCount+" minus this"+(editrate * this.s));
+	f = clipLength - (timEditRate * s);
 	s = s - (60 * m);
 	m = m - (60 * h);
+	//insole.warn("this.f ="+this.f+"  before rounding down");
+	f = Math.floor(f);
+			
+	if (editrate == ntscFps){
+		if(dropFrame){
+			//insole.warn("within update from count h= "+this.h+" m="+this.m+"  s="+this.s+"  f="+this.f);
+			//if using system time or just incrementing then need to work out the timecode from framecount
+			var countOfFrames = clipLength;
+			h = Math.floor( clipLength / FRAMES_PER_DF_HOUR);
+			countOfFrames = countOfFrames % FRAMES_PER_DF_HOUR;
+			var ten_min = Math.floor(countOfFrames / FRAMES_PER_DF_TENMIN);
+			countOfFrames = (countOfFrames % FRAMES_PER_DF_TENMIN);
+			
+			// must adjust frame count to make minutes calculation work
+		        // calculations from here on in just assume that within the 10 minute cycle
+			// there are only DF_FRAMES_PER_MINUTE (1798) frames per minute - even for the first minute
+			// in the ten minute cycle. Hence we decrement the frame count by 2 to get the minutes count
+			// So for the first two frames of the ten minute cycle we get a negative frames number
+
+			countOfFrames -= 2;
+
+			var unit_min = Math.floor(countOfFrames / FRAMES_PER_DF_MIN);
+			countOfFrames = countOfFrames % FRAMES_PER_DF_MIN;
+			m = (ten_min * 10) + unit_min;
+			
+			// frames now contains frame in minute @ 1798 frames per minute
+	        	// put the 2 frame adjustment back in to get the correct frame count
+	        	// For the first two frames of the ten minute cycle, frames is negative and this
+	        	// adjustment makes it non-negative. For other minutes in the cycle the frames count
+	        	// goes from 0 upwards, thus this adjusment gives the required 2 frame offset
+			
+			countOfFrames += 2;
 	
+		        s = Math.floor(countOfFrames / timEditRate);
+        		f = Math.floor(countOfFrames % timEditRate);
+		}else{
+		
+		}
+	}
+		
 	if (h < 10) { h = "0" + h; }
 	if (m < 10) { m = "0" + m; }
 	if (s < 10) { s = "0" + s; }
 	if (f < 10) { f = "0" + f; }
-	
-	return h+":"+m+":"+s+":"+f;
+	if(dropFrame){
+		return h+";"+m+";"+s+";"+f;
+	}else{
+		return h+":"+m+":"+s+":"+f;
+	}
 }
 
 /// Update the take numbering in the tree (called when a take is moved)
-function ILupdateTakeNumbering () {
+/*function ILupdateTakeNumbering() {
 	var items = tree.getRootNode().childNodes;
+	insole.warn("items are "+items);
 	for (var i in items) {
 		var item = items[i];
 		if(typeof item != "object") continue;
 		var childNodes = item.childNodes;
-		childNodes.sort(function(a,b){
-			var ft_a = ILgetFramesTotal(a);
-			var ft_b = ILgetFramesTotal(b);
-			return ft_a - ft_b;
-		});
+		insole.warn("item ="+item+"item.childnodes="+item.childNodes);
 		var tn = 0;
+		
 		for (var take in childNodes) {
 			if(typeof childNodes[take].attributes != "undefined") {
 				tn++;
 				if (childNodes[take].attributes.takeNo != tn){
 					childNodes[take].setText(tn);
 					childNodes[take].attributes.takeNo = tn;
+					insole.warn("childnodes[take]="+childNodes[take]+" take="+take+"  tn="+tn+"  items[i]att.databaseID="+items[i].attributes.databseID+"  i="+i);
 					ILupdateNodeInDB(childNodes[take],'takeNo',tn);
 					ILupdateNodeInDB(childNodes[take],'item',items[i].attributes.databaseID);
 				}
 			}
 		}
 	}
+}*/
+
+/*function ILsequenceInfo () {
+	
+	
+var newID = -1;
+	var children = tree.getRootNode().childNodes; //get the items
+
+	if (rootNode.lastChild != null){
+		var lastItem = rootNode.lastChild;
+	}
+
+	for (var child in children) {
+		if(child != "remove") {
+			if (children[child].id.length > 1){
+				var id = children[child].id.substring(5);
+			}else {
+				var id = children[child].id;
+			}
+			if(id > newID) newID = id;
+		}
+	}
+	newID++;
+	var tmpNode= new Ext.tree.TreeNode({
+		id: newID,
+		itemName: value,
+		sequence: sequenceName,
+		uiProvider: Ext.tree.ItemNodeUI
+	});
+
+
+	Ext.MessageBox.show({
+		title: 'Sequence ID',
+		msg: 'Please enter the Sequence',
+		width: 300,
+		buttons: Ext.MessageBox.OKCANCEL,
+		multiline: true,
+		//fn: ILsequenceInfo,
+		animEl: 'takes',
+		icon: Ext.MessageBox.INFO
+		//import
+	});	
+
+}*/
+
+function ILstoreItem () {
+	//insole.warn("storing item ");
+	var progSel = $('programmeSelector');
+	var seriesSel = $('seriesSelector');
+
+	//insole.warn("selected programme = "+progSel.value+"  SELECTED SERIES="+seriesSel.value);
+	//insole.warn("selectd indxprog="+progSel.selectedIndex+"  selcted indxseries="+seriesSel.selectedIndex);
+	
+	//perform a check to ensure that a series and programme are selected before an attempt to add a new item is made
+	if (seriesSel.value == -1){//no series selected
+		Ext.MessageBox.alert('ERROR adding item!', 'Unable to add new item : Please select a series before adding a new item');
+	}else{
+		if(progSel.value == -1)
+		{
+			Ext.MessageBox.alert('ERROR adding item!', 'Unable to add new item : Please select a programme before adding a new item');
+			
+		}else{
+			//insole.warn("now adding new item to database");
+			var newID;
+			//get the children of the root node (the items for this programme)
+			var children = tree.getRootNode().childNodes; //get the items
+			//insole.log(children.toString());
+			
+			//if there are items get the last one
+			if (rootNode.lastChild != null){
+				var lastItem = rootNode.lastChild;
+				//insole.log("id="+lastItem.attributes.id+" name "+lastItem.attributes.itemName+" sequence ="+lastItem.attributes.sequence);
+				newID = Number(lastItem.attributes.id) + 1;
+				
+			}else{//set to first item in order index
+				newID = 0;
+			}
+				
+			//insole.log("newID = "+newID);
+
+			//TODO get item name and sequence from the text field and add to database
+			var newItemName = $('itemBox').value;
+			var seq = "{"+ $('seqBox').value + "}";
+			
+			//insole.log("adding item "+newItemName+"  seq="+seq+" progid="+progSel.value);
+			
+			// -- Send to database
+			Ext.Ajax.request({
+				url: '/cgi-bin/ingex-modules/Logging.ingexmodule/data/addItem.pl',
+				params : {
+					id: newID,
+					name: newItemName,
+					sequence: seq,
+					programme: progSel.value
+				},
+				success: function(response) {
+					try {
+						var data = JSON.parse(response.responseText);
+					} catch (e) {
+						insole.log("JSON parse error: "+e.name+" - "+e.message);
+						insole.log("JSON data was: "+response.responseText);
+						insole.alert("Failed to add item to database: "+newItemName+". See previous log message.");
+					}
+					if(data.success) {
+						//reset the item input text boxes
+						ILresetItems();
+						//repopulating the item list occurs automatically on any change
+						//reload the tree
+						ILloadNewProg();
+						insole.log("Successfully added item to database: "+newItemName);
+					} else {
+						insole.error("Error adding to database: "+data.error);
+						insole.alert("Failed to add item to database: "+newItemName+". See previous log message.");
+					}
+				},
+				failure: function() {
+					insole.alert("Failed to add item to database: "+newItemName+". Recommend you refresh this page to check data integrity.");
+				}
+			});
+		}
+			
+	}
 }
+
+function ILresetItems (){
+	$('itemBox').value ='';
+	$('seqBox').value ='';
+}
+
 
 /// Create a new item
 /// @param value the item name
 /// @param seq the sequence reference string
-function ILnewNode (value, seq) {
+
+ /*function ILnewNode (value, seq) {
+	
+	//TODO perform a check that a series and programme are selected otherwise
+	//just message box saying cannot complete, please select series and programme 
+
+	Ext.MessageBox.show({
+		title: 'Item Name',
+		msg: 'Please enter the item name',
+		width: 300,
+		buttons: Ext.MessageBox.OKCANCEL,
+		multiline: true,
+		fn: ILsequenceInfo,
+		animEl: 'takes',
+		icon: Ext.MessageBox.INFO
+		//import
+	});
+
+	//if value and seq are not passed - set to default, else use passed param values
 	var newItemName;
 	if (isDefault(value)) {
 		value = '';
@@ -347,18 +651,27 @@ function ILnewNode (value, seq) {
 		seq = "{"+seq+"}";
 	}
 	
+	
 	var newID = -1;
-	var children = tree.getRootNode().childNodes;
+	var children = tree.getRootNode().childNodes; //get the items
+
+	if (rootNode.lastChild != null){
+		var lastItem = rootNode.lastChild;
+	}
+
 	for (var child in children) {
 		if(child != "remove") {
-			var id = children[child].id.substring(5);
+			if (children[child].id.length > 1){
+				var id = children[child].id.substring(5);
+			}else {
+				var id = children[child].id;
+			}
 			if(id > newID) newID = id;
 		}
 	}
 	newID++;
-	
 	var tmpNode= new Ext.tree.TreeNode({
-		id: "item-"+newID,
+		id: newID,
 		itemName: value,
 		sequence: sequenceName,
 		uiProvider: Ext.tree.ItemNodeUI
@@ -403,35 +716,42 @@ function ILnewNode (value, seq) {
 		}
 	});
 }
+*/
 
 /// Duplicate the currently selected item
 function ILduplicateNode () {
 	if(tree && tree.getSelectionModel().getSelectedNode()) {
 		var value = "";
 		var seq = "";
+		//if item is selected
 		if(tree.getSelectionModel().getSelectedNode().attributes.itemName) {
 			value = tree.getSelectionModel().getSelectedNode().attributes.itemName;
 			seq = tree.getSelectionModel().getSelectedNode().attributes.sequence;
-		} else if (tree.getSelectionModel().getSelectedNode().parentNode && tree.getSelectionModel().getSelectedNode().parentNode.attributes.itemName){
+		}//if a take within an item is selected 
+		else if (tree.getSelectionModel().getSelectedNode().parentNode && tree.getSelectionModel().getSelectedNode().parentNode.attributes.itemName){
 			value = tree.getSelectionModel().getSelectedNode().parentNode.attributes.itemName;
 			seq = tree.getSelectionModel().getSelectedNode().parentNode.attributes.sequence;
 		}
-		ILnewNode("[Pickup] "+value,seq);
+
+		ILstoreItem();
 	}
 }
 
 /// Delete the currently selected item
 function ILdeleteNode () {
 	if(tree && tree.getSelectionModel().getSelectedNode()) {
-		var node = tree.getSelectionModel().getSelectedNode();
-		var conf = confirm('Are you sure you wish to delete this item and all its takes? You cannot undo this.');
+		var node = false;
+		//if an item is selected
+		if(tree.getSelectionModel().getSelectedNode().attributes.itemName) {
+			node = tree.getSelectionModel().getSelectedNode();
+			var conf = confirm('Are you sure you wish to delete the item: '+node.attributes.itemName+' and all its takes? You cannot undo this.');
+		
+		} // if a take is selected 
+		else if (tree.getSelectionModel().getSelectedNode().parentNode.attributes.itemName){
+			node = tree.getSelectionModel().getSelectedNode().parentNode;
+			var conf = confirm('Are you sure you wish to delete the item: '+node.attributes.itemName+' and all its takes? You cannot undo this.');
+		}
 		if (conf){
-			var node = false;
-			if(tree.getSelectionModel().getSelectedNode().attributes.itemName) {
-				node = tree.getSelectionModel().getSelectedNode();
-			} else if (tree.getSelectionModel().getSelectedNode().parentNode.attributes.itemName){
-				node = tree.getSelectionModel().getSelectedNode().parentNode;
-			}
 			// -- Remove from database
 			Ext.Ajax.request({
 				url: '/cgi-bin/ingex-modules/Logging.ingexmodule/data/deleteItem.pl',
@@ -447,6 +767,8 @@ function ILdeleteNode () {
 						insole.alert("Failed to delete item from database: "+node.attributes.itemName+". See previous log message.");
 					}
 					if(data.success) {
+						//reload tree view
+						ILloadNewProg();
 						insole.log("Successfully deleted item from database: "+node.attributes.itemName);
 					} else {
 						insole.error("Error adding to database: "+data.error);
@@ -457,111 +779,163 @@ function ILdeleteNode () {
 					insole.alert("Failed to delete item from database: "+node.attributes.itemName+". Recommend you refresh this page to check data integrity.");
 				}
 			});
-				
-			// -- Remove from tree
-			if(node) node.remove();
+			
+			
 		}
 	}
 }
 
-/// Store the new take
+/// Store the new take to database and refresh display (reload tree)
 function ILstoreTake () {
-	var locSel = $("recLocSelector");
-	var itemSel = $('itemSelector');
-	try {
-		var item = tree.getNodeById(itemSel.options[itemSel.selectedIndex].value);
-	} catch (e) {
-		insole.alert("Error getting parent Item for new take: "+e.name+" - "+e.message);
-	}
-	var takeNumber;
-	if(item.lastChild) {
-		takeNumber = item.lastChild.attributes.takeNo + 1;
-	} else {
-		takeNumber = 1;
-	}
-	var now = new Date();
-	var dd = now.getDate();
-	var mm = now.getMonth() + 1; // it ranges 0-11 so add 1
-	var yy = now.getFullYear();
-	if (dd < 10) { dd = "0" + dd; }
-	if (mm < 10) { mm = "0" + mm; }
-	var sqlDate = yy+"-"+mm+"-"+dd;
+	var progSel = $('programmeSelector');
+	var seriesSel = $('seriesSelector');
 	
-	var locationName = locSel.options[locSel.selectedIndex].innerHTML;
-	var locationID = locSel.options[locSel.selectedIndex].value;
-	var result = $('resultText').innerHTML;
-	var comment = $('commentBox').value;
-	if (comment == "") comment  = "[no data]";
+	//insole.warn("selected programme = "+progSel.value+"  SELECTED SERIES="+seriesSel.value);
+	//insole.warn("selectd indxprog="+progSel.selectedIndex+"  selcted indxseries="+seriesSel.selectedIndex);
 	
-	var inpoint = $('inpointBox').value;
-	var outpoint = $('outpointBox').value;
-	var duration = $('durationBox').value;
-	var start = ILgetFramesTotalFromText(inpoint);
-	var clipLength = ILgetFramesTotalFromText(duration);
-	
-	// -- Create node
-	var tmpNode= new Ext.tree.TreeNode({
-		takeNo: takeNumber,
-		location: locationName,
-		date: sqlDate,
-		inpoint: inpoint,
-		out: outpoint,
-		duration: duration,
-		result: result,
-		comment: comment,
-		leaf: true,
-		uiProvider: Ext.tree.TakeNodeUI
-	});
-	
-	// -- Add to tree
-	if(tree) {
-		try {
-			var newNode = item.appendChild(tmpNode);
-			item.expand();
-			ILresetTake();
-		} catch (e) {
-			insole.alert("Error storing new take: "+e.name+" - "+e.message);
-			insole.alert("error adding to tree");
-		}
-	} else {
-		insole.alert("Error storing new take: tree unavailable.");
-	}
-
-	// -- Send to database
-	Ext.Ajax.request({
-		url: '/cgi-bin/ingex-modules/Logging.ingexmodule/data/addTake.pl',
-		params : {
-			takeno: takeNumber,
-			item: item.attributes.databaseID,
-			location: locationID,
-			date: sqlDate,
-			start: start,
-			result: result,
-			comment: comment,
-			editrate: editrate,
-			clipLength: clipLength		
+	//perform a check to ensure that a series and programme are selected before an attempt to add a new take is made
+	if (seriesSel.value == -1){//no series selected
+		Ext.MessageBox.alert('ERROR adding take!', 'Unable to add new take : Please select a series before adding a new take');
+	}else{
+		if(progSel.value == -1)
+		{
+			Ext.MessageBox.alert('ERROR adding take!', 'Unable to add new take : Please select a programme before adding a new take');
 			
-		},
-		success: function(response) {
-			try {
-				var data = JSON.parse(response.responseText);
-			} catch (e) {
-				insole.log("JSON parse error: "+e.name+" - "+e.message);
-				insole.log("JSON data was: "+response.responseText);
-				insole.alert("Failed to add take to database. Item: "+item.attributes.itemName+", Take Number: "+takeNumber+". See previous log message.");
+		}else{
+			var duration = $('durationBox').value;
+			if(duration == "00:00:00:00"){
+				Ext.MessageBox.alert('ERROR adding take!', 'Unable to add zero length duration : Please make a log before adding a take');
+
+			}else{
+
+				//insole.warn("adding take");
+				var locSel = $("recLocSelector");
+				var itemSel = $('itemSelector');
+				try {
+					var item = tree.getNodeById(itemSel.options[itemSel.selectedIndex].value);
+					//insole.warn("item is "+item);
+					//insole.warn("attributes are "+item.attributes);
+					//insole.warn("node id ="+item.attributes.id+"  or "+item.attributes.databaseID);
+				} catch (e) {
+					insole.alert("Error getting parent Item for new take: "+e.name+" - "+e.message);
+				}
+				var takeNumber;
+				if(item.lastChild != null) {
+					takeNumber = Number(item.lastChild.attributes.takeNo) + 1;
+				
+				} else {
+					takeNumber = 1;
+				}
+				
+				//insole.warn("last child is"+item.lastChild+" new takeno is"+takeNumber);
+				var now = new Date();
+				var dd = now.getDate();
+				var mm = now.getMonth() + 1; // it ranges 0-11 so add 1
+				var yy = now.getFullYear();
+				if (dd < 10) { dd = "0" + dd; }
+				if (mm < 10) { mm = "0" + mm; }
+				var sqlDate = yy+"-"+mm+"-"+dd;
+				
+				var locationName = locSel.options[locSel.selectedIndex].innerHTML;
+				var locationID = locSel.options[locSel.selectedIndex].value;
+				var result = $('resultText').innerHTML;
+				var comment = $('commentBox').value;
+				if (comment == "") comment  = "[no data]";
+				
+				var inpoint = $('inpointBox').value;
+				//insole.warn("inpoint = "+inpoint);
+				var outpoint = $('outpointBox').value;
+				
+				
+				//insole.warn("dropframe status = "+dropFrame);
+				if (dropFrame){var start = ILgetFramesTotalFromText(inpoint, true);
+				} else {var start = ILgetFramesTotalFromText(inpoint, false);}
+				var clipLength = ILgetFramesTotalFromText(duration, false);
+				
+				//insole.warn("inpoint= "+inpoint+" outpoint ="+outpoint+" duration = "+duration);
+				//insole.warn("invalue ="+$('inpointBox').value+"  outvalue="+$('outpointBox').value+"  duration val="+$('durationBox').value);
+				
+				//insole.warn("sending values"+"start = "+start+"  clipLength = "+clipLength);
+			
+			/*	// -- Create node
+				var tmpNode= new Ext.tree.TreeNode({
+					takeNo: takeNumber,
+					location: locationName,
+					date: sqlDate,
+					inpoint: inpoint,
+					out: outpoint,
+					duration: duration,
+					result: result,
+					comment: comment,
+					leaf: true,
+					allowChildren: false,
+					uiProvider: Ext.tree.TakeNodeUI
+				});
+				
+				// -- Add to tree
+				if(tree) {
+					try {
+						var newNode = item.appendChild(tmpNode);
+						item.expand();
+						ILresetTake();
+					} catch (e) {
+						insole.alert("Error storing new take: "+e.name+" - "+e.message);
+						insole.alert("error adding to tree");
+					}
+				} else {
+					insole.alert("Error storing new take: tree unavailable.");
+				}
+				*/
+				//insole.warn("numer="+frameNumer+"   denom="+frameDenom);
+				var editRateCombined = "("+frameNumer+","+frameDenom+")";
+				//insole.warn(editRateCombined);
+				//item selector values start at 0 but the identifiers in database start at one
+
+				var itemIdent = (Number(itemSel.value) + 1);
+
+				// -- Send to database
+				Ext.Ajax.request({
+					url: '/cgi-bin/ingex-modules/Logging.ingexmodule/data/addTake.pl',
+					params : {
+						takeno: takeNumber,
+						item: itemIdent,
+						location: locationID,
+						date: sqlDate,
+						start: start,
+						result: result,
+						comment: comment,
+						editrate: editRateCombined,
+						clipLength: clipLength		
+						
+					},
+					success: function(response) {
+						try {
+							var data = JSON.parse(response.responseText);
+							
+						} catch (e) {
+							insole.log("JSON parse error: "+e.name+" - "+e.message);
+							insole.log("JSON data was: "+response.responseText);
+							insole.alert("Failed to add take to database. Item: "+item.attributes.itemName+", Take Number: "+takeNumber+". See previous log message.");
+						}
+						if(data.success) {
+							//insole.warn("tk:"+data.takeno+":it:"+data.item+":start:"+data.start+":length:"+clipLength); 
+							insole.log("Successfully added take to database. Item: "+item.attributes.itemName+", Take Number: "+takeNumber);
+							//reset the values to be stored in a take to default
+							ILresetTake();
+							//refresh the display from the database
+							ILloadNewProg();
+						} else {
+							insole.error("Error adding to database: "+data.error);
+							insole.alert("Failed to add take to database. Item: "+item.attributes.itemName+", Take Number: "+takeNumber+". See previous log message.");
+						}
+					},
+					failure: function() {
+						insole.alert("Failed to add take to database. Item: "+item.attributes.itemName+", Take Number: "+takeNumber+". Recommend you refresh this page to check data integrity.");
+					}
+				});
 			}
-			if(data.success) {
-				newNode.id = "take-"+data.id;
-				insole.log("Successfully added take to database. Item: "+item.attributes.itemName+", Take Number: "+takeNumber);
-			} else {
-				insole.error("Error adding to database: "+data.error);
-				insole.alert("Failed to add take to database. Item: "+item.attributes.itemName+", Take Number: "+takeNumber+". See previous log message.");
-			}
-		},
-		failure: function() {
-			insole.alert("Failed to add take to database. Item: "+item.attributes.itemName+", Take Number: "+takeNumber+". Recommend you refresh this page to check data integrity.");
 		}
-	});
+	}
 }
 
 /// Reset new take details to defaults
@@ -572,6 +946,8 @@ function ILresetTake () {
 	$('commentBox').value = "";
 	$('resultText').innerHTML = "No Good";
 	$('resultText').className = "noGood";
+	
+	
 }
 
 /// Set the new take's result to "good"
@@ -587,19 +963,24 @@ function ILsetNoGood() {
 }
 
 /// Populate/update the list of items (the tree) when a new node is added
+/*
 function ILpopulateItemListNew (tree,parentNode,newNode,index) {
 	var selectNew = false;
 	if(typeof newNode.attributes.itemName != "undefined") selectNew = true;
 	ILpopulateItemList(selectNew);
 }
+*/
 
 /// Populate/update the list of items (the tree) when a new node is added
+
+/*
+
 function ILpopulateItemList(newNode) {
 	if (isDefault(newNode)) newNode = false;
 	var elSel = $('itemSelector');
 	var selectedID = -1;
-	if(newNode) {
-		selectedID = elSel.options.length -1;
+	if(newNode) {//select the last option
+		selectedID = elSel.options.length - 1;
 	} else {
 		selectedID = elSel.selectedIndex;
 	}
@@ -618,21 +999,78 @@ function ILpopulateItemList(newNode) {
 	});
 }
 
+*/
+
+///populates the list of items when a programme is selected
+function ILpopulateItemList(){
+	Ext.Ajax.request({
+		url: '/cgi-bin/ingex-modules/Logging.ingexmodule/data/getItems.pl',
+		params:{
+			progid: $('programmeSelector').value
+ 		},
+		success: function(response){
+			try {
+				var data = JSON.parse(response.responseText);
+				//array to hold all the items
+				var itemNames = new Object();
+				itemNames = data.itemNames;
+				//insole.log("DATA IS "+data.itemNames);
+				var elSel = $('itemSelector');
+				//TODO the JSON SENT BACK is not ordered, it needs sorting here or in the perl with a sorted request from the database or sort once get it back into here
+				
+				//insole.log("itemnames0="+itemNames[0].itemName);
+				//insole.log("itemnames1="+itemNames[1].itemName)
+				elSel.options.length=0;
+				
+				for (var i in itemNames)
+				{
+					var elOptNew = document.createElement('option');
+					//insole.log("item="+i);
+					elOptNew.text = itemNames[i].itemName;
+					//insole.log("itemtext="+itemNames[i].itemName);
+					elOptNew.value = i;
+					try {
+						//insole.log("adding new option");
+						elSel.add(elOptNew, null); // standards compliant; doesn't work in IE
+					}
+					catch(e) {
+						elSel.add(elOptNew); // IE only
+					}	
+				}
+				
+			
+			} catch (e) {
+				insole.alert("Error loading ITEMS list");
+			}
+		},
+		failure: function()	{
+			insole.alert("Error loading items list");
+		}
+	});
+
+}
+
+
+
 /// Send changes made to the database
 /// @param node the node (item or take) being changed
 /// @param dataIndex the piece of information being changed
 /// @param value the value it's being changed to
-function ILupdateNodeInDB (node,dataIndex,value) {
+/*function ILupdateNodeInDB (node,dataIndex,value) {
 	var url;
 	var name;
 	var id;
 	var valueToSend = value;
 	var ui;
+	//insole.warn("updating node in database");
+	//insole.warn("node ="+node+"  dataIndex="+dataIndex+" value = "+value);
 	if(typeof node.attributes.itemName != "undefined") {
 		//item
 		url = '/cgi-bin/ingex-modules/Logging.ingexmodule/data/changeItem.pl';
 		name = node.attributes.itemName;
+		
 		id = node.attributes.databaseID;
+		//insole.warn("current item name = "+name+" id= "+id);
 		if(dataIndex == "itemName") {
 			ui = node.getUI().getItemNameEl();
 		} else if (dataIndex == "sequence") {
@@ -641,8 +1079,10 @@ function ILupdateNodeInDB (node,dataIndex,value) {
 	} else {
 		//take
 		url = '/cgi-bin/ingex-modules/Logging.ingexmodule/data/changeTake.pl';
-		name = "take "+node.attributes.takeNo;
+		name = node.attributes.takeNo;
+		
 		id = node.id;
+		//insole.warn("current take name = "+name+" id= "+id);
 		ui = node.getUI().getTakeElement(dataIndex);
 		
 		if(dataIndex == "inpoint") {
@@ -670,7 +1110,7 @@ function ILupdateNodeInDB (node,dataIndex,value) {
 		}
 	}
 
-	if(typeof id.substring != "undefined" && (id.substring(0,5) == "take-" || id.substring(0,5) == "item=")) id = id.substring(5);
+//      if(typeof id.substring != "undefined" && (id.substring(0,5) == "take-" || id.substring(0,5) == "item=")) id = id.substring(5);
 
 	// -- Send to database
 	Ext.Ajax.request({
@@ -718,6 +1158,8 @@ function ILupdateNodeInDB (node,dataIndex,value) {
 	});
 }
 
+*/
+
 /// Select the previous item in the item list
 function ILselectNextItem() {
 	var elSel = $('itemSelector');
@@ -753,22 +1195,13 @@ function ILdiscoverRecorders() {
 				elSel.add(elOptNew); // IE only
 			}
 			
-			var elOptNew = document.createElement('option');
-			elOptNew.text = "Local Sys Time";
-			elOptNew.value = "1";
-			try{
-				elSel.add(elOptNew, null); //standards compliant; doesn't work in IE
-			}catch (e){
-				elSel.add(elOptNew); //IE only
-			}
-
-
-
+			numOfRecs = 0;
 			for (node in nodes) {
 				if(nodes[node].nodeType != "Recorder") continue;
 				var elOptNew = document.createElement('option');
 				elOptNew.text = node;
-				elOptNew.value = node;
+				elOptNew.value = numOfRecs;
+				numOfRecs++;
 				try {
 					elSel.add(elOptNew, null); // standards compliant; doesn't work in IE
 				} catch (e) {
@@ -776,6 +1209,23 @@ function ILdiscoverRecorders() {
 				}
 			}
 			ILRecorders = nodes;
+			
+			for (var i=0; i<numOfSysTimeOpts; i++)
+			{			
+				var elOptNew = document.createElement('option');
+				if(i==0){elOptNew.text = "25fps Local Time";}
+				if(i==1){elOptNew.text = "29.97fps non-drop Local Time";}
+				if(i==2){elOptNew.text = "29.97fps drop Local Time";}
+				if(i==3){elOptNew.text = "30fps non-drop Local Time";}
+				elOptNew.value = (numOfRecs + i);
+				try{
+					//insole.warn("editrate set to ="+editrate);
+					elSel.add(elOptNew, null); //standards compliant; doesn't work in IE
+				}catch (e){
+					elSel.add(elOptNew); //IE only
+				}
+			}			
+			
 		},
 		failure: function()	{
 			insole.alert("Error loading recorder list");
@@ -788,14 +1238,14 @@ function ILdiscoverRecorders() {
 /// @return the url
 /// Do not query if no recorder exists or no recorder selected
 function ILgetRecorderURL (recName) {
-	if(typeof( ILRecorders[recName] != "undefined") && recName != -1 && recName != 1) {
+	if(typeof( ILRecorders[recName] != "undefined")) {
 		return ILRecorders[recName].ip+queryLoc;
 	}
 	return false;
 }
 
+
 /// Grab the series and programme lists from the database
-var ILseriesData = new Object();
 function ILpopulateProgRecInfo() {
 	Ext.Ajax.request({
 		url: '/cgi-bin/ingex-modules/Logging.ingexmodule/getProgRecInfo.pl',
@@ -844,6 +1294,9 @@ function ILpopulateProgRecInfo() {
 			}
 			
 			ILseriesData = data.series;
+			//make programme and item selectors unavailable until a series is selected
+			$('programmeSelector').disabled = true;
+			$('itemSelector').disabled = true;
 		},
 		failure: function()	{
 			insole.alert("Error loading series, programme & recording location lists");
@@ -854,8 +1307,10 @@ function ILpopulateProgRecInfo() {
 /// Populate the list of programmes based on the selected series
 function ILupdateProgrammes () {
 	var seriesID = $('seriesSelector').options[$('seriesSelector').selectedIndex].value;
-	
-	var programmes = ILseriesData[seriesID].programmes;
+	//as the series has changed reset the programmes and reload the tree
+	$('programmeSelector').selectedIndex = -1;
+	ILloadNewProg();
+	//reset the programme
 	var elSel = $('programmeSelector');
 	elSel.options.length=0;
 	var elOptNew = document.createElement('option');
@@ -867,22 +1322,49 @@ function ILupdateProgrammes () {
 	} catch (e) {
 		elSel.add(elOptNew); // IE only
 	}
-	for (var prog in programmes) {
-		if(typeof programmes[prog] != "string") continue;
-		var elOptNew = document.createElement('option');
-		elOptNew.text = programmes[prog];
-		elOptNew.value = prog;
-		try {
-			elSel.add(elOptNew, null); // standards compliant; doesn't work in IE
-		} catch (e) {
-			elSel.add(elOptNew); // IE only
+	if (seriesID == -1){
+		//disable the programme item selectors and set them to show nothing
+		$('programmeSelector').disabled=true;
+		$('itemSelector').disabled=true;
+		$('programmeSelector').selectedIndex = 0;
+		$('itemSelector').selectedIndex = 0;
+		
+		
+	}else{//a series is selected
+		//enable the programme selector
+		$('programmeSelector').disabled=false;
+		var programmes = ILseriesData[seriesID].programmes;
+
+		for (var prog in programmes) {
+			if(typeof programmes[prog] != "string") continue;
+			var elOptNew = document.createElement('option');
+			elOptNew.text = programmes[prog];
+			elOptNew.value = prog;
+			try {
+				elSel.add(elOptNew, null); // standards compliant; doesn't work in IE
+			} catch (e) {
+				elSel.add(elOptNew); // IE only
+			}
 		}
 	}
 }
 
 /// Grab a the currently selected programme's item/take info from the database 
 function ILloadNewProg () {
+	
+	if($('programmeSelector').selectedIndex == -1 ||$('programmeSelector').selectedIndex == 0){
+		//if no programme selected disable the item selection
+		$('itemSelector').disabled = true;
+	}else{
+		//enable the item selector when a programme is selected
+		$('itemSelector').disabled = false;
+		//populate the item list
+		ILpopulateItemList();
+	}
+	//automatically clears previous nodes on load by default
+	//url from which to get a JSON response
 	treeLoader.url = '/cgi-bin/ingex-modules/Logging.ingexmodule/data/getProgramme.pl';
+	//on load get rootnode and expand all nodes
 	treeLoader.load(tree.getRootNode(),function(){tree.expandAll();});
 }
 
@@ -941,99 +1423,334 @@ function ILimport () {
 	Ext.MessageBox.alert('Import Unavailable', 'Unfortunately, this feature has not yet been implemented.');
 }
 
-
-
-// A "class" for a timecode
+/// A "class" for a timecode
 function ingexLoggingTimecode () {
+	
+	//holds the value of the currently selected
+	var recSel = $('recorderSelector');
+	
+	//holds the current time
 	this.h = 0;
 	this.m = 0;
 	this.s = 0;
 	this.f = 0;
+	//holds whether timecode is stuck (only from recorder)
 	this.stopped = false;
 
+	//date objects for start and stop points
+	this.startDate;
+	this.stopDate;
+	
+	//holds the duration
 	this.durH = 0;
 	this.durM = 0;
 	this.durS = 0;
 	this.durF = 0;
-
+	//total framecount of duration
+	this.durFtot = 0;
+	
+	//number of frames since midnight, at start, at end and currently
+	this.firstFrame = 0;
+	this.lastFrame = 0;
+	this.framesSinceMidnight;
+	
+	//whether a take is running
 	this.takeRunning = false;
+	
+	//holds an integer that counts down to zero and does a server update when is zero
+	this.serverCheck = 0;
 
+	//holds the time interval between incrementing
 	this.incrementer = false;
-	this.getter = false;
+
 	this.ajaxtimeout = false;
 
+	//chooses the correct increment method based on selection
 	this.incrementMethod = function(){
+		//TODO is it necessary to prevent the change of recorder input whilst a take is running.
 		
-		var recSel = $('recorderSelector'); 
 		//if no timecode supply selected do nothing
 		if (recSel.options[recSel.selectedIndex].value == -1){
 		 	clearInterval(ILtc.incrementer);
-			clearInterval(ILtc.getter);
-			this.incrementer = false;
-			this.getter = false;
-			this.ajaxtimeout = false;
-			$('tcDisplay').innerHTML = "-- : -- : -- : --";
+			ILtc.incrementer = false;
+			clearTimeout(ILtc.ajaxtimeout);
+			ILtc.ajaxtimeout = false;
+			dropFrame = false;
+			$('tcDisplay').innerHTML = "--:--:--:--";
 			
-		}else if (recSel.options[recSel.selectedIndex].value == 1){ //if system time selected
-		 	
-			
+		}else if (recSel.options[recSel.selectedIndex].value >= numOfRecs){ //if system time selected
+			if($('tcDisplay').innerHTML == "--:--:--:--" ) {
+					showLoading('tcDisplay');
+			}
+				
 			//clear incrementer and begin updating from local system time
 			clearInterval(ILtc.incrementer);
-			clearInterval(ILtc.getter);
-			this.incrementer = false;
-			this.getter = false;
-			this.ajaxtimeout = false;
-			ILtc.startIncrementing(false);
-		}else{ //if a recorder is selectedinsole.log("a recorder is selected");
-			//clear incrementer and begin updating from recorder
+			ILtc.incrementer = false;
+			clearTimeout(ILtc.ajaxtimeout);
+			ILtc.ajaxtimeout = false;
+			//insole.log("system time is selected with value ="+recSel.options[recSel.selectedIndex].value);
+			
+			if(recSel.options[recSel.selectedIndex].value == numOfRecs){//25fps
+				frameNumer = 25;
+				frameDenom = 1;
+				editrate =  (frameNumer / frameDenom);
+				dropFrame = false;
+			}
+			if(recSel.options[recSel.selectedIndex].value == numOfRecs + 1){//29.97 non-drop
+				frameNumer = 30000;
+				frameDenom = 1001;
+				editrate =  (frameNumer / frameDenom);
+				dropFrame = false;
+			}
+			if(recSel.options[recSel.selectedIndex].value == numOfRecs + 2){//29.97 drop
+				frameNumer = 30000;
+				frameDenom = 1001;
+				editrate =  (frameNumer / frameDenom);
+				dropFrame = true;
+			}
+			if(recSel.options[recSel.selectedIndex].value == numOfRecs + 3){//30 non-drop
+				frameNumer = 30;
+				frameDenom = 1;
+				editrate =  (frameNumer / frameDenom);
+				dropFrame = false;
+			}
+			
+			ILtc.startIncrementing(false);//false for use system time
+			
+		}else { //if a recorder is selected
+			if($('tcDisplay').innerHTML == "--:--:--:--") {
+				showLoading('tcDisplay');
+			}
+			
+
+			//insole.log("a recorder is selected with value ="+recSel.options[recSel.selectedIndex].value);
 			clearInterval(ILtc.incrementer);
-			clearInterval(ILtc.getter);
-			this.incrementer = false;
-			this.getter = false;
-			this.ajaxtimeout = false;			
-			ILtc.startIncrementing();
+			ILtc.incrementer = false;
+			clearTimeout(ILtc.ajaxtimeout);
+			ILtc.ajaxtimeout = false;
+			//make a request to update the edit rate			
+			var xmlHttp = getxmlHttp();
+			//insole.warn("created xmlhttp");
+			xmlHttp.onreadystatechange = function () {
+				//waits until response content is loaded before doing anything
+				if (xmlHttp.readyState==4) {
+					
+					//insole.alert("have reached readystate 4 within method choice");
+					if (ILtc.ajaxtimeout) {
+						clearTimeout(ILtc.ajaxtimeout);
+						//insole.warn("clearing timeout");
+						ILtc.ajaxtimeout = false;
+					}
+				
+					try {
+						//insole.warn("trying to get response text");
+						var tmp = JSON.parse(xmlHttp.responseText);
+						var data = tmp.tc;
+						ILtc.setEditrate(data.frameNumer,data.frameDenom);
+						
+					} catch (e) {
+						clearInterval(ILtc.incrementer);
+						insole.alert("Received invalid response when updating timecode (JSON parse error). Timecode display STOPPED.");
+						insole.log("Exception thrown:   Name: "+e.name+"   Message: "+e.message);
+						$('tcDisplay').innerHTML = "<span class='error'>Error</span>";
+						Ext.MessageBox.alert('ERROR getting recorder URL!', 'Unable to connect to recorder : Please make sure Ingex is running and check status');
+					}
+					//calling start function
+					ILtc.startRecIncrement();
+				}
+			};
+
+			//only search for a recorder url if on the Logging tab
+			if (currentTab == "Logging"){
+				//var recSel = $('recorderSelector');
+				
+				if (recSel.options[recSel.selectedIndex].value != -1 && recSel.options[recSel.selectedIndex].value < numOfRecs ){  //if a recorder is selected
+					//insole.warn("a recorder is selected and a request will be made");
+					var recorderURL = ILgetRecorderURL(recSel.options[recSel.selectedIndex].text);
+					
+					if(!recorderURL){
+						insole.alert("Error querying recorder for timecode - no recorder URL available");
+						return false;
+					}
+			
+					var now = new Date();
+					var random = Math.floor(Math.random()*101);
+					var requestID = now.getHours()+now.getMinutes()+now.getSeconds()+now.getMilliseconds()+random;
+					//insole.warn("making a request to the server within method choice");
+					//make a request to server
+					xmlHttp.open("GET","/cgi-bin/ingex-modules/Logging.ingexmodule/tc.pl?url="+recorderURL+"&"+requestID,true);
+					//insole.warn("after open edirate set to "+editrate);
+					xmlHttp.send(null);
+					//if this is set clear it
+					if (this.ajaxtimeout) {
+						clearTimeout(this.ajaxtimeout);
+					}
+					//if server doesn't respond in time then times out
+					this.ajaxtimeout = setTimeout(function(){ILtc.ajaxTimedout()},5000);
+				}
+			}
+			
 		}
-
-
+	}
+	
+	this.startRecIncrement = function(){
+		ILtc.startIncrementing(true);//true for recorder selected
 	}
 
+	//updates the timecode from a given framecount
+	this.updateTimecodeFromFrameCount = function(frameCount){
+		
+		
+		var tcEditRate;
+		if(editrate == ntscFps ){
+			if(!dropFrame){
+				tcEditRate = Math.round(editrate);//eg 29.97 is in base 30 timecode
+			}else{tcEditRate = editrate;}
+		}else{
+			tcEditRate = editrate;
+		}
+		
+		if (!dropFrame){
+			//this is correct for any non drop frame rate 
+			//insole.warn("fps = "+editrate);
+			//insole.warn("framecount ="+frameCount+"edit rate="+editrate);
+			this.s = Math.floor(frameCount/tcEditRate);
+			this.m = Math.floor(this.s/60);
+			this.h = Math.floor(this.m/60);
+			//insole.warn("frameCount="+frameCount+" minus this"+(editrate * this.s));
+			this.f = Math.floor(frameCount - (tcEditRate * this.s));
+			this.s = this.s - (60 * this.m);
+			this.m = this.m - (60 * this.h);
+						
+		}else{//is drop frame
+			
+			//if using system time or just incrementing then need to work out the timecode from framecount
+			var countOfFrames = frameCount;
+			this.h = Math.floor( frameCount / FRAMES_PER_DF_HOUR);
+			countOfFrames = countOfFrames % FRAMES_PER_DF_HOUR;
+			var ten_min = Math.floor(countOfFrames / FRAMES_PER_DF_TENMIN);
+			countOfFrames = (countOfFrames % FRAMES_PER_DF_TENMIN);
+			
+			// must adjust frame count to make minutes calculation work
+		        // calculations from here on in just assume that within the 10 minute cycle
+			// there are only DF_FRAMES_PER_MINUTE (1798) frames per minute - even for the first minute
+			// in the ten minute cycle. Hence we decrement the frame count by 2 to get the minutes count
+			// So for the first two frames of the ten minute cycle we get a negative frames number
 
-	this.startIncrementing = function(getFromServer,reset) {
-		//try to connect to server unless told otherwise
-		if (isDefault(getFromServer)) getFromServer = true;
-		
-		if (isDefault(reset)) reset = false;
-		
-		if(!this.incrementer || reset) {
-			if(getFromServer){//getting update from server timecode
-				if($('tcDisplay').innerHTML == "-- : -- : -- : --") {
-					showLoading('tcDisplay');
-				}
+			countOfFrames -= 2;
+
+			var unit_min = Math.floor(countOfFrames / FRAMES_PER_DF_MIN);
+			countOfFrames = countOfFrames % FRAMES_PER_DF_MIN;
+			this.m = (ten_min * 10) + unit_min;
+			
+			// frames now contains frame in minute @ 1798 frames per minute
+	        	// put the 2 frame adjustment back in to get the correct frame count
+	        	// For the first two frames of the ten minute cycle, frames is negative and this
+	        	// adjustment makes it non-negative. For other minutes in the cycle the frames count
+	        	// goes from 0 upwards, thus this adjusment gives the required 2 frame offset
+			
+			countOfFrames += 2;
+	
+		        this.s = Math.floor(countOfFrames / tcEditRate);
+        		this.f = Math.floor(countOfFrames % tcEditRate);
+
+		}
+		//insole.warn("within update from count h= "+this.h+" m="+this.m+"  s="+this.s+"  f="+this.f);
+		//insole.warn("frameCount="+frameCount+" minus this"+(editrate * this.s));
+	}
+
+	
+	//returns number of frames since midnight from a passed date object
+	this.getFramesSinceMidnightFromDate = function (dateObj){
+		var h; var m; var s; var f;
+		h = dateObj.getHours();
+		m = dateObj.getMinutes();
+		s = dateObj.getSeconds();
+		f = Math.floor((editrate/1000)*dateObj.getMilliseconds());
+		//returns the total number of frames since midnight
+		return (Math.floor(h*60*60*editrate) + Math.floor(m*60*editrate) + Math.floor(s*editrate) + f);
+	}	
+	
+	//starts incrementing the correct method
+	this.startIncrementing = function(recorderSelected) {
+		//if no incrementer set	
+		//insole.warn("starting incrementing with this.incrementer="+this.incrementer+"  and recorder selected = "+recorderSelected);
+		if(!this.incrementer) {
+			if(recorderSelected){//getting update from server timecode
+				
+				//insole.warn("in startIncrementing editrate = "+editrate);
+				
+				
+				//update timecode from server at start
 				this.update();
-				this.getter = setInterval(function(){ILtc.update();},2000);
-			} else {//getting update from local timecode
-				this.incrementer = setInterval(function(){ILtc.increment(tcFreq);},(tcFreq*40));
+				
+				// Format as 2 digit numbers
+				var h; var m; var s; var f;
+				if (this.h < 10) { h = "0" + this.h; }else{h = this.h;};
+				if (this.m < 10) { m = "0" + this.m; }else{m = this.m;}
+				if (this.s < 10) { s = "0" + this.s; }else{s = this.s;}
+				if (this.f < 10) { f = "0" + this.f; }else{f = this.f;}
+				
+
+				if (h==NaN || m==NaN || s==NaN){
+					showLoading('tcDisplay');
+				}else{
+					//display to timcode display
+					if (dropFrame){
+						$('tcDisplay').innerHTML == h+";"+m+";"+s+";"+f;
+					}else{
+						$('tcDisplay').innerHTML == h+":"+m+":"+s+":"+f;
+					}
+				}
+				//if the server update time is less than the increment time then no point setting incrementer just set a server update	
+				if (serverUpdatePeriod < ( tcFreq*(1000/editrate))){
+					this.incrementer = setInterval(function(){ILtc.update();},serverUpdatePeriod);
+				}else{//if the server update time is longer than the increment period
+					//set incrementer
+					//number of increments before serverCheck
+					this.serverCheck = Math.floor(serverUpdatePeriod /( tcFreq*(1000/editrate)));//every serverCheck increments will update from server instead of incrementing in browser.
+					//insole.warn("initially setting serverCheck to"+this.serverCheck+"  recorderselected="+recorderSelected);
+					//update the timecode by tcFreq frames every time 3 frames worth of time has passed
+					this.incrementer = setInterval(function(){ILtc.increment(tcFreq, recorderSelected);},(tcFreq*(1000/editrate)));
+					//insole.warn("else increment ="+this.incrementer);
+				}
+				
+			}else {//getting update from local timecode
+				//get current time	
+				var now = new Date();
+				//get frames since midnight for current date
+				this.framesSinceMidnight = this.getFramesSinceMidnightFromDate(now);
+				//update timecode from frames since midnight - auto detects dropframe
+				this.updateTimecodeFromFrameCount(this.framesSinceMidnight);
+				
+				//set increment to update the timecode  approximately every time tcFreq frames worth of time has passed
+				this.incrementer = setInterval(function(){ILtc.increment(tcFreq, recorderSelected);},(tcFreq*(1000/editrate)));
+				//insole.warn("else increment ="+this.incrementer);
+				//insole.warn("hours="+now.getHours()+":"+now.getMinutes());
+				//insole.warn("this.h="+this.h+"   this.m = "+this.m);
 			}
 		}
 	}
-
+	
+	
+	//update the timecode from the server
 	this.update = function() {
+		//insole.warn("now updating from server");
 		var xmlHttp = getxmlHttp();
 		xmlHttp.onreadystatechange = function () {
 			if (xmlHttp.readyState==4) {
+				//insole.warn("timeout = "+ILtc.ajaxtimeout+"have reached readystate4");
 				if (ILtc.ajaxtimeout) {
 					clearTimeout(ILtc.ajaxtimeout);
-					ILtc.ajaxtimeout = false;
-					//calls for local incrementation
-					ILtc.startIncrementing(false);
+					ILtc.ajaxtimeout = false;	
 				}
 				try {
 					var tmp = JSON.parse(xmlHttp.responseText);
 					var data = tmp.tc;
-					ILtc.set(data.h,data.m,data.s,data.f,data.stopped,false);
+					ILtc.set(data.h,data.m,data.s,data.f,data.frameNumer, data.frameDenom,data.framesSinceMidnight,data.dropFrame,data.stopped,false);
+					
 				} catch (e) {
 					clearInterval(ILtc.incrementer);
-					clearInterval(ILtc.getter);
 					insole.alert("Received invalid response when updating timecode (JSON parse error). Timecode display STOPPED.");
 					insole.log("Exception thrown:   Name: "+e.name+"   Message: "+e.message);
 					$('tcDisplay').innerHTML = "<span class='error'>Error</span>";
@@ -1043,12 +1760,12 @@ function ingexLoggingTimecode () {
 		
 		//only search for a recorder if on the Logging tab
 		if (currentTab == "Logging"){
-			var recSel = $('recorderSelector');
+			//var recSel = $('recorderSelector');
 			
-			if (recSel.options[recSel.selectedIndex].value != -1 && recSel.options[recSel.selectedIndex].value != 1 ){  //if a recorder is selected
+			if (recSel.options[recSel.selectedIndex].value != -1 && recSel.options[recSel.selectedIndex].value < numOfRecs ){  //if a recorder is selected
 
-				var recorderURL = ILgetRecorderURL(recSel.options[recSel.selectedIndex].value);
-
+				var recorderURL = ILgetRecorderURL(recSel.options[recSel.selectedIndex].text);
+				
 				if(!recorderURL){
 					 insole.alert("Error querying recorder for timecode - no recorder URL available");
 					return false;
@@ -1057,7 +1774,7 @@ function ingexLoggingTimecode () {
 				var now = new Date();
 				var random = Math.floor(Math.random()*101);
 				var requestID = now.getHours()+now.getMinutes()+now.getSeconds()+now.getMilliseconds()+random;
-
+				//insole.warn("making a request to the server within update");
 				xmlHttp.open("GET","/cgi-bin/ingex-modules/Logging.ingexmodule/tc.pl?url="+recorderURL+"&"+requestID,true);
 				xmlHttp.send(null);
 				if (this.ajaxtimeout) {
@@ -1072,126 +1789,276 @@ function ingexLoggingTimecode () {
 	this.ajaxTimedout = function() {
 		clearTimeout(this.ajaxtimeout);
 		clearInterval(this.incrementer);
-		clearInterval(this.getter);
 		this.ajaxtimeout = false;
-		insole.alert("AJAX timeout occurred when updating timecode. Timecode display STOPPED.");
+		insole.alert("AJAX timeout occurred when updating timecode. Moving to system time");
+		this.startIncrementing(false);
 		$('tcDisplay').innerHTML = "<span class='error'>Error</span>";
 	}
 
-	this.set = function(h,m,s,f,stopped,startInc) {
-		if (isDefault(startInc)) startInc = true;
+	this.setEditrate = function(numerFrame,denomFrame) {
+		editrate = numerFrame/denomFrame;
+	}
+
+	//set the current timecode from server framecount
+	this.set = function(h,m,s,f,numerFrame,denomFrame,framesSinceMidnight,frameDrop,stopped) {
+		//update timecode
 		this.h = h;
 		this.m = m;
 		this.s = s;
 		this.f = f;
+		frameNumer = numerFrame;
+		frameDenom = denomFrame;
+		editrate = frameNumer/frameDenom;
+		//insole.warn("in set edit rate = "+editrate);
+		//insole.warn("in set frameNUmer="+frameNumer);
+		this.framesSinceMidnight  = framesSinceMidnight;
+		dropFrame = frameDrop;
 		this.stopped = stopped;
-		if(startInc) this.startIncrementing();
+		
+		//change the duration total to match updated timecode
+		if (this.takeRunning){
+			//work out the current duration
+			this.lastFrame = this.framesSinceMidnight;
+			if(this.lastFrame > this.firstFrame)//not crossing midnight
+			{
+				this.durFtot = this.lastFrame - this.firstFrame;
+			}else{
+				this.durFtot = (this.lastFrame + ((24*60*60*editrate) - this.firstFrame))
+			}
+		}
 	}
 
-
-	this.increment = function(numToInc) {
-		if (isDefault(numToInc)) numToInc = 1;
-		var draw = false;
-		var recSel = $('recorderSelector');
-		if (recSel.options[recSel.selectedIndex].value == 1){
+	this.increment = function(numToInc, recorderSelected) {
+		//if number of frames to increment by is not set then set to 1
+		if (isDefault(numToInc)) numToInc = 1; //number of frames to increment by
+		//insole.warn("this.h = "+this.h+"  this.m="+this.m);
+		//insole.warn("incrementer has been called with recorderSelected ="+recorderSelected);
+		if(recorderSelected){
+			//insole.warn("a recorder is selected")
+			if (this.serverCheck == 0){//do a server update
+				//insole.warn("updating from server");
+				//don't need to worry about dropframe as that is automatically provided by Timecode object
+				this.update();
+				//reset the serverIncrement
+				this.serverCheck = Math.floor(serverUpdatePeriod /( tcFreq*(1000/editrate)));
+				//insole.warn("servercheck reset to"+this.serverCheck);
+			}else{
+				//count down til next server check
+				this.serverCheck --;
+				//do the basic system time increment
+				this.framesSinceMidnight +=numToInc;
+				this.updateTimecodeFromFrameCount(this.framesSinceMidnight);
+				//insole.warn("serverCheck currently"+this.serverCheck);
+			}
+		}else{//using system time
 			
-			var now = new Date();
-			this.h = now.getHours();
-			this.m = now.getMinutes();
-			this.s = now.getSeconds();
-			this.f = Math.floor((editrate/1000)*now.getMilliseconds());
+				//get current time
+				var now = new Date();
+				///update the frames since midnight which is used for incrementing
+				this.framesSinceMidnight = this.getFramesSinceMidnightFromDate(now);
+				this.updateTimecodeFromFrameCount(this.framesSinceMidnight);
 			
 		}
-
-
-		if (!this.stopped) {
-			// Do the actual incrementing
-			this.f += numToInc;
-			if (this.f > editrate) {
-				this.f -= editrate;
-				this.s++;
-				draw = true;
-				if (this.s > 59) {
-					this.s -= 59;
-					this.m++;
-					if (this.m > 59) {
-						this.m -= 59;
-						this.h++;
-					}
-				}
-			}
-			// Format as 2 digit numbers
-			var h; var m; var s; var f;
-			if (this.h < 10) { h = "0" + this.h; } else { h = this.h; }
-			if (this.m < 10) { m = "0" + this.m; } else { m = this.m; }
-			if (this.s < 10) { s = "0" + this.s; } else { s = this.s; }
-			if (this.f < 10) { f = "0" + this.f; } else { f = this.f; }
+		
+		if(this.takeRunning){
+			//update lastFrame of take
+			this.lastFrame = this.framesSinceMidnight;
 			
-			// draw
-			var fr = "--";
-
-			if (showFrames) fr = f;
-			if (showFrames || draw)	$('tcDisplay').innerHTML = h+":"+m+":"+s+":"+fr;
-			
-			if(this.takeRunning) {
-				this.durF += numToInc;
-				if (this.durF > editrate) {
-					this.durF -= editrate;
-					this.durS++;
-					if (this.durS > 59) {
-						this.durS -= 59;
-						this.durM++;
-						if (this.durM > 59) {
-							this.durM -= 59;
-							this.durH++;
-						}
-					}
-				}
-				// Format as 2 digit numbers
-				var dh; var dm; var ds; var df;
-				if (this.durH < 10) { dh = "0" + this.durH; } else { dh = this.durH; }
-				if (this.durM < 10) { dm = "0" + this.durM; } else { dm = this.durM; }
-				if (this.durS < 10) { ds = "0" + this.durS; } else { ds = this.durS; }
-				if (this.durF < 10) { df = "0" + this.durF; } else { df = this.durF; }
+		}
+		//insole.warn("at first increment h= "+this.h+" m="+this.m+"  s="+this.s+"  f="+this.f);
+		
+		var fr = '--';
 				
-				// draw
-				var dfr = "--";
-				if (showFrames) dfr = df;
-				if (showFrames || draw) {
-					$('durationBox').value = dh+":"+dm+":"+ds+":"+dfr;
-					$('outpointBox').value = h+":"+m+":"+s+":"+fr;
+		// Format as 2 digit numbers
+		var h; var m; var s; var f;
+		if (this.h < 10) { h = "0" + this.h; }else{h = this.h;};
+		if (this.m < 10) { m = "0" + this.m; }else{m = this.m;}
+		if (this.s < 10) { s = "0" + this.s; }else{s = this.s;}
+		if (this.f < 10) { f = "0" + this.f; }else{f = this.f;}
+		
+		if(this.f >= editrate){insole.alert("The number of frames is MORE THAN FPS");}
+		if(this.f < 0){insole.alert("the number of frames is NEGATIVE");}
+		//insole.warn("editrate beore tc display ="+editrate);
+		//insole.warn("before tc display "+h+":"+m+":"+s+":"+f);
+		// draw timecode to tcDisplay
+		if(dropFrame){
+			if (showFrames){ $('tcDisplay').innerHTML = h+";"+m+";"+s+";"+f;}
+			else{ $('tcDisplay').innerHTML = h+";"+m+";"+s+";"+fr;}	
+		}else{
+			if (showFrames){ $('tcDisplay').innerHTML = h+":"+m+":"+s+":"+f;}
+			else{ $('tcDisplay').innerHTML = h+":"+m+":"+s+":"+fr;}
+		}
+				
+		if(this.takeRunning) {
+			//update duration				
+			//avoid odd behaviour if timecode crosses midnight
+			if(this.lastFrame > this.firstFrame) //not crossing midnight
+			{
+				this.durFtot = this.lastFrame - this.firstFrame;
+			}else{//add number of frames in a day to the last frame and then calculate
+				this.durFtot = (this.lastFrame + ((24*60*60*editrate) - this.firstFrame))
+			}
+
+			//need to convert to timecode from total 
+			//get duration timecode from number of frames
+			this.durS = Math.floor(this.durFtot/editrate);
+			//insole.warn("seconds total="+this.durS);
+			this.durM = Math.floor(this.durS/60);
+			this.durH = Math.floor(this.durM/60);
+			this.durF = this.durFtot - (editrate * this.durS);
+			this.durS = this.durS - (60 * this.durM);
+			this.durM = this.durM - (60 * this.durH);
+	
+			//only needed if are adding to durF itself
+			if (this.durF >= editrate) {
+				insole.alert("*************** duration frame number more than editrate *************");
+				this.durF -= editrate;
+				this.durS++;
+				if (this.durS > 59) {
+					this.durS -= 59;
+					this.durM++;
+					if (this.durM > 59) {
+						this.durM -= 59;
+						this.durH++;
+					}
+				}
+			}
+			this.durF = Math.floor(this.durF);
+			
+			//insole.warn("duration update = "+this.durH+":"+this.durM+":"+this.durS+":"+this.durF);
+			//drop frame alterations
+			/*if (dropFrame){
+			if(this.m % 10 != 0){//if recording time elapsed is  not divisible by ten, drop first 2 frames of each minute
+				if(this.f == 0 && this.s == 0){this.f = 2;}//change displayed timecode to 'drop' frames
+				if(this.f == 1 && this.s == 0){this.f = 3;}
+				//don't increment the total duration
+				//if(this.durF == 0 && this.durS == 0){this.durF = 2}
+				//if(this.durF == 1 && this.durS == 0){this.durF = 3}
+				}
+			}*/
+		
+			// Format as 2 digit numbers
+			var dh; var dm; var ds; var df;
+			if (this.durH < 10) { dh = "0" + this.durH; } else { dh = this.durH; }
+			if (this.durM < 10) { dm = "0" + this.durM; } else { dm = this.durM; }
+			if (this.durS < 10) { ds = "0" + this.durS; } else { ds = this.durS; }
+			if (this.durF < 10) { df = "0" + this.durF; } else { df = this.durF; }
+			
+			if(dropFrame){
+				if(showFrames){
+					$('outpointBox').value = h+ ";" + m + ";" + s + ";" + f;
+					$('durationBox').value = dh + ":" + dm + ":" + ds + ":" + df;
+				}else{
+					$('outpointBox').value = h + ";" + m + ";" + s + ";"+ fr;
+					$('durationBox').value = dh + ":" + dm + ":" + ds + ":" + fr;
+				}
+			}else{
+				if(showFrames){
+					$('outpointBox').value = h+ ":" + m + ":" + s + ":" + f;
+					$('durationBox').value = dh + ":" + dm + ":" + ds + ":" + df;
+				}else{
+					$('outpointBox').value = h + ":" + m + ":" + s + ":"+ fr;
+					$('durationBox').value = dh + ":" + dm + ":" + ds + ":" + fr;
 				}
 			}
 		}
 	}
-	
-	this.startTake = function() {
+
+	this.startTake = function(){
+		//if no recorder is selected
+		//insole.warn("starting take with selection");
+		//get update from server if a recorder is selected
+		if (recSel.options[recSel.selectedIndex].value < numOfRecs && recSel.options[recSel.selectedIndex].value != -1){
+			//insole.warn("updating from server");
+			ILtc.update();
+			this.firstFrame = this.framesSinceMidnight;
+			this.lastFrame = this.firstFrame;
+		}else{ // system time is recorded
+			this.startDate = new Date();
+			this.firstFrame = ILtc.getFramesSinceMidnightFromDate(this.startDate);
+			this.lastFrame = this.firstFrame;
+		}
+		
+		ILtc.updateTimecodeFromFrameCount(this.firstFrame);
+		
+		//insole.warn("within startTake h= "+this.h+" m="+this.m+"  s="+this.s+"  f="+this.f);
 		// Format as 2 digit numbers
 		var h; var m; var s; var f;
 		if (this.h < 10) { h = "0" + this.h; } else { h = this.h; }
 		if (this.m < 10) { m = "0" + this.m; } else { m = this.m; }
 		if (this.s < 10) { s = "0" + this.s; } else { s = this.s; }
 		if (this.f < 10) { f = "0" + this.f; } else { f = this.f; }
-		$('inpointBox').value = h + ":" + m + ":" + s + ":" + f;
-		$('outpointBox').value = h + ":" + m + ":" + s + ":" + f;
-		$('durationBox').value = "00:00:00:00";
+		if(dropFrame){
+			$('inpointBox').value = h + ";" + m + ";" + s + ";" + f;
+			$('outpointBox').value = h + ";" + m + ";" + s + ";" + f;
+		}else{
+			$('inpointBox').value = h + ":" + m + ":" + s + ":" + f;
+			$('outpointBox').value = h + ":" + m + ":" + s + ":" + f;
+		}
+		$('durationBox').value = "00:00:00:00";	
 		this.durH = 0;
 		this.durM = 0;
 		this.durS = 0;
 		this.durF = 0;
-		this.takeRunning = true;
+		ILtc.takeRunning = true;
+		
+		//disable the recorder selector whilst a take is running
+		$('recorderSelector').disabled = true;
+
+		//insole.warn("start take running="+ILtc.takeRunning);
 	}
-	
-	this.stopTake = function() {
-		this.takeRunning = false;
+
+	this.stopTake = function(){
+		//insole.warn("entering stopTake function");
+		
+		//if is a recorder
+		if (recSel.options[recSel.selectedIndex].value < numOfRecs && recSel.options[recSel.selectedIndex].value != -1){
+			ILtc.update();
+			this.lastFrame = this.framesSinceMidnight;
+		}else{
+			this.stopDate = new Date();
+			this.lastFrame = this.getFramesSinceMidnightFromDate(this.stopDate);
+		}
+		
+		ILtc.takeRunning = false;
+		//insole.warn("have set take running to "+ILtc.takeRunning)
+		
+		//work out the duration
+		if(this.lastFrame > this.firstFrame)//not crossing midnight
+		{
+			this.durFtot = this.lastFrame - this.firstFrame;
+		}else{// add frames in a day to last frame before doing calculation
+			this.durFtot = (this.lastFrame + ((24*60*60*editrate) - this.firstFrame))
+		}
+		
+		//insole.warn("updating timecode");
+		//update this.h, this.m etc
+		ILtc.updateTimecodeFromFrameCount(ILtc.lastFrame);
+		
+		//insole.warn("durFtot="+this.durFtot);
+		//get duration time from number of frames
+		this.durS = Math.floor(this.durFtot/editrate);
+		//insole.warn("seconds total="+this.durS);
+		this.durM = Math.floor(this.durS/60);
+		this.durH = Math.floor(this.durM/60);
+		this.durF = this.durFtot - (editrate * this.durS);
+		this.durS = this.durS - (60 * this.durM);
+		this.durM = this.durM - (60 * this.durH);
+		this.durF = Math.floor(this.durF);
+		
+		//insole.warn("the duration"+this.durH+":"+this.durM+":"+this.durS+":"+this.durF);
 		// Format as 2 digit numbers
 		var h; var m; var s; var f;
 		if (this.h < 10) { h = "0" + this.h; } else { h = this.h; }
 		if (this.m < 10) { m = "0" + this.m; } else { m = this.m; }
 		if (this.s < 10) { s = "0" + this.s; } else { s = this.s; }
 		if (this.f < 10) { f = "0" + this.f; } else { f = this.f; }
-		$('outpointBox').value = h + ":" + m + ":" + s + ":" + f;
 		
+		if(dropFrame){
+			$('outpointBox').value = h + ";" + m + ";" + s + ";" + f;
+		}else{
+			$('outpointBox').value = h + ":" + m + ":" + s + ":" + f;
+		}
 		// Format as 2 digit numbers
 		var dh; var dm; var ds; var df;
 		if (this.durH < 10) { dh = "0" + this.durH; } else { dh = this.durH; }
@@ -1199,9 +2066,14 @@ function ingexLoggingTimecode () {
 		if (this.durS < 10) { ds = "0" + this.durS; } else { ds = this.durS; }
 		if (this.durF < 10) { df = "0" + this.durF; } else { df = this.durF; }
 		$('durationBox').value = dh+":"+dm+":"+ds+":"+df;
-	}
+		//insole.warn ("duration ="+this.durFtot+"  start count ="+this.firstFrame+"  endcount="+this.lastFrame);
+		//enable the recorder selector
+		$('recorderSelector').disabled = false;
 
+
+	}
 }
+
 
 // --- Extending Ext library for Logging Module ---
 
@@ -1297,6 +2169,7 @@ Ext.tree.TakeNodeUI = Ext.extend(Ext.tree.TreeNodeUI, {
     },
 
 	getTakeElement : function(name) {
+		//insole.warn("name is="+name+"  takeelements is- "+this.takeelements.name);
 		if(typeof this.takeelements[name] != "undefined") return this.takeelements[name];
 		return false;
 	}
@@ -1323,7 +2196,7 @@ Ext.tree.ItemNodeUI = Ext.extend(Ext.tree.TreeNodeUI, {
 
         var buf = [
              '<li class="x-tree-node"><div ext:tree-node-id="',n.id,'" class="x-tree-node-el x-tree-node-leaf ', a.cls,'">',
-                '<div class="x-tree-col" style="width:',c.width-bw,'px;">',
+                '<div class="x-tree-col" style="width:0px',c.width-bw,'px;">',
                     '<span class="x-tree-node-indent">',this.indentMarkup,"</span>",
                     '<img src="', this.emptyIcon, '" class="x-tree-ec-icon x-tree-elbow">',
                     // '<img src="', a.icon || this.emptyIcon, '" class="x-tree-node-icon',(a.icon ? " x-tree-node-inline-icon" : ""),(a.iconCls ? " "+a.iconCls : ""),'" unselectable="on">',
@@ -1333,13 +2206,13 @@ Ext.tree.ItemNodeUI = Ext.extend(Ext.tree.TreeNodeUI, {
                     '<span unselectable="on">',/* n.text || (c.renderer ? c.renderer(a[c.dataIndex], n, a) : a[c.dataIndex]),*/"</span></a>",
                 "</div>"];
 
-            buf.push('<div class="x-tree-col" style="width:500px;border-bottom:1px solid #ddd;color: #449;">',
+            buf.push('<div class="x-tree-col" style="width:130px;border-bottom:1px solid #ddd;color: #449;">',
                         '<div class="x-tree-col-text" dataIndex="itemName">',a['itemName'],"</div>",
                       "</div>");
 
 			var seq = "[no sequence]";
 			if (a['sequence'] != "") seq = a['sequence'];
-			buf.push('<div class="x-tree-col" style="width:200px;border-bottom:1px solid #ddd;color: #449;">',
+			buf.push('<div class="x-tree-col" style="width:80px;border-bottom:1px solid #ddd;color: #449;">',
                    '<div class="x-tree-col-text" dataIndex="sequence">',seq,"</div>",
                  "</div>");
 

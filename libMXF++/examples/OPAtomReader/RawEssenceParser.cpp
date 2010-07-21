@@ -1,5 +1,5 @@
 /*
- * $Id: RawEssenceParser.cpp,v 1.3 2009/12/17 16:36:43 john_f Exp $
+ * $Id: RawEssenceParser.cpp,v 1.4 2010/07/21 16:29:34 john_f Exp $
  *
  * Parse raw essence data
  *
@@ -74,6 +74,7 @@ const SupportedFormat SUPPORTED_FORMATS[] =
     {MXF_EC_L(DNxHD720p185ClipWrapped),             FIXED_FRAME_SIZE_PARSER,    458752},
     {MXF_EC_L(SD_Unc_625_50i_422_135_ClipWrapped),  FIXED_FRAME_SIZE_PARSER,         0},
     {MXF_EC_L(HD_Unc_1080_50i_422_ClipWrapped),     FIXED_FRAME_SIZE_PARSER,         0},
+    {MXF_EC_L(HD_Unc_720_50p_422_ClipWrapped),      FIXED_FRAME_SIZE_PARSER,         0},
     {MXF_EC_L(AvidIMX30_625_50),                    FIXED_FRAME_SIZE_PARSER,         0},
     {MXF_EC_L(AvidIMX40_625_50),                    FIXED_FRAME_SIZE_PARSER,         0},
     {MXF_EC_L(AvidIMX50_625_50),                    FIXED_FRAME_SIZE_PARSER,         0},

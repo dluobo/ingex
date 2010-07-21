@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.3 2009/12/17 16:38:40 john_f Exp $
+# $Id: Makefile,v 1.4 2010/07/21 16:29:34 john_f Exp $
 #
 # Makefile for building libMXF++
 #
@@ -117,7 +117,7 @@ install: libMXF++.a
 .PHONY: uninstall
 uninstall:
 	rm -f $(INSTALL_PREFIX)/lib/libMXF++.a
-	rm -rf $(INSTALL_PREFIX)/include/libMXF++
+	rm -Rf $(INSTALL_PREFIX)/include/libMXF++
 
 
 .PHONY: clean

@@ -1,5 +1,5 @@
 /*
- * $Id: Track.h,v 1.4 2010/06/02 13:04:40 john_f Exp $
+ * $Id: Track.h,v 1.5 2010/07/21 16:29:34 john_f Exp $
  *
  * A Track in a Package
  *
@@ -31,13 +31,14 @@
 #include "DataTypes.h"
 #include "SourceClip.h"
 #include "PackageXMLWriter.h"
+#include "PackageXMLReader.h"
 
 
 
 namespace prodauto
 {
 
-class Track : public DatabaseObject
+class Track : public DatabaseObject, protected PackageXMLChildParser
 {
 public:
     Track();
@@ -48,6 +49,7 @@ public:
     virtual void cloneInPlace(bool resetLengths);
     Track* clone();
     void toXML(PackageXMLWriter *xml_writer);
+    void fromXML(PackageXMLReader *xml_reader);
     
     uint32_t id;
     uint32_t number;
@@ -56,6 +58,10 @@ public:
     int64_t origin;
     int dataDef;
     SourceClip* sourceClip;
+    
+protected:
+    // from PackageXMLChildParser
+    virtual void ParseXMLChild(PackageXMLReader *xml_reader, std::string name);
 };
     
     

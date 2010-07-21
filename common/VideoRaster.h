@@ -1,5 +1,5 @@
 /*
- * $Id: VideoRaster.h,v 1.1 2010/06/02 10:52:38 philipn Exp $
+ * $Id: VideoRaster.h,v 1.2 2010/07/21 16:29:33 john_f Exp $
  *
  * Video raster codes and details
  *
@@ -59,6 +59,8 @@ public:
 
         SMPTE274_25I,
         SMPTE274_29I,
+        SMPTE274_25PSF,
+        SMPTE274_29PSF,
         SMPTE274_25P,
         SMPTE274_29P,
         

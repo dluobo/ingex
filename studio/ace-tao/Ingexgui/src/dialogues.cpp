@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: dialogues.cpp,v 1.14 2010/07/14 13:06:36 john_f Exp $           *
+ *   $Id: dialogues.cpp,v 1.15 2010/07/21 16:29:34 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -1845,7 +1845,7 @@ const wxColour CuePointsDlg::GetLabelColour(const size_t index)
 BEGIN_EVENT_TABLE(ChunkingDlg, wxDialog)
 	EVT_SPINCTRL(wxID_ANY, ChunkingDlg::OnChangeChunkSize)
 	EVT_CHOICE(wxID_ANY, ChunkingDlg::OnChangeChunkAlignment)
-	EVT_TOGGLEBUTTON(wxID_ANY, ChunkingDlg::OnEnable)
+	EVT_CHECKBOX(wxID_ANY, ChunkingDlg::OnEnable)
 	EVT_TIMER(wxID_ANY, ChunkingDlg::OnTimer)
 END_EVENT_TABLE()
 
@@ -1865,25 +1865,26 @@ static const int Alignments[N_ALIGNMENTS] = {
 	60,
 };
 
-/// Sets up dialogue.
-/// @param parent Parent window.
-/// @param savedState The XML document for retrieving and saving settings.
 /// Chunking occurs in two ways: manually, when the "chunk now" button in the main frame is pressed, or automatically, when enabled in this dialogue.
-/// The "chunk now" button should only be enabled while recording.  When pressed, it calls IngexguiFrame::OnChunk(), which calls ChunkingDlg::RunFrom() with no arguments.  This stops any pending automatic chunking trigger and resets the button label, and disables the button to prevent another chunk being asked for while the previous chunking cycle is still in progress.  A manual chunking cycle is then initiated by calling RecorderGroupCtrl::ChunkStop() with the current timecode and recording details.  See later in this description for what happens when this method is called.
-/// Automatic chunking is set up at the start of recording, when ChunkingDlg::RunFrom() is called, with the start timecode, and a chunking postroll value determined by the RecorderGroup object (about half a second if all recorders can manage this).  If automatic chunking is enabled in the dialogue, the trigger timecode for the start of the next chunk is worked out.
-/// This is either the start time plus the chunk length, or, if alignment is enabled in the dialogue and the function call, the next alignment point (or the one after that, if it's less than half a minute away).
-/// The "chunk now" button label is set to the time difference if an alignment was calculated (otherwise it's already showing the chunk length, which is the correct value) and a repeating countdown tick timer of a second's duration is started, which decrements the countdown value on the button until it reaches zero.  (It is not used to trigger generation of the next chunk, as a timer cannot be relied upon to do this with frame accuracy.)
-/// The postroll value is then subtracted from the trigger timecode, which allows recorders to be contacted sufficiently in advance of the timecode at which they are instructed to stop, to avoid recording overruns.  It also ensures that the trigger occurs in time despite it being generated asynchronously from a refresh timer.
-/// Timepos::SetTrigger() is called with the next chunk start time, with a wrap flag to indicate if it is to happen tomorrow (or the trigger would occur immediately), and a window pointer to send an event to.
-/// At the first Timepos::OnRefreshTimer() call after the trigger point, an event is generated which is picked up by IngexguiFrame::OnTimeposEvent(), which calls RecorderGroupCtrl::ChunkStop() with the trigger timecode, the current contents of the description field, and cue point data.  This initiates a chunking cycle by causing all the recorders to be told to stop at the trigger time, plus a postroll of the chunking postroll duration.  It also sets mode variable RecorderGroupCtrl::mChunking from (initially) RecorderGroupCtrl::NOT_CHUNKING to RecorderGroupCtrl::STOPPING.
-/// Because this mode is set, the first recorder that reports that it has successfully stopped causes the mode to be updated to RecorderGroupCtrl::WAITING, and generates a RecorderGroupCtrl::SET_TRIGGER event with the timecode of the next chunk start, which is the timecode returned by the recorder (as this is the first frame not recorded).  the RecorderGroupCtrl::WAITING mode causes RecorderGroupCtrl::TRACK_STATUS events to have a flag set which prevents the recorder source tree briefly reporting an error due to a mismatch between the recorder mode (stopped) and the main frame mode (recording).
-/// This event is picked up by IngexguiFrame::OnRecorderGroupEvent(), which generates another call to Timepos::SetTrigger() with the next chunk start (which can be in the past so long as it is within the recorders' preroll abilities), targeted at the RecorderGroup.  It also calls EventList::AddEvent() to append the chunk boundary entry to the recording list.
-/// Every recorder that stops also causes a RecorderGroupCtrl::CHUNK_END event to be generated, which is treated by the frame similarly to a RecorderGroupCtrl::STOP event except it does not cause the frame to go into STOP mode.
-/// When Timepos reaches the trigger point, ensuring that recorders are not asked to start recording in the future, the event it generates is picked up by RecorderGroupCtrl::OnTimeposEvent() which checks that the mode is still RecorderGroupCtrl::WAITING (preventing race states due to user intervention while an event is in the queue).  If so, it sets the mode to RecorderGroupCtrl::RECORDING_CHUNK and starts recording again just as if the user had pressed the record button, but at the timecode returned by the first recorder that stopped.  The mode results in each recording command (sent after requesting source details from the frame) having a preroll of zero (which is safe to do as we know the start time is in the past), rather than the normal value.
+/// The "chunk now" button should only be enabled while recording.  When pressed, it calls IngexguiFrame::OnChunk(), which calls ChunkingDlg::RunFrom() with no arguments.  This stops any pending automatic chunking trigger, resets the button label, and disables the button to prevent another chunk being requested while the previous chunking cycle is still in progress.  A manual chunking cycle is then initiated by calling RecorderGroupCtrl::ChunkStop() with the current timecode and recording details.  See later in this description for what happens when this method is called.
+/// Automatic chunking is set up at the start of recording, when ChunkingDlg::RunFrom() is called, with the start timecode, and a chunking postroll value determined by the RecorderGroup object (about half a second if all recorders can manage this).  If automatic chunking is enabled in the dialogue, the stop timecode for the current chunk is worked out.
+/// This is either the start timecode plus the chunk length, or, if alignment is enabled in the dialogue and the function call, the next alignment point (or the one after that, if it's less than half a minute away).
+/// If an alignment was calculated, the "chunk now" button label is set to the time difference (otherwise it's already showing the chunk length, which is the correct value), and a repeating countdown tick timer of a second's duration is started, which decrements the countdown value on the button until it reaches zero.  (The button countdown mechanism is not used to calculate the stop timecode or to trigger the stop command, because it has neither the resolution nor the accuracy.)
+/// The postroll value is subtracted from the stop timecode to give the trigger timecode, which allows recorders to be contacted sufficiently in advance of the stop timecode, to avoid recording overruns.  It also ensures that the command will be sent in time despite it being generated asynchronously from a refresh timer.
+/// Timepos::SetTrigger() is called with the trigger timecode, which is wrapped at midnight, but will always be assumed to be in the future.  The call includes an event handler pointer to send an event to (the main frame).
+/// At the first Timepos::OnRefreshTimer() call after the trigger point, the event is generated and is picked up by IngexguiFrame::OnTimeposEvent(), which calls RecorderGroupCtrl::ChunkStop() with the trigger timecode, the current contents of the description field, and cue point data.  This initiates a chunking cycle by causing all the recorders to be told to stop at the trigger time, plus a postroll of the chunking postroll duration (which is the exact timecode of the chunk).  It also sets mode variable RecorderGroupCtrl::mChunking from (initially) RecorderGroupCtrl::NOT_CHUNKING to RecorderGroupCtrl::STOPPING.
+/// Because this mode is set, the first recorder that reports that it has successfully stopped causes the mode to be updated to RecorderGroupCtrl::WAITING, and generates a RecorderGroupCtrl::SET_TRIGGER event with the timecode of the next chunk start, which is the timecode returned by the recorder (as this is the first frame not recorded).  The RecorderGroupCtrl::WAITING mode also causes RecorderGroupCtrl::TRACK_STATUS events to have a flag set which prevents the recorder source tree briefly reporting an error due to a mismatch between the recorder mode (stopped) and the main frame mode (recording).
+/// The RecorderGroupCtrl::SET_TRIGGER event is picked up by IngexguiFrame::OnRecorderGroupEvent(), which generates another call to Timepos::SetTrigger(), with the next chunk start.  This time the mode is set to allow timecodes in the past (which is fine so long as it is within the recorders' preroll abilities), which will cause an immediate trigger.  The event is targeted at the RecorderGroup.  The frame also calls EventList::AddEvent() to append the chunk boundary entry to the recording list.
+/// This and every subsequent recorder that stops cause a RecorderGroupCtrl::CHUNK_END event to be generated, which is treated by the frame similarly to a RecorderGroupCtrl::STOP event except it does not cause the frame to go into STOP mode.
+/// Timepos waits for the trigger point (unless it was in the past), ensuring that recorders are not asked to start recording in the future.  The event it generates is picked up by RecorderGroupCtrl::OnTimeposEvent() which checks that the mode is still RecorderGroupCtrl::WAITING (preventing race states due to user intervention while an event is in the queue).  If so, it sets the mode to RecorderGroupCtrl::RECORDING_CHUNK and starts recording again by calling RecordAll() as if the user had pressed the record button, but at the timecode returned by the first recorder that stopped.  When the list of record enables is requested from the frame, the recording flags are ignored (because with recent builds of the recorder these flags are still set at this point).  Also, each controller's record command will have a preroll of zero (which is safe to do as we know the start time is in the past), rather than the normal value.
 /// When recorders report that they are recording, the mode causes a RecorderGroupCtrl::CHUNK_START rather than a RecorderGroupCtrl::RECORDING event to be generated.  This prevents the main frame from calling Timepos::Record(), which would otherwise start the position display counting from zero and generate incorrect positions in the recording list, and also prevents EventList::AddEvent() from being called to append a start entry to the recording list (as the chunk boundary entry performs this function).
 /// Instead, ChunkingDlg::RunFrom() is called with the timecode from the event and the align argument false, to start counting down exactly one chunk length to the next chunk point (if automatic chunking is enabled) - regardless of whether the chunk had been intiated manually or automatically.  The chunking button is also enabled in case it had been pressed by the user, which would have been disabled it.  The cycle thus begins again.
 /// The mode is set back to RecorderGroupCtrl::NOT_CHUNKING when RecorderGroupCtrl::Stop() is called as a result of the user pressing the stop button. ChunkingDlg::RunFrom() with no arguments is called when the frame mode changes from recording, to stop any pending automatic chunking trigger and reset the countdown display on the "chunk now" button.
-ChunkingDlg::ChunkingDlg(wxWindow * parent, Timepos * timepos, wxXmlDocument & savedState) : wxDialog(parent, wxID_ANY, wxT("Chunking")), mTimepos(timepos), mSavedState(savedState), mCanChunk(false)
+
+/// Sets up dialogue.
+/// @param parent Parent window.
+/// @param savedState The XML document for retrieving and saving settings.
+ChunkingDlg::ChunkingDlg(wxWindow * parent, Timepos * timepos, wxXmlDocument & savedState) : wxDialog(parent, wxID_ANY, wxT("Chunking")), mTimepos(timepos), mSavedState(savedState), mCanChunk(false), mPostroll(InvalidMxfDuration)
 {
 	const wxChar* alignmentLabels[N_ALIGNMENTS] = {
 		wxT("None"),
@@ -1909,9 +1910,9 @@ ChunkingDlg::ChunkingDlg(wxWindow * parent, Timepos * timepos, wxXmlDocument & s
 	mainSizer->Add(alignBox, 0, wxEXPAND | wxALL, CONTROL_BORDER);
 	mChunkAlignCtrl = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxArrayString(N_ALIGNMENTS, alignmentLabels));
 	alignBox->Add(mChunkAlignCtrl, 0, wxALIGN_CENTRE);
-	mEnableButton = new wxToggleButton(this, wxID_ANY, wxT("Enable"));
-	mainSizer->Add(mEnableButton, 0, wxALIGN_CENTRE);
-	mainSizer->Add(new wxButton(this, wxID_OK, wxT("OK")), 1, wxEXPAND | wxALL, CONTROL_BORDER);
+	mEnableCheckBox = new wxCheckBox(this, wxID_ANY, wxT("Enable"));
+	mainSizer->Add(mEnableCheckBox, 0, wxALIGN_CENTRE);
+	mainSizer->Add(new wxButton(this, wxID_OK, wxT("Close")), 1, wxEXPAND | wxALL, CONTROL_BORDER);
 	Fit();
 	mCountdownTimer = new wxTimer(this);
 
@@ -1925,7 +1926,7 @@ ChunkingDlg::ChunkingDlg(wxWindow * parent, Timepos * timepos, wxXmlDocument & s
 		if (chunkingNode->GetNodeContent().ToLong(&value) && 0 < value && MAX_CHUNK_SIZE >= value) {
 			mChunkSizeCtrl->SetValue(value);
 		}
-		mEnableButton->SetValue(wxT("Yes") == chunkingNode->GetPropVal(wxT("Enabled"), wxT("No")));
+		mEnableCheckBox->SetValue(wxT("Yes") == chunkingNode->GetPropVal(wxT("Enabled"), wxT("No")));
 		wxString str;
 		mChunkAlignCtrl->SetSelection(0);
 		if (chunkingNode->GetPropVal(wxT("Alignment"), &str) && str.ToLong(&value) && 0 < value && N_ALIGNMENTS > value) {
@@ -1955,17 +1956,17 @@ int ChunkingDlg::ShowModal()
 		}
 	}
 	//Create new node (element node with two attributes, containing text node)
-	node = new wxXmlNode(mSavedState.GetRoot(), wxXML_ELEMENT_NODE, wxT("Chunking"), wxT(""), new wxXmlProperty(wxT("Enabled"), mEnableButton->GetValue() ? wxT("Yes") : wxT("No")));
+	node = new wxXmlNode(mSavedState.GetRoot(), wxXML_ELEMENT_NODE, wxT("Chunking"), wxT(""), new wxXmlProperty(wxT("Enabled"), mEnableCheckBox->IsChecked() ? wxT("Yes") : wxT("No")));
 	node->AddProperty(new wxXmlProperty(wxT("Alignment"), wxString::Format(wxT("%d"), mChunkAlignCtrl->GetSelection())));
 	new wxXmlNode(node, wxXML_TEXT_NODE, wxT(""), wxString::Format(wxT("%d"), mChunkSizeCtrl->GetValue()));
 	return wxID_OK;
 }
 
-/// Responds to chunking enable button being toggled by starting/stopping chunking if recording, and updating the button label.
+/// Responds to chunking enable state being toggled by starting/stopping chunking if recording, and updating the button label.
 void ChunkingDlg::OnEnable(wxCommandEvent & WXUNUSED(event))
 {
 	if (mCanChunk) {
-		if (mEnableButton->GetValue()) {
+		if (mEnableCheckBox->IsChecked()) {
 			//start chunk countdown from now
 			ProdAuto::MxfTimecode currentTimecode;
 			mTimepos->GetTimecode(&currentTimecode);
@@ -1974,7 +1975,7 @@ void ChunkingDlg::OnEnable(wxCommandEvent & WXUNUSED(event))
 		else {
 			//stop chunk countdown
 			RunFrom();
-			mCanChunk = true; //calling RunFrom() will clear mCanChunk
+			mCanChunk = true; //calling RunFrom() will have cleared mCanChunk
 		}
 	}
 }
@@ -1982,6 +1983,7 @@ void ChunkingDlg::OnEnable(wxCommandEvent & WXUNUSED(event))
 /// Responds to chunking size being changed by resetting the countdown counter and updating the label on the chunking button if not currently counting down.
 void ChunkingDlg::OnChangeChunkSize(wxSpinEvent & WXUNUSED(event))
 {
+	mChunkLength = (unsigned long) mChunkSizeCtrl->GetValue() * 60; //in seconds
 	if (!mCountdownTimer->IsRunning()) {
 		Reset();
 	}
@@ -1990,6 +1992,7 @@ void ChunkingDlg::OnChangeChunkSize(wxSpinEvent & WXUNUSED(event))
 /// Responds to chunking size being changed by resetting the countdown counter and updating the label on the chunking button if not currently counting down.
 void ChunkingDlg::OnChangeChunkAlignment(wxCommandEvent & WXUNUSED(event))
 {
+	mChunkAlignment = Alignments[mChunkAlignCtrl->GetSelection()] * 60; //in seconds
 	if (!mCountdownTimer->IsRunning()) {
 		Reset();
 	}
@@ -2002,12 +2005,12 @@ void ChunkingDlg::OnChangeChunkAlignment(wxCommandEvent & WXUNUSED(event))
 void ChunkingDlg::RunFrom(const ProdAuto::MxfTimecode & startTimecode, const ProdAuto::MxfDuration & postroll, const bool align)
 {
 	Reset();
-	mCanChunk = !startTimecode.undefined && startTimecode.edit_rate.denominator; //latter a sanity check
 	if (!postroll.undefined) {
 		mPostroll = postroll;
 	}
+	mCanChunk = !startTimecode.undefined && !mPostroll.undefined && startTimecode.edit_rate.denominator; //latter a sanity check
 	if (mCanChunk) {
-		if (mEnableButton->GetValue()) {
+		if (mEnableCheckBox->IsChecked()) {
 			//calculate when to chunk to frame accuracy
 			ProdAuto::MxfTimecode triggerTimecode = startTimecode;
 			if (align && mChunkAlignment) {
@@ -2019,23 +2022,21 @@ void ChunkingDlg::RunFrom(const ProdAuto::MxfTimecode & startTimecode, const Pro
 				}
 				//we now know the time to the next chunk
 				mCountdown = (triggerTimecode.samples - startTimecode.samples) / (triggerTimecode.edit_rate.numerator / triggerTimecode.edit_rate.denominator);
-				mCountdownTimer->Start(1000); //countdown in seconds - this is only for the button label
 			}
 			else {
-				mCountdownTimer->Start(1000); //countdown in seconds - this is only for the button label
 				triggerTimecode.samples += (int64_t) mChunkLength * triggerTimecode.edit_rate.numerator / triggerTimecode.edit_rate.denominator;
 			}
 			triggerTimecode.samples -= mPostroll.samples; //trigger the stop command before a postroll period to make sure recorders get it in time
-			bool wrap = triggerTimecode.samples > 24LL * 3600 * triggerTimecode.edit_rate.numerator / triggerTimecode.edit_rate.denominator;
-			triggerTimecode.samples %= 24LL * 3600 * triggerTimecode.edit_rate.numerator / triggerTimecode.edit_rate.denominator;
+			triggerTimecode.samples %= 24LL * 3600 * triggerTimecode.edit_rate.numerator / triggerTimecode.edit_rate.denominator; //wrap (either way)
+			mCountdownTimer->Start(1000); //countdown in seconds - this is only for the button label
 			//set the trigger to chunk
-			mTimepos->SetTrigger(&triggerTimecode, (wxEvtHandler *) GetParent(), wrap); //will inform main frame when trigger occurs
+			mTimepos->SetTrigger(&triggerTimecode, (wxEvtHandler *) GetParent(), true); //will inform main frame when trigger occurs; always in the future
 		}
 	}
 	else {
 		//stop chunking
 		mCountdownTimer->Stop();
-		mTimepos->SetTrigger(&InvalidMxfTimecode, (wxEvtHandler *) GetParent());
+		mTimepos->SetTrigger(&InvalidMxfTimecode, (wxEvtHandler *) GetParent(), false);
 	}
 }
 
@@ -2064,7 +2065,7 @@ void ChunkingDlg::Reset()
 const wxString ChunkingDlg::GetChunkButtonLabel()
 {
 	wxString label;
-	if (mEnableButton->GetValue()) {
+	if (mEnableCheckBox->IsChecked()) {
 		if (mChunkAlignment && !mCountdownTimer->IsRunning()) { //don't know when the next chunk is going to be because that can only be determined when we start recording
 			label = wxT("Chunk ???:??");
 		}
@@ -2078,12 +2079,19 @@ const wxString ChunkingDlg::GetChunkButtonLabel()
 	return label;
 }
 
+/// Returns the colour of the chunking button
+const wxColour ChunkingDlg::GetChunkButtonColour()
+{
+	return mEnableCheckBox->IsChecked() ? BUTTON_WARNING_COLOUR : wxNullColour;
+}
+
+
 /// Returns the tooltip for the chunking button.
 const wxString ChunkingDlg::GetChunkButtonToolTip()
 {
 	wxString tooltip;
-	if (mEnableButton->GetValue()) {
-		if (mChunkAlignment && !mCountdownTimer->IsRunning()) { //don't know when the next chunk is going to be because that can only be determined when we start recording
+	if (mEnableCheckBox->IsChecked()) {
+		if (mChunkAlignment) { //don't know when the next chunk is going to be because that can only be determined when we start recording
 			tooltip = wxT("Automatic chunking is enabled, aligned with timecode");
 		}
 		else {

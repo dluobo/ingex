@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.cpp,v 1.2 2010/07/14 13:06:36 john_f Exp $
+ * $Id: dvs_sdi.cpp,v 1.3 2010/07/21 16:29:34 john_f Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -357,6 +357,8 @@ int get_video_raster(int channel, VideoRaster::EnumType & video_raster)
     int dvs_mode;
     int ret = sv_query(a_sv[channel], SV_QUERY_MODE_CURRENT, 0, &dvs_mode);
 
+    //fprintf(stderr, "channel %d mode %x\n", channel, dvs_mode);
+
     switch (dvs_mode & SV_MODE_MASK)
     {
     case SV_MODE_PAL:
@@ -368,8 +370,14 @@ int get_video_raster(int channel, VideoRaster::EnumType & video_raster)
     case SV_MODE_SMPTE274_25I:
         video_raster = VideoRaster::SMPTE274_25I;
         break;
+    case SV_MODE_SMPTE274_25sF:
+        video_raster = VideoRaster::SMPTE274_25PSF;
+        break;
     case SV_MODE_SMPTE274_29I:
         video_raster = VideoRaster::SMPTE274_29I;
+        break;
+    case SV_MODE_SMPTE274_29sF:
+        video_raster = VideoRaster::SMPTE274_29PSF;
         break;
     case SV_MODE_SMPTE296_50P:
         video_raster = VideoRaster::SMPTE296_50P;
@@ -392,11 +400,13 @@ VideoRaster::EnumType sd_raster(VideoRaster::EnumType raster)
     {
     case VideoRaster::PAL:
     case VideoRaster::SMPTE274_25I:
+    case VideoRaster::SMPTE274_25PSF:
     case VideoRaster::SMPTE296_50P:
         sd_raster = VideoRaster::PAL;
         break;
     case VideoRaster::NTSC:
     case VideoRaster::SMPTE274_29I:
+    case VideoRaster::SMPTE274_29PSF:
     case VideoRaster::SMPTE296_59P:
         sd_raster = VideoRaster::NTSC;
         break;
@@ -438,8 +448,14 @@ int set_videomode_on_all_channels(int max_channels, VideoRaster::EnumType video_
     case VideoRaster::SMPTE274_25I:
         dvs_mode |= SV_MODE_SMPTE274_25I;
         break;
+    case VideoRaster::SMPTE274_25PSF:
+        dvs_mode |= SV_MODE_SMPTE274_25sF;
+        break;
     case VideoRaster::SMPTE274_29I:
         dvs_mode |= SV_MODE_SMPTE274_29I;
+        break;
+    case VideoRaster::SMPTE274_29PSF:
+        dvs_mode |= SV_MODE_SMPTE274_29sF;
         break;
     case VideoRaster::SMPTE296_50P:
         dvs_mode |= SV_MODE_SMPTE296_50P;
@@ -1611,13 +1627,13 @@ int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_from_vi
         PTHREAD_MUTEX_UNLOCK( &m_log )      // end logging guard
     }
 
-    // Query hardware health (once a second to reduce excessive sv_query calls)
+    // Read card temperature every 25 frames (to reduce excessive sv_query calls)
     if ((pc->lastframe+1) % 25 == 0)
     {
         int temp;
         if (sv_query(sv, SV_QUERY_TEMPERATURE, 0, &temp) == SV_OK)
         {
-            // Ignore bad temperature values - sometimes returned by DVS SDK
+            // Ignore bad values sometimes returned by DVS SDK
             if (temp != 0xFF0000)
             {
                 pc->hwtemperature = (double)temp / 65536.0;
@@ -1725,12 +1741,14 @@ int write_dummy_frames(sv_handle *sv, int chan, int current_frame_tick, int tick
             {
             case Ingex::VideoRaster::PAL:
             case Ingex::VideoRaster::SMPTE274_25I:
+            case Ingex::VideoRaster::SMPTE274_25PSF:
             case Ingex::VideoRaster::SMPTE274_25P:
             default:
                 n_audio_samples = PAL_AUDIO_SAMPLES;
                 break;
             case Ingex::VideoRaster::NTSC:
             case Ingex::VideoRaster::SMPTE274_29I:
+            case Ingex::VideoRaster::SMPTE274_29PSF:
             case Ingex::VideoRaster::SMPTE274_29P:
                 n_audio_samples = NTSC_AUDIO_SAMPLES[ntsc_audio_seq];
                 ntsc_audio_seq++;
@@ -1784,6 +1802,20 @@ int write_dummy_frames(sv_handle *sv, int chan, int current_frame_tick, int tick
             if (verbose)
             {
                 logTF("chan: %d i:%2d  cur_frame_tick=%d tick_last_dummy_frame=%d last_ftk=%d tc=%s\n", chan, i, current_frame_tick, tick_last_dummy_frame, last_ftk, derived_tc.Text());
+            }
+
+            // Read card temperature every so often
+            if ((pc->lastframe+1) % 25 == 0)
+            {
+                int temp;
+                if (sv_query(sv, SV_QUERY_TEMPERATURE, 0, &temp) == SV_OK)
+                {
+                    // Ignore bad values sometimes returned by DVS SDK
+                    if (temp != 0xFF0000)
+                    {
+                        pc->hwtemperature = (double)temp / 65536.0;
+                    }
+                }
             }
 
             // signal frame is now ready
@@ -2009,7 +2041,9 @@ void usage_exit(void)
     fprintf(stderr, "                         MPEG   - secondary buffer is planar YUV 4:2:0\n");
     fprintf(stderr, "                         DV25   - secondary buffer is planar YUV 4:2:0 suitable for DV25\n");
     fprintf(stderr, "    -mode vid[:AUDIO8]   set input mode on all DVS cards, vid is one of:\n");
-    fprintf(stderr, "                         PAL,NTSC,1920x1080i25,1920x1080i29,1280x720p50,1280x720p59\n");
+    fprintf(stderr, "                         PAL, NTSC,\n");
+    fprintf(stderr, "                         1920x1080i25, 1920x1080p25sf, 1920x1080i29, 1920x1080p29sf,\n");
+    fprintf(stderr, "                         1280x720p50, 1280x720p59\n");
     fprintf(stderr, "                         AUDIO8 enables 8 audio channels per SDI input\n");
     fprintf(stderr, "                         E.g. -mode 1920x1080i29:AUDIO8\n");
     fprintf(stderr, "    -sync <type>         set input sync type on all DVS cards, sync is one of:\n");
@@ -2180,9 +2214,17 @@ int main (int argc, char ** argv)
             {
                 mode_video_raster = VideoRaster::SMPTE274_25I;
             }
+            else if (strcmp(vidmode, "1920x1080p25sf") == 0)
+            {
+                mode_video_raster = VideoRaster::SMPTE274_25PSF;
+            }
             else if (strcmp(vidmode, "1920x1080i29") == 0)
             {
                 mode_video_raster = VideoRaster::SMPTE274_29I;
+            }
+            else if (strcmp(vidmode, "1920x1080p29sf") == 0)
+            {
+                mode_video_raster = VideoRaster::SMPTE274_29PSF;
             }
             else if (strcmp(vidmode, "1280x720p50") == 0)
             {
@@ -2785,9 +2827,11 @@ int main (int argc, char ** argv)
         case Ingex::VideoRaster::PAL:
         case Ingex::VideoRaster::PAL_B:
         case Ingex::VideoRaster::SMPTE274_25I:
+        case Ingex::VideoRaster::SMPTE274_25PSF:
         case Ingex::VideoRaster::SMPTE274_25P:
         case Ingex::VideoRaster::SMPTE296_50P:
         case Ingex::VideoRaster::SMPTE274_29I:
+        case Ingex::VideoRaster::SMPTE274_29PSF:
         case Ingex::VideoRaster::SMPTE274_29P:
         case Ingex::VideoRaster::SMPTE296_59P:
             extra_offset = 0x1800;

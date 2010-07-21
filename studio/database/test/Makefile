@@ -22,7 +22,7 @@ $(DATABASELIB_DIR)/libprodautodb.a:
 
 
 test: $(DATABASELIB_DIR)/libprodautodb.a $(OBJECTS)
-	$(CC) $(OBJECTS) -L$(DATABASELIB_DIR) -L$(COMMON_DIR) -L$(STUDIOCOMMON_DIR) -lprodautodb -lcommon -lstudiocommon -luuid -lpqxx -lpthread -o $@
+	$(CC) $(OBJECTS) -L$(DATABASELIB_DIR) -L$(COMMON_DIR) -L$(STUDIOCOMMON_DIR) -lprodautodb -lcommon -lstudiocommon -luuid -lpqxx -lxerces-c -lpthread -o $@
 
 	
 .deps/%.d : %.cpp
