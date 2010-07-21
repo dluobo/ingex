@@ -1,9 +1,9 @@
 #
-# $Id: Makefile,v 1.4 2010/07/14 13:06:35 john_f Exp $
+# $Id: Makefile,v 1.5 2010/07/21 18:51:26 john_f Exp $
 #
 # Makefile for building the Ingex suite of applications
 #
-# Copyright (C) 2008  BBC Research, Stuart Cunningham <stuart_hc@users.sourceforge.net>
+# Copyright (C) 2008 British Broadcasting Corporation
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -20,6 +20,11 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
 # 02110-1301, USA.
 #
+
+ifndef USE_INSTALLED_LIBMXF
+# Uncomment for the ingex-studio file release
+#$(error You need to set the environment variable USE_INSTALLED_LIBMXF)
+endif
 
 .PHONY: all
 all: studio
@@ -47,8 +52,10 @@ endif
 # do 'realclean' for studio/ace-tao to delete files generated from IDL
 .PHONY: clean
 clean:
+ifndef USE_INSTALLED_LIBMXF
 	$(MAKE) -C libMXF $@
 	$(MAKE) -C libMXF++ $@
+endif
 	$(MAKE) -C common $@
 	$(MAKE) -C player $@
 	$(MAKE) -C studio realclean
@@ -57,10 +64,15 @@ clean:
 # So far, only libMXF and common have make check targets
 .PHONY: check
 check: all
+ifndef USE_INSTALLED_LIBMXF
 	$(MAKE) -C libMXF $@
+endif
 	$(MAKE) -C common $@
 
 .PHONY: valgrind-check
 valgrind-check: all
+ifndef USE_INSTALLED_LIBMXF
 	$(MAKE) -C libMXF $@
+endif
 	$(MAKE) -C common $@
+
