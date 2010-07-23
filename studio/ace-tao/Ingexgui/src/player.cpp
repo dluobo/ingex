@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: player.cpp,v 1.19 2010/07/14 13:06:36 john_f Exp $              *
+ *   $Id: player.cpp,v 1.20 2010/07/23 17:57:24 philipn Exp $              *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -375,7 +375,7 @@ std::vector<std::string>* Player::SelectRecording(ChunkInfo * chunkInfo, const i
 		}
 		else if (cuePoint) {
 			//somewhere in the middle
-			mRecordingModeFrameOffset = mCurrentChunkInfo->GetCuePointFrames()[cuePoint - 1];
+			mRecordingModeFrameOffset = mCurrentChunkInfo->GetCuePointFrames()[cuePoint - 1] - mCurrentChunkInfo->GetStartPosition();
 		}
 		else {
 			//the beginning
@@ -638,7 +638,7 @@ bool Player::Start()
 		if (mOK) {
 			if (RECORDINGS == mMode && mCurrentChunkInfo) {
 				for (size_t i = 0; i < mCurrentChunkInfo->GetCuePointFrames().size(); i++) {
-					markPosition(mCurrentChunkInfo->GetCuePointFrames()[i], 0); //so that the pointer changes colour at each cue point
+					markPosition(mCurrentChunkInfo->GetCuePointFrames()[i] - mCurrentChunkInfo->GetStartPosition(), 0); //so that the pointer changes colour at each cue point
 				}
 			}
 #ifndef DISABLE_SHARED_MEM_SOURCE

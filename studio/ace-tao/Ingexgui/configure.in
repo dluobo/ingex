@@ -1,4 +1,4 @@
-    # $Id: configure.in,v 1.17 2010/07/21 16:29:34 john_f Exp $
+    # $Id: configure.in,v 1.18 2010/07/23 17:57:24 philipn Exp $
 #
 AC_INIT(src/ingexgui.cpp)
 AM_INIT_AUTOMAKE(ingexgui, 0.1)
@@ -136,7 +136,7 @@ if test -n "$USE_INSTALLED_LIBMXF"; then
 	CPPFLAGS+=" -I/usr/local/include/mxf/examples/avidmxfinfo"
 	LIBS+=" -larchivemxfinfo -lavidmxfinfo -lMXFReader -lMXF"
 else
-	CPPFLAGS+=" -I$WORKSPACE/libMXF/lib/include -I$WORKSPACE/libMXF/examples/avidmxfinfo -I$WORKSPACE/libMXF/examples/archive/info"
+	CPPFLAGS+=" -I$WORKSPACE/libMXF/lib/include -I$WORKSPACE/libMXF/examples/avidmxfinfo -I$WORKSPACE/libMXF/examples/archive/info -I$WORKSPACE/libMXF/examples/reader"
 	LIBS+=" $WORKSPACE/libMXF/examples/archive/info/libarchivemxfinfo.a $WORKSPACE/libMXF/examples/avidmxfinfo/libavidmxfinfo.a $WORKSPACE/libMXF/examples/reader/libMXFReader.a $WORKSPACE/libMXF/lib/libMXF.a" 
 fi
 LDFLAGS="$LDFLAGS $LIBS $LIBDIRS $IDLLOC/$IDLLIB $WORKSPACE/player/IngexPlayer/$PLAYERLIB $DVS_LDFLAGS"

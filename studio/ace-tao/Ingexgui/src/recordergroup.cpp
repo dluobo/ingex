@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: recordergroup.cpp,v 1.12 2010/07/21 16:29:34 john_f Exp $       *
+ *   $Id: recordergroup.cpp,v 1.13 2010/07/23 17:57:24 philipn Exp $       *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -153,14 +153,14 @@ void RecorderGroupCtrl::Deselect(unsigned int index)
 	//preroll and postroll limits might have been relaxed
 	unsigned int i;
 	for (i = 0; i < GetCount(); i++) {
-		if (GetController(i) && GetController(i)->IsOK()) {
+		if (i != index && GetController(i) && GetController(i)->IsOK()) {
 			mMaxPreroll = GetController(i)->GetMaxPreroll();
 			mMaxPostroll = GetController(i)->GetMaxPostroll();
 			break;
 		}
 	}
 	for (; i < GetCount(); i++) {
-		if (GetController(i) && GetController(i)->IsOK()) {
+		if (i != index && GetController(i) && GetController(i)->IsOK()) {
 			mMaxPreroll.samples = GetController(i)->GetMaxPreroll().samples < mMaxPreroll.samples ? GetController(i)->GetMaxPreroll().samples : mMaxPreroll.samples;
 			mMaxPostroll.samples = GetController(i)->GetMaxPostroll().samples < mMaxPostroll.samples ? GetController(i)->GetMaxPostroll().samples : mMaxPostroll.samples;
 		}

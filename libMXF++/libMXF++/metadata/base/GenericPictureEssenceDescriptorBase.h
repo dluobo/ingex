@@ -1,5 +1,5 @@
 /*
- * $Id: GenericPictureEssenceDescriptorBase.h,v 1.1 2009/02/02 05:14:35 stuart_hc Exp $
+ * $Id: GenericPictureEssenceDescriptorBase.h,v 1.2 2010/07/23 17:57:24 philipn Exp $
  *
  *
  *
@@ -93,6 +93,10 @@ public:
    uint8_t getFieldDominance() const;
    bool havePictureEssenceCoding() const;
    mxfUL getPictureEssenceCoding() const;
+   bool haveCodingEquations() const;
+   mxfUL getCodingEquations() const;
+   bool haveColorPrimaries() const;
+   mxfUL getColorPrimaries() const;
 
 
    // setters
@@ -122,6 +126,8 @@ public:
    void setImageEndOffset(uint32_t value);
    void setFieldDominance(uint8_t value);
    void setPictureEssenceCoding(mxfUL value);
+   void setCodingEquations(mxfUL value);
+   void setColorPrimaries(mxfUL value);
 
 
 protected:

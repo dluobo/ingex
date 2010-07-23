@@ -1,5 +1,5 @@
 /*
- * $Id: GenericPictureEssenceDescriptorBase.cpp,v 1.1 2009/02/02 05:14:35 stuart_hc Exp $
+ * $Id: GenericPictureEssenceDescriptorBase.cpp,v 1.2 2010/07/23 17:57:24 philipn Exp $
  *
  *
  *
@@ -284,6 +284,26 @@ mxfUL GenericPictureEssenceDescriptorBase::getPictureEssenceCoding() const
     return getULItem(&MXF_ITEM_K(GenericPictureEssenceDescriptor, PictureEssenceCoding));
 }
 
+bool GenericPictureEssenceDescriptorBase::haveCodingEquations() const
+{
+    return haveItem(&MXF_ITEM_K(GenericPictureEssenceDescriptor, CodingEquations));
+}
+
+mxfUL GenericPictureEssenceDescriptorBase::getCodingEquations() const
+{
+    return getULItem(&MXF_ITEM_K(GenericPictureEssenceDescriptor, CodingEquations));
+}
+
+bool GenericPictureEssenceDescriptorBase::haveColorPrimaries() const
+{
+    return haveItem(&MXF_ITEM_K(GenericPictureEssenceDescriptor, ColorPrimaries));
+}
+
+mxfUL GenericPictureEssenceDescriptorBase::getColorPrimaries() const
+{
+    return getULItem(&MXF_ITEM_K(GenericPictureEssenceDescriptor, ColorPrimaries));
+}
+
 void GenericPictureEssenceDescriptorBase::setSignalStandard(uint8_t value)
 {
     setUInt8Item(&MXF_ITEM_K(GenericPictureEssenceDescriptor, SignalStandard), value);
@@ -407,5 +427,15 @@ void GenericPictureEssenceDescriptorBase::setFieldDominance(uint8_t value)
 void GenericPictureEssenceDescriptorBase::setPictureEssenceCoding(mxfUL value)
 {
     setULItem(&MXF_ITEM_K(GenericPictureEssenceDescriptor, PictureEssenceCoding), value);
+}
+
+void GenericPictureEssenceDescriptorBase::setCodingEquations(mxfUL value)
+{
+    setULItem(&MXF_ITEM_K(GenericPictureEssenceDescriptor, CodingEquations), value);
+}
+
+void GenericPictureEssenceDescriptorBase::setColorPrimaries(mxfUL value)
+{
+    setULItem(&MXF_ITEM_K(GenericPictureEssenceDescriptor, ColorPrimaries), value);
 }
 

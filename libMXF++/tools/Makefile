@@ -13,14 +13,14 @@ generate: gen_metadata_classes
 	
 .PHONY: install
 install: generate
-	mkdir -p $(LIBMXFPP_DIR)/metadata/base
-	cp -R generated/base/* $(LIBMXFPP_DIR)/metadata/base
+	mkdir -p $(LIBMXFPP_DIR)/libMXF++/metadata/base
+	cp -R generated/base/* $(LIBMXFPP_DIR)/libMXF++/metadata/base
 
 .PHONY: firstinstall
 firstinstall: generate
-	mkdir -p $(LIBMXFPP_DIR)/metadata/base
-	cp -R generated/* $(LIBMXFPP_DIR)/metadata
-	cp Metadata.h $(LIBMXFPP_DIR)/metadata
+	mkdir -p $(LIBMXFPP_DIR)/libMXF++/metadata/base
+	cp -R generated/* $(LIBMXFPP_DIR)/libMXF++/metadata
+	cp Metadata.h $(LIBMXFPP_DIR)/libMXF++/metadata
 
 	
 .PHONY: clean

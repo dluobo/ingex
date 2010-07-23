@@ -1,5 +1,5 @@
 /*
- * $Id: AvidClipWriter.cpp,v 1.5 2010/06/02 11:03:29 philipn Exp $
+ * $Id: AvidClipWriter.cpp,v 1.6 2010/07/23 17:57:24 philipn Exp $
  *
  * 
  *
@@ -521,7 +521,7 @@ void AvidClipWriter::registerEssenceElement(int trackId, int trackNumber, AvidEs
             }
             else // AVID_NTSCL_30I_PROJECT
             {
-                trackData->essenceContainerLabel = MXF_EC_L(SD_Unc_525_60i_422_135_ClipWrapped);
+                trackData->essenceContainerLabel = MXF_EC_L(SD_Unc_525_5994i_422_135_ClipWrapped);
                 trackData->editUnitByteCount = g_uncAlignedNTSCFrameSize;
                 trackData->vbiData = new unsigned char[g_uncNTSCVBISize];
                 trackData->vbiDataSize = g_uncNTSCVBISize;

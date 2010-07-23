@@ -1,5 +1,5 @@
 /*
- * $Id: mxf_source.c,v 1.15 2010/06/18 09:44:51 philipn Exp $
+ * $Id: mxf_source.c,v 1.16 2010/07/23 17:57:24 philipn Exp $
  *
  *
  *
@@ -1321,13 +1321,17 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
                 outputStream->streamInfo.singleField = 1;
             }
             else if (mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(DVBased_100_1080_50_I_ClipWrapped)) ||
-                mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(DVBased_100_720_50_P_ClipWrapped)))
+                mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(DVBased_100_720_50_P_ClipWrapped)) ||
+                mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(DVBased_100_1080_50_I_FrameWrapped)) ||
+                mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(DVBased_100_720_50_P_FrameWrapped)))
             {
                 outputStream->streamInfo.format = DV100_FORMAT;
             }
             else if (mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(DNxHD1080i120ClipWrapped)) ||
                 mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(DNxHD1080i185ClipWrapped)) ||
                 mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(DNxHD1080p36ClipWrapped)) ||
+                mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(DNxHD1080p120ClipWrapped)) ||
+                mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(DNxHD1080p185ClipWrapped)) ||
                 mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(DNxHD720p120ClipWrapped)) ||
                 mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(DNxHD720p185ClipWrapped)))
             {

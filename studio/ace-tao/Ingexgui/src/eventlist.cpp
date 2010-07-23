@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: eventlist.cpp,v 1.11 2010/06/02 13:09:25 john_f Exp $           *
+ *   $Id: eventlist.cpp,v 1.12 2010/07/23 17:57:24 philipn Exp $           *
  *                                                                         *
  *   Copyright (C) 2009-2010 British Broadcasting Corporation                   *
  *   - all rights reserved.                                                *
@@ -673,8 +673,7 @@ ProdAuto::LocatorSeq EventList::GetLocators()
 			locators[i].comment = item.GetText().mb_str(*wxConvCurrent);
 			locators[i].colour = CuePointsDlg::GetColourCode(latestChunkInfo.GetCueColourIndeces()[i]);
 			locators[i].timecode = latestChunkInfo.GetStartTimecode();
-			locators[i].timecode.samples += latestChunkInfo.GetCuePointFrames()[i];
-			locators[i].timecode.samples %= (24LL * 3600 * latestChunkInfo.GetStartTimecode().edit_rate.numerator / latestChunkInfo.GetStartTimecode().edit_rate.denominator);
+			locators[i].timecode.samples += latestChunkInfo.GetCuePointFrames()[i] - latestChunkInfo.GetStartPosition();
 		}
 	}
 	return locators;

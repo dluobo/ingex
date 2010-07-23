@@ -1,5 +1,5 @@
 /*
- * $Id: x11_xv_display_sink.c,v 1.14 2010/07/21 16:29:34 john_f Exp $
+ * $Id: x11_xv_display_sink.c,v 1.15 2010/07/23 17:57:24 philipn Exp $
  *
  *
  *
@@ -372,7 +372,8 @@ static int init_display(X11XVDisplaySink* sink, const StreamInfo* streamInfo)
         sampleAspectRatio = (Rational){1, 1};
     
         if (sink->inputWidth == 720 || sink->inputWidth == 702 || sink->inputWidth == 704 ||
-            sink->inputWidth == 360 || sink->inputWidth == 351 || sink->inputWidth == 352)
+            sink->inputWidth == 360 || sink->inputWidth == 351 || sink->inputWidth == 352 ||
+            sink->inputWidth == 288)
         {
             /* assume rec. 601 non-square pixels */
             if (streamInfo->frameRate.num == 25 && streamInfo->frameRate.den == 1) {

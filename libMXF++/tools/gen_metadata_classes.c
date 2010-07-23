@@ -1,5 +1,5 @@
 /*
- * $Id: gen_metadata_classes.c,v 1.3 2010/06/02 11:03:29 philipn Exp $
+ * $Id: gen_metadata_classes.c,v 1.4 2010/07/23 17:57:24 philipn Exp $
  *
  * Generate base and user editable metadata classes from the libMXF data model
  *
@@ -328,7 +328,7 @@ static void gen_class(const char* directory, MXFDataModel* dataModel, MXFSetDef*
 
     fprintf(baseHeaderFile,
         "/*\n"
-        " * $Id: gen_metadata_classes.c,v 1.3 2010/06/02 11:03:29 philipn Exp $\n"
+        " * $Id: gen_metadata_classes.c,v 1.4 2010/07/23 17:57:24 philipn Exp $\n"
         " *\n"
         " *\n"
         " *\n"
@@ -384,7 +384,7 @@ static void gen_class(const char* directory, MXFDataModel* dataModel, MXFSetDef*
     
     fprintf(headerFile,
         "/*\n"
-        " * $Id: gen_metadata_classes.c,v 1.3 2010/06/02 11:03:29 philipn Exp $\n"
+        " * $Id: gen_metadata_classes.c,v 1.4 2010/07/23 17:57:24 philipn Exp $\n"
         " *\n"
         " *\n"
         " *\n"
@@ -440,7 +440,7 @@ static void gen_class(const char* directory, MXFDataModel* dataModel, MXFSetDef*
     
     fprintf(baseSourceFile,
         "/*\n"
-        " * $Id: gen_metadata_classes.c,v 1.3 2010/06/02 11:03:29 philipn Exp $\n"
+        " * $Id: gen_metadata_classes.c,v 1.4 2010/07/23 17:57:24 philipn Exp $\n"
         " *\n"
         " *\n"
         " *\n"
@@ -460,6 +460,8 @@ static void gen_class(const char* directory, MXFDataModel* dataModel, MXFSetDef*
         " * License along with this library; if not, write to the Free Software\n"
         " * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA\n"
         " */\n"
+        "\n"
+        "#include <memory>\n"
         "\n"
         "#include <libMXF++/MXF.h>\n"
         "\n"
@@ -496,7 +498,7 @@ static void gen_class(const char* directory, MXFDataModel* dataModel, MXFSetDef*
     
     fprintf(sourceFile,
         "/*\n"
-        " * $Id: gen_metadata_classes.c,v 1.3 2010/06/02 11:03:29 philipn Exp $\n"
+        " * $Id: gen_metadata_classes.c,v 1.4 2010/07/23 17:57:24 philipn Exp $\n"
         " *\n"
         " *\n"
         " *\n"

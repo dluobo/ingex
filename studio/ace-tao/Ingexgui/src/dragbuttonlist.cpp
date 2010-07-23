@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: dragbuttonlist.cpp,v 1.13 2010/06/02 13:09:25 john_f Exp $      *
+ *   $Id: dragbuttonlist.cpp,v 1.14 2010/07/23 17:57:24 philipn Exp $      *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -25,6 +25,7 @@
 #include "ingexgui.h"
 #include "eventlist.h"
 #include "avid_mxf_info.h"
+#include "mxf_reader.h"
 
 BEGIN_EVENT_TABLE(DragButtonList, wxScrolledWindow)
 	EVT_RADIOBUTTON(wxID_ANY, DragButtonList::OnRadioButton)
@@ -150,6 +151,8 @@ prodauto::PlayerInputType DragButtonList::SetMXFFiles(wxArrayString & paths, std
 	std::vector<std::string> audioFileNames;
 	mProjectName.Clear();
 	AvidMXFInfo info;
+	MXFReader *mxfReader;
+	mxfRational frameRate;
 	editRate.undefined = true;
 	editRate.samples = 0;
 	for (size_t i = 0; i < paths.GetCount(); i++) {
@@ -180,6 +183,25 @@ prodauto::PlayerInputType DragButtonList::SetMXFFiles(wxArrayString & paths, std
 				audioFileNames.push_back(path);
 			}
 			ami_free_info(&info);
+		}
+		else if (open_mxf_reader(path.c_str(), &mxfReader)) {
+			if (clip_has_video(mxfReader)) {
+				fileNames.push_back(path);
+				wxRadioButton * rb = new wxRadioButton(this, fileNames.size() + wxID_HIGHEST + 1, wxString(get_tracks_string(mxfReader), *wxConvCurrent)); //ID corresponds to file index
+				rb->SetToolTip(paths[i]);
+				GetSizer()->Add(rb, -1, wxEXPAND);
+				mEnableStates.Add(false); //we don't know whether the player can open this file yet
+				trackNames.push_back(get_tracks_string(mxfReader));
+				get_frame_rate(mxfReader, &frameRate);
+				editRate.edit_rate.numerator = frameRate.numerator;
+				editRate.edit_rate.denominator = frameRate.denominator;
+				editRate.undefined = false;
+				nVideoTracks++;
+			}
+			else {
+				audioFileNames.push_back(path);
+			}
+			close_mxf_reader(&mxfReader);
 		}
 	}
 	Layout();
