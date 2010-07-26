@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: timepos.cpp,v 1.9 2010/07/23 17:57:24 philipn Exp $             *
+ *   $Id: timepos.cpp,v 1.10 2010/07/26 16:03:40 philipn Exp $             *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -272,7 +272,7 @@ const wxString Timepos::GetStartTimecode(ProdAuto::MxfTimecode * tc)
 }
 
 /// Formats the supplied timecode as a displayable string.
-/// Wraps at 24 hours.
+/// Displays in real time (i.e. drop frame for 29.97/59.94 fps) and wraps at 24 hours.
 /// @param tc The timecode to format.
 /// @return The formatted string.
 const wxString Timepos::FormatTimecode(const ProdAuto::MxfTimecode tc)
@@ -281,12 +281,7 @@ const wxString Timepos::FormatTimecode(const ProdAuto::MxfTimecode tc)
 		return UNKNOWN_TIMECODE;
 	}
 	else {
-		//long seconds = tc.samples * tc.edit_rate.denominator / tc.edit_rate.numerator;
-		//return wxString::Format(wxT("%02d:%02d:%02d:%02d"), (seconds / 3600) % 24, (seconds / 60) % 60, seconds % 60, tc.samples % (tc.edit_rate.numerator / tc.edit_rate.denominator));
-		//generate compatible with drop frame formats
-//		Ingex::Timecode timecode(tc.samples, tc.edit_rate.numerator, tc.edit_rate.denominator, tc.drop_frame);
-		int fps = tc.edit_rate.numerator / tc.edit_rate.denominator;
-		Ingex::Timecode timecode(tc.samples, fps * tc.edit_rate.denominator, tc.edit_rate.denominator, fps * tc.edit_rate.denominator != tc.edit_rate.numerator);
+		Ingex::Timecode timecode(tc.samples, tc.edit_rate.numerator, tc.edit_rate.denominator, tc.edit_rate.numerator == 30000 || tc.edit_rate.numerator == 60000);
 		return wxString(timecode.Text(), *wxConvCurrent);
 	}
 }
