@@ -1,5 +1,5 @@
 /*
- * $Id: TaggedValue.cpp,v 1.3 2010/06/02 11:03:29 philipn Exp $
+ * $Id: TaggedValue.cpp,v 1.4 2010/07/26 16:02:38 philipn Exp $
  *
  * Copyright (C) 2009  British Broadcasting Corporation.
  * All Rights Reserved.
@@ -173,7 +173,7 @@ void TaggedValue::setStringValue(string value)
         utf16Val = new wchar_t[utf16ValSize];
         mbstowcs(utf16Val, value.c_str(), utf16ValSize);
         
-        indirectVal.length = sizeof(g_prefix_be) + utf16ValSize * mxfUTF16Char_extlen;
+        indirectVal.length = (uint16_t)(sizeof(g_prefix_be) + utf16ValSize * mxfUTF16Char_extlen);
         indirectVal.data = new uint8_t[indirectVal.length];
         memcpy(indirectVal.data, g_prefix_be, sizeof(g_prefix_be));
         mxf_set_utf16string(utf16Val, &indirectVal.data[sizeof(g_prefix_be)]);

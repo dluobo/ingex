@@ -1,5 +1,5 @@
 /*
- * $Id: File.h,v 1.5 2010/06/02 11:03:29 philipn Exp $
+ * $Id: File.h,v 1.6 2010/07/26 16:02:38 philipn Exp $
  *
  * 
  *
@@ -84,7 +84,7 @@ public:
     void writeBatchHeader(uint32_t len, uint32_t eleLen);
     void writeArrayHeader(uint32_t len, uint32_t eleLen);
     
-    void writeZeros(uint32_t len);
+    void writeZeros(uint64_t len);
     
     void fillToPosition(uint64_t position);
     void writeFill(uint32_t size);

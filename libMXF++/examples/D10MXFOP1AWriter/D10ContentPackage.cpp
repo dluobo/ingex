@@ -1,5 +1,5 @@
 /*
- * $Id: D10ContentPackage.cpp,v 1.2 2010/02/17 16:04:23 philipn Exp $
+ * $Id: D10ContentPackage.cpp,v 1.3 2010/07/26 16:02:37 philipn Exp $
  *
  * D10 MXF OP-1A content package
  *
@@ -25,6 +25,7 @@
  */
 
 #include "CommonTypes.h"
+#include <mxf/mxf_logging.h>
 #include <libMXF++/MXFException.h>
 
 #include "D10ContentPackage.h"

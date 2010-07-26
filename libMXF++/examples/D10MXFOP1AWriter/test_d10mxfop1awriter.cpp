@@ -1,5 +1,5 @@
 /*
- * $Id: test_d10mxfop1awriter.cpp,v 1.2 2010/02/17 16:04:24 philipn Exp $
+ * $Id: test_d10mxfop1awriter.cpp,v 1.3 2010/07/26 16:02:37 philipn Exp $
  *
  * Test D10 MXF OP-1A writer
  *
@@ -29,12 +29,15 @@
 #include <cstdio>
 #include <cstring>
 #include <cerrno>
-#include <inttypes.h>
 
 #include <memory>
 
 #include "D10MXFOP1AWriter.h"
 #include "libMXF++/MXFException.h"
+
+#if defined(_MSC_VER)
+#define PRId64 "I64d"
+#endif
 
 using namespace std;
 using namespace mxfpp;
@@ -43,6 +46,7 @@ using namespace mxfpp;
 static const uint32_t DEFAULT_AUDIO_BPS = 24;
 static const D10MXFOP1AWriter::D10BitRate DEFAULT_VIDEO_BIT_RATE = D10MXFOP1AWriter::D10_BIT_RATE_50;
 static const uint32_t DEFAULT_VIDEO_FRAME_SIZE = 250000;
+
 
 
 static bool parse_timecode(const char *tc_str, D10MXFOP1AWriter::D10SampleRate sample_rate,

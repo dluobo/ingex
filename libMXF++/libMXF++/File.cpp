@@ -1,5 +1,5 @@
 /*
- * $Id: File.cpp,v 1.5 2010/06/02 11:03:29 philipn Exp $
+ * $Id: File.cpp,v 1.6 2010/07/26 16:02:37 philipn Exp $
  *
  * 
  *
@@ -195,7 +195,7 @@ int64_t File::size()
 
 bool File::eof()
 {
-    return mxf_file_eof(_cFile);
+    return mxf_file_eof(_cFile) == 1;
 }
 
 
@@ -274,7 +274,7 @@ void File::writeArrayHeader(uint32_t len, uint32_t eleLen)
     MXFPP_CHECK(mxf_write_array_header(_cFile, len, eleLen));
 }
 
-void File::writeZeros(uint32_t len)
+void File::writeZeros(uint64_t len)
 {
     MXFPP_CHECK(mxf_write_zeros(_cFile, len));
 }

@@ -1,5 +1,5 @@
 /*
- * $Id: MXFException.h,v 1.2 2009/10/12 15:30:25 philipn Exp $
+ * $Id: MXFException.h,v 1.3 2010/07/26 16:02:38 philipn Exp $
  *
  * 
  *
@@ -36,7 +36,7 @@ namespace mxfpp
 #define MXFPP_CHECK(cmd) \
     if (!(cmd)) \
     { \
-        mxf_log(MXF_ELOG, "'%s' failed, at %s:%d\n", #cmd, __FILE__, __LINE__); \
+        mxf_log_error("'%s' failed, at %s:%d\n", #cmd, __FILE__, __LINE__); \
         throw MXFException("'%s' failed, at %s:%d\n", #cmd, __FILE__, __LINE__); \
     }
 

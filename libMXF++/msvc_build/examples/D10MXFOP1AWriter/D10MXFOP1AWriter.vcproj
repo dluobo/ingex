@@ -2,8 +2,8 @@
 <VisualStudioProject
 	ProjectType="Visual C++"
 	Version="7.10"
-	Name="avidclipwriter"
-	ProjectGUID="{8B0EC744-3CAF-4C07-82CA-201EC69E6BE8}"
+	Name="D10MXFOP1AWriter"
+	ProjectGUID="{F1E02AC9-B382-4770-A783-319F29E12D78}"
 	Keyword="Win32Proj">
 	<Platforms>
 		<Platform
@@ -19,7 +19,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories="..\..\..\..\libMXF\lib\include;..\..\..\;..\..\..\examples\AvidClipWriter;..\..\..\examples\Common"
+				AdditionalIncludeDirectories="..\..\..\..\libMXF\lib\include;..\..\..\;..\..\..\examples\D10MXFOP1AWriter;..\..\..\examples\Common"
 				PreprocessorDefinitions="WIN32;_DEBUG;_LIB"
 				MinimalRebuild="TRUE"
 				BasicRuntimeChecks="3"
@@ -34,7 +34,7 @@
 				Name="VCCustomBuildTool"/>
 			<Tool
 				Name="VCLibrarianTool"
-				OutputFile="$(OutDir)/avidclipwriter.lib"/>
+				OutputFile="$(OutDir)/D10MXFOP1AWriter.lib"/>
 			<Tool
 				Name="VCMIDLTool"/>
 			<Tool
@@ -62,7 +62,7 @@
 			CharacterSet="1">
 			<Tool
 				Name="VCCLCompilerTool"
-				AdditionalIncludeDirectories="..\..\..\..\libMXF\lib\include;..\..\..\;..\..\..\examples\AvidClipWriter;..\..\..\examples\Common"
+				AdditionalIncludeDirectories="..\..\..\..\libMXF\lib\include;..\..\..\;..\..\..\examples\D10MXFOP1AWriter;..\..\..\examples\Common"
 				PreprocessorDefinitions="WIN32;NDEBUG;_LIB"
 				RuntimeLibrary="2"
 				RuntimeTypeInfo="TRUE"
@@ -75,7 +75,7 @@
 				Name="VCCustomBuildTool"/>
 			<Tool
 				Name="VCLibrarianTool"
-				OutputFile="$(OutDir)/avidclipwriter.lib"/>
+				OutputFile="$(OutDir)/D10MXFOP1AWriter.lib"/>
 			<Tool
 				Name="VCMIDLTool"/>
 			<Tool
@@ -104,13 +104,13 @@
 			Filter="cpp;c;cxx;def;odl;idl;hpj;bat;asm;asmx"
 			UniqueIdentifier="{4FC737F1-C7A5-4376-A066-2A32D752A2FF}">
 			<File
-				RelativePath="..\..\..\examples\AvidClipWriter\AvidClipWriter.cpp">
+				RelativePath="..\..\..\examples\D10MXFOP1AWriter\D10ContentPackage.cpp">
+			</File>
+			<File
+				RelativePath="..\..\..\examples\D10MXFOP1AWriter\D10MXFOP1AWriter.cpp">
 			</File>
 			<File
 				RelativePath="..\..\..\examples\Common\DynamicByteArray.cpp">
-			</File>
-			<File
-				RelativePath="..\..\..\examples\AvidClipWriter\main.cpp">
 			</File>
 		</Filter>
 		<Filter
@@ -118,19 +118,17 @@
 			Filter="h;hpp;hxx;hm;inl;inc;xsd"
 			UniqueIdentifier="{93995380-89BD-4b04-88EB-625FBE52EBFB}">
 			<File
-				RelativePath="..\..\..\examples\AvidClipWriter\AvidClipWriter.h">
+				RelativePath="..\..\..\examples\Common\CommonTypes.h">
 			</File>
 			<File
-				RelativePath="..\..\..\examples\Common\CommonTypes.h">
+				RelativePath="..\..\..\examples\D10MXFOP1AWriter\D10ContentPackage.h">
+			</File>
+			<File
+				RelativePath="..\..\..\examples\D10MXFOP1AWriter\D10MXFOP1AWriter.h">
 			</File>
 			<File
 				RelativePath="..\..\..\examples\Common\DynamicByteArray.h">
 			</File>
-		</Filter>
-		<Filter
-			Name="Resource Files"
-			Filter="rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx"
-			UniqueIdentifier="{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}">
 		</Filter>
 	</Files>
 	<Globals>

@@ -59,13 +59,16 @@
 			OutputDirectory="Release"
 			IntermediateDirectory="Release"
 			ConfigurationType="4"
-			CharacterSet="2">
+			CharacterSet="1">
 			<Tool
 				Name="VCCLCompilerTool"
+				AdditionalIncludeDirectories="..\..\..\libMXF\lib\include;..\.."
 				PreprocessorDefinitions="WIN32;NDEBUG;_LIB"
-				RuntimeLibrary="4"
+				RuntimeLibrary="2"
+				RuntimeTypeInfo="TRUE"
 				UsePrecompiledHeader="0"
 				WarningLevel="3"
+				WarnAsError="TRUE"
 				Detect64BitPortabilityProblems="TRUE"
 				DebugInformationFormat="3"/>
 			<Tool
@@ -126,7 +129,7 @@
 			</File>
 			<Filter
 				Name="metadata"
-				Filter="">
+				Filter="c;cpp">
 				<File
 					RelativePath="..\..\libMXF++\metadata\AES3AudioDescriptor.cpp">
 				</File>
@@ -231,7 +234,7 @@
 				</File>
 				<Filter
 					Name="base"
-					Filter="">
+					Filter="c;cpp">
 					<File
 						RelativePath="..\..\libMXF++\metadata\base\AES3AudioDescriptorBase.cpp">
 					</File>
@@ -336,6 +339,13 @@
 					</File>
 				</Filter>
 			</Filter>
+			<Filter
+				Name="extensions"
+				Filter="c;cpp">
+				<File
+					RelativePath="..\..\libMXF++\extensions\TaggedValue.cpp">
+				</File>
+			</Filter>
 		</Filter>
 		<Filter
 			Name="Header Files"
@@ -370,7 +380,7 @@
 			</File>
 			<Filter
 				Name="metadata"
-				Filter="">
+				Filter="h;hpp">
 				<File
 					RelativePath="..\..\libMXF++\metadata\AES3AudioDescriptor.h">
 				</File>
@@ -478,7 +488,7 @@
 				</File>
 				<Filter
 					Name="base"
-					Filter="">
+					Filter="h;hpp">
 					<File
 						RelativePath="..\..\libMXF++\metadata\base\AES3AudioDescriptorBase.h">
 					</File>
@@ -582,6 +592,13 @@
 						RelativePath="..\..\libMXF++\metadata\base\WaveAudioDescriptorBase.h">
 					</File>
 				</Filter>
+			</Filter>
+			<Filter
+				Name="extensions"
+				Filter="h;hpp">
+				<File
+					RelativePath="..\..\libMXF++\extensions\TaggedValue.h">
+				</File>
 			</Filter>
 		</Filter>
 	</Files>

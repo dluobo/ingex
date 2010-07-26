@@ -1,5 +1,5 @@
 /*
- * $Id: D10MXFOP1AWriter.cpp,v 1.6 2010/07/21 16:29:34 john_f Exp $
+ * $Id: D10MXFOP1AWriter.cpp,v 1.7 2010/07/26 16:02:37 philipn Exp $
  *
  * D10 MXF OP-1A writer
  *
@@ -158,10 +158,12 @@ uint32_t D10MXFOP1AWriter::GetContentPackageSize(D10SampleRate sample_rate, uint
 
 D10MXFOP1AWriter::D10MXFOP1AWriter()
 {
+    mxfRational default_aspect_ratio = {16, 9};
+
     SetSampleRate(D10_SAMPLE_RATE_625_50I);
     SetAudioChannelCount(4);
     SetAudioQuantizationBits(24);
-    SetAspectRatio((mxfRational){16, 9});
+    SetAspectRatio(default_aspect_ratio);
     SetStartTimecode(0, false);
     mStartPosition = 0; // calculated in PrepareFile()
     SetBitRate(D10_BIT_RATE_50, mMaxEncodedImageSize);
@@ -210,17 +212,19 @@ D10MXFOP1AWriter::~D10MXFOP1AWriter()
 void D10MXFOP1AWriter::SetSampleRate(D10SampleRate sample_rate)
 {
     mSampleRate = sample_rate;
-    
+
     if (sample_rate == D10_SAMPLE_RATE_625_50I) {
         mMaxEncodedImageSize = 250000;
-        mVideoSampleRate = (mxfRational){25, 1};
+        mVideoSampleRate.numerator = 25;
+        mVideoSampleRate.denominator = 1;
         mRoundedTimecodeBase = 25;
         mAudioSequenceCount = 1;
         mAudioSequenceIndex = 0;
         mAudioSequence[0] = 1920;
     } else {
         mMaxEncodedImageSize = 208541;
-        mVideoSampleRate = (mxfRational){30000, 1001};
+        mVideoSampleRate.numerator = 30000;
+        mVideoSampleRate.denominator = 1001;
         mRoundedTimecodeBase = 30;
         mAudioSequenceCount = 5;
         mAudioSequenceIndex = 0;
@@ -659,8 +663,8 @@ Timecode D10MXFOP1AWriter::GenerateUserTimecode()
         {
             prev_skipped_count = skipped_count;
             
-            hour = (tc_count + skipped_count) / (60 * 60 * mRoundedTimecodeBase);
-            min = ((tc_count + skipped_count) % (60 * 60 * mRoundedTimecodeBase)) / (60 * mRoundedTimecodeBase);
+            hour = (int)((tc_count + skipped_count) / (60 * 60 * mRoundedTimecodeBase));
+            min = (int)(((tc_count + skipped_count) % (60 * 60 * mRoundedTimecodeBase)) / (60 * mRoundedTimecodeBase));
     
             // add frames skipped
             skipped_count = (60-6) * 2 * hour;      // every whole hour
@@ -671,10 +675,10 @@ Timecode D10MXFOP1AWriter::GenerateUserTimecode()
         tc_count += skipped_count;
     }
     
-    user_timecode.hour = tc_count / (60 * 60 * mRoundedTimecodeBase);
-    user_timecode.min = (tc_count % (60 * 60 * mRoundedTimecodeBase)) / (60 * mRoundedTimecodeBase);
-    user_timecode.sec = ((tc_count % (60 * 60 * mRoundedTimecodeBase)) % (60 * mRoundedTimecodeBase)) / mRoundedTimecodeBase;
-    user_timecode.frame = ((tc_count % (60 * 60 * mRoundedTimecodeBase)) % (60 * mRoundedTimecodeBase)) % mRoundedTimecodeBase;
+    user_timecode.hour = (int)(tc_count / (60 * 60 * mRoundedTimecodeBase));
+    user_timecode.min = (int)((tc_count % (60 * 60 * mRoundedTimecodeBase)) / (60 * mRoundedTimecodeBase));
+    user_timecode.sec = (int)(((tc_count % (60 * 60 * mRoundedTimecodeBase)) % (60 * mRoundedTimecodeBase)) / mRoundedTimecodeBase);
+    user_timecode.frame = (int)(((tc_count % (60 * 60 * mRoundedTimecodeBase)) % (60 * mRoundedTimecodeBase)) % mRoundedTimecodeBase);
     
     return user_timecode;
 }
@@ -880,8 +884,8 @@ void D10MXFOP1AWriter::CalculateStartPosition()
         // first 2 frame numbers shall be omitted at the start of each minute,
         //   except minutes 0, 10, 20, 30, 40 and 50
     
-        hour = mStartPosition / (60 * 60 * mRoundedTimecodeBase);
-        min = (mStartPosition % (60 * 60 * mRoundedTimecodeBase)) / (60 * mRoundedTimecodeBase);
+        hour = (int)(mStartPosition / (60 * 60 * mRoundedTimecodeBase));
+        min = (int)((mStartPosition % (60 * 60 * mRoundedTimecodeBase)) / (60 * mRoundedTimecodeBase));
     
         // remove frames skipped
         mStartPosition -= (60-6) * 2 * hour;   // every whole hour
@@ -904,7 +908,7 @@ uint32_t D10MXFOP1AWriter::WriteSystemItem(const D10ContentPackage *content_pack
         mMXFFile->writeUInt8(0x03 << 1); // 30 fps content package rate
     mMXFFile->writeUInt8(0x00); // content package type
     mMXFFile->writeUInt16(0x0000); // channel handle
-    mMXFFile->writeUInt16((uint32_t)(mDuration % 65536)); // continuity count
+    mMXFFile->writeUInt16((uint16_t)(mDuration % 65536)); // continuity count
     
     // SMPTE Universal Label
     mMXFFile->writeUL(&mEssenceContainerUL);
@@ -939,8 +943,8 @@ uint32_t D10MXFOP1AWriter::WriteAES3AudioElement(const D10ContentPackage *conten
     bytes[0] = 0; // element header (FVUCP Valid Flag == 0 (false)
     if (mSampleRate == D10_SAMPLE_RATE_525_60I)
         bytes[0] |= mAudioSequenceIndex & 0x07; // 5-sequence count
-    bytes[1] = mAudioSequence[mAudioSequenceIndex] & 0xff; // samples per frame (LSB)
-    bytes[2] = (mAudioSequence[mAudioSequenceIndex] >> 8) & 0xff; // samples per frame (MSB)
+    bytes[1] = (unsigned char)(mAudioSequence[mAudioSequenceIndex] & 0xff); // samples per frame (LSB)
+    bytes[2] = (unsigned char)((mAudioSequence[mAudioSequenceIndex] >> 8) & 0xff); // samples per frame (MSB)
     bytes[3] = (1 << mChannelCount) - 1; // channel valid flags
     mAES3Block.append(bytes, 4);
     
