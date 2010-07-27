@@ -1,5 +1,5 @@
 /*
- * $Id: D10MXFOP1AWriter.h,v 1.6 2010/07/21 16:29:34 john_f Exp $
+ * $Id: D10MXFOP1AWriter.h,v 1.7 2010/07/27 16:16:18 philipn Exp $
  *
  * D10 MXF OP-1A writer
  *
@@ -120,7 +120,6 @@ public:
     
 private:
     void CreateFile();
-    void CalculateStartPosition();
     uint32_t WriteSystemItem(const D10ContentPackage *content_package);
     uint32_t WriteAES3AudioElement(const D10ContentPackage *content_package);
 
@@ -134,7 +133,6 @@ private:
     mxfRational mAspectRatio;
     int64_t mStartTimecode;
     bool mDropFrameTimecode;
-    int64_t mStartPosition;
     D10BitRate mD10BitRate;
     uint32_t mEncodedImageSize;
     uint32_t mMaxEncodedImageSize;

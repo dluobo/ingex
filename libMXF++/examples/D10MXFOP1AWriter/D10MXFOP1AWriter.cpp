@@ -1,5 +1,5 @@
 /*
- * $Id: D10MXFOP1AWriter.cpp,v 1.7 2010/07/26 16:02:37 philipn Exp $
+ * $Id: D10MXFOP1AWriter.cpp,v 1.8 2010/07/27 16:16:18 philipn Exp $
  *
  * D10 MXF OP-1A writer
  *
@@ -165,7 +165,6 @@ D10MXFOP1AWriter::D10MXFOP1AWriter()
     SetAudioQuantizationBits(24);
     SetAspectRatio(default_aspect_ratio);
     SetStartTimecode(0, false);
-    mStartPosition = 0; // calculated in PrepareFile()
     SetBitRate(D10_BIT_RATE_50, mMaxEncodedImageSize);
     mxf_generate_umid(&mFileSourcePackageUID);
     mxf_generate_umid(&mMaterialPackageUID);
@@ -304,8 +303,6 @@ HeaderMetadata* D10MXFOP1AWriter::CreateHeaderMetadata()
     
     
     // inits
-    
-    CalculateStartPosition();
     
     mxf_get_timestamp_now(&now);
     if (mSampleRate == D10_SAMPLE_RATE_625_50I) {
@@ -650,28 +647,28 @@ Timecode D10MXFOP1AWriter::GenerateUserTimecode()
     MXFPP_ASSERT(mMXFFile);
     
     Timecode user_timecode;
-    int64_t tc_count = mStartPosition + mDuration;
+    int64_t tc_count = mStartTimecode + mDuration;
     
     if (mDropFrameTimecode && mSampleRate == D10MXFOP1AWriter::D10_SAMPLE_RATE_525_60I) {
         // first 2 frame numbers shall be omitted at the start of each minute,
         //   except minutes 0, 10, 20, 30, 40 and 50
-        
+
         int hour, min;
         int64_t prev_skipped_count = -1;
         int64_t skipped_count = 0;
         while (prev_skipped_count != skipped_count)
         {
             prev_skipped_count = skipped_count;
-            
+
             hour = (int)((tc_count + skipped_count) / (60 * 60 * mRoundedTimecodeBase));
             min = (int)(((tc_count + skipped_count) % (60 * 60 * mRoundedTimecodeBase)) / (60 * mRoundedTimecodeBase));
-    
+
             // add frames skipped
             skipped_count = (60-6) * 2 * hour;      // every whole hour
             skipped_count += (min / 10) * 9 * 2;    // every whole 10 min
             skipped_count += (min % 10) * 2;        // every whole min, except min 0
         }
-        
+
         tc_count += skipped_count;
     }
     
@@ -873,25 +870,6 @@ void D10MXFOP1AWriter::CreateFile()
 
     KAGFillerWriter kag_filler_writer(mHeaderPartition);
     mIndexSegment->write(mMXFFile, mHeaderPartition, &kag_filler_writer);
-}
-
-void D10MXFOP1AWriter::CalculateStartPosition()
-{
-    int hour, min;
-
-    mStartPosition = mStartTimecode;
-    if (mDropFrameTimecode && mSampleRate == D10MXFOP1AWriter::D10_SAMPLE_RATE_525_60I) {
-        // first 2 frame numbers shall be omitted at the start of each minute,
-        //   except minutes 0, 10, 20, 30, 40 and 50
-    
-        hour = (int)(mStartPosition / (60 * 60 * mRoundedTimecodeBase));
-        min = (int)((mStartPosition % (60 * 60 * mRoundedTimecodeBase)) / (60 * mRoundedTimecodeBase));
-    
-        // remove frames skipped
-        mStartPosition -= (60-6) * 2 * hour;   // every whole hour
-        mStartPosition -= (min / 10) * 9 * 2;  // every whole 10 min
-        mStartPosition -= (min % 10) * 2;      // every whole min, except min 0
-    }
 }
 
 uint32_t D10MXFOP1AWriter::WriteSystemItem(const D10ContentPackage *content_package)

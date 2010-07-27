@@ -1,5 +1,5 @@
 /*
- * $Id: test_d10mxfop1awriter.cpp,v 1.3 2010/07/26 16:02:37 philipn Exp $
+ * $Id: test_d10mxfop1awriter.cpp,v 1.4 2010/07/27 16:16:18 philipn Exp $
  *
  * Test D10 MXF OP-1A writer
  *
@@ -49,11 +49,12 @@ static const uint32_t DEFAULT_VIDEO_FRAME_SIZE = 250000;
 
 
 
-static bool parse_timecode(const char *tc_str, D10MXFOP1AWriter::D10SampleRate sample_rate,
+static bool parse_timecode(const char *tc_str, D10MXFOP1AWriter::D10SampleRate sample_rate, bool drop_frame,
                            int64_t *tc)
 {
     uint16_t rounded_timecode_base;
     int hour, min, sec, frame;
+    int64_t start_timecode;
     
     if (sample_rate == D10MXFOP1AWriter::D10_SAMPLE_RATE_625_50I)
         rounded_timecode_base = 25;
@@ -64,10 +65,25 @@ static bool parse_timecode(const char *tc_str, D10MXFOP1AWriter::D10SampleRate s
         return false;
     
     
-    *tc = hour * 60 * 60 * rounded_timecode_base +
-          min * 60 * rounded_timecode_base +
-          sec * rounded_timecode_base +
-          frame;
+    start_timecode = hour * 60 * 60 * rounded_timecode_base +
+                     min * 60 * rounded_timecode_base +
+                     sec * rounded_timecode_base +
+                     frame;
+
+    if (drop_frame) {
+        // first 2 frame numbers shall be omitted at the start of each minute,
+        //   except minutes 0, 10, 20, 30, 40 and 50
+
+        int hour = (int)(start_timecode / (60 * 60 * rounded_timecode_base));
+        int min = (int)((start_timecode % (60 * 60 * rounded_timecode_base)) / (60 * rounded_timecode_base));
+
+        // remove frames skipped
+        start_timecode -= (60-6) * 2 * hour;   // every whole hour
+        start_timecode -= (min / 10) * 9 * 2;  // every whole 10 min
+        start_timecode -= (min % 10) * 2;      // every whole min, except min 0
+    }
+
+    *tc = start_timecode;
 
     return true;
 }
@@ -273,7 +289,7 @@ int main(int argc, const char** argv)
         fprintf(stderr, "Missing video filename (-v)\n");
         return 1;
     }
-    if (start_timecode_str && !parse_timecode(start_timecode_str, sample_rate, &start_timecode))
+    if (start_timecode_str && !parse_timecode(start_timecode_str, sample_rate, drop_frame, &start_timecode))
     {
         usage(argv[0]);
         fprintf(stderr, "Invalid value '%s' for option '-t'\n", start_timecode_str);
