@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder_av.cpp,v 1.2 2010/06/25 14:23:59 philipn Exp $
+ * $Id: ffmpeg_encoder_av.cpp,v 1.3 2010/07/28 16:55:47 john_f Exp $
  *
  * Encode AV and write to file.
  *
@@ -101,7 +101,12 @@ typedef struct
     int scale_image;
 } internal_ffmpeg_encoder_t;
 
-static int init_video_xdcam(internal_ffmpeg_encoder_t * enc)
+
+// Local context
+namespace
+{
+
+int init_video_xdcam(internal_ffmpeg_encoder_t * enc)
 {
    AVCodecContext * codec_context;
 
@@ -143,13 +148,13 @@ static int init_video_xdcam(internal_ffmpeg_encoder_t * enc)
     codec_context->lmax = 3 * FF_QP2LAMBDA;
     codec_context->max_b_frames =2;
     codec_context->mb_decision = FF_MB_DECISION_SIMPLE;
-	codec_context->pix_fmt = PIX_FMT_YUV422P;
-	codec_context->bit_rate =50000000;
-	codec_context->rc_max_rate = 60000000;
-	codec_context->rc_min_rate = 0;
-	codec_context->rc_buffer_size = 50000000; 
-	codec_context->stream_codec_tag = ('c'<<24) + ('5'<<16) + ('d'<<8) + 'x';
-	
+    codec_context->pix_fmt = PIX_FMT_YUV422P;
+    codec_context->bit_rate =50000000;
+    codec_context->rc_max_rate = 60000000;
+    codec_context->rc_min_rate = 0;
+    codec_context->rc_buffer_size = 50000000; 
+    codec_context->stream_codec_tag = ('c'<<24) + ('5'<<16) + ('d'<<8) + 'x';
+    
 
    avcodec_set_dimensions(codec_context,width,height);
 
@@ -199,10 +204,8 @@ static int init_video_xdcam(internal_ffmpeg_encoder_t * enc)
 
 }
 
-
-
 /* initialise video stream for DVD encoding */
-static int init_video_dvd(internal_ffmpeg_encoder_t * enc)
+int init_video_dvd(internal_ffmpeg_encoder_t * enc)
 {
     AVCodecContext * codec_context = enc->video_st->codec;
 
@@ -278,7 +281,7 @@ static int init_video_dvd(internal_ffmpeg_encoder_t * enc)
 }
 
 /* initialise video stream for MPEG-4 encoding */
-static int init_video_mpeg4(internal_ffmpeg_encoder_t * enc)
+int init_video_mpeg4(internal_ffmpeg_encoder_t * enc)
 {
     AVCodecContext * codec_context = enc->video_st->codec;
 
@@ -346,7 +349,7 @@ static int init_video_mpeg4(internal_ffmpeg_encoder_t * enc)
 }
 
 /* initialise video stream for DV encoding */
-static int init_video_dv(internal_ffmpeg_encoder_t * enc, MaterialResolution::EnumType res, int64_t start_tc)
+int init_video_dv(internal_ffmpeg_encoder_t * enc, MaterialResolution::EnumType res, int64_t start_tc)
 {
     AVCodecContext * codec_context = enc->video_st->codec;
 
@@ -440,7 +443,7 @@ static int init_video_dv(internal_ffmpeg_encoder_t * enc, MaterialResolution::En
 }
 
 /* initialise audio streams for PCM encoding */
-static int init_audio_pcm(audio_encoder_t * aenc)
+int init_audio_pcm(audio_encoder_t * aenc)
 {
     AVCodecContext * codec_context = aenc->audio_st->codec;
 
@@ -481,7 +484,7 @@ static int init_audio_pcm(audio_encoder_t * aenc)
 }
 
 /* initialise audio stream for DVD encoding */
-static int init_audio_dvd(audio_encoder_t * aenc)
+int init_audio_dvd(audio_encoder_t * aenc)
 {
     AVCodecContext * codec_context = aenc->audio_st->codec;
 
@@ -525,7 +528,7 @@ static int init_audio_dvd(audio_encoder_t * aenc)
 }
 
 /* initialise audio stream for MP3 encoding */
-static int init_audio_mp3(audio_encoder_t * aenc)
+int init_audio_mp3(audio_encoder_t * aenc)
 {
     AVCodecContext * codec_context = aenc->audio_st->codec;
 
@@ -569,7 +572,7 @@ static int init_audio_mp3(audio_encoder_t * aenc)
     return 0;
 }
 
-static void cleanup (internal_ffmpeg_encoder_t * enc)
+void cleanup (internal_ffmpeg_encoder_t * enc)
 {
     if (enc)
     {
@@ -603,8 +606,7 @@ static void cleanup (internal_ffmpeg_encoder_t * enc)
     }
 }
 
-
-static int write_video_frame(internal_ffmpeg_encoder_t * enc, uint8_t * p_video)
+int write_video_frame(internal_ffmpeg_encoder_t * enc, uint8_t * p_video)
 {
     AVFormatContext * oc = enc->oc;
     AVStream * st = enc->video_st;
@@ -693,7 +695,7 @@ static int write_video_frame(internal_ffmpeg_encoder_t * enc, uint8_t * p_video)
     }
 }
 
-static int write_audio_frame(internal_ffmpeg_encoder_t * enc, int stream_i, short * p_audio)
+int write_audio_frame(internal_ffmpeg_encoder_t * enc, int stream_i, short * p_audio)
 {
     AVFormatContext * oc = enc->oc;
     audio_encoder_t * aenc = enc->audio_encoder[stream_i];
@@ -721,7 +723,7 @@ static int write_audio_frame(internal_ffmpeg_encoder_t * enc, int stream_i, shor
     return 0;
 }
 
-
+} // namespace
 
 extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, MaterialResolution::EnumType res, int wide_aspect, int64_t start_tc, int num_threads,
                                                      int num_audio_streams, int num_audio_channels_per_stream)
@@ -743,9 +745,9 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, Mate
     case MaterialResolution::DV100_MOV:
         fmt_name = "mov";
         break;
-	case MaterialResolution::XDCAMHD422_MOV:
+    case MaterialResolution::XDCAMHD422_MOV:
         fmt_name = "mov";
-	break;
+    break;
     default:
         break;
     }
@@ -876,32 +878,6 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, Mate
     enc->video_st->codec->time_base.den = 25;
 
 
- // Setup ffmpeg threads if specified
-    AVCodecContext * vcodec_context = enc->video_st->codec;
-    if (num_threads != 0) {
-        int threads = 0;
-        if (num_threads == THREADS_USE_BUILTIN_TUNING)
-        {
-            // select number of threaded based on picture size/codec type
-            if ((vcodec_context->width > 720)||(res==MaterialResolution::XDCAMHD422_MOV))
-            {
-                threads = 4;
-			
-            }
-        }
-        else
-        {
-            // use number of threads specified by function arg
-            threads = num_threads;
-        }
-        if (threads > 0)
-        {
-            avcodec_thread_init(vcodec_context, threads);
-            vcodec_context->thread_count= threads;
-        }
-    }
-
-
     /* Initialise video codec */
     switch (res)
     {
@@ -916,9 +892,9 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, Mate
     case MaterialResolution::DV100_MOV:
         init_video_dv(enc, res, start_tc);
         break;
-	case MaterialResolution::XDCAMHD422_MOV:
-		init_video_xdcam(enc);
-		break;
+    case MaterialResolution::XDCAMHD422_MOV:
+        init_video_xdcam(enc);
+        break;
     default:
         break;
     }
@@ -953,7 +929,7 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, Mate
         case MaterialResolution::DV25_MOV:
         case MaterialResolution::DV50_MOV:
         case MaterialResolution::DV100_MOV:
-		case MaterialResolution::XDCAMHD422_MOV:
+        case MaterialResolution::XDCAMHD422_MOV:
             init_audio_pcm(aenc);
             break;
         default:
@@ -967,7 +943,30 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, Mate
         aenc->audio_outbuf = (uint8_t *)av_malloc(aenc->audio_outbuf_size);
     }
 
-   
+ // Setup ffmpeg threads if specified
+    AVCodecContext * vcodec_context = enc->video_st->codec;
+    if (num_threads != 0)
+    {
+        int threads = 0;
+        if (num_threads == THREADS_USE_BUILTIN_TUNING)
+        {
+            // select number of threaded based on picture size/codec type
+            if (vcodec_context->width > 720)
+            {
+                threads = 4;
+            }
+        }
+        else
+        {
+            // use number of threads specified by function arg
+            threads = num_threads;
+        }
+        if (threads > 0)
+        {
+            avcodec_thread_init(vcodec_context, threads);
+            vcodec_context->thread_count= threads;
+        }
+    }
 
     // Set separate stream header if format requires it.
     if (!strcmp(enc->oc->oformat->name, "mp4")
