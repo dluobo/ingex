@@ -1,5 +1,5 @@
 /*
- * $Id: import_material.cpp,v 1.1 2010/07/21 16:29:34 john_f Exp $
+ * $Id: import_material.cpp,v 1.2 2010/07/28 17:19:41 john_f Exp $
  *
  * Import material Package Groups XML files into the database.
  *
@@ -166,9 +166,9 @@ int main(int argc, const char **argv)
 
     DatabaseCache db_cache;
 
-    int error_count = 0;
-    int imported_file_count = 0;
-    int existing_file_count = 0;
+    unsigned int error_count = 0;
+    unsigned int imported_file_count = 0;
+    unsigned int existing_file_count = 0;
     map<UMID, SourcePackage*> source_packages;
 
     size_t i;
@@ -212,6 +212,12 @@ int main(int argc, const char **argv)
     for (iter = source_packages.begin(); iter != source_packages.end(); iter++)
         delete iter->second;
 
-    return 0;
+
+    int return_value = 0;
+    if (file_list.size() == error_count)
+        return_value = 1;
+
+
+    return return_value;
 }
 

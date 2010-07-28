@@ -1,6 +1,6 @@
 #! /usr/bin/perl -w
 
-#  $Id: import_db_infod.pl,v 1.3 2010/02/12 14:51:05 john_f Exp $
+#  $Id: import_db_infod.pl,v 1.4 2010/07/28 17:19:41 john_f Exp $
 #
 # Copyright (C) 2009-2010  British Broadcasting Corporation.
 # All Rights Reserved.
@@ -42,12 +42,14 @@ use File::Glob qw( :glob); # to ensure whitespace in names returned by glob is e
 use Sys::Syslog qw(:standard :macros);
 
 my $ROOT = '/store'; #the user/group of this is applied to all files created if the script is run as root
-my %topDirs = qw(mxf_offline 1 mxf_online 1 cuts 1); #incoming directories to scan, below $ROOT
+my %topDirs = qw(mxf_offline 1 mxf_online 1 browse 1 dv 1 cuts 1); #incoming directories to scan, below $ROOT
+my $cutsDir = "cuts"; # cuts xml files appear below this top directory; all other top directories contain material xml files
 my $timestampFile = 'import_db_info_timestamp';
-my $mxfImport = '/usr/local/bin/import_mxf_info';
-my $xmlImport = '/usr/local/bin/import_cuts';
+my $importCuts = '/usr/local/bin/import_cuts';
+my $importMaterial = '/usr/local/bin/import_material';
 
-use constant WATCH_MASK => IN_CREATE | IN_MOVED_TO;
+use constant WATCH_FILE_MASK => IN_CREATE | IN_MOVED_TO;
+use constant WATCH_DIR_MASK => IN_CREATE | IN_MOVED_TO | IN_ONLYDIR;
 
 openlog 'import_db_infod', 'perror', 'user'; #'perror' echoes output to stderr (if using -n option)
 # check arguments
@@ -88,16 +90,66 @@ my $dateChange = sub {
  ScanDateDir($_[0]->fullname);
 };
 
-#subroutine called when something is created in a date directory (containing material and metadata files)
-my $fileChange = sub {
- Report("Imported " . $_[0]->fullname) if ImportFile($_[0]->fullname) && $opts{v};
+#subroutine called when something is created in a material directory (containing xml directories)
+my $materialChange = sub {
+ ScanMaterialXMLDir($_[0]->fullname);
+};
+
+#subroutine called to import an xml file appearing in a material xml/ directory
+my $importMaterialFile = sub {
+ my $imported = 1;
+ my $fail = 0;
+ if (!-d $_[0] && $_[0] =~ /\.[xX][mM][lL]$/) {
+  $fail = system $importMaterial, $_[0];
+ }
+ else {
+    $imported = 0;
+ }
+ if ($fail) {
+    $_[0] =~ /(.*)\//;
+    Warn("Importing $_[0] failed: $!. Will not retry unless daemon is re-run with -c option or after deleting $1/$timestampFile");
+    $imported = 0;
+ }
+ return $imported;
+};
+
+#subroutine called to import an xml file appearing in the cuts directory
+my $importCutsFile = sub {
+ my $imported = 1;
+ my $fail = 0;
+ if (!-d $_[0] && $_[0] =~ /\.[xX][mM][lL]$/) {
+  $fail = system $importCuts, $_[0];
+ }
+ else {
+    $imported = 0;
+ }
+ if ($fail) {
+    $_[0] =~ /(.*)\//;
+    Warn("Importing $_[0] failed: $!. Will not retry unless daemon is re-run with -c option or after deleting $1/$timestampFile");
+    $imported = 0;
+ }
+ return $imported;
+};
+
+#subroutine called when something is created in a cuts date directory
+my $cutsFileChange = sub {
+ Report("Imported " . $_[0]->fullname) if $importCutsFile->($_[0]->fullname) && $opts{v};
  $_[0]->fullname =~ /(.*)\//;
  WriteTimestampFile($1, (stat $_[0]->fullname)[9]);
 };
 
+#subroutine called when something is created in a material date directory
+my $materialFileChange = sub {
+ Report("Imported " . $_[0]->fullname) if $importMaterialFile->($_[0]->fullname) && $opts{v};
+ $_[0]->fullname =~ /(.*)\//;
+ WriteTimestampFile($1, (stat $_[0]->fullname)[9]);
+};
+
+
+
 #initial scan of everything
 Report("Watching $ROOT/ for new top-level subdirectories");
-my $watch = $notifier->watch($ROOT, WATCH_MASK, $topChange) or Die("Couldn't watch: $!"); #do this before scanning or we could miss a top-level directory being created in the intervening period
+my $watch = $notifier->watch($ROOT, WATCH_DIR_MASK, $topChange) or Die("Couldn't watch: $!"); #do this before scanning or we could miss a top-level directory being created in the intervening period
 Die("Couldn't open $ROOT/: $!") unless opendir ROOT, $ROOT;
 foreach (readdir ROOT) {
    ScanTopDir("$ROOT/$_");
@@ -117,7 +169,7 @@ sub ScanTopDir {
  $topPath =~ m|$ROOT/(.*)|;
  return unless exists $topDirs{$1}; #only interested in certain top-level directories
  Report("Watching $topPath/ for new project subdirectories");
- my $watch = $notifier->watch($topPath, WATCH_MASK, $projectChange) or Warn("Couldn't watch: $!"); #do this before scanning or we could miss a date directory being created in the intervening period
+ my $watch = $notifier->watch($topPath, WATCH_DIR_MASK, $projectChange) or Warn("Couldn't watch: $!"); #do this before scanning or we could miss a date directory being created in the intervening period
  unless (opendir TOP, $topPath) {
     Warn("Couldn't open $topPath/: $!");
     $watch->cancel;
@@ -135,7 +187,7 @@ sub ScanProjDir {
  return unless -d $projPath;
  return if $projPath =~ m|/\.\.?$|;
  Report("Watching $projPath/ for new date subdirectories");
- my $watch = $notifier->watch($projPath, WATCH_MASK, $dateChange) or Warn("Couldn't watch: $!"); #do this before scanning or we could miss a date directory being created in the intervening period
+ my $watch = $notifier->watch($projPath, WATCH_DIR_MASK, $dateChange) or Warn("Couldn't watch: $!"); #do this before scanning or we could miss a date directory being created in the intervening period
  unless (opendir PROJ, $projPath) {
     Warn("Couldn't open $projPath/: $!");
     $watch->cancel;
@@ -152,67 +204,82 @@ sub ScanDateDir {
  my $datePath = shift;
  return unless -d $datePath;
  return unless $datePath =~ /\/\d{8}$/;
- Report("Watching $datePath/ for new files");
- my $watch = $notifier->watch($datePath, WATCH_MASK, $fileChange) or Warn("Couldn't watch: $!"); #do this before scanning or we could miss a file being created in the intervening period
- unless (opendir DATE, $datePath) {
-    Warn("Couldn't open $datePath/: $!");
+
+ if ($datePath =~ /^$ROOT\/$cutsDir/) {
+   # scan for cuts xml files
+   ScanFileDir($datePath, $importCutsFile, $cutsFileChange);
+ }
+ else {
+   # scan for material xml directories
+   Report("Watching $datePath/ for new xml subdirectories");
+   my $watchXML = $notifier->watch($datePath, WATCH_DIR_MASK, $materialChange) or Warn("Couldn't watch: $!"); #do this before scanning or we could miss a date directory being created in the intervening period
+   unless (opendir DATE_DIR, $datePath) {
+      Warn("Couldn't open $datePath/: $!");
+      $watchXML->cancel;
+      return;
+   }
+   Report("Scanning $datePath/ for xml subdirectories");
+   foreach (readdir DATE_DIR) {
+      ScanMaterialXMLDir("$datePath/$_");
+   }
+   closedir DATE_DIR;
+ }
+}
+
+sub ScanMaterialXMLDir {
+ my $xmlPath = shift;
+ return unless -d $xmlPath;
+ return unless $xmlPath =~ /\/xml$/;
+ ScanFileDir($xmlPath, $importMaterialFile, $materialFileChange);
+}
+
+sub ScanFileDir {
+  my ($dirPath, $importFunc, $watchCallback) = @_;
+  Report("Watching $dirPath/ for new files");
+  my $watch = $notifier->watch($dirPath, WATCH_FILE_MASK, $watchCallback) or Warn("Couldn't watch: $!"); #do this before scanning or we could miss a file being created in the intervening period
+  unless (opendir FILE_DIR, $dirPath) {
+    Warn("Couldn't open $dirPath/: $!");
     $watch->cancel;
     return;
- }
- my $timestamp = 0;
- if (!$opts{c} && -e "$datePath/$timestampFile") { #when this sub is called by a watcher, there will be no timestamp file anyway so $opts{c} check is irrelevant
-    if (open TIMESTAMP, "$datePath/$timestampFile") {
+  }
+  my $timestamp = 0;
+  if (!$opts{c} && -e "$dirPath/$timestampFile") { #when this sub is called by a watcher, there will be no timestamp file anyway so $opts{c} check is irrelevant
+    if (open TIMESTAMP, "$dirPath/$timestampFile") {
        $timestamp = <TIMESTAMP>;
        chomp $timestamp;
        if (<TIMESTAMP> || $timestamp !~ /^\d+$/) {
-          Warn("Unrecognised contents of $datePath/$timestampFile: re-importing all files in this directory\n");
+          Warn("Unrecognised contents of $dirPath/$timestampFile: re-importing all files in this directory\n");
           $timestamp = 0;
        }
        close TIMESTAMP;
     }
     else {
-       Warn("Couldn't open $datePath/$timestampFile: $!: re-importing all files in this directory\n");
+       Warn("Couldn't open $dirPath/$timestampFile: $!: re-importing all files in this directory\n");
     }
- }
- Report("Scanning $datePath/ for files to import");
- my %files;
- my $mtime = 0; #in case no files
- foreach (readdir DATE) {
-    my $file = "$datePath/$_";
+  }
+  Report("Scanning $dirPath/ for files to import");
+  my %files;
+  my $mtime = 0; #in case no files
+  my $maxMTime = 0;
+  foreach (readdir FILE_DIR) {
+    my $file = "$dirPath/$_";
     next if -d $file;
-    $mtime = (stat "$datePath/$_")[9];
+    $mtime = (stat "$dirPath/$_")[9];
     next if $mtime < $timestamp; #if <=, may miss later files created in the same second; instead we may try to import the earlier files created in the same second twice on failure which isn't a major problem
-    push @{$files{$mtime}}, $_;
- }
- closedir DATE;
- my $count = 0;
- foreach $mtime (sort keys %files) { #mtime order, oldest first
-    foreach (@{$files{$mtime}}) {
-       $count++ if ImportFile("$datePath/$_");
+    if ($mtime > $maxMTime) {
+      $maxMTime = $mtime;
     }
- }
- Report('Imported ' . ($count ? $count : 'no') . ' file' . (1 == $count ? '' : 's') . " from $datePath/");
- WriteTimestampFile($datePath, $mtime);
-}
-
-sub ImportFile {
- my $imported = 1;
- my $fail = 0;
- if (!-d $_[0] && $_[0] =~ /\.[mM][xX][fF]$/) {
-    $fail = system $mxfImport, $_[0];
- }
- elsif (!-d $_[0] && $_[0] =~ /\.[xX][mM][lL]$/) {
-    $fail = system $xmlImport, $_[0];
- }
- else {
-    $imported = 0;
- }
- if ($fail) {
-    $_[0] =~ /(.*)\//;
-    Warn("Importing $_[0] failed: $!. Will not retry unless daemon is re-run with -c option or after deleting $1/$timestampFile");
-    $imported = 0;
- }
- return $imported;
+    push @{$files{$mtime}}, $_;
+  }
+  closedir FILE_DIR;
+  my $count = 0;
+  foreach $mtime (sort keys %files) { #mtime order, oldest first
+    foreach (@{$files{$mtime}}) {
+       $count++ if $importFunc->("$dirPath/$_");
+    }
+  }
+  Report('Imported ' . ($count ? $count : 'no') . ' file' . (1 == $count ? '' : 's') . " from $dirPath/");
+  WriteTimestampFile($dirPath, $maxMTime);
 }
 
 sub WriteTimestampFile {

@@ -1,5 +1,5 @@
 /*
- * $Id: import_cuts.cpp,v 1.1 2009/10/12 18:47:10 john_f Exp $
+ * $Id: import_cuts.cpp,v 1.2 2010/07/28 17:19:41 john_f Exp $
  *
  * Import Mult-Camera Cuts and Clip Definitions from XML file
  * to database.
@@ -438,9 +438,9 @@ int main(int argc, const char **argv)
     Database::initialise(dbhost, dbname, dbuser, dbpw, 2, 8);
     db = Database::getInstance();
     
-    int error_count = 0;
-    int imported_file_count = 0;
-    int existing_file_count = 0;
+    unsigned int error_count = 0;
+    unsigned int imported_file_count = 0;
+    unsigned int existing_file_count = 0;
     map<long, std::string> locations;
     map<string, SourceConfig*> src_configs;
     map<string, MCClipDef*> db_clips;
@@ -497,8 +497,12 @@ int main(int argc, const char **argv)
     printf("%d files imported\n", imported_file_count);
     printf("%d files were already imported\n", existing_file_count);
     printf("%d files resulted in an error\n", error_count);
-    
-    
-    return 0;
+
+    int return_value = 0;
+    if (file_list.size() == error_count)
+        return_value = 1;
+
+
+    return return_value;
 }
 
