@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder.cpp,v 1.3 2010/07/21 16:29:34 john_f Exp $
+ * $Id: ffmpeg_encoder.cpp,v 1.4 2010/07/28 17:11:54 john_f Exp $
  *
  * Encode uncompressed video to DV using libavcodec
  *
@@ -126,6 +126,10 @@ typedef struct
 } internal_ffmpeg_encoder_t;
 
 
+// Local context
+namespace
+{
+
 static void cleanup (internal_ffmpeg_encoder_t * encoder)
 {
     if (encoder)
@@ -147,6 +151,8 @@ static void cleanup (internal_ffmpeg_encoder_t * encoder)
         av_free(encoder);
     }
 }
+
+} // namespace
 
 extern ffmpeg_encoder_t * ffmpeg_encoder_init(MaterialResolution::EnumType res, Ingex::VideoRaster::EnumType raster, int num_threads)
 {
