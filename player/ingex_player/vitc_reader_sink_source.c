@@ -1,5 +1,5 @@
 /*
- * $Id: vitc_reader_sink_source.c,v 1.1 2010/06/18 09:44:51 philipn Exp $
+ * $Id: vitc_reader_sink_source.c,v 1.2 2010/07/29 17:23:21 philipn Exp $
  *
  * Copyright (C) 2010 British Broadcasting Corporation, All Rights Reserved
  *
@@ -521,7 +521,8 @@ int vss_create_vitc_reader(unsigned int *vitc_lines, int num_vitc_lines, VITCRea
     CHK_OFAIL(initialise_stream_info(&newSonk->sourceStreamInfo));
     newSonk->sourceStreamInfo.type = TIMECODE_STREAM_TYPE;
     newSonk->sourceStreamInfo.format = TIMECODE_FORMAT;
-    newSonk->sourceStreamInfo.frameRate = (Rational){25, 1}; // could be updated in set_frame_rate_or_disable
+    newSonk->sourceStreamInfo.frameRate.num = 25; /* frame rate could be updated in set_frame_rate_or_disable */
+    newSonk->sourceStreamInfo.frameRate.den = 1;
     newSonk->sourceStreamInfo.isHardFrameRate = 0;
     newSonk->sourceStreamInfo.format = TIMECODE_FORMAT;
     newSonk->sourceStreamInfo.sourceId = msc_create_id();
