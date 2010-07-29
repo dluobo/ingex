@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sink.c,v 1.17 2010/06/18 09:44:51 philipn Exp $
+ * $Id: dvs_sink.c,v 1.18 2010/07/29 17:21:44 philipn Exp $
  *
  *
  *
@@ -1238,8 +1238,8 @@ static int dvs_complete_frame(void* data, const FrameInfo* frameInfo)
         
         unsigned char* inData;
         unsigned char* outData;
-        int imageYStart;
-        int imageXStart;
+        int imageYStart = 0;
+        int imageXStart = 0;
 
         inData = activeBuffer;
         if (sink->depth8Bit)
@@ -1254,7 +1254,18 @@ static int dvs_complete_frame(void* data, const FrameInfo* frameInfo)
             activeBuffer = sink->workBuffer2;
         }
 
-        imageYStart = ((int)sink->rasterHeight < sink->height) ? 0 : (sink->rasterHeight - sink->height) / 2;
+        if (((int)sink->rasterHeight == 576 && (sink->height == 592 || sink->height == 608)) ||
+             ((int)sink->rasterHeight == 592 && sink->height == 608))
+        {
+            /* skip the extra VBI lines in the input */
+            inData += (sink->height - sink->rasterHeight) * sink->width * 2;
+        }
+        else
+        {
+            /* centre image */
+            imageYStart = ((int)sink->rasterHeight < sink->height) ? 0 : (sink->rasterHeight - sink->height) / 2;
+            imageYStart -= imageYStart % 2; /* make it even */
+        }
         imageXStart = ((int)sink->rasterWidth < sink->width) ? 0 : (sink->rasterWidth - sink->width) / 2;
         imageXStart -= imageXStart % 2; /* make it even */
 
