@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder_av.cpp,v 1.3 2010/07/28 16:55:47 john_f Exp $
+ * $Id: ffmpeg_encoder_av.cpp,v 1.4 2010/08/02 16:44:33 john_f Exp $
  *
  * Encode AV and write to file.
  *
@@ -878,6 +878,39 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, Mate
     enc->video_st->codec->time_base.den = 25;
 
 
+    // Setup ffmpeg threads
+    if (num_threads != 0)
+    {
+        int threads = 0;
+        if (num_threads == THREADS_USE_BUILTIN_TUNING)
+        {
+            // select number of threaded based on picture size/codec type
+            switch (res)
+            {
+            case MaterialResolution::DV100_MOV:
+            case MaterialResolution::XDCAMHD422_MOV:
+                threads = 4;
+                break;
+            default:
+                threads = 0;
+                break;
+            }
+        }
+        else
+        {
+            // use number of threads specified by function arg
+            threads = num_threads;
+        }
+
+        // Initialise ffmpeg for multiple threads if appropriate
+        if (threads > 0)
+        {
+            avcodec_thread_init(enc->video_st->codec, threads);
+        }
+    }
+
+    //fprintf(stderr, "vcodec_context->thread_count = %d\n", enc->video_st->codec->thread_count);
+
     /* Initialise video codec */
     switch (res)
     {
@@ -898,7 +931,7 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, Mate
     default:
         break;
     }
-    
+
     /* Add the audio streams */
     for (i = 0; i < enc->num_audio_streams; ++i)
     {
@@ -943,42 +976,16 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, Mate
         aenc->audio_outbuf = (uint8_t *)av_malloc(aenc->audio_outbuf_size);
     }
 
- // Setup ffmpeg threads if specified
-    AVCodecContext * vcodec_context = enc->video_st->codec;
-    if (num_threads != 0)
-    {
-        int threads = 0;
-        if (num_threads == THREADS_USE_BUILTIN_TUNING)
-        {
-            // select number of threaded based on picture size/codec type
-            if (vcodec_context->width > 720)
-            {
-                threads = 4;
-            }
-        }
-        else
-        {
-            // use number of threads specified by function arg
-            threads = num_threads;
-        }
-        if (threads > 0)
-        {
-            avcodec_thread_init(vcodec_context, threads);
-            vcodec_context->thread_count= threads;
-        }
-    }
-
     // Set separate stream header if format requires it.
     if (!strcmp(enc->oc->oformat->name, "mp4")
         || !strcmp(enc->oc->oformat->name, "mov")
         || !strcmp(enc->oc->oformat->name, "3gp"))
     {
-        vcodec_context->flags |= CODEC_FLAG_GLOBAL_HEADER;
+        enc->video_st->codec->flags |= CODEC_FLAG_GLOBAL_HEADER;
         for (i = 0; i < enc->num_audio_streams; ++i)
         {
             audio_encoder_t * aenc = enc->audio_encoder[i];
-            AVCodecContext * acodec_context = aenc->audio_st->codec;
-            acodec_context->flags |= CODEC_FLAG_GLOBAL_HEADER;
+            aenc->audio_st->codec->flags |= CODEC_FLAG_GLOBAL_HEADER;
         }
     }
 
