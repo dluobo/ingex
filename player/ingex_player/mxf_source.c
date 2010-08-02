@@ -1,5 +1,5 @@
 /*
- * $Id: mxf_source.c,v 1.16 2010/07/23 17:57:24 philipn Exp $
+ * $Id: mxf_source.c,v 1.17 2010/08/02 16:45:03 john_f Exp $
  *
  *
  *
@@ -778,7 +778,6 @@ static int mxfs_post_complete(void* data, MediaSource* rootSource, MediaControl*
     MXFFileSource* source = (MXFFileSource*)data;
     MXFHeaderMetadata* headerMetadata = NULL;
     struct timeval now;
-    long timeDiff;
     int result;
     int freeHeaderMetadata = 0;
     int64_t convertedPosition;
@@ -804,6 +803,7 @@ static int mxfs_post_complete(void* data, MediaSource* rootSource, MediaControl*
     {
         /* try reading the header metadata from the footer partition every 2 seconds */
 
+        long timeDiff = 0;
         gettimeofday(&now, NULL);
         if (source->postCompleteTryCount != 0)
         {

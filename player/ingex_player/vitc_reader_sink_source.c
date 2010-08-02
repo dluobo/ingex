@@ -1,5 +1,5 @@
 /*
- * $Id: vitc_reader_sink_source.c,v 1.2 2010/07/29 17:23:21 philipn Exp $
+ * $Id: vitc_reader_sink_source.c,v 1.3 2010/08/02 16:45:03 john_f Exp $
  *
  * Copyright (C) 2010 British Broadcasting Corporation, All Rights Reserved
  *
@@ -560,7 +560,7 @@ int vss_create_vitc_reader(unsigned int *vitc_lines, int num_vitc_lines, VITCRea
     return 1;
 
 fail:
-    vss_sink_close(&newSonk);
+    vss_sink_close(newSonk);
     return 0;
 }
 
