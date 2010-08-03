@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: recordbutton.h,v 1.7 2010/07/14 13:06:36 john_f Exp $            *
+ *   $Id: recordbutton.h,v 1.8 2010/08/03 09:27:07 john_f Exp $            *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -33,22 +33,22 @@
 class RecordButton : public wxButton
 {
 public:
-	RecordButton(wxWindow *, wxWindowID, const wxString & = wxT(""));
-	virtual bool Enable(bool = true);
-	virtual void Disable();
-	virtual void SetLabel(const wxString &);
-	void Record();
-	void Pending();
-	void Normal();
-	bool IsEnabled();
+    RecordButton(wxWindow *, wxWindowID, const wxString & = wxT(""));
+    virtual bool Enable(bool = true);
+    virtual void Disable();
+    virtual void SetLabel(const wxString &);
+    void Record();
+    void Pending();
+    void Normal();
+    bool IsEnabled();
 private:
-	void OnTimer(wxTimerEvent &);
-	void OnLMouseDown(wxMouseEvent &);
-	wxColour mInitialColour;
-	wxTimer * mTimer;
-	wxString mLabel;
-	bool mEnabled;
-	DECLARE_EVENT_TABLE()
+    void OnTimer(wxTimerEvent &);
+    void OnLMouseDown(wxMouseEvent &);
+    wxColour mInitialColour;
+    wxTimer * mTimer;
+    wxString mLabel;
+    bool mEnabled;
+    DECLARE_EVENT_TABLE()
 };
 
 #endif

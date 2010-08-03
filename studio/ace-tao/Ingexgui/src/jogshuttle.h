@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: jogshuttle.h,v 1.2 2010/06/02 13:09:25 john_f Exp $             *
+ *   $Id: jogshuttle.h,v 1.3 2010/08/03 09:27:07 john_f Exp $             *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -34,26 +34,26 @@ DECLARE_EVENT_TYPE(EVT_JOGSHUTTLE_MESSAGE, -1)
 /// Class with methods that are called by the jog/shuttle device
 class JSListener : public ingex::JogShuttleListener
 {
-	public:
-		JSListener(wxEvtHandler *);
-		virtual void connected(ingex::JogShuttle * jogShuttle, ingex::JogShuttleDevice device);
-		virtual void disconnected(ingex::JogShuttle * jogShuttle, ingex::JogShuttleDevice device);
-		virtual void ping(ingex::JogShuttle * jogShuttle);
-		virtual void buttonPressed(ingex::JogShuttle * jogShuttle, int number);
-		virtual void buttonReleased(ingex::JogShuttle * jogShuttle, int number);
-		virtual void jog(ingex::JogShuttle * jogShuttle, bool clockwise, int position);
-		virtual void shuttle(ingex::JogShuttle * jogShuttle, bool clockwise, int position);
-		bool IsPressed(const unsigned int);
-	private:
-		wxEvtHandler * mEvtHandler;
-		wxArrayInt mButtonsPressed;
+    public:
+        JSListener(wxEvtHandler *);
+        virtual void connected(ingex::JogShuttle * jogShuttle, ingex::JogShuttleDevice device);
+        virtual void disconnected(ingex::JogShuttle * jogShuttle, ingex::JogShuttleDevice device);
+        virtual void ping(ingex::JogShuttle * jogShuttle);
+        virtual void buttonPressed(ingex::JogShuttle * jogShuttle, int number);
+        virtual void buttonReleased(ingex::JogShuttle * jogShuttle, int number);
+        virtual void jog(ingex::JogShuttle * jogShuttle, bool clockwise, int position);
+        virtual void shuttle(ingex::JogShuttle * jogShuttle, bool clockwise, int position);
+        bool IsPressed(const unsigned int);
+    private:
+        wxEvtHandler * mEvtHandler;
+        wxArrayInt mButtonsPressed;
 };
 
 enum JogShuttleEventType {
-	JOG,
-	SHUTTLE,
-	JS_BUTTON_PRESSED,
-	JS_BUTTON_RELEASED
+    JOG,
+    SHUTTLE,
+    JS_BUTTON_PRESSED,
+    JS_BUTTON_RELEASED
 };
 
 #endif

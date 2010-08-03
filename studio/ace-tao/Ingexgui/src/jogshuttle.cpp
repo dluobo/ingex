@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: jogshuttle.cpp,v 1.2 2010/06/02 13:09:25 john_f Exp $           *
+ *   $Id: jogshuttle.cpp,v 1.3 2010/08/03 09:27:07 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -34,13 +34,13 @@ using namespace ingex; //jogshuttle stuff is in this namespace
 /// @param The handler to accept events from this listener.
 JSListener::JSListener(wxEvtHandler * evtHandler) : mEvtHandler(evtHandler)
 {
-	mButtonsPressed.Add(0 /* not pressed */, 16 /* 15 buttons but starting from index 1 */);
+    mButtonsPressed.Add(0 /* not pressed */, 16 /* 15 buttons but starting from index 1 */);
 }
 
 void JSListener::connected(JogShuttle *, JogShuttleDevice)
 //void JSListener::connected(JogShuttle * jogShuttle, JogShuttleDevice device)
 {
-//	printf("Connected to '%s'\n", jogShuttle->getDeviceName(device).c_str());
+//  printf("Connected to '%s'\n", jogShuttle->getDeviceName(device).c_str());
 }
 
 /// Called when the jog/shuttle control is unplugged.
@@ -48,15 +48,15 @@ void JSListener::connected(JogShuttle *, JogShuttleDevice)
 void JSListener::disconnected(JogShuttle *, JogShuttleDevice)
 //void JSListener::disconnected(JogShuttle * jogShuttle, JogShuttleDevice device)
 {
-	for (size_t i = 1; i < mButtonsPressed.GetCount(); i++) {
-		mButtonsPressed[i] = 0;
-	}
-//	printf("Disconnected from '%s'\n", jogShuttle->getDeviceName(device).c_str());
+    for (size_t i = 1; i < mButtonsPressed.GetCount(); i++) {
+        mButtonsPressed[i] = 0;
+    }
+//  printf("Disconnected from '%s'\n", jogShuttle->getDeviceName(device).c_str());
 }
 
 void JSListener::ping(JogShuttle *)
 {
-	// do nothing
+    // do nothing
 }
 
 /// Called when the user presses a button on the jog/shuttle control.
@@ -64,12 +64,12 @@ void JSListener::ping(JogShuttle *)
 /// @param number The button ID.
 void JSListener::buttonPressed(JogShuttle *, int number)
 {
-	if ((size_t) number < mButtonsPressed.GetCount()) { //sanity check
-		mButtonsPressed[number] = 1;
-	}
-	wxCommandEvent event(EVT_JOGSHUTTLE_MESSAGE, JS_BUTTON_PRESSED);
-	event.SetInt(number);
-	mEvtHandler->AddPendingEvent(event);
+    if ((size_t) number < mButtonsPressed.GetCount()) { //sanity check
+        mButtonsPressed[number] = 1;
+    }
+    wxCommandEvent event(EVT_JOGSHUTTLE_MESSAGE, JS_BUTTON_PRESSED);
+    event.SetInt(number);
+    mEvtHandler->AddPendingEvent(event);
 }
 
 /// Called when the user releases a button on the jog/shuttle control.
@@ -77,12 +77,12 @@ void JSListener::buttonPressed(JogShuttle *, int number)
 /// @param number The button ID.
 void JSListener::buttonReleased(JogShuttle *, int number)
 {
-	if ((size_t) number < mButtonsPressed.GetCount()) { //sanity check
-		mButtonsPressed[number] = 0;
-	}
-	wxCommandEvent event(EVT_JOGSHUTTLE_MESSAGE, JS_BUTTON_RELEASED);
-	event.SetInt(number);
-	mEvtHandler->AddPendingEvent(event);
+    if ((size_t) number < mButtonsPressed.GetCount()) { //sanity check
+        mButtonsPressed[number] = 0;
+    }
+    wxCommandEvent event(EVT_JOGSHUTTLE_MESSAGE, JS_BUTTON_RELEASED);
+    event.SetInt(number);
+    mEvtHandler->AddPendingEvent(event);
 }
 
 /// Called when the user twiddles the jog control.
@@ -91,9 +91,9 @@ void JSListener::buttonReleased(JogShuttle *, int number)
 /// @param position A rolling position number, mod 256.
 void JSListener::jog(JogShuttle *, bool clockwise, int)
 {
-	wxCommandEvent event(EVT_JOGSHUTTLE_MESSAGE, JOG);
-	event.SetInt(clockwise);
-	mEvtHandler->AddPendingEvent(event);
+    wxCommandEvent event(EVT_JOGSHUTTLE_MESSAGE, JOG);
+    event.SetInt(clockwise);
+    mEvtHandler->AddPendingEvent(event);
 }
 
 /// Called when the user twiddles the shuttle control.
@@ -102,17 +102,17 @@ void JSListener::jog(JogShuttle *, bool clockwise, int)
 /// @param position Absolute extent (0-7).
 void JSListener::shuttle(JogShuttle *, bool clockwise, int position)
 {
-	wxCommandEvent event(EVT_JOGSHUTTLE_MESSAGE, SHUTTLE);
-	event.SetInt(clockwise ? position : position * -1);
-	mEvtHandler->AddPendingEvent(event);
+    wxCommandEvent event(EVT_JOGSHUTTLE_MESSAGE, SHUTTLE);
+    event.SetInt(clockwise ? position : position * -1);
+    mEvtHandler->AddPendingEvent(event);
 }
 
 /// Returns true if the requested button number is currently pressed
 bool JSListener::IsPressed(const unsigned int number)
 {
-	bool isPressed = false;
-	if (number < mButtonsPressed.GetCount()) { //sanity check
-		isPressed = mButtonsPressed[number] != 0;
-	}
-	return isPressed;
+    bool isPressed = false;
+    if (number < mButtonsPressed.GetCount()) { //sanity check
+        isPressed = mButtonsPressed[number] != 0;
+    }
+    return isPressed;
 }

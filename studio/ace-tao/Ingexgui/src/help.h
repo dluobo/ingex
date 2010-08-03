@@ -28,15 +28,15 @@
 class HelpDlg : public wxDialog
 {
 public:
-	HelpDlg(wxWindow *);
-	static void StyleAndWrite(wxTextCtrl *, wxString &);
+    HelpDlg(wxWindow *);
+    static void StyleAndWrite(wxTextCtrl *, wxString &);
 };
 
 /// Version dialogue
 class AboutDlg : public wxDialog
 {
 public:
-	AboutDlg(wxWindow *);
+    AboutDlg(wxWindow *);
 };
 
 #endif // _HELP_H_

@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: controller.h,v 1.8 2010/06/02 13:09:25 john_f Exp $           *
+ *   $Id: controller.h,v 1.9 2010/08/03 09:27:07 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -39,82 +39,82 @@ class Controller : public wxEvtHandler, wxThread //each controller handles its o
 {
 
 public:
-	Controller(const wxString &, Comms *, wxEvtHandler *);
-	~Controller();
-	bool IsOK();
-	void SetTapeIds(const CORBA::StringSeq &, const CORBA::StringSeq &);
-	void AddProjectNames(const CORBA::StringSeq &);
-	void Record(const ProdAuto::MxfTimecode &, const ProdAuto::MxfDuration &, const wxString &, const CORBA::BooleanSeq &);
-	void Stop(const ProdAuto::MxfTimecode &, const ProdAuto::MxfDuration &, const wxString &, const ProdAuto::LocatorSeq &);
-	bool IsRouterRecorder();
-	void Destroy();
-	const ProdAuto::MxfDuration GetMaxPreroll();
-	const ProdAuto::MxfDuration GetMaxPostroll();
-	void EnableTrack(unsigned int, bool = true);
+    Controller(const wxString &, Comms *, wxEvtHandler *);
+    ~Controller();
+    bool IsOK();
+    void SetTapeIds(const CORBA::StringSeq &, const CORBA::StringSeq &);
+    void AddProjectNames(const CORBA::StringSeq &);
+    void Record(const ProdAuto::MxfTimecode &, const ProdAuto::MxfDuration &, const wxString &, const CORBA::BooleanSeq &);
+    void Stop(const ProdAuto::MxfTimecode &, const ProdAuto::MxfDuration &, const wxString &, const ProdAuto::LocatorSeq &);
+    bool IsRouterRecorder();
+    void Destroy();
+    const ProdAuto::MxfDuration GetMaxPreroll();
+    const ProdAuto::MxfDuration GetMaxPostroll();
+    void EnableTrack(unsigned int, bool = true);
 
-	enum Command
-	{
-		NONE,
-		CONNECT,
-		SET_TAPE_IDS,
-		ADD_PROJECT_NAMES,
-		RECONNECT,
-		STATUS,
-		RECORD,
-		STOP,
-		DIE,
-	};
-	enum Result
-	{
-		SUCCESS,
-		FAILURE,
-		COMM_FAILURE,
-	};
-	enum TimecodeState
-	{
-		ABSENT,
-		UNCONFIRMED,
-		STUCK,
-		RUNNING,
-	};
+    enum Command
+    {
+        NONE,
+        CONNECT,
+        SET_TAPE_IDS,
+        ADD_PROJECT_NAMES,
+        RECONNECT,
+        STATUS,
+        RECORD,
+        STOP,
+        DIE,
+    };
+    enum Result
+    {
+        SUCCESS,
+        FAILURE,
+        COMM_FAILURE,
+    };
+    enum TimecodeState
+    {
+        ABSENT,
+        UNCONFIRMED,
+        STUCK,
+        RUNNING,
+    };
 private:
-	ExitCode Entry();
-	void Signal(Command);
-	void OnThreadEvent(ControllerThreadEvent &);
-	void OnTimer(wxTimerEvent& WXUNUSED(event));
+    ExitCode Entry();
+    void Signal(Command);
+    void OnThreadEvent(ControllerThreadEvent &);
+    void OnTimer(wxTimerEvent& WXUNUSED(event));
 
-	ProdAuto::Recorder_var mRecorder;
-	Comms * mComms;
-	wxMutex mMutex;
-	wxTimer * mPollingTimer;
-	bool mTimecodeRunning;
-	bool mReconnecting;
-	Command mPendingCommand;
-	bool mPendingCommandSent;
-	wxDateTime mLastTimecodeRequest;
-	ProdAuto::MxfTimecode mLastTimecodeReceived;
-	//simple vbls accessed in both contexts - don't need protecting
-	bool mRouterRecorder;
-	//vbls accessed in both contexts while thread is running
-	const wxString mName;
-	wxCondition* mCondition;
-	Command mCommand;
-	Command mPrevCommand;
-	Command mCommandOnTimer;
-	CORBA::BooleanSeq mEnableList;
-	CORBA::StringSeq mSourceNames;
-	CORBA::StringSeq mProjectNames;
-	CORBA::StringSeq mTapeIds;
-	wxString mProject;
-	wxString mDescription;
-	ProdAuto::MxfDuration mPreroll, mPostroll;
-	ProdAuto::MxfDuration mMaxPreroll, mMaxPostroll;
-	ProdAuto::SourceList mSourceList;
-	ProdAuto::TrackList_var mTrackList;
-	ProdAuto::LocatorSeq mLocators; 
-	ProdAuto::MxfTimecode mStartTimecode;
-	ProdAuto::MxfTimecode mStopTimecode;
-	DECLARE_EVENT_TABLE()
+    ProdAuto::Recorder_var mRecorder;
+    Comms * mComms;
+    wxMutex mMutex;
+    wxTimer * mPollingTimer;
+    bool mTimecodeRunning;
+    bool mReconnecting;
+    Command mPendingCommand;
+    bool mPendingCommandSent;
+    wxDateTime mLastTimecodeRequest;
+    ProdAuto::MxfTimecode mLastTimecodeReceived;
+    //simple vbls accessed in both contexts - don't need protecting
+    bool mRouterRecorder;
+    //vbls accessed in both contexts while thread is running
+    const wxString mName;
+    wxCondition* mCondition;
+    Command mCommand;
+    Command mPrevCommand;
+    Command mCommandOnTimer;
+    CORBA::BooleanSeq mEnableList;
+    CORBA::StringSeq mSourceNames;
+    CORBA::StringSeq mProjectNames;
+    CORBA::StringSeq mTapeIds;
+    wxString mProject;
+    wxString mDescription;
+    ProdAuto::MxfDuration mPreroll, mPostroll;
+    ProdAuto::MxfDuration mMaxPreroll, mMaxPostroll;
+    ProdAuto::SourceList mSourceList;
+    ProdAuto::TrackList_var mTrackList;
+    ProdAuto::LocatorSeq mLocators; 
+    ProdAuto::MxfTimecode mStartTimecode;
+    ProdAuto::MxfTimecode mStopTimecode;
+    DECLARE_EVENT_TABLE()
 };
 
 /// Event to accommodate the output from a controller thread.
@@ -125,51 +125,51 @@ typedef void (wxEvtHandler::*ControllerThreadEventFunction)(ControllerThreadEven
 DECLARE_EVENT_TYPE(EVT_CONTROLLER_THREAD, -1)
 
 #define EVT_CONTROLLER_THREAD(fn) \
-	DECLARE_EVENT_TABLE_ENTRY( EVT_CONTROLLER_THREAD, wxID_ANY, wxID_ANY, \
-	(wxObjectEventFunction) (wxEventFunction) (ControllerThreadEventFunction) &fn, \
-	(wxObject*) NULL \
-	),
+    DECLARE_EVENT_TABLE_ENTRY( EVT_CONTROLLER_THREAD, wxID_ANY, wxID_ANY, \
+    (wxObjectEventFunction) (wxEventFunction) (ControllerThreadEventFunction) &fn, \
+    (wxObject*) NULL \
+    ),
 
 //Custom event to carry a TrackStatusList etc.  Each instance must only be cloned once!
 class ControllerThreadEvent : public wxNotifyEvent //Needs to be a Notify type event
 {
 public:
-	ControllerThreadEvent() : mTrackStatusList(0), mTimecodeState(Controller::ABSENT), mTimecodeStateChanged(false) {};
-	ControllerThreadEvent(const wxEventType & type) : wxNotifyEvent(type), mTrackStatusList(0), mTimecodeState(Controller::ABSENT), mTimecodeStateChanged(false) {};
-	~ControllerThreadEvent() {};
-	virtual wxEvent * Clone() const { return new ControllerThreadEvent(*this); }; //Called when posted to the event queue - must have exactly this prototype or base class one will be called which won't copy extra stuff
-	CORBA::ULong GetNTracks() { if (mTrackStatusList.operator->()) return mTrackStatusList->length(); else return 0; };
-	void SetName(const wxString & name) { mName = name; };
-	void SetMessage(const wxString & msg) { mMessage = msg; };
-	void SetTrackList(ProdAuto::TrackList_var trackList) { mTrackList = trackList; };
-	void SetTrackStatusList(ProdAuto::TrackStatusList_var trackStatusList) { mTrackStatusList = trackStatusList; };
-	void SetCommand(Controller::Command command) { mCommand = command; };
-	void SetResult(Controller::Result result) { mResult = result; };
-	void SetStrings(CORBA::StringSeq_var strings) { mStrings = strings; };
-	void SetTimecode(ProdAuto::MxfTimecode_var timecode) { mTimecode = timecode; };
-	void SetTimecodeState(Controller::TimecodeState state) { mTimecodeState = state; };
-	void SetTimecodeStateChanged(bool changed = true) { mTimecodeStateChanged = changed; };
-	const wxString GetName() { return mName; };
-	const wxString GetMessage() { return mMessage; };
-	const ProdAuto::TrackList_var & GetTrackList() { return mTrackList; };
-	const ProdAuto::TrackStatusList_var & GetTrackStatusList() { return mTrackStatusList; };
-	Controller::Command GetCommand() { return mCommand; };
-	Controller::Result GetResult() { return mResult; };
-	CORBA::StringSeq_var GetStrings() { return mStrings; };
-	const ProdAuto::MxfTimecode GetTimecode() { return mTimecode; };
-	Controller::TimecodeState GetTimecodeState() { return mTimecodeState; };
-	bool TimecodeStateHasChanged() { return mTimecodeStateChanged; };
-	DECLARE_DYNAMIC_CLASS(ControllerThreadEvent)
+    ControllerThreadEvent() : mTrackStatusList(0), mTimecodeState(Controller::ABSENT), mTimecodeStateChanged(false) {};
+    ControllerThreadEvent(const wxEventType & type) : wxNotifyEvent(type), mTrackStatusList(0), mTimecodeState(Controller::ABSENT), mTimecodeStateChanged(false) {};
+    ~ControllerThreadEvent() {};
+    virtual wxEvent * Clone() const { return new ControllerThreadEvent(*this); }; //Called when posted to the event queue - must have exactly this prototype or base class one will be called which won't copy extra stuff
+    CORBA::ULong GetNTracks() { if (mTrackStatusList.operator->()) return mTrackStatusList->length(); else return 0; };
+    void SetName(const wxString & name) { mName = name; };
+    void SetMessage(const wxString & msg) { mMessage = msg; };
+    void SetTrackList(ProdAuto::TrackList_var trackList) { mTrackList = trackList; };
+    void SetTrackStatusList(ProdAuto::TrackStatusList_var trackStatusList) { mTrackStatusList = trackStatusList; };
+    void SetCommand(Controller::Command command) { mCommand = command; };
+    void SetResult(Controller::Result result) { mResult = result; };
+    void SetStrings(CORBA::StringSeq_var strings) { mStrings = strings; };
+    void SetTimecode(ProdAuto::MxfTimecode_var timecode) { mTimecode = timecode; };
+    void SetTimecodeState(Controller::TimecodeState state) { mTimecodeState = state; };
+    void SetTimecodeStateChanged(bool changed = true) { mTimecodeStateChanged = changed; };
+    const wxString GetName() { return mName; };
+    const wxString GetMessage() { return mMessage; };
+    const ProdAuto::TrackList_var & GetTrackList() { return mTrackList; };
+    const ProdAuto::TrackStatusList_var & GetTrackStatusList() { return mTrackStatusList; };
+    Controller::Command GetCommand() { return mCommand; };
+    Controller::Result GetResult() { return mResult; };
+    CORBA::StringSeq_var GetStrings() { return mStrings; };
+    const ProdAuto::MxfTimecode GetTimecode() { return mTimecode; };
+    Controller::TimecodeState GetTimecodeState() { return mTimecodeState; };
+    bool TimecodeStateHasChanged() { return mTimecodeStateChanged; };
+    DECLARE_DYNAMIC_CLASS(ControllerThreadEvent)
 private:
-	wxString mName;
-	wxString mMessage;
-	ProdAuto::TrackList_var mTrackList; //deletes itself
-	ProdAuto::TrackStatusList_var mTrackStatusList; //deletes itself
-	Controller::Command mCommand;
-	Controller::Result mResult;
-	CORBA::StringSeq_var mStrings; //deletes itself
-	ProdAuto::MxfTimecode mTimecode; //deletes itself
-	Controller::TimecodeState mTimecodeState;
-	bool mTimecodeStateChanged;
+    wxString mName;
+    wxString mMessage;
+    ProdAuto::TrackList_var mTrackList; //deletes itself
+    ProdAuto::TrackStatusList_var mTrackStatusList; //deletes itself
+    Controller::Command mCommand;
+    Controller::Result mResult;
+    CORBA::StringSeq_var mStrings; //deletes itself
+    ProdAuto::MxfTimecode mTimecode; //deletes itself
+    Controller::TimecodeState mTimecodeState;
+    bool mTimecodeStateChanged;
 };
 #endif

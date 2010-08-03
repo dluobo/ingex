@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: dialogues.h,v 1.12 2010/07/21 16:29:34 john_f Exp $             *
+ *   $Id: dialogues.h,v 1.13 2010/08/03 09:27:07 john_f Exp $             *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -34,29 +34,29 @@
 /// Set preroll and postroll
 class SetRollsDlg : public wxDialog
 {
-	public:
-		SetRollsDlg(wxWindow *, const ProdAuto::MxfDuration, const ProdAuto::MxfDuration, const ProdAuto::MxfDuration, const ProdAuto::MxfDuration, wxXmlDocument &);
-		int ShowModal();
-		const ProdAuto::MxfDuration GetPreroll();
-		const ProdAuto::MxfDuration GetPostroll();
-	private:
-		ProdAuto::MxfDuration SetRoll(const wxChar *, int, const ProdAuto::MxfDuration &, wxStaticBoxSizer *);
-		void OnRollChange( wxScrollEvent& event );
-		wxSlider * mPrerollCtrl;
-		wxSlider * mPostrollCtrl;
-		wxStaticBoxSizer * mPrerollBox;
-		wxStaticBoxSizer * mPostrollBox;
-		ProdAuto::MxfDuration mMaxPreroll;
-		ProdAuto::MxfDuration mMaxPostroll;
-		wxXmlDocument & mSavedState;
+    public:
+        SetRollsDlg(wxWindow *, const ProdAuto::MxfDuration, const ProdAuto::MxfDuration, const ProdAuto::MxfDuration, const ProdAuto::MxfDuration, wxXmlDocument &);
+        int ShowModal();
+        const ProdAuto::MxfDuration GetPreroll();
+        const ProdAuto::MxfDuration GetPostroll();
+    private:
+        ProdAuto::MxfDuration SetRoll(const wxChar *, int, const ProdAuto::MxfDuration &, wxStaticBoxSizer *);
+        void OnRollChange( wxScrollEvent& event );
+        wxSlider * mPrerollCtrl;
+        wxSlider * mPostrollCtrl;
+        wxStaticBoxSizer * mPrerollBox;
+        wxStaticBoxSizer * mPostrollBox;
+        ProdAuto::MxfDuration mMaxPreroll;
+        ProdAuto::MxfDuration mMaxPostroll;
+        wxXmlDocument & mSavedState;
 
-	enum
-	{
-		SLIDER_Preroll,
-		SLIDER_Postroll,
-	};
+    enum
+    {
+        SLIDER_Preroll,
+        SLIDER_Postroll,
+    };
 
-	DECLARE_EVENT_TABLE()
+    DECLARE_EVENT_TABLE()
 };
 
 class wxGrid;
@@ -65,125 +65,125 @@ class wxGridEvent;
 /// Set project names.
 class SetProjectDlg : public wxDialog
 {
-	public:
-		SetProjectDlg(wxWindow *, const wxSortedArrayString &, wxXmlDocument &);
-		int ShowModal();
-		const wxString GetSelectedProject();
-		const wxSortedArrayString & GetProjectNames();
-		static const wxString GetCurrentProjectName(const wxXmlDocument &);
-	private:
-		enum {
-			ADD = wxID_HIGHEST + 1,
-			DELETE,
-			EDIT,
-		};
-		void OnAdd(wxCommandEvent&);
-		void OnDelete(wxCommandEvent&);
-		void OnEdit(wxCommandEvent&);
-		void OnChoice(wxCommandEvent&);
-		void EnterName(const wxString &, const wxString &, int = wxNOT_FOUND);
-		void EnableButtons(bool);
+    public:
+        SetProjectDlg(wxWindow *, const wxSortedArrayString &, wxXmlDocument &);
+        int ShowModal();
+        const wxString GetSelectedProject();
+        const wxSortedArrayString & GetProjectNames();
+        static const wxString GetCurrentProjectName(const wxXmlDocument &);
+    private:
+        enum {
+            ADD = wxID_HIGHEST + 1,
+            DELETE,
+            EDIT,
+        };
+        void OnAdd(wxCommandEvent&);
+        void OnDelete(wxCommandEvent&);
+        void OnEdit(wxCommandEvent&);
+        void OnChoice(wxCommandEvent&);
+        void EnterName(const wxString &, const wxString &, int = wxNOT_FOUND);
+        void EnableButtons(bool);
 
-//		wxListBox * mProjectList;
-		wxButton * mDeleteButton;
-		wxButton * mEditButton;
-		wxButton * mOKButton;
-		wxChoice * mProjectList;
-		wxSortedArrayString mProjectNames; //needed because there is no sort style for a wxChoice
-		wxXmlDocument & mSavedState;
-	DECLARE_EVENT_TABLE()
+//      wxListBox * mProjectList;
+        wxButton * mDeleteButton;
+        wxButton * mEditButton;
+        wxButton * mOKButton;
+        wxChoice * mProjectList;
+        wxSortedArrayString mProjectNames; //needed because there is no sort style for a wxChoice
+        wxXmlDocument & mSavedState;
+    DECLARE_EVENT_TABLE()
 };
 
 /// A wxGrid which passes on character events - currently these aren't being used because they don't seem to be passed on
 class MyGrid : public wxGrid
 {
-	public:
-		MyGrid(wxWindow * parent, wxWindowID id, const wxPoint & pos = wxDefaultPosition, const wxSize & size = wxDefaultSize, long style = wxWANTS_CHARS, const wxString & name = wxPanelNameStr) : wxGrid(parent, id, pos, size, style, name) {};
-	private:
-		void OnChar(wxKeyEvent & event) { /* std::cerr << "grid char" << std::endl; ---this works*/
+    public:
+        MyGrid(wxWindow * parent, wxWindowID id, const wxPoint & pos = wxDefaultPosition, const wxSize & size = wxDefaultSize, long style = wxWANTS_CHARS, const wxString & name = wxPanelNameStr) : wxGrid(parent, id, pos, size, style, name) {};
+    private:
+        void OnChar(wxKeyEvent & event) { /* std::cerr << "grid char" << std::endl; ---this works*/
 event.Skip(); };
-	DECLARE_EVENT_TABLE()
+    DECLARE_EVENT_TABLE()
 };
 
 /// Set tape IDs.
 class SetTapeIdsDlg : public wxDialog
 {
-	public:
-		SetTapeIdsDlg(wxWindow *, wxXmlDocument &, wxArrayString &, std::vector<bool> &);
-		static wxXmlNode * GetTapeIdsNode(wxXmlDocument &);
-		static const wxString GetTapeId(wxXmlNode *, const wxString &, wxArrayString * = 0);
-		bool IsUpdated();
-	private:
-		enum {
-			FILLINC = wxID_HIGHEST + 1,
-			FILLCOPY,
-			INCREMENT,
-			GROUPINC,
-			HELP,
-			CLEAR,
-		};
-		void OnInitDlg(wxInitDialogEvent &);
-		void OnEditorShown(wxGridEvent &);
-		void OnEditorHidden(wxGridEvent &);
-		void OnCellChange(wxGridEvent &);
-		void OnCellRangeSelected(wxGridRangeSelectEvent &);
-		void OnCellLeftClick(wxGridEvent &);
-		void OnLabelLeftClick(wxGridEvent &);
-		void OnIncrement(wxCommandEvent &);
-		void OnGroupIncrement(wxCommandEvent &);
-		void OnFillCopy(wxCommandEvent &);
-		void OnFillInc(wxCommandEvent &);
-		void OnHelp(wxCommandEvent &);
-		void OnClear(wxCommandEvent &);
-		bool ManipulateCells(const bool, const bool);
+    public:
+        SetTapeIdsDlg(wxWindow *, wxXmlDocument &, wxArrayString &, std::vector<bool> &);
+        static wxXmlNode * GetTapeIdsNode(wxXmlDocument &);
+        static const wxString GetTapeId(wxXmlNode *, const wxString &, wxArrayString * = 0);
+        bool IsUpdated();
+    private:
+        enum {
+            FILLINC = wxID_HIGHEST + 1,
+            FILLCOPY,
+            INCREMENT,
+            GROUPINC,
+            HELP,
+            CLEAR,
+        };
+        void OnInitDlg(wxInitDialogEvent &);
+        void OnEditorShown(wxGridEvent &);
+        void OnEditorHidden(wxGridEvent &);
+        void OnCellChange(wxGridEvent &);
+        void OnCellRangeSelected(wxGridRangeSelectEvent &);
+        void OnCellLeftClick(wxGridEvent &);
+        void OnLabelLeftClick(wxGridEvent &);
+        void OnIncrement(wxCommandEvent &);
+        void OnGroupIncrement(wxCommandEvent &);
+        void OnFillCopy(wxCommandEvent &);
+        void OnFillInc(wxCommandEvent &);
+        void OnHelp(wxCommandEvent &);
+        void OnClear(wxCommandEvent &);
+        bool ManipulateCells(const bool, const bool);
 #if USING_ULONGLONG
-		bool ManipulateCell(const int, const int, const bool, const bool, wxULongLong_t * = 0);
+        bool ManipulateCell(const int, const int, const bool, const bool, wxULongLong_t * = 0);
 #else
-		bool ManipulateCell(const int, const int, const bool, const bool, unsigned long * = 0);
+        bool ManipulateCell(const int, const int, const bool, const bool, unsigned long * = 0);
 #endif
-		void FillCol(const bool, const bool);
-		void UpdateRow(const int);
-		void IncrementAsGroup(const bool commit);
-		void SetBackgroundColour(int);
-		void CheckForDuplicates();
+        void FillCol(const bool, const bool);
+        void UpdateRow(const int);
+        void IncrementAsGroup(const bool commit);
+        void SetBackgroundColour(int);
+        void CheckForDuplicates();
 
-		MyGrid * mGrid;
-		wxButton * mIncrementButton;
-		wxButton * mFillCopyButton;
-		wxButton * mFillIncButton;
-		wxButton * mGroupIncButton;
-		wxButton * mClearButton;
-		wxTextCtrl * mDupWarning;
+        MyGrid * mGrid;
+        wxButton * mIncrementButton;
+        wxButton * mFillCopyButton;
+        wxButton * mFillIncButton;
+        wxButton * mGroupIncButton;
+        wxButton * mClearButton;
+        wxTextCtrl * mDupWarning;
 
-		std::vector<bool> mEnabled;
+        std::vector<bool> mEnabled;
 
-		bool mEditing;
-		bool mUpdated;
+        bool mEditing;
+        bool mUpdated;
 
-	DECLARE_EVENT_TABLE()
+    DECLARE_EVENT_TABLE()
 };
 
 /// Set a timecode to jump to
 class JumpToTimecodeDlg : public wxDialog
 {
-	public:
-		JumpToTimecodeDlg(wxWindow *, ProdAuto::MxfTimecode);
-		int ShowModal();
-		const ProdAuto::MxfTimecode GetTimecode();
-	private:
-		enum //these must be in order
-		{
-			HRS = wxID_HIGHEST + 1,
-			MINS,
-			SECS,
-			FRAMES,
-		};
-		void OnTextChange(wxCommandEvent &);
-		void OnFocus(wxFocusEvent &);
-		bool CheckValue(const wxString &, const wxString &);
-		MyTextCtrl * mHours, * mMins, * mSecs, * mFrames;
-		ProdAuto::MxfTimecode mTimecode;
-	DECLARE_EVENT_TABLE()
+    public:
+        JumpToTimecodeDlg(wxWindow *, ProdAuto::MxfTimecode);
+        int ShowModal();
+        const ProdAuto::MxfTimecode GetTimecode();
+    private:
+        enum //these must be in order
+        {
+            HRS = wxID_HIGHEST + 1,
+            MINS,
+            SECS,
+            FRAMES,
+        };
+        void OnTextChange(wxCommandEvent &);
+        void OnFocus(wxFocusEvent &);
+        bool CheckValue(const wxString &, const wxString &);
+        MyTextCtrl * mHours, * mMins, * mSecs, * mFrames;
+        ProdAuto::MxfTimecode mTimecode;
+    DECLARE_EVENT_TABLE()
 };
 
 #define TEST_MAX_REC 180 //minutes
@@ -193,8 +193,8 @@ WX_DECLARE_HASH_MAP(time_t, wxArrayString*, wxIntegerHash, wxIntegerEqual, HashO
 WX_DECLARE_HASH_SET(wxString, wxStringHash, wxStringEqual, SetOfStrings);
 
 struct DirContents {
-	std::list<time_t> mtimes;
-	HashOfArrayStrings files;
+    std::list<time_t> mtimes;
+    HashOfArrayStrings files;
 };
 
 WX_DECLARE_HASH_MAP(wxString, DirContents*, wxStringHash, wxStringEqual, HashOfDirContents);
@@ -206,54 +206,54 @@ class wxToggleButton;
 /// Enable and set parameters for test mode
 class TestModeDlg : public wxDialog
 {
-	public:
-		TestModeDlg(wxWindow *, const int, const int);
-		int ShowModal();
-		~TestModeDlg();
-		void SetRecordPaths(std::vector<std::string>*);
-		enum
-		{
-			RECORD,
-			STOP,
-		};
-	private:
-		enum
-		{
-			MIN_REC = wxID_HIGHEST + 1,
-			MAX_REC,
-			REC_RANDOM,
-			MIN_GAP,
-			MAX_GAP,
-			GAP_RANDOM,
-			RUN
-		};
-		void OnChangeMinRecTime(wxSpinEvent &);
-		void OnChangeMaxRecTime(wxSpinEvent &);
-		void OnChangeMinGapTime(wxSpinEvent &);
-		void OnChangeMaxGapTime(wxSpinEvent &);
-		void OnRun(wxCommandEvent &);
-		void OnTimer(wxTimerEvent &);
-		void OnIdle(wxIdleEvent&);
-		void Record(bool rec = true);
-		void DeleteFileArrays(const wxString&);
-		wxSpinCtrl * mMinRecTime;
-		wxSpinCtrl * mMaxRecTime;
-		wxSpinCtrl * mMinGapTime;
-		wxSpinCtrl * mMaxGapTime;
-		wxCheckBox * mEraseEnable;
-		wxSpinCtrl * mEraseThreshold;
-		wxToggleButton * mRunButton;
-		wxStaticText * mRunStopMessage;
-		wxStaticText * mRunStopCountdown;
-		wxButton * mCancelButton;
-		wxTimer * mTimer;
-		wxTimeSpan mCountdown;
-		bool mRecording;
-		const int mRecordId;
-		const int mStopId;
-		SetOfStrings mRecordPaths;
-		HashOfDirContents mDirInfo;
-	DECLARE_EVENT_TABLE()
+    public:
+        TestModeDlg(wxWindow *, const int, const int);
+        int ShowModal();
+        ~TestModeDlg();
+        void SetRecordPaths(std::vector<std::string>*);
+        enum
+        {
+            RECORD,
+            STOP,
+        };
+    private:
+        enum
+        {
+            MIN_REC = wxID_HIGHEST + 1,
+            MAX_REC,
+            REC_RANDOM,
+            MIN_GAP,
+            MAX_GAP,
+            GAP_RANDOM,
+            RUN
+        };
+        void OnChangeMinRecTime(wxSpinEvent &);
+        void OnChangeMaxRecTime(wxSpinEvent &);
+        void OnChangeMinGapTime(wxSpinEvent &);
+        void OnChangeMaxGapTime(wxSpinEvent &);
+        void OnRun(wxCommandEvent &);
+        void OnTimer(wxTimerEvent &);
+        void OnIdle(wxIdleEvent&);
+        void Record(bool rec = true);
+        void DeleteFileArrays(const wxString&);
+        wxSpinCtrl * mMinRecTime;
+        wxSpinCtrl * mMaxRecTime;
+        wxSpinCtrl * mMinGapTime;
+        wxSpinCtrl * mMaxGapTime;
+        wxCheckBox * mEraseEnable;
+        wxSpinCtrl * mEraseThreshold;
+        wxToggleButton * mRunButton;
+        wxStaticText * mRunStopMessage;
+        wxStaticText * mRunStopCountdown;
+        wxButton * mCancelButton;
+        wxTimer * mTimer;
+        wxTimeSpan mCountdown;
+        bool mRecording;
+        const int mRecordId;
+        const int mStopId;
+        SetOfStrings mRecordPaths;
+        HashOfDirContents mDirInfo;
+    DECLARE_EVENT_TABLE()
 };
 
 #define N_CUE_POINT_COLOURS 9 //including default
@@ -261,41 +261,41 @@ class TestModeDlg : public wxDialog
 /// Set cue point descriptions
 class CuePointsDlg : public wxDialog
 {
-	public:
-		CuePointsDlg(wxWindow *, wxXmlDocument&);
-		int ShowModal(const wxString = wxT(""));
-		void Shortcut(const int);
-		void Scroll(const bool);
-		const wxString GetDescription();
-		size_t GetColourIndex();
-		static ProdAuto::LocatorColour::EnumType GetColourCode(const size_t);
-		bool ValidCuePointSelected();
-		static const wxColour GetColour(const size_t);
-		static const wxColour GetLabelColour(const size_t);
-	private:
-		void OnEditorShown(wxGridEvent&);
-		void OnEditorHidden(wxGridEvent&);
-		void Load();
-		void Save();
-		void OnMenu(wxCommandEvent&);
-		void OnOK(wxCommandEvent&);
-		void OnCellLeftClick(wxGridEvent&);
-		void OnSetGridRow(wxCommandEvent&);
-		void OnLabelLeftClick(wxGridEvent&);
-		void SetColour(const int, const int);
-		void Reset();
+    public:
+        CuePointsDlg(wxWindow *, wxXmlDocument&);
+        int ShowModal(const wxString = wxT(""));
+        void Shortcut(const int);
+        void Scroll(const bool);
+        const wxString GetDescription();
+        size_t GetColourIndex();
+        static ProdAuto::LocatorColour::EnumType GetColourCode(const size_t);
+        bool ValidCuePointSelected();
+        static const wxColour GetColour(const size_t);
+        static const wxColour GetLabelColour(const size_t);
+    private:
+        void OnEditorShown(wxGridEvent&);
+        void OnEditorHidden(wxGridEvent&);
+        void Load();
+        void Save();
+        void OnMenu(wxCommandEvent&);
+        void OnOK(wxCommandEvent&);
+        void OnCellLeftClick(wxGridEvent&);
+        void OnSetGridRow(wxCommandEvent&);
+        void OnLabelLeftClick(wxGridEvent&);
+        void SetColour(const int, const int);
+        void Reset();
 
-		wxGrid * mGrid;
-		wxButton * mOkButton;
-		wxStaticText * mTimecodeDisplay;
-		wxStaticText * mMessage;
+        wxGrid * mGrid;
+        wxButton * mOkButton;
+        wxStaticText * mTimecodeDisplay;
+        wxStaticText * mMessage;
 
-		wxXmlNode * mCuePointsNode;
-		wxColour mTextColour;
-		wxColour mBackgroundColour;
-		int mCurrentRow;
-		int mDescrColours[10];
-	DECLARE_EVENT_TABLE()
+        wxXmlNode * mCuePointsNode;
+        wxColour mTextColour;
+        wxColour mBackgroundColour;
+        int mCurrentRow;
+        int mDescrColours[10];
+    DECLARE_EVENT_TABLE()
 };
 
 #endif
@@ -303,77 +303,77 @@ class CuePointsDlg : public wxDialog
 /// Controls automatic chunking.  Active when not visible.  Changes when visible take immediate effect (i.e. no possibility to cancel)
 class ChunkingDlg : public wxDialog
 {
-	public:
-		ChunkingDlg(wxWindow *, Timepos *, wxXmlDocument &);
-		int ShowModal();
-		void RunFrom(const ProdAuto::MxfTimecode & = InvalidMxfTimecode, const ProdAuto::MxfDuration & = InvalidMxfDuration, const bool = true);
-		void Reset();
-		bool CanChunk() { return mCanChunk; };
-		const wxString GetChunkButtonLabel();
-		const wxString GetChunkButtonToolTip();
-		const wxColour GetChunkButtonColour();
-	private:
-		void OnChangeChunkSize(wxSpinEvent &);
-		void OnChangeChunkAlignment(wxCommandEvent &);
-		void OnEnable(wxCommandEvent &);
-		void OnTimer(wxTimerEvent &);
-		void SetCountdownLabel();
+    public:
+        ChunkingDlg(wxWindow *, Timepos *, wxXmlDocument &);
+        int ShowModal();
+        void RunFrom(const ProdAuto::MxfTimecode & = InvalidMxfTimecode, const ProdAuto::MxfDuration & = InvalidMxfDuration, const bool = true);
+        void Reset();
+        bool CanChunk() { return mCanChunk; };
+        const wxString GetChunkButtonLabel();
+        const wxString GetChunkButtonToolTip();
+        const wxColour GetChunkButtonColour();
+    private:
+        void OnChangeChunkSize(wxSpinEvent &);
+        void OnChangeChunkAlignment(wxCommandEvent &);
+        void OnEnable(wxCommandEvent &);
+        void OnTimer(wxTimerEvent &);
+        void SetCountdownLabel();
 
-		wxSpinCtrl * mChunkSizeCtrl;
-		wxChoice * mChunkAlignCtrl;
-		wxCheckBox * mEnableCheckBox;
-		wxButton * mChunkButton;
-		wxTimer * mCountdownTimer;
-		Timepos * mTimepos;
-		wxXmlDocument & mSavedState;
-		unsigned int mCountdown;
-		unsigned long mChunkLength;
-		int mChunkAlignment;
-		bool mCanChunk;
-		ProdAuto::MxfDuration mPostroll;
-	DECLARE_EVENT_TABLE()
+        wxSpinCtrl * mChunkSizeCtrl;
+        wxChoice * mChunkAlignCtrl;
+        wxCheckBox * mEnableCheckBox;
+        wxButton * mChunkButton;
+        wxTimer * mCountdownTimer;
+        Timepos * mTimepos;
+        wxXmlDocument & mSavedState;
+        unsigned int mCountdown;
+        unsigned long mChunkLength;
+        int mChunkAlignment;
+        bool mCanChunk;
+        ProdAuto::MxfDuration mPostroll;
+    DECLARE_EVENT_TABLE()
 };
 
 class SelectRecDlg : public wxDialog
 {
-	public:
-		SelectRecDlg(wxWindow *);
-		int ShowModal();
-		void GetPaths(wxArrayString &, bool = false);
-	private:
-		void OnSelectProject(wxCommandEvent &);
-		void OnSelectDate(wxCommandEvent &);
-		void OnSelectRecording(wxCommandEvent &);
-		void OnDoubleClick(wxCommandEvent &);
-		void OnPreferOnline(wxCommandEvent &);
-		void OnNavigateRecordings(wxCommandEvent &);
-		wxChoice * mProjectSelector;
-		wxChoice * mDateSelector;
-		wxListBox * mRecordingSelector;
-		wxBitmapButton * mUpButton;
-		wxBitmapButton * mDownButton;
-		wxStaticText * mOnlineMessage;
-		wxToggleButton * mPreferOnline;
-		wxString mSelectedProject;
-		wxString mSelectedDate;
-		wxString mSelectedRecording;
-		enum {
-			PROJECT = wxID_HIGHEST + 1,
-			DATE,
-			RECORDING,
-			UP,
-			DOWN,
-			PREFER_ONLINE
-		};
-	DECLARE_EVENT_TABLE()
+    public:
+        SelectRecDlg(wxWindow *);
+        int ShowModal();
+        void GetPaths(wxArrayString &, bool = false);
+    private:
+        void OnSelectProject(wxCommandEvent &);
+        void OnSelectDate(wxCommandEvent &);
+        void OnSelectRecording(wxCommandEvent &);
+        void OnDoubleClick(wxCommandEvent &);
+        void OnPreferOnline(wxCommandEvent &);
+        void OnNavigateRecordings(wxCommandEvent &);
+        wxChoice * mProjectSelector;
+        wxChoice * mDateSelector;
+        wxListBox * mRecordingSelector;
+        wxBitmapButton * mUpButton;
+        wxBitmapButton * mDownButton;
+        wxStaticText * mOnlineMessage;
+        wxToggleButton * mPreferOnline;
+        wxString mSelectedProject;
+        wxString mSelectedDate;
+        wxString mSelectedRecording;
+        enum {
+            PROJECT = wxID_HIGHEST + 1,
+            DATE,
+            RECORDING,
+            UP,
+            DOWN,
+            PREFER_ONLINE
+        };
+    DECLARE_EVENT_TABLE()
 };
 
 /// Class storing a constant string, to be attached to each entry in a choice control.
 class StringContainer : public wxClientData
 {
-	public:
-		StringContainer(const wxString & data) : mData(data) {};
-		const wxString GetString() { return mData; };
-	private:
-		const wxString mData;
+    public:
+        StringContainer(const wxString & data) : mData(data) {};
+        const wxString GetString() { return mData; };
+    private:
+        const wxString mData;
 };

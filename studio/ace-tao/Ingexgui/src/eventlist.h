@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: eventlist.h,v 1.9 2010/06/02 13:09:25 john_f Exp $             *
+ *   $Id: eventlist.h,v 1.10 2010/08/03 09:27:07 john_f Exp $             *
  *                                                                         *
  *   Copyright (C) 2009-2010 British Broadcasting Corporation                   *
  *   - all rights reserved.                                                *
@@ -36,44 +36,44 @@ WX_DECLARE_OBJARRAY(CORBA::StringSeq_var, ArrayOfStringSeq_var);
 /// Also arrays of cue point colour indeces, timecodes and frame numbers.
 class ChunkInfo
 {
-	public:
-		ChunkInfo(const unsigned long startIndex, const wxString & projectName, const ProdAuto::MxfTimecode & startTimecode, const int64_t startPosition, const bool hasChunkBefore) : mStartIndex(startIndex), mProjectName(projectName), mStartTimecode(startTimecode), mStartPosition(startPosition), mHasChunkBefore(hasChunkBefore), mHasChunkAfter(false) {};
-		void SetHasChunkAfter() {mHasChunkAfter = true;};
-		void AddRecorder(ProdAuto::TrackList_var trackList, CORBA::StringSeq_var fileList) {mFiles.Add(fileList); mTracks.Add(trackList);}; //adds a set of tracks provided by a recorder at the end of a recording
-		void AddCuePoint(const int64_t frame, size_t colourIndex) {mCuePointFrames.push_back(frame); mCueColourIndeces.push_back(colourIndex);}; //no text here because it's stored in the event list (which means it can be edited)
-		void SetLastTimecode(const ProdAuto::MxfTimecode & lastTimecode) {mLastTimecode = lastTimecode;};
-		bool DeleteCuePoint(const unsigned long index) {
-			if (mCuePointFrames.size() > index) {
-				mCuePointFrames.erase(mCuePointFrames.begin() + index); mCueColourIndeces.erase(mCueColourIndeces.begin() + index);
-				return true;
-			}
-			else {
-				return false;
-			}
-		};
-		unsigned long GetStartIndex() {return mStartIndex;};
-		ProdAuto::MxfTimecode GetStartTimecode() {return mStartTimecode;};
-		ProdAuto::MxfTimecode GetLastTimecode() {return mLastTimecode;};
-		ArrayOfStringSeq_var * GetFiles() {return &mFiles;};
-		const wxString GetProjectName() {return mProjectName;};
-		ArrayOfTrackList_var & GetTracks() {return mTracks;};
-		std::vector<int64_t> & GetCuePointFrames() {return mCuePointFrames;};
-		std::vector<size_t> & GetCueColourIndeces() {return mCueColourIndeces;};
-		int64_t GetStartPosition() {return mStartPosition;};
-		bool HasChunkBefore() {return mHasChunkBefore;};
-		bool HasChunkAfter() {return mHasChunkAfter;};
-	private:
-		const unsigned long mStartIndex; //the index in the event list for the start of this chunk
-		ArrayOfStringSeq_var mFiles;
-		const wxString mProjectName;
-		const ProdAuto::MxfTimecode mStartTimecode;
-		ProdAuto::MxfTimecode mLastTimecode;
-		const int64_t mStartPosition;
-		ArrayOfTrackList_var mTracks; //deletes itself
-		std::vector<int64_t> mCuePointFrames;
-		std::vector<size_t> mCueColourIndeces;
-		const bool mHasChunkBefore;
-		bool mHasChunkAfter;
+    public:
+        ChunkInfo(const unsigned long startIndex, const wxString & projectName, const ProdAuto::MxfTimecode & startTimecode, const int64_t startPosition, const bool hasChunkBefore) : mStartIndex(startIndex), mProjectName(projectName), mStartTimecode(startTimecode), mStartPosition(startPosition), mHasChunkBefore(hasChunkBefore), mHasChunkAfter(false) {};
+        void SetHasChunkAfter() {mHasChunkAfter = true;};
+        void AddRecorder(ProdAuto::TrackList_var trackList, CORBA::StringSeq_var fileList) {mFiles.Add(fileList); mTracks.Add(trackList);}; //adds a set of tracks provided by a recorder at the end of a recording
+        void AddCuePoint(const int64_t frame, size_t colourIndex) {mCuePointFrames.push_back(frame); mCueColourIndeces.push_back(colourIndex);}; //no text here because it's stored in the event list (which means it can be edited)
+        void SetLastTimecode(const ProdAuto::MxfTimecode & lastTimecode) {mLastTimecode = lastTimecode;};
+        bool DeleteCuePoint(const unsigned long index) {
+            if (mCuePointFrames.size() > index) {
+                mCuePointFrames.erase(mCuePointFrames.begin() + index); mCueColourIndeces.erase(mCueColourIndeces.begin() + index);
+                return true;
+            }
+            else {
+                return false;
+            }
+        };
+        unsigned long GetStartIndex() {return mStartIndex;};
+        ProdAuto::MxfTimecode GetStartTimecode() {return mStartTimecode;};
+        ProdAuto::MxfTimecode GetLastTimecode() {return mLastTimecode;};
+        ArrayOfStringSeq_var * GetFiles() {return &mFiles;};
+        const wxString GetProjectName() {return mProjectName;};
+        ArrayOfTrackList_var & GetTracks() {return mTracks;};
+        std::vector<int64_t> & GetCuePointFrames() {return mCuePointFrames;};
+        std::vector<size_t> & GetCueColourIndeces() {return mCueColourIndeces;};
+        int64_t GetStartPosition() {return mStartPosition;};
+        bool HasChunkBefore() {return mHasChunkBefore;};
+        bool HasChunkAfter() {return mHasChunkAfter;};
+    private:
+        const unsigned long mStartIndex; //the index in the event list for the start of this chunk
+        ArrayOfStringSeq_var mFiles;
+        const wxString mProjectName;
+        const ProdAuto::MxfTimecode mStartTimecode;
+        ProdAuto::MxfTimecode mLastTimecode;
+        const int64_t mStartPosition;
+        ArrayOfTrackList_var mTracks; //deletes itself
+        std::vector<int64_t> mCuePointFrames;
+        std::vector<size_t> mCueColourIndeces;
+        const bool mHasChunkBefore;
+        bool mHasChunkAfter;
 };
 
 WX_DECLARE_OBJARRAY(ChunkInfo, ChunkInfoArray);
@@ -83,69 +83,69 @@ class RecorderData;
 /// Class to display and store the list of recording events
 class EventList : public wxListView, wxThread //used wxListCtrl for a while because wxListView crashed when you added an item - seems ok with 2.8
 {
-	public:
-		EventList(wxWindow *, wxWindowID, const wxPoint & = wxDefaultPosition, const wxSize & = wxDefaultSize, bool = true);
-		enum EventType //NB order must match TypeLabels[] initialisation
-		{
-			NONE = 0,
-			START,
-			CUE,
-			CHUNK,
-			STOP,
-			PROBLEM
-		};
-		void AddEvent(EventType, ProdAuto::MxfTimecode *, const int64_t = 0, const wxString & = wxT(""), const size_t = 0);
-		void AddRecorderData(RecorderData * data, bool = true);
-		void DeleteCuePoint();
-		void Select(const long, const bool = false);
-		void SelectPrevTake(const bool);
-		void SelectAdjacentEvent(const bool);
-		void SelectNextTake();
-		void SelectLastTake();
-		void CanEdit(const bool);
-		bool LatestChunkCuePointIsSelected();
-		bool AtTop();
-		bool AtStartOfTake();
-		bool InLastTake();
-		bool AtBottom();
-		bool SelectedChunkHasChanged();
-		ProdAuto::MxfTimecode SetCurrentProjectName(const wxString &);
-		ProdAuto::LocatorSeq GetLocators();
-		ChunkInfo * GetCurrentChunkInfo();
-		int GetCurrentCuePoint();
-		int64_t GetCurrentChunkStartPosition();
-		void Clear();
-		bool JumpToTimecode(const ProdAuto::MxfTimecode &, int64_t &);
-	private:
-		ExitCode Entry();
-		void OnEventBeginEdit(wxListEvent&);
-		void OnEventEndEdit(wxListEvent&);
-		void OnRestoreListLabel(wxCommandEvent&);
-		void OnEventSelection(wxListEvent&);
-		void ClearSavedData();
-		const wxString GetCdata(wxXmlNode *);
-		ProdAuto::MxfTimecode Load();
-		void NewChunkInfo(ProdAuto::MxfTimecode *, int64_t);
-		ProdAuto::MxfTimecode GetStartTimecode();
+    public:
+        EventList(wxWindow *, wxWindowID, const wxPoint & = wxDefaultPosition, const wxSize & = wxDefaultSize, bool = true);
+        enum EventType //NB order must match TypeLabels[] initialisation
+        {
+            NONE = 0,
+            START,
+            CUE,
+            CHUNK,
+            STOP,
+            PROBLEM
+        };
+        void AddEvent(EventType, ProdAuto::MxfTimecode *, const int64_t = 0, const wxString & = wxT(""), const size_t = 0);
+        void AddRecorderData(RecorderData * data, bool = true);
+        void DeleteCuePoint();
+        void Select(const long, const bool = false);
+        void SelectPrevTake(const bool);
+        void SelectAdjacentEvent(const bool);
+        void SelectNextTake();
+        void SelectLastTake();
+        void CanEdit(const bool);
+        bool LatestChunkCuePointIsSelected();
+        bool AtTop();
+        bool AtStartOfTake();
+        bool InLastTake();
+        bool AtBottom();
+        bool SelectedChunkHasChanged();
+        ProdAuto::MxfTimecode SetCurrentProjectName(const wxString &);
+        ProdAuto::LocatorSeq GetLocators();
+        ChunkInfo * GetCurrentChunkInfo();
+        int GetCurrentCuePoint();
+        int64_t GetCurrentChunkStartPosition();
+        void Clear();
+        bool JumpToTimecode(const ProdAuto::MxfTimecode &, int64_t &);
+    private:
+        ExitCode Entry();
+        void OnEventBeginEdit(wxListEvent&);
+        void OnEventEndEdit(wxListEvent&);
+        void OnRestoreListLabel(wxCommandEvent&);
+        void OnEventSelection(wxListEvent&);
+        void ClearSavedData();
+        const wxString GetCdata(wxXmlNode *);
+        ProdAuto::MxfTimecode Load();
+        void NewChunkInfo(ProdAuto::MxfTimecode *, int64_t);
+        ProdAuto::MxfTimecode GetStartTimecode();
 
-		ChunkInfoArray mChunkInfoArray;
-		long mCanEditAfter;
-		long mCurrentChunkInfo;
-		long mBlockEventItem;
-		wxMutex mMutex;
-		wxString mProjectName;
-		unsigned int mRecordingNodeCount;
-		bool mChunking;
-		//vbls which need mutex protection to access
-		wxCondition * mCondition;
-		wxXmlNode * mRootNode;
-		wxXmlNode * mRecordingNode;
-		wxXmlNode * mPrevRecordingNode;
-		bool mRunThread;
-		bool mSyncThread;
-		bool mLoadEventFiles;
-		wxString mFilename;
-	DECLARE_EVENT_TABLE()
+        ChunkInfoArray mChunkInfoArray;
+        long mCanEditAfter;
+        long mCurrentChunkInfo;
+        long mBlockEventItem;
+        wxMutex mMutex;
+        wxString mProjectName;
+        unsigned int mRecordingNodeCount;
+        bool mChunking;
+        //vbls which need mutex protection to access
+        wxCondition * mCondition;
+        wxXmlNode * mRootNode;
+        wxXmlNode * mRecordingNode;
+        wxXmlNode * mPrevRecordingNode;
+        bool mRunThread;
+        bool mSyncThread;
+        bool mLoadEventFiles;
+        wxString mFilename;
+    DECLARE_EVENT_TABLE()
 };
 
 #endif

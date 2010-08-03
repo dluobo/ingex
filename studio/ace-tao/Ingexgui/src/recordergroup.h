@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: recordergroup.h,v 1.10 2010/07/14 13:06:36 john_f Exp $         *
+ *   $Id: recordergroup.h,v 1.11 2010/08/03 09:27:07 john_f Exp $         *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -34,102 +34,102 @@ class wxXmlDocument;
 /// A control derived from a list box containing a list of recorders, connected and disconnected.
 class RecorderGroupCtrl : public wxListBox
 {
-	public:
-		RecorderGroupCtrl(wxWindow *, wxWindowID id, const wxPoint &, const wxSize &, int&, char**, const wxXmlDocument *);
-		~RecorderGroupCtrl();
-		void StartGettingRecorders();
-		void SetPreroll(const ProdAuto::MxfDuration);
-		void SetPostroll(const ProdAuto::MxfDuration);
-		const ProdAuto::MxfDuration GetPreroll();
-		const ProdAuto::MxfDuration GetPostroll();
-		const ProdAuto::MxfDuration GetMaxPreroll();
-		const ProdAuto::MxfDuration GetMaxPostroll();
-		const ProdAuto::MxfDuration GetChunkingPostroll();
-		void SetTapeIds(const wxString &, const CORBA::StringSeq &, const CORBA::StringSeq &);
-		void RecordAll(const ProdAuto::MxfTimecode);
-		void Record(const wxString &, const CORBA::BooleanSeq &);
-		void Stop(const ProdAuto::MxfTimecode &, const wxString &, const ProdAuto::LocatorSeq &);
-		void ChunkStop(const ProdAuto::MxfTimecode &, const wxString &, const ProdAuto::LocatorSeq &);
-		void EnableForInput(bool state = true) { mEnabledForInput = state; };
-		bool IsEnabledForInput() { return mEnabledForInput; };
-		void SetProjectNames(const wxSortedArrayString &);
-		const wxSortedArrayString & GetProjectNames();
-		void SetCurrentProjectName(const wxString &);
-		const wxString & GetCurrentProjectName();
-		const wxString & GetCurrentDescription();
-		void Deselect(unsigned int);
-		const wxString& GetTimecodeRecorder() { return mTimecodeRecorder; };
-		enum RecorderGroupCtrlEventType {
-			ENABLE_REFRESH,
-			NEW_RECORDER,
-			REMOVE_RECORDER,
-			REQUEST_RECORD,
-			RECORDING,
-			TRACK_STATUS,
-			STOPPED,
-			DISPLAY_TIMECODE_SOURCE,
-			DISPLAY_TIMECODE,
-			DISPLAY_TIMECODE_STUCK,
-			DISPLAY_TIMECODE_MISSING,
-			TIMECODE_RUNNING,
-			TIMECODE_STUCK,
-			TIMECODE_MISSING,
-			COMM_FAILURE,
-			SET_TRIGGER,
-			CHUNK_START,
-			CHUNK_END,
-		};
-	private:
-		void OnListRefreshed(wxCommandEvent &);
-		void OnLMouseDown(wxMouseEvent &);
-		void OnRightMouseDown(wxMouseEvent &);
-		void OnUnwantedMouseDown(wxMouseEvent &);
-		void OnControllerEvent(ControllerThreadEvent &);
-		void OnTimeposEvent(wxCommandEvent &);
-		void Insert(const wxString &, unsigned int);
-		const wxString GetName(unsigned int);
-		void Connect(unsigned int);
-		void Disconnect(unsigned int);
-		Controller * GetController(unsigned int);
-		void SetTimecodeRecorder(wxString name = wxT(""));
-		Comms * mComms;
-		bool mEnabledForInput;
-		ProdAuto::MxfDuration mMaxPreroll, mMaxPostroll, mPreroll, mPostroll;
-		wxString mTimecodeRecorder;
-		bool mTimecodeRecorderStuck;
-		ProdAuto::MxfTimecode mStartTimecode;
-		const wxXmlDocument * mDoc;
-		wxSortedArrayString mProjectNames;
-		wxString mCurrentProject;
-		wxString mCurrentDescription;
-		enum ChunkingMode {
-			NOT_CHUNKING,
-			STOPPING,
-			WAITING,
-			RECORDING_CHUNK,
-		};
-		ChunkingMode mChunking;
-		DECLARE_EVENT_TABLE()
+    public:
+        RecorderGroupCtrl(wxWindow *, wxWindowID id, const wxPoint &, const wxSize &, int&, char**, const wxXmlDocument *);
+        ~RecorderGroupCtrl();
+        void StartGettingRecorders();
+        void SetPreroll(const ProdAuto::MxfDuration);
+        void SetPostroll(const ProdAuto::MxfDuration);
+        const ProdAuto::MxfDuration GetPreroll();
+        const ProdAuto::MxfDuration GetPostroll();
+        const ProdAuto::MxfDuration GetMaxPreroll();
+        const ProdAuto::MxfDuration GetMaxPostroll();
+        const ProdAuto::MxfDuration GetChunkingPostroll();
+        void SetTapeIds(const wxString &, const CORBA::StringSeq &, const CORBA::StringSeq &);
+        void RecordAll(const ProdAuto::MxfTimecode);
+        void Record(const wxString &, const CORBA::BooleanSeq &);
+        void Stop(const ProdAuto::MxfTimecode &, const wxString &, const ProdAuto::LocatorSeq &);
+        void ChunkStop(const ProdAuto::MxfTimecode &, const wxString &, const ProdAuto::LocatorSeq &);
+        void EnableForInput(bool state = true) { mEnabledForInput = state; };
+        bool IsEnabledForInput() { return mEnabledForInput; };
+        void SetProjectNames(const wxSortedArrayString &);
+        const wxSortedArrayString & GetProjectNames();
+        void SetCurrentProjectName(const wxString &);
+        const wxString & GetCurrentProjectName();
+        const wxString & GetCurrentDescription();
+        void Deselect(unsigned int);
+        const wxString& GetTimecodeRecorder() { return mTimecodeRecorder; };
+        enum RecorderGroupCtrlEventType {
+            ENABLE_REFRESH,
+            NEW_RECORDER,
+            REMOVE_RECORDER,
+            REQUEST_RECORD,
+            RECORDING,
+            TRACK_STATUS,
+            STOPPED,
+            DISPLAY_TIMECODE_SOURCE,
+            DISPLAY_TIMECODE,
+            DISPLAY_TIMECODE_STUCK,
+            DISPLAY_TIMECODE_MISSING,
+            TIMECODE_RUNNING,
+            TIMECODE_STUCK,
+            TIMECODE_MISSING,
+            COMM_FAILURE,
+            SET_TRIGGER,
+            CHUNK_START,
+            CHUNK_END,
+        };
+    private:
+        void OnListRefreshed(wxCommandEvent &);
+        void OnLMouseDown(wxMouseEvent &);
+        void OnRightMouseDown(wxMouseEvent &);
+        void OnUnwantedMouseDown(wxMouseEvent &);
+        void OnControllerEvent(ControllerThreadEvent &);
+        void OnTimeposEvent(wxCommandEvent &);
+        void Insert(const wxString &, unsigned int);
+        const wxString GetName(unsigned int);
+        void Connect(unsigned int);
+        void Disconnect(unsigned int);
+        Controller * GetController(unsigned int);
+        void SetTimecodeRecorder(wxString name = wxT(""));
+        Comms * mComms;
+        bool mEnabledForInput;
+        ProdAuto::MxfDuration mMaxPreroll, mMaxPostroll, mPreroll, mPostroll;
+        wxString mTimecodeRecorder;
+        bool mTimecodeRecorderStuck;
+        ProdAuto::MxfTimecode mStartTimecode;
+        const wxXmlDocument * mDoc;
+        wxSortedArrayString mProjectNames;
+        wxString mCurrentProject;
+        wxString mCurrentDescription;
+        enum ChunkingMode {
+            NOT_CHUNKING,
+            STOPPING,
+            WAITING,
+            RECORDING_CHUNK,
+        };
+        ChunkingMode mChunking;
+        DECLARE_EVENT_TABLE()
 };
 
 /// Class storing various information about a recorder, to be attached to events from the recorder group.
 /// Various constructors for different information; all data constant.
 class RecorderData
 {
-	public:
-		RecorderData(const ProdAuto::TrackStatusList_var & trackStatusList, const ProdAuto::TrackList_var & trackList) : mTrackStatusList(trackStatusList), mTrackList(trackList) {};
-		RecorderData(const ProdAuto::TrackStatusList_var & trackStatusList) : mTrackStatusList(trackStatusList) {};
-		RecorderData(ProdAuto::MxfTimecode tc) : mTimecode(tc) {};
-		RecorderData(ProdAuto::TrackList_var trackList, CORBA::StringSeq_var fileList, ProdAuto::MxfTimecode tc = InvalidMxfTimecode) : mTrackList(trackList), mFileList(fileList), mTimecode(tc) {};
-		const ProdAuto::TrackList_var & GetTrackList() {return mTrackList;};
-		const ProdAuto::TrackStatusList_var & GetTrackStatusList() {return mTrackStatusList;};
-		CORBA::StringSeq_var GetFileList() {return mFileList;};
-		ProdAuto::MxfTimecode GetTimecode() {return mTimecode;};
-	private:
-		ProdAuto::TrackStatusList_var mTrackStatusList;
-		ProdAuto::TrackList_var mTrackList;
-		CORBA::StringSeq_var mFileList;
-		ProdAuto::MxfTimecode mTimecode;
+    public:
+        RecorderData(const ProdAuto::TrackStatusList_var & trackStatusList, const ProdAuto::TrackList_var & trackList) : mTrackStatusList(trackStatusList), mTrackList(trackList) {};
+        RecorderData(const ProdAuto::TrackStatusList_var & trackStatusList) : mTrackStatusList(trackStatusList) {};
+        RecorderData(ProdAuto::MxfTimecode tc) : mTimecode(tc) {};
+        RecorderData(ProdAuto::TrackList_var trackList, CORBA::StringSeq_var fileList, ProdAuto::MxfTimecode tc = InvalidMxfTimecode) : mTrackList(trackList), mFileList(fileList), mTimecode(tc) {};
+        const ProdAuto::TrackList_var & GetTrackList() {return mTrackList;};
+        const ProdAuto::TrackStatusList_var & GetTrackStatusList() {return mTrackStatusList;};
+        CORBA::StringSeq_var GetFileList() {return mFileList;};
+        ProdAuto::MxfTimecode GetTimecode() {return mTimecode;};
+    private:
+        ProdAuto::TrackStatusList_var mTrackStatusList;
+        ProdAuto::TrackList_var mTrackList;
+        CORBA::StringSeq_var mFileList;
+        ProdAuto::MxfTimecode mTimecode;
 };
 
 /// Class storing a recorder name and a controller object, to be attached to each entry in the list control.
@@ -137,17 +137,17 @@ class RecorderData
 /// Recorder name must be present; controller object is created and destroyed with the Start(), Stop() and Del() methods.
 class ControllerContainer : public wxClientData
 {
-	public:
-		ControllerContainer(const wxString & name) : mName(name), mController(0) {};
-		~ControllerContainer() { if (mController) { delete mController; } };
-		void Start(Comms * comms, wxEvtHandler * handler) { mController = new Controller(mName, comms, handler); }; //the controller's Destroy() method will send a message when ready to delete itself
-		void Stop() { if (mController) { mController->Destroy(); } };
-		void Del() { if (mController) { delete mController; mController = 0; } };
-		const wxString GetName() { return mName; };
-		Controller * GetController() { return mController; };
-	private:
-		const wxString mName;
-		Controller * mController;
+    public:
+        ControllerContainer(const wxString & name) : mName(name), mController(0) {};
+        ~ControllerContainer() { if (mController) { delete mController; } };
+        void Start(Comms * comms, wxEvtHandler * handler) { mController = new Controller(mName, comms, handler); }; //the controller's Destroy() method will send a message when ready to delete itself
+        void Stop() { if (mController) { mController->Destroy(); } };
+        void Del() { if (mController) { delete mController; mController = 0; } };
+        const wxString GetName() { return mName; };
+        Controller * GetController() { return mController; };
+    private:
+        const wxString mName;
+        Controller * mController;
 };
 
 #endif

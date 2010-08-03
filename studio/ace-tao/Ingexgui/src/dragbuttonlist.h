@@ -34,31 +34,31 @@ WX_DEFINE_ARRAY_INT(int, ArrayOfInts);
 /// Ignore the "drag" bit - this class represents a set of source selection buttons for playback.
 class DragButtonList : public wxScrolledWindow
 {
-	public:
-		DragButtonList(wxWindow *, wxEvtHandler *);
-		prodauto::PlayerInputType SetTracks(ChunkInfo*, std::vector<std::string> &, std::vector<std::string> &, unsigned int &);
-		prodauto::PlayerInputType SetMXFFiles(wxArrayString &, std::vector<std::string> &, std::vector<std::string> &, unsigned int &, ProdAuto::MxfTimecode &);
+    public:
+        DragButtonList(wxWindow *, wxEvtHandler *);
+        prodauto::PlayerInputType SetTracks(ChunkInfo*, std::vector<std::string> &, std::vector<std::string> &, unsigned int &);
+        prodauto::PlayerInputType SetMXFFiles(wxArrayString &, std::vector<std::string> &, std::vector<std::string> &, unsigned int &, ProdAuto::MxfTimecode &);
 #ifndef DISABLE_SHARED_MEM_SOURCE
-		prodauto::PlayerInputType SetEtoE(std::vector<std::string> &, std::vector<std::string> &, unsigned int &);
+        prodauto::PlayerInputType SetEtoE(std::vector<std::string> &, std::vector<std::string> &, unsigned int &);
 #endif
-		void EnableAndSelectTracks(std::vector<bool> *, const unsigned int);
-		void Clear();
-		void SetSourceName(const unsigned int, const wxString&);
-		unsigned int GetSelectedSource();
-		bool EarlierTrack(const bool);
-		bool LaterTrack(const bool);
-		void ToggleSplitView(const unsigned int);
-		const wxString GetProjectName();
-//		std::vector<std::string> * GetFiles();
-	private:
-		void OnUpdateUI(wxUpdateUIEvent&);
-		void OnRadioButton(wxCommandEvent& event);
-		void Select(unsigned int);
-		ArrayOfInts mEnableStates;
-		unsigned int mSelected;
-		wxString mProjectName;
-		wxEvtHandler* mButtonEvtHandler;
-	DECLARE_EVENT_TABLE();
+        void EnableAndSelectTracks(std::vector<bool> *, const unsigned int);
+        void Clear();
+        void SetSourceName(const unsigned int, const wxString&);
+        unsigned int GetSelectedSource();
+        bool EarlierTrack(const bool);
+        bool LaterTrack(const bool);
+        void ToggleSplitView(const unsigned int);
+        const wxString GetProjectName();
+//      std::vector<std::string> * GetFiles();
+    private:
+        void OnUpdateUI(wxUpdateUIEvent&);
+        void OnRadioButton(wxCommandEvent& event);
+        void Select(unsigned int);
+        ArrayOfInts mEnableStates;
+        unsigned int mSelected;
+        wxString mProjectName;
+        wxEvtHandler* mButtonEvtHandler;
+    DECLARE_EVENT_TABLE();
 };
 
 #endif

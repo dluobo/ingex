@@ -32,29 +32,29 @@ Handles communication with the name server in a threaded manner.
 class Comms : public wxThread
 {
 public:
-	Comms(wxWindow*, int&, char**);
-	~Comms();
-	void StartGettingRecorders(WXTYPE, int);
-	bool GetStatus(wxString* errMsg = 0);
-	void GetRecorderList(wxArrayString& list);
-	wxString SelectRecorder(wxString, ::ProdAuto::Recorder_var &);
+    Comms(wxWindow*, int&, char**);
+    ~Comms();
+    void StartGettingRecorders(WXTYPE, int);
+    bool GetStatus(wxString* errMsg = 0);
+    void GetRecorderList(wxArrayString& list);
+    wxString SelectRecorder(wxString, ::ProdAuto::Recorder_var &);
 private:
-	wxWindow * mParent;
-	void SetTimeout(int secs);
-	bool InitNs();
-	CORBA::Object_ptr ResolveObject(const CosNaming::Name & name, wxString & msg);
-	ExitCode Entry();
-	WXTYPE mEventType;
-	int mEventId;
-	wxMutex mMutex;
-	bool mDie;
-	wxCondition* mCondition;
-	CosNaming::NamingContext_var mNameService;
-	bool mOK;
-	CORBA::ORB_var mOrb;
-	wxArrayString mNameServiceList, mRecorderList;
-	wxString mErrMsg;
-	ACE_Thread_Mutex mNsMutex; ///< mutex to prevent concurrent use of ns
+    wxWindow * mParent;
+    void SetTimeout(int secs);
+    bool InitNs();
+    CORBA::Object_ptr ResolveObject(const CosNaming::Name & name, wxString & msg);
+    ExitCode Entry();
+    WXTYPE mEventType;
+    int mEventId;
+    wxMutex mMutex;
+    bool mDie;
+    wxCondition* mCondition;
+    CosNaming::NamingContext_var mNameService;
+    bool mOK;
+    CORBA::ORB_var mOrb;
+    wxArrayString mNameServiceList, mRecorderList;
+    wxString mErrMsg;
+    ACE_Thread_Mutex mNsMutex; ///< mutex to prevent concurrent use of ns
 };
 
 

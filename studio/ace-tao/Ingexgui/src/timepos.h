@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: timepos.h,v 1.10 2010/07/23 17:57:24 philipn Exp $           *
+ *   $Id: timepos.h,v 1.11 2010/08/03 09:27:07 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -39,47 +39,47 @@ DECLARE_EVENT_TYPE(EVT_TIMEPOS_EVENT, -1)
 /// Controls timecode and position displays
 class Timepos : public wxEvtHandler
 {
-	public:
-		Timepos(wxEvtHandler *, wxStaticText *, wxStaticText *);
-		void Reset();
-		void SetTimecode(const ProdAuto::MxfTimecode, bool);
-		void SetPosition(unsigned long);
-		void SetDefaultEditRate(const ProdAuto::MxfTimecode);
-		void SetPositionUnknown(bool = false);
-		const wxString Record(const ProdAuto::MxfTimecode);
-		void Stop(const ProdAuto::MxfTimecode);
-		void DisableTimecode(const wxString & = NO_TIMECODE);
-		const wxString GetTimecode(ProdAuto::MxfTimecode * = 0);
-		const wxString GetStartTimecode(ProdAuto::MxfTimecode * = 0);
-		const wxString GetStartPosition();
-		static const wxString FormatPosition(const ProdAuto::MxfDuration);
-		static const wxString FormatTimecode(const ProdAuto::MxfTimecode);
-		int64_t GetFrameCount();
-		const ProdAuto::MxfTimecode GetDefaultEditRate();
-		bool SetTrigger(const ProdAuto::MxfTimecode *, wxEvtHandler *, bool);
-	private:
-		void OnRefreshTimer(wxTimerEvent& WXUNUSED(event));
-		static const wxString FormatPosition(const wxTimeSpan, const ProdAuto::MxfTimecode);
-		wxTimeSpan GetDuration();
-		void Trigger();
+    public:
+        Timepos(wxEvtHandler *, wxStaticText *, wxStaticText *);
+        void Reset();
+        void SetTimecode(const ProdAuto::MxfTimecode, bool);
+        void SetPosition(unsigned long);
+        void SetDefaultEditRate(const ProdAuto::MxfTimecode);
+        void SetPositionUnknown(bool = false);
+        const wxString Record(const ProdAuto::MxfTimecode);
+        void Stop(const ProdAuto::MxfTimecode);
+        void DisableTimecode(const wxString & = NO_TIMECODE);
+        const wxString GetTimecode(ProdAuto::MxfTimecode * = 0);
+        const wxString GetStartTimecode(ProdAuto::MxfTimecode * = 0);
+        const wxString GetStartPosition();
+        static const wxString FormatPosition(const ProdAuto::MxfDuration);
+        static const wxString FormatTimecode(const ProdAuto::MxfTimecode);
+        int64_t GetFrameCount();
+        const ProdAuto::MxfTimecode GetDefaultEditRate();
+        bool SetTrigger(const ProdAuto::MxfTimecode *, wxEvtHandler *, bool);
+    private:
+        void OnRefreshTimer(wxTimerEvent& WXUNUSED(event));
+        static const wxString FormatPosition(const wxTimeSpan, const ProdAuto::MxfTimecode);
+        wxTimeSpan GetDuration();
+        void Trigger();
 
-		bool mTimecodeRunning;
-		bool mPositionRunning;
-		bool mPostrolling;
-		wxStaticText * mTimecodeDisplay;
-		wxStaticText * mPositionDisplay;
-		wxTimeSpan mTimecodeOffset;
-		wxDateTime mStopTime;
-		ProdAuto::MxfTimecode mStartTimecode;
-		ProdAuto::MxfDuration mDuration;
-		ProdAuto::MxfTimecode mLastKnownTimecode;
-		ProdAuto::MxfTimecode mTriggerTimecode;
-		ProdAuto::MxfTimecode mLastDisplayedTimecode;
-		wxEvtHandler * mTriggerHandler;
-		wxDateTime mStartDate;
-		bool mTriggerCarry;
+        bool mTimecodeRunning;
+        bool mPositionRunning;
+        bool mPostrolling;
+        wxStaticText * mTimecodeDisplay;
+        wxStaticText * mPositionDisplay;
+        wxTimeSpan mTimecodeOffset;
+        wxDateTime mStopTime;
+        ProdAuto::MxfTimecode mStartTimecode;
+        ProdAuto::MxfDuration mDuration;
+        ProdAuto::MxfTimecode mLastKnownTimecode;
+        ProdAuto::MxfTimecode mTriggerTimecode;
+        ProdAuto::MxfTimecode mLastDisplayedTimecode;
+        wxEvtHandler * mTriggerHandler;
+        wxDateTime mStartDate;
+        bool mTriggerCarry;
 
-	DECLARE_EVENT_TABLE()
+    DECLARE_EVENT_TABLE()
 };
 
 #endif
