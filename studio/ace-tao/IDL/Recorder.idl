@@ -1,5 +1,5 @@
 /*
- * $Id: Recorder.idl,v 1.6 2010/07/14 13:06:36 john_f Exp $
+ * $Id: Recorder.idl,v 1.7 2010/08/12 16:36:42 john_f Exp $
  *
  * Interface for Recorder.
  *
@@ -98,6 +98,12 @@ module ProdAuto
         readonly attribute MxfDuration MaxPreRoll;
         /// Maximum post-roll available after StopRecord received
         readonly attribute MxfDuration MaxPostRoll;
+
+        /// Record chunk size, 0 for no chunking
+        attribute unsigned short ChunkSize;
+
+        /// Record chunk alignment, 0 for no alignment
+        attribute unsigned short ChunkAlignment;
 
         /// Start recording.
         /// @param start_timecode Timecode to select first frame in recording after pre-roll period.

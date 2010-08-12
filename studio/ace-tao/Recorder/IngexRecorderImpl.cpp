@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorderImpl.cpp,v 1.20 2010/07/21 16:29:34 john_f Exp $
+ * $Id: IngexRecorderImpl.cpp,v 1.21 2010/08/12 16:36:42 john_f Exp $
  *
  * Servant class for Recorder.
  *
@@ -43,23 +43,44 @@ IngexRecorderImpl * IngexRecorderImpl::mInstance = 0;
 // To be called on completion of recording
 void recording_completed(IngexRecorder * rec)
 {
-#if 0
-    // Test - keep recording in chunks
-    const framecount_t chunk_size = 60 * 25; // 1 min
-    framecount_t restart = rec->OutTime();
-    // make new out time a round figure
-    framecount_t out = restart + chunk_size;
-    out = (out / chunk_size) * chunk_size;
-    // set duration for this chunk
-    rec->TargetDuration(out - restart);
-    rec->Start();
-#else
-    // notify observers
-    IngexRecorderImpl::Instance()->NotifyCompletion(rec);
+    bool complete;
+    if (rec && rec->Chunking() && rec->ChunkSize() != 0)
+    {
+        // Next In time is last Out time
+        Ingex::Timecode restart_tc = rec->OutTime();
+        framecount_t next_duration = rec->CalculateChunkDuration(restart_tc);
+        /*
+        framecount_t restart = restart_tc.FramesSinceMidnight();
 
-    // destroy recorder
-    delete rec;
-#endif
+        // Next Out time
+        const framecount_t chunk_size = rec->ChunkSize() * rec->FrameRateNumerator() / rec->FrameRateDenominator();
+        framecount_t out = restart + chunk_size;
+        // make new out time a round figure
+        out = (out / chunk_size) * chunk_size;
+        */
+
+        // Set duration for next chunk
+        rec->TargetDuration(next_duration);
+
+        // Start new recording
+        bool ok = rec->CheckStartTimecode(restart_tc, 0);
+        rec->Setup(restart_tc);
+        ok = ok && rec->Start();
+        complete = !ok;
+    }
+    else
+    {
+        complete = true;
+    }
+
+    if (complete)
+    {
+        // notify observers
+        IngexRecorderImpl::Instance()->NotifyCompletion(rec);
+
+        // destroy recorder
+        delete rec;
+    }
 }
 
 // Implementation constructor
@@ -89,6 +110,10 @@ bool IngexRecorderImpl::Init()
     {
         mHostname = buf;
     }
+
+    // Test only
+    //ChunkSize(300);
+    //ChunkAlignment(60);
 
     return ok;
 }
@@ -408,10 +433,12 @@ char * IngexRecorderImpl::RecordingFormat (
     // Set-up callback for completion of recording
     mpIngexRecorder->SetCompletionCallback(&recording_completed);
 
+    // Setup track enables
+    mpIngexRecorder->SetTrackEnables(track_enables);
+
     // Check for start timecode.
     // This may modify the channel_enable array.
     ok = ok && mpIngexRecorder->CheckStartTimecode(
-        track_enables,
         start_tc,
         pre_roll.undefined ? 0 : pre_roll.samples);
 
@@ -420,7 +447,20 @@ char * IngexRecorderImpl::RecordingFormat (
     start_timecode.samples = start_tc.FramesSinceMidnight();
 
     // Setup IngexRecorder
-    mpIngexRecorder->Setup(start_tc, mProjectName);
+    mpIngexRecorder->ProjectName(mProjectName);
+    mpIngexRecorder->Setup(start_tc);
+
+    // Recorder-controlled chunking
+    if (ChunkSize() > 0)
+    {
+        mpIngexRecorder->Chunking(true);
+        mpIngexRecorder->ChunkSize(ChunkSize());
+        mpIngexRecorder->ChunkAlignment(ChunkAlignment());
+
+        framecount_t chunk_duration = mpIngexRecorder->CalculateChunkDuration(start_tc);
+
+        mpIngexRecorder->TargetDuration(chunk_duration);
+    }
 
     // Setup copy parameters
     this->InitCopying();
@@ -538,6 +578,7 @@ char * IngexRecorderImpl::RecordingFormat (
     // Tell recorder when to stop.
     if (mpIngexRecorder)
     {
+        mpIngexRecorder->Chunking(false);
         mpIngexRecorder->Stop(stop_tc, post_roll,
             description,
             locs);
@@ -558,8 +599,13 @@ char * IngexRecorderImpl::RecordingFormat (
             ACE_DEBUG((LM_DEBUG, ACE_TEXT("Track %d \"%C\"\n"), track_i, name.c_str()));
             files->operator[](track_i) = name.c_str();
         }
+        mpIngexRecorder = 0;  // It will be deleted when it signals completion
     }
-    mpIngexRecorder = 0;  // It will be deleted when it signals completion
+    else
+    {
+        // Not recording - return undefined "out time"
+        mxf_stop_timecode.undefined = true;
+    }
 
     mRecording = false;
 
@@ -581,6 +627,7 @@ void IngexRecorderImpl::DoStop(Ingex::Timecode timecode, framecount_t post_roll)
     std::vector<Locator> locs;
     if (mpIngexRecorder)
     {
+        mpIngexRecorder->Chunking(false);
         mpIngexRecorder->Stop(timecode, post_roll, "recording halted", locs);
     }
     mpIngexRecorder = 0;  // It will be deleted when it signals completion

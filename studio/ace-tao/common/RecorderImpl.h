@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderImpl.h,v 1.15 2010/07/14 13:06:36 john_f Exp $
+ * $Id: RecorderImpl.h,v 1.16 2010/08/12 16:36:42 john_f Exp $
  *
  * Base class for Recorder servant.
  *
@@ -92,6 +92,20 @@ public:
     );
   
   virtual
+  ::CORBA::UShort ChunkSize (void);
+  
+  virtual
+  void ChunkSize (
+    ::CORBA::UShort ChunkSize);
+  
+  virtual
+  ::CORBA::UShort ChunkAlignment (void);
+  
+  virtual
+  void ChunkAlignment (
+    ::CORBA::UShort ChunkAlignment);
+  
+  virtual
   void SetTapeNames (
       const ::CORBA::StringSeq & source_names,
       const ::CORBA::StringSeq & tape_names
@@ -100,16 +114,6 @@ public:
       ::CORBA::SystemException
     );
   
-  /*
-  virtual
-  void UpdateConfig (
-      
-    )
-    throw (
-      ::CORBA::SystemException
-    );
-  */
-
   prodauto::Recorder * Recorder() { return mRecorder.get(); }
 
 public:
@@ -157,6 +161,8 @@ protected:
 // methods
     bool UpdateFromDatabase(unsigned int max_inputs, unsigned int max_tracks_per_input);
     void EditRate(prodauto::Rational edit_rate) { mEditRate = edit_rate; }
+    int EditRateNumerator() { return mEditRate.numerator; }
+    int EditRateDenominator() { return mEditRate.denominator; }
     void DropFrame(bool df) { mDropFrame = df; }
 
 private:
@@ -166,6 +172,8 @@ private:
 // data
     prodauto::Rational mEditRate;
     bool mDropFrame;
+    CORBA::UShort mChunkSize; // seconds
+    CORBA::UShort mChunkAlignment; // seconds
 
 // friend function
     friend ACE_THR_FUNC_RETURN start_record_thread(void *p_arg);

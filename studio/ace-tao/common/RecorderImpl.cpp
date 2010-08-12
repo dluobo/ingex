@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderImpl.cpp,v 1.16 2010/07/14 13:06:36 john_f Exp $
+ * $Id: RecorderImpl.cpp,v 1.17 2010/08/12 16:36:42 john_f Exp $
  *
  * Base class for Recorder servant.
  *
@@ -40,7 +40,8 @@
 
 // Implementation skeleton constructor
 RecorderImpl::RecorderImpl (void)
-: mFormat("Ingex recorder"), mEditRate(prodauto::g_nullRational), mDropFrame(false)
+: mFormat("Ingex recorder"), mEditRate(prodauto::g_nullRational), mDropFrame(false),
+  mChunkSize(0), mChunkAlignment(0)
 {
     mTracks = new ProdAuto::TrackList;
     mTracksStatus = new ProdAuto::TrackStatusList;
@@ -149,6 +150,28 @@ void RecorderImpl::AddProjectNames (
     {
         ACE_DEBUG((LM_ERROR, ACE_TEXT("Database Exception: %C\n"), dbe.getMessage().c_str()));
     }
+}
+
+::CORBA::UShort RecorderImpl::ChunkSize (void)
+{
+    return mChunkSize;
+}
+
+void RecorderImpl::ChunkSize (
+  ::CORBA::UShort ChunkSize)
+{
+    mChunkSize = ChunkSize;
+}
+
+::CORBA::UShort RecorderImpl::ChunkAlignment (void)
+{
+    return mChunkAlignment;
+}
+
+void RecorderImpl::ChunkAlignment (
+  ::CORBA::UShort ChunkAlignment)
+{
+    mChunkAlignment = ChunkAlignment;
 }
 
 void RecorderImpl::SetTapeNames (

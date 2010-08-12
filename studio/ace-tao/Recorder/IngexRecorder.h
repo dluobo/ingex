@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorder.h,v 1.14 2010/07/14 13:06:36 john_f Exp $
+ * $Id: IngexRecorder.h,v 1.15 2010/08/12 16:36:42 john_f Exp $
  *
  * Class to manage an individual recording.
  *
@@ -101,13 +101,17 @@ public:
     IngexRecorder(IngexRecorderImpl * impl, unsigned int index);
     ~IngexRecorder();
 
+    framecount_t CalculateChunkDuration(const Ingex::Timecode & start_tc);
+
+    void SetTrackEnables(const std::vector<bool> & track_enables);
+
     bool CheckStartTimecode(
-                const std::vector<bool> & track_enables,
                 Ingex::Timecode & start_timecode,
                 framecount_t pre_roll);
 
-    void Setup(Ingex::Timecode start_timecode,
-                const prodauto::ProjectName & project_name);
+    void ProjectName(const prodauto::ProjectName & project_name) { mProjectName = project_name; }
+
+    void Setup(Ingex::Timecode start_timecode);
 
     bool Start(void);
 
@@ -156,6 +160,11 @@ public:
     int FrameRateDenominator();
     framecount_t RecordedDuration();
 
+    unsigned int ChunkSize() { return mChunkSize; }
+    void ChunkSize(unsigned int size) { mChunkSize = size; }
+    unsigned int ChunkAlignment() { return mChunkAlignment; }
+    void ChunkAlignment(unsigned int alignment) { mChunkAlignment = alignment; }
+
 private:
     prodauto::Recorder * Recorder() const { return mRecorder.get(); }
 
@@ -169,10 +178,6 @@ private:
 private:
     std::string mName;
     Ingex::Timecode mStartTimecode;
-
-    // These are used to write metadata file on completion of recording
-    char mVideoPath[FILENAME_MAX];
-    char mDvdPath[FILENAME_MAX];
 
     void (* mpCompletionCallback)(IngexRecorder *);
 
@@ -204,11 +209,16 @@ public:
 
     bool mRecordingOK;
     unsigned int mIndex;
+    bool Chunking() { return mChunking; }
+    void Chunking(bool b) { mChunking = b; }
 
 private:
     ACE_Thread_Mutex mDroppedFramesMutex;
     bool mDroppedFrames;
     int mStartFrame[MAX_CHANNELS];
+    bool mChunking;
+    unsigned int mChunkSize; // seconds
+    unsigned int mChunkAlignment; // seconds
 
 // Recorder config from database (private copy)
     std::auto_ptr<prodauto::Recorder> mRecorder;

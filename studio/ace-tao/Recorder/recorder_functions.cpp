@@ -1,5 +1,5 @@
 /*
- * $Id: recorder_functions.cpp,v 1.39 2010/07/21 16:29:34 john_f Exp $
+ * $Id: recorder_functions.cpp,v 1.40 2010/08/12 16:36:42 john_f Exp $
  *
  * Functions which execute in recording threads.
  *
@@ -420,11 +420,9 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
 		encoder = ENCODER_FFMPEG;
 		filename_extension = ".m2v";
 		break;
-    /*
-	case MaterialResolution::XDCAMHD422_MXF_OP1A: TODO Not yet implemented
+	case MaterialResolution::XDCAMHD422_MXF_1A:
 		encoder = ENCODER_FFMPEG;
 		break;
-    */
 
     // Browse formats
     case MaterialResolution::DVD:
@@ -825,7 +823,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             ff_av_audio_channels_per_stream = 2;
             break;
         }
-        enc_av = ffmpeg_encoder_av_init(package_creator->GetFileLocation().c_str(), resolution,
+        enc_av = ffmpeg_encoder_av_init(package_creator->GetFileLocation().c_str(), resolution, raster,
             wide_aspect, start_tc, ffmpeg_threads, ff_av_num_audio_streams, ff_av_audio_channels_per_stream);
         if (!enc_av)
         {

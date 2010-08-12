@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorder.cpp,v 1.18 2010/07/21 16:29:34 john_f Exp $
+ * $Id: IngexRecorder.cpp,v 1.19 2010/08/12 16:36:42 john_f Exp $
  *
  * Class to manage an individual recording.
  *
@@ -69,7 +69,7 @@ The name parameter is used when reading config from database.
 */
 IngexRecorder::IngexRecorder(IngexRecorderImpl * impl, unsigned int index)
 : mpCompletionCallback(0), mpImpl(impl), mTargetDuration(0),
-  mRecordingOK(true), mIndex(index), mDroppedFrames(false)
+  mRecordingOK(true), mIndex(index), mDroppedFrames(false), mChunking(false), mChunkSize(0), mChunkAlignment(0)
 {
     ACE_DEBUG((LM_DEBUG, ACE_TEXT("IngexRecorder::IngexRecorder()\n")));
 
@@ -119,11 +119,55 @@ IngexRecorder::~IngexRecorder()
 }
 
 /**
+Calculate the duration of the next chunk, taking into account chunk size and alignment.
+*/
+framecount_t IngexRecorder::CalculateChunkDuration(const Ingex::Timecode & start_tc)
+{
+    framecount_t start = start_tc.FramesSinceMidnight();
+
+    const framecount_t chunk_size = ChunkSize() * FrameRateNumerator() / FrameRateDenominator();
+    framecount_t out = start + chunk_size;
+
+    // Make new out time a round figure
+    const framecount_t alignment_size = ChunkAlignment() * FrameRateNumerator() / FrameRateDenominator();
+    if (chunk_size > alignment_size && alignment_size > 0)
+    {
+        out = (out / alignment_size) * alignment_size;
+    }
+
+    // For non-integer frame rate, may want to round the out-timecode to zero (or 2) frames
+    // TODO
+
+    return out - start;
+}
+
+/**
+Setup track enables.
+This should be called before IngexRecorder::CheckStartTimecode().
+*/
+void IngexRecorder::SetTrackEnables(const std::vector<bool> & track_enables)
+{
+    // Set up channel enables
+    for (unsigned int i = 0; mpImpl && i < mpImpl->mTracks->length() && i < track_enables.size(); ++i)
+    {
+        ProdAuto::Track & track = mpImpl->mTracks->operator[](i);
+        HardwareTrack hw_trk = mpImpl->mTrackMap[track.id];
+        
+        if (track.has_source && track_enables[i])
+        {
+            mChannelEnable[hw_trk.channel] = true;
+        }
+    }
+
+    // Store track enables for use by recorder_functions
+    mTrackEnable = track_enables;
+}
+
+/**
 Prepare for a recording.  Search for target timecode and set some of the RecordOptions.
 This should be called before IngexRecorder::Setup().
 */
 bool IngexRecorder::CheckStartTimecode(
-                const std::vector<bool> & track_enables,
                 Ingex::Timecode & start_timecode,
                 framecount_t pre_roll)
 {
@@ -138,22 +182,6 @@ bool IngexRecorder::CheckStartTimecode(
         crash_record = false;
         ACE_DEBUG((LM_DEBUG, ACE_TEXT("IngexRecorder::CheckStartTimecode() %C\n"), start_timecode.Text()));
     }
-
-    // Set up channel enables
-    for (unsigned int i = 0; mpImpl && i < mpImpl->mTracks->length() && i < track_enables.size(); ++i)
-    {
-        ProdAuto::Track & track = mpImpl->mTracks->operator[](i);
-        HardwareTrack hw_trk = mpImpl->mTrackMap[track.id];
-        
-
-        if (track.has_source && track_enables[i])
-        {
-            mChannelEnable[hw_trk.channel] = true;
-        }
-    }
-
-    // Store track enables for use by recorder_functions
-    mTrackEnable = track_enables;
 
     unsigned int n_channels = IngexShm::Instance()->Channels();
 
@@ -323,15 +351,9 @@ bool IngexRecorder::CheckStartTimecode(
 /**
 Final preparation for recording.
 */
-void IngexRecorder::Setup(
-                Ingex::Timecode start_timecode,
-                const prodauto::ProjectName & project_name)
+void IngexRecorder::Setup(Ingex::Timecode start_timecode)
 {
     ACE_DEBUG((LM_DEBUG, ACE_TEXT("IngexRecorder::Setup()\n")));
-
-    // Store project name
-    mProjectName = project_name;
-
 
     // Get current recorder settings
     RecorderSettings * settings = RecorderSettings::Instance();
@@ -391,6 +413,7 @@ void IngexRecorder::Setup(
     }
 
     // Set up encoding threads
+    mThreadParams.clear();
     int encoding_i = 0;
     for (std::vector<EncodeParams>::const_iterator it = settings->encodings.begin();
         it != settings->encodings.end(); ++it, ++encoding_i)
