@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder_av.cpp,v 1.4 2010/08/02 16:44:33 john_f Exp $
+ * $Id: ffmpeg_encoder_av.cpp,v 1.5 2010/08/12 16:32:44 john_f Exp $
  *
  * Encode AV and write to file.
  *
@@ -108,18 +108,12 @@ namespace
 
 int init_video_xdcam(internal_ffmpeg_encoder_t * enc)
 {
-   AVCodecContext * codec_context;
+    AVCodecContext * codec_context;
 
     codec_context = enc->video_st->codec;
     codec_context->codec_id = CODEC_ID_MPEG2VIDEO;
     codec_context->codec_type = CODEC_TYPE_VIDEO;
    
-    enc->video_st->r_frame_rate.num = 25;
-    enc->video_st->r_frame_rate.den = 1;
-
-    codec_context->time_base.num=1;
-    codec_context->time_base.den=25;
-
     int width = 1920;
     int height = 1080;
   
@@ -153,7 +147,8 @@ int init_video_xdcam(internal_ffmpeg_encoder_t * enc)
     codec_context->rc_max_rate = 60000000;
     codec_context->rc_min_rate = 0;
     codec_context->rc_buffer_size = 50000000; 
-    codec_context->stream_codec_tag = ('c'<<24) + ('5'<<16) + ('d'<<8) + 'x';
+    codec_context->stream_codec_tag = MKTAG('x', 'd', '5', 'c'); // for mpeg encoder
+    codec_context->codec_tag = MKTAG('x', 'd', '5', 'c'); // for quicktime wrapper
     
 
    avcodec_set_dimensions(codec_context,width,height);
@@ -219,9 +214,6 @@ int init_video_dvd(internal_ffmpeg_encoder_t * enc)
     avcodec_set_dimensions(codec_context, width, height);
 
     const int dvd_kbit_rate = 5000;
-
-    enc->video_st->r_frame_rate.num = 25;
-    enc->video_st->r_frame_rate.den = 1;
 
 
     /* put dvd parameters */
@@ -295,9 +287,6 @@ int init_video_mpeg4(internal_ffmpeg_encoder_t * enc)
 
     /* bit rate */
     const int kbit_rate = 800;
-
-    enc->video_st->r_frame_rate.num = 25;
-    enc->video_st->r_frame_rate.den = 1;
 
     /* set coding parameters */
     codec_context->bit_rate = kbit_rate * 1000;
@@ -390,9 +379,6 @@ int init_video_dv(internal_ffmpeg_encoder_t * enc, MaterialResolution::EnumType 
     }
 
     avcodec_set_dimensions(codec_context, width, height);
-
-    enc->video_st->r_frame_rate.num = 25;
-    enc->video_st->r_frame_rate.den = 1;
 
     /* Setting this gives us a timecode track in MOV format */
     codec_context->timecode_frame_start = start_tc;
@@ -725,8 +711,10 @@ int write_audio_frame(internal_ffmpeg_encoder_t * enc, int stream_i, short * p_a
 
 } // namespace
 
-extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, MaterialResolution::EnumType res, int wide_aspect, int64_t start_tc, int num_threads,
-                                                     int num_audio_streams, int num_audio_channels_per_stream)
+extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename,
+                                                        MaterialResolution::EnumType res, Ingex::VideoRaster::EnumType raster,
+                                                        int wide_aspect, int64_t start_tc, int num_threads,
+                                                        int num_audio_streams, int num_audio_channels_per_stream)
 {
     internal_ffmpeg_encoder_t * enc;
     AVOutputFormat * fmt;
@@ -822,12 +810,19 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, Mate
         break;
     }
 
+    int width;
+    int height;
+    int fps_num;
+    int fps_den;
+    Ingex::Interlace::EnumType interlace;
+    Ingex::VideoRaster::GetInfo(raster, width, height, fps_num, fps_den, interlace);
+
 
     /* Set aspect ratio for video stream */
     AVRational sar;
-    if (MaterialResolution::DV100_MOV == res ||
-        MaterialResolution::XDCAMHD422_MOV == res)
+    if (width > 720)
     {
+    // HD
         sar.num = 1;
         sar.den = 1;
     }
@@ -844,20 +839,6 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, Mate
         sar.den = 54;
     }
 
-#if 0
-    // Bodge for FCP - no longer needed.
-    // When writing track header in mov file, ffmpeg (see movenc.c) writes
-    // width of sample_aspect_ratio * track->enc->width
-    // It gets sample_aspect_ratio from the AVStream
-    // FCP seems to want the width in samples so set sar = 1/1 to force
-    // that.
-    // However, the ffmpeg DV encoder will look at sample_aspect_ratio in
-    // the AVCodecContext to decide what aspect flag to put in the DV bitstream.
-    // So this means we get 4:3 signalled.
-    sar.num = 1;
-    sar.den = 1;
-#endif
-
     /* Add the video stream */
     enc->video_st = av_new_stream(enc->oc, 0);
     if (!enc->video_st)
@@ -870,12 +851,16 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, Mate
     enc->video_st->sample_aspect_ratio = sar;
     enc->video_st->codec->sample_aspect_ratio = sar;
 
+    /* Set frame rate */
+    enc->video_st->r_frame_rate.num = fps_num;
+    enc->video_st->r_frame_rate.den = fps_den;
+
     /* Set time base: This is the fundamental unit of time (in seconds) in terms
        in terms of which frame timestamps are represented.
        For fixed-fps content, timebase should be 1/framerate and timestamp
        increments should be identically 1. */
-    enc->video_st->codec->time_base.num = 1;
-    enc->video_st->codec->time_base.den = 25;
+    enc->video_st->codec->time_base.num = fps_den;
+    enc->video_st->codec->time_base.den = fps_num;
 
 
     // Setup ffmpeg threads

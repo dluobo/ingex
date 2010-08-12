@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.5 2010/06/18 10:07:25 john_f Exp $
+# $Id: Makefile,v 1.6 2010/08/12 16:32:44 john_f Exp $
 #
 # Makefile for building studio common functions
 #
@@ -72,7 +72,7 @@ test_ffmpeg_encoder: test_ffmpeg_encoder.o $(LIBSTUDIOCOMMON)
 	$(LINK.cpp) -Wall -W -g test_ffmpeg_encoder.o $(LIBSTUDIOCOMMON) $(LIBCOMMON) -lavformat -lavcodec -lswscale -lavutil -lz -lbz2 -lmp3lame -lx264 -lfaac -lfaad -lm -lpthread -o test_ffmpeg_encoder
 
 test_ffmpeg_encoder_av: test_ffmpeg_encoder_av.o $(LIBSTUDIOCOMMON)
-	$(LINK.cpp) -Wall -W -g test_ffmpeg_encoder_av.o $(LIBSTUDIOCOMMON) -lavformat -lavcodec -lswscale -lavutil -lz -lbz2 -lmp3lame -lx264 -lfaac -lfaad -lm -lpthread -o test_ffmpeg_encoder_av
+	$(LINK.cpp) -Wall -W -g test_ffmpeg_encoder_av.o $(LIBSTUDIOCOMMON) $(LIBCOMMON) -lavformat -lavcodec -lswscale -lavutil -lz -lbz2 -lmp3lame -lx264 -lfaac -lfaad -lm -lpthread -o test_ffmpeg_encoder_av
 
 yuv422_to_mjpeg: yuv422_to_mjpeg.o
 	$(LINK.cpp) -Wall -W -g yuv422_to_mjpeg.o $(INCLUDES) $(LIBSTUDIOCOMMON) $(LIBCOMMON) $(YUVLIB) -ljpeg -lpthread -o $@

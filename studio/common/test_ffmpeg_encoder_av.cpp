@@ -1,5 +1,5 @@
 /*
- * $Id: test_ffmpeg_encoder_av.cpp,v 1.2 2010/06/25 14:23:59 philipn Exp $
+ * $Id: test_ffmpeg_encoder_av.cpp,v 1.3 2010/08/12 16:32:44 john_f Exp $
  *
  * Test ffmpeg encoder av
  *
@@ -207,7 +207,7 @@ int main(int argc, const char **argv)
     int nch = 1;
     int bps = 16;
     int bytes_per_sample = 2;
-    int num_ffmpeg_threads = -1;
+    int num_ffmpeg_threads = THREADS_USE_BUILTIN_TUNING;
     const char *video_filename = NULL;
     const char *audio_filenames[MAX_AUDIO_INPUTS];
     int num_audio_inputs = 0;
@@ -427,6 +427,7 @@ int main(int argc, const char **argv)
             break;
     }
 
+    Ingex::VideoRaster::EnumType raster;
     switch (output_format)
     {
         case MaterialResolution::DVD:
@@ -435,31 +436,17 @@ int main(int argc, const char **argv)
         case MaterialResolution::DV50_MOV:
             output_width = 720;
             output_height = 576;
+            raster = Ingex::VideoRaster::PAL;
             break;
         case MaterialResolution::DV100_MOV:
+        case MaterialResolution::XDCAMHD422_MOV:
             output_width = 1920;
             output_height = 1080;
+            raster = Ingex::VideoRaster::SMPTE274_25I;
             break;
         default:
+            raster = Ingex::VideoRaster::PAL;
             break;
-    }
-
-    if (num_ffmpeg_threads < 0) {
-        switch (output_format)
-        {
-            case MaterialResolution::DVD:
-            case MaterialResolution::MPEG4_MOV:
-                /* num_ffmpeg_threads > 1 was found to cause a seg fault for ffmpeg v0.5 */
-                num_ffmpeg_threads = 0;
-                break;
-            case MaterialResolution::DV25_MOV:
-            case MaterialResolution::DV50_MOV:
-            case MaterialResolution::DV100_MOV:
-                num_ffmpeg_threads = 4;
-                break;
-            default:
-                break;
-        }
     }
     
     output_filename = argv[cmdln_index];
@@ -469,13 +456,13 @@ int main(int argc, const char **argv)
     
     video_file = fopen(video_filename, "rb");
     if (!video_file) {
-        fprintf(stderr, "Failed to open video input '%s': %s\n", argv[1], strerror(errno));
+        fprintf(stderr, "Failed to open video input '%s': %s\n", video_filename, strerror(errno));
         return 1;
     }
     for (i = 0; i < num_audio_inputs; i++) {
         audio_files[i] = fopen(audio_filenames[i], "rb");
         if (!audio_files[i]) {
-            fprintf(stderr, "Failed to open audio input '%s': %s\n", argv[1], strerror(errno));
+            fprintf(stderr, "Failed to open audio input '%s': %s\n", audio_filenames[i], strerror(errno));
             return 1;
         }
     }
@@ -493,7 +480,7 @@ int main(int argc, const char **argv)
 
     
     /* init encoder */
-    encoder = ffmpeg_encoder_av_init(output_filename, output_format, !notwide, start, num_ffmpeg_threads,
+    encoder = ffmpeg_encoder_av_init(output_filename, output_format, raster, !notwide, start, num_ffmpeg_threads,
                                      num_audio_inputs, nch);
     
     frame_count = 0;

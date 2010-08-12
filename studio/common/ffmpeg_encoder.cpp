@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder.cpp,v 1.4 2010/07/28 17:11:54 john_f Exp $
+ * $Id: ffmpeg_encoder.cpp,v 1.5 2010/08/12 16:32:44 john_f Exp $
  *
  * Encode uncompressed video to DV using libavcodec
  *
@@ -326,7 +326,7 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init(MaterialResolution::EnumType res, 
             break;
 
 		case MaterialResolution::XDCAMHD422_RAW:
-        //case MaterialResolution::XDCAMHD422_MXF_OP1A ///TODO NOT IMPLEMENTED YET
+        case MaterialResolution::XDCAMHD422_MXF_1A:
             codec_id = CODEC_ID_MPEG2VIDEO; 
             codec_type = CODEC_TYPE_VIDEO;
             buffer_size = 364083330; //= 364 MB seems about right.
