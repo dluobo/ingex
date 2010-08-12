@@ -1,5 +1,5 @@
 /*
- * $Id: MaterialResolution.cpp,v 1.4 2010/07/21 16:29:34 john_f Exp $
+ * $Id: MaterialResolution.cpp,v 1.5 2010/08/12 16:29:46 john_f Exp $
  *
  * Material resolution codes and details
  *
@@ -217,6 +217,10 @@ std::string MaterialResolution::Name(MaterialResolution::EnumType res)
         name = "MPEG2 422 Long GOP 50 Mbit/s Quicktime";
         break;
 
+    case XDCAMHD422_MXF_1A:
+        name = "MPEG2 422 Long GOP 50 Mbit/s MXF OP-1A";
+        break;
+
     default:
         name = "Unknown";
         break;
@@ -322,6 +326,11 @@ void MaterialResolution::GetInfo(MaterialResolution::EnumType res, FileFormat::E
 
     case XDCAMHD422_MOV:
         format = FileFormat::MOV;
+        op = OperationalPattern::OP_1A;
+        break;
+
+    case XDCAMHD422_MXF_1A:
+        format = FileFormat::MXF;
         op = OperationalPattern::OP_1A;
         break;
 
@@ -457,6 +466,7 @@ bool MaterialResolution::CheckVideoFormat(MaterialResolution::EnumType res,
         break;
     case MaterialResolution::XDCAMHD422_RAW:
     case MaterialResolution::XDCAMHD422_MOV:
+    case MaterialResolution::XDCAMHD422_MXF_1A:
         if (Ingex::PixelFormat::YUV_PLANAR_422 == format)
         {
             switch (raster)

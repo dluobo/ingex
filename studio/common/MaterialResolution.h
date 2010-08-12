@@ -1,5 +1,5 @@
 /*
- * $Id: MaterialResolution.h,v 1.4 2010/07/21 16:29:34 john_f Exp $
+ * $Id: MaterialResolution.h,v 1.5 2010/08/12 16:29:46 john_f Exp $
  *
  * Material resolution codes and details
  *
@@ -99,7 +99,7 @@ public:
         DNX185P_MXF_ATOM = 108,
 
         XDCAMHD422_RAW = 120,
-        //XDCAMHD422_MXF = 122,
+        XDCAMHD422_MXF_1A = 122,
         XDCAMHD422_MOV = 124,
 
         DVD = 200,
