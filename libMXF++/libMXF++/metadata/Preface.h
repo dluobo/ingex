@@ -4,6 +4,8 @@
 
 
 #include <libMXF++/metadata/base/PrefaceBase.h>
+#include <libMXF++/metadata/MaterialPackage.h>
+#include <libMXF++/metadata/SourcePackage.h>
 
 
 namespace mxfpp
@@ -20,7 +22,9 @@ public:
     virtual ~Preface();
 
 
-
+    GenericPackage* findPackage(mxfUMID package_uid) const;
+    MaterialPackage* findMaterialPackage() const;
+    std::vector<SourcePackage*> findFileSourcePackages() const;
 
 protected:
     Preface(HeaderMetadata* headerMetadata, ::MXFMetadataSet* cMetadataSet);

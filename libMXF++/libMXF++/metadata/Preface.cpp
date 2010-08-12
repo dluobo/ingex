@@ -1,5 +1,5 @@
 /*
- * $Id: Preface.cpp,v 1.1 2009/02/02 05:14:34 stuart_hc Exp $
+ * $Id: Preface.cpp,v 1.2 2010/08/12 16:25:39 john_f Exp $
  *
  * 
  *
@@ -39,4 +39,51 @@ Preface::Preface(HeaderMetadata* headerMetadata, ::MXFMetadataSet* cMetadataSet)
 Preface::~Preface()
 {}
 
+GenericPackage* Preface::findPackage(mxfUMID package_uid) const
+{
+    vector<GenericPackage*> packages = getContentStorage()->getPackages();
+    mxfUMID uid;
+    size_t i;
+    for (i = 0; i < packages.size(); i++) {
+        uid = packages[i]->getPackageUID();
+        if (mxf_equals_umid(&package_uid, &uid))
+            return packages[i];
+    }
+
+    return 0;
+}
+
+MaterialPackage* Preface::findMaterialPackage() const
+{
+    vector<GenericPackage*> packages = getContentStorage()->getPackages();
+    MaterialPackage *material_package;
+    size_t i;
+    for (i = 0; i < packages.size(); i++) {
+        material_package = dynamic_cast<MaterialPackage*>(packages[i]);
+        if (material_package)
+            return material_package;
+    }
+
+    return 0;
+}
+
+vector<SourcePackage*> Preface::findFileSourcePackages() const
+{
+    vector<GenericPackage*> packages = getContentStorage()->getPackages();
+    vector<SourcePackage*> file_packages;
+    SourcePackage *file_package;
+    size_t i;
+    for (i = 0; i < packages.size(); i++) {
+        file_package = dynamic_cast<SourcePackage*>(packages[i]);
+        if (!file_package ||
+            !file_package->haveDescriptor() || !dynamic_cast<FileDescriptor*>(file_package->getDescriptor()))
+        {
+            continue;
+        }
+
+        file_packages.push_back(file_package);
+    }
+
+    return file_packages;
+}
 

@@ -1,5 +1,5 @@
 /*
- * $Id: MetadataSet.cpp,v 1.4 2010/06/25 14:02:02 philipn Exp $
+ * $Id: MetadataSet.cpp,v 1.5 2010/08/12 16:25:39 john_f Exp $
  *
  * 
  *
@@ -108,6 +108,17 @@ MetadataSet::~MetadataSet()
     {
         _headerMetadata->remove(this);
     }
+}
+
+vector<MXFMetadataItem*> MetadataSet::getItems() const
+{
+    vector<MXFMetadataItem*> items;
+    MXFListIterator item_iter;
+    mxf_initialise_list_iter(&item_iter, &_cMetadataSet->items);
+    while (mxf_next_list_iter_element(&item_iter))
+        items.push_back((MXFMetadataItem*)mxf_get_iter_element(&item_iter));
+    
+    return items;
 }
 
 bool MetadataSet::haveItem(const mxfKey* itemKey) const

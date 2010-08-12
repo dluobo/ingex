@@ -20,7 +20,7 @@ public:
     virtual ~GenericPackage();
 
 
-
+    GenericTrack* findTrack(uint32_t trackId) const;
 
 protected:
     GenericPackage(HeaderMetadata* headerMetadata, ::MXFMetadataSet* cMetadataSet);

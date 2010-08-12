@@ -1,5 +1,5 @@
 /*
- * $Id: GenericPackage.cpp,v 1.1 2009/02/02 05:14:34 stuart_hc Exp $
+ * $Id: GenericPackage.cpp,v 1.2 2010/08/12 16:25:39 john_f Exp $
  *
  * 
  *
@@ -39,4 +39,15 @@ GenericPackage::GenericPackage(HeaderMetadata* headerMetadata, ::MXFMetadataSet*
 GenericPackage::~GenericPackage()
 {}
 
+GenericTrack* GenericPackage::findTrack(uint32_t trackId) const
+{
+    vector<GenericTrack*> tracks = getTracks();
+    size_t i;
+    for (i = 0; i < tracks.size(); i++) {
+        if (tracks[i]->haveTrackID() && tracks[i]->getTrackID() == trackId)
+            return tracks[i];
+    }
+
+    return 0;
+}
 

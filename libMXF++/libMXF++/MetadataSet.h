@@ -1,5 +1,5 @@
 /*
- * $Id: MetadataSet.h,v 1.5 2010/06/25 14:02:02 philipn Exp $
+ * $Id: MetadataSet.h,v 1.6 2010/08/12 16:25:39 john_f Exp $
  *
  * 
  *
@@ -112,7 +112,9 @@ public:
 public:
     MetadataSet(const MetadataSet& set);
     virtual ~MetadataSet();
-
+    
+    std::vector<MXFMetadataItem*> getItems() const;
+    
     bool haveItem(const mxfKey* itemKey) const;
     
     ByteArray getRawBytesItem(const mxfKey* itemKey) const;
