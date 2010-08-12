@@ -1,5 +1,5 @@
 #
-# $Id: htmlutil.pm,v 1.3 2010/07/14 13:06:37 john_f Exp $
+# $Id: htmlutil.pm,v 1.4 2010/08/12 16:39:51 john_f Exp $
 #
 # 
 #
@@ -458,12 +458,12 @@ sub get_video_resolution_popup
 
     # not set option
     push(@values, 0);
-    $labels{0} = "not set (0)";
+    $labels{0} = "not set";
 
     foreach my $vrn (@{ $vrs })
     {
         my $value = "$vrn->{'ID'}";
-        my $label = "$vrn->{'NAME'} ($value)";
+        my $label = "$vrn->{'NAME'}";
         push(@values, $value);
         $labels{$value} = $label;
 
@@ -514,7 +514,7 @@ sub get_recorder_config
         {
             if ($rp->{"VALUE"} == 0)
             {
-                $value = "not set (0)";
+                $value = "not set";
             }
             else
             {
@@ -522,7 +522,7 @@ sub get_recorder_config
                 {
                     if ($vrn->{"ID"} == $rp->{"VALUE"})
                     {
-                        $value = "$vrn->{'NAME'} ($value)";
+                        $value = "$vrn->{'NAME'}";
                         last;
                     }
                 }

@@ -321,12 +321,12 @@ sub get_video_resolution_popup
 
     # not set option
     push(@values, 0);
-    $labels{0} = "not set (0)";
+    $labels{0} = "not set";
 
     foreach my $vrn (@{ $vrs })
     {
         my $value = "$vrn->{'ID'}";
-        my $label = "$vrn->{'NAME'} ($value)";
+        my $label = "$vrn->{'NAME'}";
         push(@values, $value);
         $labels{$value} = $label;
 
@@ -362,12 +362,12 @@ sub get_video_wrapping_popup
 
     # not set option
     push(@values, 0);
-    $labels{0} = "not set (0)";
+    $labels{0} = "not set";
 
     foreach my $fmt (@{ $fmts })
     {
         my $value = "$fmt->{'ID'}";
-        my $label = "$fmt->{'NAME'} ($value)";
+        my $label = "$fmt->{'NAME'}";
         push(@values, $value);
         $labels{$value} = $label;
 
@@ -403,12 +403,12 @@ sub get_op_popup
 
     # not set option
     push(@values, 0);
-    $labels{0} = "not set (0)";
+    $labels{0} = "not set";
 
     foreach my $op (@{ $ops })
     {
         my $value = "$op->{'ID'}";
-        my $label = "$op->{'NAME'} ($value)";
+        my $label = "$op->{'NAME'}";
         push(@values, $value);
         $labels{$value} = $label;
 
@@ -459,7 +459,7 @@ sub get_recorder_config
         {
             if ($rp->{"VALUE"} == 0)
             {
-                $value = "not set (0)";
+                $value = "not set";
             }
             else
             {
@@ -467,7 +467,7 @@ sub get_recorder_config
                 {
                     if ($vrn->{"ID"} == $rp->{"VALUE"})
                     {
-                        $value = "$vrn->{'NAME'} ($value)";
+                        $value = "$vrn->{'NAME'}";
                         last;
                     }
                 }
@@ -479,7 +479,7 @@ sub get_recorder_config
         {
         	if ($rp->{"VALUE"} == 0)
             {
-                $value = "not set (0)";
+                $value = "not set";
             }
             else
             {
@@ -487,7 +487,7 @@ sub get_recorder_config
                 {
                     if ($fmt->{"ID"} == $rp->{"VALUE"})
                     {
-                        $value = "$fmt->{'NAME'} ($value)";
+                        $value = "$fmt->{'NAME'}";
                         last;
                     }
                 }
@@ -499,7 +499,7 @@ sub get_recorder_config
         {
         	if ($rp->{"VALUE"} == 0)
             {
-                $value = "not set (0)";
+                $value = "not set";
             }
             else
             {
@@ -507,7 +507,7 @@ sub get_recorder_config
                 {
                     if ($op->{"ID"} == $rp->{"VALUE"})
                     {
-                        $value = "$op->{'NAME'} ($value)";
+                        $value = "$op->{'NAME'}";
                         last;
                     }
                 }
