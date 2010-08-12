@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: recordergroup.cpp,v 1.14 2010/08/03 09:27:07 john_f Exp $       *
+ *   $Id: recordergroup.cpp,v 1.15 2010/08/12 16:35:38 john_f Exp $       *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -47,7 +47,7 @@ END_EVENT_TABLE()
 /// @param argc Argument count, for ORB initialisation.
 /// @param argv Argument vector, for ORB initialisation.
 /// @param doc The saved state.  Pointer merely saved; not used until controller events are received.
-RecorderGroupCtrl::RecorderGroupCtrl(wxWindow * parent, wxWindowID id, const wxPoint & pos, const wxSize & size, int& argc, char** argv, const wxXmlDocument * doc) : wxListBox(parent, id, pos, size, 0, 0, wxLB_MULTIPLE), mEnabledForInput(true), mPreroll(InvalidMxfDuration), mDoc(doc), mChunking(NOT_CHUNKING)
+RecorderGroupCtrl::RecorderGroupCtrl(wxWindow * parent, wxWindowID id, const wxPoint & pos, const wxSize & size, int& argc, char** argv, const wxXmlDocument * doc) : wxListBox(parent, id, pos, size, 0, 0, wxLB_MULTIPLE), mEnabledForInput(true), mPreroll(InvalidMxfDuration), mDoc(doc), mMode(STOPPED)
 {
     mComms = new Comms(this, argc, argv);
 }
@@ -369,32 +369,65 @@ void RecorderGroupCtrl::OnControllerEvent(ControllerThreadEvent & event)
                     }
                     break;
                 case Controller::RECORD : {
-                    wxCommandEvent frameEvent(EVT_RECORDERGROUP_MESSAGE, NOT_CHUNKING == mChunking ? RECORDING : CHUNK_START);
+                    //state change event
+                    if (Controller::SUCCESS == event.GetResult()) { //no point in favouring non-router recorders and even if we wanted to, we don't necessarily know yet whether we have any
+                        if (RECORD_WAIT == mMode) {
+                            mMode = RECORDING;
+                            wxCommandEvent frameEvent(EVT_RECORDERGROUP_MESSAGE, RECORD);
+                            frameEvent.SetClientData(new ProdAuto::MxfTimecode(event.GetTimecode())); //deleted by event handler
+                            AddPendingEvent(frameEvent);
+                        }
+                        else if (CHUNK_RECORD_WAIT == mMode) {
+                            mMode = CHUNK_RECORDING;
+                            wxCommandEvent frameEvent(EVT_RECORDERGROUP_MESSAGE, CHUNK_START);
+                            frameEvent.SetClientData(new ProdAuto::MxfTimecode(event.GetTimecode())); //deleted by event handler
+                            AddPendingEvent(frameEvent);
+                        }
+                    }
+                    //recorder update event
+                    wxCommandEvent frameEvent(EVT_RECORDERGROUP_MESSAGE, RECORDER_STARTED);
                     frameEvent.SetString(event.GetName());
                     frameEvent.SetInt(Controller::SUCCESS == event.GetResult());
-                    RecorderData * recorderData = new RecorderData(event.GetTimecode()); //must be deleted by event handler
-                    frameEvent.SetClientData(recorderData);
+                    frameEvent.SetClientData(new RecorderData(event.GetTimecode())); //must be deleted by event handler
                     AddPendingEvent(frameEvent);
                     break;
                 }
                 case Controller::STOP : {
-                    if (STOPPING == mChunking && Controller::SUCCESS == event.GetResult()) {
-                        //prepare a trigger to restart recording once the next chunk start time has been reached, as recorders can't accept start times in the future
-                        mStartTimecode = event.GetTimecode(); //this is the frame after the end of the recording
-                        wxCommandEvent frameEvent(EVT_RECORDERGROUP_MESSAGE, SET_TRIGGER);
-                        frameEvent.SetClientData(&mStartTimecode);
-                        AddPendingEvent(frameEvent); //events after the first will be ignored
-                        mChunking = WAITING; //make sure trigger can't happen twice
+                    //state change event
+                    if (
+                     Controller::SUCCESS == event.GetResult()
+                     && (
+                      !mHaveNonRouterRecorders //use any recorder if we only have router recorders
+                      || !GetController(FindString(event.GetName(), true))->IsRouterRecorder() //prefer the timecode returned from a non-router recorder
+                     )) {
+                        if (STOP_WAIT == mMode) {
+                            mMode = STOPPED;
+                            wxCommandEvent frameEvent(EVT_RECORDERGROUP_MESSAGE, STOP);
+                            frameEvent.SetClientData(new ProdAuto::MxfTimecode(event.GetTimecode())); //this is the frame after the end of the recording; deleted by event handler
+                            AddPendingEvent(frameEvent);
+                        }
+                        else if (CHUNK_STOP_WAIT == mMode) {
+                            mMode = CHUNK_WAIT;
+                            wxCommandEvent frameEvent(EVT_RECORDERGROUP_MESSAGE, CHUNK_END);
+                            frameEvent.SetClientData(new ProdAuto::MxfTimecode(event.GetTimecode())); //this is the frame after the end of the recording; deleted by event handler
+                            AddPendingEvent(frameEvent);
+                        }
                     }
-                    wxCommandEvent frameEvent(EVT_RECORDERGROUP_MESSAGE, NOT_CHUNKING == mChunking ? STOPPED : CHUNK_END);
+                    //recorder update event (send after any state change event so event list knows which chunk info object to add the recorder data to)
+                    wxCommandEvent frameEvent(EVT_RECORDERGROUP_MESSAGE, RECORDER_STOPPED);
                     frameEvent.SetString(event.GetName());
-                    frameEvent.SetInt (Controller::SUCCESS == event.GetResult());
-                    RecorderData * recorderData = new RecorderData(event.GetTrackList(), event.GetStrings(), event.GetTimecode()); //must be deleted by event handler
-                    frameEvent.SetClientData(recorderData);
+                    frameEvent.SetInt(Controller::SUCCESS == event.GetResult());
+                    frameEvent.SetExtraLong(GetController(FindString(event.GetName(), true))->IsRouterRecorder());
+                    if (!event.GetExtraLong()) frameEvent.SetClientData(new RecorderData(event.GetTrackList(), event.GetStrings(), event.GetTimecode())); //must be deleted by event handler
                     AddPendingEvent(frameEvent);
                     break;
                 }
-                default : // NONE (never appears), CONNECT (handled above), STATUS (handled below), DIE (never appears)
+                case Controller::NONE : //never appears
+                case Controller::CONNECT : //handled above
+                case Controller::STATUS : //handled below
+                case Controller::DIE : //never appears
+                case Controller::SET_TAPE_IDS : //never appears
+                case Controller::ADD_PROJECT_NAMES : //never appears
                     break;
             }
         }
@@ -462,7 +495,7 @@ void RecorderGroupCtrl::OnControllerEvent(ControllerThreadEvent & event)
             //track status
             wxCommandEvent frameEvent(EVT_RECORDERGROUP_MESSAGE, TRACK_STATUS);
             frameEvent.SetString(event.GetName());
-            frameEvent.SetInt(WAITING == mChunking); //prevent a problem being indicated during the period when the recorder is stopped between chunks but the expected state is to be recording
+            frameEvent.SetInt(CHUNK_WAIT == mMode); //prevent a problem being indicated during the period when the recorder is stopped between chunks but the expected state is to be recording
             RecorderData * recorderData = new RecorderData(event.GetTrackStatusList()); //must be deleted by event handler
             frameEvent.SetClientData(recorderData);
             AddPendingEvent(frameEvent);
@@ -529,77 +562,87 @@ void RecorderGroupCtrl::SetTapeIds(const wxString & recorderName, const CORBA::S
 /// @param event Contains a pointer to the timecode of the chunk end, minus postroll.  Must be deleted.
 void RecorderGroupCtrl::OnTimeposEvent(wxCommandEvent & event)
 {
-    if (WAITING == mChunking) {
-        mChunking = RECORDING_CHUNK;
-        RecordAll(mStartTimecode); //timecode has already been set to be the frame after the recordings stopped
+    if (CHUNK_WAIT == mMode) {
+        mMode = CHUNK_RECORD_WAIT; //to prevent Record being called more than once
+        Record(*((ProdAuto::MxfTimecode *) event.GetClientData())); //timecode is the frame after the recordings stopped
     }
     delete (ProdAuto::MxfTimecode *) event.GetClientData();
 }
 
-/// Initiate a recording by sending an event for each recorder asking for its enable states and tape IDs.
+/// Initiate a recording by sending an event for each recorder asking for its enable states.
 /// @param startTimecode First frame in recording after preroll period.
-void RecorderGroupCtrl::RecordAll(const ProdAuto::MxfTimecode startTimecode)
+void RecorderGroupCtrl::Record(const ProdAuto::MxfTimecode startTimecode)
 {
+    if (CHUNK_RECORD_WAIT != mMode) mMode = RECORD_WAIT; //so we know what to do when Enables() is called
     mEnabledForInput = false; //don't want recorders being removed/added while recording
-    mStartTimecode = startTimecode;
+    mTimecode = startTimecode;
     //Ask for all the enable states
     for (unsigned int i = 0; i < GetCount(); i++) {
         if (GetController(i) && GetController(i)->IsOK()) {
-            wxCommandEvent event(EVT_RECORDERGROUP_MESSAGE, REQUEST_RECORD);
+            wxCommandEvent event(EVT_RECORDERGROUP_MESSAGE, REQUEST_ENABLES);
             event.SetString(GetName(i));
-            event.SetInt(RECORDING_CHUNK == mChunking); //ignore the fact that tracks are still recording
+            event.SetInt(CHUNK_RECORD_WAIT == mMode); //ignore the fact that tracks are still recording
             AddPendingEvent(event);
         }
     }
 }
 
-/// Issue a record command to the given recorder.
-/// Preroll is set to zero if in chunking mode.
+/// Stop all recording recorders and optionally initiate a chunking operation.
+/// @param chunk True to initiate a new chunk
+/// @param stopTimecode First frame in recording of postroll period.
+/// @param description Recording description.
+/// @param locators Locator (cue point) information.
+void RecorderGroupCtrl::Stop(const bool chunk, const ProdAuto::MxfTimecode & stopTimecode, const wxString & description, const ProdAuto::LocatorSeq & locators)
+{
+    mMode = chunk ? CHUNK_STOP_WAIT : STOP_WAIT; //to know what to do when Enables() is called as the result of the events about to be sent
+    if (!chunk) mEnabledForInput = true; //do it here for safety (in case we get no response)
+    mTimecode = stopTimecode;
+    mCurrentDescription = description;
+    mLocators = locators;
+    //find out which recorders are recording
+    for (unsigned int i = 0; i < GetCount(); i++) {
+        if (GetController(i) && GetController(i)->IsOK()) {
+            wxCommandEvent event(EVT_RECORDERGROUP_MESSAGE, REQUEST_ENABLES);
+            event.SetString(GetName(i));
+            event.SetInt(1); //ignore the fact that it's already recording
+            AddPendingEvent(event);
+        }
+    }
+    mHaveNonRouterRecorders = false; //will be set if we find any
+}
+
+/// Issue a record command (with the given enable states) or a stop command to the given recorder, depending on the mode.
+/// Preroll and postroll are as set by the user unless chunking.
 /// @param recorderName The recorder in question.
 /// @param enableList Record enable states.
-void RecorderGroupCtrl::Record(const wxString & recorderName, const CORBA::BooleanSeq & enableList)
+void RecorderGroupCtrl::Enables(const wxString & recorderName, const CORBA::BooleanSeq & enableList)
 {
     if (GetController(FindString(recorderName, true))) { //sanity check
         ProdAuto::MxfDuration preroll = mPreroll;
-        if (RECORDING_CHUNK == mChunking) {
-            //want to start exactly at the given timecode, and we should be later than this so can do it
-            preroll.samples = 0;
-        }
-        GetController(FindString(recorderName, true))->Record(mStartTimecode, preroll, mCurrentProject, enableList);
-    }
-}
-
-/// Issue a stop command to all recorders, and leave chunking mode.
-/// @param stopTimecode First frame in recording of postroll period.
-/// @param description Recording description (which is saved).
-/// @param locators Locator information.
-void RecorderGroupCtrl::Stop(const ProdAuto::MxfTimecode & stopTimecode, const wxString & description, const ProdAuto::LocatorSeq & locators)
-{
-    mChunking = NOT_CHUNKING;
-    //(it doesn't matter if a non-recording recorder gets a stop command)
-    for (unsigned int i = 0; i < GetCount(); i++) {
-        if (GetController(i) && GetController(i)->IsOK()) {
-            GetController(i)->Stop(stopTimecode, mPostroll, description, locators);
-        }
-    }
-    mCurrentDescription = description;
-    mEnabledForInput = true; //do it here for safety (in case we get no response)
-}
-
-/// Make a chunk: go into chunking mode, and issue a stop command to all recorders with a fixed postroll to make sure their stop times are all in the future.
-/// @param stopTimecode First frame in recording of postroll period.
-/// @param description Recording description (which is saved).
-/// @param locators Locator information.
-void RecorderGroupCtrl::ChunkStop(const ProdAuto::MxfTimecode & timecode, const wxString & description, const ProdAuto::LocatorSeq & locators)
-{
-    mChunking = STOPPING;
-    //(it doesn't matter if a non-recording recorder gets a stop command)
-    for (unsigned int i = 0; i < GetCount(); i++) {
-        if (GetController(i) && GetController(i)->IsOK()) {
-            GetController(i)->Stop(timecode, GetChunkingPostroll(), description, locators);
+        switch (mMode) {
+            case CHUNK_RECORD_WAIT:
+            case CHUNK_RECORDING:
+                //want to record exactly at the previously given timecode, and we should be later than this so can do it
+                preroll.samples = 0;
+            case RECORD_WAIT:
+            case RECORDING:
+                //want to record with user-supplied preroll
+                GetController(FindString(recorderName, true))->Record(mTimecode, preroll, mCurrentProject, enableList);
+                break;
+            case STOP_WAIT:
+            case STOPPED:
+                //want to stop with user-supplied postroll
+                GetController(FindString(recorderName, true))->Stop(mTimecode, mPostroll, mCurrentDescription, mLocators);
+                mHaveNonRouterRecorders |= !GetController(FindString(recorderName, true))->IsRouterRecorder();
+                break;
+            case CHUNK_STOP_WAIT:
+            case CHUNK_WAIT:
+                //want to stop with predefined postroll
+                GetController(FindString(recorderName, true))->Stop(mTimecode, GetChunkingPostroll(), mCurrentDescription, mLocators);
+                mHaveNonRouterRecorders |= !GetController(FindString(recorderName, true))->IsRouterRecorder();
+                break;
         }
     }
-    mCurrentDescription = description;
 }
 
 /// Returns the duration of the postroll used when chunking

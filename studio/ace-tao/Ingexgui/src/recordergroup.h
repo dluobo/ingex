@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: recordergroup.h,v 1.11 2010/08/03 09:27:07 john_f Exp $         *
+ *   $Id: recordergroup.h,v 1.12 2010/08/12 16:35:38 john_f Exp $         *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -46,9 +46,9 @@ class RecorderGroupCtrl : public wxListBox
         const ProdAuto::MxfDuration GetMaxPostroll();
         const ProdAuto::MxfDuration GetChunkingPostroll();
         void SetTapeIds(const wxString &, const CORBA::StringSeq &, const CORBA::StringSeq &);
-        void RecordAll(const ProdAuto::MxfTimecode);
-        void Record(const wxString &, const CORBA::BooleanSeq &);
-        void Stop(const ProdAuto::MxfTimecode &, const wxString &, const ProdAuto::LocatorSeq &);
+        void Record(const ProdAuto::MxfTimecode);
+        void Enables(const wxString &, const CORBA::BooleanSeq &);
+        void Stop(const bool, const ProdAuto::MxfTimecode &, const wxString &, const ProdAuto::LocatorSeq &);
         void ChunkStop(const ProdAuto::MxfTimecode &, const wxString &, const ProdAuto::LocatorSeq &);
         void EnableForInput(bool state = true) { mEnabledForInput = state; };
         bool IsEnabledForInput() { return mEnabledForInput; };
@@ -63,10 +63,12 @@ class RecorderGroupCtrl : public wxListBox
             ENABLE_REFRESH,
             NEW_RECORDER,
             REMOVE_RECORDER,
-            REQUEST_RECORD,
-            RECORDING,
+            REQUEST_ENABLES,
+            RECORD,
+            RECORDER_STARTED,
             TRACK_STATUS,
-            STOPPED,
+            STOP,
+            RECORDER_STOPPED,
             DISPLAY_TIMECODE_SOURCE,
             DISPLAY_TIMECODE,
             DISPLAY_TIMECODE_STUCK,
@@ -75,7 +77,6 @@ class RecorderGroupCtrl : public wxListBox
             TIMECODE_STUCK,
             TIMECODE_MISSING,
             COMM_FAILURE,
-            SET_TRIGGER,
             CHUNK_START,
             CHUNK_END,
         };
@@ -97,18 +98,24 @@ class RecorderGroupCtrl : public wxListBox
         ProdAuto::MxfDuration mMaxPreroll, mMaxPostroll, mPreroll, mPostroll;
         wxString mTimecodeRecorder;
         bool mTimecodeRecorderStuck;
-        ProdAuto::MxfTimecode mStartTimecode;
+        ProdAuto::MxfTimecode mTimecode;
+        ProdAuto::LocatorSeq mLocators;
         const wxXmlDocument * mDoc;
         wxSortedArrayString mProjectNames;
         wxString mCurrentProject;
         wxString mCurrentDescription;
-        enum ChunkingMode {
-            NOT_CHUNKING,
-            STOPPING,
-            WAITING,
-            RECORDING_CHUNK,
+        enum Mode {
+            STOPPED,
+            STOP_WAIT,
+            RECORD_WAIT,
+            RECORDING,
+            CHUNK_STOP_WAIT,
+            CHUNK_WAIT,
+            CHUNK_RECORD_WAIT,
+            CHUNK_RECORDING,
         };
-        ChunkingMode mChunking;
+        Mode mMode;
+        bool mHaveNonRouterRecorders;
         DECLARE_EVENT_TABLE()
 };
 

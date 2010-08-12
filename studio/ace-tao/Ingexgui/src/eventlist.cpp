@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: eventlist.cpp,v 1.13 2010/08/03 09:27:07 john_f Exp $           *
+ *   $Id: eventlist.cpp,v 1.14 2010/08/12 16:35:38 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2009-2010 British Broadcasting Corporation                   *
  *   - all rights reserved.                                                *
@@ -376,10 +376,11 @@ bool EventList::AtBottom()
 /// Updates the other controls and the player.
 /// @param type The event type: START, CUE, CHUNK, STOP or [PROBLEM]-not fully implemented.
 /// @param timecode Timecode of the event, for START and optionally STOP and CHUNK events (for STOP and CHUNK events, assumed to be frame-accurate, unlike frameCount).
-/// @param frameCount The position in frames, for CUE, STOP and CHUNK events. (For STOP and CHUNK events, if timecode supplied, used to work out the number of days; otherwise, used as the frame-accurate length unless zero, which indicates unknown).  If a negative value supplied for START events, doesn't select the event
+/// @param frameCount The position in frames, for CUE, STOP and CHUNK events. (For STOP and CHUNK events, if timecode supplied, used to work out the number of days; otherwise, used as the frame-accurate length unless zero, which indicates unknown).
 /// @param description A description to display for events other than START (which uses the project name).
 /// @param colourIndex The colour of a CUE event.
-void EventList::AddEvent(EventType type, ProdAuto::MxfTimecode * timecode, const int64_t frameCount, const wxString & description, const size_t colourIndex)
+/// @param select If true, selects the start of the last take for a STOP event.
+void EventList::AddEvent(EventType type, ProdAuto::MxfTimecode * timecode, const int64_t frameCount, const wxString & description, const size_t colourIndex, const bool select)
 {
     wxListItem item;
     if (NONE == type) { //sanity check
@@ -398,7 +399,7 @@ void EventList::AddEvent(EventType type, ProdAuto::MxfTimecode * timecode, const
         return;
     }
     wxString dummy;
-    int64_t position = frameCount == -1 ? 0 : frameCount;
+    int64_t position = frameCount;
     ProdAuto::MxfTimecode tc = InvalidMxfTimecode;
     wxFont font(EVENT_FONT_SIZE, wxFONTFAMILY_DEFAULT, wxFONTFLAG_UNDERLINED, wxFONTFLAG_UNDERLINED);
     switch (type) {
@@ -517,8 +518,10 @@ void EventList::AddEvent(EventType type, ProdAuto::MxfTimecode * timecode, const
     item.SetId(GetItemCount()); //will insert at end
     item.SetData(mChunkInfoArray.GetCount() - 1); //the index of the chunk info for this chunk
     InsertItem(item); //insert (at end)
-    if ((START == type || CUE == type) && frameCount > -1) {
-        Select(item.GetId());
+    if (STOP == type && select) {
+        SelectLastTake();
+    }
+    else {
         EnsureVisible(item.GetId()); //scroll down if necessary
     }
 #ifndef __WIN32__
@@ -544,8 +547,11 @@ void EventList::AddEvent(EventType type, ProdAuto::MxfTimecode * timecode, const
     if (STOP == type) {
         duration.samples--; //previous frame is the last recorded
     }
-    if (STOP == type || CHUNK == type) {
+    if (STOP == type) {
         duration.undefined |= mChunkInfoArray.Item(mChunkInfoArray.GetCount() - 1).GetLastTimecode().undefined;
+    }
+    else if (CHUNK == type) {
+        duration.undefined |= mChunkInfoArray.Item(mChunkInfoArray.GetCount() - 2).GetLastTimecode().undefined;
     }
     item.SetColumn(2);
     item.SetText(Timepos::FormatPosition(duration));
@@ -847,7 +853,7 @@ ProdAuto::MxfTimecode EventList::Load()
                         timecode.undefined = true;
                     }
                 }
-                AddEvent(START, &timecode, -1); //doesn't select this event
+                AddEvent(START, &timecode);
                 //add cue points to the event list
                 for (size_t j = 0; j < cuePointNodes.size(); j++) {
                     if (cuePointNodes[j]
@@ -880,7 +886,7 @@ ProdAuto::MxfTimecode EventList::Load()
                     lastPosition = 0; //indicates unknown
                 }
                 str = recordingNodes[i]->GetPropVal(wxT("Linking"), wxT("Finishes"));
-                AddEvent(wxT("Continues") == str ? CHUNK : STOP, 0, lastPosition, description);
+                AddEvent(wxT("Continues") == str ? CHUNK : STOP, 0, lastPosition, description, 0, false); //don't select as will look messy and could take ages if loading lots of recordings
                 if (wxT("Continues") != str) {
                     lastPosition = 0;
                 }
@@ -942,7 +948,6 @@ ProdAuto::MxfTimecode EventList::Load()
                 } //recorder node loop
             } //recording node present
         } //recording node loop
-Select(0);
         SelectLastTake(); //not done earlier while recordings were being added
     } //root node
     return timecode;

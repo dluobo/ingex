@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: eventlist.h,v 1.10 2010/08/03 09:27:07 john_f Exp $             *
+ *   $Id: eventlist.h,v 1.11 2010/08/12 16:35:38 john_f Exp $             *
  *                                                                         *
  *   Copyright (C) 2009-2010 British Broadcasting Corporation                   *
  *   - all rights reserved.                                                *
@@ -25,6 +25,7 @@
 #define EVENTLIST_H_
 #include <vector>
 #include "RecorderC.h"
+#include "ingexgui.h"
 #include <wx/xml/xml.h>
 
 WX_DECLARE_OBJARRAY(ProdAuto::TrackList_var, ArrayOfTrackList_var);
@@ -37,7 +38,7 @@ WX_DECLARE_OBJARRAY(CORBA::StringSeq_var, ArrayOfStringSeq_var);
 class ChunkInfo
 {
     public:
-        ChunkInfo(const unsigned long startIndex, const wxString & projectName, const ProdAuto::MxfTimecode & startTimecode, const int64_t startPosition, const bool hasChunkBefore) : mStartIndex(startIndex), mProjectName(projectName), mStartTimecode(startTimecode), mStartPosition(startPosition), mHasChunkBefore(hasChunkBefore), mHasChunkAfter(false) {};
+        ChunkInfo(const unsigned long startIndex, const wxString & projectName, const ProdAuto::MxfTimecode & startTimecode, const int64_t startPosition, const bool hasChunkBefore) : mStartIndex(startIndex), mProjectName(projectName), mStartTimecode(startTimecode), mLastTimecode(InvalidMxfTimecode), mStartPosition(startPosition), mHasChunkBefore(hasChunkBefore), mHasChunkAfter(false) {};
         void SetHasChunkAfter() {mHasChunkAfter = true;};
         void AddRecorder(ProdAuto::TrackList_var trackList, CORBA::StringSeq_var fileList) {mFiles.Add(fileList); mTracks.Add(trackList);}; //adds a set of tracks provided by a recorder at the end of a recording
         void AddCuePoint(const int64_t frame, size_t colourIndex) {mCuePointFrames.push_back(frame); mCueColourIndeces.push_back(colourIndex);}; //no text here because it's stored in the event list (which means it can be edited)
@@ -94,7 +95,7 @@ class EventList : public wxListView, wxThread //used wxListCtrl for a while beca
             STOP,
             PROBLEM
         };
-        void AddEvent(EventType, ProdAuto::MxfTimecode *, const int64_t = 0, const wxString & = wxT(""), const size_t = 0);
+        void AddEvent(EventType, ProdAuto::MxfTimecode *, const int64_t = 0, const wxString & = wxT(""), const size_t = 0, const bool = true);
         void AddRecorderData(RecorderData * data, bool = true);
         void DeleteCuePoint();
         void Select(const long, const bool = false);

@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: ingexgui.cpp,v 1.28 2010/08/03 09:27:07 john_f Exp $           *
+ *   $Id: ingexgui.cpp,v 1.29 2010/08/12 16:35:38 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -734,7 +734,7 @@ void IngexguiFrame::OnRecord( wxCommandEvent& WXUNUSED( event ) )
         //issue command to record immediately, and log
         ProdAuto::MxfTimecode now;
         Log(wxT("Record button pressed @ ") + mTimepos->GetTimecode(&now));
-        mRecorderGroup->RecordAll(now);
+        mRecorderGroup->Record(now);
         //now in the running up state
         SetStatus(RUNNING_UP);
     }
@@ -940,7 +940,7 @@ void IngexguiFrame::OnStop( wxCommandEvent& WXUNUSED( event ) )
             ProdAuto::MxfTimecode now;
             mTimepos->GetTimecode(&now);
             Log(wxT("Stop button pressed during recording or run-up @ ") + Timepos::FormatTimecode(now));
-            mRecorderGroup->Stop(now, mDescriptionCtrl->GetLineText(0).Trim(false).Trim(true), mEventList->GetLocators());
+            mRecorderGroup->Stop(false, now, mDescriptionCtrl->GetLineText(0).Trim(false).Trim(true), mEventList->GetLocators());
             SetStatus(RUNNING_DOWN);
             //restore the player mode that existed before recording (if player is enabled)
             if (mPlayer) mPlayer->Record(false);
@@ -996,7 +996,7 @@ void IngexguiFrame::OnChunkButton( wxCommandEvent& WXUNUSED(event) )
     mChunkingDlg->RunFrom(); //just in case it's about to chunk anyway
     ProdAuto::MxfTimecode now;
     Log(wxT("Chunk button pressed @ ") + mTimepos->GetTimecode(&now));
-    mRecorderGroup->ChunkStop(now, mDescriptionCtrl->GetLineText(0).Trim(false).Trim(true), mEventList->GetLocators());
+    mRecorderGroup->Stop(true, now, mDescriptionCtrl->GetLineText(0).Trim(false).Trim(true), mEventList->GetLocators());
 }
 
 /// Responds to trigger event (set by chunking dialogue to the chunk interval) by initiating a chunking operation.
@@ -1004,7 +1004,7 @@ void IngexguiFrame::OnChunkButton( wxCommandEvent& WXUNUSED(event) )
 void IngexguiFrame::OnTimeposEvent(wxCommandEvent& event)
 {
     Log(wxT("Automatic chunk @ ") + Timepos::FormatTimecode(*((ProdAuto::MxfTimecode *) event.GetClientData())));
-    mRecorderGroup->ChunkStop(*((ProdAuto::MxfTimecode *) event.GetClientData()), mDescriptionCtrl->GetLineText(0).Trim(false).Trim(true), mEventList->GetLocators());
+    mRecorderGroup->Stop(true, *((ProdAuto::MxfTimecode *) event.GetClientData()), mDescriptionCtrl->GetLineText(0).Trim(false).Trim(true), mEventList->GetLocators());
     delete (ProdAuto::MxfTimecode *) event.GetClientData();
 }
 
@@ -1080,21 +1080,26 @@ void IngexguiFrame::TextFieldHasFocus(const bool hasFocus)
 ///     Event string: The recorder name.
 ///     Event int: The index of the recorder so it can be disconnected easily
 ///     Event client data: Ptr to a RecorderData object, containing a track list and a track status list.  Deletes this.
-/// REQUEST_RECORD: Asks the source tree for a list of enable states and passes it to the recorder group.
+/// REQUEST_ENABLES: Asks the source tree for a list of enable states and passes it to the recorder group.
 ///     Event string: The recorder name (an event will be received for each recorder).
 ///     Event int: Non-zero to ignore current recording state on determining whether there's anything to record.
-/// RECORDING: If successful, set status to recording and set timecode counter to given timecode if not already recording.
-///     Otherwise, report failure.
+/// RECORD: Starts position counter and adds a start event to the event list.
+///     Event client data: Ptr to a ProdAuto::MxfTimecode object with the start timecode.  Deletes this.
+/// CHUNK_START: Tells the chunking dialogue to start counting down to the next chunking point.
+///     Event client data: Ptr to a ProdAuto::MxfTimecode object with the start timecode.  Deletes this.
+/// RECORDER_STARTED: Tell tree and log success or otherwise of this recorder's attempt to record.
 ///     Event string: The recorder name.
 ///     Event int: Non-zero for success.
-///     Event client data: Ptr to a RecorderData object, containing a timecode.  Deletes this.
-///     Event extra long: 1 if recording a chunk; 0 otherwise
-/// STOPPED: If successful, set status to stopped and set timecode counter to given timecode if not already stopped.
-///     Otherwise, report failure.
+///     Event client data: Ptr to a ProdAuto::MxfTimecode object with the start timecode.  Deletes this.
+/// STOP: Starts position counter, and adds a stop event to the event list, and sets status to STOPPED.
+///     Event client data: Ptr to a ProdAuto::MxfTimecode object with the stop timecode.  Deletes this.
+/// CHUNK_END: Adds a chunk event to the event list, and sets a trigger for the next chunk start
+///     Event client data: Ptr to a ProdAuto::MxfTimecode object with the chunking timecode.  Deletes this.
+/// RECORDER_STOPPED: Tell tree and log success or otherwise of this recorder's attempt to stop.  If successful and not a router recorder, add recording details to the event list.
 ///     Event string: The recorder name.
 ///     Event int: Non-zero for success.
-///     Event client data: Ptr to a RecorderData object, containing a timecode.  Deletes this.
-/// CHUNK_END: As STOPPED but doesn't set status
+///	Event extra-long: non-zero if a router recorder.
+///     Event client data: if not a router recorder, ptr to a RecorderData object, containing track/file data.  Deletes this.
 /// TRACK_STATUS: Informs source tree of tracks' status (recording or not) for given recorder.
 ///     Event string: The recorder name.
 ///     Event client data: Ptr to a RecorderData object, containing a track status list.  Deletes this.
@@ -1116,7 +1121,7 @@ void IngexguiFrame::TextFieldHasFocus(const bool hasFocus)
 /// TIMECODE_SOURCE: Informs the source tree.
 ///     Event string: The recorder name.
 /// SET_TRIGGER: Adds a CHUNK event and sets a trigger to start the next chunk when the time is reached
-///     Event client data: pointer to timecode of start of next chunk
+///     Event client data: pointer to timecode of start of next chunk.  Deletes this.
 
 void IngexguiFrame::OnRecorderGroupEvent(wxCommandEvent& event) {
     switch ((RecorderGroupCtrl::RecorderGroupCtrlEventType) event.GetId()) {
@@ -1143,77 +1148,88 @@ void IngexguiFrame::OnRecorderGroupEvent(wxCommandEvent& event) {
             }
             delete (RecorderData *) event.GetClientData();
             break;
-        case RecorderGroupCtrl::REQUEST_RECORD : {
+        case RecorderGroupCtrl::REQUEST_ENABLES : {
                 //record enable list required
                 CORBA::BooleanSeq enableList;
-                if (mTree->GetRecordEnables(event.GetString(), enableList, event.GetInt())) { //something's enabled for recording, and not already recording (unless event int is non-zero)
-                    Log(wxT("REQUEST_RECORD for \"") + event.GetString() + wxT("\" and track(s) enabled to record"));
-                    mRecorderGroup->Record(event.GetString(), enableList);
+                if (mTree->GetRecordEnables(event.GetString(), enableList, event.GetInt())) { //something's enabled for recording, and not already recording (unless third argument is non-zero)
+                    Log(wxT("REQUEST_ENABLES for \"") + event.GetString() + wxT("\" and track(s) enabled to record"));
+                    mRecorderGroup->Enables(event.GetString(), enableList);
                     mTree->SetRecorderStateUnknown(event.GetString(), wxT("Awaiting response..."));
                 }
+                break;
             }
-            break;
-        case RecorderGroupCtrl::RECORDING :
-        case RecorderGroupCtrl::CHUNK_START :
-            if (event.GetInt()) { //successful
-                ProdAuto::MxfTimecode startTimecode = ((RecorderData *) event.GetClientData())->GetTimecode();
-                if (RecorderGroupCtrl::RECORDING == (RecorderGroupCtrl::RecorderGroupCtrlEventType) event.GetId()) { //not recording a chunk
-                    //start the position display counting
-                    mTimepos->Record(((RecorderData *) event.GetClientData())->GetTimecode());
-                    //add a start event
-                    mEventList->AddEvent(EventList::START, &startTimecode);
+        case RecorderGroupCtrl::RECORD : {
+                ProdAuto::MxfTimecode* tc = (ProdAuto::MxfTimecode *) event.GetClientData();
+                //start the position display counting
+                mTimepos->Record(*tc);
+                //add a start event
+                mEventList->AddEvent(EventList::START, tc);
+                delete tc;
+                break;
+            }
+        case RecorderGroupCtrl::CHUNK_START : {
+                ProdAuto::MxfTimecode* tc = (ProdAuto::MxfTimecode *) event.GetClientData();
+                //start chunking timer (if enabled), on chunk length from now (no alignment)
+                mChunkingDlg->RunFrom(*tc, mRecorderGroup->GetChunkingPostroll(), false);
+                delete tc;
+                break;
+            }
+        case RecorderGroupCtrl::RECORDER_STARTED : {
+                ProdAuto::MxfTimecode* tc = (ProdAuto::MxfTimecode *) event.GetClientData();
+                if (event.GetInt()) { //successful
+                    mTree->SetRecorderStateOK(event.GetString());
+                    Log(wxT("RECORDING successfully on \"") + event.GetString() + wxT("\" @ ") + Timepos::FormatTimecode(*tc));
                 }
                 else {
-                    //start chunking timer (if enabled), on chunk length from now (no alignment)
-                    mChunkingDlg->RunFrom(startTimecode, mRecorderGroup->GetChunkingPostroll(), false);
+                    Log(wxT("RECORDING failed on \"") + event.GetString() + wxT("\""));
+                    if (RUNNING_UP == mStatus) {
+                        mTree->SetRecorderStateProblem(event.GetString(), wxT("Failed to record: retrying"));
+                    }
                 }
-                mTree->SetRecorderStateOK(event.GetString());
-                Log(wxT("RECORDING successfully on \"") + event.GetString() + wxT("\" @ ") + Timepos::FormatTimecode(startTimecode));
+                delete tc;
+                break;
             }
-            else {
-                Log(wxT("RECORDING failed on \"") + event.GetString() + wxT("\""));
-                if (RUNNING_UP == mStatus) {
-                    mTree->SetRecorderStateProblem(event.GetString(), wxT("Failed to record: retrying"));
-                }
+        case RecorderGroupCtrl::STOP : {
+                ProdAuto::MxfTimecode* tc = (ProdAuto::MxfTimecode *) event.GetClientData();
+                mTimepos->Stop(*tc);
+                mEventList->AddEvent(EventList::STOP, tc, mTimepos->GetFrameCount(), mRecorderGroup->GetCurrentDescription());
+                SetStatus(STOPPED);
+                delete tc;
+                break;
             }
-            delete (RecorderData *) event.GetClientData();
-            break;
-        case RecorderGroupCtrl::STOPPED :
-        case RecorderGroupCtrl::CHUNK_END :
+        case RecorderGroupCtrl::CHUNK_END : {
+                ProdAuto::MxfTimecode* tc = (ProdAuto::MxfTimecode *) event.GetClientData();
+                mEventList->AddEvent(EventList::CHUNK, tc, mTimepos->GetFrameCount(), mRecorderGroup->GetCurrentDescription());
+                //set trigger to start next chunk
+                mTimepos->SetTrigger((ProdAuto::MxfTimecode *) event.GetClientData(), mRecorderGroup, false); //allow trigger to be in the past (whereupon it will happen immediately)
+                delete tc;
+                break;
+            }
+        case RecorderGroupCtrl::RECORDER_STOPPED :
             if (event.GetInt()) { //successful
-                Log(wxT("STOPPED successfully on \"") + event.GetString() + wxT("\""));
+                Log(wxT("STOPPED successfully on \"") + event.GetString() + wxT("\"") + (event.GetExtraLong() ? wxT(" (Router recorder)") : wxEmptyString));
                 mTree->SetRecorderStateOK(event.GetString());
-                //logging
-                CORBA::StringSeq_var fileList = ((RecorderData *) event.GetClientData())->GetFileList();
-                wxString msg = wxString::Format(wxT("%d element%s returned%s"), fileList->length(), 1 == fileList->length() ? wxT("") : wxT("s"), fileList->length() ? wxT(":") : wxT("."));
-                for (size_t i = 0; i < fileList->length(); i++) {
-                    msg += wxT("\n\"") + wxString(fileList[i], *wxConvCurrent) + wxT("\"");
-                }
-                Log(msg);
-                bool firstStopped = (RecorderGroupCtrl::STOPPED == (RecorderGroupCtrl::RecorderGroupCtrlEventType) event.GetId()) && (STOPPED != mStatus);
-                if (firstStopped) {
-                    //Stop
-                    ProdAuto::MxfTimecode tc = ((RecorderData *) event.GetClientData())->GetTimecode(); //use the first returned timecode as the stop position
-                    mTimepos->Stop(tc);
-                    mEventList->AddEvent(EventList::STOP, &tc, mTimepos->GetFrameCount(), mRecorderGroup->GetCurrentDescription());
-                    SetStatus(STOPPED);
-                }
-                if (((RecorderData *) event.GetClientData())->GetTrackList().operator->() && !mTree->IsRouterRecorder(event.GetString())) {
-                    //Add the recorded files to the take info (do this after AddEvent so mEventList knows if it's a chunk or not and therefore which ChunkInfo to add it to)
-                    mEventList->AddRecorderData((RecorderData *) event.GetClientData());
-                    //need to reload the player as more files have appeared
-                    if (mPlayer) mPlayer->SelectRecording(mEventList->GetCurrentChunkInfo(), 0, true);
+                if (!event.GetExtraLong()) { //not a router recorder
+                    if (((RecorderData *) event.GetClientData())->GetTrackList().operator->()) {
+                        //Add the recorded files to the take info (assumes a STOPPED or CHUNK_END event has already been received, so mEventList knows if it's a chunk or not and therefore which ChunkInfo to add it to)
+                        mEventList->AddRecorderData((RecorderData *) event.GetClientData());
+                        //need to reload the player as more files have appeared
+                        if (mPlayer) mPlayer->SelectRecording(mEventList->GetCurrentChunkInfo(), 0, true);
+                    }
+                    //logging
+                    CORBA::StringSeq_var fileList = ((RecorderData *) event.GetClientData())->GetFileList();
+                    wxString msg = wxString::Format(wxT("%d element%s returned%s"), fileList->length(), 1 == fileList->length() ? wxT("") : wxT("s"), fileList->length() ? wxT(":") : wxT("."));
+                    for (size_t i = 0; i < fileList->length(); i++) {
+                        msg += wxT("\n\"") + wxString(fileList[i], *wxConvCurrent) + wxT("\"");
+                    }
+                    Log(msg);
                 }
             }
             else {
                 Log(wxT("STOPPED failure on \"") + event.GetString() + wxT("\""));
                 mTree->SetRecorderStateProblem(event.GetString(), wxT("Failed to stop: retrying"));
             }
-            delete (RecorderData *) event.GetClientData();
-            break;
-        case RecorderGroupCtrl::SET_TRIGGER :
-            mTimepos->SetTrigger((ProdAuto::MxfTimecode *) event.GetClientData(), mRecorderGroup, false); //allow trigger to be in the past (whereupon it will happen immediately)
-            mEventList->AddEvent(EventList::CHUNK, (ProdAuto::MxfTimecode *) event.GetClientData(), mTimepos->GetFrameCount(), mRecorderGroup->GetCurrentDescription());
+            if (!event.GetExtraLong()) delete (RecorderData *) event.GetClientData();
             break;
         case RecorderGroupCtrl::TRACK_STATUS :
 //spam          Log(wxT("TRACK_STATUS for \"") + event.GetString() + wxT("\""));
@@ -1261,7 +1277,7 @@ void IngexguiFrame::OnRecorderGroupEvent(wxCommandEvent& event) {
                 Log(wxT("TIMECODE_RUNNING for \"") + event.GetString() + wxT("\""));
                 mTree->SetRecorderStateOK(event.GetString());
             break;
-        default:
+        case RecorderGroupCtrl::ENABLE_REFRESH : //never appears
             break;
     }
 }

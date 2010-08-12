@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: timepos.cpp,v 1.11 2010/08/03 09:27:07 john_f Exp $             *
+ *   $Id: timepos.cpp,v 1.12 2010/08/12 16:35:38 john_f Exp $             *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -100,7 +100,7 @@ void Timepos::Trigger()
 
 /// Sets the timecode for an event to be triggered or cancels a pending trigger.
 /// @param tc Timecode when trigger will happen.  If undefined flag is set, stops a pending trigger.
-/// @param handler Event handler where event will be sent to.  If a trigger is already set, tc is defined and the handler is the same, the existing trigger will NOT be changed.
+/// @param handler Event handler where event will be sent to.  Only needed if tc is defined.
 /// @param alwaysInFuture True to indicate the timecode is always in the future (even if its sample value is less than the current timecode).  If false, trigger timecode will be considered to be in the past if it is up to a minute before the current timecode, whereupon a trigger will occur immediately
 /// @return True if trigger was set
 bool Timepos::SetTrigger(const ProdAuto::MxfTimecode * tc, wxEvtHandler * handler, bool alwaysInFuture)
@@ -108,10 +108,10 @@ bool Timepos::SetTrigger(const ProdAuto::MxfTimecode * tc, wxEvtHandler * handle
     bool ok = true;
     mTriggerTimecode = *tc;
     if (mTriggerTimecode.undefined || !mTriggerTimecode.edit_rate.numerator) { //latter a sanity check
+        mTriggerTimecode.undefined = true;
         ok = false;
     }
     else {
-        mTriggerTimecode = *tc;
         mTriggerHandler = handler;
         //If it looks like the trigger timecode is earlier in the day or now, set the carry flag which will prevent a trigger until after the displayed timecode wraps at midnight
         mTriggerCarry = mLastDisplayedTimecode.samples >= mTriggerTimecode.samples;
@@ -137,8 +137,8 @@ wxTimeSpan Timepos::GetDuration()
     if (mPositionRunning) {
         wxDateTime now = wxDateTime::UNow();
         wxDateTime timecodeTime = now + mTimecodeOffset; //correct for timecode offset
-        timecodeTime -= wxTimeSpan(0, 0, 0, (unsigned long) 1000 * mStartTimecode.samples * mStartTimecode.edit_rate.denominator / mStartTimecode.edit_rate.numerator); //subtract the start timecode; use unsigned long because long isn't quite big enough and rolls over at about 23:51:38 (@25fps)
         duration = timecodeTime - timecodeTime.GetDateOnly(); //mod one day to remove overflows
+        duration -= wxTimeSpan(0, 0, 0, (unsigned long) 1000 * mStartTimecode.samples * mStartTimecode.edit_rate.denominator / mStartTimecode.edit_rate.numerator); //subtract the start timecode; use unsigned long because long isn't quite big enough and rolls over at about 23:51:38 (@25fps)
         duration += now.GetDateOnly() - mStartDate; //add the number of days' duration
     }
     return duration;

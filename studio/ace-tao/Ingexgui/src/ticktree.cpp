@@ -660,20 +660,6 @@ bool TickTreeCtrl::UsingTapeIds()
     return names.GetCount();
 }
 
-/// @return true if recorder name supplied is a router recorder
-bool TickTreeCtrl::IsRouterRecorder(const wxString & recorderName)
-{
-    wxTreeItemId recorder = FindRecorder(recorderName);
-    if (recorder.IsOk()) { //sanity check
-        wxTreeItemIdValue cookie;
-        wxTreeItemId package = GetFirstChild(recorder, cookie);
-        if (package.IsOk()) { //sanity check
-            return ((ItemData *) GetItemData(package))->GetInt();
-        }
-    }
-    return false;
-}
-
 /// Obtains all (non router-recorder) package names and corresponding enable status.
 /// @param names Returns package names.
 /// @param enabled Returns true for each corresponding package in names that's enabled or partially enabled; false otherwise.

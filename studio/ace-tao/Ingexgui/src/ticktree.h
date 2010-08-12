@@ -59,7 +59,6 @@ class TickTreeCtrl : public wxTreeCtrl
         bool TapeIdsOK();
         bool HasRecorders();
         bool IsUnknown();
-        bool IsRouterRecorder(const wxString &);
         bool HasProblem();
         bool HasAllSignals();
         bool RecordingSuccessfully();
