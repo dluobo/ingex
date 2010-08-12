@@ -1,5 +1,5 @@
 /*
- * $Id: RouterRecorderImpl.cpp,v 1.2 2010/07/21 16:29:34 john_f Exp $
+ * $Id: RouterRecorderImpl.cpp,v 1.3 2010/08/12 16:34:24 john_f Exp $
  *
  * Servant class for RouterRecorder.
  *
@@ -398,7 +398,6 @@ bool RouterRecorderImpl::Init(const std::string & name, const std::string & mc_c
     ::CORBA::SystemException
   )
 {
-    ACE_UNUSED_ARG (mxf_post_roll);
     ACE_UNUSED_ARG (description);
     ACE_UNUSED_ARG (locators);
 
@@ -410,13 +409,21 @@ bool RouterRecorderImpl::Init(const std::string & name, const std::string & mc_c
     ts.rec = 0;
 
     // Return stop timecode
-    // (otherwise with stop now it would be left as zero)
-    Ingex::Timecode tc(routerloggerApp::Instance()->Timecode().c_str(), pa_EDIT_RATE.numerator, pa_EDIT_RATE.denominator, DROP_FRAME);
-    mxf_stop_timecode.undefined = false; 
-    mxf_stop_timecode.edit_rate.numerator = tc.FrameRateNumerator();
-    mxf_stop_timecode.edit_rate.denominator = tc.FrameRateDenominator();
-    mxf_stop_timecode.drop_frame = tc.DropFrame();
-    mxf_stop_timecode.samples = tc.FramesSinceMidnight();
+    if (mxf_stop_timecode.undefined)
+    {
+        // otherwise with stop now it would be left as zero
+        Ingex::Timecode tc(routerloggerApp::Instance()->Timecode().c_str(), pa_EDIT_RATE.numerator, pa_EDIT_RATE.denominator, DROP_FRAME);
+        mxf_stop_timecode.undefined = false; 
+        mxf_stop_timecode.edit_rate.numerator = tc.FrameRateNumerator();
+        mxf_stop_timecode.edit_rate.denominator = tc.FrameRateDenominator();
+        mxf_stop_timecode.drop_frame = tc.DropFrame();
+        mxf_stop_timecode.samples = tc.FramesSinceMidnight();
+    }
+    else if (!mxf_post_roll.undefined)
+    {
+        // pretend we carried on for post-roll (helps GUI)
+        mxf_stop_timecode.samples += mxf_post_roll.samples;
+    }
 
     // Create out parameter to return (dummy) filename
     files = new ::CORBA::StringSeq;
