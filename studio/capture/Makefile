@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.15 2010/07/06 14:15:13 john_f Exp $
+# $Id: Makefile,v 1.16 2010/08/12 16:27:08 john_f Exp $
 #
 # Makefile for building ingex server and utilities.
 #
@@ -33,12 +33,12 @@ else
   SDI_PROGS=dvs_dummy testgen
 endif
 
-CPPFLAGS = -DDEBUG -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE -DUSE_FFMPEG -I../../common -I../common -I../database/src
+CPPFLAGS = -DDEBUG -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE -DUSE_FFMPEG -I../../common -I../../common/YUVlib -I../common -I../database/src
 CXXFLAGS = -Wall -g -O3
 TARGET_ARCH = -mmmx -msse2
 
-LIBS = -lstudiocommon -lcommon
-LIBPATHS = -L../common -L../../common
+LIBS = -lstudiocommon -lcommon -lYUVlib
+LIBPATHS = -L../common -L../../common -L../../common/YUVlib
 
 FFMPEG_LIBS = -lavformat -lavcodec -lswscale -lavutil -lz -lbz2 -lmp3lame -lx264 -lfaac -lfaad -lm -lpthread
 
