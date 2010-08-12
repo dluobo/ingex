@@ -55,7 +55,7 @@ int main (int argc, char * argv[])
     print_vr(MaterialResolution::DNX120P_MXF_ATOM);
     print_vr(MaterialResolution::DNX185P_MXF_ATOM);
     print_vr(MaterialResolution::XDCAMHD422_RAW);
-    //print_vr(MaterialResolution::XDCAMHD422_MXF);
+    //print_vr(MaterialResolution::XDCAMHD422_MXF_1A);
     print_vr(MaterialResolution::XDCAMHD422_MOV);
     print_vr(MaterialResolution::DVD);
     print_vr(MaterialResolution::MPEG4_MOV);
