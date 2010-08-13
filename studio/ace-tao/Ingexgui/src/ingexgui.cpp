@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: ingexgui.cpp,v 1.30 2010/08/13 15:21:43 john_f Exp $           *
+ *   $Id: ingexgui.cpp,v 1.31 2010/08/13 17:55:35 philipn Exp $           *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -1092,7 +1092,9 @@ void IngexguiFrame::TextFieldHasFocus(const bool hasFocus)
 ///     Event client data: Ptr to a ProdAuto::MxfTimecode object with the start timecode.  Deletes this.
 /// STOP: Starts position counter, and adds a stop event to the event list, and sets status to STOPPED.
 ///     Event client data: Ptr to a ProdAuto::MxfTimecode object with the stop timecode.  Deletes this.
-/// CHUNK_END: Adds a chunk event to the event list, and sets a trigger for the next chunk start
+/// CHUNK_END: Adds a chunk event to the event list.
+///     Event client data: Ptr to a ProdAuto::MxfTimecode object with the chunking timecode.  Deletes this.
+/// SET_TRIGGER: Sets a trigger for the next chunk start.
 ///     Event client data: Ptr to a ProdAuto::MxfTimecode object with the chunking timecode.  Deletes this.
 /// RECORDER_STOPPED: Tell tree and log success or otherwise of this recorder's attempt to stop.  If successful and not a router recorder, add recording details to the event list.
 ///     Event string: The recorder name.
@@ -1199,7 +1201,11 @@ void IngexguiFrame::OnRecorderGroupEvent(wxCommandEvent& event) {
         case RecorderGroupCtrl::CHUNK_END : {
                 ProdAuto::MxfTimecode* tc = (ProdAuto::MxfTimecode *) event.GetClientData();
                 mEventList->AddEvent(EventList::CHUNK, tc, mRecorderGroup->GetCurrentDescription(), mTimepos->GetFrameCount());
-                //set trigger to start next chunk
+                delete tc;
+                break;
+            }
+        case RecorderGroupCtrl::SET_TRIGGER : {
+                ProdAuto::MxfTimecode* tc = (ProdAuto::MxfTimecode *) event.GetClientData();
                 mTimepos->SetTrigger((ProdAuto::MxfTimecode *) event.GetClientData(), mRecorderGroup, false); //allow trigger to be in the past (whereupon it will happen immediately)
                 delete tc;
                 break;

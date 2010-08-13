@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: recordergroup.h,v 1.12 2010/08/12 16:35:38 john_f Exp $         *
+ *   $Id: recordergroup.h,v 1.13 2010/08/13 17:55:35 philipn Exp $         *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -79,6 +79,7 @@ class RecorderGroupCtrl : public wxListBox
             COMM_FAILURE,
             CHUNK_START,
             CHUNK_END,
+            SET_TRIGGER,
         };
     private:
         void OnListRefreshed(wxCommandEvent &);

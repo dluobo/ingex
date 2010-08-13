@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: recordergroup.cpp,v 1.16 2010/08/13 15:21:43 john_f Exp $       *
+ *   $Id: recordergroup.cpp,v 1.17 2010/08/13 17:55:35 philipn Exp $       *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -408,20 +408,25 @@ void RecorderGroupCtrl::OnControllerEvent(ControllerThreadEvent & event)
                         }
                         else if (CHUNK_STOP_WAIT == mMode) {
                             mMode = CHUNK_WAIT;
-                            wxCommandEvent frameEvent(EVT_RECORDERGROUP_MESSAGE, CHUNK_END);
+                            //remember the timecode for when the recorders are started
                             mTimecode = event.GetTimecode(); //this is the frame after the end of the recording, which is when the new chunk will start
+                            //report the chunk end
+                            wxCommandEvent frameEvent(EVT_RECORDERGROUP_MESSAGE, CHUNK_END);
+                            ProdAuto::MxfTimecode* chunkTimecode = new ProdAuto::MxfTimecode(mTimecode); //deleted by event handler
+                            frameEvent.SetClientData(chunkTimecode);
+                            AddPendingEvent(frameEvent);
+                            //set trigger for starting the next chunk
+                            frameEvent.SetId(SET_TRIGGER);
                             ProdAuto::MxfTimecode* triggerTimecode = new ProdAuto::MxfTimecode(mTimecode); //deleted by event handler
-                            //delay the trigger to ensure that it doesn't happen in the future
                             if (mMaxPreroll.edit_rate.numerator && mMaxPreroll.samples * mMaxPreroll.edit_rate.denominator / mMaxPreroll.edit_rate.numerator && mMaxPreroll.edit_rate.denominator) { //max preroll >= 1 second; sanity checks
-                                //add half a second
+                                //add half a second delay to the trigger to ensure that a start in the future isn't requested
                                 triggerTimecode->samples += mMaxPreroll.edit_rate.numerator / 2 / mMaxPreroll.edit_rate.denominator;
                             }
                             else {
-                                //add half the preroll
+                                //add half the preroll to the trigger to ensure that a start in the future isn't requested
                                 triggerTimecode->samples += mMaxPreroll.samples / 2;
                             }
                             frameEvent.SetClientData(triggerTimecode);
-
                             AddPendingEvent(frameEvent);
                         }
                     }
