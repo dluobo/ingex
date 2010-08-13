@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: player.cpp,v 1.21 2010/08/03 09:27:07 john_f Exp $              *
+ *   $Id: player.cpp,v 1.22 2010/08/13 17:54:23 philipn Exp $              *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -278,7 +278,7 @@ void Player::OnKeyPress(wxCommandEvent& event)
                 if (2 == event.GetExtraLong()) Open(OPEN_RECORDINGS); //ctrl
                 break;
         }
-        if (wxID_ANY != frameCommand && ((IngexguiFrame::BUTTON_MENU_Stop == frameCommand && event.GetExtraLong() != 1) || (IngexguiFrame::BUTTON_MENU_Stop != frameCommand && event.GetExtraLong()))) { //stop has been pressed with shift, or any other keypress doesn't have a modifier
+        if (wxID_ANY != frameCommand && ((IngexguiFrame::BUTTON_MENU_Stop == frameCommand && event.GetExtraLong() == 1) || (IngexguiFrame::BUTTON_MENU_Stop != frameCommand && !event.GetExtraLong()))) { //stop has been pressed with shift, or any other keypress doesn't have a modifier
             wxCommandEvent menuEvent(wxEVT_COMMAND_MENU_SELECTED, frameCommand);
             GetParent()->AddPendingEvent(menuEvent);
         }
