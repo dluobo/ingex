@@ -1,5 +1,5 @@
 /*
- * $Id: VideoRaster.cpp,v 1.2 2010/07/21 16:29:33 john_f Exp $
+ * $Id: VideoRaster.cpp,v 1.3 2010/08/13 15:18:44 john_f Exp $
  *
  * Video raster codes and details
  *
@@ -234,4 +234,26 @@ void Ingex::VideoRaster::GetInfo(Ingex::VideoRaster::EnumType raster,
     }
 }
 
+bool Ingex::VideoRaster::IsRec601(VideoRaster::EnumType raster)
+{
+    bool is_rec_601;
+
+    switch (raster)
+    {
+    case PAL:
+    case PAL_592:
+    case PAL_608:
+    case PAL_B:
+    case PAL_592_B:
+    case PAL_608_B:
+    case NTSC:
+        is_rec_601 = true;
+        break;
+    default:
+        is_rec_601 = false;
+        break;
+    }
+
+    return is_rec_601;
+}
 

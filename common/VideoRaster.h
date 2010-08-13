@@ -1,5 +1,5 @@
 /*
- * $Id: VideoRaster.h,v 1.2 2010/07/21 16:29:33 john_f Exp $
+ * $Id: VideoRaster.h,v 1.3 2010/08/13 15:18:44 john_f Exp $
  *
  * Video raster codes and details
  *
@@ -72,6 +72,8 @@ public:
 
     static void GetInfo(VideoRaster::EnumType raster,
             int & width, int & height, int & fps_num, int & fps_den, Interlace::EnumType & interlace);
+
+    static bool IsRec601(VideoRaster::EnumType raster);
 };
 
 class PixelFormat
