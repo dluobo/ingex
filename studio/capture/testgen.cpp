@@ -1,5 +1,5 @@
 /*
- * $Id: testgen.cpp,v 1.1 2010/07/06 14:15:13 john_f Exp $
+ * $Id: testgen.cpp,v 1.2 2010/08/13 09:32:46 philipn Exp $
  *
  * Dummy SDI input for testing shared memory video & audio interface.
  *
@@ -638,8 +638,11 @@ int main (int argc, char ** argv)
 
     // SDI monitor threads never terminate.
     // Loop forever monitoring status of threads for logging purposes
+    // Update the heartbeat 10 times a second
+    p_control->owner_pid = getpid();
     while (1)
     {
-        usleep( 2 * 1000 * 1000);
+        gettimeofday(&p_control->owner_heartbeat, NULL);
+        usleep(100 * 1000);
     }
 }
