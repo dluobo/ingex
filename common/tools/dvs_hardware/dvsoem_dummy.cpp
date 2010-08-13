@@ -1,5 +1,5 @@
 /*
- * $Id: dvsoem_dummy.cpp,v 1.3 2010/07/21 16:29:33 john_f Exp $
+ * $Id: dvsoem_dummy.cpp,v 1.4 2010/08/13 15:17:52 john_f Exp $
  *
  * Implement a debug-only DVS hardware library for testing.
  *
@@ -130,7 +130,19 @@ static int timecode_to_dvs_tc(const Ingex::Timecode & tc)
 
 static int is_rec601(int videomode)
 {
-    return videomode == SV_MODE_PAL || videomode == SV_MODE_NTSC;
+    int is_601;
+    switch (videomode & SV_MODE_MASK)
+    {
+    case SV_MODE_PAL:
+    case SV_MODE_NTSC:
+        is_601 = 1;
+        break;
+    default:
+        is_601 = 0;
+        break;
+    }
+
+    return is_601;
 }
 
 // Represent the colour and position of a colour bar for dummy video
