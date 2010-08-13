@@ -1,5 +1,5 @@
 /*
- * $Id: video_test_signals.c,v 1.3 2010/06/25 13:54:06 philipn Exp $
+ * $Id: video_test_signals.c,v 1.4 2010/08/13 15:17:08 john_f Exp $
  *
  * Video test frames
  *
@@ -29,36 +29,35 @@
 
 // Represent the colour and position of a colour bar
 typedef struct {
-	double			position;
-	unsigned char	colour[4];
+	double			position;  // end of bar (right hand edge)
+	unsigned char	colour[4]; // UYVY
 } bar_colour_t;
 
 // Generate a video buffer containing uncompressed UYVY video representing
-// the familiar colour bars test signal (or YUY2 video if specified).
+// the 100 % colour bars test signal (or YUY2 video if specified).
 static void create_colour_bars(unsigned char *video_buffer, int width, int height, int convert_to_YUY2, int rec601)
 {
 	int				i,j,b;
+    const int n_bars = 8;
 	bar_colour_t	rec601_UYVY_table[] = {
-				{52/720.0,	{0x80,0xEB,0x80,0xEB}},	// white
-				{140/720.0,	{0x10,0xD2,0x92,0xD2}},	// yellow
-				{228/720.0,	{0xA5,0xA9,0x10,0xA9}},	// cyan
-				{316/720.0,	{0x35,0x90,0x22,0x90}},	// green
-				{404/720.0,	{0xCA,0x6A,0xDD,0x6A}},	// magenta
-				{492/720.0,	{0x5A,0x51,0xF0,0x51}},	// red
-				{580/720.0,	{0xf0,0x29,0x6d,0x29}},	// blue
-				{668/720.0,	{0x80,0x10,0x80,0x10}},	// black
-				{720/720.0,	{0x80,0xEB,0x80,0xEB}}	// white
+				{96/720.0,	{0x80,0xEB,0x80,0xEB}},	// white
+				{184/720.0,	{0x10,0xD2,0x92,0xD2}},	// yellow
+				{272/720.0,	{0xA5,0xA9,0x10,0xA9}},	// cyan
+				{360/720.0,	{0x35,0x90,0x22,0x90}},	// green
+				{448/720.0,	{0xCA,0x6A,0xDD,0x6A}},	// magenta
+				{536/720.0,	{0x5A,0x51,0xF0,0x51}},	// red
+				{624/720.0,	{0xf0,0x29,0x6d,0x29}},	// blue
+				{720/720.0,	{0x80,0x10,0x80,0x10}},	// black
 			};
 	bar_colour_t	rec709_UYVY_table[] = {
-				{52/720.0,	{0x80,0xEB,0x80,0xEB}},	// white
-				{140/720.0,	{0x10,0xDB,0x8A,0xDB}},	// yellow
-				{228/720.0,	{0x9A,0xBC,0x10,0xBC}},	// cyan
-				{316/720.0,	{0x2A,0xAD,0x1A,0xAD}},	// green
-				{404/720.0,	{0xD6,0x4E,0xE6,0x4E}},	// magenta
-				{492/720.0,	{0x66,0x3F,0xF0,0x3F}},	// red
-				{580/720.0,	{0xF0,0x20,0x76,0x20}},	// blue
-				{668/720.0,	{0x80,0x10,0x80,0x10}},	// black
-				{720/720.0,	{0x80,0xEB,0x80,0xEB}}	// white
+				{96/720.0,	{0x80,0xEB,0x80,0xEB}},	// white
+				{184/720.0,	{0x10,0xDB,0x8A,0xDB}},	// yellow
+				{272/720.0,	{0x9A,0xBC,0x10,0xBC}},	// cyan
+				{360/720.0,	{0x2A,0xAD,0x1A,0xAD}},	// green
+				{448/720.0,	{0xD6,0x4E,0xE6,0x4E}},	// magenta
+				{536/720.0,	{0x66,0x3F,0xF0,0x3F}},	// red
+				{624/720.0,	{0xF0,0x20,0x76,0x20}},	// blue
+				{720/720.0,	{0x80,0x10,0x80,0x10}},	// black
 			};
 	bar_colour_t *UYVY_table = (rec601 ? rec601_UYVY_table : rec709_UYVY_table);
 
@@ -66,7 +65,7 @@ static void create_colour_bars(unsigned char *video_buffer, int width, int heigh
 	{
 		for (i = 0; i < width; i+=2)
 		{
-			for (b = 0; b < 9; b++)
+			for (b = 0; b < n_bars; b++)
 			{
 				if ((i / ((double)width)) < UYVY_table[b].position)
 				{
