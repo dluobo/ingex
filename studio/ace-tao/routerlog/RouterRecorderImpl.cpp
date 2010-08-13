@@ -1,5 +1,5 @@
 /*
- * $Id: RouterRecorderImpl.cpp,v 1.3 2010/08/12 16:34:24 john_f Exp $
+ * $Id: RouterRecorderImpl.cpp,v 1.4 2010/08/13 15:20:59 john_f Exp $
  *
  * Servant class for RouterRecorder.
  *
@@ -40,6 +40,7 @@
 #include "quartzRouter.h"
 #include "CutsDatabase.h"
 #include "RecorderSettings.h"
+#include "recorder_types.h"
 
 #include "Database.h"
 #include "DBException.h"
@@ -286,19 +287,31 @@ bool RouterRecorderImpl::Init(const std::string & name, const std::string & mc_c
     ACE_UNUSED_ARG (project);
     ACE_UNUSED_ARG (test_only);
 
-    ACE_DEBUG((LM_INFO, ACE_TEXT("%C RouterRecorderImpl::Start()\n"), mName.c_str()));
-
-    // Calculate start timecode
-    Ingex::Timecode tc;
+    framecount_t pre = (pre_roll.undefined ? 0 : pre_roll.samples);
+    Ingex::Timecode start_tc; // initialises to null
     if (start_timecode.undefined)
     {
-        // Start now
-        tc = Ingex::Timecode(routerloggerApp::Instance()->Timecode().c_str(), pa_EDIT_RATE.numerator, pa_EDIT_RATE.denominator, DROP_FRAME);
+        ACE_DEBUG((LM_INFO, ACE_TEXT("%C RouterRecorderImpl::Start(), immediate, pre-roll %d, time %C\n"),
+            mName.c_str(), pre, DateTime::Timecode().c_str()));
+    }
+    else
+    {
+        start_tc = Ingex::Timecode(start_timecode.samples, start_timecode.edit_rate.numerator, start_timecode.edit_rate.denominator, false);
+        ACE_DEBUG((LM_INFO, ACE_TEXT("%C RouterRecorderImpl::Start(), tc %C, pre-roll %d, time %C\n"),
+            mName.c_str(), start_tc.Text(), pre, DateTime::Timecode().c_str()));
+    }
+
+    // Calculate actual start timecode
+    if (start_timecode.undefined)
+    {
+        // Start now (ignoring any pre-roll)
+        start_tc = Ingex::Timecode(routerloggerApp::Instance()->Timecode().c_str(), pa_EDIT_RATE.numerator, pa_EDIT_RATE.denominator, DROP_FRAME);
     }
     else
     {
         // Start at start - pre-roll
-        tc = Ingex::Timecode(start_timecode.samples - pre_roll.samples, pa_EDIT_RATE.numerator, pa_EDIT_RATE.denominator, DROP_FRAME);
+        start_tc -= pre_roll.samples;
+        //tc = Ingex::Timecode(start_timecode.samples - pre_roll.samples, pa_EDIT_RATE.numerator, pa_EDIT_RATE.denominator, DROP_FRAME);
     }
 
     // Get current recorder settings
@@ -342,7 +355,7 @@ bool RouterRecorderImpl::Init(const std::string & name, const std::string & mc_c
     std::ostringstream ss;
     
     std::string date = DateTime::DateNoSeparators();
-    std::string tcode = tc.TextNoSeparators();
+    std::string tcode = start_tc.TextNoSeparators();
 
     ss << date << "_" << tcode
         << "_" << project
@@ -357,17 +370,17 @@ bool RouterRecorderImpl::Init(const std::string & name, const std::string & mc_c
     this->StopCopying(++mRecIndex);
 
     // Start saving to cuts database
-    StartSaving(tc);
+    StartSaving(start_tc);
 
     ProdAuto::TrackStatus & ts = mTracksStatus->operator[](0);
     ts.rec = 1;
 
     // Return start timecode
     start_timecode.undefined = false; 
-    start_timecode.edit_rate.numerator = tc.FrameRateNumerator();
-    start_timecode.edit_rate.denominator = tc.FrameRateDenominator();
-    start_timecode.drop_frame = tc.DropFrame();
-    start_timecode.samples = tc.FramesSinceMidnight();
+    start_timecode.edit_rate.numerator = start_tc.FrameRateNumerator();
+    start_timecode.edit_rate.denominator = start_tc.FrameRateDenominator();
+    start_timecode.drop_frame = start_tc.DropFrame();
+    start_timecode.samples = start_tc.FramesSinceMidnight();
 
     // Return
     return ProdAuto::Recorder::SUCCESS;
@@ -401,7 +414,19 @@ bool RouterRecorderImpl::Init(const std::string & name, const std::string & mc_c
     ACE_UNUSED_ARG (description);
     ACE_UNUSED_ARG (locators);
 
-    ACE_DEBUG((LM_INFO, ACE_TEXT("%C RouterRecorderImpl::Stop()\n"), mName.c_str()));
+    framecount_t post_roll = (mxf_post_roll.undefined ? 0 : mxf_post_roll.samples);
+    Ingex::Timecode stop_tc; // initialised to null
+    if (mxf_stop_timecode.undefined)
+    {
+        ACE_DEBUG((LM_INFO, ACE_TEXT("%C RouterRecorderImpl::Stop(), immediate, post-roll %d, time %C\n"),
+            mName.c_str(), post_roll, DateTime::Timecode().c_str()));
+    }
+    else
+    {
+        stop_tc = Ingex::Timecode(mxf_stop_timecode.samples, mxf_stop_timecode.edit_rate.numerator,  mxf_stop_timecode.edit_rate.denominator, false);
+        ACE_DEBUG((LM_INFO, ACE_TEXT("%C RouterRecorderImpl::Stop(), tc %C, post-roll %d, time %C\n"),
+            mName.c_str(), stop_tc.Text(), post_roll, DateTime::Timecode().c_str()));
+    }
 
     StopSaving();
 
