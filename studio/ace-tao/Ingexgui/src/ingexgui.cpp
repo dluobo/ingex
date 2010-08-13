@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: ingexgui.cpp,v 1.29 2010/08/12 16:35:38 john_f Exp $           *
+ *   $Id: ingexgui.cpp,v 1.30 2010/08/13 15:21:43 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -446,7 +446,6 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
         notebook->AddPage(playbackPage, wxT("Playback"));
         mPlaybackPageSizer = new wxBoxSizer(wxVERTICAL);
         playbackPage->SetSizer(mPlaybackPageSizer);
-        
         mPlayProjectNameBox = new wxStaticBoxSizer(wxHORIZONTAL, playbackPage); //updated when project name static text within is updated
         mPlaybackPageSizer->Add(mPlayProjectNameBox, 0, wxEXPAND | wxALL, CONTROL_BORDER);
         mPlayProjectNameBox->Add(new wxStaticText(playbackPage, PLAY_PROJECT_NAME, wxT("")), 1, wxEXPAND);
@@ -472,6 +471,7 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
 
     //event list
     mEventList = new EventList(eventPanel, -1, wxDefaultPosition, wxSize(splitterWindow->GetClientSize().x, EVENT_LIST_HEIGHT), !parser.Found(wxT("n")));
+    mEventList->Load(); //this should be done in the constructor but causes a segfault
     eventPanelSizer->Add(mEventList, 1, wxEXPAND + wxALL, CONTROL_BORDER);
 
     //Global window settings
@@ -482,12 +482,13 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
 
     //Timepos
     mTimepos = new Timepos(this, timecodeDisplay, positionDisplay);
+    mTimepos->SetDefaultEditRate(mEventList->GetEditRate());
 
     //jog/shuttle
-        mJogShuttle = new ingex::JogShuttle();
-        mJSListener = new JSListener(this);
-        mJogShuttle->addListener(mJSListener);
-        mJogShuttle->start();
+    mJogShuttle = new ingex::JogShuttle();
+    mJSListener = new JSListener(this);
+    mJogShuttle->addListener(mJSListener);
+    mJogShuttle->start();
 
     //saved state - check this after all controls have been created because it may generate a dialogue which will lead to any events previously issued being processed, which may affect controls (here's looking at you, mRecorderGroup)
     mSavedStateFilename = wxStandardPaths::Get().GetUserConfigDir() + wxFileName::GetPathSeparator() + SAVED_STATE_FILENAME;
@@ -512,7 +513,6 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
     wxString currentProject = SetProjectDlg::GetCurrentProjectName(mSavedState);
     if (!currentProject.IsEmpty()) {
         mRecorderGroup->SetCurrentProjectName(currentProject);
-        mTimepos->SetDefaultEditRate(mEventList->SetCurrentProjectName(currentProject)); //loads any stored list of events
     }
     //Various persistent dialogues
     mHelpDlg = new HelpDlg(this); //persistent to allow it to be modeless in order to remain visible while using the app
@@ -578,7 +578,6 @@ void IngexguiFrame::SetProjectName()
     if (wxID_OK == dlg.ShowModal()) {
         mRecorderGroup->SetProjectNames(dlg.GetProjectNames());
         mRecorderGroup->SetCurrentProjectName(dlg.GetSelectedProject());
-        mEventList->SetCurrentProjectName(dlg.GetSelectedProject());
         mSavedState.Save(mSavedStateFilename);
     }
 }
@@ -965,7 +964,7 @@ void IngexguiFrame::OnCue( wxCommandEvent& WXUNUSED( event ) )
                 timecode.samples += frameCount; //will wrap automatically on display
                 if (mPlayer) mPlayer->DivertKeyPresses(); //so that key presses in the player window are sent to the dialogue
                 if (wxID_OK == mCuePointsDlg->ShowModal(Timepos::FormatTimecode(timecode))) {
-                    if (mCuePointsDlg->ValidCuePointSelected()) mEventList->AddEvent(EventList::CUE, 0, frameCount, mCuePointsDlg->GetDescription(), mCuePointsDlg->GetColourIndex());
+                    if (mCuePointsDlg->ValidCuePointSelected()) mEventList->AddEvent(EventList::CUE, 0, mCuePointsDlg->GetDescription(), frameCount, mCuePointsDlg->GetColourIndex());
                     mSavedState.Save(mSavedStateFilename);
                 }
                 if (mPlayer) mPlayer->DivertKeyPresses(false);
@@ -1143,7 +1142,7 @@ void IngexguiFrame::OnRecorderGroupEvent(wxCommandEvent& event) {
                 SetStatus(RECORDING); //will prevent any more recorders being added
                 ProdAuto::MxfTimecode startTimecode;
                 mTimepos->GetStartTimecode(&startTimecode);
-                mEventList->AddEvent(EventList::START, &startTimecode); //didn't start now - started before the preroll period
+                mEventList->AddEvent(EventList::START, &startTimecode, mRecorderGroup->GetCurrentProjectName()); //didn't start now - started before the preroll period
                 mTimepos->SetPositionUnknown(); //don't know when recording started
             }
             delete (RecorderData *) event.GetClientData();
@@ -1163,7 +1162,7 @@ void IngexguiFrame::OnRecorderGroupEvent(wxCommandEvent& event) {
                 //start the position display counting
                 mTimepos->Record(*tc);
                 //add a start event
-                mEventList->AddEvent(EventList::START, tc);
+                mEventList->AddEvent(EventList::START, tc, mRecorderGroup->GetCurrentProjectName());
                 delete tc;
                 break;
             }
@@ -1192,14 +1191,14 @@ void IngexguiFrame::OnRecorderGroupEvent(wxCommandEvent& event) {
         case RecorderGroupCtrl::STOP : {
                 ProdAuto::MxfTimecode* tc = (ProdAuto::MxfTimecode *) event.GetClientData();
                 mTimepos->Stop(*tc);
-                mEventList->AddEvent(EventList::STOP, tc, mTimepos->GetFrameCount(), mRecorderGroup->GetCurrentDescription());
+                mEventList->AddEvent(EventList::STOP, tc, mRecorderGroup->GetCurrentDescription(), mTimepos->GetFrameCount());
                 SetStatus(STOPPED);
                 delete tc;
                 break;
             }
         case RecorderGroupCtrl::CHUNK_END : {
                 ProdAuto::MxfTimecode* tc = (ProdAuto::MxfTimecode *) event.GetClientData();
-                mEventList->AddEvent(EventList::CHUNK, tc, mTimepos->GetFrameCount(), mRecorderGroup->GetCurrentDescription());
+                mEventList->AddEvent(EventList::CHUNK, tc, mRecorderGroup->GetCurrentDescription(), mTimepos->GetFrameCount());
                 //set trigger to start next chunk
                 mTimepos->SetTrigger((ProdAuto::MxfTimecode *) event.GetClientData(), mRecorderGroup, false); //allow trigger to be in the past (whereupon it will happen immediately)
                 delete tc;

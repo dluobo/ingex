@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: eventlist.h,v 1.11 2010/08/12 16:35:38 john_f Exp $             *
+ *   $Id: eventlist.h,v 1.12 2010/08/13 15:21:43 john_f Exp $             *
  *                                                                         *
  *   Copyright (C) 2009-2010 British Broadcasting Corporation                   *
  *   - all rights reserved.                                                *
@@ -95,7 +95,7 @@ class EventList : public wxListView, wxThread //used wxListCtrl for a while beca
             STOP,
             PROBLEM
         };
-        void AddEvent(EventType, ProdAuto::MxfTimecode *, const int64_t = 0, const wxString & = wxT(""), const size_t = 0, const bool = true);
+        void AddEvent(EventType, ProdAuto::MxfTimecode *, const wxString &, const int64_t = 0, const size_t = 0, const bool = true);
         void AddRecorderData(RecorderData * data, bool = true);
         void DeleteCuePoint();
         void Select(const long, const bool = false);
@@ -110,7 +110,8 @@ class EventList : public wxListView, wxThread //used wxListCtrl for a while beca
         bool InLastTake();
         bool AtBottom();
         bool SelectedChunkHasChanged();
-        ProdAuto::MxfTimecode SetCurrentProjectName(const wxString &);
+        void Load();
+        ProdAuto::MxfTimecode GetEditRate() {return mEditRate;};
         ProdAuto::LocatorSeq GetLocators();
         ChunkInfo * GetCurrentChunkInfo();
         int GetCurrentCuePoint();
@@ -125,8 +126,7 @@ class EventList : public wxListView, wxThread //used wxListCtrl for a while beca
         void OnEventSelection(wxListEvent&);
         void ClearSavedData();
         const wxString GetCdata(wxXmlNode *);
-        ProdAuto::MxfTimecode Load();
-        void NewChunkInfo(ProdAuto::MxfTimecode *, int64_t);
+        void NewChunkInfo(ProdAuto::MxfTimecode *, int64_t, const wxString & = wxEmptyString);
         ProdAuto::MxfTimecode GetStartTimecode();
 
         ChunkInfoArray mChunkInfoArray;
@@ -134,7 +134,6 @@ class EventList : public wxListView, wxThread //used wxListCtrl for a while beca
         long mCurrentChunkInfo;
         long mBlockEventItem;
         wxMutex mMutex;
-        wxString mProjectName;
         unsigned int mRecordingNodeCount;
         bool mChunking;
         //vbls which need mutex protection to access
@@ -146,6 +145,7 @@ class EventList : public wxListView, wxThread //used wxListCtrl for a while beca
         bool mSyncThread;
         bool mLoadEventFiles;
         wxString mFilename;
+        ProdAuto::MxfTimecode mEditRate;
     DECLARE_EVENT_TABLE()
 };
 

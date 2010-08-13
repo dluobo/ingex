@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: recordergroup.cpp,v 1.15 2010/08/12 16:35:38 john_f Exp $       *
+ *   $Id: recordergroup.cpp,v 1.16 2010/08/13 15:21:43 john_f Exp $       *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -409,7 +409,19 @@ void RecorderGroupCtrl::OnControllerEvent(ControllerThreadEvent & event)
                         else if (CHUNK_STOP_WAIT == mMode) {
                             mMode = CHUNK_WAIT;
                             wxCommandEvent frameEvent(EVT_RECORDERGROUP_MESSAGE, CHUNK_END);
-                            frameEvent.SetClientData(new ProdAuto::MxfTimecode(event.GetTimecode())); //this is the frame after the end of the recording; deleted by event handler
+                            mTimecode = event.GetTimecode(); //this is the frame after the end of the recording, which is when the new chunk will start
+                            ProdAuto::MxfTimecode* triggerTimecode = new ProdAuto::MxfTimecode(mTimecode); //deleted by event handler
+                            //delay the trigger to ensure that it doesn't happen in the future
+                            if (mMaxPreroll.edit_rate.numerator && mMaxPreroll.samples * mMaxPreroll.edit_rate.denominator / mMaxPreroll.edit_rate.numerator && mMaxPreroll.edit_rate.denominator) { //max preroll >= 1 second; sanity checks
+                                //add half a second
+                                triggerTimecode->samples += mMaxPreroll.edit_rate.numerator / 2 / mMaxPreroll.edit_rate.denominator;
+                            }
+                            else {
+                                //add half the preroll
+                                triggerTimecode->samples += mMaxPreroll.samples / 2;
+                            }
+                            frameEvent.SetClientData(triggerTimecode);
+
                             AddPendingEvent(frameEvent);
                         }
                     }
@@ -564,13 +576,13 @@ void RecorderGroupCtrl::OnTimeposEvent(wxCommandEvent & event)
 {
     if (CHUNK_WAIT == mMode) {
         mMode = CHUNK_RECORD_WAIT; //to prevent Record being called more than once
-        Record(*((ProdAuto::MxfTimecode *) event.GetClientData())); //timecode is the frame after the recordings stopped
+        Record(mTimecode); //timecode is the frame after the recordings stopped
     }
     delete (ProdAuto::MxfTimecode *) event.GetClientData();
 }
 
 /// Initiate a recording by sending an event for each recorder asking for its enable states.
-/// @param startTimecode First frame in recording after preroll period.
+/// @param startTimecode First frame in recording after preroll period (which depends on whether chunking is happening or not).
 void RecorderGroupCtrl::Record(const ProdAuto::MxfTimecode startTimecode)
 {
     if (CHUNK_RECORD_WAIT != mMode) mMode = RECORD_WAIT; //so we know what to do when Enables() is called

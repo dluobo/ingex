@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: eventlist.cpp,v 1.14 2010/08/12 16:35:38 john_f Exp $           *
+ *   $Id: eventlist.cpp,v 1.15 2010/08/13 15:21:43 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2009-2010 British Broadcasting Corporation                   *
  *   - all rights reserved.                                                *
@@ -45,7 +45,7 @@ const wxString TypeLabels[] = {wxT(""), wxT("Start"), wxT("Cue"), wxT("Chunk Sta
 
 EventList::EventList(wxWindow * parent, wxWindowID id, const wxPoint & pos, const wxSize & size, bool loadEventFiles) :
 wxListView(parent, id, pos, size, wxLC_REPORT|wxLC_SINGLE_SEL|wxSUNKEN_BORDER|wxLC_EDIT_LABELS/*|wxALWAYS_SHOW_SB*/), //ALWAYS_SHOW_SB results in a disabled scrollbar on GTK (wx 2.8))
-mCanEditAfter(0), mCurrentChunkInfo(-1), mBlockEventItem(-1), mRecordingNodeCount(0), mChunking(false), mRunThread(false), mSyncThread(false), mLoadEventFiles(loadEventFiles)
+mCanEditAfter(0), mCurrentChunkInfo(-1), mBlockEventItem(-1), mRecordingNodeCount(0), mChunking(false), mRunThread(false), mSyncThread(false), mLoadEventFiles(loadEventFiles), mEditRate(InvalidMxfTimecode)
 {
     //set up the columns
     wxListItem itemCol;
@@ -68,11 +68,14 @@ mCanEditAfter(0), mCurrentChunkInfo(-1), mBlockEventItem(-1), mRecordingNodeCoun
     itemCol.SetText(wxT("Description"));
     InsertColumn(3, itemCol); //will set width of this automatically later
     mRootNode = new wxXmlNode(wxXML_ELEMENT_NODE, ROOT_NODE_NAME);
+//idea for storing in a standard place  mFilename = wxStandardPaths::Get().GetUserConfigDir() + wxFileName::GetPathSeparator() + SAVED_STATE_FILENAME;
+    mFilename = wxDateTime::Now().Format(wxT("ingexgui-%y%m%d.xml"));
     //start the thread (not checking for errors as not crucial to save; not waiting until thread starts as not crucial either)
     mCondition = new wxCondition(mMutex);
     mMutex.Lock(); //that's how the thread expects it
     wxThread::Create();
     wxThread::Run();
+//    Load(); segfaults if called here, at GetFirstSelected() in GetCurrentChunkInfo()
 }
 
 /// Responds to the selected item being changed, either by the user or programmatically.
@@ -376,11 +379,11 @@ bool EventList::AtBottom()
 /// Updates the other controls and the player.
 /// @param type The event type: START, CUE, CHUNK, STOP or [PROBLEM]-not fully implemented.
 /// @param timecode Timecode of the event, for START and optionally STOP and CHUNK events (for STOP and CHUNK events, assumed to be frame-accurate, unlike frameCount).
+/// @param description To show next to each event; this is the project name for START events.
 /// @param frameCount The position in frames, for CUE, STOP and CHUNK events. (For STOP and CHUNK events, if timecode supplied, used to work out the number of days; otherwise, used as the frame-accurate length unless zero, which indicates unknown).
-/// @param description A description to display for events other than START (which uses the project name).
 /// @param colourIndex The colour of a CUE event.
 /// @param select If true, selects the start of the last take for a STOP event.
-void EventList::AddEvent(EventType type, ProdAuto::MxfTimecode * timecode, const int64_t frameCount, const wxString & description, const size_t colourIndex, const bool select)
+void EventList::AddEvent(EventType type, ProdAuto::MxfTimecode * timecode, const wxString & description, const int64_t frameCount, const size_t colourIndex, const bool select)
 {
     wxListItem item;
     if (NONE == type) { //sanity check
@@ -405,7 +408,7 @@ void EventList::AddEvent(EventType type, ProdAuto::MxfTimecode * timecode, const
     switch (type) {
         case START :
             mChunking = false;
-            NewChunkInfo(timecode, 0);
+            NewChunkInfo(timecode, 0, description);
             item.SetText(TypeLabels[START]);
             item.SetTextColour(wxColour(0xFF, 0x20, 0x00));
             item.SetBackgroundColour(wxColour(wxT("WHITE")));
@@ -562,38 +565,29 @@ void EventList::AddEvent(EventType type, ProdAuto::MxfTimecode * timecode, const
 
     //description
     item.SetColumn(3);
-    if (START == type) {
-        item.SetText(mProjectName);
-    }
-    else if (STOP == type || CUE == type || CHUNK == type) {
-        item.SetText(description);
-    }
+    item.SetText(description);
     if (item.GetText().Len()) { //kludge to stop desc field being squashed if all descriptions are empty
         SetItem(item); //additional to previous data
 #ifndef __WIN32__
         SetColumnWidth(3, wxLIST_AUTOSIZE);
 #endif
     }
-
-//  if (-1 == GetFirstSelected()) { //First item to be put in the list
-//      Select(0);
-//  }
 }
 
 /// Generates a new ChunkInfo object and Recording XML node for a new recording or chunk
 /// @param timecode Start time (can be 0)
 /// @param position Start position relative to start of recording
-void EventList::NewChunkInfo(ProdAuto::MxfTimecode * timecode, int64_t position)
+/// @param projectName If empty, project name is copied from previous chunk and no project name node is generated
+void EventList::NewChunkInfo(ProdAuto::MxfTimecode * timecode, int64_t position, const wxString & projectName)
 {
     mMutex.Lock();
     mPrevRecordingNode = mRecordingNode; //so that in chunking mode, recorder data can be added to the previous recording
     mRecordingNode = new wxXmlNode(mRootNode, wxXML_ELEMENT_NODE, wxT("Recording"), wxT(""), new wxXmlProperty(wxT("Index"), wxString::Format(wxT("%d"), mRecordingNodeCount++)));
-    if (!timecode->undefined) {
-        mRecordingNode->AddProperty(wxT("StartTime"), wxString::Format(wxT("%d"), timecode->samples));
-    }
+    if (!projectName.IsEmpty()) new wxXmlNode(new wxXmlNode(mRecordingNode, wxXML_ELEMENT_NODE, wxT("ProjectName")), wxXML_CDATA_SECTION_NODE, wxT(""), projectName);
+    if (!timecode->undefined) mRecordingNode->AddProperty(wxT("StartTime"), wxString::Format(wxT("%d"), timecode->samples));
     mMutex.Unlock();
     if (mChunking && mChunkInfoArray.GetCount()) mChunkInfoArray.Item(mChunkInfoArray.GetCount() - 1).SetHasChunkAfter(); //latter check a sanity check
-    ChunkInfo * info = new ChunkInfo(GetItemCount(), mProjectName, *timecode, position, mChunking); //this will be the index of the current event; deleted by mChunkInfoArray (object array)
+    ChunkInfo * info = new ChunkInfo(GetItemCount(), projectName.IsEmpty() && mChunkInfoArray.GetCount() ? mChunkInfoArray.Item(mChunkInfoArray.GetCount() - 1).GetProjectName() : projectName, *timecode, position, mChunking); //this will be the index of the current event; deleted by mChunkInfoArray (object array)
     mChunkInfoArray.Add(info);
 }
 
@@ -706,40 +700,18 @@ bool EventList::JumpToTimecode(const ProdAuto::MxfTimecode & tc, int64_t & offse
     return false;
 }
 
-/// Sets the project name, for use in start event description and the filename of the saved events.
-/// This will load the correponding XML file of events if one is found, and generate a new file when new recordings are made.
-/// Assumes that the current XML file is up to date.
-/// @return timecode for edit rate info
-ProdAuto::MxfTimecode EventList::SetCurrentProjectName(const wxString & name)
-{
-    mProjectName = name;
-    wxString filename = name;
-    for (size_t i = 0; i < wxFileName::GetForbiddenChars().length(); i++) {
-        filename.Replace(wxString(wxFileName::GetForbiddenChars()[i]), wxT("_"));
-    }
-    filename.Replace(wxString(wxFileName::GetPathSeparator()), wxT("_"));
-    filename += wxDateTime::Now().Format(wxT("-%y%m%d"));
-    ClearSavedData();
-    mFilename = filename; //safe to do this after calling ClearSavedData()
-    return mLoadEventFiles ? Load() : InvalidMxfTimecode;
-}
-
 /// Populates the XML tree from a file, which will then be used to save to when new events are added.
-/// Ignores all data if the project name doesn't match that in the file.
 /// Calls AddEvent() and AddRecorderData() in the same way a live recording would.
 /// Does not clear existing events from the event list.
 /// Assumes ClearSavedData() has been called since the last save so that mutex doesn't have to be locked on changing shared variables.
-/// @return timecode for edit rate info
-ProdAuto::MxfTimecode EventList::Load()
+void EventList::Load()
 {
     wxXmlDocument doc;
     wxXmlNode * loadedRootNode = 0;
     wxString str;
     long long1, long2;
-    ProdAuto::MxfTimecode timecode = InvalidMxfTimecode;
-    bool haveEditRate = false; //assignment prevents compiler warning
+    mEditRate = InvalidMxfTimecode;
     long index;
-    bool haveProjectNameNode = false;
     wxXmlNode * node;
     std::vector<wxXmlNode *> recordingNodes;
     if (wxFile::Exists(mFilename)
@@ -755,12 +727,11 @@ ProdAuto::MxfTimecode EventList::Load()
          && str.ToLong(&long2)
          && 0 < long2
         ) {
-            timecode.undefined = false;
-            timecode.edit_rate.numerator = long1;
-            timecode.edit_rate.denominator = long2;
+            mEditRate.undefined = false;
+            mEditRate.edit_rate.numerator = long1;
+            mEditRate.edit_rate.denominator = long2;
         }
-        haveEditRate = !timecode.undefined;
-        //make a list of the recording nodes in order, and find the project name node
+        //make a list of the recording nodes in order
         node = loadedRootNode->GetChildren();
         while (node) {
             if (wxT("Recording") == node->GetName()
@@ -778,16 +749,6 @@ ProdAuto::MxfTimecode EventList::Load()
                 }
                 recordingNodes[index] = node;
             }
-            else if (wxT("ProjectName") == node->GetName()) {
-                if (GetCdata(node) == mProjectName) {
-                    haveProjectNameNode = true;
-                }
-                else {
-                    //give up
-                    loadedRootNode = 0;
-                    break;
-                }
-            }
             node = node->GetNext();
         }
     }
@@ -798,12 +759,13 @@ ProdAuto::MxfTimecode EventList::Load()
         //iterate over the recording nodes, filling in the event list
         long lastPosition = 0;
         for (size_t i = 0; i < recordingNodes.size(); i++) {
-            wxString description;
+            wxString projectName, description;
             if (recordingNodes[i]) {
-                //make a list of the cue points and recorders in this recording, in order, and obtain description
+                //make a list of the cue points and recorders in this recording, in order, and obtain project name and description
                 std::vector<wxXmlNode *> recorderNodes;
                 std::vector<wxXmlNode *> cuePointNodes;
                 node = recordingNodes[i]->GetChildren();
+                ProdAuto::MxfTimecode timecode = mEditRate; //for edit rate and defined values
                 while (node) {
                     if (wxT("CuePoint") == node->GetName()
                         && node->GetPropVal(wxT("Index"), &str)
@@ -835,25 +797,27 @@ ProdAuto::MxfTimecode EventList::Load()
                         }
                         recorderNodes[index] = node;
                     }
+                    else if (wxT("ProjectName") == node->GetName()) {
+                        projectName = GetCdata(node);
+                    }
                     else if (wxT("Description") == node->GetName()) {
                         description = GetCdata(node);
                     }
                     node = node->GetNext();
                 }
                 //add recording start to the event list
-                if (haveEditRate) {
+                if (!timecode.undefined) { //have edit rate
                     if (recordingNodes[i]->GetPropVal(wxT("StartTime"), &str)
                     && str.ToLong(&long1)
                     && 0 <= long1
                     ) {
-                        timecode.undefined = false;
                         timecode.samples = long1;
                     }
                     else {
                         timecode.undefined = true;
                     }
                 }
-                AddEvent(START, &timecode);
+                AddEvent(START, &timecode, projectName);
                 //add cue points to the event list
                 for (size_t j = 0; j < cuePointNodes.size(); j++) {
                     if (cuePointNodes[j]
@@ -868,7 +832,7 @@ ProdAuto::MxfTimecode EventList::Load()
                         ) {
                             long2 = 0; //default colour
                         }
-                        AddEvent(CUE, 0, long1, GetCdata(cuePointNodes[j]), (size_t) long2);
+                        AddEvent(CUE, 0, GetCdata(cuePointNodes[j]), long1, (size_t) long2);
                     }
                 }
                 //add chunk stop to the event list
@@ -886,7 +850,7 @@ ProdAuto::MxfTimecode EventList::Load()
                     lastPosition = 0; //indicates unknown
                 }
                 str = recordingNodes[i]->GetPropVal(wxT("Linking"), wxT("Finishes"));
-                AddEvent(wxT("Continues") == str ? CHUNK : STOP, 0, lastPosition, description, 0, false); //don't select as will look messy and could take ages if loading lots of recordings
+                AddEvent(wxT("Continues") == str ? CHUNK : STOP, 0, description, lastPosition, 0, false); //don't select as will look messy and could take ages if loading lots of recordings
                 if (wxT("Continues") != str) {
                     lastPosition = 0;
                 }
@@ -950,7 +914,6 @@ ProdAuto::MxfTimecode EventList::Load()
         } //recording node loop
         SelectLastTake(); //not done earlier while recordings were being added
     } //root node
-    return timecode;
 }
 
 /// If the given node has a CDATA node as a child, returns the value of this; empty string otherwise
@@ -972,10 +935,8 @@ void EventList::ClearSavedData()
     mMutex.Lock();
     delete mRootNode; //remove all stored data
     mRootNode = new wxXmlNode(wxXML_ELEMENT_NODE, ROOT_NODE_NAME);
-    new wxXmlNode(new wxXmlNode(mRootNode, wxXML_ELEMENT_NODE, wxT("ProjectName")), wxXML_CDATA_SECTION_NODE, wxT(""), mProjectName);
     mRunThread = true; //in case thread is busy so misses the signal
     mSyncThread = true; //tells thread to signal when it's not saving
-//  mSavedStateFilename = wxStandardPaths::Get().GetUserConfigDir() + wxFileName::GetPathSeparator() + SAVED_STATE_FILENAME;
     mCondition->Signal();
     mCondition->Wait(); //until not saving
     mMutex.Unlock();
@@ -999,28 +960,26 @@ wxThread::ExitCode EventList::Entry()
             mRunThread = false;
         }
         //action
-        if (mRootNode->GetChildren()) { //something to save
-            if (mSyncThread) {
-                mSyncThread = false;
-                //save synchronously
-                wxXmlDocument doc;
-                doc.SetRoot(mRootNode);
-                doc.Save(mFilename); //zzz...
-                doc.DetachRoot();
-                mCondition->Signal(); //the foreground is waiting
-            }
-            else {
-                //save asynchronously
-                wxXmlNode * rootNodeCopy = new wxXmlNode(*mRootNode); //copy constructor; needs to be on the heap
-                wxString fileName = mFilename;
-                mMutex.Unlock();
-                wxXmlDocument doc;
-                doc.SetRoot(rootNodeCopy);
-                doc.Save(fileName); //zzz...
-                doc.DetachRoot();
-                delete rootNodeCopy;
-                mMutex.Lock();
-            }
+        if (mSyncThread) {
+            mSyncThread = false;
+            //save synchronously
+            wxXmlDocument doc;
+            doc.SetRoot(mRootNode);
+            doc.Save(mFilename); //zzz...
+            doc.DetachRoot();
+            mCondition->Signal(); //the foreground is waiting
+        }
+        else {
+            //save asynchronously
+            wxXmlNode * rootNodeCopy = new wxXmlNode(*mRootNode); //copy constructor; needs to be on the heap
+            wxString fileName = mFilename;
+            mMutex.Unlock();
+            wxXmlDocument doc;
+            doc.SetRoot(rootNodeCopy);
+            doc.Save(fileName); //zzz...
+            doc.DetachRoot();
+            delete rootNodeCopy;
+            mMutex.Lock();
         }
     }
     return 0;
