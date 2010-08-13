@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.cpp,v 1.4 2010/08/12 16:27:08 john_f Exp $
+ * $Id: dvs_sdi.cpp,v 1.5 2010/08/13 09:32:06 philipn Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -134,8 +134,7 @@ int aes_audio = 0;
 int aes_routing = 0;
 int use_ffmpeg_hd_sd_scaling = 0;
 int use_yuvlib_filter = 0;
-uint8_t *hd2sd_buffer = NULL;
-uint8_t *hd2sd_workspace = NULL;
+uint8_t *hd2sd_workspace[MAX_CHANNELS];
 
 pthread_mutex_t m_log = PTHREAD_MUTEX_INITIALIZER;      // logging mutex to prevent intermixing logs
 
@@ -1232,8 +1231,8 @@ int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_from_vi
                 unsigned char *scale_output_buffer;
                 if (primary_pixel_format != secondary_pixel_format)
                 {
-                    // use intermediate buffer because a pixel format conversion will be required
-                    scale_output_buffer = hd2sd_buffer;
+                    // use video work buffer as intermediate because a pixel format conversion will be required
+                    scale_output_buffer = video_work_area[chan];
                 }
                 else
                 {
@@ -1247,7 +1246,7 @@ int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_from_vi
                           0, 0, sec_width, sec_height,
                           interlace,
                           use_yuvlib_filter, use_yuvlib_filter,
-                          hd2sd_workspace);
+                          hd2sd_workspace[chan]);
 
                 // convert pixel format if required
                 if (primary_pixel_format != secondary_pixel_format)
@@ -1281,7 +1280,7 @@ int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_from_vi
                             // other flags include: SWS_FAST_BILINEAR, SWS_BILINEAR, SWS_BICUBIC, SWS_POINT
                             // SWS_AREA, SWS_BICUBLIN, SWS_GAUSS, ... SWS_PRINT_INFO (debug)
                     avpicture_fill( (AVPicture*)td[chan].inFrame,
-                                    hd2sd_buffer,                               // scaled video
+                                    video_work_area[chan],                      // scaled video
                                     in_pixfmt,
                                     sec_width, sec_height);
                     avpicture_fill( (AVPicture*)td[chan].outFrame,
@@ -3145,7 +3144,7 @@ int main (int argc, char ** argv)
         logTF("Read one frame (%dx%d) for use as benchmark frame from %s\n", width, height, video_sample_file);
     }
 
-    // Allocate working buffers for video conversions (uvyv to 422 etc.)
+    // Allocate working buffers for video conversions (uvyv to 422, HD to SD, etc.)
     // This is faster than doing it in the shared memory.
     int chan;
     for (chan = 0; chan < MAX_CHANNELS; chan++)
@@ -3158,17 +3157,22 @@ int main (int argc, char ** argv)
                 fprintf(stderr, "Failed to allocate video work buffer.\n");
                 return 1;
             }
+
+            hd2sd_workspace[chan] = (uint8_t *)malloc(2*width*4);
+            if (!hd2sd_workspace[chan])
+            {
+                fprintf(stderr, "Failed to allocate HD-to-SD work buffer.\n");
+                return 1;
+            }
         }
         else
         {
             video_work_area[chan] = NULL;
+            hd2sd_workspace[chan] = NULL;
         }
     }
-    
-    // Allocate working buffers for scaling SD to HD
-    hd2sd_buffer = (uint8_t *)malloc(sec_width * sec_height * 2);
-    hd2sd_workspace = (uint8_t *)malloc(2 * width * 4);
-    
+
+
     // Allocate shared memory buffers
     if (! allocate_shared_buffers(num_sdi_threads, opt_max_memory))
     {
@@ -3202,7 +3206,14 @@ int main (int argc, char ** argv)
     // Cleanup
     for (chan = 0; chan < MAX_CHANNELS; chan++)
     {
-        free (video_work_area[chan]);
+        if (video_work_area[chan])
+        {
+            free(video_work_area[chan]);
+        }
+        if (hd2sd_workspace[chan])
+        {
+            free(hd2sd_workspace[chan]);
+        }
     }
 
     return 0; // silence gcc warning
