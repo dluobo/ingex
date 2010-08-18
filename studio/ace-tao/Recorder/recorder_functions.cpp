@@ -1,5 +1,5 @@
 /*
- * $Id: recorder_functions.cpp,v 1.40 2010/08/12 16:36:42 john_f Exp $
+ * $Id: recorder_functions.cpp,v 1.41 2010/08/18 10:12:26 john_f Exp $
  *
  * Functions which execute in recording threads.
  *
@@ -1815,7 +1815,7 @@ ACE_THR_FUNC_RETURN manage_record_thread(void *p_arg)
             }
             else
             {
-                ACE_DEBUG((LM_ERROR, ACE_TEXT("Failed to join record thread %x: %s\n"), *it, strerror(err)));
+                ACE_DEBUG((LM_ERROR, ACE_TEXT("Failed to join record thread %x: %s\n"), *it, strerror(errno)));
             }
         }
     }
