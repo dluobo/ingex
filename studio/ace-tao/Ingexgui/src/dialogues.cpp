@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: dialogues.cpp,v 1.19 2010/08/13 17:55:35 philipn Exp $           *
+ *   $Id: dialogues.cpp,v 1.20 2010/08/18 10:15:42 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -1866,7 +1866,7 @@ static const int Alignments[N_ALIGNMENTS] = {
 };
 
 /// Chunking occurs in two ways: manually, when the "chunk now" button in the main frame is pressed, or automatically, when enabled in this dialogue.
-/// The "chunk now" button should only be enabled while recording.  When pressed, it calls IngexguiFrame::OnChunk(), which calls ChunkingDlg::RunFrom() with no arguments.  This stops any pending automatic chunking trigger, resets the button label, and disables the button to prevent another chunk being requested while the previous chunking cycle is still in progress.  A manual chunking cycle is then initiated by calling RecorderGroupCtrl::Stop(true, ...) with the current timecode and recording details.  See later in this description for what happens when this method is called.
+/// The "chunk now" button should only be enabled while recording.  When pressed, it calls IngexguiFrame::OnChunk(), which calls ChunkingDlg::RunFrom() with no arguments.  This stops any pending automatic chunking trigger, resets the button label, and disables the button to prevent another chunk being requested while the previous chunking cycle is still in progress.  A manual chunking cycle is then initiated by calling RecorderGroupCtrl::Stop(true, ...) with the current timecode and recording details.  See later in this description for what happens when this method is called.  Realign() is also called, which results in the next chunk length being calculated to conform to the alignment (if any) chosen in the chunking dialogue.
 /// Automatic chunking is set up at the start of recording, when ChunkingDlg::RunFrom() is called, with the start timecode, and a chunking postroll value determined by the RecorderGroup object (about half a second if all recorders can manage this).  If automatic chunking is enabled in the dialogue, the stop timecode for the current chunk is worked out.
 /// This is either the start timecode plus the chunk length, or, if alignment is enabled in the dialogue and the function call, the next alignment point (or the one after that, if it's less than half a minute away).
 /// If an alignment was calculated, the "chunk now" button label is set to the time difference (otherwise it's already showing the chunk length, which is the correct value), and a repeating countdown tick timer of a second's duration is started, which decrements the countdown value on the button until it reaches zero.  (The button countdown mechanism is not used to calculate the stop timecode or to trigger the stop command, because it has neither the resolution nor the accuracy.)
@@ -1882,7 +1882,7 @@ static const int Alignments[N_ALIGNMENTS] = {
 /// Sets up dialogue.
 /// @param parent Parent window.
 /// @param savedState The XML document for retrieving and saving settings.
-ChunkingDlg::ChunkingDlg(wxWindow * parent, Timepos * timepos, wxXmlDocument & savedState) : wxDialog(parent, wxID_ANY, wxT("Chunking")), mTimepos(timepos), mSavedState(savedState), mCanChunk(false), mPostroll(InvalidMxfDuration)
+ChunkingDlg::ChunkingDlg(wxWindow * parent, Timepos * timepos, wxXmlDocument & savedState) : wxDialog(parent, wxID_ANY, wxT("Chunking")), mTimepos(timepos), mSavedState(savedState), mCanChunk(false), mPostroll(InvalidMxfDuration), mRealign(false)
 {
     const wxChar* alignmentLabels[N_ALIGNMENTS] = {
         wxT("None"),
@@ -1968,6 +1968,7 @@ void ChunkingDlg::OnEnable(wxCommandEvent & WXUNUSED(event))
             //start chunk countdown from now
             ProdAuto::MxfTimecode currentTimecode;
             mTimepos->GetTimecode(&currentTimecode);
+            mRealign = true;
             RunFrom(currentTimecode);
         }
         else {
@@ -1982,6 +1983,7 @@ void ChunkingDlg::OnEnable(wxCommandEvent & WXUNUSED(event))
 void ChunkingDlg::OnChangeChunkSize(wxSpinEvent & WXUNUSED(event))
 {
     mChunkLength = (unsigned long) mChunkSizeCtrl->GetValue() * 60; //in seconds
+    mRealign = true;
     if (!mCountdownTimer->IsRunning()) {
         Reset();
     }
@@ -1991,9 +1993,16 @@ void ChunkingDlg::OnChangeChunkSize(wxSpinEvent & WXUNUSED(event))
 void ChunkingDlg::OnChangeChunkAlignment(wxCommandEvent & WXUNUSED(event))
 {
     mChunkAlignment = Alignments[mChunkAlignCtrl->GetSelection()] * 60; //in seconds
+    mRealign = true;
     if (!mCountdownTimer->IsRunning()) {
         Reset();
     }
+}
+
+/// Re-aligns the next chunk (if aligning is enabled) even if RunFrom() is called with its align argument false
+void ChunkingDlg::Realign()
+{
+    mRealign = true;
 }
 
 /// Starts or stops the countdown.
@@ -2011,7 +2020,7 @@ void ChunkingDlg::RunFrom(const ProdAuto::MxfTimecode & startTimecode, const Pro
         if (mEnableCheckBox->IsChecked()) {
             //calculate when to chunk to frame accuracy
             ProdAuto::MxfTimecode triggerTimecode = startTimecode;
-            if (align && mChunkAlignment) {
+            if ((align || mRealign) && mChunkAlignment) {
                 triggerTimecode.samples /= mChunkAlignment * triggerTimecode.edit_rate.numerator / triggerTimecode.edit_rate.denominator; //number of alignment points passed since midnight
                 ++triggerTimecode.samples; //not samples yet but alignment points since midnight
                 triggerTimecode.samples = triggerTimecode.samples * mChunkAlignment * triggerTimecode.edit_rate.numerator / triggerTimecode.edit_rate.denominator; //the next alignment point
@@ -2037,6 +2046,7 @@ void ChunkingDlg::RunFrom(const ProdAuto::MxfTimecode & startTimecode, const Pro
         mCountdownTimer->Stop();
         mTimepos->SetTrigger(&InvalidMxfTimecode);
     }
+    mRealign = false;
 }
 
 /// Responds to the countdown timer by updating the label on the chunking button.

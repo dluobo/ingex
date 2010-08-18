@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: ingexgui.cpp,v 1.31 2010/08/13 17:55:35 philipn Exp $           *
+ *   $Id: ingexgui.cpp,v 1.32 2010/08/18 10:15:42 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -246,7 +246,7 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
         }
         wxSize size = wxDefaultSize;
         size.SetHeight(80); //bodge to show at least three lines
-        mRecorderGroup = new RecorderGroupCtrl(this, wxID_ANY, wxDefaultPosition, size, argc, argv_, &mSavedState); //do this here to allow the ORB to mangle argc and argv_
+        mRecorderGroup = new RecorderGroupCtrl(this, wxID_ANY, wxDefaultPosition, size, argc, argv_, mSavedState); //do this here to allow the ORB to mangle argc and argv_; mustn't connect recorders until SetTree() has been called
         wxCmdLineParser parser(argc, argv_);
         parser.AddSwitch(wxT("n"), wxT(""), wxT("Do not load recording list files"));
         parser.AddSwitch(wxT("p"), wxT(""), wxT("Disable player"));
@@ -435,6 +435,7 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
     descriptionBox->Add(mDescriptionCtrl, 1, wxEXPAND);
     descriptionBox->Add(new wxButton(recordPage, BUTTON_ClearDescription, wxT("Clear")), 0, wxLEFT, CONTROL_BORDER);
     mTree = new TickTreeCtrl(recordPage, TREE, wxDefaultPosition, wxSize(100, 100), wxT("Recorders")); //the y value of the size is the significant one.  Makes it a bit taller than default
+    mRecorderGroup->SetTree(mTree);
     recordPageSizer->Add(mTree, 1, wxEXPAND | wxALL, CONTROL_BORDER);
 
     //display a sensible amount (i.e total initial size of record tab) in the upper part of the splitter window 
@@ -993,6 +994,7 @@ void IngexguiFrame::OnDeleteCue( wxCommandEvent& WXUNUSED( event ) )
 void IngexguiFrame::OnChunkButton( wxCommandEvent& WXUNUSED(event) )
 {
     mChunkingDlg->RunFrom(); //just in case it's about to chunk anyway
+    mChunkingDlg->Realign(); //to realign the start of the chunk after the one we're about to instigate, if alignment is enabled
     ProdAuto::MxfTimecode now;
     Log(wxT("Chunk button pressed @ ") + mTimepos->GetTimecode(&now));
     mRecorderGroup->Stop(true, now, mDescriptionCtrl->GetLineText(0).Trim(false).Trim(true), mEventList->GetLocators());
@@ -1075,18 +1077,14 @@ void IngexguiFrame::TextFieldHasFocus(const bool hasFocus)
 /// Responds to the an event from the group of recorders.
 /// @param event The command event.
 /// The following event IDs are recognised, the enumerations being in the RecorderGroupCtrl namespace:
-/// NEW_RECORDER: Adds the recorder to the source tree, and sets mode to connected.  Sets status to recording if the new recorder is recording.
+/// NEW_RECORDER: Makes sure project name is set or disconnects.  Sets mode to connected.  Sets status to recording if the new recorder is recording.  Logs.
 ///     Event string: The recorder name.
 ///     Event int: The index of the recorder so it can be disconnected easily
-///     Event client data: Ptr to a RecorderData object, containing a track list and a track status list.  Deletes this.
-/// REQUEST_ENABLES: Asks the source tree for a list of enable states and passes it to the recorder group.
-///     Event string: The recorder name (an event will be received for each recorder).
-///     Event int: Non-zero to ignore current recording state on determining whether there's anything to record.
 /// RECORD: Starts position counter and adds a start event to the event list.
 ///     Event client data: Ptr to a ProdAuto::MxfTimecode object with the start timecode.  Deletes this.
 /// CHUNK_START: Tells the chunking dialogue to start counting down to the next chunking point.
 ///     Event client data: Ptr to a ProdAuto::MxfTimecode object with the start timecode.  Deletes this.
-/// RECORDER_STARTED: Tell tree and log success or otherwise of this recorder's attempt to record.
+/// RECORDER_STARTED: Log.
 ///     Event string: The recorder name.
 ///     Event int: Non-zero for success.
 ///     Event client data: Ptr to a ProdAuto::MxfTimecode object with the start timecode.  Deletes this.
@@ -1096,16 +1094,12 @@ void IngexguiFrame::TextFieldHasFocus(const bool hasFocus)
 ///     Event client data: Ptr to a ProdAuto::MxfTimecode object with the chunking timecode.  Deletes this.
 /// SET_TRIGGER: Sets a trigger for the next chunk start.
 ///     Event client data: Ptr to a ProdAuto::MxfTimecode object with the chunking timecode.  Deletes this.
-/// RECORDER_STOPPED: Tell tree and log success or otherwise of this recorder's attempt to stop.  If successful and not a router recorder, add recording details to the event list.
+/// RECORDER_STOPPED: Log.  If successful and not a router recorder, add recording details to the event list.
 ///     Event string: The recorder name.
 ///     Event int: Non-zero for success.
 ///	Event extra-long: non-zero if a router recorder.
 ///     Event client data: if not a router recorder, ptr to a RecorderData object, containing track/file data.  Deletes this.
-/// TRACK_STATUS: Informs source tree of tracks' status (recording or not) for given recorder.
-///     Event string: The recorder name.
-///     Event client data: Ptr to a RecorderData object, containing a track status list.  Deletes this.
-///     Event int: non-zero to indicate chunking, i.e. to ignore mismatches between intended and current recording state.
-/// REMOVE_RECORDER: Removes the given recorder from the tree, and sets mode to disconnected if no recorders remaining.
+/// REMOVE_RECORDER: Logs. Sets mode to disconnected if no recorders remaining.
 ///     Event string: The recorder name.
 /// DISPLAY_TIMECODE: Displays the given timecode, enabling auto-increment.
 ///     Event client data: Ptr to a RecorderData object, containing a timecode.  Deletes this.
@@ -1129,7 +1123,6 @@ void IngexguiFrame::OnRecorderGroupEvent(wxCommandEvent& event) {
         case RecorderGroupCtrl::NEW_RECORDER :
             Log(wxT("NEW_RECORDER: \"") + event.GetString() + wxT("\""));
             //event contains all the details about the recorder
-            mTree->AddRecorder(event.GetString(), ((RecorderData *) event.GetClientData())->GetTrackList(), ((RecorderData *) event.GetClientData())->GetTrackStatusList(), event.GetInt(), mSavedState);
             if (mRecorderGroup->GetCurrentProjectName().IsEmpty()) { //not yet selected a project and we should have some project names now as we've got a recorder
                 SetProjectName();
                 if (mRecorderGroup->GetCurrentProjectName().IsEmpty()) {
@@ -1147,18 +1140,7 @@ void IngexguiFrame::OnRecorderGroupEvent(wxCommandEvent& event) {
                 mEventList->AddEvent(EventList::START, &startTimecode, mRecorderGroup->GetCurrentProjectName()); //didn't start now - started before the preroll period
                 mTimepos->SetPositionUnknown(); //don't know when recording started
             }
-            delete (RecorderData *) event.GetClientData();
             break;
-        case RecorderGroupCtrl::REQUEST_ENABLES : {
-                //record enable list required
-                CORBA::BooleanSeq enableList;
-                if (mTree->GetRecordEnables(event.GetString(), enableList, event.GetInt())) { //something's enabled for recording, and not already recording (unless third argument is non-zero)
-                    Log(wxT("REQUEST_ENABLES for \"") + event.GetString() + wxT("\" and track(s) enabled to record"));
-                    mRecorderGroup->Enables(event.GetString(), enableList);
-                    mTree->SetRecorderStateUnknown(event.GetString(), wxT("Awaiting response..."));
-                }
-                break;
-            }
         case RecorderGroupCtrl::RECORD : {
                 ProdAuto::MxfTimecode* tc = (ProdAuto::MxfTimecode *) event.GetClientData();
                 //start the position display counting
@@ -1178,14 +1160,10 @@ void IngexguiFrame::OnRecorderGroupEvent(wxCommandEvent& event) {
         case RecorderGroupCtrl::RECORDER_STARTED : {
                 ProdAuto::MxfTimecode* tc = (ProdAuto::MxfTimecode *) event.GetClientData();
                 if (event.GetInt()) { //successful
-                    mTree->SetRecorderStateOK(event.GetString());
                     Log(wxT("RECORDING successfully on \"") + event.GetString() + wxT("\" @ ") + Timepos::FormatTimecode(*tc));
                 }
                 else {
                     Log(wxT("RECORDING failed on \"") + event.GetString() + wxT("\""));
-                    if (RUNNING_UP == mStatus) {
-                        mTree->SetRecorderStateProblem(event.GetString(), wxT("Failed to record: retrying"));
-                    }
                 }
                 delete tc;
                 break;
@@ -1213,7 +1191,6 @@ void IngexguiFrame::OnRecorderGroupEvent(wxCommandEvent& event) {
         case RecorderGroupCtrl::RECORDER_STOPPED :
             if (event.GetInt()) { //successful
                 Log(wxT("STOPPED successfully on \"") + event.GetString() + wxT("\"") + (event.GetExtraLong() ? wxT(" (Router recorder)") : wxEmptyString));
-                mTree->SetRecorderStateOK(event.GetString());
                 if (!event.GetExtraLong()) { //not a router recorder
                     if (((RecorderData *) event.GetClientData())->GetTrackList().operator->()) {
                         //Add the recorded files to the take info (assumes a STOPPED or CHUNK_END event has already been received, so mEventList knows if it's a chunk or not and therefore which ChunkInfo to add it to)
@@ -1232,18 +1209,11 @@ void IngexguiFrame::OnRecorderGroupEvent(wxCommandEvent& event) {
             }
             else {
                 Log(wxT("STOPPED failure on \"") + event.GetString() + wxT("\""));
-                mTree->SetRecorderStateProblem(event.GetString(), wxT("Failed to stop: retrying"));
             }
             if (!event.GetExtraLong()) delete (RecorderData *) event.GetClientData();
             break;
-        case RecorderGroupCtrl::TRACK_STATUS :
-//spam          Log(wxT("TRACK_STATUS for \"") + event.GetString() + wxT("\""));
-            mTree->SetTrackStatus(event.GetString(), IsRecording(), event.GetInt(), ((RecorderData *) event.GetClientData())->GetTrackStatusList()); //will set record button and status indicator
-            delete (RecorderData *) event.GetClientData();
-            break;
         case RecorderGroupCtrl::REMOVE_RECORDER :
             Log(wxT("REMOVE_RECORDER for \"") + event.GetString() + wxT("\""));
-            mTree->RemoveRecorder(event.GetString());
             if (!mTree->HasRecorders() && IsRecording()) {//this check needed in case we disconnect from a recorder that's recording/running up and we can't contact
                 SetStatus(STOPPED);
             }

@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: ingexgui.h,v 1.19 2010/08/03 09:27:07 john_f Exp $              *
+ *   $Id: ingexgui.h,v 1.20 2010/08/18 10:15:42 john_f Exp $              *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -176,7 +176,6 @@ class IngexguiFrame : public wxFrame
         NOTEBOOK,
         TIMECODE_BOX,
     };
-    private:
     enum Stat
     {
         STOPPED,
@@ -187,6 +186,9 @@ class IngexguiFrame : public wxFrame
         PAUSED,
         PLAYING_BACKWARDS,
     };
+        Stat GetStatus() {return mStatus;};
+        bool IsRecording();
+    private:
         void OnUpdateUI(wxUpdateUIEvent&);
         void OnClose(wxCloseEvent&);
         void OnHelp(wxCommandEvent&);
@@ -230,7 +232,6 @@ class IngexguiFrame : public wxFrame
         void ClearLog();
         void Log(const wxString &);
         void SetProjectName();
-        bool IsRecording();
         void EtoE();
         bool OperationAllowed(const int, bool* = 0);
 

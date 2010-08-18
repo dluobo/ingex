@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: recordergroup.cpp,v 1.17 2010/08/13 17:55:35 philipn Exp $       *
+ *   $Id: recordergroup.cpp,v 1.18 2010/08/18 10:15:42 john_f Exp $       *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -25,6 +25,7 @@
 #include "controller.h"
 #include "comms.h"
 #include "timepos.h"
+#include "ticktree.h"
 #include "ingexgui.h" //for consts
 #include <wx/xml/xml.h>
 
@@ -47,7 +48,7 @@ END_EVENT_TABLE()
 /// @param argc Argument count, for ORB initialisation.
 /// @param argv Argument vector, for ORB initialisation.
 /// @param doc The saved state.  Pointer merely saved; not used until controller events are received.
-RecorderGroupCtrl::RecorderGroupCtrl(wxWindow * parent, wxWindowID id, const wxPoint & pos, const wxSize & size, int& argc, char** argv, const wxXmlDocument * doc) : wxListBox(parent, id, pos, size, 0, 0, wxLB_MULTIPLE), mEnabledForInput(true), mPreroll(InvalidMxfDuration), mDoc(doc), mMode(STOPPED)
+RecorderGroupCtrl::RecorderGroupCtrl(wxWindow * parent, wxWindowID id, const wxPoint & pos, const wxSize & size, int& argc, char** argv, wxXmlDocument & doc) : wxListBox(parent, id, pos, size, 0, 0, wxLB_MULTIPLE), mEnabledForInput(true), mPreroll(InvalidMxfDuration), mDoc(doc), mMode(STOPPED)
 {
     mComms = new Comms(this, argc, argv);
 }
@@ -147,6 +148,7 @@ void RecorderGroupCtrl::Deselect(unsigned int index)
     wxListBox::Deselect(index);
     Disconnect(index);
     //depopulate the source tree
+    mTree->RemoveRecorder(GetString(index));
     wxCommandEvent event(EVT_RECORDERGROUP_MESSAGE, REMOVE_RECORDER);
     event.SetString(GetString(index));
     AddPendingEvent(event);
@@ -270,18 +272,17 @@ void RecorderGroupCtrl::OnControllerEvent(ControllerThreadEvent & event)
                     //everything about the recorder is now checked
                     Select(pos);
                     //populate the source tree
+                    mTree->AddRecorder(event.GetName(), event.GetTrackList(), event.GetTrackStatusList(), GetController(pos)->IsRouterRecorder(), mDoc);
+                    //tell the frame
                     wxCommandEvent frameEvent(EVT_RECORDERGROUP_MESSAGE, NEW_RECORDER);
                     frameEvent.SetString(event.GetName());
                     frameEvent.SetInt(pos); //to allow quick disconnection
-                    RecorderData * recorderData = new RecorderData(event.GetTrackStatusList(), event.GetTrackList()); //must be deleted by event handler
-                    frameEvent.SetClientData(recorderData);
-                    frameEvent.SetInt(GetController(pos)->IsRouterRecorder());
                     AddPendingEvent(frameEvent);
                     //preroll and postroll
                     if (!selectedItems.GetCount()) { //the only recorder
                         mMaxPreroll = GetController(pos)->GetMaxPreroll();
                         mPreroll = mMaxPreroll; //for the edit rate values
-                        wxXmlNode * node = mDoc->GetRoot()->GetChildren();
+                        wxXmlNode * node = mDoc.GetRoot()->GetChildren();
                         while (node && node->GetName() != wxT("Preroll")) {
                             node = node->GetNext();
                         }
@@ -294,7 +295,7 @@ void RecorderGroupCtrl::OnControllerEvent(ControllerThreadEvent & event)
                         }
                         mMaxPostroll = GetController(pos)->GetMaxPostroll();
                         mPostroll = mMaxPostroll; //for the edit rate values
-                        node = mDoc->GetRoot()->GetChildren();
+                        node = mDoc.GetRoot()->GetChildren();
                         while (node && node->GetName() != wxT("Postroll")) {
                             node = node->GetNext();
                         }
@@ -384,6 +385,13 @@ void RecorderGroupCtrl::OnControllerEvent(ControllerThreadEvent & event)
                             AddPendingEvent(frameEvent);
                         }
                     }
+                    //update tree
+                    if (Controller::SUCCESS == event.GetResult()) {
+                        mTree->SetRecorderStateOK(event.GetName());
+                    }
+                    else if (IngexguiFrame::RUNNING_UP == ((IngexguiFrame*) GetParent())->GetStatus()) {
+                        mTree->SetRecorderStateProblem(event.GetName(), wxT("Failed to record: retrying"));
+                    }
                     //recorder update event
                     wxCommandEvent frameEvent(EVT_RECORDERGROUP_MESSAGE, RECORDER_STARTED);
                     frameEvent.SetString(event.GetName());
@@ -409,15 +417,15 @@ void RecorderGroupCtrl::OnControllerEvent(ControllerThreadEvent & event)
                         else if (CHUNK_STOP_WAIT == mMode) {
                             mMode = CHUNK_WAIT;
                             //remember the timecode for when the recorders are started
-                            mTimecode = event.GetTimecode(); //this is the frame after the end of the recording, which is when the new chunk will start
+                            mChunkStartTimecode = event.GetTimecode(); //this is the frame after the end of the recording, which is when the new chunk will start
                             //report the chunk end
                             wxCommandEvent frameEvent(EVT_RECORDERGROUP_MESSAGE, CHUNK_END);
-                            ProdAuto::MxfTimecode* chunkTimecode = new ProdAuto::MxfTimecode(mTimecode); //deleted by event handler
-                            frameEvent.SetClientData(chunkTimecode);
+                            ProdAuto::MxfTimecode* chunkStartTimecode = new ProdAuto::MxfTimecode(mChunkStartTimecode); //deleted by event handler
+                            frameEvent.SetClientData(chunkStartTimecode);
                             AddPendingEvent(frameEvent);
                             //set trigger for starting the next chunk
                             frameEvent.SetId(SET_TRIGGER);
-                            ProdAuto::MxfTimecode* triggerTimecode = new ProdAuto::MxfTimecode(mTimecode); //deleted by event handler
+                            ProdAuto::MxfTimecode* triggerTimecode = new ProdAuto::MxfTimecode(mChunkStartTimecode); //deleted by event handler
                             if (mMaxPreroll.edit_rate.numerator && mMaxPreroll.samples * mMaxPreroll.edit_rate.denominator / mMaxPreroll.edit_rate.numerator && mMaxPreroll.edit_rate.denominator) { //max preroll >= 1 second; sanity checks
                                 //add half a second delay to the trigger to ensure that a start in the future isn't requested
                                 triggerTimecode->samples += mMaxPreroll.edit_rate.numerator / 2 / mMaxPreroll.edit_rate.denominator;
@@ -429,6 +437,13 @@ void RecorderGroupCtrl::OnControllerEvent(ControllerThreadEvent & event)
                             frameEvent.SetClientData(triggerTimecode);
                             AddPendingEvent(frameEvent);
                         }
+                    }
+                    //update tree
+                    if (Controller::SUCCESS == event.GetResult()) {
+                        mTree->SetRecorderStateOK(event.GetName());
+                    }
+                    else {
+                        mTree->SetRecorderStateProblem(event.GetName(), wxT("Failed to stop: retrying"));
                     }
                     //recorder update event (send after any state change event so event list knows which chunk info object to add the recorder data to)
                     wxCommandEvent frameEvent(EVT_RECORDERGROUP_MESSAGE, RECORDER_STOPPED);
@@ -510,12 +525,7 @@ void RecorderGroupCtrl::OnControllerEvent(ControllerThreadEvent & event)
                 }
             }
             //track status
-            wxCommandEvent frameEvent(EVT_RECORDERGROUP_MESSAGE, TRACK_STATUS);
-            frameEvent.SetString(event.GetName());
-            frameEvent.SetInt(CHUNK_WAIT == mMode); //prevent a problem being indicated during the period when the recorder is stopped between chunks but the expected state is to be recording
-            RecorderData * recorderData = new RecorderData(event.GetTrackStatusList()); //must be deleted by event handler
-            frameEvent.SetClientData(recorderData);
-            AddPendingEvent(frameEvent);
+            mTree->SetTrackStatus(event.GetName(), ((IngexguiFrame*) GetParent())->IsRecording(), CHUNK_WAIT == mMode, event.GetTrackStatusList()); //will set record button and status indicator; if chunking, prevent a problem being indicated during the period when the recorder is stopped between chunks but the expected state is to be recording
         }
         else { //no status
             if (event.GetName() == mTimecodeRecorder) { //just lost timecode from the recorder we're using
@@ -576,12 +586,12 @@ void RecorderGroupCtrl::SetTapeIds(const wxString & recorderName, const CORBA::S
 
 /// Starts a new chunk after a previous one has finished.
 /// Must be called late enough that the recorders are not asked to start recording in the future.
-/// @param event Contains a pointer to the timecode of the chunk end, minus postroll.  Must be deleted.
+/// @param event Contains pointer to trigger timecode as client data, which must be deleted.
 void RecorderGroupCtrl::OnTimeposEvent(wxCommandEvent & event)
 {
     if (CHUNK_WAIT == mMode) {
         mMode = CHUNK_RECORD_WAIT; //to prevent Record being called more than once
-        Record(mTimecode); //timecode is the frame after the recordings stopped
+        Record(mChunkStartTimecode); //timecode is the frame after the recordings stopped
     }
     delete (ProdAuto::MxfTimecode *) event.GetClientData();
 }
@@ -592,14 +602,16 @@ void RecorderGroupCtrl::Record(const ProdAuto::MxfTimecode startTimecode)
 {
     if (CHUNK_RECORD_WAIT != mMode) mMode = RECORD_WAIT; //so we know what to do when Enables() is called
     mEnabledForInput = false; //don't want recorders being removed/added while recording
-    mTimecode = startTimecode;
-    //Ask for all the enable states
+    //tell all relevant recorders to record
     for (unsigned int i = 0; i < GetCount(); i++) {
-        if (GetController(i) && GetController(i)->IsOK()) {
-            wxCommandEvent event(EVT_RECORDERGROUP_MESSAGE, REQUEST_ENABLES);
-            event.SetString(GetName(i));
-            event.SetInt(CHUNK_RECORD_WAIT == mMode); //ignore the fact that tracks are still recording
-            AddPendingEvent(event);
+        CORBA::BooleanSeq enableList;
+        if (
+         GetController(i) && GetController(i)->IsOK()
+         && mTree->GetRecordEnables(GetName(i), enableList, CHUNK_RECORD_WAIT == mMode)) { //something's enabled for recording, and not already recording (unless third argument is non-zero)
+               ProdAuto::MxfDuration preroll = mPreroll;
+               if (CHUNK_RECORD_WAIT == mMode) preroll.samples = 0; //want to record exactly at the previously given timecode, and we should be later than this so can do it
+               GetController(i)->Record(startTimecode, preroll, mCurrentProject, enableList);
+               mTree->SetRecorderStateUnknown(GetName(i), wxT("Awaiting response..."));
         }
     }
 }
@@ -613,51 +625,17 @@ void RecorderGroupCtrl::Stop(const bool chunk, const ProdAuto::MxfTimecode & sto
 {
     mMode = chunk ? CHUNK_STOP_WAIT : STOP_WAIT; //to know what to do when Enables() is called as the result of the events about to be sent
     if (!chunk) mEnabledForInput = true; //do it here for safety (in case we get no response)
-    mTimecode = stopTimecode;
     mCurrentDescription = description;
-    mLocators = locators;
-    //find out which recorders are recording
-    for (unsigned int i = 0; i < GetCount(); i++) {
-        if (GetController(i) && GetController(i)->IsOK()) {
-            wxCommandEvent event(EVT_RECORDERGROUP_MESSAGE, REQUEST_ENABLES);
-            event.SetString(GetName(i));
-            event.SetInt(1); //ignore the fact that it's already recording
-            AddPendingEvent(event);
-        }
-    }
     mHaveNonRouterRecorders = false; //will be set if we find any
-}
-
-/// Issue a record command (with the given enable states) or a stop command to the given recorder, depending on the mode.
-/// Preroll and postroll are as set by the user unless chunking.
-/// @param recorderName The recorder in question.
-/// @param enableList Record enable states.
-void RecorderGroupCtrl::Enables(const wxString & recorderName, const CORBA::BooleanSeq & enableList)
-{
-    if (GetController(FindString(recorderName, true))) { //sanity check
-        ProdAuto::MxfDuration preroll = mPreroll;
-        switch (mMode) {
-            case CHUNK_RECORD_WAIT:
-            case CHUNK_RECORDING:
-                //want to record exactly at the previously given timecode, and we should be later than this so can do it
-                preroll.samples = 0;
-            case RECORD_WAIT:
-            case RECORDING:
-                //want to record with user-supplied preroll
-                GetController(FindString(recorderName, true))->Record(mTimecode, preroll, mCurrentProject, enableList);
-                break;
-            case STOP_WAIT:
-            case STOPPED:
-                //want to stop with user-supplied postroll
-                GetController(FindString(recorderName, true))->Stop(mTimecode, mPostroll, mCurrentDescription, mLocators);
-                mHaveNonRouterRecorders |= !GetController(FindString(recorderName, true))->IsRouterRecorder();
-                break;
-            case CHUNK_STOP_WAIT:
-            case CHUNK_WAIT:
-                //want to stop with predefined postroll
-                GetController(FindString(recorderName, true))->Stop(mTimecode, GetChunkingPostroll(), mCurrentDescription, mLocators);
-                mHaveNonRouterRecorders |= !GetController(FindString(recorderName, true))->IsRouterRecorder();
-                break;
+    //tell all relevant recorders to stop
+    for (unsigned int i = 0; i < GetCount(); i++) {
+        CORBA::BooleanSeq enableList; //dummy
+        if (
+         GetController(i) && GetController(i)->IsOK()
+         && mTree->GetRecordEnables(GetName(i), enableList, true)) { //ignore current recording state
+            GetController(i)->Stop(stopTimecode, chunk ? GetChunkingPostroll() : mPostroll, mCurrentDescription, locators); //stop with predefined preroll if chunking
+            mTree->SetRecorderStateUnknown(GetName(i), wxT("Awaiting response..."));
+            mHaveNonRouterRecorders |= !GetController(i)->IsRouterRecorder();
         }
     }
 }

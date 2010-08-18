@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: recordergroup.h,v 1.13 2010/08/13 17:55:35 philipn Exp $         *
+ *   $Id: recordergroup.h,v 1.14 2010/08/18 10:15:42 john_f Exp $         *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -35,8 +35,9 @@ class wxXmlDocument;
 class RecorderGroupCtrl : public wxListBox
 {
     public:
-        RecorderGroupCtrl(wxWindow *, wxWindowID id, const wxPoint &, const wxSize &, int&, char**, const wxXmlDocument *);
+        RecorderGroupCtrl(wxWindow *, wxWindowID id, const wxPoint &, const wxSize &, int&, char**, wxXmlDocument &);
         ~RecorderGroupCtrl();
+        void SetTree(TickTreeCtrl * tree) {mTree = tree;};
         void StartGettingRecorders();
         void SetPreroll(const ProdAuto::MxfDuration);
         void SetPostroll(const ProdAuto::MxfDuration);
@@ -47,7 +48,6 @@ class RecorderGroupCtrl : public wxListBox
         const ProdAuto::MxfDuration GetChunkingPostroll();
         void SetTapeIds(const wxString &, const CORBA::StringSeq &, const CORBA::StringSeq &);
         void Record(const ProdAuto::MxfTimecode);
-        void Enables(const wxString &, const CORBA::BooleanSeq &);
         void Stop(const bool, const ProdAuto::MxfTimecode &, const wxString &, const ProdAuto::LocatorSeq &);
         void ChunkStop(const ProdAuto::MxfTimecode &, const wxString &, const ProdAuto::LocatorSeq &);
         void EnableForInput(bool state = true) { mEnabledForInput = state; };
@@ -63,10 +63,8 @@ class RecorderGroupCtrl : public wxListBox
             ENABLE_REFRESH,
             NEW_RECORDER,
             REMOVE_RECORDER,
-            REQUEST_ENABLES,
             RECORD,
             RECORDER_STARTED,
-            TRACK_STATUS,
             STOP,
             RECORDER_STOPPED,
             DISPLAY_TIMECODE_SOURCE,
@@ -99,9 +97,8 @@ class RecorderGroupCtrl : public wxListBox
         ProdAuto::MxfDuration mMaxPreroll, mMaxPostroll, mPreroll, mPostroll;
         wxString mTimecodeRecorder;
         bool mTimecodeRecorderStuck;
-        ProdAuto::MxfTimecode mTimecode;
-        ProdAuto::LocatorSeq mLocators;
-        const wxXmlDocument * mDoc;
+        ProdAuto::MxfTimecode mChunkStartTimecode;
+        wxXmlDocument & mDoc;
         wxSortedArrayString mProjectNames;
         wxString mCurrentProject;
         wxString mCurrentDescription;
@@ -117,6 +114,7 @@ class RecorderGroupCtrl : public wxListBox
         };
         Mode mMode;
         bool mHaveNonRouterRecorders;
+        TickTreeCtrl * mTree;
         DECLARE_EVENT_TABLE()
 };
 

@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: dialogues.h,v 1.13 2010/08/03 09:27:07 john_f Exp $             *
+ *   $Id: dialogues.h,v 1.14 2010/08/18 10:15:42 john_f Exp $             *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -307,7 +307,7 @@ class ChunkingDlg : public wxDialog
         ChunkingDlg(wxWindow *, Timepos *, wxXmlDocument &);
         int ShowModal();
         void RunFrom(const ProdAuto::MxfTimecode & = InvalidMxfTimecode, const ProdAuto::MxfDuration & = InvalidMxfDuration, const bool = true);
-        void Reset();
+        void Realign();
         bool CanChunk() { return mCanChunk; };
         const wxString GetChunkButtonLabel();
         const wxString GetChunkButtonToolTip();
@@ -318,6 +318,7 @@ class ChunkingDlg : public wxDialog
         void OnEnable(wxCommandEvent &);
         void OnTimer(wxTimerEvent &);
         void SetCountdownLabel();
+        void Reset();
 
         wxSpinCtrl * mChunkSizeCtrl;
         wxChoice * mChunkAlignCtrl;
@@ -331,6 +332,7 @@ class ChunkingDlg : public wxDialog
         int mChunkAlignment;
         bool mCanChunk;
         ProdAuto::MxfDuration mPostroll;
+        bool mRealign;
     DECLARE_EVENT_TABLE()
 };
 
