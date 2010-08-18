@@ -1,5 +1,5 @@
 /*
- * $Id: create_audio_test_signal.c,v 1.1 2010/02/17 15:56:50 philipn Exp $
+ * $Id: create_audio_test_signal.c,v 1.2 2010/08/18 10:10:07 john_f Exp $
  *
  * Create PCM audio test signal
  *
@@ -29,6 +29,7 @@
 #include <string.h>
 #include <errno.h>
 #include <math.h>
+#include <inttypes.h>
 
 #define MAX_CHANNELS        32
 
@@ -48,10 +49,18 @@ static const unsigned int DEFAULT_BITS_PER_SAMPLE = 16;
 
 
 
-static inline int write_tone(FILE *file, Input *tone, int64_t position)
+static inline int write_tone(FILE *file, Input *tone, int64_t position, int hex_output)
 {
     int32_t sample = tone->fac1 * sin(position * tone->fac2);
-    
+
+    if (hex_output)
+    {
+        uint16_t s16 = sample >> 16;
+        if (fprintf(file, "%s0x%04x,", position % 8 ? " " : "\n", s16) < 0)
+            return 0;
+    }
+    else
+    {
     switch (tone->bytes_per_sample)
     {
         case 1:
@@ -85,9 +94,11 @@ static inline int write_tone(FILE *file, Input *tone, int64_t position)
         default:
             break; // not reached
     }
+    }
     
     return 1;
 }
+
 
 static void init_tone(Input *tone, float sampling_rate, unsigned int bytes_per_sample)
 {
@@ -101,9 +112,10 @@ static void usage(const char *cmd)
     fprintf(stderr, "Usage: %s [options] <<inputs>> <output>\n", cmd);
     fprintf(stderr, "Options:\n");
     fprintf(stderr, "  -h|--help                Print this usage message and exit\n");
-    fprintf(stderr, "  --dur <sec>              Duration in seconds. Default %.1f\n", DEFAULT_DURATION);
+    fprintf(stderr, "  --dur <sec>              Duration in seconds. Default %.2f\n", DEFAULT_DURATION);
     fprintf(stderr, "  --rate <hz>              Sampling rate. Default %.1f\n", DEFAULT_SAMPLING_RATE);
     fprintf(stderr, "  --bps <bits>             Bits per sample. Default %d\n", DEFAULT_BITS_PER_SAMPLE);
+    fprintf(stderr, "  --hex                    Write output as comma-separated hexadecimal values\n");
     fprintf(stderr, "Inputs:\n");
     fprintf(stderr, "  --tone <freq> <dbfs>     Tone signal with freq (Hz) and power (dbFS)\n");
 }
@@ -121,6 +133,7 @@ int main(int argc, const char **argv)
     int num_inputs = 0;
     int i, s;
     int64_t sample_count;
+    int hex_output = 0;
     
     for (cmdln_index = 1; cmdln_index < argc; cmdln_index++) {
         if (strcmp(argv[cmdln_index], "-h") == 0 ||
@@ -175,6 +188,10 @@ int main(int argc, const char **argv)
                 return 1;
             }
             bytes_per_sample = (bits_per_sample + 7) / 8;
+        }
+        else if (strcmp(argv[cmdln_index], "--hex") == 0)
+        {
+            hex_output = 1;
         }
         else if (strcmp(argv[cmdln_index], "--tone") == 0)
         {
@@ -246,13 +263,16 @@ int main(int argc, const char **argv)
     
     for (s = 0; s < sample_count; s++) {
         for (i = 0; i < num_inputs; i++) {
-            if (!write_tone(output, &input[i], s)) {
+            if (!write_tone(output, &input[i], s, hex_output)) {
                 fprintf(stderr, "Failed to write: %s\n", strerror(errno));
                 return 1;
             }
         }
     }
     
+    if (hex_output) {
+        fprintf(output, "\n");
+    }
     
     fclose(output);
     
