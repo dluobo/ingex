@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorder.cpp,v 1.19 2010/08/12 16:36:42 john_f Exp $
+ * $Id: IngexRecorder.cpp,v 1.20 2010/08/18 10:13:13 john_f Exp $
  *
  * Class to manage an individual recording.
  *
@@ -546,8 +546,8 @@ bool IngexRecorder::Start()
         else
         {
             it->id = 0;
-            ACE_DEBUG((LM_ERROR, ACE_TEXT("Failed to create %C record thread %d\n"),
-                src_name, index));
+            ACE_DEBUG((LM_ERROR, ACE_TEXT("Failed to create %C record thread %d (returned %d, %C)\n"),
+                src_name, index, err, strerror(errno)));
         }
     }
 
