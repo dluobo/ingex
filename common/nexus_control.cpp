@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_control.cpp,v 1.1 2010/07/06 14:15:13 john_f Exp $
+ * $Id: nexus_control.cpp,v 1.2 2010/08/18 10:18:43 john_f Exp $
  *
  * Module for creating and accessing nexus shared control memory
  *
@@ -91,18 +91,26 @@ extern const char *nexus_timecode_type_name(NexusTimecode tc_type)
 
 extern int nexus_lastframe(NexusControl *pctl, int channel)
 {
-    int lastframe;
+    int lastframe = 0;
     
-    PTHREAD_MUTEX_LOCK(&pctl->channel[channel].m_lastframe)
-    lastframe = pctl->channel[channel].lastframe;
-    PTHREAD_MUTEX_UNLOCK(&pctl->channel[channel].m_lastframe)
+    if (pctl)
+    {
+        PTHREAD_MUTEX_LOCK(&pctl->channel[channel].m_lastframe)
+        lastframe = pctl->channel[channel].lastframe;
+        PTHREAD_MUTEX_UNLOCK(&pctl->channel[channel].m_lastframe)
+    }
     
     return lastframe;
 }
 
 extern NexusFrameData* nexus_frame_data(const NexusControl *pctl, uint8_t *ring[], int channel, int frame)
 {
-    return (NexusFrameData *)(ring[channel] + pctl->elementsize * (frame % pctl->ringlen) + pctl->frame_data_offset);
+    NexusFrameData * nfd = 0;
+    if (pctl)
+    {
+        nfd = (NexusFrameData *)(ring[channel] + pctl->elementsize * (frame % pctl->ringlen) + pctl->frame_data_offset);
+    }
+    return nfd;
 }
 
 extern int nexus_num_aud_samp(const NexusControl *pctl, uint8_t *ring[], int channel, int frame)
@@ -190,24 +198,44 @@ Ingex::Timecode nexus_timecode(const NexusControl *pctl, uint8_t *ring[], int ch
 
 extern const uint8_t *nexus_primary_video(const NexusControl *pctl, uint8_t *ring[], int channel, int frame)
 {
-    return ring[channel] + pctl->elementsize * (frame % pctl->ringlen);
+    uint8_t * pri_vid = 0;
+    if (pctl)
+    {
+        pri_vid = ring[channel] + pctl->elementsize * (frame % pctl->ringlen);
+    }
+    return pri_vid;
 }
 
 extern const uint8_t *nexus_secondary_video(const NexusControl *pctl, uint8_t *ring[], int channel, int frame)
 {
-    return ring[channel] + pctl->elementsize * (frame % pctl->ringlen) + pctl->sec_video_offset;
+    uint8_t * sec_vid = 0;
+    if (pctl)
+    {
+        sec_vid = ring[channel] + pctl->elementsize * (frame % pctl->ringlen) + pctl->sec_video_offset;
+    }
+    return sec_vid;
 }
 
 extern const uint8_t *nexus_primary_audio(const NexusControl *pctl, uint8_t *ring[], int channel, int frame, int audio_track)
 {
-    return (ring[channel] + pctl->elementsize * (frame % pctl->ringlen) + pctl->audio_offset) +
+    uint8_t * pri_aud = 0;
+    if (pctl)
+    {
+        pri_aud = (ring[channel] + pctl->elementsize * (frame % pctl->ringlen) + pctl->audio_offset) +
 			audio_track * MAX_AUDIO_SAMPLES_PER_FRAME * 4;		// 32bit audio
+    }
+    return pri_aud;
 }
 
 extern const uint8_t *nexus_secondary_audio(const NexusControl *pctl, uint8_t *ring[], int channel, int frame, int audio_track)
 {
-    return (ring[channel] + pctl->elementsize * (frame % pctl->ringlen) + pctl->sec_audio_offset) +
+    uint8_t * sec_aud = 0;
+    if (pctl)
+    {
+        sec_aud = (ring[channel] + pctl->elementsize * (frame % pctl->ringlen) + pctl->sec_audio_offset) +
 			audio_track * MAX_AUDIO_SAMPLES_PER_FRAME * 2;		// 16bit audio
+    }
+    return sec_aud;
 }
 
 extern void nexus_set_source_name(NexusControl *pctl, int channel, const char *source_name)
