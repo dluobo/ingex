@@ -1,5 +1,5 @@
 /*
- * $Id: dvsoem_dummy.cpp,v 1.4 2010/08/13 15:17:52 john_f Exp $
+ * $Id: dvsoem_dummy.cpp,v 1.5 2010/08/18 10:09:18 john_f Exp $
  *
  * Implement a debug-only DVS hardware library for testing.
  *
@@ -168,6 +168,18 @@ static int16_t tone_500Hz_16bit_1cycle[96] = {
 0xFA70, 0xFAB2, 0xFAE9, 0xFB32, 0xFB79, 0xFBC7, 0xFC1C, 0xFC6F,
 0xFCD0, 0xFD29, 0xFD8F, 0xFDEF, 0xFE5A, 0xFEBF, 0xFF2B, 0xFF94 };
 
+// 1 kHz -18 dBFS tone samples
+// (generated with ingex/common/tools/create_audio_test_signal)
+static int16_t tone_1000Hz_16bit_1cycle[48] =
+{
+0x0000, 0x021a, 0x042b, 0x062a, 0x080e, 0x09cf, 0x0b64, 0x0cc8,
+0x0df4, 0x0ee3, 0x0f90, 0x0ff9, 0x101d, 0x0ff9, 0x0f90, 0x0ee3,
+0x0df4, 0x0cc8, 0x0b64, 0x09cf, 0x080e, 0x062a, 0x042b, 0x021a,
+0xffff, 0xfde5, 0xfbd4, 0xf9d5, 0xf7f1, 0xf630, 0xf49b, 0xf337,
+0xf20b, 0xf11c, 0xf06f, 0xf006, 0xefe2, 0xf006, 0xf06f, 0xf11c,
+0xf20b, 0xf337, 0xf49b, 0xf630, 0xf7f1, 0xf9d5, 0xfbd4, 0xfde5
+};
+
 static void setup_source_buf(DvsCard * dvs)
 {
     //fprintf(stderr, "DUMMY: setup_source_buf()\n");
@@ -329,20 +341,18 @@ static void setup_source_buf(DvsCard * dvs)
         int32_t * audio3 = (int32_t *)audio34;
         int32_t * audio4 = audio3 + 1;
 
-        // Create 500Hz tone on audio 1,2 and 1000Hz tone on audio 3,4
+        // Create 1000Hz tone on audio 1,2 and 500Hz tone on audio 3,4
         int i;
         for (i = 0; i < 1920; i++)
         {
             // shift 16bit sample to 32bit
+            int sample1000 = tone_1000Hz_16bit_1cycle[i % 48] << 16;
             int sample500 = tone_500Hz_16bit_1cycle[i % 96] << 16;
 
-            // double frequency for audio 3 and 4
-            int sample1000 = tone_500Hz_16bit_1cycle[(i*2) % 96] << 16;
-
-            audio1[i * 2] = sample500;
-            audio2[i * 2] = sample500;
-            audio3[i * 2] = sample1000;
-            audio4[i * 2] = sample1000;
+            audio1[i * 2] = sample1000;
+            audio2[i * 2] = sample1000;
+            audio3[i * 2] = sample500;
+            audio4[i * 2] = sample500;
         }
 
         if (dvs->audio_channels == 8) {
@@ -352,20 +362,18 @@ static void setup_source_buf(DvsCard * dvs)
             int32_t * audio7 = (int32_t *)(audio34 + 0x8000);
             int32_t * audio8 = audio7 + 1;
     
-            // Create 500Hz tone on audio 5,6 and 1000Hz tone on audio 7,8
+            // Create 1000Hz tone on audio 5,6 and 500Hz tone on audio 7,8
             int i;
             for (i = 0; i < 1920; i++)
             {
                 // shift 16bit sample to 32bit
+                int sample1000 = tone_1000Hz_16bit_1cycle[i % 48] << 16;
                 int sample500 = tone_500Hz_16bit_1cycle[i % 96] << 16;
     
-                // double frequency for audio 7 and 8
-                int sample1000 = tone_500Hz_16bit_1cycle[(i*2) % 96] << 16;
-    
-                audio5[i * 2] = sample500;
-                audio6[i * 2] = sample500;
-                audio7[i * 2] = sample1000;
-                audio8[i * 2] = sample1000;
+                audio5[i * 2] = sample1000;
+                audio6[i * 2] = sample1000;
+                audio7[i * 2] = sample500;
+                audio8[i * 2] = sample500;
             }
         }
     }
