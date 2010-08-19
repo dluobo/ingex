@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: ingexgui.cpp,v 1.32 2010/08/18 10:15:42 john_f Exp $           *
+ *   $Id: ingexgui.cpp,v 1.33 2010/08/19 12:47:57 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -178,7 +178,7 @@ int IngexguiApp::FilterEvent(wxEvent& event)
 //return -1;
     bool intercepted = false;
     if (wxEVT_CHAR == event.GetEventType()) {
-        wxKeyEvent * keyEvent = (wxKeyEvent *) &event;
+        wxKeyEvent * keyEvent = dynamic_cast<wxKeyEvent *>(&event);
         intercepted = true;
         wxCommandEvent guiMenuEvent(wxEVT_COMMAND_MENU_SELECTED);
         switch (keyEvent->GetKeyCode()) {
@@ -223,7 +223,7 @@ int IngexguiApp::FilterEvent(wxEvent& event)
 /// @param argc Command line argument count.
 /// @param argv Command line argument vector.
 IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
-    : wxFrame((wxFrame *)0, FRAME, wxT("ingexgui")/*, wxDefaultPosition, wxDefaultSize, wxDEFAULT_FRAME_STYLE | wxWANTS_CHARS* - this doesn't prevent cursor keys being lost, as hoped */), mPlayer(0), mStatus(STOPPED), mTextFieldHasFocus(false), mToday(wxDateTime::Today()), mSnapshotIndex(1)
+    : wxFrame((wxFrame *) 0, FRAME, wxT("ingexgui")/*, wxDefaultPosition, wxDefaultSize, wxDEFAULT_FRAME_STYLE | wxWANTS_CHARS* - this doesn't prevent cursor keys being lost, as hoped */), mPlayer(0), mStatus(STOPPED), mTextFieldHasFocus(false), mToday(wxDateTime::Today()), mSnapshotIndex(1)
 {
     wxUpdateUIEvent::SetUpdateInterval(-1); //disable control updates until all controls have been created; otherwise, things like the warning dialogues will allow events to be generated which will then cause a crash
     //logging
@@ -1536,9 +1536,9 @@ void IngexguiFrame::OnUpdateUI(wxUpdateUIEvent& event)
                 }
                 else {
                     mPlayProjectNameBox->GetStaticBox()->Show();
-                    ((wxStaticText*) event.GetEventObject())->SetLabel(mPlayer->GetProjectName());
+                    dynamic_cast<wxStaticText*>(event.GetEventObject())->SetLabel(mPlayer->GetProjectName());
                     mPlayProjectNameBox->GetStaticBox()->SetLabel(mPlayer->GetProjectType()); //this doesn't have an ID
-                    ((wxStaticText*) event.GetEventObject())->SetMinSize(((wxStaticText*) event.GetEventObject())->GetSize()); //or project name is partially obscured if there was no project name available when the app was started
+                    dynamic_cast<wxStaticText*>(event.GetEventObject())->SetMinSize(((wxStaticText*) event.GetEventObject())->GetSize()); //or project name is partially obscured if there was no project name available when the app was started
                 }
                 mPlayProjectNameBox->Layout();
             }
@@ -1563,7 +1563,7 @@ void IngexguiFrame::OnUpdateUI(wxUpdateUIEvent& event)
             if (mEventList->AtStartOfTake() && (!mPlayer || !mPlayer->WithinRecording())) { //the start of this take is selected
                 if (event.GetEventObject()->IsKindOf(CLASSINFO(wxButton))) {
                     event.SetText(wxT("Previous Take"));
-                    ((wxButton*) event.GetEventObject())->SetToolTip(wxT("Move to start of previous take"));
+                    dynamic_cast<wxButton*>(event.GetEventObject())->SetToolTip(wxT("Move to start of previous take"));
                 }
                 else { //it's the menu item
                     event.SetText(wxT("Move to start of previous take\tPGUP"));
@@ -1572,7 +1572,7 @@ void IngexguiFrame::OnUpdateUI(wxUpdateUIEvent& event)
             else { //somewhere within a take
                 if (event.GetEventObject()->IsKindOf(CLASSINFO(wxButton))) {
                     event.SetText(wxT("Start of Take"));
-                    ((wxButton*) event.GetEventObject())->SetToolTip(wxT("Move to start of take"));
+                    dynamic_cast<wxButton*>(event.GetEventObject())->SetToolTip(wxT("Move to start of take"));
                 }
                 else { //it's the menu item
                     event.SetText(wxT("Move to start of take\tPGUP"));
@@ -1583,7 +1583,7 @@ void IngexguiFrame::OnUpdateUI(wxUpdateUIEvent& event)
             if (mEventList->InLastTake()) {
                 if (event.GetEventObject()->IsKindOf(CLASSINFO(wxButton))) {
                     event.SetText(wxT("End of Take"));
-                    ((wxButton*) event.GetEventObject())->SetToolTip(wxT("Move to end of take"));
+                    dynamic_cast<wxButton*>(event.GetEventObject())->SetToolTip(wxT("Move to end of take"));
                 }
                 else { //it's the menu item
                     event.SetText(wxT("Move to end of take\tPGDN"));
@@ -1592,7 +1592,7 @@ void IngexguiFrame::OnUpdateUI(wxUpdateUIEvent& event)
             else {
                 if (event.GetEventObject()->IsKindOf(CLASSINFO(wxButton))) {
                     event.SetText(wxT("Next Take"));
-                    ((wxButton*) event.GetEventObject())->SetToolTip(wxT("Move to start of next take"));
+                    dynamic_cast<wxButton*>(event.GetEventObject())->SetToolTip(wxT("Move to start of next take"));
                 }
                 else { //it's the menu item
                     event.SetText(wxT("Move to start of next take\tPGDN"));
@@ -1600,72 +1600,72 @@ void IngexguiFrame::OnUpdateUI(wxUpdateUIEvent& event)
             }
             break;
         case BUTTON_TapeId:
-            ((wxButton*) event.GetEventObject())->SetBackgroundColour(mTree->SomeEnabled() && !mTree->TapeIdsOK() ? BUTTON_WARNING_COLOUR : wxNullColour);
+            dynamic_cast<wxButton*>(event.GetEventObject())->SetBackgroundColour(mTree->SomeEnabled() && !mTree->TapeIdsOK() ? BUTTON_WARNING_COLOUR : wxNullColour);
             break;
         case BITMAP_StatusCtrl:
             switch (mStatus) {
                 case STOPPED:
-                    ((wxStaticBitmap*) event.GetEventObject())->SetBitmap(stop);
-                    ((wxStaticBitmap*) event.GetEventObject())->SetToolTip(wxT("Stopped"));
+                    dynamic_cast<wxStaticBitmap*>(event.GetEventObject())->SetBitmap(stop);
+                    dynamic_cast<wxStaticBitmap*>(event.GetEventObject())->SetToolTip(wxT("Stopped"));
                     break;
                 case RUNNING_UP:
-                    ((wxStaticBitmap*) event.GetEventObject())->SetBitmap(blank);
-                    ((wxStaticBitmap*) event.GetEventObject())->SetToolTip(wxT("Running up"));
+                    dynamic_cast<wxStaticBitmap*>(event.GetEventObject())->SetBitmap(blank);
+                    dynamic_cast<wxStaticBitmap*>(event.GetEventObject())->SetToolTip(wxT("Running up"));
                     break;
                 case RECORDING:
-                    ((wxStaticBitmap*) event.GetEventObject())->SetBitmap(record);
-                    ((wxStaticBitmap*) event.GetEventObject())->SetToolTip(wxT("Recording"));
+                    dynamic_cast<wxStaticBitmap*>(event.GetEventObject())->SetBitmap(record);
+                    dynamic_cast<wxStaticBitmap*>(event.GetEventObject())->SetToolTip(wxT("Recording"));
                     break;
                 case RUNNING_DOWN:
-                    ((wxStaticBitmap*) event.GetEventObject())->SetBitmap(record);
-                    ((wxStaticBitmap*) event.GetEventObject())->SetToolTip(wxT("Running down"));
+                    dynamic_cast<wxStaticBitmap*>(event.GetEventObject())->SetBitmap(record);
+                    dynamic_cast<wxStaticBitmap*>(event.GetEventObject())->SetToolTip(wxT("Running down"));
                     break;
                 case PLAYING:
                 case PLAYING_BACKWARDS:
                     if (mPlayer) {
-                        ((wxStaticBitmap*) event.GetEventObject())->SetToolTip(PLAYING == mStatus ?wxT("Playing") : wxT("Playing backwards"));
+                        dynamic_cast<wxStaticBitmap*>(event.GetEventObject())->SetToolTip(PLAYING == mStatus ?wxT("Playing") : wxT("Playing backwards"));
                         switch (mPlayer->GetSpeed()) {
                             case 1:
-                                ((wxStaticBitmap*) event.GetEventObject())->SetBitmap(play);
+                                dynamic_cast<wxStaticBitmap*>(event.GetEventObject())->SetBitmap(play);
                                 break;
                             case 2:
-                                ((wxStaticBitmap*) event.GetEventObject())->SetBitmap(ffx2);
+                                dynamic_cast<wxStaticBitmap*>(event.GetEventObject())->SetBitmap(ffx2);
                                 break;
                             case 4:
-                                ((wxStaticBitmap*) event.GetEventObject())->SetBitmap(ffx4);
+                                dynamic_cast<wxStaticBitmap*>(event.GetEventObject())->SetBitmap(ffx4);
                                 break;
                             case 8:
-                                ((wxStaticBitmap*) event.GetEventObject())->SetBitmap(ffx8);
+                                dynamic_cast<wxStaticBitmap*>(event.GetEventObject())->SetBitmap(ffx8);
                                 break;
                             case 16:
-                                ((wxStaticBitmap*) event.GetEventObject())->SetBitmap(ffx16);
+                                dynamic_cast<wxStaticBitmap*>(event.GetEventObject())->SetBitmap(ffx16);
                                 break;
                             case 32:
-                                ((wxStaticBitmap*) event.GetEventObject())->SetBitmap(ffx32);
+                                dynamic_cast<wxStaticBitmap*>(event.GetEventObject())->SetBitmap(ffx32);
                                 break;
                             case 64:
-                                ((wxStaticBitmap*) event.GetEventObject())->SetBitmap(ffx64);
+                                dynamic_cast<wxStaticBitmap*>(event.GetEventObject())->SetBitmap(ffx64);
                                 break;
                             case -1:
-                                ((wxStaticBitmap*) event.GetEventObject())->SetBitmap(play_backwards);
+                                dynamic_cast<wxStaticBitmap*>(event.GetEventObject())->SetBitmap(play_backwards);
                                 break;
                             case -2:
-                                ((wxStaticBitmap*) event.GetEventObject())->SetBitmap(frx2);
+                                dynamic_cast<wxStaticBitmap*>(event.GetEventObject())->SetBitmap(frx2);
                                 break;
                             case -4:
-                                ((wxStaticBitmap*) event.GetEventObject())->SetBitmap(frx4);
+                                dynamic_cast<wxStaticBitmap*>(event.GetEventObject())->SetBitmap(frx4);
                                 break;
                             case -8:
-                                ((wxStaticBitmap*) event.GetEventObject())->SetBitmap(frx8);
+                                dynamic_cast<wxStaticBitmap*>(event.GetEventObject())->SetBitmap(frx8);
                                 break;
                             case -16:
-                                ((wxStaticBitmap*) event.GetEventObject())->SetBitmap(frx16);
+                                dynamic_cast<wxStaticBitmap*>(event.GetEventObject())->SetBitmap(frx16);
                                 break;
                             case -32:
-                                ((wxStaticBitmap*) event.GetEventObject())->SetBitmap(frx32);
+                                dynamic_cast<wxStaticBitmap*>(event.GetEventObject())->SetBitmap(frx32);
                                 break;
                             case -64:
-                                ((wxStaticBitmap*) event.GetEventObject())->SetBitmap(frx64);
+                                dynamic_cast<wxStaticBitmap*>(event.GetEventObject())->SetBitmap(frx64);
                                 break;
                             default:
                                 break;
@@ -1673,39 +1673,39 @@ void IngexguiFrame::OnUpdateUI(wxUpdateUIEvent& event)
                     }
                     break;
                 case PAUSED:
-                    ((wxStaticBitmap*) event.GetEventObject())->SetBitmap(paused);
-                    ((wxStaticBitmap*) event.GetEventObject())->SetToolTip(wxT("Paused"));
+                    dynamic_cast<wxStaticBitmap*>(event.GetEventObject())->SetBitmap(paused);
+                    dynamic_cast<wxStaticBitmap*>(event.GetEventObject())->SetToolTip(wxT("Paused"));
                     break;
             }
             break;
         case TIMECODE_BOX:
             if (mRecorderGroup->GetTimecodeRecorder().IsEmpty()) {
-                ((wxStaticBox*) event.GetEventObject())->SetLabel(wxT("Studio Timecode"));
+                dynamic_cast<wxStaticBox*>(event.GetEventObject())->SetLabel(wxT("Studio Timecode"));
             }
             else {
-                ((wxStaticBox*) event.GetEventObject())->SetLabel(wxT("Studio Timecode (") + mRecorderGroup->GetTimecodeRecorder() + wxT(")"));
+                dynamic_cast<wxStaticBox*>(event.GetEventObject())->SetLabel(wxT("Studio Timecode (") + mRecorderGroup->GetTimecodeRecorder() + wxT(")"));
             }
             break;
         case BITMAP_Alert:
             if (!mTree->HasRecorders()) {
-                ((wxStaticBitmap*) event.GetEventObject())->SetBitmap(blank);
-                ((wxStaticBitmap*) event.GetEventObject())->SetToolTip(wxT(""));
+                dynamic_cast<wxStaticBitmap*>(event.GetEventObject())->SetBitmap(blank);
+                dynamic_cast<wxStaticBitmap*>(event.GetEventObject())->SetToolTip(wxT(""));
             }
             else if (mTree->HasProblem()) {
-                ((wxStaticBitmap*) event.GetEventObject())->SetBitmap(exclamation);
-                ((wxStaticBitmap*) event.GetEventObject())->SetToolTip(wxT("Recorder problem"));
+                dynamic_cast<wxStaticBitmap*>(event.GetEventObject())->SetBitmap(exclamation);
+                dynamic_cast<wxStaticBitmap*>(event.GetEventObject())->SetToolTip(wxT("Recorder problem"));
             }
             else if (!mTree->HasAllSignals()) {
-                ((wxStaticBitmap*) event.GetEventObject())->SetBitmap(concerned);
-                ((wxStaticBitmap*) event.GetEventObject())->SetToolTip(wxT("Signals missing on enabled tracks"));
+                dynamic_cast<wxStaticBitmap*>(event.GetEventObject())->SetBitmap(concerned);
+                dynamic_cast<wxStaticBitmap*>(event.GetEventObject())->SetToolTip(wxT("Signals missing on enabled tracks"));
             }
             else if (mTree->IsUnknown()) {
-                ((wxStaticBitmap*) event.GetEventObject())->SetBitmap(blank);
-                ((wxStaticBitmap*) event.GetEventObject())->SetToolTip(wxT("Awaiting response"));
+                dynamic_cast<wxStaticBitmap*>(event.GetEventObject())->SetBitmap(blank);
+                dynamic_cast<wxStaticBitmap*>(event.GetEventObject())->SetToolTip(wxT("Awaiting response"));
             }
             else {
-                ((wxStaticBitmap*) event.GetEventObject())->SetBitmap(happy);
-                ((wxStaticBitmap*) event.GetEventObject())->SetToolTip(wxT("Status OK"));
+                dynamic_cast<wxStaticBitmap*>(event.GetEventObject())->SetBitmap(happy);
+                dynamic_cast<wxStaticBitmap*>(event.GetEventObject())->SetToolTip(wxT("Status OK"));
             }
             break;
         case BUTTON_MENU_Record: {
@@ -1720,17 +1720,17 @@ void IngexguiFrame::OnUpdateUI(wxUpdateUIEvent& event)
                 event.SetText(legend);
                 switch (mStatus) {
                     case RUNNING_UP:
-                        ((RecordButton*) event.GetEventObject())->Pending();
-                        ((RecordButton*) event.GetEventObject())->SetToolTip(wxT(""));
+                        dynamic_cast<RecordButton*>(event.GetEventObject())->Pending();
+                        dynamic_cast<RecordButton*>(event.GetEventObject())->SetToolTip(wxT(""));
                         break;
                     case RECORDING:
                     case RUNNING_DOWN:
-                        ((RecordButton*) event.GetEventObject())->Record();
-                        ((RecordButton*) event.GetEventObject())->SetToolTip(wxT("Recording"));
+                        dynamic_cast<RecordButton*>(event.GetEventObject())->Record();
+                        dynamic_cast<RecordButton*>(event.GetEventObject())->SetToolTip(wxT("Recording"));
                         break;
                     default:
-                        ((RecordButton*) event.GetEventObject())->Normal();
-                        ((RecordButton*) event.GetEventObject())->SetToolTip(wxT("Start a new recording"));
+                        dynamic_cast<RecordButton*>(event.GetEventObject())->Normal();
+                        dynamic_cast<RecordButton*>(event.GetEventObject())->SetToolTip(wxT("Start a new recording"));
                         break;
                 }
             }
@@ -1742,52 +1742,52 @@ void IngexguiFrame::OnUpdateUI(wxUpdateUIEvent& event)
         case BUTTON_MENU_Stop:
             if (event.GetEventObject()->IsKindOf(CLASSINFO(wxButton))) {
                 if (RECORDING == mStatus || RUNNING_DOWN == mStatus) {
-                    ((wxButton*) event.GetEventObject())->SetToolTip(wxT("Stop recording after postroll"));
+                    dynamic_cast<wxButton*>(event.GetEventObject())->SetToolTip(wxT("Stop recording after postroll"));
                 }
                 else {
-                    ((wxButton*) event.GetEventObject())->SetToolTip(wxT(""));
+                    dynamic_cast<wxButton*>(event.GetEventObject())->SetToolTip(wxT(""));
                 }
             }
             break;
         case BUTTON_Cue:
             switch (mStatus) {
                 case RUNNING_UP: case RUNNING_DOWN:
-                    ((wxButton*) event.GetEventObject())->SetToolTip(wxT(""));
+                    dynamic_cast<wxButton*>(event.GetEventObject())->SetToolTip(wxT(""));
                     break;
                 case STOPPED:
                     if (mPlayer) {
                         event.SetText(wxT("Play"));
-                        ((wxButton*) event.GetEventObject())->SetToolTip(wxT("Play from current position"));
+                        dynamic_cast<wxButton*>(event.GetEventObject())->SetToolTip(wxT("Play from current position"));
                     }
                     else {
                         event.SetText(wxEmptyString);
-                        ((wxButton*) event.GetEventObject())->SetToolTip(wxT(""));
+                        dynamic_cast<wxButton*>(event.GetEventObject())->SetToolTip(wxT(""));
                     }
                     break;
                 case RECORDING:
                     event.SetText(wxT("Mark cue"));
-                    ((wxButton*) event.GetEventObject())->SetToolTip(wxT("Store a cue point for subsequent review"));
+                    dynamic_cast<wxButton*>(event.GetEventObject())->SetToolTip(wxT("Store a cue point for subsequent review"));
                     break;
                 case PLAYING: case PLAYING_BACKWARDS:
                     event.SetText(wxT("Pause"));
-                    ((wxButton*) event.GetEventObject())->SetToolTip(wxT("Freeze playback"));
+                    dynamic_cast<wxButton*>(event.GetEventObject())->SetToolTip(wxT("Freeze playback"));
                     break;
                 case PAUSED:
                     if (mPlayer && mPlayer->AtRecordingEnd()) {
                         event.SetText(wxT("Replay"));
-                        ((wxButton*) event.GetEventObject())->SetToolTip(wxT("Playback from start"));
+                        dynamic_cast<wxButton*>(event.GetEventObject())->SetToolTip(wxT("Playback from start"));
                     }
                     else {
                     event.SetText(wxT("Play"));
-                    ((wxButton*) event.GetEventObject())->SetToolTip(wxT("Play from current position"));
+                    dynamic_cast<wxButton*>(event.GetEventObject())->SetToolTip(wxT("Play from current position"));
                     }
                     break;
             }
             break;
         case BUTTON_Chunk:
             event.SetText(mChunkingDlg->GetChunkButtonLabel());
-            ((wxButton*) event.GetEventObject())->SetToolTip(mChunkingDlg->GetChunkButtonToolTip());
-            ((wxButton*) event.GetEventObject())->SetBackgroundColour(mChunkingDlg->GetChunkButtonColour());
+            dynamic_cast<wxButton*>(event.GetEventObject())->SetToolTip(mChunkingDlg->GetChunkButtonToolTip());
+            dynamic_cast<wxButton*>(event.GetEventObject())->SetBackgroundColour(mChunkingDlg->GetChunkButtonColour());
             break;
         case MENU_PlayerDisable:
             event.Check(!mPlayer || !mPlayer->IsEnabled());

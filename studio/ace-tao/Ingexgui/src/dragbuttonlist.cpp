@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: dragbuttonlist.cpp,v 1.15 2010/08/03 09:27:07 john_f Exp $      *
+ *   $Id: dragbuttonlist.cpp,v 1.16 2010/08/19 12:47:57 john_f Exp $      *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -47,7 +47,7 @@ void DragButtonList::OnUpdateUI(wxUpdateUIEvent& event)
         event.Enable(mEnableStates[event.GetId() - wxID_HIGHEST - 1]);
     }
     if (event.GetId() == (int) mSelected + wxID_HIGHEST + 1) { //the selected button
-        ((wxRadioButton *) event.GetEventObject())->SetValue(true); //toggles the others automatically
+        (dynamic_cast<wxRadioButton *>(event.GetEventObject()))->SetValue(true); //toggles the others automatically
     }
 }
 

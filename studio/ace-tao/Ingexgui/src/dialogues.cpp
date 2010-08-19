@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: dialogues.cpp,v 1.20 2010/08/18 10:15:42 john_f Exp $           *
+ *   $Id: dialogues.cpp,v 1.21 2010/08/19 12:47:56 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -1126,14 +1126,14 @@ void JumpToTimecodeDlg::OnFocus(wxFocusEvent & event)
 const ProdAuto::MxfTimecode JumpToTimecodeDlg::GetTimecode()
 {
     long field;
-    ((wxTextCtrl *) FindWindow(HRS))->GetValue().ToLong(&field);
+    (dynamic_cast<MyTextCtrl *>(FindWindow(HRS)))->GetValue().ToLong(&field);
     mTimecode.samples = field * 60;
-    ((MyTextCtrl *) FindWindow(MINS))->GetValue().ToLong(&field);
+    (dynamic_cast<MyTextCtrl *>(FindWindow(MINS)))->GetValue().ToLong(&field);
     mTimecode.samples = (mTimecode.samples + field) * 60;
-    ((MyTextCtrl *) FindWindow(SECS))->GetValue().ToLong(&field);
+    (dynamic_cast<MyTextCtrl *>(FindWindow(SECS)))->GetValue().ToLong(&field);
     mTimecode.samples += field;
     mTimecode.samples *= mTimecode.edit_rate.numerator / mTimecode.edit_rate.denominator;
-    ((MyTextCtrl *) FindWindow(FRAMES))->GetValue().ToLong(&field);
+    (dynamic_cast<MyTextCtrl *>(FindWindow(FRAMES)))->GetValue().ToLong(&field);
     mTimecode.samples += field;
     return mTimecode;
 }
@@ -2038,7 +2038,7 @@ void ChunkingDlg::RunFrom(const ProdAuto::MxfTimecode & startTimecode, const Pro
             triggerTimecode.samples %= 24LL * 3600 * triggerTimecode.edit_rate.numerator / triggerTimecode.edit_rate.denominator; //wrap (either way)
             mCountdownTimer->Start(1000); //countdown in seconds - this is only for the button label
             //set the trigger to chunk
-            mTimepos->SetTrigger(&triggerTimecode, (wxEvtHandler *) GetParent(), true); //will inform main frame when trigger occurs; always in the future
+            mTimepos->SetTrigger(&triggerTimecode, dynamic_cast<wxEvtHandler *>(GetParent()), true); //will inform main frame when trigger occurs; always in the future
         }
     }
     else {
@@ -2291,7 +2291,7 @@ void SelectRecDlg::OnSelectProject(wxCommandEvent & WXUNUSED(event))
 /// If previously-selected recording is found, or only one recording is found, selects this and enables thmPreferOnline->SetBackgroundColour(e OK button.
 void SelectRecDlg::OnSelectDate(wxCommandEvent & WXUNUSED(event))
 {
-    mSelectedDate = ((StringContainer *) mDateSelector->GetClientObject(mDateSelector->GetSelection()))->GetString();
+    mSelectedDate = dynamic_cast<StringContainer *>(mDateSelector->GetClientObject(mDateSelector->GetSelection()))->GetString();
     mRecordingSelector->Clear(); //repopulating it in case directory structure has changed
     wxArrayString paths; //to allow sorting
     wxDir::GetAllFiles(wxString(RECORDING_SERVER_ROOT) + wxFileName::GetPathSeparator() + OFFLINE_SUBDIR + wxFileName::GetPathSeparator() + mSelectedProject + wxFileName::GetPathSeparator() + mSelectedDate, &paths, wxEmptyString, wxDIR_FILES); //produces rubbish if ROOT_DIR not turned into a wxString

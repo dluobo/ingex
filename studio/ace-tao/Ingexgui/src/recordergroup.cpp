@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: recordergroup.cpp,v 1.18 2010/08/18 10:15:42 john_f Exp $       *
+ *   $Id: recordergroup.cpp,v 1.19 2010/08/19 12:47:57 john_f Exp $       *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -128,14 +128,14 @@ void RecorderGroupCtrl::Insert(const wxString & name, unsigned int pos)
 /// @return The recorder name.
 const wxString RecorderGroupCtrl::GetName(unsigned int index)
 {
-    return ((ControllerContainer *) GetClientObject(index))->GetName();
+    return dynamic_cast<ControllerContainer*>(GetClientObject(index))->GetName();
 }
 
 /// Starts the process of connecting to a recorder, in another thread, creating a controller.
 /// @param index The position in the list of the recorder to connect to.
 void RecorderGroupCtrl::Connect(unsigned int index)
 {
-    ((ControllerContainer *) GetClientObject(index))->Start(mComms, this);
+    dynamic_cast<ControllerContainer*>(GetClientObject(index))->Start(mComms, this);
 }
 
 /// Deselects the given recorder and disconnects from it.
@@ -178,7 +178,7 @@ void RecorderGroupCtrl::Disconnect(unsigned int index)
         //start looking for a new one
         SetTimecodeRecorder();
     }
-    ((ControllerContainer *) GetClientObject(index))->Stop();
+    dynamic_cast<ControllerContainer *>(GetClientObject(index))->Stop();
 }
 
 /// Gets the controller of the given recorder - 0 if it doesn't exist.
@@ -186,7 +186,7 @@ void RecorderGroupCtrl::Disconnect(unsigned int index)
 Controller * RecorderGroupCtrl::GetController(unsigned int index)
 {
     if (GetClientObject(index)) {
-        return ((ControllerContainer *) GetClientObject(index))->GetController();
+        return dynamic_cast<ControllerContainer *>(GetClientObject(index))->GetController();
     }
     else {
         return (Controller *) 0;
@@ -250,7 +250,7 @@ void RecorderGroupCtrl::OnControllerEvent(ControllerThreadEvent & event)
             }
         }
         if (pos < GetCount() && GetController(pos)) { //sanity checks
-            ((ControllerContainer *) GetClientObject(pos))->Del();
+            dynamic_cast<ControllerContainer *>(GetClientObject(pos))->Del();
             SetString(pos, event.GetName());
         }
     }
@@ -389,14 +389,14 @@ void RecorderGroupCtrl::OnControllerEvent(ControllerThreadEvent & event)
                     if (Controller::SUCCESS == event.GetResult()) {
                         mTree->SetRecorderStateOK(event.GetName());
                     }
-                    else if (IngexguiFrame::RUNNING_UP == ((IngexguiFrame*) GetParent())->GetStatus()) {
+                    else if (IngexguiFrame::RUNNING_UP == (dynamic_cast<IngexguiFrame *>(GetParent())->GetStatus())) {
                         mTree->SetRecorderStateProblem(event.GetName(), wxT("Failed to record: retrying"));
                     }
                     //recorder update event
                     wxCommandEvent frameEvent(EVT_RECORDERGROUP_MESSAGE, RECORDER_STARTED);
                     frameEvent.SetString(event.GetName());
                     frameEvent.SetInt(Controller::SUCCESS == event.GetResult());
-                    frameEvent.SetClientData(new RecorderData(event.GetTimecode())); //must be deleted by event handler
+                    frameEvent.SetClientData(new ProdAuto::MxfTimecode(event.GetTimecode())); //must be deleted by event handler
                     AddPendingEvent(frameEvent);
                     break;
                 }

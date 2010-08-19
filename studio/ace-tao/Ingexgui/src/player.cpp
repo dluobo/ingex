@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: player.cpp,v 1.22 2010/08/13 17:54:23 philipn Exp $              *
+ *   $Id: player.cpp,v 1.23 2010/08/19 12:47:57 john_f Exp $              *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -121,7 +121,7 @@ void Player::OnUpdateUI(wxUpdateUIEvent& event)
 #endif
         case FILES:
             event.Enable(mModesAllowed[event.GetId()]);
-            ((wxToggleButton*) event.GetEventObject())->SetValue(event.GetId() == mMode && mEnabled);
+            dynamic_cast<wxToggleButton*>(event.GetEventObject())->SetValue(event.GetId() == mMode && mEnabled);
             break;
         default:
             break;
