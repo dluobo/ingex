@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorder.cpp,v 1.20 2010/08/18 10:13:13 john_f Exp $
+ * $Id: IngexRecorder.cpp,v 1.21 2010/08/19 12:45:44 john_f Exp $
  *
  * Class to manage an individual recording.
  *
@@ -130,7 +130,7 @@ framecount_t IngexRecorder::CalculateChunkDuration(const Ingex::Timecode & start
 
     // Make new out time a round figure
     const framecount_t alignment_size = ChunkAlignment() * FrameRateNumerator() / FrameRateDenominator();
-    if (chunk_size > alignment_size && alignment_size > 0)
+    if (chunk_size >= alignment_size && alignment_size > 0)
     {
         out = (out / alignment_size) * alignment_size;
     }
