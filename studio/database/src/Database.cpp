@@ -1,5 +1,5 @@
 /*
- * $Id: Database.cpp,v 1.16 2010/07/21 16:29:34 john_f Exp $
+ * $Id: Database.cpp,v 1.17 2010/08/20 16:12:51 john_f Exp $
  *
  * Provides access to the data in the database
  *
@@ -4307,7 +4307,7 @@ string Database::loadLocationName(long database_id, Transaction *transaction)
     END_WORK("LoadLocationName")
 }
 
-void Database::returnConnection(Transaction *transaction)
+void Database::returnConnection(ConnectionReturner *connectionReturner)
 {
     vector<Transaction*>::iterator iter;
 
@@ -4315,14 +4315,14 @@ void Database::returnConnection(Transaction *transaction)
 
     // find the transaction
     for (iter = _transactionsInUse.begin(); iter != _transactionsInUse.end(); iter++) {
-        if (transaction == *iter)
+        if (connectionReturner == *iter)
             break;
     }
     assert(iter != _transactionsInUse.end());
 
     // return connection to pool
-    _connectionPool.push_back(transaction->_conn);
-    transaction->_conn = 0;
+    _connectionPool.push_back(connectionReturner->_conn);
+    connectionReturner->_conn = 0;
 
     _transactionsInUse.erase(iter);
 }

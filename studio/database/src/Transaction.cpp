@@ -1,5 +1,5 @@
 /*
- * $Id: Transaction.cpp,v 1.3 2009/09/18 16:50:11 philipn Exp $
+ * $Id: Transaction.cpp,v 1.4 2010/08/20 16:12:51 john_f Exp $
  *
  * A database transaction
  *
@@ -35,18 +35,31 @@ using namespace pqxx;
 
 
 
-Transaction::Transaction(Database *database, connection *conn, string name)
-: namedclass("Transaction"), work(*conn, name)
+ConnectionReturner::ConnectionReturner(Database *database, pqxx::connection *conn)
 {
     _database = database;
     _conn = conn;
 }
 
+ConnectionReturner::~ConnectionReturner()
+{
+    // The destructor order is: pqxx::work -> ConnectionReturner -> namedclass
+    //    (namedclass is last because it is declared a virtual base class)
+    // and therefore the connection is returned here to the Database connection pool after the
+    // pqxx::work superclass of Transaction has destructed
+    _database->returnConnection(this);
+}
+
+
+
+Transaction::Transaction(Database *database, connection *conn, string name)
+: namedclass("Transaction"), ConnectionReturner(database, conn), work(*conn, name)
+{
+}
+
 Transaction::~Transaction() throw()
 {
-    // work::abort() will be called in destructor if transaction was started but not committed
-    
-    _database->returnConnection(this);
+    // work::abort() will be called in work destructor if transaction was started but not committed
 }
 
 void Transaction::commit()

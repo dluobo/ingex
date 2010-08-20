@@ -1,5 +1,5 @@
 /*
- * $Id: Database.h,v 1.13 2010/07/14 13:06:36 john_f Exp $
+ * $Id: Database.h,v 1.14 2010/08/20 16:12:51 john_f Exp $
  *
  * Provides access to the data in the database
  *
@@ -52,7 +52,7 @@ namespace prodauto
 class Database
 {
 public:
-    friend class Transaction;
+    friend class ConnectionReturner;
 
 public:
     static void initialise(std::string hostname, std::string dbname, std::string username, std::string password,
@@ -217,8 +217,8 @@ protected:
              unsigned int initialConnections, unsigned int maxConnections);
     ~Database();
 
-    // called by Transaction when destructing
-    void returnConnection(Transaction *transaction);
+    // called by ConnectionReturner (Transaction) when destructing
+    void returnConnection(ConnectionReturner *connectionReturner);
 
 private:
     pqxx::connection* openConnection(std::string hostname, std::string dbname, std::string username,

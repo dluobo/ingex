@@ -1,5 +1,5 @@
 /*
- * $Id: Transaction.h,v 1.2 2009/09/18 16:50:11 philipn Exp $
+ * $Id: Transaction.h,v 1.3 2010/08/20 16:12:51 john_f Exp $
  *
  * A database transaction
  *
@@ -40,11 +40,24 @@ namespace prodauto
 
 class Database;
 
-class Transaction : public pqxx::work
+
+class ConnectionReturner
 {
 public:
     friend class Database;
     
+public:
+    ConnectionReturner(Database *database, pqxx::connection *conn);
+    virtual ~ConnectionReturner();
+
+protected:
+    Database *_database;
+    pqxx::connection *_conn;
+};
+
+
+class Transaction : protected ConnectionReturner, public pqxx::work
+{
 public:
     Transaction(Database *database, pqxx::connection *conn, std::string name);
     virtual ~Transaction() throw();
@@ -56,9 +69,6 @@ public:
     long tentativeDatabaseID(DatabaseObject *obj);
     
 private:
-    Database *_database;
-    pqxx::connection *_conn;
-    
     std::vector<std::pair<long, DatabaseObject*> > _commitListeners;
 };
 
