@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderApp.cpp,v 1.7 2009/09/18 16:15:14 john_f Exp $
+ * $Id: RecorderApp.cpp,v 1.8 2010/08/20 16:09:53 john_f Exp $
  *
  * Encapsulation of the recorder application.
  *
@@ -189,7 +189,7 @@ bool RecorderApp::Init(int argc, char * argv[])
     // Initialise database connection
     try
     {
-        DatabaseManager::Instance()->Initialise(db_host, db_name, db_username, db_password, 4, 12);
+        DatabaseManager::Instance()->Initialise(db_host, db_name, db_username, db_password, 4, 24);
     }
     catch (const prodauto::DBException & dbe)
     {
