@@ -1,5 +1,5 @@
 /*
- * $Id: recorder_functions.cpp,v 1.41 2010/08/18 10:12:26 john_f Exp $
+ * $Id: recorder_functions.cpp,v 1.42 2010/08/20 16:10:58 john_f Exp $
  *
  * Functions which execute in recording threads.
  *
@@ -453,6 +453,8 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         break;
     }
 
+    // Note if setup prior to record loop fails
+    bool init_error = false;
 
     // Check which capture buffer has suitable format
     bool use_primary_video = true;
@@ -683,14 +685,8 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             src_name.c_str(), p_opt->index, it->channel, it->track));
     }
 
-    // Set error flag for GUI if capture format not suitable
-    if (incompatible_format)
-    {
-        for (unsigned int i = 0; i < package_creator->GetMaterialPackage()->tracks.size(); ++i)
-        {
-            p_impl->NoteRecError(mp_stc_dbids[i]);
-        }
-    }
+    // Note error on incompatible format
+    init_error |= incompatible_format;
 
 
     // Directories
@@ -864,12 +860,14 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         catch (const prodauto::DBException & dbe)
         {
             LOG_RECORD_ERROR("Database exception: %C\n", dbe.getMessage().c_str());
+            init_error = true;
             p_rec->NoteFailure();
             mxf = false;
         }
         catch (const prodauto::MXFWriterException & e)
         {
-            LOG_RECORD_ERROR("MXFWriterException: %C\n", e.getMessage().c_str());
+            LOG_RECORD_ERROR("MXFWriterException (PrepareToWrite): %C\n", e.getMessage().c_str());
+            init_error = true;
             p_rec->NoteFailure();
             mxf = false;
         }
@@ -955,6 +953,15 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         clear_YUV_frame(&quad_frame);
 
         quad_workspace = new uint8_t[WIDTH * 3];
+    }
+
+    // Set track error flags if there was a problem during setup
+    if (init_error)
+    {
+        for (unsigned int i = 0; i < package_creator->GetMaterialPackage()->tracks.size(); ++i)
+        {
+            p_impl->NoteRecError(mp_stc_dbids[i]);
+        }
     }
 
     // Buffer to hold frame data during encoding
