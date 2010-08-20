@@ -1,5 +1,5 @@
 /*
- * $Id: HeaderMetadata.h,v 1.3 2010/06/25 14:02:02 philipn Exp $
+ * $Id: HeaderMetadata.h,v 1.4 2010/08/20 11:08:03 philipn Exp $
  *
  * 
  *
@@ -51,6 +51,7 @@ public:
     static bool isHeaderMetadata(const mxfKey* key);
 
     HeaderMetadata(DataModel* dataModel);
+    HeaderMetadata(::MXFHeaderMetadata *c_header_metadata, bool take_ownership);
     virtual ~HeaderMetadata();
     
     static mxfProductVersion getToolkitVersion();
@@ -89,6 +90,7 @@ private:
     std::map<mxfKey, AbsMetadataSetFactory*> _objectFactory;
     
     ::MXFHeaderMetadata* _cHeaderMetadata;
+    bool _ownCHeaderMetadata;
     std::map<mxfUUID, MetadataSet*> _objectDirectory;
     bool _busyDestructing;
     

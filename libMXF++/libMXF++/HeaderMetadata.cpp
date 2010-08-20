@@ -1,5 +1,5 @@
 /*
- * $Id: HeaderMetadata.cpp,v 1.4 2010/06/02 11:03:29 philipn Exp $
+ * $Id: HeaderMetadata.cpp,v 1.5 2010/08/20 11:08:03 philipn Exp $
  *
  * 
  *
@@ -56,6 +56,14 @@ HeaderMetadata::HeaderMetadata(DataModel* dataModel)
     
     initialiseObjectFactory();
     MXFPP_CHECK(mxf_create_header_metadata(&_cHeaderMetadata, dataModel->getCDataModel()));
+    _ownCHeaderMetadata = true;
+}
+
+HeaderMetadata::HeaderMetadata(::MXFHeaderMetadata *c_header_metadata, bool take_ownership)
+{
+    initialiseObjectFactory();
+    _cHeaderMetadata = c_header_metadata;
+    _ownCHeaderMetadata = take_ownership;
 }
 
 HeaderMetadata::~HeaderMetadata()
@@ -73,7 +81,10 @@ HeaderMetadata::~HeaderMetadata()
         delete (*iter2).second;
     }
 
-    mxf_free_header_metadata(&_cHeaderMetadata);
+    if (_ownCHeaderMetadata)
+    {
+        mxf_free_header_metadata(&_cHeaderMetadata);
+    }
 }
 
 mxfProductVersion HeaderMetadata::getToolkitVersion()

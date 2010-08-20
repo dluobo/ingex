@@ -1,5 +1,5 @@
 /*
- * $Id: DataModel.cpp,v 1.3 2010/06/02 11:03:29 philipn Exp $
+ * $Id: DataModel.cpp,v 1.4 2010/08/20 11:08:03 philipn Exp $
  *
  * 
  *
@@ -67,11 +67,21 @@ DataModel::DataModel()
 {
     MXFPP_CHECK(mxf_load_data_model(&_cDataModel));
     MXFPP_CHECK(mxf_finalise_data_model(_cDataModel));
+    _ownCDataModel = true;
+}
+
+DataModel::DataModel(::MXFDataModel *c_data_model, bool take_ownership)
+{
+    _cDataModel = c_data_model;
+    _ownCDataModel = take_ownership;
 }
 
 DataModel::~DataModel()
 {
-    mxf_free_data_model(&_cDataModel);
+    if (_ownCDataModel)
+    {
+        mxf_free_data_model(&_cDataModel);
+    }
 }
 
 void DataModel::finalise()

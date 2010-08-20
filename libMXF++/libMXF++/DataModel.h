@@ -1,5 +1,5 @@
 /*
- * $Id: DataModel.h,v 1.2 2009/10/22 16:36:37 philipn Exp $
+ * $Id: DataModel.h,v 1.3 2010/08/20 11:08:03 philipn Exp $
  *
  * 
  *
@@ -73,6 +73,7 @@ class DataModel
 {
 public:
     DataModel();
+    DataModel(::MXFDataModel *c_data_model, bool take_ownership);
     ~DataModel();
     
     void finalise();
@@ -101,6 +102,7 @@ public:
     
 private:
     ::MXFDataModel* _cDataModel;
+    bool _ownCDataModel;
 };
 
 
