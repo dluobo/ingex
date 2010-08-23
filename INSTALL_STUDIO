@@ -1,0 +1,9 @@
+To build Ingex-Studio:
+
+If using installed libMXF
+> export USE_INSTALLED_LIBMXF=yes
+
+Make
+> make
+
+
