@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder_av.cpp,v 1.5 2010/08/12 16:32:44 john_f Exp $
+ * $Id: ffmpeg_encoder_av.cpp,v 1.6 2010/08/23 16:52:42 john_f Exp $
  *
  * Encode AV and write to file.
  *
@@ -30,6 +30,7 @@ This file is based on ffmpeg/output_example.c from the ffmpeg source tree.
 #include <stdlib.h>
 
 #define __STDC_CONSTANT_MACROS
+#define __STDC_FORMAT_MACROS
 #include <inttypes.h>
 
 #ifdef __cplusplus
@@ -106,7 +107,7 @@ typedef struct
 namespace
 {
 
-int init_video_xdcam(internal_ffmpeg_encoder_t * enc)
+int init_video_xdcam(internal_ffmpeg_encoder_t * enc, int64_t start_tc)
 {
     AVCodecContext * codec_context;
 
@@ -151,7 +152,10 @@ int init_video_xdcam(internal_ffmpeg_encoder_t * enc)
     codec_context->codec_tag = MKTAG('x', 'd', '5', 'c'); // for quicktime wrapper
     
 
-   avcodec_set_dimensions(codec_context,width,height);
+    avcodec_set_dimensions(codec_context,width,height);
+
+    /* Setting this non-zero gives us a timecode track in MOV format */
+    codec_context->timecode_frame_start = start_tc;
 
  // some formats want stream headers to be seperate
     if(!strcmp(enc->oc->oformat->name, "mp4")
@@ -273,7 +277,7 @@ int init_video_dvd(internal_ffmpeg_encoder_t * enc)
 }
 
 /* initialise video stream for MPEG-4 encoding */
-int init_video_mpeg4(internal_ffmpeg_encoder_t * enc)
+int init_video_mpeg4(internal_ffmpeg_encoder_t * enc, int64_t start_tc)
 {
     AVCodecContext * codec_context = enc->video_st->codec;
 
@@ -290,6 +294,9 @@ int init_video_mpeg4(internal_ffmpeg_encoder_t * enc)
 
     /* set coding parameters */
     codec_context->bit_rate = kbit_rate * 1000;
+
+    /* Setting this non-zero gives us a timecode track in MOV format */
+    codec_context->timecode_frame_start = start_tc;
 
 
     // some formats want stream headers to be seperate
@@ -380,7 +387,7 @@ int init_video_dv(internal_ffmpeg_encoder_t * enc, MaterialResolution::EnumType 
 
     avcodec_set_dimensions(codec_context, width, height);
 
-    /* Setting this gives us a timecode track in MOV format */
+    /* Setting this non-zero gives us a timecode track in MOV format */
     codec_context->timecode_frame_start = start_tc;
 
 
@@ -903,7 +910,7 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename,
         init_video_dvd(enc);
         break;
     case MaterialResolution::MPEG4_MOV:
-        init_video_mpeg4(enc);
+        init_video_mpeg4(enc, start_tc);
         break;
     case MaterialResolution::DV25_MOV:
     case MaterialResolution::DV50_MOV:
@@ -911,7 +918,7 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename,
         init_video_dv(enc, res, start_tc);
         break;
     case MaterialResolution::XDCAMHD422_MOV:
-        init_video_xdcam(enc);
+        init_video_xdcam(enc, start_tc);
         break;
     default:
         break;
