@@ -7,6 +7,8 @@ LOCATION=studio
 if [ "$LOCATION" = "studio" ]
 then
 # Studio
+# Example with just one area using the router
+# and communication via PC serial port.
 ./routerlogger --dbuser bamzooki --dbpass bamzooki \
   -v \
   -r /dev/ttyS0 -l \
@@ -24,7 +26,8 @@ elif [ "$LOCATION" = "stage" ]
 then
 
 # Lot and Stage
-#./routerlogger -r /dev/ttyS0 -t /dev/ttyS1 \
+# Example with two areas using same router
+# and communication via ethernet adapter.
 ./routerlogger --dbuser bamzooki --dbpass bamzooki \
   -v \
   -r 192.168.1.252:4098 -s \
