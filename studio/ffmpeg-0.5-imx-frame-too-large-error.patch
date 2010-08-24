@@ -1,0 +1,18 @@
+--- libavcodec/mpegvideo_enc.c	2009-03-02 05:18:33.000000000 +0000
++++ ../ffmpeg-0.5/libavcodec/mpegvideo_enc.c	2010-08-11 18:18:17.000000000 +0100
+@@ -2057,13 +2057,13 @@
+             int dir;
+ 
+             if(s->pb.buf_end - s->pb.buf - (put_bits_count(&s->pb)>>3) < MAX_MB_BYTES){
+-                av_log(s->avctx, AV_LOG_ERROR, "encoded frame too large\n");
++                //av_log(s->avctx, AV_LOG_ERROR, "encoded frame too large\n");
+                 return -1;
+             }
+             if(s->data_partitioning){
+                 if(   s->pb2   .buf_end - s->pb2   .buf - (put_bits_count(&s->    pb2)>>3) < MAX_MB_BYTES
+                    || s->tex_pb.buf_end - s->tex_pb.buf - (put_bits_count(&s->tex_pb )>>3) < MAX_MB_BYTES){
+-                    av_log(s->avctx, AV_LOG_ERROR, "encoded frame too large\n");
++                    //av_log(s->avctx, AV_LOG_ERROR, "encoded frame too large\n");
+                     return -1;
+                 }
+             }

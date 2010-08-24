@@ -1,7 +1,7 @@
 Summary: FFmpeg library with DNxHD(VC-3) DVCPRO-HD H.264 AAC MP3 A52(AC-3) codecs
 Name: ffmpeg-DNxHD-h264-aac
 Version: 0.5
-Release: 5
+Release: 6
 License: GPL
 Group: System Environment/Daemons
 Source: ffmpeg-%{version}.tar.bz2
@@ -16,6 +16,7 @@ Patch7: ffmpeg-0.5-archive-mxf.patch
 Patch8: ffmpeg-0.5-dnxhd-avid-nitris.patch
 Patch9: ffmpeg-0.5-dnxhd-sst.patch
 Patch10: ffmpeg-0.5-quicktime-aspect-ratio.patch
+Patch11: ffmpeg-0.5-imx-frame-too-large-error.patch
 Url: http://www.ffmpeg.org/download.html
 BuildRoot: %{_tmppath}/%{name}-root
 BuildRequires: autoconf nasm
@@ -51,6 +52,7 @@ rm -rf $RPM_BUILD_ROOT
 %patch8
 %patch9
 %patch10
+%patch11
 
 %build
 ./configure --prefix=/usr --enable-pthreads --disable-demuxer=ogg --enable-swscale --enable-libx264 --enable-libmp3lame --enable-gpl --enable-libfaac --enable-libfaad
@@ -78,6 +80,9 @@ rm -rf $RPM_BUILD_ROOT
 /usr/share/
 
 %changelog
+* Wed Aug 11 2010 Philip de Nier 0.5-6
+- Comment out 'encoded frame too large' log message for IMX
+
 * Thu Jun 10 2010 Philip de Nier 0.5-5
 - Fix DV aspect ratio in bitstream (DISP)
 - Added ffmpeg-0.5-quicktime-aspect-ratio.patch
