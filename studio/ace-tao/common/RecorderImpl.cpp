@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderImpl.cpp,v 1.17 2010/08/12 16:36:42 john_f Exp $
+ * $Id: RecorderImpl.cpp,v 1.18 2010/08/25 17:51:48 john_f Exp $
  *
  * Base class for Recorder servant.
  *
@@ -240,10 +240,11 @@ bool RecorderImpl::SetSourcePackages()
                         ACE_DEBUG((LM_DEBUG, ACE_TEXT("Input %d, track %d, source package name \"%C\"\n"),
                         i, j, sc->name.c_str()));
 
-                        if (mTapeMap.find(sc->name) != mTapeMap.end())
+                        std::map<std::string, std::string>::const_iterator it = mTapeMap.find(sc->name);
+                        if (it != mTapeMap.end() && !it->second.empty())
                         {
                             // We have a corresponding tape name.
-                            sc->setSourcePackage(mTapeMap[sc->name], mEditRate, mDropFrame);
+                            sc->setSourcePackage(it->second, mEditRate, mDropFrame);
                         }
                         else
                         {

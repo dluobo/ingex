@@ -1,5 +1,5 @@
 /*
- * $Id: Recorder.idl,v 1.7 2010/08/12 16:36:42 john_f Exp $
+ * $Id: Recorder.idl,v 1.8 2010/08/25 17:51:48 john_f Exp $
  *
  * Interface for Recorder.
  *
@@ -148,6 +148,7 @@ module ProdAuto
 
         /// Set tape names corresponding to source package names of recorder tracks.
         /// The two sequences should be the same length.
+        /// Supply empty tape name to make recorder generate its own.
         void SetTapeNames(in CORBA::StringSeq source_names, in CORBA::StringSeq tape_names);
 
         /// Instruct the recorder to re-read its configuration data.
