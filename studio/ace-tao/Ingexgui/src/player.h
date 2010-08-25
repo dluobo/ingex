@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: player.h,v 1.15 2010/08/03 09:27:07 john_f Exp $                *
+ *   $Id: player.h,v 1.16 2010/08/25 17:51:06 john_f Exp $                *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -230,6 +230,7 @@ class Player : public wxPanel, prodauto::LocalIngexPlayer
         prodauto::PlayerOutputType mOutputType;
         bool mAudioFollowsVideo;
         unsigned int mNVideoTracks;
+        bool mRecording;
     DECLARE_EVENT_TABLE()
 };
 

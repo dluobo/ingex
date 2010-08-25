@@ -65,9 +65,10 @@ TickTreeCtrl::TickTreeCtrl(wxWindow * parent, wxWindowID id, const wxPoint& pos,
     Disable();
 }
 
-/// Adds a recorder to the tree.
+/// Adds a recorder to the tree.  Only call when nothing is recording.
 /// Adds only tracks which have sources, but counts the number of sourceless video tracks between used video tracks, for arranging tape ID data correctly when requested.
 /// Arranges tracks by package name, and displays tape IDs for packages names if found.
+/// If any tracks are recording, clears record enables for non-recording tracks and for every track on every other recorder.
 /// Sets all tracks to be enabled for recording.
 /// Updates overall tree state and sends a notification event.
 /// @param name The recorder name.
@@ -75,7 +76,8 @@ TickTreeCtrl::TickTreeCtrl(wxWindow * parent, wxWindowID id, const wxPoint& pos,
 /// @param trackStatusList Whether each track is recording or not.
 /// @param isRouterRecorder True if this recorder is a router recorder - all tracks (should be only one anyway) will be regarded as router tracks and tape IDs will not be used.
 /// @param doc XML document object for tape ID information.
-void TickTreeCtrl::AddRecorder(const wxString & name, const ProdAuto::TrackList_var & trackList, const ProdAuto::TrackStatusList_var & trackStatusList, bool isRouterRecorder, wxXmlDocument & doc)
+/// @return true if any tracks are recording
+bool TickTreeCtrl::AddRecorder(const wxString & name, const ProdAuto::TrackList_var & trackList, const ProdAuto::TrackStatusList_var & trackStatusList, bool isRouterRecorder, wxXmlDocument & doc)
 {
     Enable();
     //make recorder root node
@@ -103,7 +105,7 @@ void TickTreeCtrl::AddRecorder(const wxString & name, const ProdAuto::TrackList_
                 //create a package node and remember its ID
                 packageNameTreeNodes[packageName] = AppendItem(recorderRoot, packageName, DISABLED); //state will be updated below, from track nodes
                 SetItemData(packageNameTreeNodes[packageName], new ItemData(DISABLED, packageName, isRouterRecorder, !tapeId.IsEmpty() || isRouterRecorder)); //remember package name for when messing about with tape IDs
-                if (!tapeId.IsEmpty() && !isRouterRecorder) {
+                if (!tapeId.IsEmpty() && !isRouterRecorder && SetTapeIdsDlg::AreTapeIdsEnabled(doc)) {
                     AddMessage(packageNameTreeNodes[packageName], tapeId);
                 }
             }
@@ -122,6 +124,16 @@ void TickTreeCtrl::AddRecorder(const wxString & name, const ProdAuto::TrackList_
     SetItemData(recorderRoot, new ItemData(DISABLED, name, trackList->length()));
     //sort recorder nodes
     SortChildren(GetRootItem());
+    //disable all tracks of all other recorders if anything recording
+    //(can't use SelectRecursively() from the root to do this as we don't know whether we're fully or partially recording until we've traversed the tree)
+    if (someRecording) {
+        wxTreeItemIdValue cookie;
+        wxTreeItemId recorder = GetFirstChild(GetRootItem(), cookie);
+        while (recorder.IsOk()) {
+            if (recorder != recorderRoot) SelectRecursively(recorder, 0, false);
+            recorder = GetNextChild(GetRootItem(), cookie);
+        }
+    }
     //report all track state up the tree
     SetTrackStatus(name, someRecording, false, trackStatusList);
     //tape IDs
@@ -131,6 +143,7 @@ void TickTreeCtrl::AddRecorder(const wxString & name, const ProdAuto::TrackList_
         guiEvent.SetString(name);
         AddPendingEvent(guiEvent);
     }
+    return someRecording;
 }
 
 /// Removes a recorder from the tree.
@@ -185,14 +198,13 @@ void TickTreeCtrl::OnLMouseDown(wxMouseEvent & event)
     wxTreeItemId id = HitTest(event.GetPosition(), flags);
     if (mEnableChanges && (flags & wxTREE_HITTEST_ONITEMICON)) {
         //apply selection state to this and all children recursively
-        unsigned int enabledTracks = 0;
         if (DISABLED == GetItemImage(id) || PARTIALLY_ENABLED == GetItemImage(id)) {
             //record enable
-            SelectRecursively(id, enabledTracks);
+            SelectRecursively(id);
         }
         else if (ENABLED == GetItemImage(id)) {
             //record disable
-            SelectRecursively(id, enabledTracks, false);
+            SelectRecursively(id, 0, false);
         }
         //report selection state to all ancestors recursively
         ReportState(id);
@@ -214,11 +226,11 @@ bool TickTreeCtrl::IsRecording()
     return RECORDING == dynamic_cast<ItemData *>(GetItemData(GetRootItem()))->GetUnderlyingState() || PARTIALLY_RECORDING == ((ItemData *) GetItemData(GetRootItem()))->GetUnderlyingState();
 }
 
-/// Indicates whether all enabled tracks' packages have tape IDs.
-/// @return True if all tape IDs present.
-bool TickTreeCtrl::TapeIdsOK()
+/// Returns true if all enabled tracks' packages have tape IDs, or tape IDs are not being used.
+/// @param doc XML document object for tape ID information
+bool TickTreeCtrl::TapeIdsOK(wxXmlDocument & doc)
 {
-    return dynamic_cast<ItemData *>(GetItemData(GetRootItem()))->GetBool();
+    return dynamic_cast<ItemData *>(GetItemData(GetRootItem()))->GetBool() || !SetTapeIdsDlg::AreTapeIdsEnabled(doc);
 }
 
 /// Indicates whether overall state is unknown.
@@ -249,13 +261,6 @@ bool TickTreeCtrl::HasRecorders()
     return GetCount() > 1;
 }
 
-/// Indicates whether at least one track is recording and there are no problems.
-/// @return True if recording with no problems.
-bool TickTreeCtrl::RecordingSuccessfully()
-{
-    return RECORDING == GetItemImage(GetRootItem()) || PARTIALLY_RECORDING == GetItemImage(GetRootItem());
-}
-
 /// Returns the total number of tracks enabled to record
 unsigned int TickTreeCtrl::EnabledTracks()
 {
@@ -264,7 +269,8 @@ unsigned int TickTreeCtrl::EnabledTracks()
 
 /// Indicates if all recorders that have tracks selected for recording are recording
 /// @return True if all recording
-bool TickTreeCtrl::AllRecording() {
+bool TickTreeCtrl::AllRecording()
+{
     bool allRecording = true;
     wxTreeItemIdValue cookie;
     wxTreeItemId recorder = GetFirstChild(GetRootItem(), cookie);
@@ -277,6 +283,22 @@ bool TickTreeCtrl::AllRecording() {
     return allRecording;
 }
 
+/// Indicates if all recorders that have tracks selected for recording are stopped
+/// @return True if all stopped
+bool TickTreeCtrl::AllStopped()
+{
+    bool allStopped = true;
+    wxTreeItemIdValue cookie;
+    wxTreeItemId recorder = GetFirstChild(GetRootItem(), cookie);
+    while (recorder.IsOk()) {
+        if (RECORDING == dynamic_cast<ItemData *>(GetItemData(recorder))->GetUnderlyingState() || PARTIALLY_RECORDING == ((ItemData *) GetItemData(recorder))->GetUnderlyingState()) { //some tracks enabled but not recording
+            allStopped = false;
+        }
+        recorder = GetNextChild(GetRootItem(), cookie);
+    }
+    return allStopped;
+}
+
 /// Travels from the given point in the tree away from the root, changing the state of all items to the state given and determining the aggregate tape ID, signal present status and number of tracks enabled for recording.
 /// Generates an event if a recorder signal present status changes.
 /// @param id Starting node.
@@ -285,7 +307,7 @@ bool TickTreeCtrl::AllRecording() {
 /// @param unknown Unknown state if true.  Overrides enabled parameter.
 /// @param problem Problem if true.  Overrides unknown and enabled parameters.
 /// @return flags: TAPE_IDS_OK, ALL_SIGNALS, TRACK_NODE.
-int TickTreeCtrl::SelectRecursively(wxTreeItemId id, unsigned int & enabledTracks, bool enabled, bool unknown, bool problem)
+int TickTreeCtrl::SelectRecursively(wxTreeItemId id, unsigned int * enabledTracks, bool enabled, bool unknown, bool problem)
 {
     //apply visible/underlying selection states to this node
     if (problem) {
@@ -308,7 +330,7 @@ int TickTreeCtrl::SelectRecursively(wxTreeItemId id, unsigned int & enabledTrack
     child = GetFirstChild(id, cookie);
     while (child.IsOk()) {
         //set child's state, get aggregate tape ID and signal present status, and count enabled sources
-        rc &= SelectRecursively(child, offspringEnabledTracks, enabled, unknown, problem);
+        rc &= SelectRecursively(child, &offspringEnabledTracks, enabled, unknown, problem);
         child = GetNextChild(id, cookie);
     }
     //update state of this node
@@ -318,7 +340,7 @@ int TickTreeCtrl::SelectRecursively(wxTreeItemId id, unsigned int & enabledTrack
             dynamic_cast<ItemData *>(GetItemData(id))->SetBool(enabled);
         }
         if (dynamic_cast<ItemData *>(GetItemData(id))->GetBool()) { //enabled for recording
-            enabledTracks++; //add one to the total if this track is enabled
+            if (enabledTracks) *enabledTracks++; //add one to the total if this track is enabled
             if (NO_SIGNAL_COLOUR == GetItemBackgroundColour(id)) { //no signal on a track enabled for recording
                 rc &= ~ALL_SIGNALS;
             }
@@ -336,7 +358,7 @@ int TickTreeCtrl::SelectRecursively(wxTreeItemId id, unsigned int & enabledTrack
         }
         SetSignalPresentStatus(id, rc & ALL_SIGNALS);
         dynamic_cast<ItemData *>(GetItemData(id))->SetEnabledTracks(offspringEnabledTracks);
-        enabledTracks += offspringEnabledTracks;
+        if (enabledTracks) *enabledTracks += offspringEnabledTracks;
         rc &= ~TRACK_NODE; //inform caller that this is not a track node
     }
     return rc;
@@ -651,6 +673,7 @@ void TickTreeCtrl::SetTrackStatus(const wxString & recorderName, bool recording,
 }
 
 /// Works out if there are any package names which do not belong to router recorders, i.e. that use tape IDs.
+/// Does not care if tape IDs are enabled or not.
 /// @return true if using tape IDs.
 bool TickTreeCtrl::UsingTapeIds()
 {
@@ -674,16 +697,17 @@ void TickTreeCtrl::GetPackageNames(wxArrayString & names, std::vector<bool> & en
 void TickTreeCtrl::UpdateTapeIds(wxXmlDocument & doc)
 {
     wxXmlNode * tapeIdsNode = SetTapeIdsDlg::GetTapeIdsNode(doc);
-    ScanPackageNames(0, 0, tapeIdsNode);
+    ScanPackageNames(0, 0, tapeIdsNode, SetTapeIdsDlg::AreTapeIdsEnabled(doc));
 }
 
 /// Either returns all package names, with corresponding enabled status, or updates all tape IDs.
 /// Skips package names that belong to router recorders.
-/// If updating, reports to the root, and generates a status update notification event and a recorder notification event for each recorder whose tape IDs have changed.
+/// If updating tape IDs, reports to the root, and generates a status update notification event and a recorder notification event for each recorder whose tape IDs have changed (taking account of the effect of the tapeIdsAreEnabled parameter).
 /// @param names If 0, updates; if not, returns package names.
 /// @param enabled If returning package names, returns true for each corresponding package in names that's enabled or partially enabled; false otherwise.  Ignored if not returning package names.
-/// @param tapeIDsNode If updating, this XML node is searched for tape IDs.
-void TickTreeCtrl::ScanPackageNames(wxArrayString * names, std::vector<bool> * enabled, wxXmlNode * tapeIdsNode)
+/// @param tapeIdsNode If updating, this XML node is searched for tape IDs.
+/// @param tapeIdsAreEnabled If updating, tape IDs are all set to empty strings if this is false.
+void TickTreeCtrl::ScanPackageNames(wxArrayString * names, std::vector<bool> * enabled, wxXmlNode * tapeIdsNode, bool tapeIdsAreEnabled)
 {
     wxString packageName;
     wxTreeItemIdValue recordersCookie;
@@ -702,17 +726,24 @@ void TickTreeCtrl::ScanPackageNames(wxArrayString * names, std::vector<bool> * e
                 enabled->push_back(ENABLED == GetItemImage(package) || PARTIALLY_ENABLED == GetItemImage(package));
             }
             else { //updating
-                wxString tapeId = SetTapeIdsDlg::GetTapeId(tapeIdsNode, packageName);
-                if (RetrieveMessage(package) != tapeId) {
+                if (tapeIdsAreEnabled) {
+                    wxString tapeId = SetTapeIdsDlg::GetTapeId(tapeIdsNode, packageName);
+                    if (RetrieveMessage(package) != tapeId) {
+                        tapeIdChanges = true;
+                        if (tapeId.IsEmpty()) { //no tape ID
+                            RemoveMessage(package);
+                            dynamic_cast<ItemData *>(GetItemData(package))->SetBool(false);
+                        }
+                        else { //tape ID is present
+                            AddMessage(package, tapeId);
+                            dynamic_cast<ItemData *>(GetItemData(package))->SetBool(true);
+                        }
+                    }
+                }
+                else if (!RetrieveMessage(package).IsEmpty()) {
                     tapeIdChanges = true;
-                    if (tapeId.IsEmpty()) { //no tape ID
-                        RemoveMessage(package);
-                        dynamic_cast<ItemData *>(GetItemData(package))->SetBool(false);
-                    }
-                    else { //tape ID is present
-                        AddMessage(package, tapeId);
-                        dynamic_cast<ItemData *>(GetItemData(package))->SetBool(true);
-                    }
+                    RemoveMessage(package);
+                    dynamic_cast<ItemData *>(GetItemData(package))->SetBool(false);
                 }
             }
             package = GetNextChild(recorder, packagesCookie);
@@ -744,14 +775,14 @@ void TickTreeCtrl::AddMessage(const wxTreeItemId item, const wxString & message)
 }
 
 
-/// Retrieves a message from a tree item's displayed text.
+/// Retrieves a message (if any) from a tree item's displayed text.
 /// @param item The tree node.
 /// @return The message.
 const wxString TickTreeCtrl::RetrieveMessage(const wxTreeItemId item)
 {
     //NB format must correspond to AddMessage()
     wxString message = GetItemText(item).Mid(dynamic_cast<ItemData *>(GetItemData(item))->GetString().Len() + 2); //remove characters up to start of message
-    message.Truncate(message.Len() - 1); //remove trailing bracket
+    message.Truncate(message.Len() - 1); //remove trailing bracket (if any)
     return message;
 }
 

@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: timepos.cpp,v 1.12 2010/08/12 16:35:38 john_f Exp $             *
+ *   $Id: timepos.cpp,v 1.13 2010/08/25 17:51:06 john_f Exp $             *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -345,6 +345,7 @@ void Timepos::SetTimecode(const ProdAuto::MxfTimecode tc, bool stuck)
     }
     else if (tc.edit_rate.numerator && tc.edit_rate.denominator) { //sensible values: no chance of divide by zero!
         mLastKnownTimecode = tc;
+        mLastDisplayedTimecode = tc; //to prevent problems with functions that use this variable if they are called before the timecode display is updated
         if (stuck) {
             mTimecodeRunning = false;
             //show the stuck value

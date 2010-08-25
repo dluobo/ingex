@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: dialogues.cpp,v 1.21 2010/08/19 12:47:56 john_f Exp $           *
+ *   $Id: dialogues.cpp,v 1.22 2010/08/25 17:51:06 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -479,6 +479,24 @@ SetTapeIdsDlg::SetTapeIdsDlg(wxWindow * parent, wxXmlDocument & doc, wxArrayStri
         mUpdated = true;
     }
 }
+
+/// Returns the enabled state of tape IDs
+/// @param doc The XML document.
+bool SetTapeIdsDlg::AreTapeIdsEnabled(wxXmlDocument & doc)
+{
+    wxXmlNode * tapeIdsNode = GetTapeIdsNode(doc);
+    return wxT("Yes") == tapeIdsNode->GetPropVal(wxT("Enabled"), wxT("Yes"));
+}
+
+/// Saves the enabled state of tape IDs
+/// @param doc The XML document.
+void SetTapeIdsDlg::EnableTapeIds(wxXmlDocument & doc, bool enabled)
+{
+    wxXmlNode * tapeIdsNode = GetTapeIdsNode(doc);
+    tapeIdsNode->DeleteProperty(wxT("Enabled"));
+    tapeIdsNode->SetProperties(new wxXmlProperty(wxT("Enabled"), enabled ? wxT("Yes") : wxT("No")));
+}
+
 
 /// Retrieves or creates the node in the given document containing tape IDs.
 /// Removes any child nodes not called "TapeId".

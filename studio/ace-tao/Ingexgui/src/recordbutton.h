@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: recordbutton.h,v 1.8 2010/08/03 09:27:07 john_f Exp $            *
+ *   $Id: recordbutton.h,v 1.9 2010/08/25 17:51:06 john_f Exp $            *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -38,7 +38,7 @@ public:
     virtual void Disable();
     virtual void SetLabel(const wxString &);
     void Record();
-    void Pending();
+    void Pending(bool);
     void Normal();
     bool IsEnabled();
 private:
@@ -48,6 +48,7 @@ private:
     wxTimer * mTimer;
     wxString mLabel;
     bool mEnabled;
+    bool mRunningUp;
     DECLARE_EVENT_TABLE()
 };
 

@@ -45,9 +45,8 @@ class TickTreeCtrl : public wxTreeCtrl
 {
     public:
         TickTreeCtrl(wxWindow *, wxWindowID, const wxPoint& = wxDefaultPosition, const wxSize& = wxDefaultSize, const wxString & = wxT(""));
-        void AddRecorder(const wxString &, const ProdAuto::TrackList_var &, const ProdAuto::TrackStatusList_var &, bool, wxXmlDocument &);
+        bool AddRecorder(const wxString &, const ProdAuto::TrackList_var &, const ProdAuto::TrackStatusList_var &, bool, wxXmlDocument &);
         void RemoveRecorder(const wxString &);
-
         void Clear();
         void EnableChanges(bool = true);
         bool GetRecordEnables(const wxString &, CORBA::BooleanSeq &, bool);
@@ -55,13 +54,13 @@ class TickTreeCtrl : public wxTreeCtrl
         bool SomeEnabled();
         bool IsRecording();
         bool AllRecording();
+        bool AllStopped();
         bool UsingTapeIds();
-        bool TapeIdsOK();
+        bool TapeIdsOK(wxXmlDocument &);
         bool HasRecorders();
         bool IsUnknown();
         bool HasProblem();
         bool HasAllSignals();
-        bool RecordingSuccessfully();
         unsigned int EnabledTracks();
         void SetRecorderStateUnknown(const wxString &, const wxString &);
         void SetRecorderStateProblem(const wxString &, const wxString &);
@@ -81,10 +80,10 @@ class TickTreeCtrl : public wxTreeCtrl
     private:
         wxTreeItemId FindRecorder(const wxString &);
         void OnLMouseDown(wxMouseEvent &);
-        int SelectRecursively(wxTreeItemId, unsigned int &, bool = true, bool = false, bool = false);
+        int SelectRecursively(wxTreeItemId, unsigned int * = 0, bool = true, bool = false, bool = false);
         void SetRecorderState(const wxString &, bool, const wxString &);
         void ReportState(wxTreeItemId, bool = true);
-        void ScanPackageNames(wxArrayString *, std::vector<bool> *, wxXmlNode * = 0);
+        void ScanPackageNames(wxArrayString *, std::vector<bool> *, wxXmlNode * = 0, const bool = false);
         void AddMessage(const wxTreeItemId item, const wxString &);
         const wxString RetrieveMessage(const wxTreeItemId item);
         void RemoveMessage(const wxTreeItemId item);

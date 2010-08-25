@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: recordbutton.cpp,v 1.8 2010/08/03 09:27:07 john_f Exp $            *
+ *   $Id: recordbutton.cpp,v 1.9 2010/08/25 17:51:06 john_f Exp $            *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -61,6 +61,7 @@ bool RecordButton::Enable(bool state)
     return mEnabled;
 }
 
+/// Makes the button non-clickable.
 void RecordButton::Disable()
 {
     Enable(false);
@@ -76,7 +77,7 @@ void RecordButton::SetLabel(const wxString & label)
     }
 }
 
-/// Puts the button into the normal (non recording or pending) state.
+/// Puts the button into the normal (non recording or pending) state, and sets the tooltip accordingly.
 void RecordButton::Normal() {
     if (RECORDING_COLOUR == GetBackgroundColour() || mTimer->IsRunning()) { //not already in normal state
 //std::cerr << "normal" << std::endl;
@@ -84,11 +85,11 @@ void RecordButton::Normal() {
         SetLabel(mLabel);
         SetBackgroundColour(mEnabled ? ENABLED_COLOUR : mInitialColour); //dull red or greyed out
         mTimer->Stop();
+        SetToolTip(wxT("Start a new recording"));
     }
 }
 
-
-/// Puts the button into the bright red textless and disabled "record" state.
+/// Puts the button into the bright red textless and disabled "record" state, and sets the tooltip accordingly.
 void RecordButton::Record() {
     if (RECORDING_COLOUR != GetBackgroundColour() || mTimer->IsRunning()) { //not already in record state
 //std::cerr << "record" << std::endl;
@@ -96,17 +97,21 @@ void RecordButton::Record() {
         SetLabel(wxT(""));
         SetBackgroundColour(RECORDING_COLOUR);
         mTimer->Stop();
+        SetToolTip(wxT("Recording"));
     }
 }
 
-/// Puts the button into the flashing bright red textless and disabled "pending" state.
-void RecordButton::Pending() {
-    if (!mTimer->IsRunning()) { //not already in pending mode
+/// Puts the button into the flashing textless "running up" or "running down" state, and sets the tooltip accordingly.
+/// @param runningUp true for running up; false for running down
+void RecordButton::Pending(bool runningUp) {
+    if (!mTimer->IsRunning() || mRunningUp != runningUp) { //changing mode
 //std::cerr << "pending" << std::endl;
+        mRunningUp = runningUp;
         wxButton::Enable(); //so it's not greyed out
         wxButton::SetLabel(wxT(""));
-        SetBackgroundColour(RECORDING_COLOUR);
+        SetBackgroundColour(mRunningUp ? RECORDING_COLOUR : ENABLED_COLOUR);
         mTimer->Start(125); //for flashing
+        SetToolTip(mRunningUp ? wxT("Running up") : wxT("Running down"));
     }
 }
 
@@ -114,8 +119,8 @@ void RecordButton::Pending() {
 void RecordButton::OnTimer(wxTimerEvent & WXUNUSED(event)) {
 //std::cerr << "timer" << std::endl;
     if (mTimer->IsRunning()) { //trap timer being stopped with event in the system - if this ever happens...
-        if (RECORDING_COLOUR != GetBackgroundColour()) {
-            SetBackgroundColour(RECORDING_COLOUR);
+        if (mInitialColour == GetBackgroundColour()) {
+            SetBackgroundColour(mRunningUp ? RECORDING_COLOUR : ENABLED_COLOUR);
         }
         else {
             SetBackgroundColour(mInitialColour);

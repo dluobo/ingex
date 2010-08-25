@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: dialogues.h,v 1.14 2010/08/18 10:15:42 john_f Exp $             *
+ *   $Id: dialogues.h,v 1.15 2010/08/25 17:51:06 john_f Exp $             *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -112,6 +112,8 @@ class SetTapeIdsDlg : public wxDialog
         SetTapeIdsDlg(wxWindow *, wxXmlDocument &, wxArrayString &, std::vector<bool> &);
         static wxXmlNode * GetTapeIdsNode(wxXmlDocument &);
         static const wxString GetTapeId(wxXmlNode *, const wxString &, wxArrayString * = 0);
+        static void EnableTapeIds(wxXmlDocument &, bool);
+        static bool AreTapeIdsEnabled(wxXmlDocument &);
         bool IsUpdated();
     private:
         enum {

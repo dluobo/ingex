@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: help.cpp,v 1.20 2010/08/18 10:15:42 john_f Exp $                *
+ *   $Id: help.cpp,v 1.21 2010/08/25 17:51:06 john_f Exp $                *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -35,7 +35,7 @@ HelpDlg::HelpDlg(wxWindow * parent)
     sizer->Add(notebook, 1, wxEXPAND | wxALL, 10);
 
     wxTextCtrl * qs = new wxTextCtrl(notebook, -1, wxT(""), wxDefaultPosition, wxDefaultSize, wxTE_READONLY | wxTE_MULTILINE);
-    wxString message = wxT("1) Click the recorder names you wish to use in the #Recorder Selection# box.\n\n2) Select/add a suitable project name from the #Misc->Set Project Name...# menu if desired.\n\n3) Set appropriate values for pre-roll and post-roll from the #Misc->Set pre- and post-roll# menu if desired.\n\n4) If you don't want to record with all tracks, open up the #Recorders# tree to the desired level by clicking on the small arrows, and click on #R# symbols.\n\n5) Press the #Set tape Ids# button and make sure there is a suitable tape ID for each package of tracks.\n\n6) Fill in the #Description# box if desired.\n\n7) Press the #Record# button to start recording, and the #Stop# button to finish.");
+    wxString message = wxT("1) Click the recorder names you wish to use in the #Recorder Selection# box.\n\n2) Select/add a suitable project name from the #Misc->Set Project Name...# menu if desired.\n\n3) Set appropriate values for pre-roll and post-roll from the #Misc->Set pre- and post-roll...# menu if desired.\n\n4) If you don't want to record with all tracks, open up the #Recorders# tree to the desired level by clicking on the small arrows, and click on #R# symbols.\n\n5) Press the #Set tape IDs# button and make sure there is a suitable tape ID for each package of tracks, or disable tape IDs in the #Misc# menu.\n\n6) Fill in the #Description# box if desired.\n\n7) Press the #Record# button to start recording, and the #Stop# button to finish.");
     StyleAndWrite(qs, message);
     notebook->AddPage(qs, wxT("Quick Start"));
 
@@ -55,12 +55,17 @@ HelpDlg::HelpDlg(wxWindow * parent)
     notebook->AddPage(recorder, wxT("Recorder selection"));
 
     wxTextCtrl * roll = new wxTextCtrl(notebook, -1, wxT(""), wxDefaultPosition, wxDefaultSize, wxTE_READONLY | wxTE_MULTILINE);
-    message = wxT("When connected to at least one recorder, a dialogue can be accessed from the #Misc# menu to set pre-roll and post-roll.  These settings are remembered between sessions.\n\nThe #Pre-roll# slider allows you to add a variable amount of pre-roll to each recording.  Its maximum value depends on the capabilities of the recorders.\n\nThe #Post-roll# slider operates in a similar way.  Recorders are likely to allow an infinite amount of post-roll, in which case it is limited to ") + wxString::Format(wxT("%d frame%s."), DEFAULT_MAX_POSTROLL, DEFAULT_MAX_POSTROLL == 1 ? wxT("") : wxT("s"));
+    message = wxT("When connected to at least one recorder, a dialogue can be accessed from the #Misc# menu to set pre-roll and post-roll.  These settings are remembered between sessions.\n\nThe #Pre-roll# slider allows you to add a variable amount of pre-roll to each recording.  Its maximum value depends on the capabilities of the recorders.\n\nThe #Post-roll# slider operates in a similar way.  Recorders are likely to allow an infinite amount of post-roll, in which case it is limited to ") + wxString::Format(wxT("%d frame%s."), DEFAULT_MAX_POSTROLL, DEFAULT_MAX_POSTROLL == 1 ? wxT("") : wxT("s")) + wxT("  During post-roll the record button shows the \"running down\" state");
+#ifdef ALLOW_OVERLAPPED_RECORDINGS
+    message += wxT(" and a new recording can be started, which will overlap the current recording.");
+#else
+    message += wxT(".");
+#endif
     StyleAndWrite(roll, message);
     notebook->AddPage(roll, wxT("Pre-roll and Post-roll"));
 
     wxTextCtrl * tapeIds = new wxTextCtrl(notebook, -1, wxT(""), wxDefaultPosition, wxDefaultSize, wxTE_READONLY | wxTE_MULTILINE);
-    message = wxT("Recordings cannot be made unless all enabled tracks (apart from those of router recorders) have a corresponding tape ID.  #Set tape IDs# will be orange if a missing tape ID is preventing you from recording.  Pressing this button (whether orange or not) brings up a dialogue for manipulating tape IDs, which are remembered between sessions.  It is designed to allow you to enter and update the information for several tapes quickly.  Press the #Help# on the dialogue for details about how to do this.");
+    message = wxT("If tape IDs are enabled in the #Misc# menu, recordings cannot be made unless all enabled tracks (apart from those of router recorders) have a corresponding tape ID.  #Set tape IDs# will be orange if a missing tape ID is preventing you from recording.  Pressing this button (whether orange or not) brings up a dialogue for manipulating tape IDs, which are remembered between sessions.  It is designed to allow you to enter and update the information for several tapes quickly.  Press the #Help# button on the dialogue for details about how to do this.");
     StyleAndWrite(tapeIds, message);
     notebook->AddPage(tapeIds, wxT("Tape IDs"));
 
@@ -79,7 +84,7 @@ HelpDlg::HelpDlg(wxWindow * parent)
     notebook->AddPage(indicators, wxT("Indicators and Player Mode Buttons"));
 
     wxTextCtrl * transport = new wxTextCtrl(notebook, -1, wxT(""), wxDefaultPosition, wxDefaultSize, wxTE_READONLY | wxTE_MULTILINE);
-    message = wxT("When connected to at least one recorder, the #Record# button indicates the total number of tracks enabled to record.  If this is greater than zero, and all the enabled tracks (apart from router recorders) have tape IDs, it will be a dull red, indicating that recording is possible.  (If lack of tape IDs is preventing a recording occurring, #Set Tape IDs# will be orange to remind you that you must define some tape IDs before you can record.)  When pressed, #Record# will become bright red with no legend (as it can no longer be pressed), and will flash (\"running up\") until all applicable recorders have responded successfully to the record command.  #F1# provides a shortcut key for recording.\n\n#Stop# can only be pressed while recording, and sets the displayed status to stopped immediately, even if recorders are still post-rolling.  #Shift+F5# provides a shortcut key for stopping.\n\nWhile recording, #Mark cue# (or shortcut #F2#) adds a line to the cue point display to mark a point of interest.\n\nAfter at least one recording has been made, #Mark cue# becomes a play/pause button, explained in the instructions for the player.  #Stop# has no effect during playback.\n\n#Chunk# can be pressed during recording to create a new chunk immediately.  See separate help section on chunking for more details.\n\n#Record# can be pressed during playback, which will immediately halt the player (to reduce load on the recording system) and commence a new recording.");
+    message = wxT("When connected to at least one recorder, the #Record# button indicates the total number of tracks enabled to record.  If this is greater than zero, and all the enabled tracks (apart from router recorders) have tape IDs, it will be a dull red, indicating that recording is possible.  (If lack of tape IDs is preventing a recording occurring, #Set Tape IDs# will be orange to remind you that you must define some tape IDs before you can record.)  When pressed, #Record# will flash bright red (\"running up\") until all applicable recorders have responded successfully to the record command, and will then become steady bright red.  Similarly, when stopping, it will flash dull red (\"running down\") during postroll and while waiting for a response.  #F1# provides a shortcut key for recording.\n\n#Stop# can only be pressed while recording, and sets the displayed status to stopped immediately, even if recorders are still post-rolling.  #Shift+F5# provides a shortcut key for stopping.\n\nWhile recording, #Mark cue# (or shortcut #F2#) adds a line to the cue point display to mark a point of interest.\n\nAfter at least one recording has been made, #Mark cue# becomes a play/pause button, explained in the instructions for the player.  #Stop# has no effect during playback.\n\n#Chunk# can be pressed during recording to create a new chunk immediately.  See separate help section on chunking for more details.\n\n#Record# can be pressed during playback, which will immediately halt the player (to reduce load on the recording system) and commence a new recording.");
     StyleAndWrite(transport, message);
     notebook->AddPage(transport, wxT("Transport controls"));
 
@@ -172,6 +177,6 @@ AboutDlg::AboutDlg(wxWindow * parent)
 #ifdef DISABLE_SHARED_MEM_SOURCE
     message += wxT("not ");
 #endif
-    message += wxT("included.  Please send feedback to matthewmarks@users.sourceforge.net.\n\nVersion $Id: help.cpp,v 1.20 2010/08/18 10:15:42 john_f Exp $\n\nCopyright (C) British Broadcasting Corporation 2006-2009 - All rights reserved.\n\n$Date: 2010/08/18 10:15:42 $.");
+    message += wxT("included.  Please send feedback to matthewmarks@users.sourceforge.net.\n\nVersion $Id: help.cpp,v 1.21 2010/08/25 17:51:06 john_f Exp $\n\nCopyright (C) British Broadcasting Corporation 2006-2009 - All rights reserved.\n\n$Date: 2010/08/25 17:51:06 $.");
     textBox->SetValue(message);
 };

@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: ingexgui.cpp,v 1.33 2010/08/19 12:47:57 john_f Exp $           *
+ *   $Id: ingexgui.cpp,v 1.34 2010/08/25 17:51:06 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -144,6 +144,7 @@ BEGIN_EVENT_TABLE( IngexguiFrame, wxFrame )
     EVT_BUTTON( BUTTON_JumpToTimecode, IngexguiFrame::OnJumpToTimecode )
     EVT_BUTTON( BUTTON_TakeSnapshot, IngexguiFrame::OnTakeSnapshot )
     EVT_BUTTON( BUTTON_DeleteCue, IngexguiFrame::OnDeleteCue )
+    EVT_MENU( MENU_UseTapeIds, IngexguiFrame::OnUseTapeIds )
     EVT_COMMAND( wxID_ANY, EVT_PLAYER_MESSAGE, IngexguiFrame::OnPlayerEvent )
     EVT_COMMAND( wxID_ANY, EVT_TREE_MESSAGE, IngexguiFrame::OnTreeEvent )
     EVT_COMMAND( wxID_ANY, EVT_RECORDERGROUP_MESSAGE, IngexguiFrame::OnRecorderGroupEvent )
@@ -271,6 +272,7 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
     menuMisc->Append(MENU_Chunking, wxT("Chunking..."));
     wxMenuItem * clearLogItem = menuMisc->Append(MENU_ClearLog, wxT("Clear recording log"));
     clearLogItem->Enable(false);
+    menuMisc->AppendCheckItem(MENU_UseTapeIds, wxT("Use tape IDs"));
     menuMisc->AppendCheckItem(MENU_AutoClear, wxT("Don't log multiple recordings"));
     menuMisc->Append(MENU_TestMode, wxT("Test mode..."));
     menuMisc->Append(wxID_CLOSE, wxT("Quit"));
@@ -627,6 +629,14 @@ void IngexguiFrame::OnRecorderListRefresh( wxCommandEvent& WXUNUSED( event ) )
     mRecorderGroup->StartGettingRecorders();
 }
 
+/// Responds to the Use Tape IDs menu checkbox being clicked by updating the state
+void IngexguiFrame::OnUseTapeIds( wxCommandEvent& event )
+{
+    SetTapeIdsDlg::EnableTapeIds(mSavedState, event.IsChecked());
+    mSavedState.Save(mSavedStateFilename);
+    mTree->UpdateTapeIds(mSavedState); //will issue an event to update the record and tape ID buttons
+}
+
 /// Responds to the tape IDs button being pressed by showing the appropriate dialogue and updating state if user makes changes.
 /// @param event The button event.
 void IngexguiFrame::OnSetTapeIds( wxCommandEvent& WXUNUSED( event ) )
@@ -729,8 +739,6 @@ void IngexguiFrame::OnRecord( wxCommandEvent& WXUNUSED( event ) )
             //clear everything away because we're starting again
             ClearLog(); //resets player
         }
-        //stop player using disks
-        if (mPlayer) mPlayer->Record();
         //issue command to record immediately, and log
         ProdAuto::MxfTimecode now;
         Log(wxT("Record button pressed @ ") + mTimepos->GetTimecode(&now));
@@ -942,8 +950,6 @@ void IngexguiFrame::OnStop( wxCommandEvent& WXUNUSED( event ) )
             Log(wxT("Stop button pressed during recording or run-up @ ") + Timepos::FormatTimecode(now));
             mRecorderGroup->Stop(false, now, mDescriptionCtrl->GetLineText(0).Trim(false).Trim(true), mEventList->GetLocators());
             SetStatus(RUNNING_DOWN);
-            //restore the player mode that existed before recording (if player is enabled)
-            if (mPlayer) mPlayer->Record(false);
         }
         else if (PLAYING == mStatus || PLAYING_BACKWARDS == mStatus || PAUSED == mStatus) {
             SetStatus(STOPPED);
@@ -1080,6 +1086,7 @@ void IngexguiFrame::TextFieldHasFocus(const bool hasFocus)
 /// NEW_RECORDER: Makes sure project name is set or disconnects.  Sets mode to connected.  Sets status to recording if the new recorder is recording.  Logs.
 ///     Event string: The recorder name.
 ///     Event int: The index of the recorder so it can be disconnected easily
+///     Event extra long: The recorder is recording
 /// RECORD: Starts position counter and adds a start event to the event list.
 ///     Event client data: Ptr to a ProdAuto::MxfTimecode object with the start timecode.  Deletes this.
 /// CHUNK_START: Tells the chunking dialogue to start counting down to the next chunking point.
@@ -1130,10 +1137,9 @@ void IngexguiFrame::OnRecorderGroupEvent(wxCommandEvent& event) {
                     mRecorderGroup->Deselect(event.GetInt());
                 }
             }
-            if (mTree->RecordingSuccessfully()) {
+            if (!mRecorderGroup->GetCurrentProjectName().IsEmpty() && event.GetExtraLong()) {
+                //this recorder is still connected and is already recording
                 Log(wxT(" ...already recording"));
-                //this recorder is already recording
-                if (mPlayer) mPlayer->Record();
                 SetStatus(RECORDING); //will prevent any more recorders being added
                 ProdAuto::MxfTimecode startTimecode;
                 mTimepos->GetStartTimecode(&startTimecode);
@@ -1172,7 +1178,6 @@ void IngexguiFrame::OnRecorderGroupEvent(wxCommandEvent& event) {
                 ProdAuto::MxfTimecode* tc = (ProdAuto::MxfTimecode *) event.GetClientData();
                 mTimepos->Stop(*tc);
                 mEventList->AddEvent(EventList::STOP, tc, mRecorderGroup->GetCurrentDescription(), mTimepos->GetFrameCount());
-                SetStatus(STOPPED);
                 delete tc;
                 break;
             }
@@ -1274,6 +1279,10 @@ void IngexguiFrame::OnTreeEvent(wxCommandEvent& event)
                     mChunkingDlg->RunFrom(startTimecode, mRecorderGroup->GetChunkingPostroll());
                 }
                 break;
+            case RUNNING_DOWN:
+                if (mTree->AllStopped()) { //all recorders that are supposed to are recording
+                    SetStatus(STOPPED);
+                }
             default:
                 break;
         }
@@ -1311,12 +1320,14 @@ void IngexguiFrame::SetStatus(Stat status)
             SetStatusText(wxT("Stopped."));
             mTree->EnableChanges();
             mChunkingDlg->RunFrom();
+            if (mPlayer) mPlayer->Record(false);
             break;
         case RUNNING_UP:
             if (changed) {
                 Log(wxT("status: RUNNING_UP"));
             }
             SetStatusText(wxT("Running up."));
+            if (mPlayer) mPlayer->Record();
             mTree->EnableChanges(false);
             break;
         case RECORDING:
@@ -1325,6 +1336,7 @@ void IngexguiFrame::SetStatus(Stat status)
                 mRecorderGroup->EnableForInput(false); //catches connecting to a recorder that's already recording
             }
             SetStatusText(wxT("Recording."));
+            if (mPlayer) mPlayer->Record();
             mTree->EnableChanges(false);
             break;
         case RUNNING_DOWN:
@@ -1332,6 +1344,7 @@ void IngexguiFrame::SetStatus(Stat status)
                 Log(wxT("status: RUNNING_DOWN"));
             }
             SetStatusText(wxT("Running down."));
+            if (mPlayer) mPlayer->Record();
             mTree->EnableChanges(false);
             mChunkingDlg->RunFrom();
             break;
@@ -1454,7 +1467,6 @@ void IngexguiFrame::OnDescriptionEnterKey(wxCommandEvent & WXUNUSED(event))
 /// @param message The string to display.
 void IngexguiFrame::Log(const wxString & message)
 {
-//  std::cerr << wxDateTime::Now().FormatISOTime().mb_str(*wxConvCurrent) << " " << message.mb_str(*wxConvCurrent) << std::endl;
     if (wxDateTime::Today() != mToday) {
         mToday = wxDateTime::Today();
             wxLogMessage(wxT("Date: ") + mToday.FormatISODate());
@@ -1599,8 +1611,11 @@ void IngexguiFrame::OnUpdateUI(wxUpdateUIEvent& event)
                 }
             }
             break;
+        case MENU_UseTapeIds:
+            event.Check(SetTapeIdsDlg::AreTapeIdsEnabled(mSavedState));
+            break;
         case BUTTON_TapeId:
-            dynamic_cast<wxButton*>(event.GetEventObject())->SetBackgroundColour(mTree->SomeEnabled() && !mTree->TapeIdsOK() ? BUTTON_WARNING_COLOUR : wxNullColour);
+            dynamic_cast<wxButton*>(event.GetEventObject())->SetBackgroundColour(mTree->SomeEnabled() && !mTree->TapeIdsOK(mSavedState) ? BUTTON_WARNING_COLOUR : wxNullColour);
             break;
         case BITMAP_StatusCtrl:
             switch (mStatus) {
@@ -1720,17 +1735,16 @@ void IngexguiFrame::OnUpdateUI(wxUpdateUIEvent& event)
                 event.SetText(legend);
                 switch (mStatus) {
                     case RUNNING_UP:
-                        dynamic_cast<RecordButton*>(event.GetEventObject())->Pending();
-                        dynamic_cast<RecordButton*>(event.GetEventObject())->SetToolTip(wxT(""));
+                        dynamic_cast<RecordButton*>(event.GetEventObject())->Pending(true);
                         break;
                     case RECORDING:
-                    case RUNNING_DOWN:
                         dynamic_cast<RecordButton*>(event.GetEventObject())->Record();
-                        dynamic_cast<RecordButton*>(event.GetEventObject())->SetToolTip(wxT("Recording"));
+                        break;
+                    case RUNNING_DOWN:
+                        dynamic_cast<RecordButton*>(event.GetEventObject())->Pending(false);
                         break;
                     default:
                         dynamic_cast<RecordButton*>(event.GetEventObject())->Normal();
-                        dynamic_cast<RecordButton*>(event.GetEventObject())->SetToolTip(wxT("Start a new recording"));
                         break;
                 }
             }
@@ -1935,14 +1949,18 @@ bool IngexguiFrame::OperationAllowed(const int operation, bool* found)
             enabled = mRecorderGroup->IsEnabledForInput();
             break;
         case BUTTON_TapeId:
-            enabled = mTree->UsingTapeIds();
+            enabled = SetTapeIdsDlg::AreTapeIdsEnabled(mSavedState) && mTree->UsingTapeIds();
             break;
         case BUTTON_JumpToTimecode:
             enabled = mPlayer && RECORDINGS == mPlayer->GetMode() && !IsRecording() && mEventList->GetCurrentChunkInfo();
             break;
         case BUTTON_MENU_Record:
         case MENU_TestMode:
-            enabled = mTree->SomeEnabled() && mTree->TapeIdsOK() && mRecorderGroup->IsEnabledForInput() && (RECORDING != mStatus && RUNNING_UP != mStatus && RUNNING_DOWN != mStatus);
+#ifdef ALLOW_OVERLAPPED_RECORDINGS
+            enabled = mTree->SomeEnabled() && mTree->TapeIdsOK(mSavedState) && mRecorderGroup->IsEnabledForInput() && (RECORDING != mStatus && RUNNING_UP != mStatus);
+#else
+            enabled = mTree->SomeEnabled() && mTree->TapeIdsOK(mSavedState) && mRecorderGroup->IsEnabledForInput() && (RECORDING != mStatus && RUNNING_UP != mStatus && RUNNING_DOWN != mStatus);
+#endif
             break;
         case BUTTON_MENU_Stop:
             enabled = RUNNING_UP == mStatus || RECORDING == mStatus || RUNNING_DOWN == mStatus;

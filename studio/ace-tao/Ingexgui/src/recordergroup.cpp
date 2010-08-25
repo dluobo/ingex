@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: recordergroup.cpp,v 1.19 2010/08/19 12:47:57 john_f Exp $       *
+ *   $Id: recordergroup.cpp,v 1.20 2010/08/25 17:51:06 john_f Exp $       *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -269,12 +269,12 @@ void RecorderGroupCtrl::OnControllerEvent(ControllerThreadEvent & event)
                 //check edit rate compatibility
                 wxArrayInt selectedItems;
                 if (!GetSelections(selectedItems) || (GetController(pos)->GetMaxPreroll().edit_rate.numerator == mMaxPreroll.edit_rate.numerator && GetController(pos)->GetMaxPreroll().edit_rate.denominator == mMaxPreroll.edit_rate.denominator)) { //the only recorder, or compatible edit rate (assume MaxPostroll has same edit rate)
+                    wxCommandEvent frameEvent(EVT_RECORDERGROUP_MESSAGE, NEW_RECORDER);
                     //everything about the recorder is now checked
                     Select(pos);
                     //populate the source tree
-                    mTree->AddRecorder(event.GetName(), event.GetTrackList(), event.GetTrackStatusList(), GetController(pos)->IsRouterRecorder(), mDoc);
+                    frameEvent.SetExtraLong(mTree->AddRecorder(event.GetName(), event.GetTrackList(), event.GetTrackStatusList(), GetController(pos)->IsRouterRecorder(), mDoc));
                     //tell the frame
-                    wxCommandEvent frameEvent(EVT_RECORDERGROUP_MESSAGE, NEW_RECORDER);
                     frameEvent.SetString(event.GetName());
                     frameEvent.SetInt(pos); //to allow quick disconnection
                     AddPendingEvent(frameEvent);
@@ -525,7 +525,11 @@ void RecorderGroupCtrl::OnControllerEvent(ControllerThreadEvent & event)
                 }
             }
             //track status
-            mTree->SetTrackStatus(event.GetName(), ((IngexguiFrame*) GetParent())->IsRecording(), CHUNK_WAIT == mMode, event.GetTrackStatusList()); //will set record button and status indicator; if chunking, prevent a problem being indicated during the period when the recorder is stopped between chunks but the expected state is to be recording
+            mTree->SetTrackStatus(event.GetName(), dynamic_cast<IngexguiFrame*>(GetParent())->IsRecording(),
+             CHUNK_WAIT == mMode //doesn't matter if recorder is not recording during CHUNK_WAIT
+              || IngexguiFrame::RUNNING_UP == dynamic_cast<IngexguiFrame*>(GetParent())->GetStatus() //recorders can be in either state during running up
+              || IngexguiFrame::RUNNING_DOWN == dynamic_cast<IngexguiFrame*>(GetParent())->GetStatus(), //recorders can be in either state during running down
+             event.GetTrackStatusList()); //will set record button and status indicator
         }
         else { //no status
             if (event.GetName() == mTimecodeRecorder) { //just lost timecode from the recorder we're using
@@ -607,7 +611,11 @@ void RecorderGroupCtrl::Record(const ProdAuto::MxfTimecode startTimecode)
         CORBA::BooleanSeq enableList;
         if (
          GetController(i) && GetController(i)->IsOK()
+#ifdef ALLOW_OVERLAPPED_RECORDINGS
+         && mTree->GetRecordEnables(GetName(i), enableList, true)) { //something's enabled for recording
+#else
          && mTree->GetRecordEnables(GetName(i), enableList, CHUNK_RECORD_WAIT == mMode)) { //something's enabled for recording, and not already recording (unless third argument is non-zero)
+#endif
                ProdAuto::MxfDuration preroll = mPreroll;
                if (CHUNK_RECORD_WAIT == mMode) preroll.samples = 0; //want to record exactly at the previously given timecode, and we should be later than this so can do it
                GetController(i)->Record(startTimecode, preroll, mCurrentProject, enableList);

@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: player.cpp,v 1.23 2010/08/19 12:47:57 john_f Exp $              *
+ *   $Id: player.cpp,v 1.24 2010/08/25 17:51:06 john_f Exp $              *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -68,7 +68,8 @@ mMode(RECORDINGS), mPreviousMode(RECORDINGS),
 mCurrentChunkInfo(0), //to check before accessing in case it hasn't been set
 mDivertKeyPresses(false),
 mOutputType(outputType),
-mAudioFollowsVideo(false)
+mAudioFollowsVideo(false),
+mRecording(false)
 {
     //Controls
     wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
@@ -286,34 +287,38 @@ void Player::OnKeyPress(wxCommandEvent& event)
 }
 
 ///If player is enabled, puts in safe (non disk-accessing) "recording" mode, or returns it to the mode it was in before recording commenced.
+///Remembers previous setting so can be called more than once with the same state with no ill-effects
 ///@param recording True to put into recording mode.
 void Player::Record(const bool recording)
 {
-    if (recording) {
-        mPreviousMode = mMode; //so that previous mode will be restored on stop, even if the player is disabled at the moment
-        mModesAllowed[RECORDINGS] = false;
-        mModesAllowed[FILES] = false;
-        if (mEnabled) {
+    if (recording != mRecording) {
+        mRecording = recording;
+        if (recording) {
+            mPreviousMode = mMode; //so that previous mode will be restored on stop, even if the player is disabled at the moment
+            mModesAllowed[RECORDINGS] = false;
+            mModesAllowed[FILES] = false;
+            if (mEnabled) {
 #ifndef DISABLE_SHARED_MEM_SOURCE //E to E mode available
-            if (ETOE == mMode) { //don't need to change mode
-                if (PlayerState::PAUSED == mState) {
-                    //start playback as button to do this is not available during recording
-                    Play();
+                if (ETOE == mMode) { //don't need to change mode
+                    if (PlayerState::PAUSED == mState) {
+                        //start playback as button to do this is not available during recording
+                        Play();
+                    }
                 }
-            }
-            else {
-                //switch to E to E mode
-                SetMode(ETOE);
-            }
+                else {
+                    //switch to E to E mode
+                    SetMode(ETOE);
+                }
 #else
-            Reset();
+                Reset();
 #endif
+            }
         }
-    }
-    else {
-        mModesAllowed[RECORDINGS] = true;
-        mModesAllowed[FILES] = mFileModeMxfFiles.GetCount() || mFileModeMovFile.Length();
-        SetPreviousMode();
+        else {
+            mModesAllowed[RECORDINGS] = true;
+            mModesAllowed[FILES] = mFileModeMxfFiles.GetCount() || mFileModeMovFile.Length();
+            SetPreviousMode();
+        }
     }
 }
 
