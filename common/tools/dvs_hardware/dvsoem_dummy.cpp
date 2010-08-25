@@ -1,5 +1,5 @@
 /*
- * $Id: dvsoem_dummy.cpp,v 1.5 2010/08/18 10:09:18 john_f Exp $
+ * $Id: dvsoem_dummy.cpp,v 1.6 2010/08/25 18:13:01 john_f Exp $
  *
  * Implement a debug-only DVS hardware library for testing.
  *
@@ -707,13 +707,21 @@ int sv_openex(sv_handle ** psv, char * setup, int openprogram, int opentype, int
         dvs->frame_rate_denom = 1;
         dvs->videomode = SV_MODE_PAL;
 
-        // Set initial timecode from time-of-day
-        struct timeval tod_tv;
-        gettimeofday(&tod_tv, NULL);
-        time_t tod_time = tod_tv.tv_sec;
-        struct tm tod_tm;
-        localtime_r(&tod_time, &tod_tm);
-        dvs->timecode = Ingex::Timecode(tod_tm.tm_hour, tod_tm.tm_min, tod_tm.tm_sec, 0, dvs->frame_rate_numer, dvs->frame_rate_denom, false);
+        if (1)
+        {
+            // Set initial timecode from time-of-day
+            struct timeval tod_tv;
+            gettimeofday(&tod_tv, NULL);
+            time_t tod_time = tod_tv.tv_sec;
+            struct tm tod_tm;
+            localtime_r(&tod_time, &tod_tm);
+            dvs->timecode = Ingex::Timecode(tod_tm.tm_hour, tod_tm.tm_min, tod_tm.tm_sec, 0, dvs->frame_rate_numer, dvs->frame_rate_denom, false);
+        }
+        else
+        {
+            // Set initial timecode to 10:00:00:00
+            dvs->timecode = Ingex::Timecode(10, 0, 0, 0, dvs->frame_rate_numer, dvs->frame_rate_denom, false);
+        }
 
         // Setup source audio/video
         setup_source_buf(dvs);
