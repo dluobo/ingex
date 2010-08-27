@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder_av.cpp,v 1.6 2010/08/23 16:52:42 john_f Exp $
+ * $Id: ffmpeg_encoder_av.cpp,v 1.7 2010/08/27 19:12:02 john_f Exp $
  *
  * Encode AV and write to file.
  *
@@ -115,9 +115,6 @@ int init_video_xdcam(internal_ffmpeg_encoder_t * enc, int64_t start_tc)
     codec_context->codec_id = CODEC_ID_MPEG2VIDEO;
     codec_context->codec_type = CODEC_TYPE_VIDEO;
    
-    int width = 1920;
-    int height = 1080;
-  
 
     codec_context->gop_size = 12;
 #if defined(FFMPEG_NONLINEAR_PATCH)
@@ -131,8 +128,6 @@ int init_video_xdcam(internal_ffmpeg_encoder_t * enc, int64_t start_tc)
     codec_context->qmax = 12;
 #endif
     codec_context->me_method = 5; // (epzs)
-    codec_context->width = width;
-    codec_context->height = height;
     codec_context->flags |= CODEC_FLAG_INTERLACED_DCT;
    // codec_context->flags |= CODEC_FLAG_CLOSED_GOP; //No need for closed GOP in non MXF/XDCAM
     codec_context->flags2 |= CODEC_FLAG2_NON_LINEAR_QUANT;
@@ -151,8 +146,6 @@ int init_video_xdcam(internal_ffmpeg_encoder_t * enc, int64_t start_tc)
     codec_context->stream_codec_tag = MKTAG('x', 'd', '5', 'c'); // for mpeg encoder
     codec_context->codec_tag = MKTAG('x', 'd', '5', 'c'); // for quicktime wrapper
     
-
-    avcodec_set_dimensions(codec_context,width,height);
 
     /* Setting this non-zero gives us a timecode track in MOV format */
     codec_context->timecode_frame_start = start_tc;
@@ -212,10 +205,6 @@ int init_video_dvd(internal_ffmpeg_encoder_t * enc)
     codec_context->codec_id = CODEC_ID_MPEG2VIDEO;
     codec_context->codec_type = CODEC_TYPE_VIDEO;
     codec_context->pix_fmt = PIX_FMT_YUV420P;
-
-    int width = 720;
-    int height = 576;
-    avcodec_set_dimensions(codec_context, width, height);
 
     const int dvd_kbit_rate = 5000;
 
@@ -285,10 +274,6 @@ int init_video_mpeg4(internal_ffmpeg_encoder_t * enc, int64_t start_tc)
     codec_context->codec_type = CODEC_TYPE_VIDEO;
     codec_context->pix_fmt = PIX_FMT_YUV420P;
 
-    int width = 720;
-    int height = 576;
-    avcodec_set_dimensions(codec_context, width, height);
-
     /* bit rate */
     const int kbit_rate = 800;
 
@@ -354,8 +339,6 @@ int init_video_dv(internal_ffmpeg_encoder_t * enc, MaterialResolution::EnumType 
 
     int encoded_frame_size = 0;
     int top_field_first = 1;
-    int width = 720;
-    int height = 576;
 
     switch (res)
     {
@@ -374,10 +357,13 @@ int init_video_dv(internal_ffmpeg_encoder_t * enc, MaterialResolution::EnumType 
         enc->scale_image = 1;
         enc->input_width = 1920;
         enc->input_height = 1080;
-        width = 1440;                       // coded width (input scaled horizontally from 1920)
-        height = 1080;
+        {
+            int width = 1440;    // coded width (input scaled horizontally from 1920)
+            int height = 1080;
+            enc->inputBuffer = (uint8_t *)av_mallocz(width * height * 2);
+            avcodec_set_dimensions(codec_context, width, height);
+        }
         enc->tmpFrame = (AVPicture *)av_mallocz(sizeof(AVPicture));
-        enc->inputBuffer = (uint8_t *)av_mallocz(width * height * 2);
         encoded_frame_size = 576000;        // SMPTE 370M spec
         top_field_first = 1;
         break;
@@ -385,7 +371,6 @@ int init_video_dv(internal_ffmpeg_encoder_t * enc, MaterialResolution::EnumType 
         break;
     }
 
-    avcodec_set_dimensions(codec_context, width, height);
 
     /* Setting this non-zero gives us a timecode track in MOV format */
     codec_context->timecode_frame_start = start_tc;
@@ -827,23 +812,37 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename,
 
     /* Set aspect ratio for video stream */
     AVRational sar;
-    if (width > 720)
+    switch (raster)
     {
-    // HD
+    case Ingex::VideoRaster::PAL:
+    case Ingex::VideoRaster::PAL_B:
+        if (wide_aspect)
+        {
+            sar.num = 118;
+            sar.den = 81;
+        }
+        else
+        {
+            sar.num = 59;
+            sar.den = 54;
+        }
+        break;
+    case Ingex::VideoRaster::NTSC:
+        if (wide_aspect)
+        {
+            sar.num = 40;
+            sar.den = 33;
+        }
+        else
+        {
+            sar.num = 10;
+            sar.den = 11;
+        }
+        break;
+    default:
         sar.num = 1;
         sar.den = 1;
-    }
-    else if (wide_aspect)
-    {
-    // SD 16:9
-        sar.num = 118;
-        sar.den = 81;
-    }
-    else
-    {
-    // SD 4:3
-        sar.num = 59;
-        sar.den = 54;
+        break;
     }
 
     /* Add the video stream */
@@ -857,6 +856,9 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename,
 
     enc->video_st->sample_aspect_ratio = sar;
     enc->video_st->codec->sample_aspect_ratio = sar;
+
+    /* Set size for video codec */
+    avcodec_set_dimensions(enc->video_st->codec, width, height);
 
     /* Set frame rate */
     enc->video_st->r_frame_rate.num = fps_num;
