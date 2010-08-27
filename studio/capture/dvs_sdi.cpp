@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.cpp,v 1.6 2010/08/27 17:42:39 john_f Exp $
+ * $Id: dvs_sdi.cpp,v 1.7 2010/08/27 19:13:11 john_f Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -70,6 +70,8 @@ extern "C"
 #endif
 
 using namespace Ingex;
+
+const bool CHECK_AUDIO_OFFSET = false;
 
 const int PAL_AUDIO_SAMPLES = 1920;
 const int NTSC_AUDIO_SAMPLES[5] = { 1602, 1601, 1602, 1601, 1602 };
@@ -1002,17 +1004,22 @@ int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_from_vi
     //
 
     // check audio offset
-    if (0)
+    if (CHECK_AUDIO_OFFSET)
     {
-        fprintf(stderr, "chan = %d, audio_offset = %x, video[0].addr = %p, audio[0].addr[0-4] = %p %p %p %p, audio[0].size = %d\n",
-            chan,
-            audio_offset,
-            pbuffer->video[0].addr,
-            pbuffer->audio[0].addr[0],
-            pbuffer->audio[0].addr[1],
-            pbuffer->audio[0].addr[2],
-            pbuffer->audio[0].addr[3],
-            pbuffer->audio[0].size);
+        static bool done = false;
+        if (!done && 0 == chan)
+        {
+            fprintf(stderr, "chan = %d, audio_offset = %x, video[0].addr = %p, audio[0].addr[0-4] = %p %p %p %p, audio[0].size = %d\n",
+                chan,
+                audio_offset,
+                pbuffer->video[0].addr,
+                pbuffer->audio[0].addr[0],
+                pbuffer->audio[0].addr[1],
+                pbuffer->audio[0].addr[2],
+                pbuffer->audio[0].addr[3],
+                pbuffer->audio[0].size);
+            done = true;
+        }
     }
 
     // Clear frame number.
@@ -2942,6 +2949,11 @@ int main (int argc, char ** argv)
             break;
         }
         break;
+    }
+
+    if (CHECK_AUDIO_OFFSET)
+    {
+        fprintf(stderr, "Hardcoded audio offset = 0x%x\n", width*height*2 + extra_offset);
     }
 
     // Report on capture formats
