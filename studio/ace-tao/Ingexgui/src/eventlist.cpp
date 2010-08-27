@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: eventlist.cpp,v 1.15 2010/08/13 15:21:43 john_f Exp $           *
+ *   $Id: eventlist.cpp,v 1.16 2010/08/27 17:44:05 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2009-2010 British Broadcasting Corporation                   *
  *   - all rights reserved.                                                *
@@ -446,13 +446,13 @@ void EventList::AddEvent(EventType type, ProdAuto::MxfTimecode * timecode, const
                     }
                     //use the approx. framecount to add whole days
                     int64_t totalMinutes = frameCount / timecode->edit_rate.numerator * timecode->edit_rate.denominator / 60; //this is an approx number of minutes in total
-                    if (position < 3600 * 12 * timecode->edit_rate.numerator / timecode->edit_rate.denominator) { //fractional day is less than half
+                    if (position < 3600LL * 12 * timecode->edit_rate.numerator / timecode->edit_rate.denominator) { //fractional day is less than half
                         totalMinutes += 1; //nudge upwards to ensure all the days are added if frameCount is a bit low
                     }
                     else {
                         totalMinutes -= 1; //nudge downwards to ensure an extra day is not added if frameCount is a bit high
                     }
-                    position += (totalMinutes / 60 / 24) * 3600 * 24 * timecode->edit_rate.numerator / timecode->edit_rate.denominator; //add whole days to the fractional day
+                    position += ((int64_t) (totalMinutes / 60 / 24)) * 3600 * 24 * timecode->edit_rate.numerator / timecode->edit_rate.denominator; //add whole days to the fractional day
                     mRecordingNode->AddProperty(wxT("OutSample"), wxString::Format(wxT("%d"), position - mChunkInfoArray.Item(mChunkInfoArray.GetCount() - 1).GetStartPosition())); //first sample not recorded. Relative to start of chunk
                 }
                 else if (frameCount) {
@@ -511,6 +511,7 @@ void EventList::AddEvent(EventType type, ProdAuto::MxfTimecode * timecode, const
     if (!mRootNode->GetPropVal(wxT("EditRateNumerator"), &dummy) && timecode && !timecode->undefined) {
         mRootNode->AddProperty(wxT("EditRateNumerator"), wxString::Format(wxT("%d"), timecode->edit_rate.numerator));
         mRootNode->AddProperty(wxT("EditRateDenominator"), wxString::Format(wxT("%d"), timecode->edit_rate.denominator));
+        mRootNode->AddProperty(wxT("DropFrame"), timecode->drop_frame ? wxT("Yes") : wxT("No"));
     }
     mRunThread = true; //in case thread is busy so misses the signal
     mCondition->Signal();
@@ -730,6 +731,7 @@ void EventList::Load()
             mEditRate.undefined = false;
             mEditRate.edit_rate.numerator = long1;
             mEditRate.edit_rate.denominator = long2;
+            mEditRate.drop_frame = wxT("Yes") == loadedRootNode->GetPropVal(wxT("DropFrame"), wxT("No"));
         }
         //make a list of the recording nodes in order
         node = loadedRootNode->GetChildren();

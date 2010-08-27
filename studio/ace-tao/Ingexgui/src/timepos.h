@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: timepos.h,v 1.12 2010/08/12 16:35:38 john_f Exp $           *
+ *   $Id: timepos.h,v 1.13 2010/08/27 17:44:05 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -59,6 +59,7 @@ class Timepos : public wxEvtHandler
         bool SetTrigger(const ProdAuto::MxfTimecode * = 0, wxEvtHandler * = 0, bool = false);
     private:
         void OnRefreshTimer(wxTimerEvent& WXUNUSED(event));
+        void UpdateTimecodeAndDuration();
         static const wxString FormatPosition(const wxTimeSpan, const ProdAuto::MxfTimecode);
         wxTimeSpan GetDuration();
         void Trigger();
@@ -74,7 +75,8 @@ class Timepos : public wxEvtHandler
         ProdAuto::MxfDuration mDuration;
         ProdAuto::MxfTimecode mLastKnownTimecode;
         ProdAuto::MxfTimecode mTriggerTimecode;
-        ProdAuto::MxfTimecode mLastDisplayedTimecode;
+        ProdAuto::MxfTimecode mRunningTimecode;
+	wxTimeSpan mRunningDuration;
         wxEvtHandler * mTriggerHandler;
         wxDateTime mStartDate;
         bool mTriggerCarry;

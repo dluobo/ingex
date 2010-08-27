@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: dialogues.cpp,v 1.22 2010/08/25 17:51:06 john_f Exp $           *
+ *   $Id: dialogues.cpp,v 1.23 2010/08/27 17:44:05 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -2039,18 +2039,18 @@ void ChunkingDlg::RunFrom(const ProdAuto::MxfTimecode & startTimecode, const Pro
             //calculate when to chunk to frame accuracy
             ProdAuto::MxfTimecode triggerTimecode = startTimecode;
             if ((align || mRealign) && mChunkAlignment) {
-                triggerTimecode.samples /= mChunkAlignment * triggerTimecode.edit_rate.numerator / triggerTimecode.edit_rate.denominator; //number of alignment points passed since midnight
+                triggerTimecode.samples /= ((int64_t) mChunkAlignment) * triggerTimecode.edit_rate.numerator / triggerTimecode.edit_rate.denominator; //number of alignment points passed since midnight
                 ++triggerTimecode.samples; //not samples yet but alignment points since midnight
-                triggerTimecode.samples = triggerTimecode.samples * mChunkAlignment * triggerTimecode.edit_rate.numerator / triggerTimecode.edit_rate.denominator; //the next alignment point
-                if (triggerTimecode.samples - startTimecode.samples < 30 * triggerTimecode.edit_rate.numerator / triggerTimecode.edit_rate.denominator) { //less than half a minute to the next alignment point, so producing a very small chunk
+                triggerTimecode.samples = ((int64_t) triggerTimecode.samples) * mChunkAlignment * triggerTimecode.edit_rate.numerator / triggerTimecode.edit_rate.denominator; //the next alignment point
+                if (triggerTimecode.samples - startTimecode.samples < ((int64_t) triggerTimecode.edit_rate.numerator) * 30 / triggerTimecode.edit_rate.denominator) { //less than half a minute to the next alignment point, so producing a very small chunk
                     //don't chunk until the alignment point after this
-                    triggerTimecode.samples += mChunkAlignment * triggerTimecode.edit_rate.numerator / triggerTimecode.edit_rate.denominator;
+                    triggerTimecode.samples += ((int64_t) mChunkAlignment) * triggerTimecode.edit_rate.numerator / triggerTimecode.edit_rate.denominator;
                 }
                 //we now know the time to the next chunk
-                mCountdown = (triggerTimecode.samples - startTimecode.samples) / (triggerTimecode.edit_rate.numerator / triggerTimecode.edit_rate.denominator);
+                mCountdown = ((int64_t) (triggerTimecode.samples - startTimecode.samples)) / (triggerTimecode.edit_rate.numerator / triggerTimecode.edit_rate.denominator);
             }
             else {
-                triggerTimecode.samples += (int64_t) mChunkLength * triggerTimecode.edit_rate.numerator / triggerTimecode.edit_rate.denominator;
+                triggerTimecode.samples += ((int64_t) mChunkLength) * triggerTimecode.edit_rate.numerator / triggerTimecode.edit_rate.denominator;
             }
             triggerTimecode.samples -= mPostroll.samples; //trigger the stop command before a postroll period to make sure recorders get it in time
             triggerTimecode.samples %= 24LL * 3600 * triggerTimecode.edit_rate.numerator / triggerTimecode.edit_rate.denominator; //wrap (either way)

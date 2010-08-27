@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: recordergroup.cpp,v 1.20 2010/08/25 17:51:06 john_f Exp $       *
+ *   $Id: recordergroup.cpp,v 1.21 2010/08/27 17:44:05 john_f Exp $       *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -426,7 +426,7 @@ void RecorderGroupCtrl::OnControllerEvent(ControllerThreadEvent & event)
                             //set trigger for starting the next chunk
                             frameEvent.SetId(SET_TRIGGER);
                             ProdAuto::MxfTimecode* triggerTimecode = new ProdAuto::MxfTimecode(mChunkStartTimecode); //deleted by event handler
-                            if (mMaxPreroll.edit_rate.numerator && mMaxPreroll.samples * mMaxPreroll.edit_rate.denominator / mMaxPreroll.edit_rate.numerator && mMaxPreroll.edit_rate.denominator) { //max preroll >= 1 second; sanity checks
+                            if (mMaxPreroll.edit_rate.numerator && ((int64_t) mMaxPreroll.samples) * mMaxPreroll.edit_rate.denominator / mMaxPreroll.edit_rate.numerator && mMaxPreroll.edit_rate.denominator) { //max preroll >= 1 second; sanity checks
                                 //add half a second delay to the trigger to ensure that a start in the future isn't requested
                                 triggerTimecode->samples += mMaxPreroll.edit_rate.numerator / 2 / mMaxPreroll.edit_rate.denominator;
                             }
