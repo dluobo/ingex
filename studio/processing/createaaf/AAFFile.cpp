@@ -1,5 +1,5 @@
 /*
- * $Id: AAFFile.cpp,v 1.12 2010/07/21 16:29:34 john_f Exp $
+ * $Id: AAFFile.cpp,v 1.13 2010/08/27 18:14:22 john_f Exp $
  *
  * AAF file for defining clips, multi-camera clips, etc
  *
@@ -2419,7 +2419,7 @@ void AAFFile::mapFileSourceMob(SourcePackage* sourcePackage)
             }
             else
             {
-                PA_LOGTHROW(CreateAAFException, ("Unsupported resolution id %d", fileDescriptor->videoResolutionID));
+                PA_LOGTHROW(CreateAAFException, ("Unsupported resolution: %s", MaterialResolution::Name((MaterialResolution::EnumType)fileDescriptor->videoResolutionID).c_str()));
             }
             AAF_CHECK(pCDCIDescriptor2->SetComponentWidth(8));
             AAF_CHECK(pCDCIDescriptor2->SetColorSiting(kAAFRec601));
