@@ -1,5 +1,5 @@
 /*
- * $Id: system_info_web.cpp,v 1.1 2010/07/06 14:15:13 john_f Exp $
+ * $Id: system_info_web.cpp,v 1.2 2010/08/27 18:13:32 john_f Exp $
  *
  * Web server to get info on CPU, memory and disk statistics
  *
@@ -143,7 +143,7 @@ static void disk_filesystem_stats(struct shttpd_arg* arg)
         if (buf[0] != '/')      // skip mounts which don't start with '/'
             continue;
         //avoid the /proc mount
-	if (strncmp(buf, "/proc", 5) == 0)
+	if (strncmp(buf, "/proc /proc proc", 16) == 0)
 	   continue;
 	p = strchr(buf, ' ');   // find the end of first word
         if (p == NULL)
