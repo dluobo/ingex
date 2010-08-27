@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.cpp,v 1.5 2010/08/13 09:32:06 philipn Exp $
+ * $Id: dvs_sdi.cpp,v 1.6 2010/08/27 17:42:39 john_f Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -959,6 +959,8 @@ int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_from_vi
         logTF("chan %d: Setting SV_FIFO_FLAG_FLUSH\n", chan);
     }
 
+    // tmp test
+    //flags |= SV_FIFO_FLAG_AUDIOINTERLEAVED;
 
     /*
     Call sv_fifo_getbuffer().
@@ -1002,14 +1004,15 @@ int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_from_vi
     // check audio offset
     if (0)
     {
-        fprintf(stderr, "chan = %d, audio_offset = %x, video[0].addr = %p, audio[0].addr[0-4] = %p %p %p %p\n",
+        fprintf(stderr, "chan = %d, audio_offset = %x, video[0].addr = %p, audio[0].addr[0-4] = %p %p %p %p, audio[0].size = %d\n",
             chan,
             audio_offset,
             pbuffer->video[0].addr,
             pbuffer->audio[0].addr[0],
             pbuffer->audio[0].addr[1],
             pbuffer->audio[0].addr[2],
-            pbuffer->audio[0].addr[3]);
+            pbuffer->audio[0].addr[3],
+            pbuffer->audio[0].size);
     }
 
     // Clear frame number.
@@ -2821,7 +2824,7 @@ int main (int argc, char ** argv)
         break;
     case MPEG:
         secondary_pixel_format = Ingex::PixelFormat::YUV_PLANAR_420_MPEG;
-        video_secondary_format = Format422PlanarYUV;
+        video_secondary_format = Format420PlanarYUV;
         break;
     case DV25:
         if (Ingex::VideoRaster::PAL == secondary_video_raster)
