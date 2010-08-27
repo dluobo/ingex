@@ -1,5 +1,5 @@
 /*
- * $Id: shared_mem_source.c,v 1.14 2010/06/25 14:40:57 philipn Exp $
+ * $Id: shared_mem_source.c,v 1.15 2010/08/27 17:41:32 john_f Exp $
  *
  *
  *
@@ -204,7 +204,7 @@ static int rec_ring_num_aud_samp(SharedMemSource *source, int track, int lastFra
     return nexus_num_aud_samp(conn.pctl, conn.ring, source->channel, lastFrame);
 }
 
-static int rec_ring_timecode(SharedMemSource *source, int track, int lastFrame)
+static Ingex::Timecode rec_ring_timecode(SharedMemSource *source, int track, int lastFrame)
 {
     assert(track < NUM_TIMECODE_TRACKS);
     TimecodeTrackType timecodeTrack = (TimecodeTrackType)track;
@@ -229,7 +229,7 @@ static int rec_ring_timecode(SharedMemSource *source, int track, int lastFrame)
             break;
     }
 
-    return nexus_tc(conn.pctl, conn.ring, source->channel, lastFrame, tc_type);
+    return nexus_timecode(conn.pctl, conn.ring, source->channel, lastFrame, tc_type);
 }
 
 /* returns 0 when successfull, -2 if timed out, otherwise -1 */
@@ -244,7 +244,6 @@ static int shm_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceLis
     const int sleepUSec = 100;
     int updateCount = 0;
     int nameUpdated;
-    int roundedFrameRate = get_rounded_frame_rate(&source->frameRate);
 
     /* Check nexus connection is good */
     if (!connected || !nexus_connection_status(&conn, NULL, NULL))
@@ -401,14 +400,13 @@ static int shm_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceLis
         }
 
         if (track->streamInfo.type == TIMECODE_STREAM_TYPE) {
-            int tc_as_int = rec_ring_timecode(source, i - (source->numAudioTracks + 1), lastFrame);
-            // convert ts-as-int to Timecode
+            Ingex::Timecode shm_tc = rec_ring_timecode(source, i - (source->numAudioTracks + 1), lastFrame);
             Timecode tc;
-            tc.isDropFrame = 0;
-            tc.frame = tc_as_int % roundedFrameRate;
-            tc.hour = (int)(tc_as_int / (60 * 60 * roundedFrameRate));
-            tc.min = (int)((tc_as_int - (tc.hour * 60 * 60 * roundedFrameRate)) / (60 * roundedFrameRate));
-            tc.sec = (int)((tc_as_int - (tc.hour * 60 * 60 * roundedFrameRate) - (tc.min * 60 * roundedFrameRate)) / roundedFrameRate);
+            tc.isDropFrame = shm_tc.DropFrame();
+            tc.hour = shm_tc.Hours();
+            tc.min = shm_tc.Minutes();
+            tc.sec = shm_tc.Seconds();
+            tc.frame = shm_tc.Frames();
             memcpy(buffer, &tc, track->frameSize);
         }
 

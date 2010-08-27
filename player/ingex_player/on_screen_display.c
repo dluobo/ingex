@@ -1,5 +1,5 @@
 /*
- * $Id: on_screen_display.c,v 1.16 2010/07/21 16:29:34 john_f Exp $
+ * $Id: on_screen_display.c,v 1.17 2010/08/27 17:41:32 john_f Exp $
  *
  *
  *
@@ -929,7 +929,7 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
         /* timecode */
         xPos = timecodeXPos + osdd->timecodeTypeData.cs_ovly[UNKNOWN_TC_OVLY_IDX].w * 5 / 3;
         CHK_ORET(apply_timecode_overlay(&osdd->timecodeTextData, hour, min, sec, frame, 
-            is_pal_frame_rate(&frameInfo->frameRate), image, osdd->videoFormat, width, height, 
+            frameInfo->timecodes[osdd->state->timecodeIndex].timecode.isDropFrame, image, osdd->videoFormat, width, height, 
             xPos, timecodeYPos, txtY, txtU, txtV, box, &osdd->workspace));
     }
 

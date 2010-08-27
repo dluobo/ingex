@@ -1,5 +1,5 @@
 /*
- * $Id: overlay.h,v 1.1 2009/12/17 15:57:40 john_f Exp $
+ * $Id: overlay.h,v 1.2 2010/08/27 17:41:32 john_f Exp $
  *
  * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
@@ -44,7 +44,7 @@ int apply_overlay(overlay *ovly, unsigned char *image, StreamFormat format, int 
                   OverlayWorkspace *workspace);
 
 
-int apply_timecode_overlay(timecode_data *tc_data, int hr, int mn, int sc, int fr, int is_pal,
+int apply_timecode_overlay(timecode_data *tc_data, int hr, int mn, int sc, int fr, int drop_frame,
                            unsigned char *image, StreamFormat format, int width, int height,
                            int x, int y, unsigned char colour_y, unsigned char colour_u, unsigned char colour_v, int box,
                            OverlayWorkspace *workspace);

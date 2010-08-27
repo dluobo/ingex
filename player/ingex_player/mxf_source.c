@@ -1,5 +1,5 @@
 /*
- * $Id: mxf_source.c,v 1.17 2010/08/02 16:45:03 john_f Exp $
+ * $Id: mxf_source.c,v 1.18 2010/08/27 17:41:32 john_f Exp $
  *
  *
  *
@@ -445,7 +445,7 @@ static int send_timecode(MediaSourceListener* listener, OutputStreamData* output
         CHK_ORET(sdl_allocate_buffer(listener, outputStream->streamId, &timecodeBuffer, sizeof(Timecode)));
 
         timecodeEvent = (Timecode*)timecodeBuffer;
-        timecodeEvent->isDropFrame = 0;
+        timecodeEvent->isDropFrame = mxfTimecode->isDropFrame;
         timecodeEvent->hour = mxfTimecode->hour;
         timecodeEvent->min = mxfTimecode->min;
         timecodeEvent->sec = mxfTimecode->sec;

@@ -1,5 +1,5 @@
 /*
- * $Id: YUV_text_overlay.c,v 1.5 2010/06/02 10:52:38 philipn Exp $
+ * $Id: YUV_text_overlay.c,v 1.6 2010/08/27 17:41:32 john_f Exp $
  *
  *
  *
@@ -914,7 +914,7 @@ void free_timecode(timecode_data* tc_data)
 {
     int	c;
 
-    for (c = 0; c < 11; c++)
+    for (c = 0; c < 12; c++)
         free_overlay(&tc_data->tc_ovly[c]);
 }
 
@@ -924,7 +924,7 @@ int init_timecode(p_info_rec* p_info, timecode_data* tc_data,
 {
     info_rec*		info;
     FT_GlyphSlot	slot;
-    char		cset[] = "0123456789:";
+    char		cset[] = "0123456789:;";
     int         bb_t, bb_b, bb_l, bb_r; // bounding box
     BYTE*		dstLine;
     BYTE*		srcPtr;
@@ -949,7 +949,7 @@ int init_timecode(p_info_rec* p_info, timecode_data* tc_data,
     bb_b = -1000000;
     bb_l =  1000000;
     bb_r = -1000000;
-    for (c = 0; c < 11; c++)
+    for (c = 0; c < 12; c++)
     {
         /* load glyph image into the slot (erase previous one) */
         if (FT_Load_Char(info->face, cset[c], FT_LOAD_RENDER))
@@ -971,7 +971,7 @@ int init_timecode(p_info_rec* p_info, timecode_data* tc_data,
     bb_r += 1;
     tc_data->height = bb_b - bb_t;
     // initialise character overlays
-    for (c = 0; c < 11; c++)
+    for (c = 0; c < 12; c++)
     {
         tc_data->tc_ovly[c].w = bb_r - bb_l;
         tc_data->tc_ovly[c].h = tc_data->height;
@@ -986,15 +986,15 @@ int init_timecode(p_info_rec* p_info, timecode_data* tc_data,
         tc_data->tc_ovly[c].Cbuff = NULL;
     }
     // copy bitmaps
-    for (c = 0; c < 11; c++)
+    for (c = 0; c < 12; c++)
     {
         /* load glyph image into the slot (erase previous one) */
         if (FT_Load_Char(info->face, cset[c], FT_LOAD_RENDER))
             return YUV_freetype;
         slot = info->face->glyph;  /* a small shortcut */
-        if (c == 10)
+        if (c == 10 || c == 11)
         {
-            // make colon narrower than other characters
+            // make colon and semi-colon narrower than other characters
             tc_data->tc_ovly[c].w = slot->advance.x / 64;
         }
         srcPtr = slot->bitmap.buffer;
@@ -1012,7 +1012,7 @@ int init_timecode(p_info_rec* p_info, timecode_data* tc_data,
         }
     }
     tc_data->width = (tc_data->tc_ovly[0].w * 8) +
-                     (tc_data->tc_ovly[10].w * 3);	// 8 digits and 3 colons
+                     (tc_data->tc_ovly[11].w * 3);	// 8 digits and 3 semi-colons (assuming a semi-colon is wider than a colon)
     return YUV_OK;
 }
 

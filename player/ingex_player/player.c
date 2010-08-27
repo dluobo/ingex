@@ -1,5 +1,5 @@
 /*
- * $Id: player.c,v 1.26 2010/06/18 09:44:51 philipn Exp $
+ * $Id: player.c,v 1.27 2010/08/27 17:41:32 john_f Exp $
  *
  *
  *
@@ -588,7 +588,8 @@ static int parse_length(const char* text, int allowDecimal, int64_t* value, Rati
     else if (strstr(text, ";") != NULL)
     {
         int hour, min, sec, frame;
-        if (sscanf(text, "%d;%d;%d;%d", &hour, &min, &sec, &frame) != 4)
+        if (sscanf(text, "%d;%d;%d;%d", &hour, &min, &sec, &frame) != 4 &&
+            sscanf(text, "%d:%d:%d;%d", &hour, &min, &sec, &frame) != 4)
         {
             return 0;
         }

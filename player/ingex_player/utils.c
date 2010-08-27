@@ -1,5 +1,5 @@
 /*
- * $Id: utils.c,v 1.6 2010/06/02 11:12:14 philipn Exp $
+ * $Id: utils.c,v 1.7 2010/08/27 17:41:32 john_f Exp $
  *
  *
  *
@@ -97,13 +97,13 @@ void print_timecode(TimecodeType type, TimecodeSubType subType, const Rational* 
         printf("-DLTC");
     }
     printf("] ");
-    if (is_pal_frame_rate(frameRate))
+    if (timecode->isDropFrame)
     {
-        printf("%02u:%02u:%02u:%02u", timecode->hour, timecode->min, timecode->sec, timecode->frame);
+        printf("%02u:%02u:%02u;%02u", timecode->hour, timecode->min, timecode->sec, timecode->frame);
     }
     else
     {
-        printf("%02u;%02u;%02u;%02u", timecode->hour, timecode->min, timecode->sec, timecode->frame);
+        printf("%02u:%02u:%02u:%02u", timecode->hour, timecode->min, timecode->sec, timecode->frame);
     }
 }
 
