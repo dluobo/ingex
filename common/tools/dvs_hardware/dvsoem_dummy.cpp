@@ -1,5 +1,5 @@
 /*
- * $Id: dvsoem_dummy.cpp,v 1.6 2010/08/25 18:13:01 john_f Exp $
+ * $Id: dvsoem_dummy.cpp,v 1.7 2010/08/31 18:30:46 john_f Exp $
  *
  * Implement a debug-only DVS hardware library for testing.
  *
@@ -239,7 +239,7 @@ static void setup_source_buf(DvsCard * dvs)
                 }
                 else if (strcmp(param, "video=NTSC") == 0) {
                     dvs->width = 720;
-                    dvs->height = 480;
+                    dvs->height = 486;
                     dvs->frame_rate_numer = 30000;
                     dvs->frame_rate_denom = 1001;
                     dvs->videomode = SV_MODE_NTSC;
@@ -610,7 +610,7 @@ int sv_videomode(sv_handle * sv, int videomode)
         break;
     case SV_MODE_NTSC:
         dvs->width = 720;
-        dvs->height = 480;
+        dvs->height = 486;
         dvs->frame_rate_numer = 30000;
         dvs->frame_rate_denom = 1001;
         break;
