@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.cpp,v 1.7 2010/08/27 19:13:11 john_f Exp $
+ * $Id: dvs_sdi.cpp,v 1.8 2010/08/31 18:24:54 john_f Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -2942,7 +2942,7 @@ int main (int argc, char ** argv)
             extra_offset = 0x1800;
             break;
         case Ingex::VideoRaster::NTSC:
-            extra_offset = 0x3400;
+            extra_offset = 0x1240;
             break;
         default:
             extra_offset = 0;
