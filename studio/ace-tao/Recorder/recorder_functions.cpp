@@ -1,5 +1,5 @@
 /*
- * $Id: recorder_functions.cpp,v 1.42 2010/08/20 16:10:58 john_f Exp $
+ * $Id: recorder_functions.cpp,v 1.43 2010/09/01 14:07:10 john_f Exp $
  *
  * Functions which execute in recording threads.
  *
@@ -1319,14 +1319,14 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                 else if (ff_av_audio_channels_per_stream == 1)
                 {
                     unsigned int astream_i = 0;
-                    for (unsigned int i = 0; i < package_creator->GetMaterialPackage()->tracks.size() && astream_i < ff_av_num_audio_streams; ++i)
+                    for (unsigned int i = 0; i < package_creator->GetMaterialPackage()->tracks.size(); ++i)
                     {
                         prodauto::Track * mp_trk = package_creator->GetMaterialPackage()->tracks[i];
                         if (PICTURE_DATA_DEFINITION == mp_trk->dataDef)
                         {
                             result |= ffmpeg_encoder_av_encode_video(enc_av, (uint8_t *) ef.Track(i).Data());
                         }
-                        else if (SOUND_DATA_DEFINITION == mp_trk->dataDef)
+                        else if (SOUND_DATA_DEFINITION == mp_trk->dataDef && astream_i < ff_av_num_audio_streams)
                         {
                             result |= ffmpeg_encoder_av_encode_audio(enc_av, astream_i++, audio_samples_per_frame, (short *) ef.Track(i).Data());
                         }
