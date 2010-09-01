@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.cpp,v 1.8 2010/08/31 18:24:54 john_f Exp $
+ * $Id: dvs_sdi.cpp,v 1.9 2010/09/01 14:22:34 john_f Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -105,8 +105,6 @@ int             control_id, ring_id[MAX_CHANNELS];
 int             width = 0, height = 0;
 int             sec_width = 0, sec_height = 0;
 int             frame_rate_numer = 0, frame_rate_denom = 0;
-int fps = 0;
-bool df = false;
 VideoRaster::EnumType primary_video_raster = VideoRaster::NONE;
 VideoRaster::EnumType secondary_video_raster = VideoRaster::NONE;
 Interlace::EnumType interlace = Interlace::NONE;
@@ -714,8 +712,6 @@ int allocate_shared_buffers(int num_channels, long long max_memory)
     p_control->frame_rate_numer = frame_rate_numer;
     p_control->frame_rate_denom = frame_rate_denom;
 
-    //p_control->drop_frame = df;
-
     p_control->pri_video_raster = primary_video_raster;
     p_control->pri_pixel_format = primary_pixel_format;
     p_control->pri_video_format = video_format;
@@ -806,10 +802,11 @@ time_t today_midnight_time(void)
 }
 */
 
-void dvsaudio32_deinterleave_32bit(uint8_t *audio12, uint8_t *audio34, uint8_t *a32[])
+void dvsaudio32_deinterleave_32bit(uint8_t *audio12, uint8_t *audio34, uint8_t *a32[], int num_samples)
 {
 	// Copy all 32bits, de-interleaving pairs
-    for (int i = 0; i < MAX_AUDIO_SAMPLES_PER_FRAME; i++) {
+    for (int i = 0; i < num_samples; i++)
+    {
         int src_idx = i*4*2;                // index into 32bit interleaved pairs
         int mon_idx = i*4;                  // index into 32bit mono audio
         a32[0][mon_idx + 0] = audio12[src_idx + 0];
@@ -832,11 +829,12 @@ void dvsaudio32_deinterleave_32bit(uint8_t *audio12, uint8_t *audio34, uint8_t *
 	}
 }
 
-void dvsaudio32_deinterleave_16bit(uint8_t *audio12, uint8_t *audio34, uint8_t *a16[])
+void dvsaudio32_deinterleave_16bit(uint8_t *audio12, uint8_t *audio34, uint8_t *a16[], int num_samples)
 {
     // Copy 16 most significant bits out of 32 bit audio pairs
     // for 4 channels each loop iteraction
-    for (int i = 0; i < MAX_AUDIO_SAMPLES_PER_FRAME; i++) {
+    for (int i = 0; i < num_samples; i++)
+    {
         int tmp_idx = i*4*2;                // index into 32bit interleaved pairs
         int sec_idx = i*2;                  // index into 16bit mono audio buffers
         a16[0][sec_idx + 0] = audio12[tmp_idx + 2];
@@ -851,7 +849,7 @@ void dvsaudio32_deinterleave_16bit(uint8_t *audio12, uint8_t *audio34, uint8_t *
     }
 }
 
-void dvsaudio32_to_4_mono_tracks(uint8_t *src, uint8_t *dst32, uint8_t *dst16)
+void dvsaudio32_to_4_mono_tracks(uint8_t *src, uint8_t *dst32, uint8_t *dst16, int num_samples)
 {
     // src contains either 4 channels or 8 channels as multiplexed pairs
     // where each pair is aligned on a 0x4000 boundary
@@ -867,7 +865,7 @@ void dvsaudio32_to_4_mono_tracks(uint8_t *src, uint8_t *dst32, uint8_t *dst16)
     a32[2] = dst32 + MAX_AUDIO_SAMPLES_PER_FRAME*4 * 2;
     a32[3] = dst32 + MAX_AUDIO_SAMPLES_PER_FRAME*4 * 3;
 
-	dvsaudio32_deinterleave_32bit(audio12, audio34, a32);
+	dvsaudio32_deinterleave_32bit(audio12, audio34, a32, num_samples);
 
     // De-interleave and truncate to 16bit mono
     //
@@ -878,17 +876,17 @@ void dvsaudio32_to_4_mono_tracks(uint8_t *src, uint8_t *dst32, uint8_t *dst16)
     a16[2] = dst16 + MAX_AUDIO_SAMPLES_PER_FRAME*2 * 2;
     a16[3] = dst16 + MAX_AUDIO_SAMPLES_PER_FRAME*2 * 3;
 
-	dvsaudio32_deinterleave_16bit(audio12, audio34, a16);
+	dvsaudio32_deinterleave_16bit(audio12, audio34, a16, num_samples);
 }
 
-void dvsaudio32_to_mono_audio(uint8_t *src, uint8_t *dst32, uint8_t *dst16, int audio8)
+void dvsaudio32_to_mono_audio(uint8_t *src, uint8_t *dst32, uint8_t *dst16, int num_samples, int audio8)
 {
     // src and dst32 can be the same buffer, so first read full src audio into tmp buffer
     uint8_t tmp[audio_size];
 
     memcpy(tmp, src, audio_size);
 
-	dvsaudio32_to_4_mono_tracks(tmp, dst32, dst16);
+	dvsaudio32_to_4_mono_tracks(tmp, dst32, dst16, num_samples);
 
 	if (audio8)
 	{
@@ -896,7 +894,8 @@ void dvsaudio32_to_mono_audio(uint8_t *src, uint8_t *dst32, uint8_t *dst16, int 
 		// 16bit buffer has channel 5 start immediately after channel 4
 		dvsaudio32_to_4_mono_tracks(tmp + 0x8000,
 						            dst32 + 0x8000,
-									dst16 + MAX_AUDIO_SAMPLES_PER_FRAME*2 * 4);
+									dst16 + MAX_AUDIO_SAMPLES_PER_FRAME * 2 * 4,
+                                    num_samples);
 	}
 }
 
@@ -1009,15 +1008,19 @@ int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_from_vi
         static bool done = false;
         if (!done && 0 == chan)
         {
-            fprintf(stderr, "chan = %d, audio_offset = %x, video[0].addr = %p, audio[0].addr[0-4] = %p %p %p %p, audio[0].size = %d\n",
+            // audio_offset is equal to dma_video_size
+            fprintf(stderr, "chan = %d, audio_offset = 0x%x, video[0].addr = %p, video[0].size = 0x%x,\n"
+                "          audio[0].addr[0-4] = %p %p %p %p, audio[0].size = 0x%x\n",
                 chan,
                 audio_offset,
                 pbuffer->video[0].addr,
+                pbuffer->video[0].size,
                 pbuffer->audio[0].addr[0],
                 pbuffer->audio[0].addr[1],
                 pbuffer->audio[0].addr[2],
                 pbuffer->audio[0].addr[3],
                 pbuffer->audio[0].size);
+            fprintf(stderr, (void *)audio_offset == pbuffer->audio[0].addr[0] ? "Audio offset is correct.\n" : "Error: audio offset incorrect!\n");
             done = true;
         }
     }
@@ -1151,6 +1154,7 @@ int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_from_vi
                     dma_dest + audio_offset,              // src
                     vid_dest + audio_offset,              // 32bit dest
                     vid_dest + secondary_audio_offset,    // 16bit dest
+                    num_audio_samples,
                     audio8ch);                            // 4 or 8 channels
         }
     }
@@ -1165,6 +1169,7 @@ int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_from_vi
                     vid_dest + audio_offset,              // src
                     vid_dest + audio_offset,              // 32bit dest
                     vid_dest + secondary_audio_offset,    // 16bit dest
+                    num_audio_samples,
                     audio8ch);                            // 4 or 8 channels
         }
     }
@@ -1373,7 +1378,8 @@ int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_from_vi
         vitc_bits = vitc1_bits;
     }
     int dvitc_bits;
-    if ((unsigned)dvitc1_bits >= 0x80000000 && (unsigned)dvitc2_bits < 0x80000000)
+    if (Ingex::Interlace::NONE != interlace &&
+        (unsigned)dvitc1_bits >= 0x80000000 && (unsigned)dvitc2_bits < 0x80000000)
     {
         dvitc_bits = dvitc2_bits;
         if (1) //(verbose)
@@ -2752,16 +2758,6 @@ int main (int argc, char ** argv)
 
     // We now know primary_video_raster, width, height, frame_rate and interlace (from card).
     
-    // Set fps and df for constructing Timecodes
-    // Currently assuming drop frame for NTSC frame rate but this is not necessarily the case!
-    fps = frame_rate_numer / frame_rate_denom;
-    df = false;
-    if (frame_rate_numer % frame_rate_denom > 0)
-    {
-        df = true;
-        ++fps;
-    }
-
     // Set secondary_video_raster
     if (NONE != secondary_capture_format)
     {
@@ -2912,16 +2908,15 @@ int main (int argc, char ** argv)
     int sn = 0;
     sv_query(a_sv[0], SV_QUERY_SERIALNUMBER, 0, &sn);
     sn /= 1000000;
-    int extra_offset;
     switch (sn)
     {
     case 0:  // dvs_dummy
         dvs_dummy = true;
-        extra_offset = 0;
+        dma_video_size = width * height * 2;
         break;
     case 11: // SDStationOEM
     case 19: // SDStationOEMII
-        extra_offset = 0;
+        dma_video_size = width * height * 2;
         break;
     case 13: // Centaurus
     case 20: // CentaurusII PCI-X
@@ -2931,29 +2926,28 @@ int main (int argc, char ** argv)
         {
         case Ingex::VideoRaster::PAL:
         case Ingex::VideoRaster::PAL_B:
+            dma_video_size = 0xCC000;
+            break;
+        case Ingex::VideoRaster::NTSC:
+            dma_video_size = 0xAC000;
+            break;
         case Ingex::VideoRaster::SMPTE274_25I:
         case Ingex::VideoRaster::SMPTE274_25PSF:
         case Ingex::VideoRaster::SMPTE274_25P:
-        case Ingex::VideoRaster::SMPTE296_50P:
         case Ingex::VideoRaster::SMPTE274_29I:
         case Ingex::VideoRaster::SMPTE274_29PSF:
         case Ingex::VideoRaster::SMPTE274_29P:
-        case Ingex::VideoRaster::SMPTE296_59P:
-            extra_offset = 0x1800;
+            dma_video_size = 0x3F6000;
             break;
-        case Ingex::VideoRaster::NTSC:
-            extra_offset = 0x1240;
+        case Ingex::VideoRaster::SMPTE296_50P:
+        case Ingex::VideoRaster::SMPTE296_59P:
+            dma_video_size = 0x1C3000;
             break;
         default:
-            extra_offset = 0;
+            dma_video_size = width * height * 2;
             break;
         }
         break;
-    }
-
-    if (CHECK_AUDIO_OFFSET)
-    {
-        fprintf(stderr, "Hardcoded audio offset = 0x%x\n", width*height*2 + extra_offset);
     }
 
     // Report on capture formats
@@ -2994,10 +2988,6 @@ int main (int argc, char ** argv)
     {
         logTF("Audio 8 channel mode enabled\n");
     }
-
-    // Set the DMA size, taking into account the
-    // empirically determined offsets.
-    dma_video_size = width*height*2 + extra_offset;
 
     // Set up audio sizes for DMA transferred audio and reformatted secondary audio
     int audio_pair_size = 0x4000;
