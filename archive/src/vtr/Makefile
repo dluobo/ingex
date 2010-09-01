@@ -18,8 +18,14 @@ GENERAL_OBJECTS=$(GENERAL_DIR)/.objs/Threads.o \
 HTTP_OBJECTS = $(HTTP_DIR)/.objs/JSONObject.o \
 	$(HTTP_DIR)/.objs/HTTPServer.o
 	
-	
-INCLUDES += $(GENERAL_INC) $(HTTP_INC)
+ifdef USE_DVS_DUMMY
+	CAPTURE_OBJECT_DEPS = $(CAPTURE_DIR)/.c_objs/sv_dummy.o
+else
+	CAPTURE_OBJECT_DEPS =
+endif
+
+
+INCLUDES += $(GENERAL_INC) $(HTTP_INC) $(DATABASE_INC) $(DVS_INC)
 
 
 
@@ -27,8 +33,8 @@ INCLUDES += $(GENERAL_INC) $(HTTP_INC)
 all: $(OBJECTS) vtr_control
 
 
-vtr_control: general http $(OBJECTS) .objs/main.o  
-	$(COMPILE) .objs/main.o -L. $(GENERAL_OBJECTS) $(HTTP_OBJECTS) $(OBJECTS) $(SHTTPD_LIB) -lpthread -lrt -o $@
+vtr_control: .objs/main.o $(GENERAL_OBJECTS) $(HTTP_OBJECTS) $(OBJECTS) $(CAPTURE_OBJECT_DEPS)
+	$(COMPILE) .objs/main.o -L. $(GENERAL_OBJECTS) $(HTTP_OBJECTS) $(OBJECTS) $(SHTTPD_LIB) $(DVS_LIB) $(INGEX_COMMON_LIB) -lpthread -lrt -o $@
 	
 	
 

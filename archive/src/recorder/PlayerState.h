@@ -1,5 +1,5 @@
 /*
- * $Id: PlayerState.h,v 1.1 2008/07/08 16:25:46 philipn Exp $
+ * $Id: PlayerState.h,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * Parses a player state text string and returns the name/value pairs
  *
@@ -45,6 +45,7 @@ public:
     bool haveValue(std::string name);
     
     bool getInt(std::string name, int* value);
+    bool getUInt(std::string name, unsigned int* value);
     bool getInt64(std::string name, int64_t* value);
     bool getBool(std::string name, bool* value);
     bool getString(std::string name, std::string* value);

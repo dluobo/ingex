@@ -8,8 +8,12 @@
 
 <link rel="icon" href="favicon.ico" type="image/x-icon"/>
 
-<script type="text/javascript" src="scripts/common.js"/>
-<script type="text/javascript" src="scripts/index.js"/>
+<script type="text/javascript">
+var apiVersion = 1;
+</script>
+
+<script type="text/javascript" src="scripts/common.js"></script>
+<script type="text/javascript" src="scripts/index.js"></script>
 
 <link href="styles/index.css" rel="stylesheet" rev="stylesheet" type="text/css"/>
 
@@ -42,6 +46,7 @@
 <table id="link-line" cellspacing="5">
 	<tr>
 		<td><a id="index-link" class="current-page-link" href="index.html">Home</a></td>
+		<td><a id="setup-link" href="setup.html">Setup</a></td>
 		<td><a id="select-source-link" href="source.html">Prepare</a></td>
 		<td><a id="record-link" href="record.html">Record</a></td>
 		<td><a id="review-link" href="review.html">Review</a></td>
@@ -71,10 +76,6 @@
 	<tr>
 		<td style="color:blue;">Version: </td>
 		<td id="recorder-version"></td>
-	</tr>
-	<tr>
-		<td style="color:blue;">Audio tracks:</td>
-		<td id="num-audio-tracks"></td>
 	</tr>
 	<tr>
 		<td style="color:blue;">Disk space:</td>

@@ -3,6 +3,13 @@
 -- TYPES
 ------------------------------------
 
+CREATE TYPE Rational AS
+(
+    numerator INTEGER,
+    denominator INTEGER
+);
+
+
 ------------------------------------
 -- TABLES
 ------------------------------------
@@ -35,42 +42,59 @@ CREATE TABLE Source
     src_type_id INTEGER NOT NULL,
     src_barcode VARCHAR(32),
     src_rec_instance INTEGER DEFAULT 0 NOT NULL,
-    CONSTRAINT src_barcode_key UNIQUE (src_barcode), -- creates an index for us
     CONSTRAINT src_type_fkey FOREIGN KEY (src_type_id) REFERENCES SourceType (srt_identifier),
     CONSTRAINT src_pkey PRIMARY KEY (src_identifier)
 ) WITHOUT OIDS;
 
+CREATE INDEX src_barcode_index ON Source (src_barcode);
 
 
--- D3 SOURCE
 
-CREATE SEQUENCE d3s_id_seq;
-CREATE TABLE D3Source
+-- SOURCE ITEM
+
+CREATE SEQUENCE sit_id_seq;
+CREATE TABLE SourceItem
 (
-    d3s_identifier INTEGER DEFAULT nextval('d3s_id_seq') NOT NULL,
-    d3s_format VARCHAR(6),
-    d3s_prog_title VARCHAR(72),
-    d3s_episode_title VARCHAR(144),
-    d3s_tx_date DATE,
-    d3s_mag_prefix VARCHAR(1),
-    d3s_prog_no VARCHAR(8),
-    d3s_prod_code VARCHAR(2),
-    d3s_spool_status VARCHAR(1),
-    d3s_stock_date DATE,
-    d3s_spool_descr VARCHAR(29),
-    d3s_memo VARCHAR(120),
-    d3s_duration BIGINT,
-    d3s_spool_no VARCHAR(14),
-    d3s_acc_no VARCHAR(14),
-    d3s_cat_detail VARCHAR(10),
-    d3s_item_no INTEGER,
-    d3s_source_id INTEGER NOT NULL,
-    CONSTRAINT d3s_source_fkey FOREIGN KEY (d3s_source_id) REFERENCES Source (src_identifier)
+    sit_identifier INTEGER DEFAULT nextval('sit_id_seq') NOT NULL,
+    sit_format VARCHAR(6),
+    sit_prog_title VARCHAR(72),
+    sit_episode_title VARCHAR(144),
+    sit_tx_date DATE,
+    sit_mag_prefix VARCHAR(1),
+    sit_prog_no VARCHAR(8),
+    sit_prod_code VARCHAR(2),
+    sit_spool_status VARCHAR(1),
+    sit_stock_date DATE,
+    sit_spool_descr VARCHAR(29),
+    sit_memo VARCHAR(120),
+    sit_duration BIGINT,
+    sit_spool_no VARCHAR(14),
+    sit_acc_no VARCHAR(14),
+    sit_cat_detail VARCHAR(10),
+    sit_item_no INTEGER,
+    sit_aspect_ratio_code VARCHAR(8),
+    sit_source_id INTEGER NOT NULL,
+    sit_modified_flag BOOLEAN DEFAULT 'false',
+    CONSTRAINT sit_source_fkey FOREIGN KEY (sit_source_id) REFERENCES Source (src_identifier)
             ON DELETE CASCADE,
-    CONSTRAINT d3s_pkey PRIMARY KEY (d3s_identifier)
+    CONSTRAINT sit_pkey PRIMARY KEY (sit_identifier)
 ) WITHOUT OIDS;
 
-CREATE INDEX d3s_source_index ON D3Source (d3s_source_id);
+CREATE INDEX sit_source_index ON SourceItem (sit_source_id);
+
+
+
+-- SOURCE INSTANCE
+
+CREATE SEQUENCE sin_id_seq;
+CREATE TABLE SourceInstance
+(
+    sin_identifier INTEGER DEFAULT nextval('sin_id_seq') NOT NULL,
+    sin_src_barcode VARCHAR(32),
+    sin_next_rec_instance INTEGER DEFAULT 1 NOT NULL,
+    CONSTRAINT sin_src_barcode_key UNIQUE (sin_src_barcode), -- creates an index for us
+    CONSTRAINT sin_pkey PRIMARY KEY (sin_identifier)
+) WITHOUT OIDS;
 
 
 
@@ -91,17 +115,17 @@ CREATE TABLE Destination
     des_type_id INTEGER NOT NULL,
     des_barcode VARCHAR(32), -- not all destinations will have a barcode
     des_source_id INTEGER NOT NULL,
-    des_d3source_id INTEGER,
+    des_source_item_id INTEGER,
     des_ingest_item_no INTEGER,
     CONSTRAINT des_type_fkey FOREIGN KEY (des_type_id) REFERENCES DestinationType (dst_identifier),
     CONSTRAINT des_source_fkey FOREIGN KEY (des_source_id) REFERENCES Source (src_identifier),
-    CONSTRAINT des_d3source_fkey FOREIGN KEY (des_d3source_id) REFERENCES D3Source (d3s_identifier),
+    CONSTRAINT des_source_item_fkey FOREIGN KEY (des_source_item_id) REFERENCES SourceItem (sit_identifier),
     CONSTRAINT des_pkey PRIMARY KEY (des_identifier)
 ) WITHOUT OIDS;
 
 CREATE INDEX des_barcode_index ON Destination (des_barcode);
 CREATE INDEX des_source_index ON Destination (des_source_id);
-CREATE INDEX des_d3source_index ON Destination (des_d3source_id);
+CREATE INDEX des_source_item_index ON Destination (des_source_item_id);
 
 
 
@@ -162,7 +186,8 @@ CREATE TABLE RecordingSession
     rcs_status_id INTEGER NOT NULL,
     rcs_abort_initiator_id INTEGER,
     rcs_comments VARCHAR(256),
-    rcs_total_d3_errors INTEGER,
+    rcs_total_vtr_errors INTEGER,
+    rcs_total_digibeta_dropouts INTEGER,
     CONSTRAINT rcs_status_fkey FOREIGN KEY (rcs_status_id) REFERENCES RecordingSessionStatus (rss_identifier),
     CONSTRAINT rcs_abort_initiator_fkey FOREIGN KEY (rcs_abort_initiator_id) REFERENCES AbortInitiator (abi_identifier),
     CONSTRAINT rcs_recorder_fkey FOREIGN KEY (rcs_recorder_id) REFERENCES Recorder (rec_identifier)
@@ -223,11 +248,20 @@ CREATE TABLE PSEResult
     CONSTRAINT pse_pkey PRIMARY KEY (pse_identifier)
 ) WITHOUT OIDS;
 
+CREATE TABLE IngestFormat
+(
+    ift_identifier INTEGER NOT NULL,
+    ift_name VARCHAR(256) NOT NULL,
+    CONSTRAINT ift_key UNIQUE (ift_name),
+    CONSTRAINT ift_pkey PRIMARY KEY (ift_identifier)
+) WITHOUT OIDS;
+
 
 CREATE SEQUENCE hdd_id_seq;
 CREATE TABLE HardDiskDestination
 (
     hdd_identifier INTEGER DEFAULT nextval('hdd_id_seq') NOT NULL,
+    hdd_format_id INTEGER NOT NULL,
     hdd_host VARCHAR(512) NOT NULL,
     hdd_path VARCHAR(512) NOT NULL,
     hdd_name VARCHAR(256) NOT NULL,
@@ -244,6 +278,7 @@ CREATE TABLE HardDiskDestination
     hdd_browse_size BIGINT,
     hdd_dest_id INTEGER NOT NULL,
     hdd_cache_id INTEGER,
+    CONSTRAINT hdd_format_fkey FOREIGN KEY (hdd_format_id) REFERENCES IngestFormat (ift_identifier),
     CONSTRAINT hdd_pse_result_fkey FOREIGN KEY (hdd_pse_result_id) REFERENCES PSEResult (pse_identifier),
     CONSTRAINT hdd_dest_fkey FOREIGN KEY (hdd_dest_id) REFERENCES Destination (des_identifier)
             ON DELETE CASCADE,
@@ -364,17 +399,20 @@ CREATE TABLE LTOFile
     ltf_cat_detail VARCHAR(10),
     ltf_item_no INTEGER,
     ltf_recording_session_id INTEGER,
+    ltf_hdd_format_id INTEGER NOT NULL,
     ltf_hdd_host VARCHAR(512),
     ltf_hdd_path VARCHAR(512),
     ltf_hdd_name VARCHAR(256),
     ltf_hdd_material_package_uid CHAR(64),
     ltf_hdd_file_package_uid CHAR(64),
     ltf_hdd_tape_package_uid CHAR(64),
+    ltf_source_format VARCHAR(6),
     ltf_source_spool_no VARCHAR(14),
     ltf_source_item_no INTEGER,
     ltf_source_mag_prefix VARCHAR(1),
     ltf_source_prog_no VARCHAR(8),
     ltf_source_prod_code VARCHAR(2),
+    CONSTRAINT ltf_hdd_format_fkey FOREIGN KEY (ltf_hdd_format_id) REFERENCES IngestFormat (ift_identifier),
     CONSTRAINT ltf_status_fkey FOREIGN KEY (ltf_status_id) REFERENCES LTOFileTransferStatus (lfs_identifier),
     CONSTRAINT ltf_lto_fkey FOREIGN KEY (ltf_lto_id) REFERENCES LTO (lto_identifier)
         ON DELETE CASCADE,
@@ -402,8 +440,9 @@ CREATE TABLE InfaxExport
     ixe_export_date TIMESTAMP WITHOUT TIME ZONE DEFAULT NULL,
     ixe_creation TIMESTAMP WITHOUT TIME ZONE DEFAULT now() NOT NULL,
     ixe_transfer_date TIMESTAMP WITHOUT TIME ZONE,
-    ixe_d3_spool_no VARCHAR(14),
-    ixe_item_no INTEGER,
+    ixe_source_format VARCHAR(6),
+    ixe_source_spool_no VARCHAR(14),
+    ixe_source_item_no INTEGER,
     ixe_prog_title VARCHAR(72),
     ixe_episode_title VARCHAR(144),
     ixe_mag_prefix VARCHAR(1),
@@ -435,14 +474,35 @@ CREATE TABLE InfaxExport
 -- FUNCTIONS
 ------------------------------------
 
--- note: instance numbers returned by this function will start counting from 1
-
-CREATE FUNCTION get_rec_instance(INTEGER) RETURNS INTEGER AS $$
-    UPDATE Source 
-        SET src_rec_instance = src_rec_instance + 1
-        WHERE src_identifier = $1;
-    SELECT src_rec_instance FROM Source WHERE src_identifier = $1;
-$$ LANGUAGE SQL;
+CREATE FUNCTION get_rec_instance(VARCHAR, INTEGER) RETURNS INTEGER AS $$
+DECLARE
+    instance_num INTEGER;
+BEGIN
+    LOCK TABLE SourceInstance;
+    
+    -- get the next recording instance number for this spool
+    SELECT sin_next_rec_instance
+        INTO instance_num
+        FROM SourceInstance
+        WHERE sin_src_barcode = $1;
+    IF FOUND THEN
+        UPDATE SourceInstance 
+            SET sin_next_rec_instance = sin_next_rec_instance + 1
+            WHERE sin_src_barcode = $1;
+    ELSE
+        instance_num = 1;
+        INSERT INTO SourceInstance (sin_src_barcode, sin_next_rec_instance)
+            VALUES ($1, instance_num + 1);
+    END IF;
+    
+    -- update the instance number in the Source table
+    UPDATE Source
+        SET src_rec_instance = instance_num
+        WHERE src_identifier = $2;
+    
+    RETURN instance_num;
+END
+$$ LANGUAGE plpgsql;
 
 
 
@@ -452,18 +512,25 @@ $$ LANGUAGE SQL;
 
 -- database version
 
-INSERT INTO Version (ver_version) VALUES (1);
+INSERT INTO Version (ver_version) VALUES (2);
 
 
 -- source types
 
-INSERT INTO SourceType (srt_identifier, srt_name) VALUES (1, 'D3 Tape');
+INSERT INTO SourceType (srt_identifier, srt_name) VALUES (1, 'Video Tape');
 
 
 -- destination types
 
 INSERT INTO DestinationType (dst_identifier, dst_name) VALUES (1, 'Hard disk');
-INSERT INTO DestinationType (dst_identifier, dst_name) VALUES (2, 'Digibeta');
+INSERT INTO DestinationType (dst_identifier, dst_name) VALUES (2, 'Video Tape');
+
+
+-- ingest format
+
+INSERT INTO IngestFormat (ift_identifier, ift_name) VALUES (1, 'MXF Uncompressed 8-bit');
+INSERT INTO IngestFormat (ift_identifier, ift_name) VALUES (2, 'MXF Uncompressed 10-bit');
+INSERT INTO IngestFormat (ift_identifier, ift_name) VALUES (3, 'MXF D-10 50Mbps');
 
 
 -- recording session status

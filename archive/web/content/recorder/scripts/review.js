@@ -6,6 +6,7 @@ var enableSessionCommentsRequest = true;
 var sessionCommentsCount = 0;
 var itemMarkRequest = null;
 var enableItemMarkRequest = true;
+var enableVersionAlert = true;
 
 var clearItem = new Object;
 clearItem.id = -1;
@@ -198,7 +199,7 @@ function set_pse_result(pseResult)
         default:
             if (get_tag_state(pseResultE) != pseResult)
             {
-                pseResultE.innerHTML = "?Unknown";
+                pseResultE.innerHTML = "";
                 pseResultE.setAttribute("style", "");
                 set_tag_state(pseResultE, pseResult);
             }
@@ -356,11 +357,21 @@ function set_session_status(status)
             set_last_session_result(0, "", "");
         }
         update_progressbar_pointer(-1, -1);
+        if (status != null)
+        {
+            update_vtr_error_level_state(status.replayStatus.vtrErrorLevel);
+            update_mark_filter_state(status.replayStatus.markFilter);
+        }
+        else
+        {
+            update_vtr_error_level_state(-1);
+            update_mark_filter_state(-1);
+        }
         reset_progressbar_marks();
     }
     else
     {
-        update_tag_value("d3-spool-no", status.sessionStatus.d3SpoolNo.replace(/\ /g, "&nbsp;"), status.sessionStatus.d3SpoolNo);
+        update_tag_value("d3-spool-no", status.sessionStatus.sourceSpoolNo.replace(/\ /g, "&nbsp;"), status.sessionStatus.sourceSpoolNo);
         update_tag_value("digibeta-spool-no", status.sessionStatus.digibetaSpoolNo.replace(/\ /g, "&nbsp;"), status.sessionStatus.digibetaSpoolNo);
         update_tag_value("d3-vtr-error-count", status.sessionStatus.vtrErrorCount, escape(status.sessionStatus.vtrErrorCount));
         set_pse_result(status.sessionStatus.pseResult);
@@ -377,7 +388,7 @@ function set_session_status(status)
         set_button_busy_state("abort-button", status.sessionStatus.abortBusy);
         set_button_busy_state("complete-button", status.sessionStatus.completeBusy);
         set_button_busy_state("chunk-button", status.sessionStatus.chunkBusy);
-        set_play_info(status.sessionStatus.playingItemIndex, status.sessionStatus.itemCount, status.sessionStatus.playingItemPosition, status.sessionStatus.playingFilePosition);
+        set_play_info(status.sessionStatus.playingItemIndex, status.sessionStatus.itemCount, status.sessionStatus.playingItemPosition, status.replayStatus.position);
         var enableMarkStart = status.sessionStatus.state == 4 && // 4 == PREPARE_CHUNKING_SESSION_STATE
             status.sessionStatus.playingItemPosition != 0 && // is not at the start of the item
             !status.sessionStatus.readyToChunk; // items left to mark
@@ -406,7 +417,7 @@ function set_session_status(status)
         {
             set_last_session_result(0, "", "");
         }
-        update_progressbar_pointer(status.sessionStatus.playingFilePosition, status.sessionStatus.playingFileDuration);
+        update_progressbar_pointer(status.replayStatus.position, status.replayStatus.duration);
         var marksDuration;
         if (status.sessionStatus.state == 5) // 5 == CHUNKING_SESSION_STATE
         {
@@ -414,13 +425,15 @@ function set_session_status(status)
         }
         else
         {
-            marksDuration = status.sessionStatus.playingFileDuration;
+            marksDuration = status.replayStatus.duration;
         }
         if (pgItemClipChangeCount != status.sessionStatus.itemClipChangeCount ||
             pgMarksDuration != marksDuration)
         {
             update_progressbar_marks(marksDuration);
         }
+        update_vtr_error_level_state(status.replayStatus.vtrErrorLevel);
+        update_mark_filter_state(status.replayStatus.markFilter);
     }
 }
 
@@ -436,6 +449,19 @@ function status_handler()
             }
             
             var status = eval("(" + statusRequest.responseText + ")");
+
+            if (!check_api_version(status))
+            {
+                if (enableVersionAlert)
+                {
+                    alert("Invalid API version " + get_api_version() +
+                        ". Require version " + status.apiVersion);
+                    enableVersionAlert = false;
+                }
+                throw "Invalid API version";
+            }
+            enableVersionAlert = true;
+
             set_general_status(status, statusInterval);
             
             set_session_status(status);

@@ -1,3 +1,5 @@
+var enableVersionAlert = true;
+
 // a status update is performed every 1/2 second
 var statusInterval = 500;
 
@@ -9,7 +11,6 @@ function set_system_status(status)
     {
         update_tag_value("recorder-name", "", "");
         update_tag_value("recorder-version", "", "");
-        update_tag_value("num-audio-tracks", "", "");
         update_tag_value("disk-space", "", "");
         update_tag_value("recording-time", "", "");
         update_tag_value("d3-vtr-state", "", 0);
@@ -21,12 +22,12 @@ function set_system_status(status)
         
         update_tag_value("recorder-name", status.recorderName, status.recorderName);
         update_tag_value("recorder-version", versionString, versionString);
-        update_tag_value("num-audio-tracks", status.numAudioTracks, status.numAudioTracks);
         var diskSpaceString = get_size_string(status.diskSpace);
         update_tag_value("disk-space", diskSpaceString, diskSpaceString);
         var recordingTimeString = get_duration_string(status.recordingTime);
+        recordingTimeString += " (" + status.recordingTimeIngestFormat + ")";
         update_tag_value("recording-time", recordingTimeString, recordingTimeString);
-        update_tag_value("d3-vtr-state", status.d3VTRState, status.d3VTRState);
+        update_tag_value("d3-vtr-state", status.sourceVTRState, status.sourceVTRState);
         update_tag_value("digibeta-vtr-state", status.digibetaVTRState, status.digibetaVTRState);
     }
 }
@@ -43,6 +44,19 @@ function status_handler()
             }
             
             var status = eval("(" + statusRequest.responseText + ")");
+
+            if (!check_api_version(status))
+            {
+                if (enableVersionAlert)
+                {
+                    alert("Invalid API version " + get_api_version() +
+                        ". Require version " + status.apiVersion);
+                    enableVersionAlert = false;
+                }
+                throw "Invalid API version";
+            }
+            enableVersionAlert = true;
+
             set_general_status(status, statusInterval);
             
             set_system_status(status);

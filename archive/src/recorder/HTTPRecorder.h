@@ -1,5 +1,5 @@
 /*
- * $Id: HTTPRecorder.h,v 1.1 2008/07/08 16:25:46 philipn Exp $
+ * $Id: HTTPRecorder.h,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * HTTP interface to the recorder
  *
@@ -53,9 +53,12 @@ public:
     
     
     void getRecorderStatus(HTTPConnection* connection);
+
+    void getProfileList(HTTPConnection* connection);
+    void getProfile(HTTPConnection* connection);
+    void updateProfile(HTTPConnection* connection);
     
     void getSourceInfo(HTTPConnection* connection);
-    void updateSourceInfo(HTTPConnection* connection);
 
     void checkSelectedDigibeta(HTTPConnection* connection);
     
@@ -95,8 +98,6 @@ public:
     void getItemSourceInfo(HTTPConnection* connection);
     
     
-    Recorder* getRecorder();
-    
     static std::string getPSEReportsURL();
     
 private:
@@ -108,22 +109,6 @@ private:
     int _barcodeCount;
     Timer _barcodeExpirationTimer;
     Mutex _barcodeMutex;
-    
-    Thread* _sourceInfoAgent;
-    Mutex _sourceInfoAgentMutex;
-    
-    Thread* _checkDigibetaAgent;
-    Mutex _checkDigibetaAgentMutex;
-    
-    Thread* _updateSourceInfoAgent;
-    Thread* _startSessionAgent;
-    Mutex _startSessionOrUpdateSourceInfoAgentMutex;
-    
-    Thread* _cacheContentsAgent;
-    Mutex _cacheContentsAgentMutex;
-
-    Thread* _replayFileAgent;
-    Mutex _replayFileAgentMutex;
 };
 
 

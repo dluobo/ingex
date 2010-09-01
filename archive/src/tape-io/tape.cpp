@@ -1,5 +1,5 @@
 /*
- * $Id: tape.cpp,v 1.1 2008/07/08 16:26:42 philipn Exp $
+ * $Id: tape.cpp,v 1.2 2010/09/01 16:05:23 philipn Exp $
  *
  * Transfers a set of MXF files to LTO
  *
@@ -32,14 +32,15 @@
 
 #include <pthread.h>
 
-#include <stdio.h>
-#include <stdlib.h>
+#include <cstdio>
+#include <cstdlib>
 #include <inttypes.h>
+#include <cstring>
 
 #include <unistd.h> 
-#include <errno.h>
-#include <limits.h>
-#include <time.h>
+#include <cerrno>
+#include <climits>
+#include <ctime>
 #include <sys/stat.h>
 
 #include <write_archive_mxf.h>  // for update_mxf_file()

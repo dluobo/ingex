@@ -1,5 +1,5 @@
 /*
- * $Id: Cache.h,v 1.1 2008/07/08 16:22:00 philipn Exp $
+ * $Id: Cache.h,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * Manages the files in the disk cache
  *
@@ -54,6 +54,7 @@ public:
     ~CacheContentItem();
 
     long identifier;
+    std::string sourceFormat;
     std::string sourceSpoolNo;
     std::string sourceProgNo;
     uint32_t sourceItemNo;
@@ -115,15 +116,19 @@ public:
     
     bool checkMultiItemMXF(std::string barcode, int numItems);
     
-    bool getMultiItemTemplateFilename(std::string barcode, int numItems, std::string* mxfFilenameTemplate);
+    bool getMultiItemTemplateFilename(std::string barcode, int numItems,
+        std::string* mxfFilenameTemplate,
+        std::string* eventFilename);
     bool getMultiItemFilenames(std::string barcode, int itemNumber,
         std::string* mxfFilename, 
         std::string* browseFilename, std::string* browseTimecodeFilename, std::string* browseInfoFilename, 
-        std::string* pseFilename);
+        std::string* pseFilename,
+        std::string* eventFilename);
     bool getUniqueFilenames(std::string barcode, long sourceId, 
         std::string* mxfFilename, 
         std::string* browseFilename, std::string* browseTimecodeFilename, std::string* browseInfoFilename, 
-        std::string* pseFilename);
+        std::string* pseFilename,
+        std::string* eventFilename);
     
     int64_t getDiskSpace();
     
@@ -134,12 +139,17 @@ public:
     std::string getCompleteFilename(std::string filename);
     std::string getCompleteBrowseFilename(std::string filename);
     std::string getCompletePSEFilename(std::string filename);
-
+    std::string getCompleteCreatingEventFilename(std::string filename);
+    std::string getCompleteEventFilename(std::string filename);
+    
+    std::string getEventFilename(std::string mxfFilename);
+    std::string getCreatingEventFilename(std::string mxfFilename);
+    
     int64_t getFileSize(std::string filename);
     int64_t getCreatingFileSize(std::string filename);
     int64_t getBrowseFileSize(std::string filename);
     
-    void registerCreatingItem(HardDiskDestination* dest, RecordingSessionTable* session, D3Source* d3Source, bool isTemp);
+    void registerCreatingItem(HardDiskDestination* dest, RecordingSessionTable* session, SourceItem* sourceItem, bool isTemp);
     void updateCreatingItem(HardDiskDestination* dest, RecordingSessionTable* session);
     void finaliseCreatingItem(HardDiskDestination* dest);
     void removeCreatingItems();
@@ -176,7 +186,12 @@ private:
     bool browseFileExists(std::string filename);
     bool pseFileExists(std::string filename);
     bool removeFile(std::string filename);
+    bool removeEventFile(std::string mxfFilename);
     bool removeCreatingFile(std::string filename);
+    bool removeCreatingEventFile(std::string mxfFilename);
+    
+    bool moveCreatingFile(std::string filename, bool isEventFile);
+    bool moveCreatingEventFile(std::string mxfFilename);
 
     bool isPageFilename(std::string filename);
     std::string getPageFilenameTemplate(std::string baseFilename);

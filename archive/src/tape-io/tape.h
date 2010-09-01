@@ -1,5 +1,5 @@
 /*
- * $Id: tape.h,v 1.1 2008/07/08 16:26:45 philipn Exp $
+ * $Id: tape.h,v 1.2 2010/09/01 16:05:23 philipn Exp $
  *
  * Transfers a set of MXF files to LTO
  *
@@ -33,7 +33,6 @@
 
 using std::string;
 
-// These are maintained to be the same as d3archive::GeneralStatus etc
 enum GeneralState { READY, BUSY, NO_TAPE, BAD_TAPE };
 enum StoreState { STARTED, IN_PROGRESS, COMPLETED, FAILED };
 

@@ -1,5 +1,5 @@
 /*
- * $Id: SonyProtocol.h,v 1.1 2008/07/08 16:27:17 philipn Exp $
+ * $Id: SonyProtocol.h,v 1.2 2010/09/01 16:05:23 philipn Exp $
  *
  * Implements the Sony VTR protocol
  *
@@ -83,7 +83,7 @@ private:
 class SonyProtocol
 {
 public:
-    static SonyProtocol* open(std::string serialDeviceName);
+    static SonyProtocol* open(std::string serialDeviceName, SerialType = TYPE_STD_TTY);
     
 public:
     ~SonyProtocol();

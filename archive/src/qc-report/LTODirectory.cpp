@@ -1,5 +1,5 @@
 /*
- * $Id: LTODirectory.cpp,v 1.1 2008/07/08 16:25:11 philipn Exp $
+ * $Id: LTODirectory.cpp,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * Provides a list of MXF and session file items in a LTO directory and can 
  * create a backup of the session files and index file
@@ -21,9 +21,11 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#include <stdio.h>
-#include <ctype.h>
-#include <errno.h>
+#include <cstdlib>
+#include <cstdio>
+#include <cctype>
+#include <cerrno>
+#include <cstring>
 #include <dirent.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -123,7 +125,7 @@ static void add_session_file(string filename, time_t modTime, vector<LTOItem>& i
     for (iter = items.begin(); iter != items.end(); iter++)
     {
         LTOItem& item = *iter;
-        if (mxfFilename.compare(item.mxfFilename) == 0)
+        if (mxfFilename == item.mxfFilename)
         {
             if (item.sessionFilename.empty() ||
                 item.sessionMTime < modTime)

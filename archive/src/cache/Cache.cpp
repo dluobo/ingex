@@ -1,5 +1,5 @@
 /*
- * $Id: Cache.cpp,v 1.1 2008/07/08 16:21:59 philipn Exp $
+ * $Id: Cache.cpp,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * Manages the files in the disk cache
  *
@@ -39,12 +39,12 @@
     in cache/.
 */
  
-#include <stdio.h>
+#include <cstdio>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <sys/statvfs.h>
-#include <errno.h>
+#include <cerrno>
 #include <dirent.h>
 #include <fcntl.h>
 
@@ -72,8 +72,9 @@ using namespace rec;
 
 
 static const char* g_creatingDirectory = "creating";
+static const char* g_eventsDirectory = "events";
 static const char* g_mxfPageFileSuffix = ".mxfp";
-
+static const char* g_eventSuffix = "_event.mxf";
 
 
 static string get_filename_instance(long instance)
@@ -360,7 +361,8 @@ bool Cache::checkMultiItemMXF(string barcode, int numItems)
     return true;
 }
 
-bool Cache::getMultiItemTemplateFilename(string barcode, int numItems, string* mxfFilenameTemplate)
+bool Cache::getMultiItemTemplateFilename(string barcode, int numItems, string* mxfFilenameTemplate,
+    string* eventFilename)
 {
     if (!checkMultiItemMXF(barcode, numItems))
     {
@@ -386,12 +388,13 @@ bool Cache::getMultiItemTemplateFilename(string barcode, int numItems, string* m
 
     
     *mxfFilenameTemplate = pageFileTemplate;
+    *eventFilename = getCreatingEventFilename(pageFileTemplate);
     return true;
 }
 
 bool Cache::getMultiItemFilenames(string barcode, int itemNumber,
     string* mxfFilename, string* browseFilename, string* browseTimecodeFilename, 
-    string* browseInfoFilename, string* pseFilename)
+    string* browseInfoFilename, string* pseFilename, string* eventFilename)
 {
     // base filename is the barcode with spaces replaced with '_'
     string baseFilename = barcode;
@@ -406,6 +409,7 @@ bool Cache::getMultiItemFilenames(string barcode, int itemNumber,
     string testItemBrowseTimecodeFilename = getMultiItemFilename(baseFilename, itemNumber, ".tc");
     string testItemBrowseInfoFilename = getMultiItemFilename(baseFilename, itemNumber, ".txt");
     string testItemPSEFilename = getMultiItemFilename(baseFilename, itemNumber, ".PSEreport.html");
+    string testItemEventFilename = getCreatingEventFilename(testItemMXFFilename);
         
     if (creatingFileExists(testItemMXFFilename) ||
         fileExists(testItemMXFFilename))
@@ -418,12 +422,13 @@ bool Cache::getMultiItemFilenames(string barcode, int itemNumber,
     *browseTimecodeFilename = testItemBrowseTimecodeFilename;
     *browseInfoFilename = testItemBrowseInfoFilename;
     *pseFilename = testItemPSEFilename;
+    *eventFilename = testItemEventFilename;
     return true;
 }
 
 bool Cache::getUniqueFilenames(string barcode, long sourceId,
     string* mxfFilename, string* browseFilename, string* browseTimecodeFilename, 
-    string* browseInfoFilename, string* pseFilename)
+    string* browseInfoFilename, string* pseFilename, string* eventFilename)
 {
     // base filename is the barcode with spaces replaced with '_'
     string baseFilename = barcode;
@@ -439,6 +444,7 @@ bool Cache::getUniqueFilenames(string barcode, long sourceId,
     string testBrowseTimecodeFilename;
     string testBrowseInfoFilename;
     string testPSEFilename;
+    string testEventFilename;
     long firstInstanceNumber = -1;
     long lastInstanceNumber = -1;
     long testInstanceNumber;
@@ -446,13 +452,14 @@ bool Cache::getUniqueFilenames(string barcode, long sourceId,
     const int maxTries = 20;
     while (numTries < maxTries)
     {
-        testInstanceNumber = RecorderDatabase::getInstance()->getNewSourceRecordingInstance(sourceId);
+        testInstanceNumber = RecorderDatabase::getInstance()->getNewSourceRecordingInstance(barcode, sourceId);
 
         testMXFFilename = getSingleItemFilename(baseFilename, testInstanceNumber, ".mxf");
         testBrowseFilename = getSingleItemFilename(baseFilename, testInstanceNumber, ".mpg");
         testBrowseTimecodeFilename = getSingleItemFilename(baseFilename, testInstanceNumber, ".tc");
         testBrowseInfoFilename = getSingleItemFilename(baseFilename, testInstanceNumber, ".txt");
         testPSEFilename = getSingleItemFilename(baseFilename, testInstanceNumber, ".PSEreport.html");
+        testEventFilename = getCreatingEventFilename(testMXFFilename);
         
         if (!creatingFileExists(testMXFFilename) &&
             !fileExists(testMXFFilename) &&        
@@ -492,6 +499,7 @@ bool Cache::getUniqueFilenames(string barcode, long sourceId,
     *browseTimecodeFilename = testBrowseTimecodeFilename;
     *browseInfoFilename = testBrowseInfoFilename;
     *pseFilename = testPSEFilename;
+    *eventFilename = testEventFilename;
     return true;
 }
 
@@ -545,6 +553,38 @@ string Cache::getCompletePSEFilename(string filename)
     return join_path(_pseDirectory, filename);
 }
 
+string Cache::getCompleteCreatingEventFilename(string filename)
+{
+    return join_path(_directory, g_creatingDirectory, filename);
+}
+
+string Cache::getCompleteEventFilename(string filename)
+{
+    return join_path(_directory, g_eventsDirectory, filename);
+}
+
+string Cache::getEventFilename(string mxfFilename)
+{
+    string name = strip_path(mxfFilename);
+    string path = strip_name(mxfFilename);
+    
+    return join_path(path, g_eventsDirectory, getCreatingEventFilename(name));
+}
+
+string Cache::getCreatingEventFilename(string mxfFilename)
+{
+    if (isPageFilename(mxfFilename))
+    {
+        REC_ASSERT(mxfFilename.rfind("__%d") != string::npos);
+        return mxfFilename.substr(0, mxfFilename.rfind("__%d")) + g_eventSuffix;
+    }
+    else
+    {
+        REC_ASSERT(mxfFilename.size() >= 4 && mxfFilename.rfind(".mxf") == mxfFilename.size() - 4);
+        return mxfFilename.substr(0, mxfFilename.size() - 4) + g_eventSuffix;
+    }
+}
+
 int64_t Cache::getFileSize(string filename)
 {
     struct stat statBuf;
@@ -581,7 +621,7 @@ int64_t Cache::getBrowseFileSize(string filename)
     return -1;
 }
 
-void Cache::registerCreatingItem(HardDiskDestination* dest, RecordingSessionTable* session, D3Source* d3Source, bool isTemp)
+void Cache::registerCreatingItem(HardDiskDestination* dest, RecordingSessionTable* session, SourceItem* sourceItem, bool isTemp)
 {
     // remove item with same name (TODO: is this actually an assertion violation?)
     CreatingCacheItem* existingItem = eraseCreatingItem(dest->name);
@@ -633,11 +673,12 @@ void Cache::registerCreatingItem(HardDiskDestination* dest, RecordingSessionTabl
         creatingItem->sessionCreation = session->creation;
         creatingItem->sessionComments = session->comments;
         creatingItem->sessionStatus = session->status;
-        creatingItem->sourceSpoolNo = d3Source->spoolNo;
-        creatingItem->sourceItemNo = d3Source->itemNo;
-        creatingItem->sourceProgNo = d3Source->progNo;
-        creatingItem->sourceMagPrefix = d3Source->magPrefix;
-        creatingItem->sourceProdCode = d3Source->prodCode;
+        creatingItem->sourceFormat = sourceItem->format;
+        creatingItem->sourceSpoolNo = sourceItem->spoolNo;
+        creatingItem->sourceItemNo = sourceItem->itemNo;
+        creatingItem->sourceProgNo = sourceItem->progNo;
+        creatingItem->sourceMagPrefix = sourceItem->magPrefix;
+        creatingItem->sourceProdCode = sourceItem->prodCode;
         creatingItem->isTemp = isTemp;
         
         updater.enable();
@@ -669,13 +710,12 @@ void Cache::finaliseCreatingItem(HardDiskDestination* dest)
     CreatingCacheItem* creatingItem = getCreatingItem(dest->name);    
     REC_ASSERT(creatingItem != 0);
     
-    // move the file
-    if (rename(getCompleteCreatingFilename(creatingItem->name).c_str(), 
-        getCompleteFilename(creatingItem->name).c_str()) != 0)
+    // move the file and event file
+    if (!moveCreatingFile(creatingItem->name, false))
     {
-        REC_LOGTHROW(("Failed to move cache creating file '%s' into cache", 
-            creatingItem->name.c_str()));
+        REC_LOGTHROW(("Failed to move cache creating file '%s' into cache", creatingItem->name.c_str()));
     }
+    moveCreatingEventFile(creatingItem->name);
     
     _items.push_back(creatingItem);
     REC_ASSERT(eraseCreatingItem(creatingItem->name) != 0);
@@ -714,6 +754,10 @@ void Cache::removeCreatingItems()
             {
                 Logging::info("Removed file '%s' from the cache creating directory\n", creatingItem->name.c_str());
             }
+        }
+        if (removeCreatingEventFile(creatingItem->name))
+        {
+            Logging::info("Removed event file associated with '%s' from the cache creating directory\n", creatingItem->name.c_str());
         }
         
         // Note: we never remove browse or pse files - if the full quality is lost for whatever
@@ -759,6 +803,10 @@ void Cache::removeCreatingItem(string filename)
             Logging::info("Removed file '%s' from the cache creating directory\n", creatingItem->name.c_str());
         }
     }
+    if (removeCreatingEventFile(creatingItem->name))
+    {
+        Logging::info("Removed event file associated with '%s' from the cache creating directory\n", creatingItem->name.c_str());
+    }
     
     // Note: we never remove browse or pse files - if the full quality is lost for whatever
     // reason then at least we will still have the browse copy
@@ -785,6 +833,7 @@ bool Cache::removeItem(long hdDestinationId)
             
             // remove file on disk
             result = removeFile((*iter)->name);
+            removeEventFile((*iter)->name);
             
             // Note: we never remove browse or pse files - if the full quality is lost for whatever
             // reason then at least we will still have the browse copy
@@ -809,13 +858,14 @@ bool Cache::removeItem(string name)
     vector<CacheItem*>::iterator iter;
     for (iter = _items.begin(); iter != _items.end(); iter++)
     {
-        if ((*iter)->name.compare(name) == 0)
+        if ((*iter)->name == name)
         {
             // remove link in database
             RecorderDatabase::getInstance()->removeHardDiskDestinationFromCache((*iter)->hdDestinationId);
             
             // remove file on disk
             result = removeFile((*iter)->name);
+            removeEventFile((*iter)->name);
             
             // Note: we never remove browse or pse files - if the full quality is lost for whatever
             // reason then at least we will still have the browse copy
@@ -839,13 +889,15 @@ bool Cache::processItemRemoved(string name)
     vector<CacheItem*>::iterator iter;
     for (iter = _items.begin(); iter != _items.end(); iter++)
     {
-        if ((*iter)->name.compare(name) == 0)
+        if ((*iter)->name == name)
         {
             // Note: the database will only be updated here if the item was deleted outside the recorder
             // or tape transfer system. The recorder and tape transfer systems will remove the database link 
             // before deleting the file from disk
             RecorderDatabase::getInstance()->removeHardDiskDestinationFromCache((*iter)->hdDestinationId);
 
+            removeEventFile((*iter)->name);
+            
             delete *iter;
             _items.erase(iter);
             
@@ -865,7 +917,7 @@ bool Cache::itemExists(string name)
     vector<CacheItem*>::const_iterator iter;
     for (iter = _items.begin(); iter != _items.end(); iter++)
     {
-        if ((*iter)->name.compare(name) == 0)
+        if ((*iter)->name == name)
         {
             haveItem = true;
             break;
@@ -971,6 +1023,7 @@ CacheContents* Cache::getContents()
         contents->items.push_back(new CacheContentItem());
         ccItem = contents->items.back();
         ccItem->identifier = item->hdDestinationId;
+        ccItem->sourceFormat = item->sourceFormat;
         ccItem->sourceSpoolNo = item->sourceSpoolNo;
         ccItem->sourceItemNo = item->sourceItemNo;
         ccItem->sourceProgNo = item->sourceProgNo;
@@ -1001,6 +1054,7 @@ CacheContents* Cache::getContents()
         contents->items.push_back(new CacheContentItem());
         ccItem = contents->items.back();
         ccItem->identifier = item->hdDestinationId;
+        ccItem->sourceFormat = item->sourceFormat;
         ccItem->sourceSpoolNo = item->sourceSpoolNo;
         ccItem->sourceItemNo = item->sourceItemNo;
         ccItem->sourceProgNo = item->sourceProgNo;
@@ -1101,6 +1155,11 @@ bool Cache::removeFile(string filename)
     return false;
 }
 
+bool Cache::removeEventFile(string mxfFilename)
+{
+    return removeFile(getEventFilename(mxfFilename));
+}
+
 bool Cache::removeCreatingFile(string filename)
 {
     if (creatingFileExists(filename))
@@ -1112,6 +1171,44 @@ bool Cache::removeCreatingFile(string filename)
     }
     
     return false;
+}
+
+bool Cache::removeCreatingEventFile(string mxfFilename)
+{
+    return removeCreatingFile(getCreatingEventFilename(mxfFilename));
+}
+
+bool Cache::moveCreatingFile(string filename, bool isEventFile)
+{
+    if (creatingFileExists(filename))
+    {
+        string destination;
+        if (isEventFile)
+        {
+            destination = getCompleteEventFilename(filename);
+        }
+        else
+        {
+            destination = getCompleteFilename(filename);
+        }
+        
+        if (rename(getCompleteCreatingFilename(filename).c_str(), destination.c_str()) != 0)
+        {
+            Logging::warning("Failed to rename file '%s' for move: %s\n", strerror(errno));
+            return false;
+        }
+        
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+}
+
+bool Cache::moveCreatingEventFile(string mxfFilename)
+{
+    return moveCreatingFile(getCreatingEventFilename(mxfFilename), true);
 }
 
 void Cache::updateStatus()
@@ -1173,6 +1270,18 @@ void Cache::initialise(long recorderId, bool forRecorder)
             }
             
             closedir(creatingDirStream);
+        }
+
+        // create the 'events' directory
+        if (!fileExists(g_eventsDirectory))
+        {
+            if (mkdir(join_path(_directory, g_eventsDirectory).c_str(), 0777) != 0)
+            {
+                REC_LOGTHROW(("Failed to create cache events ('%s') directory: %s", 
+                    g_eventsDirectory, strerror(errno)));
+            }
+            
+            Logging::info("Created cache events directory '%s'\n", g_eventsDirectory);
         }
     }
     
@@ -1267,7 +1376,8 @@ void Cache::initialise(long recorderId, bool forRecorder)
     {
         if (strcmp(cacheDirent->d_name, ".") == 0 ||
             strcmp(cacheDirent->d_name, "..") == 0 ||
-            strcmp(cacheDirent->d_name, g_creatingDirectory) == 0)
+            strcmp(cacheDirent->d_name, g_creatingDirectory) == 0 ||
+            strcmp(cacheDirent->d_name, g_eventsDirectory) == 0)
         {
             continue;
         }
@@ -1316,7 +1426,7 @@ bool Cache::processItemAdded(string name)
     vector<CacheItem*>::iterator itemIter;
     for (itemIter = _items.begin(); itemIter != _items.end(); itemIter++)
     {
-        if ((*itemIter)->name.compare(name) == 0)
+        if ((*itemIter)->name == name)
         {
             return true;
         }
@@ -1370,7 +1480,7 @@ CreatingCacheItem* Cache::getCreatingItem(string name)
     vector<CreatingCacheItem*>::const_iterator iter;
     for (iter = _creatingItems.begin(); iter != _creatingItems.end(); iter++)
     {
-        if ((*iter)->name.compare(name) == 0)
+        if ((*iter)->name == name)
         {
             return *iter;
         }
@@ -1385,7 +1495,7 @@ CreatingCacheItem* Cache::eraseCreatingItem(string name)
     vector<CreatingCacheItem*>::iterator iter;
     for (iter = _creatingItems.begin(); iter != _creatingItems.end(); iter++)
     {
-        if ((*iter)->name.compare(name) == 0)
+        if ((*iter)->name == name)
         {
             creatingItem = *iter;
             _creatingItems.erase(iter);

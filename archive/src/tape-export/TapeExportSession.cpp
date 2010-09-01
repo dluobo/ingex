@@ -1,5 +1,5 @@
 /*
- * $Id: TapeExportSession.cpp,v 1.1 2008/07/08 16:26:10 philipn Exp $
+ * $Id: TapeExportSession.cpp,v 1.2 2010/09/01 16:05:23 philipn Exp $
  *
  * Manages a tape export session
  *
@@ -37,6 +37,7 @@
 #define __STDC_FORMAT_MACROS 1
 
 #include <set>
+#include <algorithm>
 
 #include "TapeExportSession.h"
 #include "TapeExport.h"
@@ -122,7 +123,7 @@ private:
 TapeExportSession::TapeExportSession(TapeExport* tapeExport, string barcode, 
     int64_t maxTotalSize, int64_t minTotalSize, int maxFiles)
 : _tapeExport(tapeExport), _barcode(barcode), _maxTotalSize(maxTotalSize), _minTotalSize(minTotalSize),
-_maxFiles(maxFiles), _autoTransferMethod(true),
+_maxFiles(maxFiles), _autoTransferMethod(true), _keepLTOFiles(false),
 _startedTransfer(false), _completed(false), _aborted(false), _userAborted(false), _abortBusy(false), 
 _enableAbort(false), _doneInitialCheck(false), _autoSelectionComplete(false),
 _stopThread(false), _threadHasStopped(false),
@@ -130,6 +131,9 @@ _abortCalled(false), _ltoStatusChangeCount(0)
 {
     // source must have a barcode
     REC_CHECK(barcode.size() > 0);
+
+    _tapeTransferLockFile = Config::tape_transfer_lock_file;
+    _keepLTOFiles = Config::dbg_keep_lto_files;
     
     TapeDeviceDetails tapeDeviceDetails = tapeExport->getTapeDeviceDetails();
     
@@ -148,7 +152,7 @@ _abortCalled(false), _ltoStatusChangeCount(0)
 
 TapeExportSession::TapeExportSession(TapeExport* tapeExport, std::string barcode, std::vector<long> itemIds, int64_t maxTotalSize)
 : _tapeExport(tapeExport), _barcode(barcode), _itemIds(itemIds), _maxTotalSize(maxTotalSize), _minTotalSize(0),
-_maxFiles(0), _autoTransferMethod(false),
+_maxFiles(0), _autoTransferMethod(false), _keepLTOFiles(false),
 _startedTransfer(false), _completed(false), _aborted(false), _userAborted(false), _abortBusy(false), 
 _enableAbort(false), _doneInitialCheck(false), _autoSelectionComplete(false),
 _stopThread(false), _threadHasStopped(false),
@@ -157,6 +161,9 @@ _sessionTable(0), _ltoStatusChangeCount(0)
 {
     // source must have a barcode
     REC_CHECK(barcode.size() > 0);
+
+    _tapeTransferLockFile = Config::tape_transfer_lock_file;
+    _keepLTOFiles = Config::dbg_keep_lto_files;
     
     TapeDeviceDetails tapeDeviceDetails = tapeExport->getTapeDeviceDetails();
     
@@ -195,7 +202,7 @@ void TapeExportSession::start()
     int state = _autoTransferMethod ? 0 : 1;
     try
     {
-        auto_ptr<FileLock> tapeFileLock(new FileLock(Config::getString("tape_transfer_lock_file"), true));
+        auto_ptr<FileLock> tapeFileLock(new FileLock(_tapeTransferLockFile, true));
         
         controlTimer.start(100 * MSEC_IN_USEC);
         
@@ -576,6 +583,7 @@ LTOContents* TapeExportSession::getLTOContents()
         ltoFile.cacheName = (*iter)->hddName;
         ltoFile.size = (*iter)->size;
         ltoFile.duration = (*iter)->realDuration;
+        ltoFile.sourceFormat = (*iter)->sourceFormat;
         ltoFile.sourceSpoolNo = (*iter)->sourceSpoolNo;
         ltoFile.sourceItemNo = (*iter)->sourceItemNo;
         ltoFile.sourceProgNo = (*iter)->sourceProgNo;
@@ -597,7 +605,7 @@ bool TapeExportSession::isFileUsedInSession(string name)
     vector<LTOFileTable*>::const_iterator iter;
     for (iter = _sessionTable->lto->ltoFiles.begin(); iter != _sessionTable->lto->ltoFiles.end(); iter++)
     {
-        if ((*iter)->hddName.compare(name) == 0)
+        if ((*iter)->hddName == name)
         {
             return true;
         }
@@ -676,7 +684,7 @@ bool TapeExportSession::completeInternal(string comments)
     
 
     // remove the files
-    if (Config::getBool("dbg_keep_lto_files"))
+    if (_keepLTOFiles)
     {
         Logging::warning("Deletion of files successfully transferred to lto is disabled\n");
     }
@@ -940,56 +948,58 @@ bool TapeExportSession::createLTOFiles(vector<CacheContentItem>& itemsForTransfe
             ltoFileTable->realDuration = item.duration;
             
             auto_ptr<Source> source(RecorderDatabase::getInstance()->loadHDDSource(item.identifier));
-            D3Source* d3Source = source->getD3Source(item.sourceItemNo);
-            // TODO: would it be better to load the D3Source directly from the database?
-            // we expect d3 sources to be unique identified by the spool number and item number
-            REC_ASSERT(d3Source != 0);
+            SourceItem* sourceItem = source->getSourceItem(item.sourceItemNo);
+            // TODO: would it be better to load the source item directly from the database?
+            // we expect sources to be unique identified by the spool number and item number
+            REC_ASSERT(sourceItem != 0);
             ltoFileTable->format = "LTO"; // change to LTO
-            ltoFileTable->progTitle = d3Source->progTitle;
-            ltoFileTable->episodeTitle = d3Source->episodeTitle;
-            ltoFileTable->txDate = d3Source->txDate;
-            ltoFileTable->magPrefix = d3Source->magPrefix;
-            ltoFileTable->progNo = d3Source->progNo;
-            ltoFileTable->prodCode = d3Source->prodCode;
+            ltoFileTable->progTitle = sourceItem->progTitle;
+            ltoFileTable->episodeTitle = sourceItem->episodeTitle;
+            ltoFileTable->txDate = sourceItem->txDate;
+            ltoFileTable->magPrefix = sourceItem->magPrefix;
+            ltoFileTable->progNo = sourceItem->progNo;
+            ltoFileTable->prodCode = sourceItem->prodCode;
             ltoFileTable->spoolStatus = "M"; // 'M' stands for miscelleaneous and in this case indicates it is a dub 
             ltoFileTable->stockDate = today; // LTO's stock date
-            if (strncasecmp("programme", d3Source->spoolDescr.c_str(), strlen("programme")) == 0)
+            if (strncasecmp("programme", sourceItem->spoolDescr.c_str(), strlen("programme")) == 0)
             {
-                ltoFileTable->spoolDescr = "PROGRAMME (DUB OF " + d3Source->spoolNo + ")";
+                ltoFileTable->spoolDescr = "PROGRAMME (DUB OF " + sourceItem->spoolNo + ")";
             }
             else
             {
-                ltoFileTable->spoolDescr = "DUB OF " + d3Source->spoolNo;
+                ltoFileTable->spoolDescr = "DUB OF " + sourceItem->spoolNo;
             }
             ltoFileTable->spoolDescr = ltoFileTable->spoolDescr.substr(0, 29);
             ltoFileTable->memo = item.sessionComments;
-            if (!d3Source->memo.empty())
+            if (!sourceItem->memo.empty())
             {
                 if (!ltoFileTable->memo.empty())
                 {
-                    ltoFileTable->memo += "\n" + d3Source->memo;
+                    ltoFileTable->memo += "\n" + sourceItem->memo;
                 }
                 else
                 {
-                    ltoFileTable->memo = d3Source->memo;
+                    ltoFileTable->memo = sourceItem->memo;
                 }
             }
             ltoFileTable->memo = ltoFileTable->memo.substr(0, 120);
-            ltoFileTable->duration = d3Source->duration;
+            ltoFileTable->duration = sourceItem->duration;
             ltoFileTable->spoolNo = _barcode; // change to the LTO spool number
             ltoFileTable->accNo = ""; // don't know the accession number at this point
-            ltoFileTable->catDetail = d3Source->catDetail;
-            ltoFileTable->itemNo = d3Source->itemNo;
+            ltoFileTable->catDetail = sourceItem->catDetail;
+            ltoFileTable->itemNo = sourceItem->itemNo;
     
             ltoFileTable->recordingSessionId = item.sessionId;
             
-            ltoFileTable->sourceSpoolNo = d3Source->spoolNo;
-            ltoFileTable->sourceItemNo = d3Source->itemNo;
-            ltoFileTable->sourceProgNo = d3Source->progNo;
-            ltoFileTable->sourceMagPrefix = d3Source->magPrefix;
-            ltoFileTable->sourceProdCode = d3Source->prodCode;
+            ltoFileTable->sourceFormat = sourceItem->format;
+            ltoFileTable->sourceSpoolNo = sourceItem->spoolNo;
+            ltoFileTable->sourceItemNo = sourceItem->itemNo;
+            ltoFileTable->sourceProgNo = sourceItem->progNo;
+            ltoFileTable->sourceMagPrefix = sourceItem->magPrefix;
+            ltoFileTable->sourceProdCode = sourceItem->prodCode;
             
             auto_ptr<HardDiskDestination> hdd(RecorderDatabase::getInstance()->loadHDDest(item.identifier));
+            ltoFileTable->ingestFormat = hdd->ingestFormat;
             ltoFileTable->hddHostName = hdd->hostName;
             ltoFileTable->hddPath = hdd->path;
             ltoFileTable->hddName = hdd->name;
@@ -997,30 +1007,29 @@ bool TapeExportSession::createLTOFiles(vector<CacheContentItem>& itemsForTransfe
             ltoFileTable->filePackageUID = hdd->filePackageUID;
             ltoFileTable->tapePackageUID = hdd->tapePackageUID;
 
-            // get the digibeta destination through the recording session
+            // get the digibeta destination (if it exists) through the recording session
             Destination* digiDest = 0;
             AutoPointerVector<Destination> dests(RecorderDatabase::getInstance()->loadSessionDestinations(item.sessionId));
             vector<Destination*>::const_iterator destIter;
             for (destIter = dests.get().begin(); destIter != dests.get().end(); destIter++)
             {
-                if ((*destIter)->concreteDestination->getTypeId() == DIGIBETA_DEST_TYPE)
+                if ((*destIter)->concreteDestination->getTypeId() == VIDEO_TAPE_DEST_TYPE)
                 {
                     digiDest = *destIter;
                     break;
                 }
             }
-            REC_ASSERT(digiDest != 0); // the system currently requires a digibeta destination
             
             ltoFileTable->infaxExport.transferDate = item.sessionCreation;
-            ltoFileTable->infaxExport.d3SpoolNo = d3Source->spoolNo;
-            ltoFileTable->infaxExport.d3ItemNo = d3Source->itemNo;
-            ltoFileTable->infaxExport.progTitle = d3Source->progTitle;
-            ltoFileTable->infaxExport.episodeTitle = d3Source->episodeTitle;
-            ltoFileTable->infaxExport.magPrefix = d3Source->magPrefix;
-            ltoFileTable->infaxExport.progNo = d3Source->progNo;
-            ltoFileTable->infaxExport.prodCode = d3Source->prodCode;
+            ltoFileTable->infaxExport.sourceSpoolNo = sourceItem->spoolNo;
+            ltoFileTable->infaxExport.sourceItemNo = sourceItem->itemNo;
+            ltoFileTable->infaxExport.progTitle = sourceItem->progTitle;
+            ltoFileTable->infaxExport.episodeTitle = sourceItem->episodeTitle;
+            ltoFileTable->infaxExport.magPrefix = sourceItem->magPrefix;
+            ltoFileTable->infaxExport.progNo = sourceItem->progNo;
+            ltoFileTable->infaxExport.prodCode = sourceItem->prodCode;
             ltoFileTable->infaxExport.mxfName = ltoFileTable->name;
-            ltoFileTable->infaxExport.digibetaSpoolNo = digiDest->barcode;
+            ltoFileTable->infaxExport.digibetaSpoolNo = (digiDest != 0 ? digiDest->barcode : "");
             ltoFileTable->infaxExport.browseName = hdd->browseName;
             ltoFileTable->infaxExport.ltoSpoolNo = _barcode;
         }

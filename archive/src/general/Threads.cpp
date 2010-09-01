@@ -1,5 +1,5 @@
 /*
- * $Id: Threads.cpp,v 1.1 2008/07/08 16:23:29 philipn Exp $
+ * $Id: Threads.cpp,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * Provides classes to manage mutexes, RW locks and threads
  *
@@ -19,7 +19,10 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
- 
+
+#include <cstring>
+#include <cerrno>
+
 #include "Threads.h"
 #include "RecorderException.h"
 #include "Logging.h"
@@ -32,25 +35,28 @@ using namespace rec;
 
 Mutex::Mutex()
 {
-    if (pthread_mutex_init(&_pthreadMutex, NULL) != 0)
+    int result = pthread_mutex_init(&_pthreadMutex, NULL);
+    if (result != 0)
     {
-        REC_LOGTHROW(("Failed to initialise mutex"));
+        REC_LOGTHROW(("Failed to initialise mutex: %s", strerror(result)));
     }
 }
 
 Mutex::~Mutex()
 {
-    if (pthread_mutex_destroy(&_pthreadMutex) != 0)
+    int result = pthread_mutex_destroy(&_pthreadMutex);
+    if (result != 0)
     {
-        REC_LOG(error, ("Failed to destroy mutex in Mutex destructor\n"));
+        REC_LOG(error, ("Failed to destroy mutex in Mutex destructor: %s", strerror(result)));
     }
 }
     
 void Mutex::lock()
 {
-    if (pthread_mutex_lock(&_pthreadMutex) != 0)
+    int result = pthread_mutex_lock(&_pthreadMutex);
+    if (result != 0)
     {
-        REC_LOGTHROW(("Failed to get a mutex lock"));
+        REC_LOGTHROW(("Failed to get a mutex lock: %s", strerror(result)));
     }
 }
 
@@ -61,9 +67,10 @@ bool Mutex::tryLock()
 
 void Mutex::unlock()
 {
-    if (pthread_mutex_unlock(&_pthreadMutex) != 0)
+    int result = pthread_mutex_unlock(&_pthreadMutex);
+    if (result != 0)
     {
-        REC_LOGTHROW(("Failed to unlock mutex"));
+        REC_LOGTHROW(("Failed to unlock mutex: %s", strerror(result)));
     }
 }
     
@@ -101,41 +108,46 @@ bool TryMutexLocker::haveLock()
 
 ReadWriteLock::ReadWriteLock()
 {
-    if (pthread_rwlock_init(&_pthreadReadWriteLock, NULL) != 0)
+    int result = pthread_rwlock_init(&_pthreadReadWriteLock, NULL);
+    if (result != 0)
     {
-        REC_LOGTHROW(("Failed to initialise read-write lock"));
+        REC_LOGTHROW(("Failed to initialise read-write lock: %s", strerror(result)));
     }
 }
 
 ReadWriteLock::~ReadWriteLock()
 {
-    if (pthread_rwlock_destroy(&_pthreadReadWriteLock) != 0)
+    int result = pthread_rwlock_destroy(&_pthreadReadWriteLock);
+    if (result != 0)
     {
-        REC_LOG(error, ("Failed to destroy mutex in Mutex destructor\n"));
+        REC_LOG(error, ("Failed to destroy mutex in Mutex destructor: %s", strerror(result)));
     }
 }
 
 void ReadWriteLock::readLock()
 {
-    if (pthread_rwlock_rdlock(&_pthreadReadWriteLock) != 0)
+    int result = pthread_rwlock_rdlock(&_pthreadReadWriteLock);
+    if (result != 0)
     {
-        REC_LOGTHROW(("Failed to get a read lock"));
+        REC_LOGTHROW(("Failed to get a read lock: %s", strerror(result)));
     }
 }
 
 void ReadWriteLock::writeLock()
 {
-    if (pthread_rwlock_wrlock(&_pthreadReadWriteLock) != 0)
+    int result = pthread_rwlock_wrlock(&_pthreadReadWriteLock);
+    if (result != 0)
     {
-        REC_LOGTHROW(("Failed to get a write lock"));
+        REC_LOGTHROW(("Failed to get a write lock: %s", strerror(result)));
     }
 }
 
 void ReadWriteLock::unlock()
 {
-    if (pthread_rwlock_unlock(&_pthreadReadWriteLock) != 0)
+    int result = pthread_rwlock_unlock(&_pthreadReadWriteLock);
+    if (result != 0)
     {
-        REC_LOGTHROW(("Failed to unlock read-write lock"));
+        REC_LOGTHROW(("Failed to unlock read-write lock: %s", strerror(result)));
     }
 }
 

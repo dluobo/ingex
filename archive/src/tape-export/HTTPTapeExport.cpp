@@ -1,5 +1,5 @@
 /*
- * $Id: HTTPTapeExport.cpp,v 1.1 2008/07/08 16:26:04 philipn Exp $
+ * $Id: HTTPTapeExport.cpp,v 1.2 2010/09/01 16:05:23 philipn Exp $
  *
  * HTTP interface to the tape export
  *
@@ -118,448 +118,9 @@ static string get_complete_prog_no(string magPrefix, string progNo, string prodC
 
 
 
-class CheckBarcodeSelectionAgent : public ThreadWorker
-{
-public:
-    CheckBarcodeSelectionAgent(TapeExport* tapeExport, string barcode, HTTPConnection* connection)
-    : _tapeExport(tapeExport), _barcode(barcode), _connection(connection), _hasStopped(false) 
-    {}
-    
-    virtual ~CheckBarcodeSelectionAgent()
-    {}
-    
-    virtual void start()
-    {
-        GUARD_THREAD_START(_hasStopped);
-        
-        // check that it is a valid barcode
-        if (!_tapeExport->isLTOBarcode(_barcode))
-        {
-            JSONObject json;
-            json.setBool("accepted", false);
-            json.setString("barcode", _barcode);
-            json.setString("message", "Barcode is not a LTO barcode");
-            _connection->sendJSON(&json);
-            return;
-        }
-        // check the LTO barcode hasn't been used before in a completed session
-        if (RecorderDatabase::getInstance()->ltoUsedInCompletedSession(_barcode))
-        {
-            JSONObject json;
-            json.setBool("accepted", false);
-            json.setString("barcode", _barcode);
-            json.setString("message", "Barcode has been used in a completed session");
-            _connection->sendJSON(&json);
-            return;
-        }
-        
-        // generate the response
-        
-        JSONObject json;
-        json.setBool("accepted", true);
-        json.setString("barcode", _barcode);
-        _connection->sendJSON(&json);
-    }
-    
-    virtual void stop()
-    {
-        // nothing to stop
-    }
-    
-    virtual bool hasStopped() const
-    {
-        return _hasStopped;
-    }
-    
-private:
-    TapeExport* _tapeExport;
-    string _barcode;
-    HTTPConnection* _connection;
-    bool _hasStopped;
-};
-
-
-class CacheContentsAgent : public ThreadWorker
-{
-public:
-    CacheContentsAgent(TapeExport* tapeExport, HTTPConnection* connection)
-    : _tapeExport(tapeExport), _connection(connection), _hasStopped(false) 
-    {}
-    
-    virtual ~CacheContentsAgent()
-    {}
-    
-    virtual void start()
-    {
-        GUARD_THREAD_START(_hasStopped);
-        
-        
-        // load cache contents
-        auto_ptr<CacheContents> contents(_tapeExport->getCache()->getContents());
-        if (!contents.get())
-        {
-            Logging::warning("Failed to load cache contents\n");
-            _connection->sendServerError("Failed to load cache contents");
-            return;
-        }
-    
-        // get the cache status
-        CacheStatus status = _tapeExport->getCache()->getStatus();
-        
-        
-        // get the files currently being transferred to LTO
-        set<string> sessionFileNames = _tapeExport->getSessionFileNames();
-        
-        
-        // generate the response
-        
-        JSONObject json;
-        
-        json.setString("path", contents->path);
-        json.setNumber("statusChangeCount", status.statusChangeCount);
-        
-        JSONArray* jitems = json.setArray("items");
-        vector<CacheContentItem*>::const_iterator iter;
-        for (iter = contents->items.begin(); iter != contents->items.end(); iter++)
-        {
-            JSONObject* tv = jitems->appendObject();
-            tv->setNumber("identifier", (*iter)->identifier);
-            tv->setString("srcSpoolNo", (*iter)->sourceSpoolNo);
-            tv->setNumber("srcItemNo", (*iter)->sourceItemNo);
-            tv->setString("srcMPProgNo", get_complete_prog_no((*iter)->sourceMagPrefix, (*iter)->sourceProgNo, (*iter)->sourceProdCode));
-            tv->setString("sessionCreation", get_timestamp_string((*iter)->sessionCreation));
-            tv->setString("name", (*iter)->name);
-            tv->setNumber("size", (*iter)->size);
-            tv->setNumber("duration", (*iter)->duration);
-            string pseURL = g_pseReportFramedURL;
-            pseURL += "?name=" + (*iter)->pseName;
-            tv->setString("pseURL", pseURL);
-            tv->setNumber("pseResult", (*iter)->pseResult);
-           
-            if (sessionFileNames.find((*iter)->name) != sessionFileNames.end())
-            {
-                tv->setBool("locked", true);
-            }
-            else
-            {
-                tv->setBool("locked", false);
-            }
-        }
-        _connection->sendJSON(&json);
-    }
-    
-    virtual void stop()
-    {
-        // nothing to stop
-    }
-    
-    virtual bool hasStopped() const
-    {
-        return _hasStopped;
-    }
-    
-private:
-    TapeExport* _tapeExport;
-    HTTPConnection* _connection;
-    bool _hasStopped;
-};
-
-
-class DeleteCacheItemsAgent : public ThreadWorker
-{
-public:
-    DeleteCacheItemsAgent(vector<long> items, TapeExport* tapeExport, HTTPConnection* connection)
-    : _items(items), _tapeExport(tapeExport), _connection(connection), _hasStopped(false) 
-    {}
-    
-    virtual ~DeleteCacheItemsAgent()
-    {}
-    
-    virtual void start()
-    {
-        GUARD_THREAD_START(_hasStopped);
-        
-        string name;
-        vector<long>::const_iterator iter;
-        for (iter = _items.begin(); iter != _items.end(); iter++)
-        {
-            name = _tapeExport->getCache()->getItemName(*iter);
-            if (name.size() == 0)
-            {
-                Logging::warning("Not deleting unknown file %ld from cache requested by client\n", (*iter));
-                continue;
-            }
-            
-            if (_tapeExport->isFileUsedInSession(name))
-            {
-                Logging::warning("Not deleting cache file '%s' requested by client because it is being used in a transfer session\n", name.c_str());
-            }
-            else if (_tapeExport->getCache()->removeItem(name))
-            {
-                Logging::info("Deleted cache file '%s' requested by the client\n", name.c_str());
-            }
-            else
-            {
-                Logging::warning("Failed to delete cache file '%s' requested by the client\n", name.c_str());
-            }
-        }
-        
-        _connection->sendOk();
-    }
-    
-    virtual void stop()
-    {
-        // nothing to stop
-    }
-    
-    virtual bool hasStopped() const
-    {
-        return _hasStopped;
-    }
-    
-private:
-    vector<long> _items;
-    TapeExport* _tapeExport;
-    HTTPConnection* _connection;
-    bool _hasStopped;
-};
-
-
-
-class StartAutoSessionAgent : public ThreadWorker
-{
-public:
-    StartAutoSessionAgent(string barcode, HTTPTapeExport* httpTapeExport, HTTPConnection* connection)
-    : _barcode(barcode), _httpTapeExport(httpTapeExport), _connection(connection), _hasStopped(false) 
-    {}
-    
-    virtual ~StartAutoSessionAgent()
-    {}
-    
-    virtual void start()
-    {
-        GUARD_THREAD_START(_hasStopped);
-        
-        // create the session
-        TapeExportSession* session;
-        int result;
-        if ((result = _httpTapeExport->getTapeExport()->startNewAutoSession(_barcode, &session)) != 0)
-        {
-            // a error has occurred
-            JSONObject json;
-            json.setBool("error", true);
-            switch (result)
-            {
-                case SESSION_IN_PROGRESS_FAILURE:
-                    json.setString("errorMessage", "Session is already in progress");
-                    break;
-                case INVALID_BARCODE_FAILURE:
-                    json.setString("errorMessage", "Barcode is invalid");
-                    break;
-                case TAPE_NOT_READY_FAILURE:
-                    json.setString("errorMessage", "Tape is not ready");
-                    break;
-                case BARCODE_USED_BEFORE_FAILURE:
-                    json.setString("errorMessage", "Barcode has been used in a completed session");
-                    break;
-                default:
-                    json.setString("errorMessage", "Internal server error");
-                    break;
-            }
-            json.setString("barcode", _barcode);
-            _connection->sendJSON(&json);
-            return;
-        }
-        
-        // reset the barcode
-        _httpTapeExport->newBarcode("");
-        
-        
-        JSONObject json;
-        json.setBool("error", false);
-        json.setString("barcode", _barcode);
-        json.setString("redirect", "/transfer.html");
-        _connection->sendJSON(&json);
-    }
-    
-    virtual void stop()
-    {
-        // nothing to stop
-    }
-    
-    virtual bool hasStopped() const
-    {
-        return _hasStopped;
-    }
-    
-private:
-    string _barcode;
-    HTTPTapeExport* _httpTapeExport;
-    HTTPConnection* _connection;
-    bool _hasStopped;
-};
-
-
-class StartManualSessionAgent : public ThreadWorker
-{
-public:
-    StartManualSessionAgent(string barcode, vector<long> itemIds, HTTPTapeExport* httpTapeExport, HTTPConnection* connection)
-    : _barcode(barcode), _itemIds(itemIds), _httpTapeExport(httpTapeExport), _connection(connection), _hasStopped(false) 
-    {}
-    
-    virtual ~StartManualSessionAgent()
-    {}
-    
-    virtual void start()
-    {
-        GUARD_THREAD_START(_hasStopped);
-        
-        // create the session
-        TapeExportSession* session;
-        int result;
-        if ((result = _httpTapeExport->getTapeExport()->startNewManualSession(_barcode, _itemIds, &session)) != 0)
-        {
-            // a error has occurred
-            JSONObject json;
-            json.setBool("error", true);
-            switch (result)
-            {
-                case SESSION_IN_PROGRESS_FAILURE:
-                    json.setString("errorMessage", "Session is already in progress");
-                    break;
-                case INVALID_BARCODE_FAILURE:
-                    json.setString("errorMessage", "Barcode is invalid");
-                    break;
-                case EMPTY_ITEM_LIST_FAILURE:
-                    json.setString("errorMessage", "Item list is empty");
-                    break;
-                case MAX_SIZE_EXCEEDED_FAILURE:
-                    json.setString("errorMessage", "Total size of item list exceeds maximum");
-                    break;
-                case ZERO_SIZE_FAILURE:
-                    json.setString("errorMessage", "Total size of item list is zero");
-                    break;
-                case UNKNOWN_ITEM_FAILURE:
-                    json.setString("errorMessage", "Item list contains an unknown item");
-                    break;
-                case TAPE_NOT_READY_FAILURE:
-                    json.setString("errorMessage", "Tape is not ready");
-                    break;
-                case BARCODE_USED_BEFORE_FAILURE:
-                    json.setString("errorMessage", "Barcode has been used in a completed session");
-                    break;
-                default:
-                    json.setString("errorMessage", "Internal server error");
-                    break;
-            }
-            json.setString("barcode", _barcode);
-            _connection->sendJSON(&json);
-            return;
-        }
-        
-        // reset the barcode
-        _httpTapeExport->newBarcode("");
-        
-        
-        JSONObject json;
-        json.setBool("error", false);
-        json.setString("barcode", _barcode);
-        json.setString("redirect", "/transfer.html");
-        _connection->sendJSON(&json);
-    }
-    
-    virtual void stop()
-    {
-        // nothing to stop
-    }
-    
-    virtual bool hasStopped() const
-    {
-        return _hasStopped;
-    }
-    
-private:
-    string _barcode;
-    vector<long> _itemIds;
-    HTTPTapeExport* _httpTapeExport;
-    HTTPConnection* _connection;
-    bool _hasStopped;
-};
-
-
-class LTOContentsAgent : public ThreadWorker
-{
-public:
-    LTOContentsAgent(TapeExport* tapeExport, HTTPConnection* connection)
-    : _tapeExport(tapeExport), _connection(connection), _hasStopped(false) 
-    {}
-    
-    virtual ~LTOContentsAgent()
-    {}
-    
-    virtual void start()
-    {
-        GUARD_THREAD_START(_hasStopped);
-        
-        
-        // load lto contents
-        auto_ptr<LTOContents> contents(_tapeExport->getLTOContents());
-        if (!contents.get())
-        {
-            _connection->sendServerError("No LTO contents available");
-            return;
-        }
-    
-        // generate the response
-        
-        JSONObject json;
-        
-        json.setNumber("ltoStatusChangeCount", contents->ltoStatusChangeCount);
-        
-        JSONArray* jitems = json.setArray("items");
-        vector<LTOFile>::const_iterator iter;
-        for (iter = contents->ltoFiles.begin(); iter != contents->ltoFiles.end(); iter++)
-        {
-            JSONObject* tv = jitems->appendObject();
-            tv->setNumber("status", (*iter).status);
-            tv->setString("transferStarted", ((*iter).transferStarted == g_nullTimestamp) ? 
-                "" : get_time_string((*iter).transferStarted));
-            tv->setString("transferEnded", ((*iter).transferEnded == g_nullTimestamp) ?
-                "" : get_time_string((*iter).transferEnded));
-            tv->setString("name", (*iter).name);
-            tv->setString("cacheName", (*iter).cacheName);
-            tv->setNumber("size", (*iter).size);
-            tv->setNumber("duration", (*iter).duration);
-            tv->setString("srcSpoolNo", (*iter).sourceSpoolNo);
-            tv->setNumber("srcItemNo", (*iter).sourceItemNo);
-            tv->setString("srcMPProgNo", get_complete_prog_no((*iter).sourceMagPrefix, (*iter).sourceProgNo, (*iter).sourceProdCode));
-        }
-        _connection->sendJSON(&json);
-    }
-    
-    virtual void stop()
-    {
-        // nothing to stop
-    }
-    
-    virtual bool hasStopped() const
-    {
-        return _hasStopped;
-    }
-    
-private:
-    TapeExport* _tapeExport;
-    HTTPConnection* _connection;
-    bool _hasStopped;
-};
-
-
-
-
 
 HTTPTapeExport::HTTPTapeExport(HTTPServer* server, TapeExport* tapeExport, BarcodeScanner* scanner)
-: _checkBarcodeSelectionAgent(0), _startSessionAgent(0), _cacheContentsAgent(0), _deleteCacheItemsAgent(0),
-_ltoContentsAgent(0), _tapeExport(tapeExport), _barcodeCount(0)
+: _tapeExport(tapeExport), _barcodeCount(0)
 {
     HTTPServiceDescription* service;
     
@@ -605,11 +166,6 @@ _ltoContentsAgent(0), _tapeExport(tapeExport), _barcodeCount(0)
 
 HTTPTapeExport::~HTTPTapeExport()
 {
-    delete _checkBarcodeSelectionAgent;
-    delete _startSessionAgent;
-    delete _cacheContentsAgent;
-    delete _deleteCacheItemsAgent;
-    delete _ltoContentsAgent;
 }
 
 void HTTPTapeExport::newBarcode(string barcode)
@@ -635,35 +191,35 @@ void HTTPTapeExport::processRequest(HTTPServiceDescription* serviceDescription, 
 {
     // route the connection to the correct function
     
-    if (serviceDescription->getURL().compare(g_tapeExportStatusURL) == 0)
+    if (serviceDescription->getURL() == g_tapeExportStatusURL)
     {
         getTapeExportStatus(connection);
     }
-    else if (serviceDescription->getURL().compare(g_checkSelectionURL) == 0)
+    else if (serviceDescription->getURL() == g_checkSelectionURL)
     {
         checkBarcodeSelection(connection);
     }
-    else if (serviceDescription->getURL().compare(g_cacheContentsURL) == 0)
+    else if (serviceDescription->getURL() == g_cacheContentsURL)
     {
         getCacheContents(connection);
     }
-    else if (serviceDescription->getURL().compare(g_deleteCacheItemsURL) == 0)
+    else if (serviceDescription->getURL() == g_deleteCacheItemsURL)
     {
         deleteCacheItems(connection);
     }
-    else if (serviceDescription->getURL().compare(g_newAutoSessionURL) == 0)
+    else if (serviceDescription->getURL() == g_newAutoSessionURL)
     {
         startNewAutoSession(connection);
     }
-    else if (serviceDescription->getURL().compare(g_newManualSessionURL) == 0)
+    else if (serviceDescription->getURL() == g_newManualSessionURL)
     {
         startNewManualSession(connection);
     }
-    else if (serviceDescription->getURL().compare(g_abortSessionURL) == 0)
+    else if (serviceDescription->getURL() == g_abortSessionURL)
     {
         abortSession(connection);
     }
-    else if (serviceDescription->getURL().compare(g_ltoContentsURL) == 0)
+    else if (serviceDescription->getURL() == g_ltoContentsURL)
     {
         getLTOContents(connection);
     }
@@ -675,7 +231,7 @@ void HTTPTapeExport::processRequest(HTTPServiceDescription* serviceDescription, 
 
 void HTTPTapeExport::processSSIRequest(string name, HTTPConnection* connection)
 {
-    if (name.compare(g_ssiGetPSEReportURL) == 0)
+    if (name == g_ssiGetPSEReportURL)
     {
         if (connection->haveQueryValue("name"))
         {
@@ -704,7 +260,7 @@ void HTTPTapeExport::getTapeExportStatus(HTTPConnection* connection)
 
     // process the URL query string
     string barcodeArg = connection->getQueryValue("barcode");
-    if (barcodeArg.compare("true") == 0)
+    if (barcodeArg == "true")
     {
         includeBarcode = true;
         
@@ -717,25 +273,25 @@ void HTTPTapeExport::getTapeExportStatus(HTTPConnection* connection)
         }
     }
     string sessionArg = connection->getQueryValue("session");
-    if (sessionArg.compare("true") == 0)
+    if (sessionArg == "true")
     {
         includeSession = true;
         sessionStatus = _tapeExport->getSessionStatus();
     }
     string cacheArg = connection->getQueryValue("cache");
-    if (cacheArg.compare("true") == 0)
+    if (cacheArg == "true")
     {
         includeCache = true;
         cacheStatus = _tapeExport->getCache()->getStatus();
     }
     string systemArg = connection->getQueryValue("system");
-    if (systemArg.compare("true") == 0)
+    if (systemArg == "true")
     {
         includeSystem = true;
         systemStatus = _tapeExport->getSystemStatus();
     }
     string prepareArg = connection->getQueryValue("prepare");
-    if (prepareArg.compare("true") == 0)
+    if (prepareArg == "true")
     {
         includePrepare = true;
     }
@@ -821,22 +377,6 @@ void HTTPTapeExport::getTapeExportStatus(HTTPConnection* connection)
 
 void HTTPTapeExport::checkBarcodeSelection(HTTPConnection* connection)
 {
-    LOCK_SECTION(_checkBarcodeSelectionAgentMutex);
-    
-    if (_checkBarcodeSelectionAgent != 0 &&
-        _checkBarcodeSelectionAgent->isRunning())
-    {
-        connection->sendServerBusy("Server is busy with the previous request");
-        return;
-    }
-    
-    // clean-up
-    if (_checkBarcodeSelectionAgent != 0)
-    {
-        SAFE_DELETE(_checkBarcodeSelectionAgent);
-    }
-    
-
     // check it is an LTO tape barcode
     string barcode = connection->getQueryValue("barcode");
     if (!_tapeExport->isLTOBarcode(barcode))
@@ -845,57 +385,99 @@ void HTTPTapeExport::checkBarcodeSelection(HTTPConnection* connection)
         json.setBool("accepted", false);
         json.setString("barcode", barcode);
         json.setString("message", "Barcode is not an LTO tape barcode");
-        
         connection->sendJSON(&json);
         return;
     }
     
+    // check that it is a valid barcode
+    if (!_tapeExport->isLTOBarcode(barcode))
+    {
+        JSONObject json;
+        json.setBool("accepted", false);
+        json.setString("barcode", barcode);
+        json.setString("message", "Barcode is not a LTO barcode");
+        connection->sendJSON(&json);
+        return;
+    }
     
-    // start the agent
-    _checkBarcodeSelectionAgent = new Thread(new CheckBarcodeSelectionAgent(_tapeExport, barcode, connection), true);
-    _checkBarcodeSelectionAgent->start();
+    // check the LTO barcode hasn't been used before in a completed session
+    if (RecorderDatabase::getInstance()->ltoUsedInCompletedSession(barcode))
+    {
+        JSONObject json;
+        json.setBool("accepted", false);
+        json.setString("barcode", barcode);
+        json.setString("message", "Barcode has been used in a completed session");
+        connection->sendJSON(&json);
+        return;
+    }
+    
+    // generate the response
+    
+    JSONObject json;
+    json.setBool("accepted", true);
+    json.setString("barcode", barcode);
+    connection->sendJSON(&json);
 }
 
 void HTTPTapeExport::getCacheContents(HTTPConnection* connection)
 {
-    LOCK_SECTION(_cacheContentsAgentMutex);
-    
-    if (_cacheContentsAgent != 0 &&
-        _cacheContentsAgent->isRunning())
+    // load cache contents
+    auto_ptr<CacheContents> contents(_tapeExport->getCache()->getContents());
+    if (!contents.get())
     {
-        connection->sendServerBusy("Server is busy with the previous request");
+        Logging::warning("Failed to load cache contents\n");
+        connection->sendServerError("Failed to load cache contents");
         return;
     }
-    
-    // clean-up
-    if (_cacheContentsAgent != 0)
-    {
-        SAFE_DELETE(_cacheContentsAgent);
-    }
 
+    // get the cache status
+    CacheStatus status = _tapeExport->getCache()->getStatus();
     
-    // start the agent
-    _cacheContentsAgent = new Thread(new CacheContentsAgent(_tapeExport, connection), true);
-    _cacheContentsAgent->start();
+    
+    // get the files currently being transferred to LTO
+    set<string> sessionFileNames = _tapeExport->getSessionFileNames();
+    
+    
+    // generate the response
+    
+    JSONObject json;
+    
+    json.setString("path", contents->path);
+    json.setNumber("statusChangeCount", status.statusChangeCount);
+    
+    JSONArray* jitems = json.setArray("items");
+    vector<CacheContentItem*>::const_iterator iter;
+    for (iter = contents->items.begin(); iter != contents->items.end(); iter++)
+    {
+        JSONObject* tv = jitems->appendObject();
+        tv->setNumber("identifier", (*iter)->identifier);
+        tv->setString("srcFormat", (*iter)->sourceFormat);
+        tv->setString("srcSpoolNo", (*iter)->sourceSpoolNo);
+        tv->setNumber("srcItemNo", (*iter)->sourceItemNo);
+        tv->setString("srcMPProgNo", get_complete_prog_no((*iter)->sourceMagPrefix, (*iter)->sourceProgNo, (*iter)->sourceProdCode));
+        tv->setString("sessionCreation", get_timestamp_string((*iter)->sessionCreation));
+        tv->setString("name", (*iter)->name);
+        tv->setNumber("size", (*iter)->size);
+        tv->setNumber("duration", (*iter)->duration);
+        string pseURL = g_pseReportFramedURL;
+        pseURL += "?name=" + (*iter)->pseName;
+        tv->setString("pseURL", pseURL);
+        tv->setNumber("pseResult", (*iter)->pseResult);
+       
+        if (sessionFileNames.find((*iter)->name) != sessionFileNames.end())
+        {
+            tv->setBool("locked", true);
+        }
+        else
+        {
+            tv->setBool("locked", false);
+        }
+    }
+    connection->sendJSON(&json);
 }
 
 void HTTPTapeExport::deleteCacheItems(HTTPConnection* connection)
 {
-    LOCK_SECTION(_deleteCacheItemsAgentMutex);
-    
-    if (_deleteCacheItemsAgent != 0 &&
-        _deleteCacheItemsAgent->isRunning())
-    {
-        connection->sendServerBusy("Server is busy with the previous request");
-        return;
-    }
-    
-    // clean-up
-    if (_deleteCacheItemsAgent != 0)
-    {
-        SAFE_DELETE(_deleteCacheItemsAgent);
-    }
-
     // get the "items" post data
     string itemsString = connection->getPostValue("items");
     if (itemsString.size() == 0)
@@ -919,28 +501,38 @@ void HTTPTapeExport::deleteCacheItems(HTTPConnection* connection)
     }
     while ((pos = itemsString.find(",", pos + 1)) != string::npos);
     
-    // start the agent
-    _deleteCacheItemsAgent = new Thread(new DeleteCacheItemsAgent(items, _tapeExport, connection), true);
-    _deleteCacheItemsAgent->start();
+    
+    // delete the items
+    string name;
+    vector<long>::const_iterator iter;
+    for (iter = items.begin(); iter != items.end(); iter++)
+    {
+        name = _tapeExport->getCache()->getItemName(*iter);
+        if (name.size() == 0)
+        {
+            Logging::warning("Not deleting unknown file %ld from cache requested by client\n", (*iter));
+            continue;
+        }
+        
+        if (_tapeExport->isFileUsedInSession(name))
+        {
+            Logging::warning("Not deleting cache file '%s' requested by client because it is being used in a transfer session\n", name.c_str());
+        }
+        else if (_tapeExport->getCache()->removeItem(name))
+        {
+            Logging::info("Deleted cache file '%s' requested by the client\n", name.c_str());
+        }
+        else
+        {
+            Logging::warning("Failed to delete cache file '%s' requested by the client\n", name.c_str());
+        }
+    }
+    
+    connection->sendOk();
 }
 
 void HTTPTapeExport::startNewAutoSession(HTTPConnection* connection)
 {
-    LOCK_SECTION(_startSessionAgentMutex);
-    
-    if (_startSessionAgent != 0 &&
-        _startSessionAgent->isRunning())
-    {
-        connection->sendServerBusy("Server is busy with the previous request");
-        return;
-    }
-    
-    // clean-up
-    if (_startSessionAgent != 0)
-    {
-        SAFE_DELETE(_startSessionAgent);
-    }
-
     // process the URL and get and check the barcode argument
     string barcode = connection->getQueryValue("barcode");
     if (!_tapeExport->isLTOBarcode(barcode))
@@ -955,29 +547,50 @@ void HTTPTapeExport::startNewAutoSession(HTTPConnection* connection)
     }
 
     
-    // start the agent
-    _startSessionAgent = new Thread(new StartAutoSessionAgent(barcode, 
-        this, connection), true);
-    _startSessionAgent->start();
+    // create the session
+    TapeExportSession* session;
+    int result;
+    if ((result = _tapeExport->startNewAutoSession(barcode, &session)) != 0)
+    {
+        // a error has occurred
+        JSONObject json;
+        json.setBool("error", true);
+        switch (result)
+        {
+            case SESSION_IN_PROGRESS_FAILURE:
+                json.setString("errorMessage", "Session is already in progress");
+                break;
+            case INVALID_BARCODE_FAILURE:
+                json.setString("errorMessage", "Barcode is invalid");
+                break;
+            case TAPE_NOT_READY_FAILURE:
+                json.setString("errorMessage", "Tape is not ready");
+                break;
+            case BARCODE_USED_BEFORE_FAILURE:
+                json.setString("errorMessage", "Barcode has been used in a completed session");
+                break;
+            default:
+                json.setString("errorMessage", "Internal server error");
+                break;
+        }
+        json.setString("barcode", barcode);
+        connection->sendJSON(&json);
+        return;
+    }
+    
+    // reset the barcode
+    newBarcode("");
+    
+    
+    JSONObject json;
+    json.setBool("error", false);
+    json.setString("barcode", barcode);
+    json.setString("redirect", "/transfer.html");
+    connection->sendJSON(&json);
 }
 
 void HTTPTapeExport::startNewManualSession(HTTPConnection* connection)
 {
-    LOCK_SECTION(_startSessionAgentMutex);
-    
-    if (_startSessionAgent != 0 &&
-        _startSessionAgent->isRunning())
-    {
-        connection->sendServerBusy("Server is busy with the previous request");
-        return;
-    }
-    
-    // clean-up
-    if (_startSessionAgent != 0)
-    {
-        SAFE_DELETE(_startSessionAgent);
-    }
-
     // process the URL and get and check the barcode argument
     string barcode = connection->getQueryValue("barcode");
     if (!_tapeExport->isLTOBarcode(barcode))
@@ -998,7 +611,7 @@ void HTTPTapeExport::startNewManualSession(HTTPConnection* connection)
         Logging::debug("Client request to start manual transfer session contained no 'items' in query parameter\n");
         return;
     }
-    vector<long> items;
+    vector<long> itemIds;
     long itemId;
     size_t pos = -1;
     do
@@ -1009,15 +622,63 @@ void HTTPTapeExport::startNewManualSession(HTTPConnection* connection)
             Logging::debug("Client request to start manual transfer session contained invalid 'items' in query parameter\n");
             return;
         }
-        items.push_back(itemId);
+        itemIds.push_back(itemId);
     }
     while ((pos = itemsString.find(",", pos + 1)) != string::npos);
     
     
-    // start the agent
-    _startSessionAgent = new Thread(new StartManualSessionAgent(barcode, items,
-        this, connection), true);
-    _startSessionAgent->start();
+    // create the session
+    TapeExportSession* session;
+    int result;
+    if ((result = _tapeExport->startNewManualSession(barcode, itemIds, &session)) != 0)
+    {
+        // a error has occurred
+        JSONObject json;
+        json.setBool("error", true);
+        switch (result)
+        {
+            case SESSION_IN_PROGRESS_FAILURE:
+                json.setString("errorMessage", "Session is already in progress");
+                break;
+            case INVALID_BARCODE_FAILURE:
+                json.setString("errorMessage", "Barcode is invalid");
+                break;
+            case EMPTY_ITEM_LIST_FAILURE:
+                json.setString("errorMessage", "Item list is empty");
+                break;
+            case MAX_SIZE_EXCEEDED_FAILURE:
+                json.setString("errorMessage", "Total size of item list exceeds maximum");
+                break;
+            case ZERO_SIZE_FAILURE:
+                json.setString("errorMessage", "Total size of item list is zero");
+                break;
+            case UNKNOWN_ITEM_FAILURE:
+                json.setString("errorMessage", "Item list contains an unknown item");
+                break;
+            case TAPE_NOT_READY_FAILURE:
+                json.setString("errorMessage", "Tape is not ready");
+                break;
+            case BARCODE_USED_BEFORE_FAILURE:
+                json.setString("errorMessage", "Barcode has been used in a completed session");
+                break;
+            default:
+                json.setString("errorMessage", "Internal server error");
+                break;
+        }
+        json.setString("barcode", barcode);
+        connection->sendJSON(&json);
+        return;
+    }
+    
+    // reset the barcode
+    newBarcode("");
+    
+    
+    JSONObject json;
+    json.setBool("error", false);
+    json.setString("barcode", barcode);
+    json.setString("redirect", "/transfer.html");
+    connection->sendJSON(&json);
 }
 
 void HTTPTapeExport::abortSession(HTTPConnection* connection)
@@ -1036,21 +697,6 @@ void HTTPTapeExport::abortSession(HTTPConnection* connection)
 
 void HTTPTapeExport::getLTOContents(HTTPConnection* connection)
 {
-    LOCK_SECTION(_ltoContentsAgentMutex);
-    
-    if (_ltoContentsAgent != 0 &&
-        _ltoContentsAgent->isRunning())
-    {
-        connection->sendServerBusy("Server is busy with the previous request");
-        return;
-    }
-    
-    // clean-up
-    if (_ltoContentsAgent != 0)
-    {
-        SAFE_DELETE(_ltoContentsAgent);
-    }
-
     if (!_tapeExport->haveSession())
     {
         connection->sendBadRequest("No session in progress");
@@ -1058,16 +704,42 @@ void HTTPTapeExport::getLTOContents(HTTPConnection* connection)
     }
     
     
-    // start the agent
-    _ltoContentsAgent = new Thread(new LTOContentsAgent(_tapeExport, connection), true);
-    _ltoContentsAgent->start();
+    // load lto contents
+    auto_ptr<LTOContents> contents(_tapeExport->getLTOContents());
+    if (!contents.get())
+    {
+        connection->sendServerError("No LTO contents available");
+        return;
+    }
+
+    // generate the response
+    
+    JSONObject json;
+    
+    json.setNumber("ltoStatusChangeCount", contents->ltoStatusChangeCount);
+    
+    JSONArray* jitems = json.setArray("items");
+    vector<LTOFile>::const_iterator iter;
+    for (iter = contents->ltoFiles.begin(); iter != contents->ltoFiles.end(); iter++)
+    {
+        JSONObject* tv = jitems->appendObject();
+        tv->setNumber("status", (*iter).status);
+        tv->setString("transferStarted", ((*iter).transferStarted == g_nullTimestamp) ? 
+            "" : get_time_string((*iter).transferStarted));
+        tv->setString("transferEnded", ((*iter).transferEnded == g_nullTimestamp) ?
+            "" : get_time_string((*iter).transferEnded));
+        tv->setString("name", (*iter).name);
+        tv->setString("cacheName", (*iter).cacheName);
+        tv->setNumber("size", (*iter).size);
+        tv->setNumber("duration", (*iter).duration);
+        tv->setString("srcFormat", (*iter).sourceFormat);
+        tv->setString("srcSpoolNo", (*iter).sourceSpoolNo);
+        tv->setNumber("srcItemNo", (*iter).sourceItemNo);
+        tv->setString("srcMPProgNo", get_complete_prog_no((*iter).sourceMagPrefix, (*iter).sourceProgNo, (*iter).sourceProdCode));
+    }
+    connection->sendJSON(&json);
 }
 
-
-TapeExport* HTTPTapeExport::getTapeExport()
-{
-    return _tapeExport;
-}
 
 string HTTPTapeExport::getPSEReportsURL()
 {
@@ -1083,5 +755,4 @@ void HTTPTapeExport::checkBarcodeStatus()
         _barcode = "";
     }
 }
-
 

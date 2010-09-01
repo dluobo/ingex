@@ -1,5 +1,5 @@
 /*
- * $Id: Timing.cpp,v 1.2 2009/10/12 16:09:18 philipn Exp $
+ * $Id: Timing.cpp,v 1.3 2010/09/01 16:05:22 philipn Exp $
  *
  * Provides sleep functions and timer using a monotonic system clock
  *
@@ -21,7 +21,7 @@
  */
  
  
-#include <errno.h>
+#include <cerrno>
  
 #include "Timing.h"
 #include "RecorderException.h"

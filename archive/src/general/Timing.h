@@ -1,5 +1,5 @@
 /*
- * $Id: Timing.h,v 1.1 2008/07/08 16:23:44 philipn Exp $
+ * $Id: Timing.h,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * Provides sleep functions and timer using a monotonic system clock
  *

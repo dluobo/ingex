@@ -1,5 +1,5 @@
 /*
- * $Id: DatabaseThings.h,v 1.1 2008/07/08 16:23:03 philipn Exp $
+ * $Id: DatabaseThings.h,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * Database enums and classes matching the things stored in the database
  *
@@ -32,10 +32,10 @@
 
 // Database enums
 
-#define D3_TAPE_SOURCE_TYPE             1
+#define VIDEO_TAPE_SOURCE_TYPE          1
 
 #define HARD_DISK_DEST_TYPE             1
-#define DIGIBETA_DEST_TYPE              2
+#define VIDEO_TAPE_DEST_TYPE            2
 
 #define RECORDING_SESSION_STARTED       1
 #define RECORDING_SESSION_COMPLETED     2
@@ -57,14 +57,26 @@
 #define LTO_FILE_TRANSFER_STATUS_FAILED          4
 
 
-// AssetProperty types;
+// AssetProperty types
 extern const char* g_stringPropertyType;
 extern const char* g_datePropertyType;
 extern const char* g_lengthPropertyType;
-    
+extern const char* g_uint32PropertyType;
+
 
 namespace rec
 {
+
+typedef enum
+{
+    UNKNOWN_INGEST_FORMAT = 0,
+    MXF_UNC_8BIT_INGEST_FORMAT = 1,
+    MXF_UNC_10BIT_INGEST_FORMAT = 2,
+    MXF_D10_50_INGEST_FORMAT = 3,
+} IngestFormat;
+
+std::string ingest_format_to_string(IngestFormat format, bool unknownIsDisabled);
+
 
 class AssetProperty
 {
@@ -115,7 +127,7 @@ public:
     virtual bool parseSourceProperties(AssetPropertySource* assetSource, std::string* errMessage) = 0; 
 };
 
-class D3Source;
+class SourceItem;
 
 class Source : public DatabaseTable
 {
@@ -123,7 +135,10 @@ public:
     Source();
     virtual ~Source();
 
-    D3Source* getD3Source(uint32_t itemNo);
+    SourceItem* getSourceItem(uint32_t itemNo);
+    SourceItem* getFirstSourceItem();
+    
+    Source* clone();
     
     std::vector<ConcreteSource*> concreteSources;
     std::string barcode;
@@ -149,18 +164,18 @@ public:
     ConcreteDestination* concreteDestination;
     std::string barcode;
     long sourceId;
-    long d3SourceId;
+    long sourceItemId;
     int ingestItemNo;
 };
 
 
-class D3Source : public ConcreteSource
+class SourceItem : public ConcreteSource
 {
 public:    
-    D3Source();
-    virtual ~D3Source();
+    SourceItem();
+    virtual ~SourceItem();
     
-    virtual int getTypeId() { return D3_TAPE_SOURCE_TYPE; }
+    virtual int getTypeId() { return VIDEO_TAPE_SOURCE_TYPE; }
     virtual std::vector<AssetProperty> getSourceProperties();
     virtual bool parseSourceProperties(AssetPropertySource* assetSource, std::string* errMessage); 
     
@@ -180,6 +195,8 @@ public:
     std::string accNo;
     std::string catDetail;
     uint32_t itemNo;
+    std::string aspectRatioCode;
+    bool modifiedFlag;
 };
 
 
@@ -192,6 +209,7 @@ public:
     virtual int getTypeId() { return HARD_DISK_DEST_TYPE; }
     virtual std::vector<AssetProperty> getDestinationProperties();
     
+    IngestFormat ingestFormat;
     std::string hostName;
     std::string path;
     std::string name;
@@ -216,7 +234,7 @@ public:
     DigibetaDestination();
     virtual ~DigibetaDestination();
     
-    virtual int getTypeId() { return DIGIBETA_DEST_TYPE; }
+    virtual int getTypeId() { return VIDEO_TAPE_DEST_TYPE; }
     virtual std::vector<AssetProperty> getDestinationProperties();
 };
 
@@ -261,7 +279,8 @@ public:
     int status;
     int abortInitiator;
     std::string comments;
-    long totalD3Errors;
+    long totalVTRErrors;
+    long totalDigiBetaDropouts;
     RecordingSessionSourceTable* source;
     std::vector<RecordingSessionDestinationTable*> destinations;
 };
@@ -284,6 +303,7 @@ public:
     CacheItem();
     virtual ~CacheItem();
     
+    IngestFormat ingestFormat;
     long hdDestinationId;
     std::string name;
     std::string browseName;
@@ -295,6 +315,7 @@ public:
     Timestamp sessionCreation;
     std::string sessionComments;
     int sessionStatus;
+    std::string sourceFormat;
     std::string sourceSpoolNo;
     uint32_t sourceItemNo;
     std::string sourceProgNo;
@@ -311,8 +332,9 @@ public:
     virtual ~InfaxExportTable();
 
     Timestamp transferDate;
-    std::string d3SpoolNo;
-    uint32_t d3ItemNo;
+    std::string sourceFormat;
+    std::string sourceSpoolNo;
+    uint32_t sourceItemNo;
     std::string progTitle;
     std::string episodeTitle;
     std::string magPrefix;
@@ -356,6 +378,7 @@ public:
     
     long recordingSessionId;
     
+    IngestFormat ingestFormat;
     std::string hddHostName;
     std::string hddPath;
     std::string hddName;
@@ -363,6 +386,7 @@ public:
     UMID filePackageUID;
     UMID tapePackageUID;
     
+    std::string sourceFormat;
     std::string sourceSpoolNo;
     uint32_t sourceItemNo;
     std::string sourceProgNo;
@@ -408,12 +432,9 @@ public:
 };
 
 
-
 };
 
 
 
-
 #endif
-
 

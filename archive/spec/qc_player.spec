@@ -1,10 +1,10 @@
 Name: qc_player
 Summary: Archive Quality Check Player
-Version: 0.5.2
+Version: 0.5.3
 Release: 1
 License: GPL
 Group: Productivity/Multimedia/Video/Players
-Packager: Jerry Kramskoy <jerry.kramskoy@bbc.co.uk>
+Packager: Philip de Nier <philip.denier@rd.bbc.co.uk>
 BuildRoot: %{_tmppath}/%{name}-root
 Requires: dvsdriver shttpd codecs-for-ffmpeg ffmpeg-h264-aac barcode ImageMagick
 
@@ -53,7 +53,7 @@ cp -a $INGEX_ARCHIVE_DIR/src/qc-report/qc_report $RPM_BUILD_ROOT/usr/local/bin
 cp -a $INGEX_ARCHIVE_DIR/src/qc-report/qc_report_script.sh $RPM_BUILD_ROOT/usr/local/bin
 cp -a $INGEX_DIR/player/ingex_player/player $RPM_BUILD_ROOT/usr/local/bin
 cp -a $INGEX_DIR/player/ingex_player/qc_player $RPM_BUILD_ROOT/usr/local/bin
-cp -a $INGEX_DIR/libMXF/examples/archive/info/d3_mxf_info $RPM_BUILD_ROOT/usr/local/bin
+cp -a $INGEX_DIR/libMXF/examples/archive/info/archive_mxf_info $RPM_BUILD_ROOT/usr/local/bin
 
 mkdir -p $RPM_BUILD_ROOT/home/qc/Desktop
 
@@ -92,6 +92,14 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Mon Feb 1 2010 Philip de Nier, BBC Research 0.5.3
+- Updated to use the latest Ingex software
+- Added overlay showing the video and audio VTR error level
+- Added commandline option to show the VTR error level
+- Changed QC player.desktop to enable the VTR error level display
+- d3_mxf_info utility was renamed to archive_mxf_info
+- disabled DigiBeta dropout marks and indicator
+
 * Wed Oct 8 2008 Jerry Kramskoy, BBC Research 0.5.2
 - Add barcode images to qc report web page
 

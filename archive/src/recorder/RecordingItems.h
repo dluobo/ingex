@@ -1,5 +1,5 @@
 /*
- * $Id: RecordingItems.h,v 1.1 2008/07/08 16:25:50 philipn Exp $
+ * $Id: RecordingItems.h,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * Provides access to the recording item information  
  *
@@ -40,7 +40,7 @@ class RecordingItem
 {
 public:
     RecordingItem();
-    RecordingItem(int id_,int index_, D3Source* d3Source_);
+    RecordingItem(int id_,int index_, SourceItem* sourceItem_);
     RecordingItem(int id_, int index_); // junk item
     ~RecordingItem();
     
@@ -67,7 +67,7 @@ public:
     // source identifier (value between 0 and (num items -1)) in array and info
     // only relevant if isJunk is false
     int id;
-    D3Source* d3Source;
+    SourceItem* sourceItem;
     
     // clip
     int64_t startPosition;
@@ -92,7 +92,7 @@ public:
     bool haveMultipleItems();
     int getItemCount();
     int64_t getTotalInfaxDuration();
-    std::string getD3SpoolNo();
+    std::string getSourceSpoolNo();
     int64_t getTotalDuration();
     
     RecordingItem getFirstItem();
@@ -125,7 +125,7 @@ private:
     bool _multipleItems;
     int _itemsCount;
     int64_t _totalInfaxDuration;
-    std::string _d3SpoolNo;
+    std::string _sourceSpoolNo;
     int64_t _totalDuration;
 
     int _itemClipChangeCount;
@@ -140,5 +140,4 @@ private:
 
 
 #endif
-
 

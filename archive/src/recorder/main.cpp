@@ -1,5 +1,5 @@
 /*
- * $Id: main.cpp,v 1.1 2008/07/08 16:25:36 philipn Exp $
+ * $Id: main.cpp,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * Recorder application main function
  *
@@ -20,10 +20,10 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
  
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <errno.h>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <cerrno>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -42,11 +42,12 @@
 #include "HTTPServer.h"
 #include "RecorderException.h"
 #include "RecorderDatabase.h"
+#include "InfaxAccess.h"
 #include "Logging.h"
+#include "MXFCommon.h"
 #include "Utilities.h"
 #include "Config.h"
 #include "version.h"
-
 
 using namespace std;
 using namespace rec;
@@ -57,60 +58,13 @@ static const char* g_recorderLogSuffix = ".log";
 static const char* g_captureLogPrefix = "capture_";
 static const char* g_captureLogSuffix = ".log";
 
-static const ConfigSpec g_configSpec[] = 
-{
-    // common
-    {"log_dir", NON_EMPTY_STRING_CONFIG_TYPE, true, 0},
-    {"keep_logs", INT_CONFIG_TYPE, true, "30"},
-    {"cache_dir", NON_EMPTY_STRING_CONFIG_TYPE, true, 0},
-    {"browse_dir", NON_EMPTY_STRING_CONFIG_TYPE, true, 0},
-    {"pse_dir", NON_EMPTY_STRING_CONFIG_TYPE, true, 0},
-    {"db_host", NON_EMPTY_STRING_CONFIG_TYPE, true, 0},
-    {"db_name", NON_EMPTY_STRING_CONFIG_TYPE, true, 0},
-    {"db_user", NON_EMPTY_STRING_CONFIG_TYPE, true, 0},
-    {"db_password", NON_EMPTY_STRING_CONFIG_TYPE, true, 0},
-    {"recorder_name", NON_EMPTY_STRING_CONFIG_TYPE, true, 0},
-    {"tape_transfer_lock_file", NON_EMPTY_STRING_CONFIG_TYPE, true, 0},
-
-    // recorder
-    {"recorder_log_level", NON_EMPTY_STRING_CONFIG_TYPE, true, "DEBUG"},
-    {"capture_log_level", INT_CONFIG_TYPE, true, "3"},
-    {"recorder_www_root", NON_EMPTY_STRING_CONFIG_TYPE, true, 0},
-    {"recorder_www_port", INT_CONFIG_TYPE, true, 0},
-    {"recorder_www_replay_port", INT_CONFIG_TYPE, true, 0},
-    {"recorder_vtr_device_1", NON_EMPTY_STRING_CONFIG_TYPE, true, 0},
-    {"recorder_vtr_device_2", NON_EMPTY_STRING_CONFIG_TYPE, true, 0},
-    {"recorder_server_barcode_scanner", BOOL_CONFIG_TYPE, true, "false"},
-    {"recorder_barcode_fifo", NON_EMPTY_STRING_CONFIG_TYPE, false, 0},
-    {"ring_buffer_size", INT_CONFIG_TYPE, true, "125"},
-    {"browse_enable", BOOL_CONFIG_TYPE, true, "false"},
-    {"browse_video_bit_rate", INT_CONFIG_TYPE, true, "2700"},
-    {"browse_thread_count", INT_CONFIG_TYPE, true, "4"},
-    {"browse_overflow_frames", INT_CONFIG_TYPE, true, "50"},
-    {"pse_enable", BOOL_CONFIG_TYPE, true, "false"},
-    {"vitc_lines", INT_ARRAY_CONFIG_TYPE, true, "19,21"},
-    {"ltc_lines", INT_ARRAY_CONFIG_TYPE, true, "15,17"},
-    {"digibeta_barcode_prefixes", NON_EMPTY_STRING_ARRAY_CONFIG_TYPE, true, "CU "},
-    {"num_audio_tracks", INT_CONFIG_TYPE, true, "4"},
-    {"chunking_throttle_fps", INT_CONFIG_TYPE, true, "75"},
-    {"enable_chunking_junk", BOOL_CONFIG_TYPE, true, "true"},
-    {"enable_multi_item", BOOL_CONFIG_TYPE, true, "true"},
-    
-    // debug
-    {"dbg_av_sync", BOOL_CONFIG_TYPE, true, "false"},
-    {"dbg_vitc_failures", BOOL_CONFIG_TYPE, true, "false"},
-    {"dbg_vga_replay", BOOL_CONFIG_TYPE, true, "false"},
-    {"dbg_null_barcode_scanner", BOOL_CONFIG_TYPE, true, "false"},
-    {"dbg_store_thread_buffer", BOOL_CONFIG_TYPE, true, "false"},
-    {"dbg_serial_port_open", BOOL_CONFIG_TYPE, true, "false"},
-};
 
 
 // from version.h
 
 string rec::get_version()
 {
-    return "0.9.6";
+    return "0.11.0";
 }
 
 string rec::get_build_date()
@@ -143,14 +97,12 @@ static void usage(const char* cmd)
     fprintf(stderr, "  -h, --help                   Display this usage message and exit\n");
     fprintf(stderr, "  -v | --version               Display the version and exit\n");
     fprintf(stderr, "* -c | --config <name>         The configuration filename\n");
-    fprintf(stderr, "  --config-string <value>      Configuration string (name/value pairs separated by ;). Overrides configuration file entries.\n");
 }
 
 int main(int argc, const char** argv)
 {
     int cmdlnIndex = 1;
     string configFilename;
-    string configString;
     string recorderName;
     string logDir;
     LogLevel logLevel;
@@ -167,6 +119,25 @@ int main(int argc, const char** argv)
     string vtrSerialDeviceName1;
     string vtrSerialDeviceName2;
     string scannerFIFO;
+    int realUserId = getuid();
+    int numHTTPThreads;
+    int keepLogs;
+    bool haveBarcodeScanner;
+    bool debugBarcodeScanner = false;
+    
+#if !defined(ENABLE_DEBUG)
+    if (realUserId == 0)
+    {
+        fprintf(stderr, "ERROR: Running recorder with root user as real user is not permitted\n");
+        return 1;
+    }
+    if (geteuid() != 0)
+    {
+        fprintf(stderr, "ERROR: Running recorder with root user not the effective user is not permitted\n");
+        fprintf(stderr, "Change the ownership of '%s' to root and set the set-user-id bit\n", argv[0]);
+        return 1;
+    }
+#endif
     
     
     // parse command line arguments
@@ -196,25 +167,14 @@ int main(int argc, const char** argv)
             configFilename = argv[cmdlnIndex + 1];
             cmdlnIndex += 2;
         }
-        else if (strcmp(argv[cmdlnIndex], "--config-string") == 0)
-        {
-            if (cmdlnIndex + 1 >= argc)
-            {
-                usage(argv[0]);
-                fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
-                return 1;
-            }
-            configString = argv[cmdlnIndex + 1];
-            cmdlnIndex += 2;
-        }
         else
         {
             usage(argv[0]);
             fprintf(stderr, "Unknown argument '%s'\n", argv[cmdlnIndex]);
             return 1;
         }
-    }    
-    
+    }
+
     if (configFilename.empty())
     {
         usage(argv[0]);
@@ -223,13 +183,15 @@ int main(int argc, const char** argv)
     }
 
 
-    // setup, read and validate config
-    
-    if (!Config::setSpec(g_configSpec, sizeof(g_configSpec) / sizeof(ConfigSpec)))
+    // drop root privileges by setting the effective user to the real user
+    if (seteuid(realUserId) != 0)
     {
-        fprintf(stderr, "Failed to set default configuration\n");
+        fprintf(stderr, "Failed to set effective user: %s\n", strerror(errno));
         return 1;
     }
+    
+    
+    // read and validate config
     
     if (!Config::readFromFile(configFilename))
     {
@@ -237,16 +199,7 @@ int main(int argc, const char** argv)
         return 1;
     }
 
-    if (!configString.empty())
-    {
-        if (!Config::readFromString(configString))
-        {
-            fprintf(stderr, "Failed to read configuration from string '%s'\n", configString.c_str());
-            return 1;
-        }
-    }
-
-    if (!Config::haveValue("recorder_name"))
+    if (Config::recorder_name.empty())
     {
         string hostName = get_host_name();
         if (hostName.empty())
@@ -254,11 +207,11 @@ int main(int argc, const char** argv)
             fprintf(stderr, "Failed to get the hostname to set the default recorder name: %s\n", strerror(errno));
             return 1;
         }
-        Config::setString("recorder_name", hostName);
+        Config::recorder_name = hostName;
     }
     
     string configError;
-    if (!Config::validate(&configError))
+    if (!Config::validateRecorderConfig(&configError))
     {
         fprintf(stderr, "Invalid configuration: %s\n", configError.c_str());
         return 1;
@@ -267,79 +220,71 @@ int main(int argc, const char** argv)
     
     // read config values and do further checks
 
-    logDir = Config::getString("log_dir");
+    logDir = Config::log_dir;
     if (!directory_exists(logDir))
     {
         fprintf(stderr, "Log directory '%s' does not exist\n", logDir.c_str());
         return 1;
     }
 
-    if (!parse_log_level_string(Config::getString("recorder_log_level"), &logLevel))
-    {
-        fprintf(stderr, "Invalid recorder_log_level in configuration file\n");
-        return 1;
-    }
+    logLevel = Config::recorder_log_level;
     
-    cacheDir = Config::getString("cache_dir");
+    cacheDir = Config::cache_dir;
     if (!check_absolute_directory_exists(cacheDir, "Cache"))
     {
         return 1;
     }
     
-    browseDir = Config::getString("browse_dir");
+    browseDir = Config::browse_dir;
     if (!check_absolute_directory_exists(browseDir, "Browse"))
     {
         return 1;
     }
     
-    pseDir = Config::getString("pse_dir");
+    pseDir = Config::pse_dir;
     if (!check_absolute_directory_exists(pseDir, "PSE"))
     {
         return 1;
     }
+    
+    dbHost = Config::db_host;
+    dbName = Config::db_name;
+    dbUser = Config::db_user;
+    dbPassword = Config::db_password;
+    
+    recorderName = Config::recorder_name;
+    
+    documentRoot = Config::recorder_www_root;
+    port = Config::recorder_www_port;
+    replayPort = Config::recorder_www_replay_port;
+    numHTTPThreads = Config::recorder_www_threads;
+    
+    vtrSerialDeviceName1 = Config::recorder_vtr_device_1;
+    vtrSerialDeviceName2 = Config::recorder_vtr_device_2;
 
-    dbHost = Config::getString("db_host");
-    dbName = Config::getString("db_name");
-    dbUser = Config::getString("db_user");
-    dbPassword = Config::getString("db_password");
-    
-    recorderName = Config::getString("recorder_name");
-    
-    documentRoot = Config::getString("recorder_www_root");
-    port = Config::getInt("recorder_www_port");
-    replayPort = Config::getInt("recorder_www_replay_port");
-    
-    vtrSerialDeviceName1 = Config::getString("recorder_vtr_device_1");
-    vtrSerialDeviceName2 = Config::getString("recorder_vtr_device_2");
-
-    if (Config::getBool("recorder_server_barcode_scanner"))
+    haveBarcodeScanner = Config::recorder_server_barcode_scanner;
+    if (haveBarcodeScanner)
     {
-        if (!Config::getString("recorder_barcode_fifo", &scannerFIFO))
-        {
-            fprintf(stderr, "Missing recorder_barcode_fifo in configuration file\n");
-            return 1;
-        }
-        else if (!file_exists(scannerFIFO))
+        debugBarcodeScanner = Config::dbg_null_barcode_scanner;
+        scannerFIFO = Config::recorder_barcode_fifo;
+        if (!file_exists(scannerFIFO))
         {
             fprintf(stderr, "Scanner FIFO file '%s' does not exist\n", scannerFIFO.c_str());
             return 1;
         }
     }
-
-    if (Config::getInt("chunking_throttle_fps") <= 0)
-    {
-        fprintf(stderr, "Invalid chunking_throttle_fps in configuration file\n");
-        return 1;
-    }
     
+    keepLogs = Config::keep_logs;
+    
+
     
     // initialise the curl library
     curl_global_init(CURL_GLOBAL_ALL);
     
     
     // clear old log files
-    clear_old_log_files(logDir, g_recorderLogPrefix, g_recorderLogSuffix, Config::getInt("keep_logs"));    
-    clear_old_log_files(logDir, g_captureLogPrefix, g_captureLogSuffix, Config::getInt("keep_logs"));    
+    clear_old_log_files(logDir, g_recorderLogPrefix, g_recorderLogSuffix, keepLogs);
+    clear_old_log_files(logDir, g_captureLogPrefix, g_captureLogSuffix, keepLogs);
 
     
     // initialise logging to file and console
@@ -367,6 +312,10 @@ int main(int argc, const char** argv)
     Logging::info("Configuration: %s\n", Config::writeToString().c_str());
     
     
+    // redirect libMXF log messages
+    redirect_mxf_logging();
+    
+    
     // initialise the database
     try
     {
@@ -378,14 +327,24 @@ int main(int argc, const char** argv)
         return 1;
     }
     
+    // initialize the Infax access
+    try
+    {
+        InfaxAccess::initialise();
+    }
+    catch (const RecorderException& ex)
+    {
+        Logging::error("Failed to initialise Infax access: Recorder exception: %s\n", ex.getMessage().c_str());
+        return 1;
+    }
     
     // open the scanner - either using exclusive device access or a fifo written to by an another process
     BarcodeScanner* scanner = 0;
-    if (Config::getBool("recorder_server_barcode_scanner"))
+    if (haveBarcodeScanner)
     {
         try
         {
-            if (Config::getBool("dbg_null_barcode_scanner"))
+            if (debugBarcodeScanner)
             {
                 scanner = new BarcodeScanner();
                 Logging::warning("Using null barcode scanner device\n");
@@ -412,16 +371,33 @@ int main(int argc, const char** argv)
         // add an alias to the pse directory so that we can html link to files
         vector<pair<string, string> > pseAlias;
         pseAlias.push_back(pair<string, string>(HTTPRecorder::getPSEReportsURL(), pseDir));
-        HTTPServer httpServer(port, documentRoot, pseAlias);
+        HTTPServer httpServer(port, documentRoot, pseAlias, numHTTPThreads);
 
         Recorder recorder(recorderName, cacheDir, browseDir, pseDir, replayPort, 
             vtrSerialDeviceName1, vtrSerialDeviceName2);
 
+#if !defined(ENABLE_DEBUG)
+        // drop root privileges permanently now that the recorder has initialized
+        if (seteuid(0) != 0)
+        {
+            throw RecorderException("Failed to set effective user to root user: %s", strerror(errno));
+        }
+        if (setuid(realUserId) != 0)
+        {
+            throw RecorderException("Failed to set user: %s", strerror(errno));
+        }
+        if (setuid(0) != -1)
+        {
+            throw RecorderException("Failed to drop privileges permanently: root privilege could be restored");
+        }
+#endif
+        
         HTTPRecorder httpRec(&httpServer, &recorder, scanner);
         HTTPVTRControl httpVTRControl(&httpServer, recorder.getVTRControls());
 
         httpServer.start();
-            
+        
+        
         while (true)
         {
             // sleep 5 minutes
@@ -434,7 +410,7 @@ int main(int argc, const char** argv)
             if (logFileStartDate != dateNow)
             {
                 string newRecorderLogFilename = join_path(logDir, add_timestamp_to_filename(g_recorderLogPrefix, g_recorderLogSuffix));
-                if (newRecorderLogFilename.compare(recorderLogFilename) != 0)
+                if (newRecorderLogFilename != recorderLogFilename)
                 {
                     FileLogging* fileLogging = dynamic_cast<FileLogging*>(Logging::getInstance());
                     if (fileLogging != 0)
@@ -445,7 +421,7 @@ int main(int argc, const char** argv)
                             Logging::info("Reopened log file from '%s'\n", recorderLogFilename.c_str());
                             recorderLogFilename = newRecorderLogFilename;
                             
-                            clear_old_log_files(logDir, g_recorderLogPrefix, g_recorderLogSuffix, Config::getInt("keep_logs"));    
+                            clear_old_log_files(logDir, g_recorderLogPrefix, g_recorderLogSuffix, keepLogs);    
     
                             Logging::info("Recorder '%s'\n", recorderName.c_str());
                             Logging::info("Version: %s (build %s)\n", get_version().c_str(), get_build_date().c_str());
@@ -459,7 +435,7 @@ int main(int argc, const char** argv)
                 }
                 
                 string newCaptureLogFilename = join_path(logDir, add_timestamp_to_filename(g_captureLogPrefix, g_captureLogSuffix));
-                if (newCaptureLogFilename.compare(captureLogFilename) != 0)
+                if (newCaptureLogFilename != captureLogFilename)
                 {
                     logTF("Reopening log file '%s'\n", newCaptureLogFilename.c_str());
                     if (reopenLogFile(newCaptureLogFilename.c_str()))
@@ -467,7 +443,7 @@ int main(int argc, const char** argv)
                         logTF("Reopened log file from '%s'\n", newCaptureLogFilename.c_str());
                         captureLogFilename = newCaptureLogFilename;
                         
-                        clear_old_log_files(logDir, g_captureLogPrefix, g_captureLogSuffix, Config::getInt("keep_logs"));    
+                        clear_old_log_files(logDir, g_captureLogPrefix, g_captureLogSuffix, keepLogs);
                     }
                     else
                     {

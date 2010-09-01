@@ -91,6 +91,10 @@ function set_lto_contents(contents)
     colDurationE.innerHTML = "Duration";
     rowE.appendChild(colDurationE);
     
+    var colFormatE = document.createElement("td");
+    colFormatE.innerHTML = "Format";
+    rowE.appendChild(colFormatE);
+    
     var colSpoolNoE = document.createElement("td");
     colSpoolNoE.innerHTML = "Spool No";
     rowE.appendChild(colSpoolNoE);
@@ -158,6 +162,10 @@ function set_lto_contents(contents)
         colDurationE.innerHTML = get_duration_string(contents.items[i].duration);
         rowE.appendChild(colDurationE);
 
+        colFormatE = document.createElement("td");
+        colFormatE.innerHTML = contents.items[i].srcFormat;
+        rowE.appendChild(colFormatE);
+
         colSpoolNoE = document.createElement("td");
         colSpoolNoE.innerHTML = contents.items[i].srcSpoolNo.replace(/\ /g, "&nbsp;");
         rowE.appendChild(colSpoolNoE);
@@ -197,6 +205,7 @@ function set_session_status(status)
         update_tag_value("session-status", status.sessionStatus, status.sessionStatus);
         var statusString = get_tape_dev_status_string(status.tapeDevStatus, status.tapeDevDetailedStatus);
         update_tag_value("tape-dev-status", statusString, statusString);
+        update_tag_value("format", status.format, status.format);
         update_tag_value("spool-num", status.spoolNum.replace(/\ /g, "&nbsp;"), status.spoolNum);
         if (status.autoTransferMethod)
         {

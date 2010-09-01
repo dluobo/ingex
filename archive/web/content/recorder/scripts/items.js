@@ -5,6 +5,7 @@ var itemClipInfoRequest = null;
 var pbMarksRequest = null;
 var itemMarkRequest = null;
 var enableItemRequest = true;
+var enableVersionAlert = true;
 
 var itemSourceChangeCount = -1;
 var itemClipChangeCount = -1;
@@ -463,7 +464,7 @@ function create_item_table(item, index, nextItem)
     
         // item data
         set_source_item_value(rowE, "Prog Title", 3, item.progTitle);
-        set_source_item_value(rowE, "Tx Date", 1, item.txDate);
+        set_source_item_value(rowE, "Raster AR", 1, get_aspect_ratio_string(item.aspectRatioCode, item.rasterAspectRatio));
         bodyE.appendChild(rowE);
     
         rowE = document.createElement("tr");
@@ -494,12 +495,13 @@ function create_item_table(item, index, nextItem)
     
         // item data
         set_source_item_value(rowE, "Episode Title", 3, item.episodeTitle);
-        set_source_item_value(rowE, "Spool Descr", 1, item.spoolDescr);
+        set_source_item_value(rowE, "Tx Date", 1, item.txDate);
         bodyE.appendChild(rowE);
     
         // item data
         rowE = document.createElement("tr");
-        set_source_item_value(rowE, "Memo", 5, item.memo);
+        set_source_item_value(rowE, "Memo", 3, item.memo);
+        set_source_item_value(rowE, "Spool Descr", 1, item.spoolDescr);
         bodyE.appendChild(rowE);
     }
 
@@ -555,7 +557,7 @@ function set_source_info(sourceInfo, sessionState)
     // tape info
     
     document.getElementById("src-spool-no").innerHTML = sourceInfo.tapeInfo.spoolNo.replace(/\ /g, "&nbsp;");
-    document.getElementById("src-format").innerHTML = sourceInfo.tapeInfo.format;
+    document.getElementById("src-format").innerHTML = get_format_string(sourceInfo.tapeInfo.format);
     document.getElementById("src-stock-date").innerHTML = sourceInfo.tapeInfo.stockDate;
     document.getElementById("src-total-duration").innerHTML = get_duration_string(sourceInfo.tapeInfo.totalInfaxDuration);
     document.getElementById("src-spool-status").innerHTML = sourceInfo.tapeInfo.spoolStatus;
@@ -683,7 +685,7 @@ function set_session_status(status)
     set_playing_item_state(status.sessionStatus.state, status.sessionStatus.playingItemId, status.sessionStatus.playingItemIndex, 
         status.sessionStatus.playingItemPosition);
     set_progress_bar_state(status.sessionStatus.state, status.sessionStatus.chunkingPosition, status.sessionStatus.chunkingDuration);
-    update_progressbar_pointer(status.sessionStatus.playingFilePosition, status.sessionStatus.playingFileDuration);
+    update_progressbar_pointer(status.replayStatus.position, status.replayStatus.duration);
 
     if (get_tag_state(sourceInfoE) != status.sessionStatus.d3SpoolNo ||
         itemClipChangeCount < 0 || itemSourceChangeCount < 0 ||
@@ -700,7 +702,7 @@ function set_session_status(status)
     }
     else
     {
-        marksDuration = status.sessionStatus.playingFileDuration;
+        marksDuration = status.replayStatus.duration;
     }
     if (pgItemClipChangeCount != status.sessionStatus.itemClipChangeCount ||
         pgMarksDuration != marksDuration)
@@ -733,6 +735,18 @@ function status_handler()
             }
             
             var status = eval("(" + statusRequest.responseText + ")");
+
+            if (!check_api_version(status))
+            {
+                if (enableVersionAlert)
+                {
+                    alert("Invalid API version " + get_api_version() +
+                        ". Require version " + status.apiVersion);
+                    enableVersionAlert = false;
+                }
+                throw "Invalid API version";
+            }
+            enableVersionAlert = true;
             
             set_session_status(status);
             

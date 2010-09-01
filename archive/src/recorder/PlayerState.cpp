@@ -1,5 +1,5 @@
 /*
- * $Id: PlayerState.cpp,v 1.1 2008/07/08 16:25:36 philipn Exp $
+ * $Id: PlayerState.cpp,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * Parses a player state text string and returns the name/value pairs
  *
@@ -22,10 +22,10 @@
  
 #define __STDC_FORMAT_MACROS 1
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <errno.h>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <cerrno>
 
 #include "PlayerState.h"
 #include "Utilities.h"
@@ -135,6 +135,21 @@ bool PlayerState::getInt(string name, int* value)
     return false;
 }
 
+bool PlayerState::getUInt(string name, unsigned int* value)
+{
+    string result;
+    if (getValue(name, &result))
+    {
+        if (sscanf(result.c_str(), "%u", value))
+        {
+            return true;
+        }
+        Logging::warning("PlayerState value '%s' is not a valid unsigned int\n", result.c_str());
+    }
+    
+    return false;
+}
+
 bool PlayerState::getInt64(string name, int64_t* value)
 {
     string result;
@@ -155,12 +170,12 @@ bool PlayerState::getBool(string name, bool* value)
     string result;
     if (getValue(name, &result))
     {
-        if (result.compare("true") == 0)
+        if (result == "true")
         {
             *value = true;
             return true;
         }
-        else if (result.compare("false") == 0)
+        else if (result == "false")
         {
             *value = false;
             return true;

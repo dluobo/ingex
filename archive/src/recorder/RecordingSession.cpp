@@ -1,5 +1,5 @@
 /*
- * $Id: RecordingSession.cpp,v 1.1 2008/07/08 16:25:39 philipn Exp $
+ * $Id: RecordingSession.cpp,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * Manages a recording session
  *
@@ -21,7 +21,7 @@
  */
 
 /*
-    A recording session starts when the user has selected a D3 source and 
+    A recording session starts when the user has selected a source and 
     Digibeta destination and selects to start a session. A recording session 
     ends when the user selects to complete it at the end or abort it at any 
     stage. The system can also abort the session, eg. when the disk space runs 
@@ -29,11 +29,11 @@
     
     The first part of the recording session is the capture from the source tape.
     The capture is started by the user and is stopped either by the user or when
-    the D3 VTR stops.
+    the source VTR stops.
     
-    The second part is the review. A review of a capture of a single-item D3 
+    The second part is the review. A review of a capture of a single-item source
     tape will consist of the user playing back the file and either selecting
-    to complete or abort. A review of a multi-item D3 source will start with the 
+    to complete or abort. A review of a multi-item source will start with the 
     user selecting the order, start and duration of each item using the 
     captured file, chunking that file, playing back and finally completing or
     aborting.
@@ -43,11 +43,13 @@
 // to get the PRI64d etc. macros
 #define __STDC_FORMAT_MACROS 1
 
-#include <errno.h>
+#include <cerrno>
 
 #include "RecordingSession.h"
 #include "Recorder.h"
 #include "RecorderDatabase.h"
+#include "D10MXFWriter.h"
+#include "ArchiveMXFWriter.h"
 #include "Logging.h"
 #include "RecorderException.h"
 #include "Utilities.h"
@@ -65,7 +67,7 @@ using namespace rec;
 #define SDI_SIGNAL_PLAY_WAIT_SEC        2
 
     
-static ArchiveTimecode inv_convert_archive_timecode(Timecode rtc)
+static ArchiveTimecode convert_timecode(rec::Timecode rtc)
 {
     ArchiveTimecode result;
     
@@ -75,23 +77,6 @@ static ArchiveTimecode inv_convert_archive_timecode(Timecode rtc)
     result.frame = rtc.frame;
     
     return result;
-}
-
-static Timecode convert_archive_timecode(ArchiveTimecode rtc)
-{
-    Timecode result;
-    
-    result.hour = rtc.hour;
-    result.min = rtc.min;
-    result.sec = rtc.sec;
-    result.frame = rtc.frame;
-    
-    return result;
-}
-
-static void convert_umid(mxfUMID* from, UMID* to)
-{
-    memcpy(to->bytes, &from->octet0, 32);
 }
 
 static string get_state_string(SessionState state)
@@ -140,36 +125,69 @@ private:
 
 
 
-RecordingSession::RecordingSession(Recorder* recorder, RecordingItems* recordingItems, string digibetaBarcode, int replayPort,
-    VTRControl* d3VTRControl, VTRControl* digibetaVTRControl)
-: _recorder(recorder), _recordingItems(recordingItems), _chunking(0), 
-_digibetaSpoolNo(digibetaBarcode), _d3VTRControl(d3VTRControl), _digibetaVTRControl(digibetaVTRControl),
-_sessionTable(0), _hddDest(0), _infaxDuration(-1), _sessionState(NOT_STARTED_SESSION_STATE),
+RecordingSession::RecordingSession(Recorder* recorder, const Profile *profile, Source* infaxSource,
+    string digibetaBarcode, int replayPort, VTRControl* sourceVTRControl, VTRControl* digibetaVTRControl)
+: _recorder(recorder), _profile(0), _recordingItems(0), _videotapeBackup(false),
+_chunking(0), _digibetaSpoolNo(digibetaBarcode), _sourceVTRControl(sourceVTRControl),
+_digibetaVTRControl(digibetaVTRControl),_sessionTable(0), _hddDest(0), _infaxDuration(-1), _sessionState(NOT_STARTED_SESSION_STATE),
 _startBusy(false), _stopBusy(false), _chunkBusy(false), _completeBusy(false), _abortBusy(false), _diskSpace(0), 
-_vtrErrorCount(0), _pseResult(0), _browseBufferOverflow(false), _duration(-1), _sessionResult(UNKNOWN_SESSION_RESULT),
-_stopThread(false), _threadHasStopped(false),
+_vtrErrorCount(0), _digiBetaDropoutEnabled(false), _digiBetaDropoutCount(0), _pseResult(0),
+_browseBufferOverflow(false), _duration(-1),
+_sessionResult(UNKNOWN_SESSION_RESULT), _stopThread(false), _threadHasStopped(false),
 _startCalled(false), _stopCalled(false), _chunkFileCalled(false), _completeCalled(false), _abortCalled(false), 
 _sessionCommentsCount(0), _replayPort(replayPort), _replay(0)
 {
-    _lastVTRErrorLTC.hour = 99;
-    
-    REC_CHECK(recordingItems->getSource()->barcode.size() > 0);
+    REC_CHECK(infaxSource->barcode.size() > 0);
     
     try
     {
+        _profile = new Profile(profile);
+        _profile->setCachedIngestFormat(infaxSource->getFirstSourceItem()->format);
+        REC_ASSERT(_profile->getIngestFormat() != UNKNOWN_INGEST_FORMAT);
+        Logging::info("Ingest session profile is '%s'\n", _profile->getName().c_str());
+        Logging::info("Ingest format is '%s'\n", ingest_format_to_string(_profile->getIngestFormat(), false).c_str());
+        
+        _videotapeBackup = Config::videotape_backup;
+        if (_videotapeBackup)
+        {
+            REC_ASSERT(!digibetaBarcode.empty());
+            REC_ASSERT(digibetaVTRControl);
+        }
+        
+        _lastVTRErrorLTC.hour = 99;
+        _lastVTRErrorVITC.hour = 99;
+        
+        // initialize capture
+        _digiBetaDropoutEnabled = _recorder->isDigibetaSource(infaxSource);
+        _recorder->getCapture()->set_digibeta_dropout_enable(_digiBetaDropoutEnabled);
+        _recorder->getCapture()->set_browse_enable(_profile->browse_enable);
+        _recorder->getCapture()->set_browse_video_bitrate(_profile->browse_video_bit_rate);
+        _recorder->getCapture()->set_pse_enable(_profile->pse_enable);
+        _recorder->getCapture()->set_num_audio_tracks(_profile->num_audio_tracks);
+        _recorder->getCapture()->set_include_crc32(_profile->include_crc32);
+        _recorder->getCapture()->set_ingest_format(_profile->getIngestFormat());
+        _recorder->getCapture()->set_primary_timecode(_profile->primary_timecode);
+        
+        
+        auto_ptr<Source> source(createRecordingSource(infaxSource));
+        RecorderDatabase::getInstance()->saveSource(source.get());
+        _recordingItems = new RecordingItems(source.get());
+        source.release(); // _recordingItems takes ownership
+        
         _infaxDuration = _recordingItems->getTotalInfaxDuration();
         
         if (_recordingItems->haveMultipleItems())
         {
-            if (!recorder->getCache()->getMultiItemTemplateFilename(recordingItems->getSource()->barcode, recordingItems->getItemCount(), &_mxfFilename))
+            if (!recorder->getCache()->getMultiItemTemplateFilename(_recordingItems->getSource()->barcode,
+                _recordingItems->getItemCount(), &_mxfFilename, &_eventFilename))
             {                             
                 REC_LOGTHROW(("Failed to get a unique filenames from the cache for multi-item source"));
             }
         }
         else
         {
-            if (!recorder->getCache()->getUniqueFilenames(recordingItems->getSource()->barcode, recordingItems->getSource()->databaseId, 
-                &_mxfFilename, &_browseFilename, &_browseTimecodeFilename, &_browseInfoFilename, &_pseFilename))
+            if (!recorder->getCache()->getUniqueFilenames(_recordingItems->getSource()->barcode, _recordingItems->getSource()->databaseId, 
+                &_mxfFilename, &_browseFilename, &_browseTimecodeFilename, &_browseInfoFilename, &_pseFilename, &_eventFilename))
             {                             
                 REC_LOGTHROW(("Failed to get a unique filenames from the cache"));
             }
@@ -182,7 +200,7 @@ _sessionCommentsCount(0), _replayPort(replayPort), _replay(0)
         _sessionTable->status = RECORDING_SESSION_STARTED;
         _sessionTable->abortInitiator = -1;
         _sessionTable->source = new RecordingSessionSourceTable();
-        _sessionTable->source->source = recordingItems->getSource();
+        _sessionTable->source->source = _recordingItems->getSource();
     
         // save session to database
         RecorderDatabase::getInstance()->saveSession(_sessionTable);
@@ -192,39 +210,62 @@ _sessionCommentsCount(0), _replayPort(replayPort), _replay(0)
         {
             // temporary hard disk destination
             _hddDest = addHardDiskDestination(_mxfFilename, _browseFilename, _pseFilename, 
-                recordingItems->getFirstItem().d3Source, -1);
+                _recordingItems->getFirstItem().sourceItem, -1);
         }
         else
         {
             _hddDest = addHardDiskDestination(_mxfFilename, _browseFilename, _pseFilename, 
-                recordingItems->getFirstItem().d3Source, 1);
+                _recordingItems->getFirstItem().sourceItem, 1);
         }
-        addDigibetaDestination(digibetaBarcode);
+        if (_videotapeBackup)
+        {
+            addDigibetaDestination(digibetaBarcode);
+        }
 
 
         _diskSpace = _recorder->getRemainingDiskSpace();
         
-        _d3VTRControl->registerListener(this);
-        _digibetaVTRControl->registerListener(this);
+        _sourceVTRControl->registerListener(this);
+        if (_videotapeBackup)
+        {
+            _digibetaVTRControl->registerListener(this);
+        }
     
         _statusMessage = "Ready";
         setSessionState(READY_SESSION_STATE);
         
         
-        Logging::info("A new recording session was created for source '%s' and digibeta '%s'.", recordingItems->getSource()->barcode.c_str(),
-            digibetaBarcode.c_str());
+        Logging::info("A new recording session was created for source '%s'",
+            _recordingItems->getSource()->barcode.c_str());
+        if (_videotapeBackup)
+        {
+            Logging::infoMore(false, " and digibeta '%s'.", digibetaBarcode.c_str());
+        }
+        else
+        {
+            Logging::infoMore(false, ".");
+        }
         Logging::infoMore(true, "Filenames are '%s', (browse) '%s', (pse) '%s'\n",  
             _mxfFilename.c_str(), _browseFilename.c_str(), _pseFilename.c_str());
     }
     catch (...)
     {
-        delete _sessionTable;
+        delete _profile;
+        delete _chunking;
+        
+        _sourceVTRControl->unregisterListener(this);
+        if (_videotapeBackup)
+        {
+            _digibetaVTRControl->unregisterListener(this);
+        }
         
         vector<Destination*>::const_iterator iter;
         for (iter = _destinations.begin(); iter != _destinations.end(); iter++)
         {
             delete *iter;
         }
+        delete _sessionTable;
+        delete _replay;
         
         throw;
     }
@@ -232,10 +273,14 @@ _sessionCommentsCount(0), _replayPort(replayPort), _replay(0)
 
 RecordingSession::~RecordingSession()
 {
+    delete _profile;
     delete _chunking;
     
-    _d3VTRControl->unregisterListener(this);
-    _digibetaVTRControl->unregisterListener(this);
+    _sourceVTRControl->unregisterListener(this);
+    if (_videotapeBackup)
+    {
+        _digibetaVTRControl->unregisterListener(this);
+    }
     
     vector<Destination*>::const_iterator iter;
     for (iter = _destinations.begin(); iter != _destinations.end(); iter++)
@@ -441,17 +486,20 @@ void RecordingSession::vtrState(VTRControl* vtrControl, VTRState vtrState, const
     
     if (sessionState == RECORDING_SESSION_STATE && vtrState != PLAY_VTR_STATE)
     {
-        if (vtrState == STOPPED_VTR_STATE || vtrState == PAUSED_VTR_STATE)
+        if (vtrState == STOPPED_VTR_STATE || vtrState == PAUSED_VTR_STATE || vtrState == FAST_REWIND_VTR_STATE)
         {
             Logging::warning("Stopping recording because %s VTR %s\n",
-                vtrControl->isD3VTR() ? "D3" : "Digibeta",
-                (vtrState == STOPPED_VTR_STATE) ? "stopped" : "paused");
+                (vtrControl == _sourceVTRControl) ? "Source" : "Backup",
+                (vtrState == STOPPED_VTR_STATE) ? "stopped" : 
+                    ((vtrState == PAUSED_VTR_STATE) ? "pause" : "fast rewinding"));
             stopRecording();
         }
         else
         {
+            // Warning: the recording is not stopped here because it was found that the D3 VTR returned
+            // spurious state changes
             Logging::warning("%s VTR state changed whilst recording: state = %s\n",
-                vtrControl->isD3VTR() ? "D3" : "Digibeta",
+                (vtrControl == _sourceVTRControl) ? "Source" : "Backup",
                 VTRControl::getStateString(vtrState).c_str());
             if (vtrState == OTHER_VTR_STATE)
             {
@@ -461,23 +509,25 @@ void RecordingSession::vtrState(VTRControl* vtrControl, VTRState vtrState, const
     }
 }
 
-void RecordingSession::vtrPlaybackError(VTRControl* vtrControl, int errorCode, Timecode ltc)
+void RecordingSession::vtrPlaybackError(VTRControl* vtrControl, int errorCode, Timecode ltc, Timecode vitc)
 {
     SessionState sessionState = getSessionState();
     
-    if (vtrControl->isD3VTR() && sessionState == RECORDING_SESSION_STATE && ltc != _lastVTRErrorLTC)
+    if (vtrControl == _sourceVTRControl && sessionState == RECORDING_SESSION_STATE &&
+        ltc != _lastVTRErrorLTC && vitc != _lastVTRErrorVITC)
     {
         LOCK_SECTION(_vtrErrorsMutex);
         
         VTRError error;
         error.errorCode = (unsigned char)(errorCode & 0xff);
-        error.vitcTimecode.hour = INVALID_TIMECODE_HOUR; // don't require VITC to match, LTC is more reliable
-        error.ltcTimecode = inv_convert_archive_timecode(ltc);
+        error.ltcTimecode = convert_timecode(ltc);
+        error.vitcTimecode = convert_timecode(vitc);
         
         _vtrErrors.push_back(error);
         _vtrErrorCount++;
         
         _lastVTRErrorLTC = ltc;
+        _lastVTRErrorVITC = vitc;
     }
 }
 
@@ -522,7 +572,7 @@ bool RecordingSession::abortIfRecording(bool fromUser, string comments)
     
     SessionState sessionState = getSessionState();
     
-    if (sessionState == RECORDING_SESSION_STATE)
+    if (sessionState == RECORDING_SESSION_STATE && !_abortCalled)
     {
         _abortCalled = true;
         _abortFromUser = fromUser;
@@ -548,7 +598,7 @@ void RecordingSession::setSessionComments(string comments)
 {
     LOCK_SECTION(_controlMutex);
     
-    if (comments.compare(_sessionComments) != 0)
+    if (comments != _sessionComments)
     {
         _sessionComments = comments;
         _sessionCommentsCount++;
@@ -588,10 +638,10 @@ void RecordingSession::playItem(int id, int index)
             return;
         }
 
-        string filename = _replay->getFilename();
+        string filename = _replay->getStatus().filename;
 
         // start playing if the position is at the start of the item
-        if (filename.compare(item.filename) == 0)
+        if (filename == item.filename)
         {
             _replay->seekPositionOrPlay(item.startPosition);
             return;
@@ -618,8 +668,7 @@ void RecordingSession::playPrevItem()
     }
     
     
-    string filename;
-    int64_t position;
+    ConfidenceReplayStatus replayStatus;
     {
         LOCK_SECTION(_replayMutex);
 
@@ -628,12 +677,11 @@ void RecordingSession::playPrevItem()
             return;
         }
 
-        filename = _replay->getFilename();
-        position = _replay->getPosition();
+        replayStatus = _replay->getStatus();
     }
 
     RecordingItem prevItem;
-    if (!_recordingItems->getPrevStartOfItem(filename, position, &prevItem))
+    if (!_recordingItems->getPrevStartOfItem(replayStatus.filename, replayStatus.position, &prevItem))
     {
         return;
     }
@@ -661,8 +709,7 @@ void RecordingSession::playNextItem()
         return;
     }
 
-    string filename;
-    int64_t position;
+    ConfidenceReplayStatus replayStatus;
     {
         LOCK_SECTION(_replayMutex);
 
@@ -671,12 +718,11 @@ void RecordingSession::playNextItem()
             return;
         }
 
-        filename = _replay->getFilename();
-        position = _replay->getPosition();
+        replayStatus = _replay->getStatus();
     }
 
     RecordingItem nextItem;
-    if (!_recordingItems->getNextStartOfItem(filename, position, &nextItem))
+    if (!_recordingItems->getNextStartOfItem(replayStatus.filename, replayStatus.position, &nextItem))
     {
         return;
     }
@@ -704,8 +750,7 @@ void RecordingSession::seekToEOP()
         return;
     }
 
-    string filename;
-    int64_t position;
+    ConfidenceReplayStatus replayStatus;
     {
         LOCK_SECTION(_replayMutex);
 
@@ -713,18 +758,17 @@ void RecordingSession::seekToEOP()
         {
             return;
         }
-
-        filename = _replay->getFilename();
-        position = _replay->getPosition();
+        
+        replayStatus = _replay->getStatus();
     }
 
     RecordingItem item;
-    if (!_recordingItems->getItem(filename, position, &item))
+    if (!_recordingItems->getItem(replayStatus.filename, replayStatus.position, &item))
     {
         return;
     }
 
-    if (item.duration > 1 && item.d3Source->duration > 1)
+    if (item.duration > 1 && item.sourceItem->duration > 1)
     {
         LOCK_SECTION(_replayMutex);
 
@@ -734,7 +778,7 @@ void RecordingSession::seekToEOP()
         }
 
         int64_t offset = item.startPosition;
-        if (item.duration < item.d3Source->duration)
+        if (item.duration < item.sourceItem->duration)
         {
             // seek to the end of the item
             offset += item.duration - 1;
@@ -742,7 +786,7 @@ void RecordingSession::seekToEOP()
         else
         {
             // seek to the end of programme using the infax duration
-            offset += item.d3Source->duration - 1;
+            offset += item.sourceItem->duration - 1;
         }
 
         _replay->seek(offset);
@@ -763,9 +807,7 @@ int RecordingSession::markItemStart(int* id, bool* isJunk, int64_t* filePosition
         return -1;
     }
     
-    string filename;
-    int64_t position;
-    int64_t duration;
+    ConfidenceReplayStatus replayStatus;
     {
         LOCK_SECTION(_replayMutex);
 
@@ -774,27 +816,25 @@ int RecordingSession::markItemStart(int* id, bool* isJunk, int64_t* filePosition
             return -1;
         }
         
-        filename = _replay->getFilename();
-        position = _replay->getPosition();
-        duration = _replay->getDuration();
+        replayStatus = _replay->getStatus();
     }
     
     int itemId;
     bool itemIsJunk;
-    int result = _recordingItems->markItemStart(filename, position, &itemId, &itemIsJunk);
+    int result = _recordingItems->markItemStart(replayStatus.filename, replayStatus.position, &itemId, &itemIsJunk);
     if (result >= 0)
     {
         LOCK_SECTION(_replayMutex);
 
         if (_replay != 0)
         {
-            _replay->setMark(position, ITEM_START_MARK);
+            _replay->setMark(replayStatus.position, ITEM_START_MARK);
         }
         
         *id = itemId;
         *isJunk = itemIsJunk;
-        *filePosition = position;
-        *fileDuration = duration;
+        *filePosition = replayStatus.position;
+        *fileDuration = replayStatus.duration;
     }
     
     return result;
@@ -823,13 +863,70 @@ int RecordingSession::clearItem(int id, int index, int64_t* filePosition)
 
         if (_replay != 0)
         {
-            if (clearedFilename.compare(_replay->getFilename()) == 0)
+            if (clearedFilename == _replay->getStatus().filename)
             {
                 _replay->clearMark(clearedPosition, ITEM_START_MARK);
             }
         }
         
         *filePosition = clearedPosition;
+    }
+    
+    return result;
+}
+
+int RecordingSession::markItemStart()
+{
+    int id;
+    bool isJunk;
+    int64_t filePosition;
+    int64_t fileDuration;
+    
+    return markItemStart(&id, &isJunk, &filePosition, &fileDuration);
+}
+
+int RecordingSession::clearItem()
+{
+    TRY_LOCK_SECTION(_sessionStateChangeMutex);
+    if (!HAVE_SECTION_LOCK())
+    {
+        return -1;
+    }
+    
+    SessionState sessionState = getSessionState();
+    if (sessionState != PREPARE_CHUNKING_SESSION_STATE)
+    {
+        return -1;
+    }
+    
+    ConfidenceReplayStatus replayStatus;
+    {
+        LOCK_SECTION(_replayMutex);
+
+        if (_replay == 0)
+        {
+            return -1;
+        }
+        
+        replayStatus = _replay->getStatus();
+    }
+    
+    RecordingItem item;
+    if (!_recordingItems->getItem(replayStatus.filename, replayStatus.position, &item) ||
+        item.startPosition - replayStatus.position != 0)
+    {
+        return -1;
+    }
+    
+    
+    string clearedFilename;
+    int64_t clearedPosition;
+    int result = _recordingItems->clearItem(item.id, item.index, &clearedFilename, &clearedPosition);
+    if (result >= 0)
+    {
+        LOCK_SECTION(_replayMutex);
+
+        _replay->clearMark(clearedPosition, ITEM_START_MARK);
     }
     
     return result;
@@ -908,7 +1005,7 @@ SessionState RecordingSession::getState()
     return getSessionState();
 }
 
-SessionStatus RecordingSession::getStatus()
+SessionStatus RecordingSession::getStatus(const ConfidenceReplayStatus* replayStatus)
 {
     checkChunkingStatus();
 
@@ -916,13 +1013,15 @@ SessionStatus RecordingSession::getStatus()
 
     SessionStatus status;
     status.state = state;
-    status.d3SpoolNo = _recordingItems->getD3SpoolNo();
+    status.sourceSpoolNo = _recordingItems->getSourceSpoolNo();
     status.digibetaSpoolNo = _digibetaSpoolNo;
     status.statusMessage = _statusMessage;
     status.itemCount = _recordingItems->getItemCount();
+    status.fileFormat = ingest_format_to_string(_profile->getIngestFormat(), false);
     status.filename = strip_path(_mxfFilename);
     status.browseFilename = strip_path(_browseFilename);
     status.vtrErrorCount = _vtrErrorCount;
+    status.digiBetaDropoutEnabled = _digiBetaDropoutEnabled;
     status.sessionCommentsCount = _sessionCommentsCount;
     
     
@@ -932,27 +1031,43 @@ SessionStatus RecordingSession::getStatus()
         RecordStats stats;
         _recorder->getCapture()->get_record_stats(&stats);
         
-        status.vtrState = _d3VTRControl->getState();
+        status.vtrState = _sourceVTRControl->getState();
         if (state == RECORDING_SESSION_STATE)
         {
+            status.digiBetaDropoutCount = stats.digiBetaDropoutCount;
             status.duration = stats.current_framecount;
-            status.startVITC = convert_archive_timecode(stats.start_vitc);
-            status.startLTC = convert_archive_timecode(stats.start_ltc);
+            status.startVITC = stats.start_vitc;
+            status.startLTC = stats.start_ltc;
+            status.currentVITC = stats.current_vitc;
+            status.currentLTC = stats.current_ltc;
             status.fileSize = stats.file_size;
             status.browseFileSize = stats.browse_file_size;
             status.browseBufferOverflow = _browseBufferOverflow;
+            status.dvsBuffersEmpty = stats.dvs_buffers_empty;
+            status.numDVSBuffers = stats.num_dvs_buffers;
+            status.captureBufferPos = stats.capture_buffer_pos;
+            status.storeBufferPos = stats.store_buffer_pos;
+            status.browseBufferPos = stats.browse_buffer_pos;
+            status.ringBufferSize = stats.ring_buffer_size;
         }
         else
         {
+            status.digiBetaDropoutCount = 0;
             status.duration = 0;
             status.startVITC = g_nullTimecode;
             status.startLTC = g_nullTimecode;
+            status.currentVITC = g_nullTimecode;
+            status.currentLTC = g_nullTimecode;
             status.fileSize = 0;
             status.browseFileSize = 0;
             status.browseBufferOverflow = false;
+            status.dvsBuffersEmpty = 0;
+            status.numDVSBuffers = 0;
+            status.captureBufferPos = 0;
+            status.storeBufferPos = 0;
+            status.browseBufferPos = 0;
+            status.ringBufferSize = 0;
         }
-        status.currentVITC = convert_archive_timecode(stats.current_vitc);
-        status.currentLTC = convert_archive_timecode(stats.current_ltc);
         status.infaxDuration = _infaxDuration;
         status.diskSpace = _diskSpace;
         status.startBusy = _startBusy;
@@ -977,6 +1092,7 @@ SessionStatus RecordingSession::getStatus()
             }
         }
         
+        status.digiBetaDropoutCount = _digiBetaDropoutCount;
         status.duration = _duration;
         status.pseResult = _pseResult;
         status.infaxDuration = _infaxDuration;
@@ -988,25 +1104,14 @@ SessionStatus RecordingSession::getStatus()
             status.readyToChunk = Chunking::readyForChunking(_recordingItems);
         }
         
-        string filename;
-        {
-            LOCK_SECTION(_replayMutex);
-    
-            if (_replay != 0)
-            {
-                filename = _replay->getFilename();
-                status.playingFilePosition = _replay->getPosition();
-                status.playingFileDuration = _replay->getDuration();
-            }
-        }
-        if (status.playingFilePosition >= 0)
+        if (replayStatus->position >= 0)
         {
             RecordingItem item;
-            if (_recordingItems->getItem(filename, status.playingFilePosition, &item))
+            if (_recordingItems->getItem(replayStatus->filename, replayStatus->position, &item))
             {
                 status.playingItemId = item.id;
                 status.playingItemIndex = item.index;
-                status.playingItemPosition = status.playingFilePosition - item.startPosition;
+                status.playingItemPosition = replayStatus->position - item.startPosition;
             }
         }
         
@@ -1053,6 +1158,18 @@ void RecordingSession::forwardConfidenceReplayControl(string command)
     _replay->forwardControl(command);
 }
 
+ConfidenceReplayStatus RecordingSession::getConfidenceReplayStatus()
+{
+    LOCK_SECTION(_replayMutex);
+
+    if (_replay == 0)
+    {
+        return ConfidenceReplayStatus();
+    }
+    
+    return _replay->getStatus();
+}
+
 RecordingItems* RecordingSession::getRecordingItems()
 {
     return _recordingItems;
@@ -1063,10 +1180,34 @@ void RecordingSession::getFinalResult(SessionResult* result, string* sourceSpool
     LOCK_SECTION(_sessionStateMutex);
     
     *result = _sessionResult;
-    *sourceSpoolNo = _recordingItems->getFirstItem().d3Source->spoolNo;
+    *sourceSpoolNo = _recordingItems->getFirstItem().sourceItem->spoolNo;
     *failureReason = _sessionFailureReason;
 }
 
+uint32_t RecordingSession::getContentPackageSize() const
+{
+    switch (_profile->getIngestFormat())
+    {
+        case MXF_UNC_8BIT_INGEST_FORMAT:
+            return ArchiveMXFWriter::getContentPackageSize(true, _profile->num_audio_tracks, _profile->include_crc32);
+        case MXF_UNC_10BIT_INGEST_FORMAT:
+            return ArchiveMXFWriter::getContentPackageSize(false, _profile->num_audio_tracks, _profile->include_crc32);
+        case MXF_D10_50_INGEST_FORMAT:
+            return D10MXFWriter::getContentPackageSize();
+        case UNKNOWN_INGEST_FORMAT:
+        default:
+            REC_ASSERT(false);
+    }
+}
+
+Source* RecordingSession::createRecordingSource(Source* infaxSource)
+{
+    // TODO: using clone() might change if infaxSource becomes a different class
+    Source* source = infaxSource->clone();
+    source->recInstance = 0; // not relevant in infaxSource
+    
+    return source;
+}
 
 void RecordingSession::setSessionState(SessionState state)
 {
@@ -1118,44 +1259,47 @@ bool RecordingSession::startRecordingInternal()
     
     // check the VTRs are accessible and that tapes are present
     
-    VTRState d3VTRState = _d3VTRControl->getState();
-    if (d3VTRState == NOT_CONNECTED_VTR_STATE)
+    VTRState sourceVTRState = _sourceVTRControl->getState();
+    if (sourceVTRState == NOT_CONNECTED_VTR_STATE)
     {
-        _statusMessage = "D3 VTR disconnected";
-        Logging::warning("Attempted to start recording when D3 VTR is not connected\n");
+        _statusMessage = "Source VTR disconnected";
+        Logging::warning("Attempted to start recording when source VTR is not connected\n");
         return false;
     }
-    else if (d3VTRState == REMOTE_LOCKOUT_VTR_STATE)
+    else if (sourceVTRState == REMOTE_LOCKOUT_VTR_STATE)
     {
-        _statusMessage = "D3 VTR remote lockout";
-        Logging::warning("Attempted to start recording when D3 VTR is remote locked out\n");
+        _statusMessage = "Source VTR remote lockout";
+        Logging::warning("Attempted to start recording when source VTR is remote locked out\n");
         return false;
     }
-    else if (d3VTRState == TAPE_UNTHREADED_VTR_STATE)
+    else if (sourceVTRState == TAPE_UNTHREADED_VTR_STATE)
     {
-        _statusMessage = "No D3 Tape";
-        Logging::warning("Attempted to start recording without D3 tape in VTR\n");
+        _statusMessage = "No source Tape";
+        Logging::warning("Attempted to start recording without source tape in VTR\n");
         return false;
     }
     
-    VTRState digibetaVTRState = _digibetaVTRControl->getState();
-    if (digibetaVTRState == NOT_CONNECTED_VTR_STATE)
+    if (_videotapeBackup)
     {
-        _statusMessage = "Digibeta VTR disconnected";
-        Logging::warning("Attempted to start recording when Digibeta VTR is not accessible\n");
-        return false;
-    }
-    else if (digibetaVTRState == REMOTE_LOCKOUT_VTR_STATE)
-    {
-        _statusMessage = "Digibeta VTR remote lockout";
-        Logging::warning("Attempted to start recording when Digibeta VTR is remote locked out\n");
-        return false;
-    }
-    else if (digibetaVTRState == TAPE_UNTHREADED_VTR_STATE)
-    {
-        _statusMessage = "No Digibeta Tape";
-        Logging::warning("Attempted to start recording without Digibeta tape in VTR\n");
-        return false;
+        VTRState digibetaVTRState = _digibetaVTRControl->getState();
+        if (digibetaVTRState == NOT_CONNECTED_VTR_STATE)
+        {
+            _statusMessage = "Digibeta VTR disconnected";
+            Logging::warning("Attempted to start recording when Digibeta VTR is not accessible\n");
+            return false;
+        }
+        else if (digibetaVTRState == REMOTE_LOCKOUT_VTR_STATE)
+        {
+            _statusMessage = "Digibeta VTR remote lockout";
+            Logging::warning("Attempted to start recording when Digibeta VTR is remote locked out\n");
+            return false;
+        }
+        else if (digibetaVTRState == TAPE_UNTHREADED_VTR_STATE)
+        {
+            _statusMessage = "No Digibeta Tape";
+            Logging::warning("Attempted to start recording without Digibeta tape in VTR\n");
+            return false;
+        }
     }
 
     
@@ -1187,23 +1331,23 @@ bool RecordingSession::startRecordingInternal()
     Logging::info("Starting recording...\n");
 
     
-    // pause the D3 VTR if it is not already playing
-    if (_d3VTRControl->getState() != PLAY_VTR_STATE && _d3VTRControl->getState() != PAUSED_VTR_STATE)
+    // pause the source VTR if it is not already playing
+    if (_sourceVTRControl->getState() != PLAY_VTR_STATE && _sourceVTRControl->getState() != PAUSED_VTR_STATE)
     {
-        _statusMessage = "Pause D3 VTR";
+        _statusMessage = "Pause source VTR";
     
         // stop and set standby on
-        if (!_d3VTRControl->stop())
+        if (!_sourceVTRControl->stop())
         {
-            Logging::warning("Failed to stop D3 VTR\n");
-            _statusMessage = "Stop D3 VTR failed";
+            Logging::warning("Failed to stop source VTR\n");
+            _statusMessage = "Stop source VTR failed";
             return false;
         }
         sleep_msec(500);
-        if (!_d3VTRControl->standbyOn())
+        if (!_sourceVTRControl->standbyOn())
         {
-            Logging::warning("Failed to set D3 VTR standby on\n");
-            _statusMessage = "Standby D3 VTR failed";
+            Logging::warning("Failed to set source VTR standby on\n");
+            _statusMessage = "Standby source VTR failed";
             return false;
         }
         
@@ -1211,14 +1355,14 @@ bool RecordingSession::startRecordingInternal()
         Timer timer;
         timer.start(5 * SEC_IN_USEC);
         VTRState state;
-        while ((state = _d3VTRControl->getState()) != PAUSED_VTR_STATE && timer.timeLeft() > 0)
+        while ((state = _sourceVTRControl->getState()) != PAUSED_VTR_STATE && timer.timeLeft() > 0)
         {
             sleep_msec(2);
         }
         if (state != PAUSED_VTR_STATE)
         {
-            Logging::error("Failed to set the D3 VTR in paused state within 5 seconds; state != PAUSED_VTR_STATE\n");
-            _statusMessage = "Pause D3 VTR failed";
+            Logging::error("Failed to set the source VTR in paused state within 5 seconds; state != PAUSED_VTR_STATE\n");
+            _statusMessage = "Pause source VTR failed";
             return false;
         }
 
@@ -1227,7 +1371,8 @@ bool RecordingSession::startRecordingInternal()
     }
     
     // pause the Digibeta VTR if it is not already recording
-    if (_digibetaVTRControl->getState() != RECORDING_VTR_STATE && _digibetaVTRControl->getState() != PAUSED_VTR_STATE)
+    if (_videotapeBackup && _digibetaVTRControl->getState() != RECORDING_VTR_STATE &&
+        _digibetaVTRControl->getState() != PAUSED_VTR_STATE)
     {
         _statusMessage = "Pause Digibeta VTR";
     
@@ -1262,15 +1407,15 @@ bool RecordingSession::startRecordingInternal()
         }
     }
     
-    // start the D3 vtr playing
-    if (_d3VTRControl->getState() != PLAY_VTR_STATE)
+    // start the source vtr playing
+    if (_sourceVTRControl->getState() != PLAY_VTR_STATE)
     {
-        _statusMessage = "Play D3 VTR";
+        _statusMessage = "Play source VTR";
         
-        if (!_d3VTRControl->play())
+        if (!_sourceVTRControl->play())
         {
-            Logging::warning("Failed to start D3 VTR playing\n");
-            _statusMessage = "Play D3 VTR failed";
+            Logging::warning("Failed to start source VTR playing\n");
+            _statusMessage = "Play source VTR failed";
             return false;
         }
     
@@ -1278,14 +1423,14 @@ bool RecordingSession::startRecordingInternal()
         Timer timer;
         timer.start(5 * SEC_IN_USEC);
         VTRState state;
-        while ((state = _d3VTRControl->getState()) != PLAY_VTR_STATE && timer.timeLeft() > 0)
+        while ((state = _sourceVTRControl->getState()) != PLAY_VTR_STATE && timer.timeLeft() > 0)
         {
             sleep_msec(2);
         }
         if (state != PLAY_VTR_STATE)
         {
-            Logging::error("Failed to start the D3 VTR playing within 5 seconds; state != PLAY_VTR_STATE\n");
-            _statusMessage = "Play D3 VTR failed";
+            Logging::error("Failed to start the source VTR playing within 5 seconds; state != PLAY_VTR_STATE\n");
+            _statusMessage = "Play source VTR failed";
             return false;
         }
     }
@@ -1302,21 +1447,13 @@ bool RecordingSession::startRecordingInternal()
         Logging::error("Failed to start recording - SDI signal is bad\n");
         _statusMessage = "SDI signal bad";
 
-        // stop the VTRs
-        if (!_d3VTRControl->stop())
-        {
-            Logging::warning("Failed to stop the D3 VTR after start recording failed\n");
-        }
-        if (!_digibetaVTRControl->stop())
-        {
-            Logging::warning("Failed to stop the Digibeta VTR after start recording failed\n");
-        }
+        stopVTRs("after start recording failed");
         return false;
     }
 
     
     // start the Digibeta recording
-    if (_digibetaVTRControl->getState() != RECORDING_VTR_STATE)
+    if (_videotapeBackup && _digibetaVTRControl->getState() != RECORDING_VTR_STATE)
     {
         _statusMessage = "Record Digibeta VTR";
         
@@ -1325,16 +1462,7 @@ bool RecordingSession::startRecordingInternal()
             Logging::warning("Failed to start recording in Digibeta VTR\n");
             _statusMessage = "Digibeta VTR record failed";
 
-            // stop the VTRs
-            if (!_d3VTRControl->stop())
-            {
-                Logging::warning("Failed to stop the D3 VTR after start recording failed\n");
-            }
-            if (!_digibetaVTRControl->stop())
-            {
-                Logging::warning("Failed to stop the Digibeta VTR after start recording failed\n");
-            }
-            
+            stopVTRs("after start recording failed");
             return false;
         }
     }
@@ -1345,12 +1473,16 @@ bool RecordingSession::startRecordingInternal()
     {
         _statusMessage = "Start record";
         
+        Rational aspectRatio = Recorder::getRasterAspectRatio(_recordingItems->getFirstItem().sourceItem->aspectRatioCode);
+        
         bool result;
         if (_recordingItems->haveMultipleItems())
         {
             // capture multi-item source
             result = _recorder->getCapture()->start_multi_item_record(
-                _recorder->getCache()->getCompleteCreatingFilename(_mxfFilename).c_str());
+                _recorder->getCache()->getCompleteCreatingFilename(_mxfFilename).c_str(),
+                _recorder->getCache()->getCompleteCreatingEventFilename(_eventFilename).c_str(),
+                &aspectRatio);
         }
         else
         {
@@ -1359,22 +1491,16 @@ bool RecordingSession::startRecordingInternal()
                 _recorder->getCache()->getCompleteCreatingFilename(_mxfFilename).c_str(),
                 _recorder->getCache()->getCompleteBrowseFilename(_browseFilename).c_str(),
                 _recorder->getCache()->getCompleteBrowseFilename(_browseTimecodeFilename).c_str(),
-                _recorder->getCache()->getCompletePSEFilename(_pseFilename).c_str());
+                _recorder->getCache()->getCompletePSEFilename(_pseFilename).c_str(),
+                _recorder->getCache()->getCompleteCreatingEventFilename(_eventFilename).c_str(),
+                &aspectRatio);
         }
         if (!result)
         {
             Logging::error("Failed to start recording\n");
             _statusMessage = "Start record failed";
             
-            // stop the VTRs
-            if (!_d3VTRControl->stop())
-            {
-                Logging::warning("Failed to stop the D3 VTR after start recording failed\n");
-            }
-            if (!_digibetaVTRControl->stop())
-            {
-                Logging::warning("Failed to stop the Digibeta VTR after start recording failed\n");
-            }
+            stopVTRs("after start recording failed");
             return false;
         }
     }
@@ -1383,15 +1509,7 @@ bool RecordingSession::startRecordingInternal()
         Logging::error("Failed to start recording: %s\n", ex.getMessage().c_str());
         _statusMessage = "Start record failed";
         
-        // stop the VTRs
-        if (!_d3VTRControl->stop())
-        {
-            Logging::warning("Failed to stop the D3 VTR after start recording failed\n");
-        }
-        if (!_digibetaVTRControl->stop())
-        {
-            Logging::warning("Failed to stop the Digibeta VTR after start recording failed\n");
-        }
+        stopVTRs("after start recording failed");
         return false;
     }
     catch (...)
@@ -1399,69 +1517,55 @@ bool RecordingSession::startRecordingInternal()
         Logging::error("Failed to start recording\n");
         _statusMessage = "Start record failed";
         
-        // stop the VTRs
-        if (!_d3VTRControl->stop())
-        {
-            Logging::warning("Failed to stop the D3 VTR after start recording failed\n");
-        }
-        if (!_digibetaVTRControl->stop())
-        {
-            Logging::warning("Failed to stop the Digibeta VTR after start recording failed\n");
-        }
+        stopVTRs("after start recording failed");
         return false;
     }
     
     
-    // check that the Digibeta is recording
-    Timer timer;
-    timer.start(5 * SEC_IN_USEC);
-    VTRState state = _digibetaVTRControl->getState();
-    while (state != RECORDING_VTR_STATE && timer.timeLeft() > 0)
+    if (_videotapeBackup)
     {
-        sleep_msec(2);
-        state = _digibetaVTRControl->getState();
-    }
-    if (state != RECORDING_VTR_STATE)
-    {
-        Logging::error("Failed to start the Digibeta VTR recording within 5 seconds; state != RECORDING_VTR_STATE\n");
-        _statusMessage = "Digibeta VTR record failed";
-
-        // abort the capture
-        try
+        // check that the Digibeta is recording
+        Timer timer;
+        timer.start(5 * SEC_IN_USEC);
+        VTRState state = _digibetaVTRControl->getState();
+        while (state != RECORDING_VTR_STATE && timer.timeLeft() > 0)
         {
-            if (_recorder->getCapture()->abort_record())
+            sleep_msec(2);
+            state = _digibetaVTRControl->getState();
+        }
+        if (state != RECORDING_VTR_STATE)
+        {
+            Logging::error("Failed to start the Digibeta VTR recording within 5 seconds; state != RECORDING_VTR_STATE\n");
+            _statusMessage = "Digibeta VTR record failed";
+    
+            // abort the capture
+            try
             {
-                Logging::info("Capture was aborted\n");
+                if (_recorder->getCapture()->abort_record())
+                {
+                    Logging::info("Capture was aborted\n");
+                }
+                else
+                {
+                    // TODO: need to halt the recorder completely?
+                    Logging::warning("Failed to abort capture\n");
+                }
             }
-            else
+            catch (...)
             {
-                // TODO: need to halt the recorder completely?
-                Logging::warning("Failed to abort capture\n");
+                Logging::warning("Failed to abort capture: exception thrown\n");
             }
+            
+            stopVTRs("after start recording failed");
+            return false;
         }
-        catch (...)
-        {
-            Logging::warning("Failed to abort capture: exception thrown\n");
-        }
-        
-        // stop the VTRs
-        if (!_d3VTRControl->stop())
-        {
-            Logging::warning("Failed to stop the D3 VTR after start recording failed\n");
-        }
-        if (!_digibetaVTRControl->stop())
-        {
-            Logging::warning("Failed to stop the Digibeta VTR after start recording failed\n");
-        }
-        
-        return false;
     }
 
     
     if (!_recordingItems->haveMultipleItems())
     {
         // write the browse info file
-        if (Config::getBool("browse_enable"))
+        if (_profile->browse_enable)
         {
             RecordingItem firstItem = _recordingItems->getFirstItem();
             writeBrowseInfo(_recorder->getCache()->getCompleteBrowseFilename(_browseInfoFilename), 
@@ -1507,16 +1611,18 @@ bool RecordingSession::stopRecordingInternal()
         if (_recordingItems->haveMultipleItems())
         {
             stopOk = _recorder->getCapture()->stop_multi_item_record(-1, 
-                _vtrErrors.size() > 0 ? &_vtrErrors[0] : 0, _vtrErrors.size(), &capturePSEResult);
+                _vtrErrors.size() > 0 ? &_vtrErrors[0] : 0, _vtrErrors.size(),
+                &capturePSEResult, &_digiBetaDropoutCount);
         }
         else
         {
             RecordingItem firstItem = _recordingItems->getFirstItem();
-            InfaxData d3Infax;
-            getInfaxData(&firstItem, &d3Infax);
+            InfaxData sourceInfaxData;
+            getInfaxData(&firstItem, &sourceInfaxData);
                 
-            stopOk = _recorder->getCapture()->stop_record(-1, &d3Infax, 
-                _vtrErrors.size() > 0 ? &_vtrErrors[0] : 0, _vtrErrors.size(), &capturePSEResult);
+            stopOk = _recorder->getCapture()->stop_record(-1, &sourceInfaxData, 
+                _vtrErrors.size() > 0 ? &_vtrErrors[0] : 0, _vtrErrors.size(),
+                &capturePSEResult, &_digiBetaDropoutCount);
         }
         if (!stopOk)
         {
@@ -1534,7 +1640,7 @@ bool RecordingSession::stopRecordingInternal()
         }
         else
         {
-            _pseResult = 0; // unknown
+            _pseResult = 0; // unknown and no PSE report written
         }
         
         
@@ -1542,9 +1648,9 @@ bool RecordingSession::stopRecordingInternal()
         RecordStats stats;
         _recorder->getCapture()->get_record_stats(&stats);
         _duration = stats.current_framecount;
-        convert_umid(&stats.materialPackageUID, &_materialPackageUID);
-        convert_umid(&stats.filePackageUID, &_filePackageUID);
-        convert_umid(&stats.tapePackageUID, &_tapePackageUID);
+        _materialPackageUID = stats.materialPackageUID;
+        _filePackageUID = stats.filePackageUID;
+        _tapePackageUID = stats.tapePackageUID;
         _recordingItems->initialise(_recorder->getCache()->getCompleteCreatingFilename(_mxfFilename), _duration);
 
         // next state
@@ -1572,7 +1678,7 @@ bool RecordingSession::stopRecordingInternal()
 
 
     // stop the Digibeta recording
-    if (_digibetaVTRControl->getState() == RECORDING_VTR_STATE)
+    if (_videotapeBackup && _digibetaVTRControl->getState() == RECORDING_VTR_STATE)
     {
         _statusMessage = "Stop Digibeta VTR";
         
@@ -1582,14 +1688,14 @@ bool RecordingSession::stopRecordingInternal()
         }
     }
     
-    // stop the D3 VTR playing
-    if (_d3VTRControl->getState() == PLAY_VTR_STATE)
+    // stop the source VTR playing
+    if (_sourceVTRControl->getState() == PLAY_VTR_STATE)
     {
-        _statusMessage = "Stop D3 VTR";
+        _statusMessage = "Stop source VTR";
         
-        if (!_d3VTRControl->stop())
+        if (!_sourceVTRControl->stop())
         {
-            Logging::warning("Failed to stop D3 VTR playing when stopping the recording\n");
+            Logging::warning("Failed to stop source VTR playing when stopping the recording\n");
         }
     }
     
@@ -1664,8 +1770,10 @@ bool RecordingSession::chunkFileInternal()
     Chunking* worker = 0;
     try
     {
-        Chunking* worker = new Chunking(this, _sessionTable, 
-            _recorder->getCache()->getCompleteCreatingFilename(_mxfFilename), _recordingItems);
+        bool disablePSE = (_pseResult != PSE_RESULT_PASSED && _pseResult != PSE_RESULT_FAILED);
+        
+        Chunking* worker = new Chunking(this, _sessionTable,
+            _recorder->getCache()->getCompleteCreatingFilename(_mxfFilename), _recordingItems, disablePSE);
         _chunking = new Thread(worker, true);
         _chunking->start();
     }
@@ -1774,7 +1882,8 @@ bool RecordingSession::completeInternal(string comments)
         
         _sessionTable->status = RECORDING_SESSION_COMPLETED;
         _sessionTable->comments = comments.substr(0, 255);
-        _sessionTable->totalD3Errors = _vtrErrorCount;
+        _sessionTable->totalVTRErrors = _vtrErrorCount;
+        _sessionTable->totalDigiBetaDropouts = _digiBetaDropoutCount;
         
         
         // update hard disk destination
@@ -1891,7 +2000,8 @@ bool RecordingSession::abortInternal(bool fromUser, string comments)
     }
 
     // stop the digibeta vtr recording
-    if (sessionState == RECORDING_SESSION_STATE && _digibetaVTRControl->getState() == RECORDING_VTR_STATE)
+    if (_videotapeBackup && sessionState == RECORDING_SESSION_STATE &&
+        _digibetaVTRControl->getState() == RECORDING_VTR_STATE)
     {
         _statusMessage = "Stop Digibeta VTR";
         
@@ -1903,14 +2013,14 @@ bool RecordingSession::abortInternal(bool fromUser, string comments)
     }
     
     // stop the vtr playing
-    if (sessionState == RECORDING_SESSION_STATE && _d3VTRControl->getState() == PLAY_VTR_STATE)
+    if (sessionState == RECORDING_SESSION_STATE && _sourceVTRControl->getState() == PLAY_VTR_STATE)
     {
-        _statusMessage = "Stop D3 VTR";
+        _statusMessage = "Stop source VTR";
         
-        Logging::info("Stopping D3 for aborted session\n");
-        if (!_d3VTRControl->stop())
+        Logging::info("Stopping source for aborted session\n");
+        if (!_sourceVTRControl->stop())
         {
-            Logging::warning("Failed to stop D3 VTR playing when aborting\n");
+            Logging::warning("Failed to stop source VTR playing when aborting\n");
         }
     }
     
@@ -2043,7 +2153,7 @@ void RecordingSession::writeBrowseInfo(string filename, RecordingItem* item, boo
     
     fprintf(file, "\n\n\nSource Information\n\n");
     
-    vector<AssetProperty> sourceProps = item->d3Source->getSourceProperties();
+    vector<AssetProperty> sourceProps = item->sourceItem->getSourceProperties();
     vector<AssetProperty>::const_iterator iter;
     for (iter = sourceProps.begin(); iter != sourceProps.end(); iter++)
     {
@@ -2055,31 +2165,31 @@ void RecordingSession::writeBrowseInfo(string filename, RecordingItem* item, boo
 
 void RecordingSession::getInfaxData(RecordingItem* item, InfaxData* infaxData)
 {
-    D3Source* d3Source = item->d3Source;
+    SourceItem* sourceItem = item->sourceItem;
 
     // initialise and ensure strings are null terminated
     memset((void*)infaxData, 0, sizeof(InfaxData));
     
-    strncpy(infaxData->format, d3Source->format.c_str(), FORMAT_SIZE - 1);
-    strncpy(infaxData->progTitle, d3Source->progTitle.c_str(), PROGTITLE_SIZE - 1);
-    strncpy(infaxData->epTitle, d3Source->episodeTitle.c_str(), EPTITLE_SIZE - 1);
-    infaxData->txDate.year = d3Source->txDate.year;
-    infaxData->txDate.month = d3Source->txDate.month;
-    infaxData->txDate.day = d3Source->txDate.day;
-    strncpy(infaxData->magPrefix, d3Source->magPrefix.c_str(), MAGPREFIX_SIZE - 1);
-    strncpy(infaxData->progNo, d3Source->progNo.c_str(), PROGNO_SIZE - 1);
-    strncpy(infaxData->prodCode, d3Source->prodCode.c_str(), PRODCODE_SIZE - 1);
-    strncpy(infaxData->spoolStatus, d3Source->spoolStatus.c_str(), SPOOLSTATUS_SIZE - 1);
-    infaxData->stockDate.year = d3Source->stockDate.year;
-    infaxData->stockDate.month = d3Source->stockDate.month;
-    infaxData->stockDate.day = d3Source->stockDate.day;
-    strncpy(infaxData->spoolDesc, d3Source->spoolDescr.c_str(), SPOOLDESC_SIZE - 1);
-    strncpy(infaxData->memo, d3Source->memo.c_str(), MEMO_SIZE - 1);
-    infaxData->duration = d3Source->duration / 25; // "/ 25" because infax precision in seconds
-    strncpy(infaxData->spoolNo, d3Source->spoolNo.c_str(), SPOOLNO_SIZE - 1);
-    strncpy(infaxData->accNo, d3Source->accNo.c_str(), ACCNO_SIZE - 1);
-    strncpy(infaxData->catDetail, d3Source->catDetail.c_str(), CATDETAIL_SIZE - 1);
-    infaxData->itemNo = d3Source->itemNo;
+    strncpy(infaxData->format, sourceItem->format.c_str(), FORMAT_SIZE - 1);
+    strncpy(infaxData->progTitle, sourceItem->progTitle.c_str(), PROGTITLE_SIZE - 1);
+    strncpy(infaxData->epTitle, sourceItem->episodeTitle.c_str(), EPTITLE_SIZE - 1);
+    infaxData->txDate.year = sourceItem->txDate.year;
+    infaxData->txDate.month = sourceItem->txDate.month;
+    infaxData->txDate.day = sourceItem->txDate.day;
+    strncpy(infaxData->magPrefix, sourceItem->magPrefix.c_str(), MAGPREFIX_SIZE - 1);
+    strncpy(infaxData->progNo, sourceItem->progNo.c_str(), PROGNO_SIZE - 1);
+    strncpy(infaxData->prodCode, sourceItem->prodCode.c_str(), PRODCODE_SIZE - 1);
+    strncpy(infaxData->spoolStatus, sourceItem->spoolStatus.c_str(), SPOOLSTATUS_SIZE - 1);
+    infaxData->stockDate.year = sourceItem->stockDate.year;
+    infaxData->stockDate.month = sourceItem->stockDate.month;
+    infaxData->stockDate.day = sourceItem->stockDate.day;
+    strncpy(infaxData->spoolDesc, sourceItem->spoolDescr.c_str(), SPOOLDESC_SIZE - 1);
+    strncpy(infaxData->memo, sourceItem->memo.c_str(), MEMO_SIZE - 1);
+    infaxData->duration = sourceItem->duration / 25; // "/ 25" because infax precision in seconds
+    strncpy(infaxData->spoolNo, sourceItem->spoolNo.c_str(), SPOOLNO_SIZE - 1);
+    strncpy(infaxData->accNo, sourceItem->accNo.c_str(), ACCNO_SIZE - 1);
+    strncpy(infaxData->catDetail, sourceItem->catDetail.c_str(), CATDETAIL_SIZE - 1);
+    infaxData->itemNo = sourceItem->itemNo;
 }
 
 bool RecordingSession::replayFile(string filename, int64_t startPosition, bool showSecondMarkBar)
@@ -2097,12 +2207,14 @@ bool RecordingSession::replayFile(string filename, int64_t startPosition, bool s
     
     try
     {
-        if (_replay == 0 || _replay->getFilename().compare(filename) != 0)
+        if (_replay == 0 || _replay->getStatus().filename != filename)
         {
             // first replay or replay of a different file
             SAFE_DELETE(_replay);
         
-            _replay = new ConfidenceReplay(filename, _replayPort, startPosition, showSecondMarkBar);
+            string eventFilename = _recorder->getCache()->getCreatingEventFilename(filename);
+            
+            _replay = new ConfidenceReplay(filename, eventFilename, _replayPort, startPosition, showSecondMarkBar);
             _replay->start();
         }
         else
@@ -2174,18 +2286,19 @@ void RecordingSession::checkChunkingStatus()
     setSessionState(REVIEWING_SESSION_STATE);
 }
 
-HardDiskDestination* RecordingSession::addHardDiskDestination(string mxfFilename, string browseFilename, 
-    string pseFilename, D3Source* d3Source, int ingestItemNo)
+HardDiskDestination* RecordingSession::addHardDiskDestination(string mxfFilename,
+    string browseFilename, string pseFilename, SourceItem* sourceItem, int ingestItemNo)
 {
     //  hard disk destination
     _destinations.push_back(new Destination());
     Destination* dest = _destinations.back();
     dest->sourceId = _recordingItems->getSource()->databaseId;
-    dest->d3SourceId = (ingestItemNo > 0) ? d3Source->databaseId : -1;
+    dest->sourceItemId = (ingestItemNo > 0) ? sourceItem->databaseId : -1;
     dest->ingestItemNo = ingestItemNo;
     dest->concreteDestination = new HardDiskDestination();
     
     HardDiskDestination* hddDest = dynamic_cast<HardDiskDestination*>(dest->concreteDestination);
+    hddDest->ingestFormat = _profile->getIngestFormat();
     hddDest->hostName = get_host_name();
     hddDest->path = _recorder->getCache()->getPath();
     hddDest->name = mxfFilename;
@@ -2204,18 +2317,20 @@ HardDiskDestination* RecordingSession::addHardDiskDestination(string mxfFilename
     RecorderDatabase::getInstance()->saveSessionDestinations(_sessionTable);
     
     // register new hdd destination item with the cache
-    _recorder->getCache()->registerCreatingItem(hddDest, _sessionTable, d3Source, ingestItemNo < 1);
+    _recorder->getCache()->registerCreatingItem(hddDest, _sessionTable, sourceItem, ingestItemNo < 1);
     
     return hddDest;
 }
 
 DigibetaDestination* RecordingSession::addDigibetaDestination(string barcode)
 {
+    REC_ASSERT(_videotapeBackup);
+    
     _destinations.push_back(new Destination());
     Destination* dest = _destinations.back();
     dest->barcode = barcode;
     dest->sourceId = _recordingItems->getSource()->databaseId;
-    dest->d3SourceId = -1;
+    dest->sourceItemId = -1;
     dest->ingestItemNo = -1;
     DigibetaDestination* digibetaDestination = new DigibetaDestination();
     dest->concreteDestination = digibetaDestination;
@@ -2235,4 +2350,17 @@ void RecordingSession::updateHardDiskDestination(HardDiskDestination* hddDest)
     _recorder->getCache()->updateCreatingItem(hddDest, _sessionTable);
     RecorderDatabase::getInstance()->updateHardDiskDestination(hddDest);
 }        
+
+void RecordingSession::stopVTRs(string errorContext)
+{
+    // stop the VTRs
+    if (!_sourceVTRControl->stop())
+    {
+        Logging::warning("Failed to stop the source VTR %s\n", errorContext.c_str());
+    }
+    if (_videotapeBackup && !_digibetaVTRControl->stop())
+    {
+        Logging::warning("Failed to stop the Digibeta VTR %s\n", errorContext.c_str());
+    }
+}
 

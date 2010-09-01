@@ -1,5 +1,5 @@
 /*
- * $Id: Logging.h,v 1.1 2008/07/08 16:23:34 philipn Exp $
+ * $Id: Logging.h,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * Provides methods for various levels of logging to standard streams and/or file
  *
@@ -23,23 +23,27 @@
 #ifndef __RECORDER_LOGGING_H__
 #define __RECORDER_LOGGING_H__
 
-#include <stdarg.h>
-#include <stdio.h>
-#include <memory>
+#include <cstdarg>
+#include <cstdio>
 
+#include <memory>
 #include <string>
 
 
 // eg. REC_LOGTHROW(("Something failed with error %d", 1));
 #define REC_LOGTHROW(params) \
+{ \
     Logging::error params; \
     Logging::errorMore(false, ", near %s:%d\n", __FILE__, __LINE__); \
-    throw RecorderException params;
+    throw RecorderException params; \
+}
 
 // eg. REC_LOG(warning, ("Something might be wrong here %d", 1));
 #define REC_LOG(type, params) \
+{ \
     Logging::type params; \
-    Logging::type ## More(false, ", near %s:%d\n", __FILE__, __LINE__);
+    Logging::type ## More(false, ", near %s:%d\n", __FILE__, __LINE__); \
+}
     
 
 
@@ -47,13 +51,13 @@ namespace rec
 {
 
 // lowest message type to log, starting with error at the top and ending in debug
-typedef enum LogLevel
+typedef enum
 { 
     LOG_LEVEL_ERROR = 0, 
     LOG_LEVEL_WARNING, 
     LOG_LEVEL_INFO, 
     LOG_LEVEL_DEBUG 
-};
+} LogLevel;
 
 class Logging
 {

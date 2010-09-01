@@ -1,5 +1,5 @@
 #! /bin/sh
-# $Id: qc_setup,v 1.1 2008/07/08 16:00:21 philipn Exp $
+# $Id: qc_setup,v 1.2 2010/09/01 16:05:22 philipn Exp $
 # Author: Philip de Nier
 #
 # /etc/init.d/qc_setup

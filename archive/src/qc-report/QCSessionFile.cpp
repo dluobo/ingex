@@ -1,5 +1,5 @@
 /*
- * $Id: QCSessionFile.cpp,v 1.1 2008/07/08 16:25:19 philipn Exp $
+ * $Id: QCSessionFile.cpp,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * Provides access to information contained in a qc_player session file
  *
@@ -22,9 +22,10 @@
 
 #define __STDC_FORMAT_MACROS 1
 
-#include <stdio.h>
-#include <ctype.h>
-#include <errno.h>
+#include <cstdio>
+#include <cctype>
+#include <cerrno>
+#include <cstring>
 #include <inttypes.h>
 
 #include "QCSessionFile.h"
@@ -314,5 +315,4 @@ QCSessionFile::QCSessionFile(string filename)
 QCSessionFile::~QCSessionFile()
 {
 }
-    
 

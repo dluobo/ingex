@@ -1,5 +1,5 @@
 /*
- * $Id: BarcodeScannerFIFO.h,v 1.1 2008/07/08 16:19:55 philipn Exp $
+ * $Id: BarcodeScannerFIFO.h,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * Used to reads barcodes from a FIFO file
  *

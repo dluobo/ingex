@@ -1,5 +1,5 @@
 /*
- * $Id: TapeExport.cpp,v 1.1 2008/07/08 16:26:09 philipn Exp $
+ * $Id: TapeExport.cpp,v 1.2 2010/09/01 16:05:23 philipn Exp $
  *
  * Provides main access to the tape export application
  *
@@ -84,15 +84,14 @@ TapeExport::TapeExport(string tapeDevice, string recorderName, string cacheDirec
 _maxFiles(0), _cache(0), _sessionDone(false), _session(0), _sessionThread(0),
 _lastSessionTable(0), _tape(0)
 {
-    _ltoBarcodePrefixes = Config::getStringArray("lto_barcode_prefixes");
-    _remDurationFactor = get_archive_mxf_content_package_size(Config::getInt("num_audio_tracks"));
-    _maxTotalSize = Config::getInt("max_lto_size_gb") * 1000LL * 1000LL * 1000LL;
+    _ltoBarcodePrefixes = Config::lto_barcode_prefixes;
+    _remDurationFactor = get_archive_mxf_content_package_size(false, 4, true);
+    _maxTotalSize = Config::max_lto_size_gb * 1000LL * 1000LL * 1000LL;
     _minTotalSize = 0;
-    _maxFiles = Config::getInt("max_auto_files_on_lto");
-
+    _maxFiles = Config::max_auto_files_on_lto;
     
     _tape = new ::Tape(tapeDevice);
-    _tape->set_log_level(Config::getInt("tape_log_level"));
+    _tape->set_log_level(Config::tape_log_level);
     if (!_tape->init_tape_monitor())
     {
         REC_LOGTHROW(("Failed to access tape device"));

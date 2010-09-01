@@ -1,5 +1,5 @@
 /*
- * $Id: Utilities.h,v 1.1 2008/07/08 16:23:46 philipn Exp $
+ * $Id: Utilities.h,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * Common utility functions
  *
@@ -58,6 +58,9 @@ std::string int_to_string(int value);
 std::string long_to_string(long value);
 std::string int64_to_string(int64_t value);
 
+std::string primary_timecode_to_string(PrimaryTimecode primaryTimecode);
+bool primary_timecode_from_string(std::string strValue, PrimaryTimecode *primaryTimecode);
+
 Date get_todays_date();
 
 Timestamp get_localtime_now();
@@ -71,12 +74,13 @@ bool directory_exists(std::string path);
 bool directory_path_is_absolute(std::string path);
 bool file_exists(std::string filename);
 
-bool parse_log_level_string(std::string level, LogLevel* level);
-
 std::string trim_string(std::string val);
 
 
 bool is_valid_barcode(std::string barcode);
+
+
+int64_t timecode_to_position(const rec::Timecode &tc);
 
 
 template <class Element>

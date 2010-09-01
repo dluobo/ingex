@@ -1,44 +1,287 @@
 /*
- * $Id: Config.cpp,v 1.1 2008/07/08 16:23:25 philipn Exp $
+ * $Id: Config.cpp,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * Read, write and store an application's configuration options
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2010  British Broadcasting Corporation.
+ * All Rights Reserved.
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
+ * Author: Philip de Nier
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+ * 02110-1301, USA.
  */
 
-/*
-    An application would typically use setSpec() to set a configuration spec, 
-    load a configuration using readFromFile() and then call validate().
-*/
-
-
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <errno.h>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <cerrno>
 
 #include "Config.h"
 #include "Utilities.h"
 #include "RecorderException.h"
 
-
 using namespace std;
 using namespace rec;
 
+
+#define CHECK_PARSE(cmd) \
+    if ((cmd) < 0) \
+        return false;
+
+#define CHECK_STRING_NOT_SET(var, err) \
+    if (var.empty()) { \
+        *err = #var " not set"; \
+        return false; \
+    }
+
+#define CHECK_INT_NOT_SET(var, err) \
+    if (var <= 0) { \
+        *err = #var " not set"; \
+        return false; \
+    }
+
+#define CHECK_ARRAY_NOT_SET(var, err) \
+    if (var.empty()) { \
+        *err = #var " not set"; \
+        return false; \
+    }
+
+
+
+static bool find_value(map<string, string> &config_pairs, string name, string *value)
+{
+    map<string, string>::const_iterator result = config_pairs.find(name);
+    if (result == config_pairs.end())
+        return false;
+
+    *value = result->second;
+    return true;
+}
+
+static int parse_string(map<string, string> &config_pairs, string name, string *value)
+{
+    string str_value;
+    if (!find_value(config_pairs, name, &str_value))
+        return 1;
+    
+    *value = str_value;
+    return 0;
+}
+
+static int parse_string_array(map<string, string> &config_pairs, string name, vector<string> *value)
+{
+    string str_value;
+    if (!find_value(config_pairs, name, &str_value))
+        return 1;
+    
+    vector<string> ret_value;
+    size_t prev_pos = 0;
+    size_t pos = 0;
+    while ((pos = str_value.find(",", prev_pos)) != string::npos) {
+        ret_value.push_back(str_value.substr(prev_pos, pos - prev_pos));
+        prev_pos = pos + 1;
+    }
+    if (prev_pos < str_value.size())
+        ret_value.push_back(str_value.substr(prev_pos, str_value.size() - prev_pos));
+    
+    *value = ret_value;
+    return 0;
+}
+
+static int parse_int(map<string, string> &config_pairs, string name, int *value)
+{
+    string str_value;
+    if (!find_value(config_pairs, name, &str_value))
+        return 1;
+    
+    int ret_value;
+    if (sscanf(str_value.c_str(), "%d", &ret_value) != 1) {
+        fprintf(stderr, "Config '%s' value '%s' is not a valid int\n", name.c_str(), str_value.c_str());
+        return -1;
+    }
+    
+    *value = ret_value;
+    return 0;
+}
+
+static int parse_int_array(map<string, string> &config_pairs, string name, vector<int> *value)
+{
+    string str_value;
+    if (!find_value(config_pairs, name, &str_value))
+        return 1;
+    
+    vector<int> ret_value;
+    int intValue;
+    size_t prev_pos = 0;
+    size_t pos = 0;
+    while ((pos = str_value.find(",", prev_pos)) != string::npos) {
+        if (sscanf(str_value.substr(prev_pos, pos - prev_pos).c_str(), "%d", &intValue) != 1) {
+            fprintf(stderr, "Config '%s' value '%s' is not a valid int array\n", name.c_str(), str_value.c_str());
+            return -1;
+        }
+        ret_value.push_back(intValue);
+        
+        prev_pos = pos + 1;
+    }
+    if (prev_pos < str_value.size()) {
+        if (sscanf(str_value.substr(prev_pos, str_value.size() - prev_pos).c_str(), "%d", &intValue) != 1) {
+            fprintf(stderr, "Config '%s' value '%s' is not a valid int array\n", name.c_str(), str_value.c_str());
+            return -1;
+        }
+        ret_value.push_back(intValue);
+    }
+
+    *value = ret_value;
+    return 0;
+}
+
+static int parse_bool(map<string, string> &config_pairs, string name, bool *value)
+{
+    string str_value;
+    if (!find_value(config_pairs, name, &str_value))
+        return 1;
+    
+    if (str_value == "true") {
+        *value = true;
+        return 0;
+    } else if (str_value == "false") {
+        *value = false;
+        return 0;
+    }
+    
+    fprintf(stderr, "Config '%s' value '%s' is not a valid boolean\n", name.c_str(), str_value.c_str());
+    return -1;
+}
+
+static int parse_log_level(map<string, string> &config_pairs, string name, LogLevel *value)
+{
+    string str_value;
+    int result = parse_string(config_pairs, name, &str_value);
+    if (result != 0)
+        return result;
+    
+    if (str_value == "DEBUG") {
+        *value = LOG_LEVEL_DEBUG;
+        return 0;
+    } else if (str_value == "INFO") {
+        *value = LOG_LEVEL_INFO;
+        return 0;
+    } else if (str_value == "WARNING") {
+        *value = LOG_LEVEL_WARNING;
+        return 0;
+    } else if (str_value == "ERROR") {
+        *value = LOG_LEVEL_ERROR;
+        return 0;
+    }
+    
+    return -1;
+}
+
+static int parse_serial_type(map<string, string> &config_pairs, string name, SerialType *value)
+{
+    string str_value;
+    int result = parse_string(config_pairs, name, &str_value);
+    if (result != 0)
+        return result;
+    
+    if (str_value.empty()) {
+        *value = TYPE_STD_TTY;
+        return 0;
+    } else if (str_value == "Blackmagic") {
+        *value = TYPE_BLACKMAGIC;
+        return 0;
+    } else if (str_value == "DVS") {
+        *value = TYPE_DVS;
+        return 0;
+    }
+    
+    return -1;
+}
+
+
+
+static string serialize_string_array(const vector<string> &value)
+{
+    string str_value;
+    size_t i;
+    for (i = 0; i < value.size(); i++) {
+        if (i != 0)
+            str_value.append(",");
+        str_value.append(value[i]);
+    }
+    
+    return str_value;
+}
+
+static string serialize_int(int value)
+{
+    char buf[16];
+    sprintf(buf, "%d", value);
+    return buf;
+}
+
+static string serialize_int_array(const vector<int> &value)
+{
+    string str_value;
+    char buf[16];
+    size_t i;
+    for (i = 0; i < value.size(); i++) {
+        if (i != 0)
+            str_value.append(",");
+        sprintf(buf, "%d", value[i]);
+        str_value.append(buf);
+    }
+    
+    return str_value;
+}
+
+static string serialize_bool(bool value)
+{
+    return (value ? "true" : "false");
+}
+
+static string serialize_log_level(LogLevel level)
+{
+    switch (level)
+    {
+        case LOG_LEVEL_ERROR:
+            return "ERROR";
+        case LOG_LEVEL_WARNING:
+            return "WARNING";
+        case LOG_LEVEL_INFO:
+            return "INFO";
+        case LOG_LEVEL_DEBUG:
+        default:
+            return "DEBUG";
+    }
+}
+
+static string serialize_serial_type(SerialType type)
+{
+    switch (type)
+    {
+        case TYPE_DVS:
+            return "DVS";
+        case TYPE_BLACKMAGIC:
+            return "Blackmagic";
+        case TYPE_STD_TTY:
+        default:
+            return "";
+    }
+}
 
 static string read_next_line(FILE* file)
 {
@@ -49,8 +292,7 @@ static string read_next_line(FILE* file)
     while ((c = fgetc(file)) != EOF && (c == '\r' || c == '\n'))
     {}
     
-    while (c != EOF && (c != '\r' && c != '\n'))
-    {
+    while (c != EOF && (c != '\r' && c != '\n')) {
         line += c;
         c = fgetc(file);
     }
@@ -60,144 +302,83 @@ static string read_next_line(FILE* file)
 
 
 
-Config Config::_instance;
-Mutex Config::_instanceMutex;
+
+string Config::log_dir;
+int Config::keep_logs = 0;
+string Config::cache_dir;
+string Config::browse_dir;
+string Config::pse_dir;
+string Config::db_host;
+string Config::db_name;
+string Config::db_user;
+string Config::db_password;
+string Config::recorder_name;
+string Config::tape_transfer_lock_file;
+string Config::player_exe;
+string Config::local_infax_db_host;
+string Config::local_infax_db_name;
+string Config::local_infax_db_user;
+string Config::local_infax_db_password;
+LogLevel Config::recorder_log_level = LOG_LEVEL_DEBUG;
+int Config::capture_log_level = 0;
+string Config::recorder_www_root;
+int Config::recorder_www_port = 0;
+int Config::recorder_www_replay_port = 0;
+int Config::recorder_www_threads = 0;
+bool Config::videotape_backup = false;
+vector<string> Config::source_vtr;
+vector<string> Config::backup_vtr;
+SerialType Config::recorder_vtr_serial_type_1 = TYPE_STD_TTY;
+SerialType Config::recorder_vtr_serial_type_2 = TYPE_STD_TTY;
+string Config::recorder_vtr_device_1;
+string Config::recorder_vtr_device_2;
+bool Config::recorder_server_barcode_scanner = false;
+string Config::recorder_barcode_fifo;
+string Config::profile_directory;
+string Config::profile_filename_suffix;
+int Config::ring_buffer_size = 0;
+int Config::browse_thread_count = 0;
+int Config::browse_overflow_frames = 0;
+int Config::digibeta_dropout_lower_threshold = 0;
+int Config::digibeta_dropout_upper_threshold = 0;
+int Config::digibeta_dropout_store_threshold = 0;
+bool Config::palff_mode = false;
+vector<int> Config::vitc_lines;
+vector<int> Config::ltc_lines;
+vector<string> Config::digibeta_barcode_prefixes;
+int Config::chunking_throttle_fps = 0;
+bool Config::enable_chunking_junk = false;
+bool Config::enable_multi_item = false;
+int Config::player_source_buffer_size = 0;
+bool Config::read_analogue_ltc = false;
+bool Config::read_digital_ltc = false;
+int Config::read_audio_track_ltc = 0;
+LogLevel Config::tape_export_log_level = LOG_LEVEL_DEBUG;
+int Config::tape_log_level = 0;
+string Config::tape_export_www_root;
+int Config::tape_export_www_port = 0;
+int Config::tape_export_www_threads = 0;
+bool Config::tape_export_server_barcode_scanner = false;
+string Config::tape_export_barcode_fifo;
+string Config::tape_device;
+vector<string> Config::lto_barcode_prefixes;
+int Config::max_auto_files_on_lto = 0;
+int Config::max_lto_size_gb = 0;
+bool Config::dbg_av_sync = false;
+bool Config::dbg_vitc_failures = false;
+bool Config::dbg_vga_replay = false;
+bool Config::dbg_force_x11 = false;
+bool Config::dbg_null_barcode_scanner = false;
+bool Config::dbg_store_thread_buffer = false;
+bool Config::dbg_serial_port_open = false;
+bool Config::dbg_keep_lto_files = false;
 
 
-Config::Config()
-{}
-
-Config::~Config()
-{}
-
-bool Config::setSpec(const ConfigSpec* specs, int numConfigs)
-{
-    LOCK_SECTION(_instanceMutex);
-
-    int i;
-    for (i = 0; i < numConfigs; i++)
-    {
-        if (specs[i].name == 0 || strlen(specs[i].name) == 0)
-        {
-            return false;
-        }
-        
-        // note: initialising as "ValueSpec valueSpec; valueSpec.type = ..."
-        // causes non-null padding bytes (why?) resulting in a false failure of 
-        // the memcmp below
-        ValueSpec valueSpec = {specs[i].type, specs[i].isRequired};
-        
-        pair<map<string, ValueSpec>::iterator, bool> result = _instance._spec.insert(make_pair(specs[i].name, valueSpec));
-        if (!result.second)
-        {
-            if (memcmp(&(*result.first).second, &valueSpec, sizeof(valueSpec)) != 0)
-            {
-                // replace the existing spec
-                _instance._spec.erase(result.first);
-                _instance._spec.insert(make_pair(specs[i].name, valueSpec));
-            }
-        }
-        
-        if (specs[i].defaultValue != 0 && !_instance.ihaveValue(specs[i].name))
-        {
-            _instance.setValue(specs[i].name, specs[i].defaultValue);
-        }
-    }
-    
-    return true;
-}
-
-bool Config::validate(string* error)
-{
-    LOCK_SECTION(_instanceMutex);
-
-    string value;
-    map<string, ValueSpec>::const_iterator iter;
-    for (iter = _instance._spec.begin(); iter != _instance._spec.end(); iter++)
-    {
-        const string& name = (*iter).first;
-        const ValueSpec& valueSpec = (*iter).second;
-        
-        if (_instance.ihaveValue(name))
-        {
-            switch (valueSpec.type)
-            {
-                case STRING_CONFIG_TYPE:
-                    // anything goes
-                    break;
-                case NON_EMPTY_STRING_CONFIG_TYPE:
-                    if (_instance.iisEmptyValue(name))
-                    {
-                        *error = name;
-                        *error += ": String is empty";
-                        return false;
-                    }
-                    break;
-                case INT_CONFIG_TYPE:
-                    if (!_instance.iisValidInt(name))
-                    {
-                        *error = name;
-                        *error += ": Invalid integer value";
-                        return false;
-                    }
-                    break;
-                case BOOL_CONFIG_TYPE:
-                    if (!_instance.iisValidBool(name))
-                    {
-                        *error = name;
-                        *error += ": Invalid boolean value";
-                        return false;
-                    }
-                    break;
-                case INT_ARRAY_CONFIG_TYPE:
-                    if (!_instance.iisValidIntArray(name))
-                    {
-                        *error = name;
-                        *error += ": Invalid integer array value";
-                        return false;
-                    }
-                    break;
-                case STRING_ARRAY_CONFIG_TYPE:
-                    if (!_instance.iisValidStringArray(name))
-                    {
-                        *error = name;
-                        *error += ": Invalid string array value";
-                        return false;
-                    }
-                    break;
-                case NON_EMPTY_STRING_ARRAY_CONFIG_TYPE:
-                    if (!_instance.iisValidNonEmptyStringArray(name))
-                    {
-                        *error = name;
-                        *error += ": Invalid non-empty string array value";
-                        return false;
-                    }
-                    break;
-            }
-        }
-        else
-        {
-            if (valueSpec.isRequired)
-            {
-                *error = name;
-                *error += ": Missing required value";
-                return false;
-            }
-        }
-    }
-    
-    return true;
-}
-
-// TODO/Note: if this fails then a partial set of name/value pairs could have been entered
 bool Config::readFromFile(string filename)
 {
-    LOCK_SECTION(_instanceMutex);
-
-    FILE* file;
-    if ((file = fopen(filename.c_str(), "rb")) == NULL)
-    {
-        fprintf(stderr, "Failed to open log file '%s' for reading: %s\n", filename.c_str(), strerror(errno));
+    FILE *file = fopen(filename.c_str(), "rb");
+    if (!file) {
+        fprintf(stderr, "Failed to open config file '%s' for reading: %s\n", filename.c_str(), strerror(errno));
         return false;
     }
     
@@ -206,13 +387,12 @@ bool Config::readFromFile(string filename)
     string name;
     string value;
     string line;
-    bool haveNonSpace;
+    bool have_non_space;
+    map<string, string> config_pairs;
     
-    while (true)
-    {
+    while (true) {
         line = read_next_line(file);
-        if (line.size() == 0)
-        {
+        if (line.size() == 0) {
             // done
             break;
         }
@@ -220,27 +400,21 @@ bool Config::readFromFile(string filename)
         // parse name
         start = 0;
         len = 0;   
-        haveNonSpace = false;
-        while (start + len < line.size())
-        {
-            if (line[start + len] == '=')
-            {
+        have_non_space = false;
+        while (start + len < line.size()) {
+            if (line[start + len] == '=') {
                 break;
-            }
-            else if (line[start + len] == '#')
-            {
+            } else if (line[start + len] == '#') {
                 // comment line
                 len = line.size() - start; // force same as empty line
                 break;
             }
             
-            haveNonSpace = haveNonSpace || !isspace(line[start + len]);
+            have_non_space = have_non_space || !isspace(line[start + len]);
             len++;
         }
-        if (start + len >= line.size())
-        {
-            if (haveNonSpace)
-            {
+        if (start + len >= line.size()) {
+            if (have_non_space) {
                 fprintf(stderr, "Invalid config line '%s': missing '='\n", line.c_str());
                 fclose(file);
                 return false;
@@ -250,8 +424,7 @@ bool Config::readFromFile(string filename)
             continue;
         }
         name = trim_string(line.substr(start, len));
-        if (name.size() == 0)
-        {
+        if (name.size() == 0) {
             fprintf(stderr, "Invalid config line '%s': zero length name\n", line.c_str());
             fclose(file);
             return false;
@@ -260,12 +433,9 @@ bool Config::readFromFile(string filename)
         len = 0;
 
         // parse value        
-        while (start + len < line.size())
-        {
+        while (start + len < line.size()) {
             if (line[start + len] == '#')
-            {
                 break;
-            }
             len++;
         }
         value = trim_string(line.substr(start, len));
@@ -278,604 +448,305 @@ bool Config::readFromFile(string filename)
             value = value.substr(1, value.size() - 2);
         }
 
-        // set name/value        
-        _instance.setValue(name, value);
+        // set name/value
+        config_pairs[name] = value;
     }
-    
+
     fclose(file);
-    return true;
+
+
+    bool result = setConfigPairs(config_pairs);
+
+    return result;
 }
-
-// TODO/Note: if this fails then a partial set of name/value pairs could have been entered
-bool Config::readFromString(string configString)
-{
-    LOCK_SECTION(_instanceMutex);
-
-    size_t start = 0;
-    size_t len = 0;
-    string name;
-    string value;
-    bool haveNonSpace;
-    while (start + len < configString.size())
-    {
-        // parse name
-        haveNonSpace = false;
-        while (start + len < configString.size())
-        {
-            if (configString[start + len] == '=')
-            {
-                break;
-            }
-            else if (configString[start + len] == ';')
-            {
-                fprintf(stderr, "Invalid config string: end of name/value before '=' found\n");
-                return false;
-            }
-
-            haveNonSpace = haveNonSpace || !isspace(configString[start + len]);
-            len++;
-        }
-        if (start + len >= configString.size())
-        {
-            if (haveNonSpace)
-            {
-                fprintf(stderr, "Invalid config line '%s': missing '='\n", configString.c_str());
-                return false;
-            }
-            
-            // done
-            return true;
-        }
-        name = trim_string(configString.substr(start, len));
-        if (name.size() == 0)
-        {
-            fprintf(stderr, "Invalid config string: zero length name\n");
-            return false;
-        }
-        start += len + 1;
-        len = 0;
-
-        // parse value        
-        while (start + len < configString.size())
-        {
-            if (configString[start + len] == ';')
-            {
-                break;
-            }
-            len++;
-        }
-        value = trim_string(configString.substr(start, len));
-        start += len + 1;
-        len = 0;
-
-        // remove quotes
-        if (value.size() >= 2 &&
-            value[0] == value[value.size() - 1] &&
-            (value[0] == '\'' || value[0] == '"'))
-        {
-            value = value.substr(1, value.size() - 2);
-        }
-        
-        // set name/value        
-        _instance.setValue(name, value);
-    }
-    
-    return true;
-}
-
 
 bool Config::writeToFile(string filename)
 {
-    LOCK_SECTION(_instanceMutex);
-    
-    FILE* file;
-    if ((file = fopen(filename.c_str(), "wb")) == NULL)
-    {
+    FILE* file = fopen(filename.c_str(), "wb");
+    if (!file) {
         fprintf(stderr, "Failed to open config file '%s' for writing: %s\n", filename.c_str(), strerror(errno));
         return false;
     }
+    
+    map<string, string> config_pairs = getConfigPairs();
 
     map<string, string>::const_iterator iter;
-    for (iter = _instance._nameAndValues.begin(); iter != _instance._nameAndValues.end(); iter++)
-    {
-        if (fprintf(file, "%s = '%s'\n", (*iter).first.c_str(), (*iter).second.c_str()) < 0)
-        {
+    for (iter = config_pairs.begin(); iter != config_pairs.end(); iter++) {
+        if (fprintf(file, "%s = '%s'\n", iter->first.c_str(), iter->second.c_str()) < 0) {
             fprintf(stderr, "Failed to write to config file '%s': %s\n", filename.c_str(), strerror(errno));
             fclose(file);
             return false;
         }
-    }    
+    }
+    
+    fclose(file);
+    
     return true;
 }
 
 string Config::writeToString()
 {
-    LOCK_SECTION(_instanceMutex);
-    
+    map<string, string> config_pairs = getConfigPairs();
+
     string result;
     map<string, string>::const_iterator iter;
-    for (iter = _instance._nameAndValues.begin(); iter != _instance._nameAndValues.end(); iter++)
-    {
-        result += (*iter).first + "='" + (*iter).second + "';";
-    }
+    for (iter = config_pairs.begin(); iter != config_pairs.end(); iter++)
+        result += iter->first + "='" + iter->second + "';";
     
     return result;
 }
 
-bool Config::haveValue(string name)
+bool Config::validateRecorderConfig(string *error)
 {
-    LOCK_SECTION(_instanceMutex);
+    if (!validateCommon(error))
+        return false;
     
-    return _instance.ihaveValue(name);
-}
-
-bool Config::isValidInt(string name)
-{
-    LOCK_SECTION(_instanceMutex);
-    
-    return _instance.iisValidInt(name);
-}
-
-bool Config::isValidBool(string name)
-{
-    LOCK_SECTION(_instanceMutex);
-    
-    return _instance.iisValidBool(name);
-}
-
-bool Config::isValidIntArray(string name)
-{
-    LOCK_SECTION(_instanceMutex);
-    
-    return _instance.iisValidIntArray(name);
-}
-
-bool Config::isValidStringArray(string name)
-{
-    LOCK_SECTION(_instanceMutex);
-    
-    return _instance.iisValidStringArray(name);
-}
-
-void Config::setInt(string name, int value)
-{
-    LOCK_SECTION(_instanceMutex);
-    
-    char buf[16];
-    sprintf(buf, "%d", value);
-    
-    _instance.setValue(name, buf);
-}
-
-void Config::setBool(string name, bool value)
-{
-    LOCK_SECTION(_instanceMutex);
-
-    if (value)
-    {
-        _instance.setValue(name, "true");
+    CHECK_STRING_NOT_SET(local_infax_db_host, error);
+    CHECK_STRING_NOT_SET(local_infax_db_name, error);
+    CHECK_STRING_NOT_SET(local_infax_db_user, error);
+    CHECK_STRING_NOT_SET(local_infax_db_password, error);
+    CHECK_STRING_NOT_SET(recorder_www_root, error);
+    CHECK_INT_NOT_SET(recorder_www_port, error);
+    CHECK_INT_NOT_SET(recorder_www_threads, error);
+    CHECK_ARRAY_NOT_SET(source_vtr, error);
+    CHECK_STRING_NOT_SET(recorder_vtr_device_1, error);
+    if (videotape_backup) {
+        CHECK_ARRAY_NOT_SET(backup_vtr, error);
+        CHECK_STRING_NOT_SET(recorder_vtr_device_2, error);
     }
-    else
-    {
-        _instance.setValue(name, "false");
-    }
-}
-
-void Config::setString(string name, string value)
-{
-    LOCK_SECTION(_instanceMutex);
-
-    _instance.setValue(name, value);
-}
-
-void Config::setIntArray(string name, vector<int> value)
-{
-    LOCK_SECTION(_instanceMutex);
-
-    char buf[16];
-    string storeValue;
-    vector<int>::const_iterator iter;
-    for (iter = value.begin(); iter != value.end(); iter++)
-    {
-        if (iter != value.begin())
-        {
-            storeValue.append(",");
-        }
-        sprintf(buf, "%d", *iter);
-        storeValue.append(buf); 
-    }
-    
-    _instance.setValue(name, storeValue);
-}
-
-void Config::setStringArray(string name, vector<string> value)
-{
-    LOCK_SECTION(_instanceMutex);
-
-    string storeValue;
-    vector<string>::const_iterator iter;
-    for (iter = value.begin(); iter != value.end(); iter++)
-    {
-        if (iter != value.begin())
-        {
-            storeValue.append(",");
-        }
-        storeValue.append(*iter); 
-    }
-    
-    _instance.setValue(name, storeValue);
-}
-
-bool Config::getInt(string name, int* value)
-{
-    LOCK_SECTION(_instanceMutex);
-    
-    string result;
-    if (_instance.getValue(name, &result))
-    {
-        if (sscanf(result.c_str(), "%d", value) == 1)
-        {
-            return true;
-        }
-        fprintf(stderr, "Config value '%s' is not a valid int\n", result.c_str());
-    }
-    
-    return false;
-}
-
-bool Config::getBool(string name, bool* value)
-{
-    LOCK_SECTION(_instanceMutex);
-    
-    string result;
-    if (_instance.getValue(name, &result))
-    {
-        if (result.compare("true") == 0)
-        {
-            *value = true;
-            return true;
-        }
-        else if (result.compare("false") == 0)
-        {
-            *value = false;
-            return true;
-        }
-        fprintf(stderr, "Config value '%s' is not a valid boolean ('true' or 'false')\n", result.c_str());
-    }
-    
-    return false;
-}
-
-bool Config::getString(string name, string* value)
-{
-    LOCK_SECTION(_instanceMutex);
-    
-    return _instance.getValue(name, value);
-}
-
-bool Config::getIntArray(string name, vector<int>* value)
-{
-    LOCK_SECTION(_instanceMutex);
-    
-    string result;
-    if (!_instance.getValue(name, &result))
-    {
-        value->clear();
+    if (recorder_server_barcode_scanner)
+        CHECK_STRING_NOT_SET(recorder_barcode_fifo, error);
+    CHECK_STRING_NOT_SET(profile_filename_suffix, error);
+    CHECK_INT_NOT_SET(ring_buffer_size, error);
+    CHECK_INT_NOT_SET(browse_overflow_frames, error);
+    if (digibeta_dropout_lower_threshold >= digibeta_dropout_upper_threshold) {
+        *error = "invalid digibeta_dropout_lower_threshold digibeta_dropout_upper_threshold values";
         return false;
     }
-    
-    int intValue;
-    size_t prevPos = 0;
-    size_t pos = 0;
-    while ((pos = result.find(",", prevPos)) != string::npos)
-    {
-        if (sscanf(result.substr(prevPos, pos - prevPos).c_str(), "%d", &intValue) != 1)
-        {
-            value->clear();
+    if (palff_mode) {
+        CHECK_ARRAY_NOT_SET(vitc_lines, error);
+        CHECK_ARRAY_NOT_SET(ltc_lines, error);
+    }
+    if (videotape_backup)
+        CHECK_ARRAY_NOT_SET(digibeta_barcode_prefixes, error);
+    CHECK_INT_NOT_SET(chunking_throttle_fps, error);
+    if (!read_analogue_ltc && !read_digital_ltc) {
+        if (read_audio_track_ltc < 0) {
+            *error = "read_audio_track_ltc not set";
             return false;
         }
-        value->push_back(intValue);
-        
-        prevPos = pos + 1;
-    }
-    if (prevPos < result.size())
-    {
-        if (sscanf(result.substr(prevPos, result.size() - prevPos).c_str(), "%d", &intValue) != 1)
-        {
-            value->clear();
-            return false;
-        }
-        value->push_back(intValue);
-    }
-    
-    return true;
-}
-
-bool Config::getStringArray(string name, vector<string>* value)
-{
-    LOCK_SECTION(_instanceMutex);
-    
-    string result;
-    if (!_instance.getValue(name, &result))
-    {
-        value->clear();
-        return false;
-    }
-    
-    size_t prevPos = 0;
-    size_t pos = 0;
-    while ((pos = result.find(",", prevPos)) != string::npos)
-    {
-        value->push_back(result.substr(prevPos, pos - prevPos));
-        prevPos = pos + 1;
-    }
-    if (prevPos < result.size())
-    {
-        value->push_back(result.substr(prevPos, result.size() - prevPos));
-    }
-    
-    return true;
-}
-
-int Config::getIntD(string name, int defaultValue)
-{
-    int value;
-    if (getInt(name, &value))
-    {
-        return value;
-    }
-    
-    return defaultValue;
-}
-
-bool Config::getBoolD(string name, bool defaultValue)
-{
-    bool value;
-    if (getBool(name, &value))
-    {
-        return value;
-    }
-    
-    return defaultValue;
-}
-
-string Config::getStringD(string name, string defaultValue)
-{
-    string value;
-    if (getString(name, &value))
-    {
-        return value;
-    }
-    
-    return defaultValue;
-}
-
-vector<int> Config::getIntArray(string name, vector<int> defaultValue)
-{
-    vector<int> value;
-    if (getIntArray(name, &value))
-    {
-        return value;
-    }
-    
-    return defaultValue;
-}
-
-vector<string> Config::getStringArray(string name, vector<string> defaultValue)
-{
-    vector<string> value;
-    if (getStringArray(name, &value))
-    {
-        return value;
-    }
-    
-    return defaultValue;
-}
-
-int Config::getInt(string name)
-{
-    int value;
-    REC_CHECK(getInt(name, &value));
-
-    return value;
-}
-
-bool Config::getBool(string name)
-{
-    bool value;
-    REC_CHECK(getBool(name, &value));
-
-    return value;
-}
-
-string Config::getString(string name)
-{
-    string value;
-    REC_CHECK(getString(name, &value));
-    
-    return value;
-}
-
-vector<int> Config::getIntArray(string name)
-{
-    vector<int> value;
-    REC_CHECK(getIntArray(name, &value));
-    
-    return value;
-}
-
-vector<string> Config::getStringArray(string name)
-{
-    vector<string> value;
-    REC_CHECK(getStringArray(name, &value));
-    
-    return value;
-}
-
-bool Config::clearValue(string name)
-{
-    LOCK_SECTION(_instanceMutex);
-    
-    return _instance.iclearValue(name);
-}
-
-void Config::clear()
-{
-    LOCK_SECTION(_instanceMutex);
-    
-    _instance._nameAndValues.clear();
-}
-
-
-bool Config::ihaveValue(string name)
-{
-    return _nameAndValues.find(name) != _nameAndValues.end();
-}
-
-bool Config::iisValidInt(string name)
-{
-    string result;
-    if (!_instance.getValue(name, &result))
-    {
-        return false;
-    }
-    
-    int value;
-    if (sscanf(result.c_str(), "%d", &value) != 1)
-    {
-        return false;
-    }
-    
-    return true;
-}
-
-bool Config::iisEmptyValue(string name)
-{
-    string result;
-    _instance.getValue(name, &result);
-    return result.empty();
-}
-
-bool Config::iisValidBool(string name)
-{
-    string result;
-    if (!_instance.getValue(name, &result))
-    {
-        return false;
-    }
-    
-    if (result.compare("true") != 0 && result.compare("false") != 0)
-    {
-        return false;
-    }
-    
-    return true;
-}
-
-bool Config::iisValidIntArray(string name)
-{
-    string result;
-    if (!_instance.getValue(name, &result))
-    {
-        return false;
-    }
-    
-    int intValue;
-    size_t prevPos = 0;
-    size_t pos = 0;
-    while ((pos = result.find(",", prevPos)) != string::npos)
-    {
-        if (sscanf(result.substr(prevPos, pos - prevPos).c_str(), "%d", &intValue) != 1)
-        {
-            return false;
-        }
-        
-        prevPos = pos + 1;
-    }
-    if (prevPos < result.size())
-    {
-        if (sscanf(result.substr(prevPos, result.size() - prevPos).c_str(), "%d", &intValue) != 1)
-        {
+        if (read_audio_track_ltc >= 8) {
+            *error = "invalid read_audio_track_ltc value";
             return false;
         }
     }
     
+    
     return true;
 }
 
-bool Config::iisValidStringArray(string name)
+bool Config::validateTapeExportConfig(string *error)
 {
-    string result;
-    if (!_instance.getValue(name, &result))
-    {
+    if (!validateCommon(error))
         return false;
-    }
+    
+    CHECK_STRING_NOT_SET(tape_export_www_root, error);
+    CHECK_INT_NOT_SET(tape_export_www_port, error);
+    CHECK_INT_NOT_SET(tape_export_www_threads, error);
+    if (tape_export_server_barcode_scanner)
+        CHECK_STRING_NOT_SET(tape_export_barcode_fifo, error);
+    CHECK_STRING_NOT_SET(tape_device, error);
+    CHECK_ARRAY_NOT_SET(lto_barcode_prefixes, error);
+    CHECK_INT_NOT_SET(max_auto_files_on_lto, error);
+    CHECK_INT_NOT_SET(max_lto_size_gb, error);
     
     return true;
 }
 
-bool Config::iisValidNonEmptyStringArray(string name)
+bool Config::setConfigPairs(map<string, string> &config_pairs)
 {
-    string result;
-    if (!_instance.getValue(name, &result))
-    {
-        return false;
-    }
+    // common
+    CHECK_PARSE(parse_string(config_pairs, "log_dir", &log_dir));
+    CHECK_PARSE(parse_int(config_pairs, "keep_logs", &keep_logs));
+    CHECK_PARSE(parse_string(config_pairs, "cache_dir", &cache_dir));
+    CHECK_PARSE(parse_string(config_pairs, "browse_dir", &browse_dir));
+    CHECK_PARSE(parse_string(config_pairs, "pse_dir", &pse_dir));
+    CHECK_PARSE(parse_string(config_pairs, "db_host", &db_host));
+    CHECK_PARSE(parse_string(config_pairs, "db_name", &db_name));
+    CHECK_PARSE(parse_string(config_pairs, "db_user", &db_user));
+    CHECK_PARSE(parse_string(config_pairs, "db_password", &db_password));
+    CHECK_PARSE(parse_string(config_pairs, "recorder_name", &recorder_name));
+    CHECK_PARSE(parse_string(config_pairs, "tape_transfer_lock_file", &tape_transfer_lock_file));
+    CHECK_PARSE(parse_string(config_pairs, "player_exe", &player_exe));
     
-    size_t prevPos = 0;
-    size_t pos = 0;
-    while ((pos = result.find(",", prevPos)) != string::npos)
-    {
-        if (result.substr(prevPos, pos - prevPos).empty())
-        {
-            return false;
-        }
-        prevPos = pos + 1;
-    }
-    if (prevPos < result.size())
-    {
-        if (result.substr(prevPos, result.size() - prevPos).empty())
-        {
-            return false;
-        }
-    }
+    // infax access
+    CHECK_PARSE(parse_string(config_pairs, "local_infax_db_host", &local_infax_db_host));
+    CHECK_PARSE(parse_string(config_pairs, "local_infax_db_name", &local_infax_db_name));
+    CHECK_PARSE(parse_string(config_pairs, "local_infax_db_user", &local_infax_db_user));
+    CHECK_PARSE(parse_string(config_pairs, "local_infax_db_password", &local_infax_db_password));
+
+    // recorder
+    CHECK_PARSE(parse_log_level(config_pairs, "recorder_log_level", &recorder_log_level));
+    CHECK_PARSE(parse_int(config_pairs, "capture_log_level", &capture_log_level));
+    CHECK_PARSE(parse_string(config_pairs, "recorder_www_root", &recorder_www_root));
+    CHECK_PARSE(parse_int(config_pairs, "recorder_www_port", &recorder_www_port));
+    CHECK_PARSE(parse_int(config_pairs, "recorder_www_replay_port", &recorder_www_replay_port));
+    CHECK_PARSE(parse_int(config_pairs, "recorder_www_threads", &recorder_www_threads));
+    CHECK_PARSE(parse_bool(config_pairs, "videotape_backup", &videotape_backup));
+    CHECK_PARSE(parse_string_array(config_pairs, "source_vtr", &source_vtr));
+    CHECK_PARSE(parse_string_array(config_pairs, "backup_vtr", &backup_vtr));
+    CHECK_PARSE(parse_serial_type(config_pairs, "recorder_vtr_serial_type_1", &recorder_vtr_serial_type_1));
+    CHECK_PARSE(parse_serial_type(config_pairs, "recorder_vtr_serial_type_2", &recorder_vtr_serial_type_2));
+    CHECK_PARSE(parse_string(config_pairs, "recorder_vtr_device_1", &recorder_vtr_device_1));
+    CHECK_PARSE(parse_string(config_pairs, "recorder_vtr_device_2", &recorder_vtr_device_2));
+    CHECK_PARSE(parse_bool(config_pairs, "recorder_server_barcode_scanner", &recorder_server_barcode_scanner));
+    CHECK_PARSE(parse_string(config_pairs, "recorder_barcode_fifo", &recorder_barcode_fifo));
+    CHECK_PARSE(parse_string(config_pairs, "profile_directory", &profile_directory));
+    CHECK_PARSE(parse_string(config_pairs, "profile_filename_suffix", &profile_filename_suffix));
+    CHECK_PARSE(parse_int(config_pairs, "ring_buffer_size", &ring_buffer_size));
+    CHECK_PARSE(parse_int(config_pairs, "browse_thread_count", &browse_thread_count));
+    CHECK_PARSE(parse_int(config_pairs, "browse_overflow_frames", &browse_overflow_frames));
+    CHECK_PARSE(parse_int(config_pairs, "digibeta_dropout_lower_threshold", &digibeta_dropout_lower_threshold));
+    CHECK_PARSE(parse_int(config_pairs, "digibeta_dropout_upper_threshold", &digibeta_dropout_upper_threshold));
+    CHECK_PARSE(parse_int(config_pairs, "digibeta_dropout_store_threshold", &digibeta_dropout_store_threshold));
+    CHECK_PARSE(parse_bool(config_pairs, "palff_mode", &palff_mode));
+    CHECK_PARSE(parse_int_array(config_pairs, "vitc_lines", &vitc_lines));
+    CHECK_PARSE(parse_int_array(config_pairs, "ltc_lines", &ltc_lines));
+    CHECK_PARSE(parse_string_array(config_pairs, "digibeta_barcode_prefixes", &digibeta_barcode_prefixes));
+    CHECK_PARSE(parse_int(config_pairs, "chunking_throttle_fps", &chunking_throttle_fps));
+    CHECK_PARSE(parse_bool(config_pairs, "enable_chunking_junk", &enable_chunking_junk));
+    CHECK_PARSE(parse_bool(config_pairs, "enable_multi_item", &enable_multi_item));
+    CHECK_PARSE(parse_int(config_pairs, "player_source_buffer_size", &player_source_buffer_size));
+    CHECK_PARSE(parse_bool(config_pairs, "read_analogue_ltc", &read_analogue_ltc));
+    CHECK_PARSE(parse_bool(config_pairs, "read_digital_ltc", &read_digital_ltc));
+    CHECK_PARSE(parse_int(config_pairs, "read_audio_track_ltc", &read_audio_track_ltc));
+    
+    // tape export
+    CHECK_PARSE(parse_log_level(config_pairs, "tape_export_log_level", &tape_export_log_level));
+    CHECK_PARSE(parse_int(config_pairs, "tape_log_level", &tape_log_level));
+    CHECK_PARSE(parse_string(config_pairs, "tape_export_www_root", &tape_export_www_root));
+    CHECK_PARSE(parse_int(config_pairs, "tape_export_www_port", &tape_export_www_port));
+    CHECK_PARSE(parse_int(config_pairs, "tape_export_www_threads", &tape_export_www_threads));
+    CHECK_PARSE(parse_bool(config_pairs, "tape_export_server_barcode_scanner", &tape_export_server_barcode_scanner));
+    CHECK_PARSE(parse_string(config_pairs, "tape_export_barcode_fifo", &tape_export_barcode_fifo));
+    CHECK_PARSE(parse_string(config_pairs, "tape_device", &tape_device));
+    CHECK_PARSE(parse_string_array(config_pairs, "lto_barcode_prefixes", &lto_barcode_prefixes));
+    CHECK_PARSE(parse_int(config_pairs, "max_auto_files_on_lto", &max_auto_files_on_lto));
+    CHECK_PARSE(parse_int(config_pairs, "max_lto_size_gb", &max_lto_size_gb));
+    
+    // debug
+    CHECK_PARSE(parse_bool(config_pairs, "dbg_av_sync", &dbg_av_sync));
+    CHECK_PARSE(parse_bool(config_pairs, "dbg_vitc_failures", &dbg_vitc_failures));
+    CHECK_PARSE(parse_bool(config_pairs, "dbg_vga_replay", &dbg_vga_replay));
+    CHECK_PARSE(parse_bool(config_pairs, "dbg_force_x11", &dbg_force_x11));
+    CHECK_PARSE(parse_bool(config_pairs, "dbg_null_barcode_scanner", &dbg_null_barcode_scanner));
+    CHECK_PARSE(parse_bool(config_pairs, "dbg_store_thread_buffer", &dbg_store_thread_buffer));
+    CHECK_PARSE(parse_bool(config_pairs, "dbg_serial_port_open", &dbg_serial_port_open));
+    CHECK_PARSE(parse_bool(config_pairs, "dbg_keep_lto_files", &dbg_keep_lto_files));
     
     return true;
 }
 
-void Config::setValue(string name, string value)
+map<string, string> Config::getConfigPairs()
 {
-    pair<map<string, string>::iterator, bool> result = _nameAndValues.insert(make_pair(name, value));
-    if (!result.second)
-    {
-        // replace the existing value
-        _nameAndValues.erase(result.first);
-        _nameAndValues.insert(make_pair(name, value));
-    }
-}
-
-bool Config::getValue(string name, string* value)
-{
-    map<string, string>::iterator result;
-    if ((result = _nameAndValues.find(name)) != _nameAndValues.end())
-    {
-        *value = (*result).second;
-        return true;
-    }
+    map<string, string> config_pairs;
     
-    return false;
-}
-
-bool Config::iclearValue(string name)
-{
-    map<string, string>::iterator result;
-    if ((result = _nameAndValues.find(name)) != _nameAndValues.end())
-    {
-        _nameAndValues.erase(result);
-        return true;
-    }
+    config_pairs["log_dir"] = log_dir;
+    config_pairs["keep_logs"] = serialize_int(keep_logs);
+    config_pairs["cache_dir"] = cache_dir;
+    config_pairs["browse_dir"] = browse_dir;
+    config_pairs["pse_dir"] = pse_dir;
+    config_pairs["db_host"] = db_host;
+    config_pairs["db_name"] = db_name;
+    config_pairs["db_user"] = db_user;
+    config_pairs["db_password"] = db_password;
+    config_pairs["recorder_name"] = recorder_name;
+    config_pairs["tape_transfer_lock_file"] = tape_transfer_lock_file;
+    config_pairs["player_exe"] = player_exe;
     
-    return false;
+    // infax access
+    config_pairs["local_infax_db_host"] = local_infax_db_host;
+    config_pairs["local_infax_db_name"] = local_infax_db_name;
+    config_pairs["local_infax_db_user"] = local_infax_db_user;
+    config_pairs["local_infax_db_password"] = local_infax_db_password;
+
+    // recorder
+    config_pairs["recorder_log_level"] = serialize_log_level(recorder_log_level);
+    config_pairs["capture_log_level"] = serialize_int(capture_log_level);
+    config_pairs["recorder_www_root"] = recorder_www_root;
+    config_pairs["recorder_www_port"] = serialize_int(recorder_www_port);
+    config_pairs["recorder_www_replay_port"] = serialize_int(recorder_www_replay_port);
+    config_pairs["recorder_www_threads"] = serialize_int(recorder_www_threads);
+    config_pairs["videotape_backup"] = serialize_bool(videotape_backup);
+    config_pairs["source_vtr"] = serialize_string_array(source_vtr);
+    config_pairs["backup_vtr"] = serialize_string_array(backup_vtr);
+    config_pairs["recorder_vtr_serial_type_1"] = serialize_serial_type(recorder_vtr_serial_type_1);
+    config_pairs["recorder_vtr_serial_type_2"] = serialize_serial_type(recorder_vtr_serial_type_2);
+    config_pairs["recorder_vtr_device_1"] = recorder_vtr_device_1;
+    config_pairs["recorder_vtr_device_2"] = recorder_vtr_device_2;
+    config_pairs["recorder_server_barcode_scanner"] = serialize_bool(recorder_server_barcode_scanner);
+    config_pairs["recorder_barcode_fifo"] = recorder_barcode_fifo;
+    config_pairs["profile_directory"] = profile_directory;
+    config_pairs["profile_filename_suffix"] = profile_filename_suffix;
+    config_pairs["ring_buffer_size"] = serialize_int(ring_buffer_size);
+    config_pairs["browse_thread_count"] = serialize_int(browse_thread_count);
+    config_pairs["browse_overflow_frames"] = serialize_int(browse_overflow_frames);
+    config_pairs["digibeta_dropout_lower_threshold"] = serialize_int(digibeta_dropout_lower_threshold);
+    config_pairs["digibeta_dropout_upper_threshold"] = serialize_int(digibeta_dropout_upper_threshold);
+    config_pairs["digibeta_dropout_store_threshold"] = serialize_int(digibeta_dropout_store_threshold);
+    config_pairs["palff_mode"] = serialize_bool(palff_mode);
+    config_pairs["vitc_lines"] = serialize_int_array(vitc_lines);
+    config_pairs["ltc_lines"] = serialize_int_array(ltc_lines);
+    config_pairs["digibeta_barcode_prefixes"] = serialize_string_array(digibeta_barcode_prefixes);
+    config_pairs["chunking_throttle_fps"] = serialize_int(chunking_throttle_fps);
+    config_pairs["enable_chunking_junk"] = serialize_bool(enable_chunking_junk);
+    config_pairs["enable_multi_item"] = serialize_bool(enable_multi_item);
+    config_pairs["player_source_buffer_size"] = serialize_int(player_source_buffer_size);
+    config_pairs["read_analogue_ltc"] = serialize_bool(read_analogue_ltc);
+    config_pairs["read_digital_ltc"] = serialize_bool(read_digital_ltc);
+    config_pairs["read_audio_track_ltc"] = serialize_int(read_audio_track_ltc);
+    
+    // tape export
+    config_pairs["tape_export_log_level"] = serialize_log_level(tape_export_log_level);
+    config_pairs["tape_log_level"] = serialize_int(tape_log_level);
+    config_pairs["tape_export_www_root"] = tape_export_www_root;
+    config_pairs["tape_export_www_port"] = serialize_int(tape_export_www_port);
+    config_pairs["tape_export_www_threads"] = serialize_int(tape_export_www_threads);
+    config_pairs["tape_export_server_barcode_scanner"] = serialize_bool(tape_export_server_barcode_scanner);
+    config_pairs["tape_export_barcode_fifo"] = tape_export_barcode_fifo;
+    config_pairs["tape_device"] = tape_device;
+    config_pairs["lto_barcode_prefixes"] = serialize_string_array(lto_barcode_prefixes);
+    config_pairs["max_auto_files_on_lto"] = serialize_int(max_auto_files_on_lto);
+    config_pairs["max_lto_size_gb"] = serialize_int(max_lto_size_gb);
+    
+    // debug
+    config_pairs["dbg_av_sync"] = serialize_bool(dbg_av_sync);
+    config_pairs["dbg_vitc_failures"] = serialize_bool(dbg_vitc_failures);
+    config_pairs["dbg_vga_replay"] = serialize_bool(dbg_vga_replay);
+    config_pairs["dbg_force_x11"] = serialize_bool(dbg_force_x11);
+    config_pairs["dbg_null_barcode_scanner"] = serialize_bool(dbg_null_barcode_scanner);
+    config_pairs["dbg_store_thread_buffer"] = serialize_bool(dbg_store_thread_buffer);
+    config_pairs["dbg_serial_port_open"] = serialize_bool(dbg_serial_port_open);
+    config_pairs["dbg_keep_lto_files"] = serialize_bool(dbg_keep_lto_files);
+ 
+    return config_pairs;
 }
 
+bool Config::validateCommon(string *error)
+{
+    CHECK_STRING_NOT_SET(log_dir, error);
+    CHECK_INT_NOT_SET(keep_logs, error);
+    CHECK_STRING_NOT_SET(cache_dir, error);
+    CHECK_STRING_NOT_SET(browse_dir, error);
+    CHECK_STRING_NOT_SET(pse_dir, error);
+    CHECK_STRING_NOT_SET(db_host, error);
+    CHECK_STRING_NOT_SET(db_name, error);
+    CHECK_STRING_NOT_SET(db_user, error);
+    CHECK_STRING_NOT_SET(db_password, error);
+    CHECK_STRING_NOT_SET(recorder_name, error);
+    CHECK_STRING_NOT_SET(tape_transfer_lock_file, error);
+    CHECK_STRING_NOT_SET(player_exe, error);
+    
+    return true;
+}
 

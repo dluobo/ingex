@@ -1,0 +1,23 @@
+[Desktop Entry]
+Categories=Application;Network;WebBrowser;X-Ximian-Main;X-Ximian-Toplevel;
+Comment[en_GB]=Web Browser
+Comment=Web Browser
+Exec=firefox http://localhost:9000
+GenericName[en_GB]=
+GenericName=
+Icon=yast-backup
+MimeType=text/html;application/xhtml+xml;
+Name[en_GB]=Ingex
+Name=Ingex
+NotShowIn=GNOME;
+Path=
+StartupNotify=true
+Terminal=false
+TerminalOptions=
+TryExec=firefox
+Type=Application
+X-DBUS-ServiceName=
+X-DBUS-StartupType=
+X-KDE-SubstituteUID=false
+X-KDE-Username=
+X-SuSE-translate=true

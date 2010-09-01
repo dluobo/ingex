@@ -1,5 +1,5 @@
 /*
- * $Id: DatabaseThings.cpp,v 1.1 2008/07/08 16:22:59 philipn Exp $
+ * $Id: DatabaseThings.cpp,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * Database enums and classes matching the things stored in the database
  *
@@ -21,9 +21,9 @@
  */
  
 /*
-    Note: The D3Source::getSourceProperties() and 
-    D3Source::parseSourceProperties() methods (and related parse_... functions)
-    were originally used when updating the D3 info using the web browser client.
+    Note: The SourceItem::getSourceProperties() and 
+    SourceItem::parseSourceProperties() methods (and related parse_... functions)
+    were originally used when updating the source info using the web browser client.
     This functionality is no longer available in the web browser client.
 */
 
@@ -251,6 +251,32 @@ static string get_duration_string(int64_t value)
 }
 
 
+
+string rec::ingest_format_to_string(IngestFormat format, bool unknownIsDisabled)
+{
+    switch (format)
+    {
+        case MXF_UNC_8BIT_INGEST_FORMAT:
+            return "MXF Unc. 8-bit";
+        case MXF_UNC_10BIT_INGEST_FORMAT:
+            return "MXF Unc. 10-bit";
+        case MXF_D10_50_INGEST_FORMAT:
+            return "MXF D-10 50Mbps";
+        case UNKNOWN_INGEST_FORMAT:
+        default:
+            if (unknownIsDisabled)
+            {
+                return "Disabled";
+            }
+            else
+            {
+                return "";
+            }
+    }
+}
+
+
+
 AssetProperty::AssetProperty()
 {}
 
@@ -292,24 +318,55 @@ Source::~Source()
     }
 }
 
-D3Source* Source::getD3Source(uint32_t itemNo)
+SourceItem* Source::getSourceItem(uint32_t itemNo)
 {
     vector<ConcreteSource*>::const_iterator iter;
     for (iter = concreteSources.begin(); iter != concreteSources.end(); iter++)
     {
-        D3Source* d3Source = dynamic_cast<D3Source*>(*iter);
+        SourceItem* sourceItem = dynamic_cast<SourceItem*>(*iter);
         
-        if (d3Source != 0 && d3Source->itemNo == itemNo)
+        if (sourceItem != 0 && sourceItem->itemNo == itemNo)
         {
-            return d3Source;
+            return sourceItem;
         }
     }
     
     return 0;
 }
 
+SourceItem* Source::getFirstSourceItem()
+{
+    if (concreteSources.empty())
+    {
+        return 0;
+    }
+    
+    return dynamic_cast<SourceItem*>(concreteSources.front());
+}
+
+Source* Source::clone()
+{
+    Source *clonedSource = new Source();
+    
+    clonedSource->barcode = barcode;
+    clonedSource->recInstance = recInstance;
+
+    size_t i;
+    for (i = 0; i < concreteSources.size(); i++)
+    {
+        SourceItem *sourceItem = dynamic_cast<SourceItem*>(concreteSources[i]);
+        REC_ASSERT(sourceItem);
+        
+        SourceItem *clonedSourceItem = new SourceItem();
+        *clonedSourceItem = *sourceItem;
+        clonedSource->concreteSources.push_back(clonedSourceItem);
+    }
+    
+    return clonedSource;
+}
+
 Destination::Destination()
-: DatabaseTable(), concreteDestination(0), sourceId(-1), d3SourceId(-1), ingestItemNo(-1)
+: DatabaseTable(), concreteDestination(0), sourceId(-1), sourceItemId(-1), ingestItemNo(-1)
 {
 }
 
@@ -319,16 +376,16 @@ Destination::~Destination()
 }
 
 
-D3Source::D3Source()
-: ConcreteSource(), duration(-1), itemNo(0)
+SourceItem::SourceItem()
+: ConcreteSource(), duration(-1), itemNo(0), modifiedFlag(false)
 {
 }
 
-D3Source::~D3Source()
+SourceItem::~SourceItem()
 {
 }
 
-vector<AssetProperty> D3Source::getSourceProperties()
+vector<AssetProperty> SourceItem::getSourceProperties()
 {
     vector<AssetProperty> result;
     
@@ -348,59 +405,105 @@ vector<AssetProperty> D3Source::getSourceProperties()
     result.push_back(AssetProperty(14, "catdetail", "Catalogue Detail", catDetail, g_stringPropertyType, 10, true));
     result.push_back(AssetProperty(15, "memo", "Memo", memo, g_stringPropertyType, 120, true));
     result.push_back(AssetProperty(16, "itemno", "Item No.", int64_to_string(itemNo), g_uint32PropertyType, 0, true));
+    result.push_back(AssetProperty(17, "aspectratiocode", "Aspect Ratio Code", aspectRatioCode, g_stringPropertyType, 8, true));
     
     return result;
 }
 
-bool D3Source::parseSourceProperties(AssetPropertySource* assetSource, string* errMessage)
+bool SourceItem::parseSourceProperties(AssetPropertySource* assetSource, string* errMessage)
 {
     // ignore format, progTitle, episodeTitle, txDate, spoolNo which are not editable
     
+    string in_magPrefix;
+    string in_progNo;
+    string in_prodCode;
+    string in_spoolStatus;
+    Date in_stockDate;
+    string in_spoolDescr;
+    string in_memo;
+    int64_t in_duration;
+    string in_accNo;
+    string in_catDetail;
+    uint32_t in_itemNo;
+    string in_aspectRatioCode;
     
     // parse editable values if present
-    if (!parse_string(assetSource, 5, "magprefix", false, 1, &magPrefix, errMessage))
+    
+    if (!parse_string(assetSource, 5, "magprefix", false, 1, &in_magPrefix, errMessage))
     {
         return false;
     }
-    if (!parse_string(assetSource, 6, "progno", false, 8, &progNo, errMessage))
+    if (!parse_string(assetSource, 6, "progno", false, 8, &in_progNo, errMessage))
     {
         return false;
     }
-    if (!parse_string(assetSource, 7, "prodcode", false, 2, &prodCode, errMessage))
+    if (!parse_string(assetSource, 7, "prodcode", false, 2, &in_prodCode, errMessage))
     {
         return false;
     }
-    if (!parse_string(assetSource, 8, "spoolstatus", false, 1, &spoolStatus, errMessage))
+    if (!parse_string(assetSource, 8, "spoolstatus", false, 1, &in_spoolStatus, errMessage))
     {
         return false;
     }
-    if (!parse_date(assetSource, 9, "stockdate", &stockDate, errMessage))
+    if (!parse_date(assetSource, 9, "stockdate", &in_stockDate, errMessage))
     {
         return false;
     }
-    if (!parse_string(assetSource, 10, "spooldescr", false, 29, &spoolDescr, errMessage))
+    if (!parse_string(assetSource, 10, "spooldescr", false, 29, &in_spoolDescr, errMessage))
     {
         return false;
     }
-    if (!parse_duration(assetSource, 11, "duration", &duration, errMessage))
+    if (!parse_duration(assetSource, 11, "duration", &in_duration, errMessage))
     {
         return false;
     }
-    if (!parse_string(assetSource, 13, "accno", false, 14, &accNo, errMessage))
+    if (!parse_string(assetSource, 13, "accno", false, 14, &in_accNo, errMessage))
     {
         return false;
     }
-    if (!parse_string(assetSource, 14, "catdetail", false, 10, &catDetail, errMessage))
+    if (!parse_string(assetSource, 14, "catdetail", false, 10, &in_catDetail, errMessage))
     {
         return false;
     }
-    if (!parse_string(assetSource, 15, "memo", false, 120, &memo, errMessage))
+    if (!parse_string(assetSource, 15, "memo", false, 120, &in_memo, errMessage))
     {
         return false;
     }
-    if (!parse_uint32(assetSource, 16, "itemno", &itemNo, errMessage))
+    if (!parse_uint32(assetSource, 16, "itemno", &in_itemNo, errMessage))
     {
         return false;
+    }
+    if (!parse_string(assetSource, 17, "aspectratiocode", false, 8, &in_aspectRatioCode, errMessage))
+    {
+        return false;
+    }
+
+    if (in_magPrefix != magPrefix ||
+        in_progNo != progNo ||
+        in_prodCode != prodCode ||
+        in_spoolStatus != spoolStatus ||
+        in_stockDate != stockDate ||
+        in_spoolDescr != spoolDescr ||
+        in_duration != duration ||
+        in_accNo != accNo ||
+        in_catDetail != catDetail ||
+        in_memo != memo ||
+        in_itemNo != itemNo ||
+        in_aspectRatioCode != aspectRatioCode)
+    {
+        modifiedFlag = true;
+
+        progNo = in_progNo;
+        prodCode = in_prodCode;
+        spoolStatus = in_spoolStatus;
+        stockDate = in_stockDate;
+        spoolDescr = in_spoolDescr;
+        duration = in_duration;
+        accNo = in_accNo;
+        catDetail = in_catDetail;
+        memo = in_memo;
+        itemNo = in_itemNo;
+        aspectRatioCode = in_aspectRatioCode;
     }
     
     return true;
@@ -408,7 +511,8 @@ bool D3Source::parseSourceProperties(AssetPropertySource* assetSource, string* e
 
 
 HardDiskDestination::HardDiskDestination()
-: ConcreteDestination(), pseResult(0), size(-1), duration(-1), browseSize(-1), cacheId(-1)
+: ConcreteDestination(), ingestFormat(UNKNOWN_INGEST_FORMAT), pseResult(0), size(-1), duration(-1),
+browseSize(-1), cacheId(-1)
 {
 }
 
@@ -469,7 +573,8 @@ RecordingSessionDestinationTable::~RecordingSessionDestinationTable()
 
 
 RecordingSessionTable::RecordingSessionTable()
-: DatabaseTable(), recorder(0), status(0), abortInitiator(0), totalD3Errors(0), source(0)
+: DatabaseTable(), recorder(0), status(0), abortInitiator(0), totalVTRErrors(0), totalDigiBetaDropouts(0),
+source(0)
 {
 }
 
@@ -497,7 +602,8 @@ CacheTable::~CacheTable()
 
 
 CacheItem::CacheItem()
-: hdDestinationId(-1), pseResult(0), size(-1), duration(-1), sessionId(-1), sourceItemNo(0)
+: ingestFormat(UNKNOWN_INGEST_FORMAT), hdDestinationId(-1), pseResult(0), size(-1), duration(-1),
+sessionId(-1), sourceItemNo(0)
 {
 }
 
@@ -507,7 +613,7 @@ CacheItem::~CacheItem()
 
 
 InfaxExportTable::InfaxExportTable()
-: DatabaseTable(), d3ItemNo(0)
+: DatabaseTable(), sourceItemNo(0)
 {
 }
 InfaxExportTable::~InfaxExportTable()
@@ -516,7 +622,8 @@ InfaxExportTable::~InfaxExportTable()
 
 
 LTOFileTable::LTOFileTable()
-: DatabaseTable(), status(-1), size(-1), realDuration(-1), duration(-1), itemNo(0), sourceItemNo(0)
+: DatabaseTable(), status(-1), size(-1), realDuration(-1), duration(-1), itemNo(0),
+recordingSessionId(-1), ingestFormat(UNKNOWN_INGEST_FORMAT), sourceItemNo(0)
 {
 }
 
@@ -549,6 +656,4 @@ LTOTransferSessionTable::~LTOTransferSessionTable()
 {
     delete lto;
 }
-
-
 

@@ -1,5 +1,5 @@
 /*
- * $Id: indexfile.h,v 1.1 2008/07/08 16:26:44 philipn Exp $
+ * $Id: indexfile.h,v 1.2 2010/09/01 16:05:23 philipn Exp $
  *
  * Boilerplate text added to the LTO index file
  *

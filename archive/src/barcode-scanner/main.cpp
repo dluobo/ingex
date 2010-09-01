@@ -1,5 +1,5 @@
 /*
- * $Id: main.cpp,v 1.1 2008/07/08 16:19:54 philipn Exp $
+ * $Id: main.cpp,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * Copies scanned barcodes to one or more FIFO files.
  *
@@ -27,10 +27,10 @@
     processes, each with it's own FIFO, to share a barcode scanner.
 */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <errno.h>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <cerrno>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <signal.h>

@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderDatabase.cpp,v 1.1 2008/07/08 16:23:02 philipn Exp $
+ * $Id: RecorderDatabase.cpp,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * Provides access to the recorder data in a PostgreSQL database
  *
@@ -105,7 +105,7 @@ static const char* g_loadSourceSQL =
 static const char* g_getSourceRecInstanceStmt = "getsrcrecinstance";
 static const char* g_getSourceRecInstanceSQL = 
 " \
-    SELECT get_rec_instance($1) \
+    SELECT get_rec_instance($1, $2) \
 ";        
         
 static const char* g_resetSourceRecInstanceStmt = "resetsrcrecinstance";
@@ -118,57 +118,77 @@ static const char* g_resetSourceRecInstanceSQL =
 ";        
         
 
-static const char* g_loadD3SourcesStmt = "loadd3sources";
-static const char* g_loadD3SourcesSQL = 
+static const char* g_loadSourceItemsStmt = "loadsourceitems";
+static const char* g_loadSourceItemsSQL = 
 " \
     SELECT \
-        d3s_identifier, \
-        d3s_format, \
-        d3s_prog_title, \
-        d3s_episode_title, \
-        d3s_tx_date, \
-        d3s_mag_prefix, \
-        d3s_prog_no, \
-        d3s_prod_code, \
-        d3s_spool_status, \
-        d3s_stock_date, \
-        d3s_spool_descr, \
-        d3s_memo, \
-        d3s_duration, \
-        d3s_spool_no, \
-        d3s_acc_no, \
-        d3s_cat_detail, \
-        d3s_item_no \
-    FROM D3Source \
+        sit_identifier, \
+        sit_format, \
+        sit_prog_title, \
+        sit_episode_title, \
+        sit_tx_date, \
+        sit_mag_prefix, \
+        sit_prog_no, \
+        sit_prod_code, \
+        sit_spool_status, \
+        sit_stock_date, \
+        sit_spool_descr, \
+        sit_memo, \
+        sit_duration, \
+        sit_spool_no, \
+        sit_acc_no, \
+        sit_cat_detail, \
+        sit_item_no, \
+        sit_aspect_ratio_code, \
+        sit_modified_flag \
+    FROM SourceItem \
     WHERE \
-        d3s_source_id = $1 \
+        sit_source_id = $1 \
     ORDER BY \
-        d3s_item_no ASC \
+        sit_item_no ASC \
 ";       
 
-static const char* g_updateD3SourceStmt = "updated3source";
-static const char* g_updateD3SourceSQL = 
+static const char* g_saveSourceStmt = "savesource";
+static const char* g_saveSourceSQL = 
 " \
-    UPDATE D3Source \
-    SET \
-        d3s_format = $1, \
-        d3s_prog_title = $2, \
-        d3s_episode_title = $3, \
-        d3s_tx_date = $4, \
-        d3s_mag_prefix = $5, \
-        d3s_prog_no = $6, \
-        d3s_prod_code = $7, \
-        d3s_spool_status = $8, \
-        d3s_stock_date = $9, \
-        d3s_spool_descr = $10, \
-        d3s_memo = $11, \
-        d3s_duration = $12, \
-        d3s_spool_no = $13, \
-        d3s_acc_no = $14, \
-        d3s_cat_detail = $15, \
-        d3s_item_no = $16 \
-    WHERE \
-        d3s_identifier = $17 \
+    INSERT INTO SOURCE \
+    ( \
+        src_identifier, \
+        src_type_id, \
+        src_barcode \
+    ) \
+    VALUES \
+    ($1, $2, $3) \
+";        
+        
+static const char* g_saveSourceItemStmt = "savesourceitem";
+static const char* g_saveSourceItemSQL = 
+" \
+    INSERT INTO SourceItem \
+    ( \
+        sit_identifier, \
+        sit_source_id, \
+        sit_format, \
+        sit_prog_title, \
+        sit_episode_title, \
+        sit_tx_date, \
+        sit_mag_prefix, \
+        sit_prog_no, \
+        sit_prod_code, \
+        sit_spool_status, \
+        sit_stock_date, \
+        sit_spool_descr, \
+        sit_memo, \
+        sit_duration, \
+        sit_spool_no, \
+        sit_acc_no, \
+        sit_cat_detail, \
+        sit_item_no, \
+        sit_aspect_ratio_code, \
+        sit_modified_flag \
+    ) \
+    VALUES \
+    ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20) \
 ";        
 
 static const char* g_saveDestStmt = "savedest";
@@ -180,7 +200,7 @@ static const char* g_saveDestSQL =
         des_type_id, \
         des_barcode, \
         des_source_id, \
-        des_d3source_id, \
+        des_source_item_id, \
         des_ingest_item_no \
     ) \
     VALUES \
@@ -193,6 +213,7 @@ static const char* g_saveHDDestSQL =
     INSERT INTO HardDiskDestination \
     ( \
         hdd_identifier, \
+        hdd_format_id, \
         hdd_host, \
         hdd_path, \
         hdd_name, \
@@ -211,7 +232,7 @@ static const char* g_saveHDDestSQL =
         hdd_dest_id \
     ) \
     VALUES \
-        ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17) \
+        ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18) \
 ";        
         
 static const char* g_saveDigibetaDestStmt = "savedigibetadest";
@@ -237,7 +258,8 @@ static const char* g_loadAllMinimalSessionsSQL =
         rcs_status_id, \
         rcs_abort_initiator_id, \
         rcs_comments, \
-        rcs_total_d3_errors \
+        rcs_total_vtr_errors, \
+        rcs_total_digibeta_dropouts \
     FROM RecordingSession \
     WHERE \
         rcs_recorder_id = $1 \
@@ -254,7 +276,8 @@ static const char* g_loadMinimalSessionsSQL =
         rcs_status_id, \
         rcs_abort_initiator_id, \
         rcs_comments, \
-        rcs_total_d3_errors \
+        rcs_total_vtr_errors, \
+        rcs_total_digibeta_dropouts \
     FROM RecordingSession \
     WHERE \
         rcs_recorder_id = $1 AND \
@@ -272,10 +295,11 @@ static const char* g_saveSessionSQL =
         rcs_status_id, \
         rcs_abort_initiator_id, \
         rcs_comments, \
-        rcs_total_d3_errors \
+        rcs_total_vtr_errors, \
+        rcs_total_digibeta_dropouts \
     ) \
     VALUES \
-        ($1, $2, $3, $4, $5, $6, $7) \
+        ($1, $2, $3, $4, $5, $6, $7, $8) \
 ";        
         
 static const char* g_updateSessionStmt = "updatesession";
@@ -286,9 +310,10 @@ static const char* g_updateSessionSQL =
         rcs_status_id = $1, \
         rcs_abort_initiator_id = $2, \
         rcs_comments = $3, \
-        rcs_total_d3_errors = $4 \
+        rcs_total_vtr_errors = $4, \
+        rcs_total_digibeta_dropouts = $5 \
     WHERE \
-        rcs_identifier = $5 \
+        rcs_identifier = $6 \
 ";        
         
 static const char* g_deleteSessionStmt = "deletesession";
@@ -371,6 +396,7 @@ static const char* g_loadCacheItemsSQL =
 " \
     SELECT \
         hdd_identifier, \
+        hdd_format_id, \
         hdd_name, \
         hdd_browse_name, \
         hdd_pse_report_name, \
@@ -381,17 +407,18 @@ static const char* g_loadCacheItemsSQL =
         rcs_creation, \
         rcs_comments, \
         rcs_status_id, \
-        d3s_spool_no, \
-        d3s_item_no, \
-        d3s_prog_no, \
-        d3s_mag_prefix, \
-        d3s_prod_code \
+        sit_format, \
+        sit_spool_no, \
+        sit_item_no, \
+        sit_prog_no, \
+        sit_mag_prefix, \
+        sit_prod_code \
     FROM \
         HardDiskDestination \
         INNER JOIN Destination ON (hdd_dest_id = des_identifier) \
         INNER JOIN SessionDestination ON (sdt_dest_id = des_identifier) \
         INNER JOIN RecordingSession ON (sdt_session_id = rcs_identifier) \
-        INNER JOIN D3Source ON (des_d3source_id = d3s_identifier) \
+        INNER JOIN SourceItem ON (des_source_item_id = sit_identifier) \
     WHERE \
         hdd_cache_id = $1 \
 ";        
@@ -401,6 +428,7 @@ static const char* g_loadCacheItemSQL =
 " \
     SELECT \
         hdd_identifier, \
+        hdd_format_id, \
         hdd_name, \
         hdd_browse_name, \
         hdd_pse_report_name, \
@@ -411,17 +439,18 @@ static const char* g_loadCacheItemSQL =
         rcs_creation, \
         rcs_comments, \
         rcs_status_id, \
-        d3s_spool_no, \
-        d3s_item_no, \
-        d3s_prog_no, \
-        d3s_mag_prefix, \
-        d3s_prod_code \
+        sit_format, \
+        sit_spool_no, \
+        sit_item_no, \
+        sit_prog_no, \
+        sit_mag_prefix, \
+        sit_prod_code \
     FROM \
         HardDiskDestination \
         INNER JOIN Destination ON (hdd_dest_id = des_identifier) \
         INNER JOIN SessionDestination ON (sdt_dest_id = des_identifier) \
         INNER JOIN RecordingSession ON (sdt_session_id = rcs_identifier) \
-        INNER JOIN D3Source ON (des_d3source_id = d3s_identifier) \
+        INNER JOIN SourceItem ON (des_source_item_id = sit_identifier) \
     WHERE \
         hdd_cache_id = $1 AND \
         hdd_name = $2 \
@@ -437,7 +466,7 @@ static const char* g_loadSessionDestsSQL =
         des_type_id, \
         des_barcode, \
         des_source_id, \
-        des_d3source_id, \
+        des_source_item_id, \
         des_ingest_item_no \
     FROM Destination \
         INNER JOIN SessionDestination ON (sdt_dest_id = des_identifier) \
@@ -454,7 +483,7 @@ static const char* g_loadDestinationsSQL =
         des_type_id, \
         des_barcode, \
         des_source_id, \
-        des_d3source_id, \
+        des_source_item_id, \
         des_ingest_item_no \
     FROM Destination \
     WHERE \
@@ -509,6 +538,7 @@ static const char* g_loadHDDestSQL =
 " \
     SELECT \
         hdd_identifier, \
+        hdd_format_id, \
         hdd_host, \
         hdd_path, \
         hdd_name, \
@@ -536,6 +566,7 @@ static const char* g_loadHDDest2SQL =
 " \
     SELECT \
         hdd_identifier, \
+        hdd_format_id, \
         hdd_host, \
         hdd_path, \
         hdd_name, \
@@ -722,12 +753,14 @@ static const char* g_loadLTOFilesSQL =
         ltf_acc_no, \
         ltf_cat_detail, \
         ltf_recording_session_id, \
+        ltf_hdd_format_id, \
         ltf_hdd_host, \
         ltf_hdd_path, \
         ltf_hdd_name, \
         ltf_hdd_material_package_uid, \
         ltf_hdd_file_package_uid, \
         ltf_hdd_tape_package_uid, \
+        ltf_source_format, \
         ltf_source_spool_no, \
         ltf_source_item_no, \
         ltf_source_prog_no, \
@@ -778,12 +811,14 @@ static const char* g_saveLTOFileSQL =
         ltf_acc_no, \
         ltf_cat_detail, \
         ltf_recording_session_id, \
+        ltf_hdd_format_id, \
         ltf_hdd_host, \
         ltf_hdd_path, \
         ltf_hdd_name, \
         ltf_hdd_material_package_uid, \
         ltf_hdd_file_package_uid, \
         ltf_hdd_tape_package_uid, \
+        ltf_source_format, \
         ltf_source_spool_no, \
         ltf_source_item_no, \
         ltf_source_prog_no, \
@@ -791,7 +826,7 @@ static const char* g_saveLTOFileSQL =
         ltf_source_prod_code \
     ) \
     VALUES \
-        ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33) \
+        ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35) \
 ";        
         
 static const char* g_deleteLTOStmt = "deletelto";
@@ -809,8 +844,9 @@ static const char* g_saveInfaxExportSQL =
     ( \
         ixe_identifier, \
         ixe_transfer_date, \
-        ixe_d3_spool_no, \
-        ixe_item_no, \
+        ixe_source_format, \
+        ixe_source_spool_no, \
+        ixe_source_item_no, \
         ixe_prog_title, \
         ixe_episode_title, \
         ixe_mag_prefix, \
@@ -822,7 +858,7 @@ static const char* g_saveInfaxExportSQL =
         ixe_lto_spool_no \
     ) \
     VALUES \
-        ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) \
+        ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) \
 ";        
         
 static const char* g_checkDigibetaUsedStmt = "checkdigibetaused";
@@ -839,8 +875,8 @@ static const char* g_checkDigibetaUsedSQL =
         rcs_status_id = 2 \
 ";        
         
-static const char* g_checkD3UsedStmt = "checkd3used";
-static const char* g_checkD3UsedSQL = 
+static const char* g_checkSourceUsedStmt = "checksourceused";
+static const char* g_checkSourceUsedSQL = 
 " \
     SELECT \
         src_identifier \
@@ -858,10 +894,8 @@ static const char* g_checkD3UsedSQL =
 
 void PostgresRecorderDatabase::initialise(string host, string name, string user, string password)
 {
-    if (_instance)
-    {
-        REC_LOGTHROW(("Database is already initialised"));
-    }
+    REC_ASSERT(!_instance);
+
     _instance = new PostgresRecorderDatabase(host, name, user, password);
 }
 
@@ -914,10 +948,17 @@ void PostgresRecorderDatabase::prepareStatements()
         _connection->prepare(g_loadSourceStmt, g_loadSourceSQL)
             ("varchar", prepare::treat_string);
         
-        _connection->prepare(g_loadD3SourcesStmt, g_loadD3SourcesSQL)
+        _connection->prepare(g_loadSourceItemsStmt, g_loadSourceItemsSQL)
             ("integer", prepare::treat_direct);
 
-        _connection->prepare(g_updateD3SourceStmt, g_updateD3SourceSQL)
+        _connection->prepare(g_saveSourceStmt, g_saveSourceSQL)
+            ("integer", prepare::treat_direct)
+            ("integer", prepare::treat_direct)
+            ("varchar", prepare::treat_string);
+        
+        _connection->prepare(g_saveSourceItemStmt, g_saveSourceItemSQL)
+            ("integer", prepare::treat_direct)
+            ("integer", prepare::treat_direct)
             ("varchar", prepare::treat_string)
             ("varchar", prepare::treat_string)
             ("varchar", prepare::treat_string)
@@ -934,7 +975,8 @@ void PostgresRecorderDatabase::prepareStatements()
             ("varchar", prepare::treat_string)
             ("varchar", prepare::treat_string)
             ("integer", prepare::treat_direct)
-            ("integer", prepare::treat_direct);
+            ("varchar", prepare::treat_string)
+            ("boolean", prepare::treat_bool);
             
         _connection->prepare(g_saveRecorderStmt, g_saveRecorderSQL)
             ("integer", prepare::treat_direct)
@@ -949,6 +991,7 @@ void PostgresRecorderDatabase::prepareStatements()
             ("integer", prepare::treat_direct);
         
         _connection->prepare(g_saveHDDestStmt, g_saveHDDestSQL)
+            ("integer", prepare::treat_direct)
             ("integer", prepare::treat_direct)
             ("varchar", prepare::treat_string)
             ("varchar", prepare::treat_string)
@@ -978,9 +1021,11 @@ void PostgresRecorderDatabase::prepareStatements()
             ("integer", prepare::treat_direct)
             ("integer", prepare::treat_direct)
             ("varchar", prepare::treat_string)
+            ("integer", prepare::treat_direct)
             ("integer", prepare::treat_direct);
         
         _connection->prepare(g_getSourceRecInstanceStmt, g_getSourceRecInstanceSQL)
+            ("varchar", prepare::treat_string)
             ("integer", prepare::treat_direct);
             
         _connection->prepare(g_resetSourceRecInstanceStmt, g_resetSourceRecInstanceSQL)
@@ -992,6 +1037,7 @@ void PostgresRecorderDatabase::prepareStatements()
             ("integer", prepare::treat_direct)
             ("integer", prepare::treat_direct)
             ("varchar", prepare::treat_string)
+            ("integer", prepare::treat_direct)
             ("integer", prepare::treat_direct)
             ("integer", prepare::treat_direct);
         
@@ -1109,7 +1155,7 @@ void PostgresRecorderDatabase::prepareStatements()
         _connection->prepare(g_checkDigibetaUsedStmt, g_checkDigibetaUsedSQL)
             ("varchar", prepare::treat_string);
             
-        _connection->prepare(g_checkD3UsedStmt, g_checkD3UsedSQL)
+        _connection->prepare(g_checkSourceUsedStmt, g_checkSourceUsedSQL)
             ("varchar", prepare::treat_string);
             
         _connection->prepare(g_loadSessionLTOStmt, g_loadSessionLTOSQL)
@@ -1146,6 +1192,8 @@ void PostgresRecorderDatabase::prepareStatements()
             ("varchar", prepare::treat_string)
             ("varchar", prepare::treat_string)
             ("integer", prepare::treat_direct)
+            ("integer", prepare::treat_direct)
+            ("varchar", prepare::treat_string)
             ("varchar", prepare::treat_string)
             ("varchar", prepare::treat_string)
             ("varchar", prepare::treat_string)
@@ -1164,6 +1212,7 @@ void PostgresRecorderDatabase::prepareStatements()
             
         _connection->prepare(g_saveInfaxExportStmt, g_saveInfaxExportSQL)
             ("integer", prepare::treat_direct)
+            ("varchar", prepare::treat_string)
             ("varchar", prepare::treat_string)
             ("varchar", prepare::treat_string)
             ("integer", prepare::treat_direct)
@@ -1242,7 +1291,7 @@ Source* PostgresRecorderDatabase::loadSource(string barcode)
             return 0;
         }
         
-        if (readLong(res[0][1], -1) != D3_TAPE_SOURCE_TYPE)
+        if (readLong(res[0][1], -1) != VIDEO_TAPE_SOURCE_TYPE)
         {
             Logging::warning("Unknown source type %d\n", readLong(res[0][1], -1));
             return 0;
@@ -1250,26 +1299,26 @@ Source* PostgresRecorderDatabase::loadSource(string barcode)
         
         auto_ptr<Source> retSource(new Source());
         retSource->databaseId = readLong(res[0][0], -1);
-        // res[0][1] "src_type_id" not yet used because the type is assumed to  == 1 (D3) 
+        // res[0][1] "src_type_id" not yet used because the type is assumed to be VIDEO_TAPE_SOURCE_TYPE
         retSource->barcode = readString(res[0][2]);
         retSource->recInstance = readLong(res[0][3], -1);
         
-        // read the concrete D3 sources
-        retSource->concreteSources = loadD3Sources(ts, retSource->databaseId);
+        // read the source items
+        retSource->concreteSources = loadSourceItems(ts, retSource->databaseId);
         
         return retSource.release();
     }
     END_WORK("Load source")
 }
 
-long PostgresRecorderDatabase::getNewSourceRecordingInstance(long sourceId)
+long PostgresRecorderDatabase::getNewSourceRecordingInstance(string barcode, long sourceId)
 {
     START_WORK
     {
         LOCK_SECTION(_accessMutex);
         
         work ts(*_connection, "get new source recording instance");
-        result res = ts.prepared(g_getSourceRecInstanceStmt)(sourceId).exec();
+        result res = ts.prepared(g_getSourceRecInstanceStmt)(barcode)(sourceId).exec();
         ts.commit();
         
         if (res.size() == 0)
@@ -1298,40 +1347,35 @@ void PostgresRecorderDatabase::resetSourceRecordingInstance(long sourceId, long 
     END_WORK("Reset source recording instance number")
 }
 
-void PostgresRecorderDatabase::updateConcreteSource(ConcreteSource* source)
+void PostgresRecorderDatabase::saveSource(Source* source)
 {
-    // only D3 sources are supported
-    REC_ASSERT(source->getTypeId() == D3_TAPE_SOURCE_TYPE);
-    D3Source* d3Source = dynamic_cast<D3Source*>(source);
-    
     START_WORK
     {
         LOCK_SECTION(_accessMutex);
         
-        work ts(*_connection, "update d3 source");
+        work ts(*_connection, "save source");
+        long nextId = getNextId(ts, "src_id_seq");
         
-        ts.prepared(g_updateD3SourceStmt)
-            (d3Source->format, d3Source->format.size() > 0)
-            (d3Source->progTitle, d3Source->progTitle.size() > 0)
-            (d3Source->episodeTitle, d3Source->episodeTitle.size() > 0)
-            (writeDate(d3Source->txDate), d3Source->txDate != g_nullDate)
-            (d3Source->magPrefix, d3Source->magPrefix.size() > 0)
-            (d3Source->progNo, d3Source->progNo.size() > 0)
-            (d3Source->prodCode, d3Source->prodCode.size() > 0)
-            (d3Source->spoolStatus, d3Source->spoolStatus.size() > 0)
-            (writeDate(d3Source->stockDate), d3Source->stockDate != g_nullDate)
-            (d3Source->spoolDescr, d3Source->spoolDescr.size() > 0)
-            (d3Source->memo, d3Source->memo.size() > 0)
-            (d3Source->duration, d3Source->duration >= 0)
-            (d3Source->spoolNo, d3Source->spoolNo.size() > 0)
-            (d3Source->accNo, d3Source->accNo.size() > 0)
-            (d3Source->catDetail, d3Source->catDetail.size() > 0)
-            (d3Source->itemNo, d3Source->itemNo > 0)
-            (d3Source->databaseId).exec();
+        ts.prepared(g_saveSourceStmt)
+            (nextId)
+            (VIDEO_TAPE_SOURCE_TYPE)
+            (source->barcode).exec();
         
+        size_t i;
+        for (i = 0; i < source->concreteSources.size(); i++)
+        {
+            // only video tape sources are supported
+            REC_ASSERT(source->concreteSources[i]->getTypeId() == VIDEO_TAPE_SOURCE_TYPE);
+            SourceItem* sourceItem = dynamic_cast<SourceItem*>(source->concreteSources[i]);
+            
+            saveSourceItem(ts, nextId, sourceItem);
+        }
+
         ts.commit();
+        
+        source->databaseId = nextId;
     }
-    END_WORK("Update D3 source")
+    END_WORK("Save source")
 }
 
 vector<RecordingSessionTable*> PostgresRecorderDatabase::loadMinimalSessions(long recorderId, int status)
@@ -1365,7 +1409,8 @@ vector<RecordingSessionTable*> PostgresRecorderDatabase::loadMinimalSessions(lon
             session->status = readInt((*iter)[4], -1);
             session->abortInitiator = readInt((*iter)[5], -1);
             session->comments = readString((*iter)[6]);
-            session->totalD3Errors = readLong((*iter)[7], 0);
+            session->totalVTRErrors = readLong((*iter)[7], 0);
+            session->totalDigiBetaDropouts = readLong((*iter)[8], 0);
             // minimal session has no sources and no destinations
         }
         return result.release();
@@ -1393,7 +1438,8 @@ void PostgresRecorderDatabase::saveSession(RecordingSessionTable* session)
             (session->status)
             (session->abortInitiator, session->abortInitiator >= 0)
             (session->comments)
-            (session->totalD3Errors, session->totalD3Errors >= 0).exec();
+            (session->totalVTRErrors, session->totalVTRErrors >= 0)
+            (session->totalDigiBetaDropouts, session->totalDigiBetaDropouts >= 0).exec();
         session->databaseId = nextSessionId;
         session->creation = now;
         
@@ -1462,7 +1508,8 @@ void PostgresRecorderDatabase::updateSession(RecordingSessionTable* session)
             (session->status)
             (session->abortInitiator, session->abortInitiator >= 0)
             (session->comments)
-            (session->totalD3Errors)
+            (session->totalVTRErrors)
+            (session->totalDigiBetaDropouts)
             (session->databaseId).exec();
         
         ts.commit();
@@ -1560,21 +1607,23 @@ vector<CacheItem*> PostgresRecorderDatabase::loadCacheItems(long cacheId)
             result.get().push_back(new CacheItem());
             item = result.get().back();
             item->hdDestinationId = readLong((*iter)[0], -1);
-            item->name = readString((*iter)[1]);
-            item->browseName = readString((*iter)[2]);
-            item->pseName = readString((*iter)[3]);
-            item->pseResult = readInt((*iter)[4], 0);
-            item->size = readInt64((*iter)[5], -1);
-            item->duration = readInt64((*iter)[6], -1);
-            item->sessionId = readLong((*iter)[7], -1);
-            item->sessionCreation = readTimestamp((*iter)[8], g_nullTimestamp);
-            item->sessionComments = readString((*iter)[9]);
-            item->sessionStatus = readInt((*iter)[10], -1);
-            item->sourceSpoolNo = readString((*iter)[11]);
-            item->sourceItemNo = readInt((*iter)[12], 0);
-            item->sourceProgNo = readString((*iter)[13]);
-            item->sourceMagPrefix = readString((*iter)[14]);
-            item->sourceProdCode = readString((*iter)[15]);
+            item->ingestFormat = (IngestFormat)(readEnum((*iter)[1]));
+            item->name = readString((*iter)[2]);
+            item->browseName = readString((*iter)[3]);
+            item->pseName = readString((*iter)[4]);
+            item->pseResult = readInt((*iter)[5], 0);
+            item->size = readInt64((*iter)[6], -1);
+            item->duration = readInt64((*iter)[7], -1);
+            item->sessionId = readLong((*iter)[8], -1);
+            item->sessionCreation = readTimestamp((*iter)[9], g_nullTimestamp);
+            item->sessionComments = readString((*iter)[10]);
+            item->sessionStatus = readInt((*iter)[11], -1);
+            item->sourceFormat = readString((*iter)[12]);
+            item->sourceSpoolNo = readString((*iter)[13]);
+            item->sourceItemNo = readInt((*iter)[14], 0);
+            item->sourceProgNo = readString((*iter)[15]);
+            item->sourceMagPrefix = readString((*iter)[16]);
+            item->sourceProdCode = readString((*iter)[17]);
         }
         
         return result.release();
@@ -1601,21 +1650,23 @@ CacheItem* PostgresRecorderDatabase::loadCacheItem(long cacheId, string name)
         
         auto_ptr<CacheItem> item(new CacheItem());
         item->hdDestinationId = readLong(res[0][0], -1);
-        item->name = readString(res[0][1]);
-        item->browseName = readString(res[0][2]);
-        item->pseName = readString(res[0][3]);
-        item->pseResult = readInt(res[0][4], 0);
-        item->size = readInt64(res[0][5], -1);
-        item->duration = readInt64(res[0][6], -1);
-        item->sessionId = readLong(res[0][7], -1);
-        item->sessionCreation = readTimestamp(res[0][8], g_nullTimestamp);
-        item->sessionComments = readString(res[0][9]);
-        item->sessionStatus = readInt(res[0][10], -1);
-        item->sourceSpoolNo = readString(res[0][11]);
-        item->sourceItemNo = readInt(res[0][12], 0);
-        item->sourceProgNo = readString(res[0][13]);
-        item->sourceMagPrefix = readString(res[0][14]);
-        item->sourceProdCode = readString(res[0][15]);
+        item->ingestFormat = (IngestFormat)(readEnum(res[0][1]));
+        item->name = readString(res[0][2]);
+        item->browseName = readString(res[0][3]);
+        item->pseName = readString(res[0][4]);
+        item->pseResult = readInt(res[0][5], 0);
+        item->size = readInt64(res[0][6], -1);
+        item->duration = readInt64(res[0][7], -1);
+        item->sessionId = readLong(res[0][8], -1);
+        item->sessionCreation = readTimestamp(res[0][9], g_nullTimestamp);
+        item->sessionComments = readString(res[0][10]);
+        item->sessionStatus = readInt(res[0][11], -1);
+        item->sourceFormat = readString(res[0][12]);
+        item->sourceSpoolNo = readString(res[0][13]);
+        item->sourceItemNo = readInt(res[0][14], 0);
+        item->sourceProgNo = readString(res[0][15]);
+        item->sourceMagPrefix = readString(res[0][16]);
+        item->sourceProdCode = readString(res[0][17]);
         
         return item.release();
     }
@@ -1644,7 +1695,7 @@ vector<Destination*> PostgresRecorderDatabase::loadSessionDestinations(long sess
             typeIds.push_back(readInt((*resIter)[1], -1));
             dest->barcode = readString((*resIter)[2]);
             dest->sourceId = readLong((*resIter)[3], -1);
-            dest->d3SourceId = readLong((*resIter)[4], -1);
+            dest->sourceItemId = readLong((*resIter)[4], -1);
             dest->ingestItemNo = readInt((*resIter)[5], -1);
         }
         
@@ -1659,9 +1710,9 @@ vector<Destination*> PostgresRecorderDatabase::loadSessionDestinations(long sess
             {
                 (*destIter)->concreteDestination = loadHardDiskDestination(ts, (*destIter)->databaseId);
             }
-            else // (*typeIdIter) == DIGIBETA_DEST_TYPE)
+            else // (*typeIdIter) == VIDEO_TAPE_DEST_TYPE)
             {
-                REC_ASSERT((*typeIdIter) == DIGIBETA_DEST_TYPE);
+                REC_ASSERT((*typeIdIter) == VIDEO_TAPE_DEST_TYPE);
                 (*destIter)->concreteDestination = loadDigibetaDestination(ts, (*destIter)->databaseId);
             }
         }
@@ -1695,7 +1746,7 @@ vector<Destination*> PostgresRecorderDatabase::loadDestinations(string barcode)
             typeIds.push_back(readInt((*resIter)[1], -1));
             dest->barcode = readString((*resIter)[2]);
             dest->sourceId = readLong((*resIter)[3], -1);
-            dest->d3SourceId = readLong((*resIter)[4], -1);
+            dest->sourceItemId = readLong((*resIter)[4], -1);
             dest->ingestItemNo = readInt((*resIter)[5], -1);
         }
         
@@ -1710,9 +1761,9 @@ vector<Destination*> PostgresRecorderDatabase::loadDestinations(string barcode)
             {
                 (*destIter)->concreteDestination = loadHardDiskDestination(ts, (*destIter)->databaseId);
             }
-            else // (*typeIdIter) == DIGIBETA_DEST_TYPE)
+            else // (*typeIdIter) == VIDEO_TAPE_DEST_TYPE)
             {
-                REC_ASSERT((*typeIdIter) == DIGIBETA_DEST_TYPE);
+                REC_ASSERT((*typeIdIter) == VIDEO_TAPE_DEST_TYPE);
                 (*destIter)->concreteDestination = loadDigibetaDestination(ts, (*destIter)->databaseId);
             }
         }
@@ -1814,21 +1865,22 @@ HardDiskDestination* PostgresRecorderDatabase::loadHDDest(long hdDestId)
         
         auto_ptr<HardDiskDestination> hdd(new HardDiskDestination());
         hdd->databaseId = readLong(res[0][0], -1);
-        hdd->hostName = readString(res[0][1]);
-        hdd->path = readString(res[0][2]);
-        hdd->name = readString(res[0][3]);
-        hdd->materialPackageUID.fromString(readString(res[0][4]));
-        hdd->filePackageUID.fromString(readString(res[0][5]));
-        hdd->tapePackageUID.fromString(readString(res[0][6]));
-        hdd->browsePath = readString(res[0][7]);
-        hdd->browseName = readString(res[0][8]);
-        hdd->psePath = readString(res[0][9]);
-        hdd->pseName = readString(res[0][10]);
-        hdd->pseResult = readInt(res[0][11], 0);
-        hdd->size = readInt64(res[0][12], -1);
-        hdd->duration = readInt64(res[0][13], -1);
-        hdd->browseSize = readInt64(res[0][14], -1);
-        hdd->cacheId = readLong(res[0][15], -1);
+        hdd->ingestFormat = (IngestFormat)(readEnum(res[0][1]));
+        hdd->hostName = readString(res[0][2]);
+        hdd->path = readString(res[0][3]);
+        hdd->name = readString(res[0][4]);
+        hdd->materialPackageUID.fromString(readString(res[0][5]));
+        hdd->filePackageUID.fromString(readString(res[0][6]));
+        hdd->tapePackageUID.fromString(readString(res[0][7]));
+        hdd->browsePath = readString(res[0][8]);
+        hdd->browseName = readString(res[0][9]);
+        hdd->psePath = readString(res[0][10]);
+        hdd->pseName = readString(res[0][11]);
+        hdd->pseResult = readInt(res[0][12], 0);
+        hdd->size = readInt64(res[0][13], -1);
+        hdd->duration = readInt64(res[0][14], -1);
+        hdd->browseSize = readInt64(res[0][15], -1);
+        hdd->cacheId = readLong(res[0][16], -1);
         
         return hdd.release();
     }
@@ -1849,7 +1901,7 @@ Source* PostgresRecorderDatabase::loadHDDSource(long hdDestId)
             REC_LOGTHROW(("Failed to load source for hard disk destination %ld", hdDestId));
         }
         
-        if (readLong(res[0][1], -1) != D3_TAPE_SOURCE_TYPE)
+        if (readLong(res[0][1], -1) != VIDEO_TAPE_SOURCE_TYPE)
         {
             REC_LOGTHROW(("Unknown source type %d\n", readLong(res[0][1], -1)));
         }
@@ -1857,13 +1909,13 @@ Source* PostgresRecorderDatabase::loadHDDSource(long hdDestId)
         
         auto_ptr<Source> retSource(new Source());
         retSource->databaseId = readLong(res[0][0], -1);
-        // res[0][1] "src_type_id" not yet used because the type is assumed to  == 1 (D3) 
+        // res[0][1] "src_type_id" not yet used because the type is assumed to be VIDEO_TAPE_SOURCE_TYPE
         retSource->barcode = readString(res[0][2]);
         retSource->recInstance = readLong(res[0][3], -1);
         
         
-        // read the concrete D3 sources
-        retSource->concreteSources = loadD3Sources(ts, retSource->databaseId);
+        // read the source items
+        retSource->concreteSources = loadSourceItems(ts, retSource->databaseId);
         
         return retSource.release();
     }
@@ -2044,19 +2096,19 @@ bool PostgresRecorderDatabase::digibetaUsedInCompletedSession(string spoolNo)
     END_WORK("Check digibeta used in completed session")
 }
 
-bool PostgresRecorderDatabase::d3UsedInCompletedSession(string spoolNo)
+bool PostgresRecorderDatabase::sourceUsedInCompletedSession(string spoolNo)
 {
     START_WORK
     {
         LOCK_SECTION(_accessMutex);
         
-        work ts(*_connection, "check d3 used");
-        result res = ts.prepared(g_checkD3UsedStmt)
+        work ts(*_connection, "check source used");
+        result res = ts.prepared(g_checkSourceUsedStmt)
             (spoolNo).exec();
         
         return res.size() > 0;
     }
-    END_WORK("Check D3 used in completed session")
+    END_WORK("Check source used in completed session")
 }
 
 void PostgresRecorderDatabase::saveInfaxExport(InfaxExportTable* infaxExport)
@@ -2072,8 +2124,9 @@ void PostgresRecorderDatabase::saveInfaxExport(InfaxExportTable* infaxExport)
         ts.prepared(g_saveInfaxExportStmt)
             (nextExportId)
             (writeTimestamp(infaxExport->transferDate))
-            (infaxExport->d3SpoolNo)
-            (infaxExport->d3ItemNo)
+            (infaxExport->sourceFormat)
+            (infaxExport->sourceSpoolNo)
+            (infaxExport->sourceItemNo)
             (infaxExport->progTitle)
             (infaxExport->episodeTitle)
             (infaxExport->magPrefix)
@@ -2103,7 +2156,7 @@ void PostgresRecorderDatabase::saveDestination(work& ts, Destination* destinatio
             (destination->concreteDestination->getTypeId())
             (destination->barcode, destination->barcode.size() > 0)
             (destination->sourceId)
-            (destination->d3SourceId, destination->d3SourceId > 0)
+            (destination->sourceItemId, destination->sourceItemId > 0)
             (destination->ingestItemNo, destination->ingestItemNo > 0).exec();
         destination->databaseId = nextDestId;
 
@@ -2111,9 +2164,9 @@ void PostgresRecorderDatabase::saveDestination(work& ts, Destination* destinatio
         {
             saveHardDiskDestination(ts, nextDestId, dynamic_cast<HardDiskDestination*>(destination->concreteDestination));
         }
-        else // (destination->concreteDestination->getTypeId() == DIGIBETA_DEST_TYPE)
+        else // (destination->concreteDestination->getTypeId() == VIDEO_TAPE_DEST_TYPE)
         {
-            REC_ASSERT(destination->concreteDestination->getTypeId() == DIGIBETA_DEST_TYPE);
+            REC_ASSERT(destination->concreteDestination->getTypeId() == VIDEO_TAPE_DEST_TYPE);
             saveDigibetaDestination(ts, nextDestId, dynamic_cast<DigibetaDestination*>(destination->concreteDestination));
         }
     }
@@ -2128,6 +2181,7 @@ void PostgresRecorderDatabase::saveHardDiskDestination(work& ts, long destId, Ha
         
         ts.prepared(g_saveHDDestStmt)
             (nextHDDId)
+            ((int)(hdd->ingestFormat))
             (hdd->hostName)
             (hdd->path)
             (hdd->name)
@@ -2177,21 +2231,22 @@ HardDiskDestination* PostgresRecorderDatabase::loadHardDiskDestination(work& ts,
         
         auto_ptr<HardDiskDestination> hdd(new HardDiskDestination());
         hdd->databaseId = readLong(res[0][0], -1);
-        hdd->hostName = readString(res[0][1]);
-        hdd->path = readString(res[0][2]);
-        hdd->name = readString(res[0][3]);
-        hdd->materialPackageUID.fromString(readString(res[0][4]));
-        hdd->filePackageUID.fromString(readString(res[0][5]));
-        hdd->tapePackageUID.fromString(readString(res[0][6]));
-        hdd->browsePath = readString(res[0][7]);
-        hdd->browseName = readString(res[0][8]);
-        hdd->psePath = readString(res[0][9]);
-        hdd->pseName = readString(res[0][10]);
-        hdd->pseResult = readInt(res[0][11], 0);
-        hdd->size = readInt64(res[0][12], -1);
-        hdd->duration = readInt64(res[0][13], -1);
-        hdd->browseSize = readInt64(res[0][14], -1);
-        hdd->cacheId = readLong(res[0][15], -1);
+        hdd->ingestFormat = (IngestFormat)(readEnum(res[0][1]));
+        hdd->hostName = readString(res[0][2]);
+        hdd->path = readString(res[0][3]);
+        hdd->name = readString(res[0][4]);
+        hdd->materialPackageUID.fromString(readString(res[0][5]));
+        hdd->filePackageUID.fromString(readString(res[0][6]));
+        hdd->tapePackageUID.fromString(readString(res[0][7]));
+        hdd->browsePath = readString(res[0][8]);
+        hdd->browseName = readString(res[0][9]);
+        hdd->psePath = readString(res[0][10]);
+        hdd->pseName = readString(res[0][11]);
+        hdd->pseResult = readInt(res[0][12], 0);
+        hdd->size = readInt64(res[0][13], -1);
+        hdd->duration = readInt64(res[0][14], -1);
+        hdd->browseSize = readInt64(res[0][15], -1);
+        hdd->cacheId = readLong(res[0][16], -1);
         
         return hdd.release();
     }
@@ -2218,49 +2273,84 @@ DigibetaDestination* PostgresRecorderDatabase::loadDigibetaDestination(work& ts,
     END_WORK("Load digibeta destination")
 }
 
-vector<ConcreteSource*> PostgresRecorderDatabase::loadD3Sources(pqxx::work& ts, long databaseId)
+vector<ConcreteSource*> PostgresRecorderDatabase::loadSourceItems(pqxx::work& ts, long sourceDatabaseId)
 {
     START_WORK
     {
-        result res = ts.prepared(g_loadD3SourcesStmt)(databaseId).exec();
+        result res = ts.prepared(g_loadSourceItemsStmt)(sourceDatabaseId).exec();
         
         if (res.size() == 0)
         {
-            REC_LOGTHROW(("Failed to load the concrete D3 source associated with source %ld\n", databaseId)); 
+            REC_LOGTHROW(("Failed to load the source item associated with source %ld\n", sourceDatabaseId)); 
         }
 
-        AutoPointerVector<ConcreteSource> d3Sources;
-        D3Source* d3Source;
+        AutoPointerVector<ConcreteSource> sourceItems;
+        SourceItem* sourceItem;
         
         result::const_iterator resIter;
         for (resIter = res.begin(); resIter != res.end(); resIter++)
         {
-            d3Sources.get().push_back(new D3Source());
-            d3Source = dynamic_cast<D3Source*>(d3Sources.get().back());
+            sourceItems.get().push_back(new SourceItem());
+            sourceItem = dynamic_cast<SourceItem*>(sourceItems.get().back());
 
-            d3Source->databaseId = readLong((*resIter)[0], -1);
-            d3Source->format = readString((*resIter)[1]);
-            d3Source->progTitle = readString((*resIter)[2]);
-            d3Source->episodeTitle = readString((*resIter)[3]);
-            d3Source->txDate = readDate((*resIter)[4], g_nullDate);
-            d3Source->magPrefix = readString((*resIter)[5]);
-            d3Source->progNo = readString((*resIter)[6]);
-            d3Source->prodCode = readString((*resIter)[7]);
-            d3Source->spoolStatus = readString((*resIter)[8]);
-            d3Source->stockDate = readDate((*resIter)[9], g_nullDate);
-            d3Source->spoolDescr = readString((*resIter)[10]);
-            d3Source->memo = readString((*resIter)[11]);
-            d3Source->duration = readInt64((*resIter)[12], -1);
-            d3Source->spoolNo = readString((*resIter)[13]);
-            d3Source->accNo = readString((*resIter)[14]);
-            d3Source->catDetail = readString((*resIter)[15]);
-            d3Source->itemNo = readInt((*resIter)[16], 0);
+            sourceItem->databaseId = readLong((*resIter)[0], -1);
+            sourceItem->format = readString((*resIter)[1]);
+            sourceItem->progTitle = readString((*resIter)[2]);
+            sourceItem->episodeTitle = readString((*resIter)[3]);
+            sourceItem->txDate = readDate((*resIter)[4], g_nullDate);
+            sourceItem->magPrefix = readString((*resIter)[5]);
+            sourceItem->progNo = readString((*resIter)[6]);
+            sourceItem->prodCode = readString((*resIter)[7]);
+            sourceItem->spoolStatus = readString((*resIter)[8]);
+            sourceItem->stockDate = readDate((*resIter)[9], g_nullDate);
+            sourceItem->spoolDescr = readString((*resIter)[10]);
+            sourceItem->memo = readString((*resIter)[11]);
+            sourceItem->duration = readInt64((*resIter)[12], -1);
+            sourceItem->spoolNo = readString((*resIter)[13]);
+            sourceItem->accNo = readString((*resIter)[14]);
+            sourceItem->catDetail = readString((*resIter)[15]);
+            sourceItem->itemNo = readInt((*resIter)[16], 0);
+            sourceItem->aspectRatioCode = readString((*resIter)[17]);
+            sourceItem->modifiedFlag = readBool((*resIter)[18], false);
         }
         
-        return d3Sources.release();
+        return sourceItems.release();
     }
-    END_WORK("Load D3 Sources")
+    END_WORK("Load source items")
 }    
+
+void PostgresRecorderDatabase::saveSourceItem(pqxx::work& ts, long sourceDatabaseId, SourceItem* sourceItem)
+{
+    START_WORK
+    {
+        long nextId = getNextId(ts, "sit_id_seq");
+        
+        ts.prepared(g_saveSourceItemStmt)
+            (nextId)
+            (sourceDatabaseId)
+            (sourceItem->format, sourceItem->format.size() > 0)
+            (sourceItem->progTitle, sourceItem->progTitle.size() > 0)
+            (sourceItem->episodeTitle, sourceItem->episodeTitle.size() > 0)
+            (writeDate(sourceItem->txDate), sourceItem->txDate != g_nullDate)
+            (sourceItem->magPrefix, sourceItem->magPrefix.size() > 0)
+            (sourceItem->progNo, sourceItem->progNo.size() > 0)
+            (sourceItem->prodCode, sourceItem->prodCode.size() > 0)
+            (sourceItem->spoolStatus, sourceItem->spoolStatus.size() > 0)
+            (writeDate(sourceItem->stockDate), sourceItem->stockDate != g_nullDate)
+            (sourceItem->spoolDescr, sourceItem->spoolDescr.size() > 0)
+            (sourceItem->memo, sourceItem->memo.size() > 0)
+            (sourceItem->duration, sourceItem->duration >= 0)
+            (sourceItem->spoolNo, sourceItem->spoolNo.size() > 0)
+            (sourceItem->accNo, sourceItem->accNo.size() > 0)
+            (sourceItem->catDetail, sourceItem->catDetail.size() > 0)
+            (sourceItem->itemNo, sourceItem->itemNo > 0)
+            (sourceItem->aspectRatioCode, sourceItem->aspectRatioCode.size() > 0)
+            (sourceItem->modifiedFlag).exec();
+            
+       sourceItem->databaseId = nextId;
+    }
+    END_WORK("Save source item")
+}
 
 LTOTable* PostgresRecorderDatabase::loadSessionLTO(pqxx::work& ts, long sessionId)
 {
@@ -2325,17 +2415,19 @@ vector<LTOFileTable*> PostgresRecorderDatabase::loadLTOFiles(pqxx::work& ts, lon
             ltoFile->accNo = readString((*resIter)[18]);
             ltoFile->catDetail = readString((*resIter)[19]);
             ltoFile->recordingSessionId = readLong((*resIter)[20], -1);
-            ltoFile->hddHostName = readString((*resIter)[21]);
-            ltoFile->hddPath = readString((*resIter)[22]);
-            ltoFile->hddName = readString((*resIter)[23]);
-            ltoFile->materialPackageUID.fromString(readString((*resIter)[24]));
-            ltoFile->filePackageUID.fromString(readString((*resIter)[25]));
-            ltoFile->tapePackageUID.fromString(readString((*resIter)[26]));
-            ltoFile->sourceSpoolNo = readString((*resIter)[27]);
-            ltoFile->sourceItemNo = readInt((*resIter)[28], 0);
-            ltoFile->sourceProgNo = readString((*resIter)[29]);
-            ltoFile->sourceMagPrefix = readString((*resIter)[30]);
-            ltoFile->sourceProdCode = readString((*resIter)[31]);
+            ltoFile->ingestFormat = (IngestFormat)(readEnum((*resIter)[21]));
+            ltoFile->hddHostName = readString((*resIter)[22]);
+            ltoFile->hddPath = readString((*resIter)[23]);
+            ltoFile->hddName = readString((*resIter)[24]);
+            ltoFile->materialPackageUID.fromString(readString((*resIter)[25]));
+            ltoFile->filePackageUID.fromString(readString((*resIter)[26]));
+            ltoFile->tapePackageUID.fromString(readString((*resIter)[27]));
+            ltoFile->sourceFormat = readString((*resIter)[28]);
+            ltoFile->sourceSpoolNo = readString((*resIter)[29]);
+            ltoFile->sourceItemNo = readInt((*resIter)[30], 0);
+            ltoFile->sourceProgNo = readString((*resIter)[31]);
+            ltoFile->sourceMagPrefix = readString((*resIter)[32]);
+            ltoFile->sourceProdCode = readString((*resIter)[33]);
         }
         
         return files.release();
@@ -2394,12 +2486,14 @@ void PostgresRecorderDatabase::saveLTOFile(pqxx::work& ts, long ltoId, LTOFileTa
             (ltoFile->accNo, ltoFile->accNo.size() > 0)
             (ltoFile->catDetail, ltoFile->catDetail.size() > 0)
             (ltoFile->recordingSessionId)
+            ((int)(ltoFile->ingestFormat))
             (ltoFile->hddHostName)
             (ltoFile->hddPath)
             (ltoFile->hddName)
             (ltoFile->materialPackageUID.toString(), ltoFile->materialPackageUID != g_nullUMID)
             (ltoFile->filePackageUID.toString(), ltoFile->filePackageUID != g_nullUMID)
             (ltoFile->tapePackageUID.toString(), ltoFile->tapePackageUID != g_nullUMID)
+            (ltoFile->sourceFormat)
             (ltoFile->sourceSpoolNo)
             (ltoFile->sourceItemNo)
             (ltoFile->sourceProgNo)
@@ -2422,5 +2516,4 @@ void PostgresRecorderDatabase::deleteLTO(pqxx::work& ts, LTOTable* lto)
     }
     END_WORK("Delete LTO")
 }
-
 

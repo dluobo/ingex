@@ -1,5 +1,5 @@
 /*
- * $Id: main.cpp,v 1.1 2008/07/08 16:24:07 philipn Exp $
+ * $Id: main.cpp,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * Generates a MPEG-2 browse copy, timecode and source info file from a D3 MXF file.
  *
@@ -26,20 +26,21 @@
     This set of files is the same as that generated at the time of ingest.
 */
  
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <errno.h>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <cerrno>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include <time.h>
+#include <ctime>
 
 #include <string>
 
-#include "D3MXFFile.h"
+#include "ArchiveMXFFile.h"
 #include "RecorderException.h"
 #include "Logging.h"
+#include "MXFCommon.h"
 
 #include "browse_encoder.h"
 #include "video_conversion.h"
@@ -343,6 +344,10 @@ int main(int argc, const char** argv)
         return 1;
     }
     
+    
+    // redirect libMXF log messages
+    redirect_mxf_logging();
+    
 
     int16_t* stereoAudio = new int16_t[1920 * 2];
     memset(stereoAudio, 0, 1920 * 2 * sizeof(int16_t));
@@ -353,7 +358,11 @@ int main(int argc, const char** argv)
     try
     {
         // open the MXF file
-        D3MXFFile mxfFile(mxfFilename);
+        ArchiveMXFFile mxfFile(mxfFilename);
+        if (!mxfFile.isComplete())
+        {
+            throw RecorderException("MXF file '%s' is incomplete", mxfFilename.c_str());
+        }
         Logging::info("MXF file: '%s'\n", mxfFilename.c_str());
 
         int64_t duration = mxfFile.getDuration();
@@ -377,7 +386,7 @@ int main(int argc, const char** argv)
         
         
         // write the info file
-        InfaxData* d3InfaxData = mxfFile.getD3InfaxData();
+        const InfaxData* sourceInfaxData = mxfFile.getSourceInfaxData();
         FILE* infoFile = fopen(infoFilename.c_str(), "wb");
         if (infoFile == 0)
         {
@@ -390,28 +399,30 @@ int main(int argc, const char** argv)
         fprintf(infoFile, "Local time: %s\n", get_user_timestamp_string().c_str());
         
         fprintf(infoFile, "\n\n\nSource Information\n\n");
-        fprintf(infoFile, "Format: %s\n", d3InfaxData->format);
-        fprintf(infoFile, "Programme Title: %s\n", d3InfaxData->progTitle);
-        fprintf(infoFile, "Episode Title: %s\n", d3InfaxData->epTitle);
-        fprintf(infoFile, "Tx Date: %s\n", get_date_string(d3InfaxData->txDate).c_str());
-        fprintf(infoFile, "Magazine Prefix: %s\n", d3InfaxData->magPrefix);
-        fprintf(infoFile, "Programme No.: %s\n", d3InfaxData->progNo);
-        fprintf(infoFile, "Production Code: %s\n", d3InfaxData->prodCode);
-        fprintf(infoFile, "Spool Status: %s\n", d3InfaxData->spoolStatus);
-        fprintf(infoFile, "Stock Date: %s\n", get_date_string(d3InfaxData->stockDate).c_str());
-        fprintf(infoFile, "Spool Description: %s\n", d3InfaxData->spoolDesc);
-        fprintf(infoFile, "Duration: %s\n", get_duration_string(d3InfaxData->duration * 25).c_str());
-        fprintf(infoFile, "Spool No.: %s\n", d3InfaxData->spoolNo);
-        fprintf(infoFile, "Accession No.: %s\n", d3InfaxData->accNo);
-        fprintf(infoFile, "Catalogue Detail: %s\n", d3InfaxData->catDetail);
-        fprintf(infoFile, "Memo: %s\n", d3InfaxData->memo);
-        fprintf(infoFile, "Item No.: %d\n", d3InfaxData->itemNo);
+        fprintf(infoFile, "Format: %s\n", sourceInfaxData->format);
+        fprintf(infoFile, "Programme Title: %s\n", sourceInfaxData->progTitle);
+        fprintf(infoFile, "Episode Title: %s\n", sourceInfaxData->epTitle);
+        fprintf(infoFile, "Tx Date: %s\n", get_date_string(sourceInfaxData->txDate).c_str());
+        fprintf(infoFile, "Magazine Prefix: %s\n", sourceInfaxData->magPrefix);
+        fprintf(infoFile, "Programme No.: %s\n", sourceInfaxData->progNo);
+        fprintf(infoFile, "Production Code: %s\n", sourceInfaxData->prodCode);
+        fprintf(infoFile, "Spool Status: %s\n", sourceInfaxData->spoolStatus);
+        fprintf(infoFile, "Stock Date: %s\n", get_date_string(sourceInfaxData->stockDate).c_str());
+        fprintf(infoFile, "Spool Description: %s\n", sourceInfaxData->spoolDesc);
+        fprintf(infoFile, "Duration: %s\n", get_duration_string(sourceInfaxData->duration * 25).c_str());
+        fprintf(infoFile, "Spool No.: %s\n", sourceInfaxData->spoolNo);
+        fprintf(infoFile, "Accession No.: %s\n", sourceInfaxData->accNo);
+        fprintf(infoFile, "Catalogue Detail: %s\n", sourceInfaxData->catDetail);
+        fprintf(infoFile, "Memo: %s\n", sourceInfaxData->memo);
+        fprintf(infoFile, "Item No.: %d\n", sourceInfaxData->itemNo);
         
         fclose(infoFile);
 
         
         // open the browse encoder
-        browse_encoder_t* encoder = browse_encoder_init(browseFilename.c_str(), videoKBps, threadCount);
+        rec::Rational aspectRatio = mxfFile.getAspectRatio();
+        browse_encoder_t* encoder = browse_encoder_init(browseFilename.c_str(), aspectRatio.numerator,
+            aspectRatio.denominator, videoKBps, threadCount);
         if (encoder == 0)
         {
             throw RecorderException("Failed to open the browse encoder");
@@ -425,20 +436,22 @@ int main(int argc, const char** argv)
         }
         
         // encode
-        ArchiveTimecode ctc;
-        int64_t frameNumber = 0;
-        D3MXFFrame* frame;
+        Timecode vitc, ltc, ctc;
+        MXFContentPackage* contentPackage;
+        ArchiveMXFContentPackage* archiveContentPackage;
         int64_t percentCount = 0;
-        while (mxfFile.nextFrame(frame))
+        while (mxfFile.nextFrame(false, contentPackage))
         {
+            archiveContentPackage = dynamic_cast<ArchiveMXFContentPackage*>(contentPackage);
+            
             // convert audio to 16 bit stereo
-            if (frame->numAudioTracks > 0)
+            if (archiveContentPackage->getNumAudioTracks() > 0)
             {
                 uint16_t* outputA12 = (uint16_t*)stereoAudio;
-                unsigned char* inputA1 = frame->audio[0];
-                unsigned char* inputA2 = frame->audio[1];
+                const unsigned char* inputA1 = archiveContentPackage->getAudio(0);
+                const unsigned char* inputA2 = archiveContentPackage->getAudio(1);
                 int i;
-                if (frame->numAudioTracks > 1)
+                if (archiveContentPackage->getNumAudioTracks() > 1)
                 {
                     for (i = 0; i < 1920 * 3; i += 3) 
                     {
@@ -456,33 +469,31 @@ int main(int argc, const char** argv)
                 }
             }
             
-            // convert video to yuv420    
-            uyvy_to_yuv420(720, 576, 0, frame->video, yuv420Video);
+            // convert video to yuv420
+            uyvy_to_yuv420(720, 576, 0, archiveContentPackage->getVideo8Bit(), yuv420Video);
 
             
             // encode
-            if (browse_encoder_encode(encoder, yuv420Video, stereoAudio, frame->ltc, frame->vitc, frameNumber) != 0)
+            if (browse_encoder_encode(encoder, yuv420Video, stereoAudio, archiveContentPackage->getPosition()) != 0)
             {
                 throw RecorderException("Failed to encode frame");
             }
 
-            // write timecode            
-            ctc.hour = frameNumber / (60 * 60 * 25);
-            ctc.min = (frameNumber % (60 * 60 * 25)) / (60 * 25);
-            ctc.sec = ((frameNumber % (60 * 60 * 25)) % (60 * 25)) / 25;
-            ctc.frame = ((frameNumber % (60 * 60 * 25)) % (60 * 25)) % 25;
+            // write timecode
+            ctc = archiveContentPackage->getCTC();
+            ltc = archiveContentPackage->getLTC();
+            vitc = archiveContentPackage->getVITC();
             
-            fprintf(timecodeFile, "C%02d:%02d:%02d:%02d V%02d:%02d:%02d:%02d L%02d:%02d:%02d:%02d\n", 
-            ctc.hour, ctc.min, ctc.sec, ctc.frame,
-            frame->vitc.hour, frame->vitc.min, frame->vitc.sec, frame->vitc.frame,
-            frame->ltc.hour, frame->ltc.min, frame->ltc.sec, frame->ltc.frame);
+            fprintf(timecodeFile, "C%02d:%02d:%02d:%02d V%02d:%02d:%02d:%02d L%02d:%02d:%02d:%02d\n",
+                    ctc.hour, ctc.min, ctc.sec, ctc.frame,
+                    vitc.hour, vitc.min, vitc.sec, vitc.frame,
+                    ltc.hour, ltc.min, ltc.sec, ltc.frame);
             
-            if (frameNumber * 100 / duration > percentCount * 10)
+            if (archiveContentPackage->getPosition() * 100 / duration > percentCount * 10)
             {
                 percentCount++;
                 Logging::info("%d%%\n", percentCount * 10);
             }
-            frameNumber++;
         }
 
         // close       

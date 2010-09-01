@@ -1,5 +1,5 @@
 /*
- * $Id: HTTPTapeExport.h,v 1.1 2008/07/08 16:26:12 philipn Exp $
+ * $Id: HTTPTapeExport.h,v 1.2 2010/09/01 16:05:23 philipn Exp $
  *
  * HTTP interface to the tape export
  *
@@ -66,8 +66,6 @@ public:
     void getLTOContents(HTTPConnection* connection);
     
     
-    TapeExport* getTapeExport();
-
     
     static std::string getPSEReportsURL();
     
@@ -75,21 +73,6 @@ private:
     void checkBarcodeStatus();
     bool isLTOBarcode(std::string barcode);
 
-    Thread* _checkBarcodeSelectionAgent;
-    Mutex _checkBarcodeSelectionAgentMutex;
-    
-    Thread* _startSessionAgent;
-    Mutex _startSessionAgentMutex;
-    
-    Thread* _cacheContentsAgent;
-    Mutex _cacheContentsAgentMutex;
-
-    Thread* _deleteCacheItemsAgent;
-    Mutex _deleteCacheItemsAgentMutex;
-    
-    Thread* _ltoContentsAgent;
-    Mutex _ltoContentsAgentMutex;
-    
     TapeExport* _tapeExport;
     
     std::string _barcode;

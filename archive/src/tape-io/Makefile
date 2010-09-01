@@ -16,9 +16,6 @@ INCLUDES += $(INGEX_COMMON_INC) $(MXF_INC)
 .PHONY: all
 all: $(OBJECTS) test_tape
 
-.PHONY: ingex-deps
-ingex-deps: ingex-common ingex-libmxf
-
 
 test_tape: $(OBJECTS)
 	$(COMPILE) -o test_tape $(OBJECTS) $(INGEX_COMMON_LIB) $(MXF_LIB) -lncurses -lpthread -lrt

@@ -3,6 +3,7 @@ var vtrStatusRequest = null;
 var vtrControlRequest = null;
 var enableVTRControlRequest = true;
 var d3StatusRequested = false;
+var enableVersionAlert = true;
 
 
 // a status update is performed every 1/2 second
@@ -331,6 +332,19 @@ function status_handler()
             }
             
             var status = eval("(" + statusRequest.responseText + ")");
+
+            if (!check_api_version(status))
+            {
+                if (enableVersionAlert)
+                {
+                    alert("Invalid API version " + get_api_version() +
+                        ". Require version " + status.apiVersion);
+                    enableVersionAlert = false;
+                }
+                throw "Invalid API version";
+            }
+            enableVersionAlert = true;
+
             set_general_status(status, statusInterval);
             
             // set timer for next status request

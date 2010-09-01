@@ -1,5 +1,5 @@
 /*
- * $Id: RecordingItems.cpp,v 1.1 2008/07/08 16:25:38 philipn Exp $
+ * $Id: RecordingItems.cpp,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * Provides access to the recording item information  
  *
@@ -22,7 +22,7 @@
 
 /*
     A recording item consists of clip information (filename, start and duration)
-    and D3 source information. This information is used for display to the user,
+    and source item information. This information is used for display to the user,
     playing back and chunking.
     
     The order of the items, start, duration and whether or not they are present 
@@ -43,17 +43,17 @@ using namespace rec;
 
 
 RecordingItem::RecordingItem()
-: isDisabled(false), isJunk(false), index(-1), id(-1), d3Source(0), startPosition(-1), duration(-1)
+: isDisabled(false), isJunk(false), index(-1), id(-1), sourceItem(0), startPosition(-1), duration(-1)
 {
 }
 
-RecordingItem::RecordingItem(int id_, int index_, D3Source* d3Source_)
-: isDisabled(false), isJunk(false), index(index_), id(id_), d3Source(d3Source_), startPosition(-1), duration(-1)
+RecordingItem::RecordingItem(int id_, int index_, SourceItem* sourceItem_)
+: isDisabled(false), isJunk(false), index(index_), id(id_), sourceItem(sourceItem_), startPosition(-1), duration(-1)
 {
 }
 
 RecordingItem::RecordingItem(int id_, int index_)
-: isDisabled(false), isJunk(true), index(index_), id(id_), d3Source(0), startPosition(-1), duration(-1)
+: isDisabled(false), isJunk(true), index(index_), id(id_), sourceItem(0), startPosition(-1), duration(-1)
 {
 }
 
@@ -97,9 +97,9 @@ void RecordingItem::swapSourceWith(RecordingItem* withItem)
     id = withItem->id;
     withItem->id = idCopy;
     
-    D3Source* d3SourceCopy = d3Source;
-    d3Source = withItem->d3Source;
-    withItem->d3Source = d3SourceCopy;
+    SourceItem* sourceItemCopy = sourceItem;
+    sourceItem = withItem->sourceItem;
+    withItem->sourceItem = sourceItemCopy;
 }
 
 void RecordingItem::disable()
@@ -138,20 +138,20 @@ _totalDuration(0), _itemClipChangeCount(0), _itemSourceChangeCount(0)
     vector<ConcreteSource*>::const_iterator iter;
     for (iter = source->concreteSources.begin(); iter != source->concreteSources.end(); iter++)
     {
-        D3Source* d3Source = dynamic_cast<D3Source*>(*iter);
-        REC_ASSERT(d3Source != 0);
+        SourceItem* sourceItem = dynamic_cast<SourceItem*>(*iter);
+        REC_ASSERT(sourceItem != 0);
         
-        _items.push_back(RecordingItem(count, count, d3Source));
+        _items.push_back(RecordingItem(count, count, sourceItem));
         
-        if (d3Source->duration > 0)
+        if (sourceItem->duration > 0)
         {
             if (_totalInfaxDuration < 0)
             {
-                _totalInfaxDuration = d3Source->duration;
+                _totalInfaxDuration = sourceItem->duration;
             }
             else
             {
-                _totalInfaxDuration += d3Source->duration;
+                _totalInfaxDuration += sourceItem->duration;
             }
         }
         
@@ -159,7 +159,7 @@ _totalDuration(0), _itemClipChangeCount(0), _itemSourceChangeCount(0)
     }
     
     // add junk item
-    if (_items.size() > 1 && Config::getBool("enable_chunking_junk"))
+    if (_items.size() > 1 && Config::enable_chunking_junk)
     {
         _items.push_back(RecordingItem(count, count));
         count++;
@@ -167,7 +167,7 @@ _totalDuration(0), _itemClipChangeCount(0), _itemSourceChangeCount(0)
     
     _multipleItems = _items.size() > 1;
     _itemsCount = _items.size();
-    _d3SpoolNo = _items[0].d3Source->spoolNo;
+    _sourceSpoolNo = _items[0].sourceItem->spoolNo;
 }
 
 RecordingItems::~RecordingItems()
@@ -252,9 +252,9 @@ int64_t RecordingItems::getTotalInfaxDuration()
     return _totalInfaxDuration;
 }
 
-string RecordingItems::getD3SpoolNo()
+string RecordingItems::getSourceSpoolNo()
 {
-    return _d3SpoolNo;
+    return _sourceSpoolNo;
 }
 
 int64_t RecordingItems::getTotalDuration()
@@ -283,7 +283,7 @@ bool RecordingItems::getItem(string filename, int64_t position, RecordingItem* i
             return false;
         }
         
-        if (item.filename.compare(filename) == 0 &&
+        if (item.filename == filename &&
             position >= item.startPosition &&
             position < item.startPosition + item.duration)
         {
@@ -322,7 +322,7 @@ bool RecordingItems::getNextStartOfItem(string filename, int64_t position, Recor
             return false;
         }
         
-        if (item.filename.compare(filename) == 0 &&
+        if (item.filename == filename &&
             position >= item.startPosition &&
             position < item.startPosition + item.duration)
         {
@@ -355,7 +355,7 @@ bool RecordingItems::getPrevStartOfItem(string filename, int64_t position, Recor
             return false;
         }
         
-        if (item.filename.compare(filename) == 0 &&
+        if (item.filename == filename &&
             position >= item.startPosition &&
             position < item.startPosition + item.duration)
         {
@@ -416,7 +416,7 @@ int RecordingItems::markItemStart(string filename, int64_t position, int* id, bo
             return -1;
         }
         
-        if (item.filename.compare(filename) == 0 &&
+        if (item.filename == filename &&
             position >= item.startPosition &&
             position < item.startPosition + item.duration)
         {

@@ -1,5 +1,5 @@
 /*
- * $Id: SerialPort.h,v 1.1 2008/07/08 16:27:16 philipn Exp $
+ * $Id: SerialPort.h,v 1.2 2010/09/01 16:05:23 philipn Exp $
  *
  * Provides serial port reading and writing
  *
@@ -28,10 +28,17 @@
 #include <string>
 
 #include "Threads.h"
-
+#include "dvs_clib.h"
 
 namespace rec
 {
+
+typedef enum
+{
+    TYPE_STD_TTY,       // Standard tty device such as /dev/ttyS0 or /dev/ttyUSB0
+    TYPE_DVS,           // DVS Port A, B, C or D; requires DVS SDK calls
+    TYPE_BLACKMAGIC,    // Uses a fairly standard tty driver but mode cannot be set or read
+} SerialType;
 
 typedef enum
 {
@@ -82,7 +89,7 @@ class SerialPort
 {
 public:
     static SerialPort* open(std::string deviceName, BaudRate baudRate, CharacterSize charSize,
-        StopBits stopBits, Parity parity);
+        StopBits stopBits, Parity parity, SerialType type = TYPE_STD_TTY);
 
 public:
     ~SerialPort();
@@ -93,10 +100,12 @@ public:
 
 
 private:
-    SerialPort(std::string deviceName, int fd);
+    SerialPort(std::string deviceName, int fd, SerialType type, sv_handle * sv);
     
     std::string _deviceName;
     int _fd;
+    SerialType _type;
+    sv_handle * _sv;
     Mutex _accessMutex;
 };
 

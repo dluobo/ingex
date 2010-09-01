@@ -5,6 +5,10 @@ var selectDigibetaRequest = null;
 var enableSelectDigibetaRequest = true; 
 var startNewSessionRequest = null;
 var enableStartNewSessionRequest = true;
+var enableVersionAlert = true;
+
+var allowAspectRatioUpdate = true;
+var urlUnknownAspectRatioCode = "-";
 
 var lastBarcodeCount = -1;
 var sourceInfoBarcode = null;
@@ -24,6 +28,52 @@ function set_start_record_state(status)
         !enableSourceInfoRequest);
     
     update_button_disable("start-session-button", disableButton);
+}
+
+function set_profiles(profiles)
+{
+    var selectProfileDivE = document.getElementById("select-profile-div");
+    
+    selectProfileDivE.innerHTML = "";
+    
+    if (profiles == null)
+    {
+        return;
+    }
+    
+    var labelE = document.createElement("span");
+    labelE.setAttribute("id", "select-profile-label");
+    labelE.innerHTML = "Profile&nbsp";
+    selectProfileDivE.appendChild(labelE);
+    
+    var selectE = document.createElement("select");
+    selectE.setAttribute("id", "select-profile");
+
+    var i;
+    for (i = 0; i < profiles.length; i++)
+    {
+        var optionE = document.createElement("option");
+        if (i == 0)
+        {
+            optionE.setAttribute("selected", "true");
+        }
+        optionE.setAttribute("value", profiles[i].id);
+        optionE.innerHTML = profiles[i].name;
+        selectE.appendChild(optionE);
+    }
+
+    selectProfileDivE.appendChild(selectE);
+}
+
+function get_selected_profile_id()
+{
+    var selectProfileE = document.getElementById("select-profile");
+    if (!selectProfileE)
+    {
+        return -1;
+    }
+    
+    return selectProfileE.options[selectProfileE.selectedIndex].value;
 }
 
 function set_start_session_error(result)
@@ -46,13 +96,13 @@ function set_start_session_error(result)
             case 3: // AUDIO_SIGNAL_BAD_FAILURE:
                 message += "audio signal is bad";
                 break;
-            case 4: // D3_VTR_CONNECT_FAILURE:
+            case 4: // SOURCE_VTR_CONNECT_FAILURE:
                 message += "no D3 VTR connection";
                 break;
-            case 5: //D3_VTR_REMOTE_LOCKOUT_FAILURE:
+            case 5: // SOURCE_VTR_REMOTE_LOCKOUT_FAILURE:
                 message += "D3 VTR remote lockout";
                 break;
-            case 6: // NO_D3_TAPE:
+            case 6: // NO_SOURCE_TAPE:
                 message += "no D3 tape";
                 break;
             case 7: // DIGIBETA_VTR_CONNECT_FAILURE:
@@ -72,6 +122,18 @@ function set_start_session_error(result)
                 break;
             case 12: // MULTI_ITEM_NOT_ENABLED_FAILURE:
                 message += "multi-item ingest not enabled";
+                break;
+            case 13: // INVALID_ASPECT_RATIO_FAILURE:
+                message += "item with unknown/invalid aspect ratio";
+                break;
+            case 14: // UNKNOWN_PROFILE_FAILURE:
+                message += "unknown ingest profile identifier";
+                break;
+            case 15: // DISABLED_INGEST_FORMAT_FAILURE:
+                message += "ingest is disabled for given source format";
+                break;
+            case 16: // MULTI_ITEM_INGEST_FORMAT_FAILURE:
+                message += "multi-item ingest not supported for given ingest format";
                 break;
             default:
                 // unknown code - use the supplied message
@@ -127,6 +189,133 @@ function set_digibeta_status(status)
     }
 
     digibetaStatusE.innerHTML = message;
+}
+
+function get_url_item_aspect_ratio_codes()
+{
+    var allSelectES = document.getElementsByName("aspect-ratio-select");
+    
+    var aspectRatioCodes = new Array();
+    
+    var i;
+    for (i = 0; i < allSelectES.length; i++)
+    {
+        aspectRatioCodes[i] = allSelectES[i].options[allSelectES[i].selectedIndex].value;
+        if (aspectRatioCodes[i] == null || aspectRatioCodes[i].length == 0)
+        {
+            aspectRatioCodes[i] = urlUnknownAspectRatioCode;
+        }
+    }
+    
+    return aspectRatioCodes;
+}
+
+function change_aspect_ratio(selectE)
+{
+    var optionE = selectE.options[selectE.selectedIndex];
+    
+    remove_class(selectE, "unknown-aspect-ratio");
+    remove_class(selectE, "known-aspect-ratio");
+    
+    if (have_class(optionE, "unknown-aspect-ratio"))
+    {
+        add_class(selectE, "unknown-aspect-ratio");
+    }
+    else if (have_class(optionE, "known-aspect-ratio"))
+    {
+        add_class(selectE, "known-aspect-ratio");
+    }
+    
+    // find index of selectE in the NodeList of elements with name 'aspect-ratio-select'
+    var allSelectES = document.getElementsByName("aspect-ratio-select");
+    var i;
+    for (i = 0; i < allSelectES.length; i++)
+    {
+        if (allSelectES[i] == selectE)
+        {
+            break;
+        }
+    }
+
+    // change all aspect ratios below selectE using recursive call to change_aspect_ratio
+    i++;
+    allSelectES[i].selectedIndex = selectE.selectedIndex;
+    change_aspect_ratio(allSelectES[i]);
+}
+
+function set_source_item_aspect_ratio_value(rowE, name, colSpan, aspectRatioCode, rasterAspectRatio)
+{
+    var colE = document.createElement("td");
+    colE.setAttribute("class", "item-heading");
+    colE.innerHTML = name;
+    rowE.appendChild(colE);
+    colE = document.createElement("td");
+    if (colSpan > 1)
+    {
+        colE.setAttribute("colspan", colSpan);
+    }
+
+    if (allowAspectRatioUpdate)
+    {
+        var selectE = document.createElement("select");
+        selectE.setAttribute("name", "aspect-ratio-select");
+        selectE.setAttribute("onchange", "change_aspect_ratio(this)");
+        add_class(selectE, "aspect-ratio-select");
+
+        // input option
+        optionE = document.createElement("option");
+        optionE.setAttribute("selected", "true");
+        if (rasterAspectRatio == null)
+        {
+            optionE.setAttribute("value", null);
+            add_class(optionE, "unknown-aspect-ratio");
+            add_class(selectE, "unknown-aspect-ratio");
+        }
+        else
+        {
+            optionE.setAttribute("value", aspectRatioCode);
+            add_class(optionE, "known-aspect-ratio");
+            add_class(selectE, "known-aspect-ratio");
+        }
+        optionE.innerHTML = get_aspect_ratio_string(aspectRatioCode, rasterAspectRatio);
+        selectE.appendChild(optionE);
+
+        // other, raster aspect ratio only options
+        if (aspectRatioCode != "xxx12")
+        {
+            optionE = document.createElement("option");
+            optionE.setAttribute("value", "xxx12");
+            add_class(optionE, "known-aspect-ratio");
+            optionE.innerHTML = get_aspect_ratio_string(null, "4:3");
+            selectE.appendChild(optionE);
+        }
+        if (aspectRatioCode != "xxx16")
+        {
+            optionE = document.createElement("option");
+            optionE.setAttribute("value", "xxx16");
+            add_class(optionE, "known-aspect-ratio");
+            optionE.innerHTML = get_aspect_ratio_string(null, "16:9");
+            selectE.appendChild(optionE);
+        }
+        
+        
+        colE.appendChild(selectE);
+    }
+    else
+    {
+        if (rasterAspectRatio == null)
+        {
+            add_class(colE, "unknown-aspect-ratio");
+        }
+        else
+        {
+            add_class(colE, "known-aspect-ratio");
+        }
+
+        colE.innerHTML = get_aspect_ratio_string(aspectRatioCode, rasterAspectRatio);
+    }
+    
+    rowE.appendChild(colE);
 }
 
 function set_source_item_value(rowE, name, colSpan, value)
@@ -236,7 +425,7 @@ function set_source_info(sourceInfo)
     // tape info
     
     document.getElementById("src-spool-no").innerHTML = sourceInfo.tapeInfo.spoolNo.replace(/\ /g, "&nbsp;");
-    document.getElementById("src-format").innerHTML = sourceInfo.tapeInfo.format;
+    document.getElementById("src-format").innerHTML = get_format_string(sourceInfo.tapeInfo.format);
     document.getElementById("src-stock-date").innerHTML = sourceInfo.tapeInfo.stockDate;
     document.getElementById("src-total-duration").innerHTML = get_duration_string(sourceInfo.tapeInfo.totalInfaxDuration);
     document.getElementById("src-spool-status").innerHTML = sourceInfo.tapeInfo.spoolStatus;
@@ -276,16 +465,17 @@ function set_source_info(sourceInfo)
 
         rowE = document.createElement("tr");
         set_source_item_value(rowE, "Prog Title", 3, sourceInfo.items[i].progTitle);
-        set_source_item_value(rowE, "Tx Date", 1, sourceInfo.items[i].txDate);
+        set_source_item_aspect_ratio_value(rowE, "Raster AR", 1, sourceInfo.items[i].aspectRatioCode, sourceInfo.items[i].rasterAspectRatio);
         bodyE.appendChild(rowE);
 
         rowE = document.createElement("tr");
         set_source_item_value(rowE, "Episode Title", 3, sourceInfo.items[i].episodeTitle);
-        set_source_item_value(rowE, "Spool Descr", 1, sourceInfo.items[i].spoolDescr);
+        set_source_item_value(rowE, "Tx Date", 1, sourceInfo.items[i].txDate);
         bodyE.appendChild(rowE);
 
         rowE = document.createElement("tr");
-        set_source_item_value(rowE, "Memo", 5, sourceInfo.items[i].memo);
+        set_source_item_value(rowE, "Memo", 3, sourceInfo.items[i].memo);
+        set_source_item_value(rowE, "Spool Descr", 1, sourceInfo.items[i].spoolDescr);
         bodyE.appendChild(rowE);
 
 
@@ -309,6 +499,8 @@ function source_info_handler()
             }
             
             var sourceInfo = eval("(" + sourceInfoRequest.responseText + ")");
+            
+            set_profiles(sourceInfo.profiles);
             set_source_info(sourceInfo);
             set_start_session_error(null);
             
@@ -317,6 +509,7 @@ function source_info_handler()
     } 
     catch (err)
     {
+        set_profiles(null);
         set_source_info(null);
         enableSourceInfoRequest = true;
     }
@@ -335,10 +528,23 @@ function status_handler()
             }
             
             var status = eval("(" + statusRequest.responseText + ")");
+            
+            if (!check_api_version(status))
+            {
+                if (enableVersionAlert)
+                {
+                    alert("Invalid API version " + get_api_version() +
+                        ". Require version " + status.apiVersion);
+                    enableVersionAlert = false;
+                }
+                throw "Invalid API version";
+            }
+            enableVersionAlert = true;
+            
             set_general_status(status, statusInterval);
 
             // vtr states           
-            update_tag_value("d3-vtr-state", status.d3VTRState, status.d3VTRState);
+            update_tag_value("d3-vtr-state", status.sourceVTRState, status.sourceVTRState);
             update_tag_value("digibeta-vtr-state", status.digibetaVTRState, status.digibetaVTRState);
             
             // process barcode
@@ -384,12 +590,25 @@ function status_handler()
     {
         set_general_status(null, statusInterval);
 
-        // vtr states
+        // clear vtr states
         update_tag_value("d3-vtr-state", "", 0);
         update_tag_value("digibeta-vtr-state", "", 0);
         
-        // set the start_record state
+        // clear the start_record state
         set_start_record_state(null);
+        
+        // clear the profiles
+        set_profiles(null);
+        
+        // clear the source info
+        set_source_info(null);
+        
+        // clear the barcode input text and set focus
+        clear_digibeta_input();
+        clear_source_input();
+
+        // clear the start new session message
+        set_start_session_error(null);
 
         // set timer for next status request
         statusTimer = setTimeout("request_status()", statusInterval);
@@ -514,6 +733,7 @@ function request_source_info(barcode)
     if (barcode == null || barcode.length == 0)
     {
         enableSourceInfoRequest = true;
+        set_profiles(null);
         set_source_info(null);
         return;
     }
@@ -526,6 +746,7 @@ function request_source_info(barcode)
         sourceInfo.errorMessage = "barcode is an LTO barcode";
         
         enableSourceInfoRequest = true;
+        set_profiles(null);
         set_source_info(sourceInfo);
         return;
     }
@@ -534,7 +755,9 @@ function request_source_info(barcode)
     try
     {
         sourceInfoRequest = new XMLHttpRequest();
-        sourceInfoRequest.open("GET", "/recorder/sourceinfo.json?barcode=" + encodeURIComponent(barcode), true);
+        sourceInfoRequest.open("GET", "/recorder/sourceinfo.json" +
+            "?barcode=" + encodeURIComponent(barcode) + 
+            "&profiles=true", true);
         sourceInfoRequest.onreadystatechange = source_info_handler;
         sourceInfoRequest.send(null);
     }
@@ -565,8 +788,30 @@ function start_new_session()
         try
         {
             startNewSessionRequest = new XMLHttpRequest();
-            startNewSessionRequest.open("GET", "/recorder/newsession.json?barcode=" + 
-                encodeURIComponent(srcBarcode) + "&digibetabarcode=" + encodeURIComponent(dbBarcode), true);
+
+            var profileId = get_selected_profile_id();
+            
+            if (allowAspectRatioUpdate)
+            {
+                var itemAspectRatioCodes = get_url_item_aspect_ratio_codes();
+                
+                startNewSessionRequest.open("GET",
+                    "/recorder/newsession.json" + 
+                    "?barcode=" + encodeURIComponent(srcBarcode) + 
+                    "&digibetabarcode=" + encodeURIComponent(dbBarcode) +
+                    "&aspectRatioCodes=" + encodeURIComponent(itemAspectRatioCodes.join(",")) +
+                    "&profileid=" + profileId,
+                    true);
+            }
+            else
+            {
+                startNewSessionRequest.open("GET",
+                    "/recorder/newsession.json" +
+                    "?barcode=" + encodeURIComponent(srcBarcode) +
+                    "&digibetabarcode=" + encodeURIComponent(dbBarcode),
+                    "&profileid=" + profileId,
+                    true);
+            }
             startNewSessionRequest.onreadystatechange = start_new_session_handler;
             startNewSessionRequest.send(null);
         }

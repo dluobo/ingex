@@ -1,5 +1,5 @@
 /*
- * $Id: pse_simple.h,v 1.1 2008/07/08 16:24:59 philipn Exp $
+ * $Id: pse_simple.h,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * Simple PSE analysis (currently does no analysis and always passes)
  *
@@ -31,13 +31,16 @@ public:
     PSE_Simple();
     ~PSE_Simple();
 
-    bool init(void);
-    bool fini(void);
-    bool open(void);
-    bool close(void);
+    virtual bool init(void);
+    virtual bool fini(void);
+    virtual bool open(void);
+    virtual bool close(void);
 
-    bool analyse_frame(const uint8_t *video_frame);
-    bool get_remaining_results(std::vector<PSEResult> &p_results);
+    virtual bool is_init(void);
+    virtual bool is_open(void);
+
+    virtual bool analyse_frame(const uint8_t *video_frame);
+    virtual bool get_remaining_results(std::vector<PSEResult> &p_results);
 
 private:
     std::vector<PSEResult> results;

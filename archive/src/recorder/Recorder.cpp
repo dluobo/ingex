@@ -1,5 +1,5 @@
 /*
- * $Id: Recorder.cpp,v 1.1 2008/07/08 16:25:37 philipn Exp $
+ * $Id: Recorder.cpp,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * Provides main access to the recorder application
  *
@@ -35,6 +35,7 @@
 #include "Recorder.h"
 #include "DummyVTRControl.h"
 #include "RecorderDatabase.h"
+#include "ArchiveMXFWriter.h"
 #include "Logging.h"
 #include "RecorderException.h"
 #include "Utilities.h"
@@ -54,18 +55,20 @@ using namespace rec;
    LOCK_SECTION(_replayMutex); \
    if (_replay != 0 && !_replay->isRunning()) \
    { \
-       std::string replayFilename = _replay->getFilename(); \
+       ConfidenceReplayStatus replayStatus = _replay->getStatus(); \
        try \
        { \
            SAFE_DELETE(_replay); \
-           Logging::info("Closed replay of cache file '%s'\n", replayFilename.c_str()); \
+           Logging::info("Closed replay of cache file '%s'\n", replayStatus.filename.c_str()); \
        } \
        catch (...) \
        { \
-           Logging::error("Failed to delete replay for cache file '%s'\n", replayFilename.c_str()); \
+           Logging::error("Failed to delete replay for cache file '%s'\n", replayStatus.filename.c_str()); \
            _replay = 0; \
        } \
    }  
+
+
 
 
 static int check_vtr_ready(VTRControl* control)
@@ -91,83 +94,300 @@ static int check_vtr_ready(VTRControl* control)
     return 0;
 }
 
+static bool parse_vtr_device_type_code(string symbol, int* deviceTypeCode)
+{
+    if (symbol.size() < 4)
+    {
+        return false;
+    }
+    
+    int code;
+    if (sscanf(&symbol.c_str()[symbol.size() - 4], "%x", &code) != 1)
+    {
+        return false;
+    }
+    
+    *deviceTypeCode = code;
+    return true;
+}
 
-   
+static void parse_config_vtr_list(vector<string> &stringArray, vector<int>* deviceTypeCodes)
+{
+    size_t i;
+    int deviceTypeCode;
+    for (i = 0; i < stringArray.size(); i++)
+    {
+        if (!parse_vtr_device_type_code(stringArray[i], &deviceTypeCode))
+        {
+            REC_LOGTHROW(("Failed to parse VTR device code '%s'", stringArray[i].c_str()));
+        }
+        
+        deviceTypeCodes->push_back(deviceTypeCode);
+    }
+}
+
+
+
+Rational Recorder::getRasterAspectRatio(string aspectRatioCode)
+{
+    // handle special cases used internally
+    
+    if (aspectRatioCode == "xxx12")
+    {
+        // 4:3 raster aspect ratio, with unknown full code
+        return Rational(4, 3);
+    }
+    else if (aspectRatioCode == "xxx16")
+    {
+        // 16:9 raster aspect ratio, with unknown full code
+        return Rational(16, 9);
+    }
+    
+    
+    // parse the aspect ratio code
+    
+    int activeImageAR = 0;
+    char displayFormat = 0;
+    int rasterImageAR = 0;
+    char protection = 0;
+    
+    string number;
+    int state = 0;
+    size_t i = 0;
+    while (i < aspectRatioCode.size() && state < 4)
+    {
+        switch (state)
+        {
+            case 0: // parse active image aspect ratio
+                if (aspectRatioCode[i] >= '0' && aspectRatioCode[i] <= '9')
+                {
+                    number.push_back(aspectRatioCode[i]);
+                    i++;
+                }
+                else
+                {
+                    if (sscanf(number.c_str(), "%d", &activeImageAR) != 1)
+                    {
+                        return g_nullRational;
+                    }
+                    state = 1;
+                    number.clear();
+                }
+                break;
+                
+            case 1: // parse display format char
+                if (aspectRatioCode[i] != 'P' && aspectRatioCode[i] != 'L' && aspectRatioCode[i] != 'F' &&
+                    aspectRatioCode[i] != 'M')
+                {
+                    return g_nullRational;
+                }
+                displayFormat = aspectRatioCode[i];
+                state = 2;
+                i++;
+                break;
+                
+            case 2: // parse raster image aspect ratio
+                if (aspectRatioCode[i] >= '0' && aspectRatioCode[i] <= '9')
+                {
+                    number.push_back(aspectRatioCode[i]);
+                    i++;
+                }
+                else
+                {
+                    if (sscanf(number.c_str(), "%d", &rasterImageAR) != 1)
+                    {
+                        return g_nullRational;
+                    }
+                    state = 3;
+                }
+                break;
+
+            case 3: // parse protection char
+                if (aspectRatioCode[i] != 'A' && aspectRatioCode[i] != 'B' && aspectRatioCode[i] != 'C' &&
+                    aspectRatioCode[i] != 'N')
+                {
+                    return g_nullRational;
+                }
+                protection = aspectRatioCode[i];
+                state = 4;
+                i++;
+                break;
+                
+            default:
+                break;
+        }
+    }
+    if (state == 2 && number.size() > 0)
+    {
+        if (sscanf(number.c_str(), "%d", &rasterImageAR) != 1)
+        {
+            return g_nullRational;
+        }
+    }
+    
+    
+    if (rasterImageAR == 12)
+    {
+        return Rational(4, 3);
+    }
+    else if (rasterImageAR == 16)
+    {
+        return Rational(16, 9);
+    }
+
+    // only 4:3 (12:9) and 16:9 raster aspect ratios are supported 
+    return g_nullRational;
+}
+
+bool Recorder::isValidAspectRatioCode(string aspectRatioCode)
+{
+    return !getRasterAspectRatio(aspectRatioCode).isNull();
+}
+
+
+
 
 Recorder::Recorder(string name, std::string cacheDirectory, std::string browseDirectory, std::string pseDirectory, 
     int replayPort, string vtrSerialDeviceName1, string vtrSerialDeviceName2)
-: _name(name), _numAudioTracks(4), _replayPort(replayPort),
-_capture(0), _sessionDone(false), _session(0), _sessionThread(0), _lastSessionRecordingItems(0), 
-_cache(0), _recorderTable(0), _replay(0)
+: _profileManager(0), _lastSessionProfileId(-1), _name(name), _videotapeBackup(false), _replayPort(replayPort),
+_capture(0), _vtrControl1(0), _vtrControl2(0),
+_sessionDone(false), _session(0), _sessionThread(0),
+_lastSessionRecordingItems(0), _lastSessionResult(UNKNOWN_SESSION_RESULT),
+_cache(0), _recorderTable(0), _replay(0), _jogShuttleControl(0)
 {
-    _digibetaBarcodePrefixes = Config::getStringArray("digibeta_barcode_prefixes");
-    // TODO: _numAudioTracks should only be stored in the config and not in the Recorder
-    _numAudioTracks = Config::getInt("num_audio_tracks");
-    _remDurationFactor = get_archive_mxf_content_package_size(_numAudioTracks);
+    // create and load profiles
+    
+    _profileManager = new ProfileManager(Config::profile_directory, Config::profile_filename_suffix);
+
+    
+    // assume initially 8-bit uncompressed with 4 audio tracks
+    _remDurationFactor = ArchiveMXFWriter::getContentPackageSize(false, 4, true);
+    _remDurationIngestFormat = MXF_UNC_8BIT_INGEST_FORMAT;
 
     // create and initialise SDI capture system
     
-    vector<int> vitcLines = Config::getIntArray("vitc_lines");
-    vector<int> ltcLines = Config::getIntArray("ltc_lines");
-    
     _capture = new ::Capture(this);
     
-    _capture->set_loglev(Config::getInt("capture_log_level"));
-    _capture->set_browse_enable(Config::getBool("browse_enable"));
-    _capture->set_browse_video_bitrate(Config::getInt("browse_video_bit_rate"));
-    _capture->set_browse_thread_count(Config::getInt("browse_thread_count"));
-    _capture->set_browse_overflow_frames(Config::getInt("browse_overflow_frames"));
-    _capture->set_pse_enable(Config::getBool("pse_enable"));
-    _capture->set_vitc_lines(&vitcLines[0], (int)vitcLines.size());
-    _capture->set_ltc_lines(&ltcLines[0], (int)ltcLines.size());
-    _capture->set_debug_avsync(Config::getBool("dbg_av_sync"));
-    _capture->set_debug_vitc_failures(Config::getBool("dbg_vitc_failures"));
-    _capture->set_debug_store_thread_buffer(Config::getBool("dbg_store_thread_buffer"));
-    _capture->set_num_audio_tracks(_numAudioTracks);
+    _capture->set_loglev(Config::capture_log_level);
+    _capture->set_browse_thread_count(Config::browse_thread_count);
+    _capture->set_browse_overflow_frames(Config::browse_overflow_frames);
+    _capture->set_digibeta_dropout_thresholds(Config::digibeta_dropout_lower_threshold,
+        Config::digibeta_dropout_upper_threshold,
+        Config::digibeta_dropout_store_threshold);
+
+    bool palff_mode = Config::palff_mode;
+    _capture->set_palff_mode(palff_mode);
+    if (palff_mode)
+    {
+        vector<int> vitcLines = Config::vitc_lines;
+        vector<int> ltcLines = Config::ltc_lines;
+        
+        _capture->set_vitc_lines(&vitcLines[0], (int)vitcLines.size());
+        _capture->set_ltc_lines(&ltcLines[0], (int)ltcLines.size());
+    }
+    
+    if (Config::read_analogue_ltc)
+    {
+        _capture->set_ltc_source(ANALOGUE_LTC_SOURCE, -1);
+    }
+    else if (Config::read_digital_ltc)
+    {
+        _capture->set_ltc_source(DIGITAL_LTC_SOURCE, -1);
+    }
+    else if (Config::read_audio_track_ltc >= 0)
+    {
+        _capture->set_ltc_source(AUDIO_TRACK_LTC_SOURCE, Config::read_audio_track_ltc);
+    }
+    else if (palff_mode)
+    {
+        _capture->set_ltc_source(VBI_LTC_SOURCE, -1);
+    }
+    else
+    {
+        _capture->set_ltc_source(NO_LTC_SOURCE, -1);
+    }
+
+    if (palff_mode)
+    {
+        _capture->set_vitc_source(VBI_VITC_SOURCE);
+    }
+    else
+    {
+        _capture->set_vitc_source(ANALOGUE_VITC_SOURCE);
+    }
+    
+    _capture->set_debug_avsync(Config::dbg_av_sync);
+    _capture->set_debug_vitc_failures(Config::dbg_vitc_failures);
+    _capture->set_debug_store_thread_buffer(Config::dbg_store_thread_buffer);
     _capture->set_mxf_page_size(MXF_PAGE_FILE_SIZE);
     
-    if (!_capture->init_capture(Config::getInt("ring_buffer_size")))
+    if (!_capture->init_capture(Config::ring_buffer_size))
     {
         REC_LOGTHROW(("Failed to initialise the DVS SDI Ingex capture system"));
     }
     Logging::info("Initialised the capture system\n");
     
     
-    // connect to VTRs
-    if (vtrSerialDeviceName1.compare("DUMMY_D3") == 0)
+    // videotape backup configs
+    _videotapeBackup = Config::videotape_backup;
+    if (_videotapeBackup)
     {
-        _vtrControl1 = new DummyVTRControl(AJ_D350_PAL_DEVICE_TYPE);
+        parse_config_vtr_list(Config::source_vtr, &_sourceVTRDeviceTypeCodes);
+        parse_config_vtr_list(Config::backup_vtr, &_backupVTRDeviceTypeCodes);
+        
+        if (_sourceVTRDeviceTypeCodes.empty() && _backupVTRDeviceTypeCodes.empty())
+        {
+            REC_LOGTHROW(("Missing source_vtr and/or backup_vtr config values")); 
+        }
+        
+        _digibetaBarcodePrefixes = Config::digibeta_barcode_prefixes;
+    }
+
+    
+    // connect to VTRs
+    if (vtrSerialDeviceName1 == "DUMMY_D3")
+    {
+        _vtrControl1 = new DummyVTRControl(AJ_D350_625LINE_DEVICE_TYPE);
         Logging::warning("Opened dummy D3 vtr control 1\n");
     }
-    else if (vtrSerialDeviceName1.compare("DUMMY_DIGIBETA") == 0)
+    else if (vtrSerialDeviceName1 == "DUMMY_DIGIBETA")
     {
-        _vtrControl1 = new DummyVTRControl(DVW_A500P_DEVICE_TYPE);
+        _vtrControl1 = new DummyVTRControl(DVW_A500_625LINE_DEVICE_TYPE);
         Logging::warning("Opened dummy Digibeta vtr control 1\n");
     }
     else
     {
-        _vtrControl1 = new DefaultVTRControl(vtrSerialDeviceName1);
+        _vtrControl1 = new DefaultVTRControl(vtrSerialDeviceName1, Config::recorder_vtr_serial_type_1);
         Logging::info("Using vtr control serial device 1 '%s'\n", vtrSerialDeviceName1.c_str());
     }
     
-    if (vtrSerialDeviceName2.compare("DUMMY_D3") == 0)
+    if (_videotapeBackup)
     {
-        _vtrControl2 = new DummyVTRControl(AJ_D350_PAL_DEVICE_TYPE);
-        Logging::warning("Opened dummy D3 vtr control 2\n");
-    }
-    else if (vtrSerialDeviceName2.compare("DUMMY_DIGIBETA") == 0)
-    {
-        _vtrControl2 = new DummyVTRControl(DVW_A500P_DEVICE_TYPE);
-        Logging::warning("Opened dummy Digibeta vtr control 2\n");
-    }
-    else
-    {
-        _vtrControl2 = new DefaultVTRControl(vtrSerialDeviceName2);
-        Logging::info("Using vtr control serial device 2 '%s'\n", vtrSerialDeviceName2.c_str());
+        if (vtrSerialDeviceName2 == "DUMMY_D3")
+        {
+            _vtrControl2 = new DummyVTRControl(AJ_D350_625LINE_DEVICE_TYPE);
+            Logging::warning("Opened dummy D3 vtr control 2\n");
+        }
+        else if (vtrSerialDeviceName2 == "DUMMY_DIGIBETA")
+        {
+            _vtrControl2 = new DummyVTRControl(DVW_A500_625LINE_DEVICE_TYPE);
+            Logging::warning("Opened dummy Digibeta vtr control 2\n");
+        }
+        else
+        {
+           _vtrControl2 = new DefaultVTRControl(vtrSerialDeviceName2, Config::recorder_vtr_serial_type_2);
+            Logging::info("Using vtr control serial device 2 '%s'\n", vtrSerialDeviceName2.c_str());
+        }
     }
     
     _vtrControl1->registerListener(this);
-    _vtrControl2->registerListener(this);
+    if (_videotapeBackup)
+    {
+        _vtrControl2->registerListener(this);
+    }
+    
+    // server-side jog-shuttle control
+    _jogShuttleControl = new JogShuttleControl(this);
     
     
     // load or create recorder data from the database
@@ -232,6 +452,7 @@ _cache(0), _recorderTable(0), _replay(0)
 
 Recorder::~Recorder()
 {
+    delete _profileManager;
     delete _capture;
     // _session is owned by _sessionThread
     delete _sessionThread;
@@ -242,8 +463,12 @@ Recorder::~Recorder()
     delete _replay;
 }
 
-void Recorder::sdiStatusChanged(bool videoOK, bool audioOK, bool recordingOK)
+void Recorder::sdiStatusChanged(bool videoOK, bool audioOK, bool dltcOk, bool vitcOK, bool recordingOK)
 {
+    // not used
+    (void)dltcOk;
+    (void)vitcOK;
+    
     SESSION_ACCESS_SECTION();
     
     if (_session)
@@ -264,6 +489,17 @@ void Recorder::sdiStatusChanged(bool videoOK, bool audioOK, bool recordingOK)
                 Logging::warning("Sending system 'abort if recording' to recording session because capture system stopped\n"); 
             }
         }
+    }
+}
+
+void Recorder::sdiCaptureDroppedFrame()
+{
+    SESSION_ACCESS_SECTION();
+    
+    if (_session)
+    {
+        Logging::warning("Sending system 'abort' because the SDI capture dropped a frame\n"); 
+        _session->abort(false, "SDI capture dropped frame");
     }
 }
 
@@ -290,25 +526,21 @@ void Recorder::browseBufferOverflow()
 
 void Recorder::vtrDeviceType(VTRControl* vtrControl, int deviceTypeCode, DeviceType deviceType)
 {
-    // only poll the extended state when the VTR is the D3 VTR so that the D3 VTR 
-    // playback error is available to the recording session for writing into the MXF file
-    if (vtrControl->isD3VTR())
+    if (_videotapeBackup)
     {
-        vtrControl->pollExtState(true);
+        // only poll the extended state from the source VTR
+        vtrControl->pollExtState(isSourceVTR(deviceTypeCode));
     }
     else
     {
-        vtrControl->pollExtState(false);
+        vtrControl->pollExtState(true);
     }
 }
 
-int Recorder::startNewSession(Source* source, string digibetaBarcode, RecordingSession** session)
+int Recorder::startNewSession(int profileId, Source* source, string digibetaBarcode, RecordingSession** session)
 {
     SESSION_ACCESS_SECTION();
-    
-    // we are now responsible for deleting the Source if something fails
-    auto_ptr<RecordingItems> recordingItems(new RecordingItems(source));
-    
+    LOCK_SECTION(_profileManagerMutex);
     
     // no session must be active
     if (_session)
@@ -344,54 +576,89 @@ int Recorder::startNewSession(Source* source, string digibetaBarcode, RecordingS
     }
 
     
-    // check D3 and Digibeta VTRs can be controlled and that tape are present
+    // check source and Digibeta VTRs can be controlled and that tape are present
     
-    VTRControl* d3VTRControl = getD3VTRControl();
-    int result = check_vtr_ready(d3VTRControl);
+    VTRControl* sourceVTRControl = getSourceVTRControl();
+    int result = check_vtr_ready(sourceVTRControl);
     if (result != 0)
     {
         switch (result)
         {
             case 3:
-                return D3_VTR_REMOTE_LOCKOUT_FAILURE;
+                return SOURCE_VTR_REMOTE_LOCKOUT_FAILURE;
             case 4:
-                return NO_D3_TAPE;
+                return NO_SOURCE_TAPE;
             case 1:
             case 2:
             default:
-                return D3_VTR_CONNECT_FAILURE;
+                return SOURCE_VTR_CONNECT_FAILURE;
         }
     }
 
-    VTRControl* digibetaVTRControl = getDigibetaVTRControl();
-    result = check_vtr_ready(digibetaVTRControl);
-    if (result != 0)
+    VTRControl* digibetaVTRControl = 0;
+    if (_videotapeBackup)
     {
-        switch (result)
+        digibetaVTRControl = getBackupVTRControl();
+        result = check_vtr_ready(digibetaVTRControl);
+        if (result != 0)
         {
-            case 3:
-                return DIGIBETA_VTR_REMOTE_LOCKOUT_FAILURE;
-            case 4:
-                return NO_DIGIBETA_TAPE;
-            case 1:
-            case 2:
-            default:
-                return DIGIBETA_VTR_CONNECT_FAILURE;
+            switch (result)
+            {
+                case 3:
+                    return DIGIBETA_VTR_REMOTE_LOCKOUT_FAILURE;
+                case 4:
+                    return NO_DIGIBETA_TAPE;
+                case 1:
+                case 2:
+                default:
+                    return DIGIBETA_VTR_CONNECT_FAILURE;
+            }
         }
     }
     
     
     // check that multi-item support is enabled if source has multiple items
-    if (!checkMultiItemSupport(recordingItems->getSource()))
+    if (!checkMultiItemSupport(source))
     {
         return MULTI_ITEM_NOT_ENABLED_FAILURE;
     }
     
     // check the multi-item MXF file are not present in the cache
-    if (recordingItems->getItemCount() > 1 &&
-        !_cache->checkMultiItemMXF(recordingItems->getD3SpoolNo(), recordingItems->getItemCount()))
+    if (source->concreteSources.size() > 1 &&
+        !_cache->checkMultiItemMXF(source->barcode, source->concreteSources.size()))
     {
         return MULTI_ITEM_MXF_EXISTS_FAILURE;
+    }
+    
+    // check all source item aspect ratios are known
+    if (!checkSourceAspectRatios(source))
+    {
+        return INVALID_ASPECT_RATIO_FAILURE;
+    }
+    
+    // get the profile
+    Profile* profile = _profileManager->getProfile(profileId);
+    if (profile == NULL)
+    {
+        return UNKNOWN_PROFILE_FAILURE;
+    }
+    
+    // get ingest format
+    IngestFormat ingestFormat = profile->getIngestFormat(source->getFirstSourceItem()->format);
+    
+    // check not disabled
+    if (ingestFormat == UNKNOWN_INGEST_FORMAT)
+    {
+        return DISABLED_INGEST_FORMAT_FAILURE;
+    }
+    
+    // check multi-item ingest is supported for ingest format
+    if (source->concreteSources.size() > 1 &&
+        ingestFormat != MXF_UNC_8BIT_INGEST_FORMAT &&
+        ingestFormat != MXF_UNC_10BIT_INGEST_FORMAT &&
+        ingestFormat != MXF_D10_50_INGEST_FORMAT)
+    {
+        return MULTI_ITEM_INGEST_FORMAT_FAILURE;
     }
     
     
@@ -423,11 +690,19 @@ int Recorder::startNewSession(Source* source, string digibetaBarcode, RecordingS
     // start the session
     try
     {
-        _session = new RecordingSession(this, recordingItems.get(), digibetaBarcode, _replayPort,
-            d3VTRControl, digibetaVTRControl);
-        recordingItems.release(); // _session now owns it
+        _session = new RecordingSession(this, profile, source, digibetaBarcode, _replayPort,
+            sourceVTRControl, digibetaVTRControl);
         _sessionThread = new Thread(_session, true);
         _sessionThread->start();
+        
+        _lastSessionProfileId = profile->getId();
+        
+        {
+            LOCK_SECTION(_remDurationMutex);
+            
+            _remDurationFactor = _session->getContentPackageSize();
+            _remDurationIngestFormat = _session->getIngestFormat();
+        }
     }
     catch (...)
     {
@@ -458,13 +733,13 @@ SessionState Recorder::getSessionState()
     return SessionState();
 }
 
-SessionStatus Recorder::getSessionStatus()
+SessionStatus Recorder::getSessionStatus(const ConfidenceReplayStatus* replayStatus)
 {
     SESSION_ACCESS_SECTION();
     
     if (_session)
     {
-        return _session->getStatus();
+        return _session->getStatus(replayStatus);
     }
     
     return SessionStatus();
@@ -589,6 +864,31 @@ void Recorder::forwardConfidenceReplayControl(string command)
     }
 }
 
+ConfidenceReplayStatus Recorder::getConfidenceReplayStatus()
+{
+    // try local replay
+    {
+        REPLAY_ACCESS_SECTION();
+        
+        if (_replay)
+        {
+            return _replay->getStatus();
+        }
+    }
+    
+    // try the session replay
+    {
+        SESSION_ACCESS_SECTION();
+        
+        if (_session)
+        {
+            return _session->getConfidenceReplayStatus();
+        }
+    }
+    
+    return ConfidenceReplayStatus();
+}
+
 int Recorder::replayFile(string name)
 {
     SESSION_ACCESS_SECTION();
@@ -606,7 +906,7 @@ int Recorder::replayFile(string name)
     if (_replay)
     {
         // play file or seek to start if the file is already playing
-        if (_replay->getFilename().compare(_cache->getCompleteFilename(name)) == 0)
+        if (_replay->getStatus().filename == _cache->getCompleteFilename(name))
         {
             _replay->seekPositionOrPlay(0);
             return 0;
@@ -628,7 +928,10 @@ int Recorder::replayFile(string name)
     
     try
     {
-        _replay = new ConfidenceReplay(_cache->getCompleteFilename(name), _replayPort, 0, false);
+        string mxfFilename = _cache->getCompleteFilename(name);
+        string eventFilename = _cache->getEventFilename(mxfFilename);
+        
+        _replay = new ConfidenceReplay(mxfFilename, eventFilename, _replayPort, 0, false);
         _replay->start();
         Logging::info("Started replay of file '%s' in cache\n", name.c_str());
     }
@@ -707,6 +1010,30 @@ int Recorder::clearItem(int id, int index, int64_t* filePosition)
     return -1;
 }
 
+int Recorder::markItemStart()
+{
+    SESSION_ACCESS_SECTION();
+    
+    if (_session)
+    {
+        return _session->markItemStart();
+    }
+    
+    return -1;
+}
+
+int Recorder::clearItem()
+{
+    SESSION_ACCESS_SECTION();
+    
+    if (_session)
+    {
+        return _session->clearItem();
+    }
+    
+    return -1;
+}
+
 int Recorder::moveItemUp(int id, int index)
 {
     SESSION_ACCESS_SECTION();
@@ -759,20 +1086,29 @@ RecorderStatus Recorder::getStatus()
 {
     ::GeneralStats captureStats;
     _capture->get_general_stats(&captureStats);
-    
-    VTRControl* d3VTRControl = getD3VTRControl();
-    VTRState d3VTRState = (d3VTRControl != 0) ? d3VTRControl->getState() : NOT_CONNECTED_VTR_STATE;
-    VTRControl* digibetaVTRControl = getDigibetaVTRControl();
+
+    VTRControl* sourceVTRControl = getSourceVTRControl();
+    VTRState sourceVTRState = (sourceVTRControl != 0) ? sourceVTRControl->getState() : NOT_CONNECTED_VTR_STATE;
+    VTRControl* digibetaVTRControl = getBackupVTRControl();
     VTRState digibetaVTRState = (digibetaVTRControl != 0) ? digibetaVTRControl->getState() : NOT_CONNECTED_VTR_STATE;
     
+    
     RecorderStatus status;
+    
+    bool vtrOK = sourceVTRState != NOT_CONNECTED_VTR_STATE && sourceVTRState != REMOTE_LOCKOUT_VTR_STATE;
+    bool tapeOK = sourceVTRState != TAPE_UNTHREADED_VTR_STATE && sourceVTRState != EJECTING_VTR_STATE;
+    if (_videotapeBackup)
+    {
+        vtrOK = vtrOK && digibetaVTRState != NOT_CONNECTED_VTR_STATE && digibetaVTRState != REMOTE_LOCKOUT_VTR_STATE;
+        tapeOK = tapeOK && digibetaVTRState != TAPE_UNTHREADED_VTR_STATE && digibetaVTRState != EJECTING_VTR_STATE;
+    }
+    
     status.recorderName = _name;
     status.databaseOk = RecorderDatabase::getInstance()->haveConnection();
     status.sdiCardOk = captureStats.video_ok && captureStats.audio_ok;
     status.videoOk = captureStats.video_ok;
     status.audioOk = captureStats.audio_ok;
-    status.vtrOk = d3VTRState != NOT_CONNECTED_VTR_STATE && d3VTRState != REMOTE_LOCKOUT_VTR_STATE &&
-        digibetaVTRState != NOT_CONNECTED_VTR_STATE && digibetaVTRState != REMOTE_LOCKOUT_VTR_STATE;
+    status.vtrOk = vtrOK;
 
     bool sessionActive;
     {
@@ -780,21 +1116,20 @@ RecorderStatus Recorder::getStatus()
         sessionActive = _session != 0;
     }
 
-    status.d3VTRState = d3VTRState;
+    status.sourceVTRState = sourceVTRState;
     status.digibetaVTRState = digibetaVTRState;
     
     status.readyToRecord = !sessionActive && 
         status.sdiCardOk && status.videoOk && status.audioOk && 
         status.databaseOk && 
         status.vtrOk && 
-        d3VTRState != TAPE_UNTHREADED_VTR_STATE && d3VTRState != EJECTING_VTR_STATE &&
-        digibetaVTRState != TAPE_UNTHREADED_VTR_STATE && digibetaVTRState != EJECTING_VTR_STATE;
+        tapeOK;
     
     {
         REPLAY_ACCESS_SECTION();
     
         status.replayActive = _replay != 0;
-        status.replayFilename = (_replay != 0) ? _replay->getFilename() : "" ;
+        status.replayFilename = (_replay != 0) ? _replay->getStatus().filename : "" ;
     }
     
     return status;
@@ -802,15 +1137,18 @@ RecorderStatus Recorder::getStatus()
 
 RecorderSystemStatus Recorder::getSystemStatus()
 {
-    VTRControl* d3VTRControl = getD3VTRControl();
-    VTRControl* digibetaVTRControl = getDigibetaVTRControl();
+    VTRControl* sourceVTRControl = getSourceVTRControl();
+    VTRControl* digibetaVTRControl = getBackupVTRControl();
     
     RecorderSystemStatus status;
     
-    status.numAudioTracks = _numAudioTracks;
     status.remDiskSpace = getRemainingDiskSpace();
-    status.remDuration = status.remDiskSpace / _remDurationFactor;
-    status.d3VTRState = (d3VTRControl != 0) ? d3VTRControl->getState() : NOT_CONNECTED_VTR_STATE;
+    {
+        LOCK_SECTION(_remDurationMutex);
+        status.remDuration = status.remDiskSpace / _remDurationFactor;
+        status.remDurationIngestFormat = _remDurationIngestFormat;
+    }
+    status.sourceVTRState = (sourceVTRControl != 0) ? sourceVTRControl->getState() : NOT_CONNECTED_VTR_STATE;
     status.digibetaVTRState = (digibetaVTRControl != 0) ? digibetaVTRControl->getState() : NOT_CONNECTED_VTR_STATE;
     
     return status;
@@ -867,35 +1205,49 @@ Cache* Recorder::getCache()
     return _capture;
 }
 
-VTRControl* Recorder::getD3VTRControl()
+VTRControl* Recorder::getSourceVTRControl()
 {
-    if (_vtrControl1->isD3VTR())
+    if (_videotapeBackup)
+    {
+        int deviceCode1 = _vtrControl1->getDeviceCode();
+        int deviceCode2 = _vtrControl2->getDeviceCode();
+        
+        if (isSourceVTR(deviceCode1))
+        {
+            return _vtrControl1;
+        }
+        else if (isSourceVTR(deviceCode2))
+        {
+            return _vtrControl2;
+        }
+    }
+    else
     {
         return _vtrControl1;
     }
-    else if (_vtrControl2->isD3VTR())
-    {
-        return _vtrControl2;
-    }
     
-    // D3 VTR control is not connected
+    // source VTR control is not connected
     return 0;
 }
 
-VTRControl* Recorder::getDigibetaVTRControl()
+VTRControl* Recorder::getBackupVTRControl()
 {
-    // any VTR that that is not a D3 VTR is assumed to be the Digibeta VTR
-    
-    if (_vtrControl1->isNonD3VTR())
+    if (_videotapeBackup)
     {
-        return _vtrControl1;
-    }
-    else if (_vtrControl2->isNonD3VTR())
-    {
-        return _vtrControl2;
+        int deviceCode1 = _vtrControl1->getDeviceCode();
+        int deviceCode2 = _vtrControl2->getDeviceCode();
+        
+        if (isBackupVTR(deviceCode1))
+        {
+            return _vtrControl1;
+        }
+        else if (isBackupVTR(deviceCode2))
+        {
+            return _vtrControl2;
+        }
     }
     
-    // Digibeta VTR control is not connected
+    // backup VTR control is not connected
     return 0;
 }
 
@@ -903,7 +1255,10 @@ vector<VTRControl*> Recorder::getVTRControls()
 {
     vector<VTRControl*> vcs;
     vcs.push_back(_vtrControl1);
-    vcs.push_back(_vtrControl2);
+    if (_videotapeBackup)
+    {
+        vcs.push_back(_vtrControl2);
+    }
     
     return vcs;
 }
@@ -918,8 +1273,15 @@ string Recorder::getName()
     return _name;
 }
 
+bool Recorder::tapeBackupEnabled()
+{
+    return _videotapeBackup;
+}
+
 bool Recorder::isDigibetaBarcode(string barcode)
 {
+    REC_ASSERT(_videotapeBackup);
+    
     if (!is_valid_barcode(barcode))
     {
         return false;
@@ -937,9 +1299,152 @@ bool Recorder::isDigibetaBarcode(string barcode)
     return false;
 }
 
+bool Recorder::isDigibetaSource(Source* source)
+{
+    if (!source || source->concreteSources.empty())
+    {
+        return false;
+    }
+    
+    SourceItem* sourceItem = dynamic_cast<SourceItem*>(source->concreteSources[0]);
+    REC_ASSERT(sourceItem);
+    
+    return sourceItem->format == "BD";
+}
+
 bool Recorder::checkMultiItemSupport(Source* source)
 {
-    return Config::getBool("enable_multi_item") || source->concreteSources.size() <= 1;
+    return Config::enable_multi_item || source->concreteSources.size() <= 1;
+}
+
+bool Recorder::updateSourceAspectRatios(Source* source, vector<string> aspectRatioCodes)
+{
+    if (aspectRatioCodes.empty())
+    {
+        // empty means no updates
+        return true;
+    }
+    
+    if (aspectRatioCodes.size() != source->concreteSources.size())
+    {
+        // each source item must have a corresponding aspect ratio code
+        return false;
+    }
+    
+    size_t i;
+    for (i = 0; i < aspectRatioCodes.size(); i++)
+    {
+        if (!isValidAspectRatioCode(aspectRatioCodes[i]))
+        {
+            return false;
+        }
+    }
+    
+    for (i = 0; i < source->concreteSources.size(); i++)
+    {
+        SourceItem* sourceItem = dynamic_cast<SourceItem*>(source->concreteSources[i]);
+        REC_ASSERT(sourceItem);
+        
+        if (sourceItem->aspectRatioCode != aspectRatioCodes[i])
+        {
+            sourceItem->aspectRatioCode = aspectRatioCodes[i];
+            sourceItem->modifiedFlag = true;
+        }
+    }
+    
+    return true;
+}
+
+bool Recorder::checkSourceAspectRatios(Source* source)
+{
+    size_t i;
+    for (i = 0; i < source->concreteSources.size(); i++)
+    {
+        SourceItem* sourceItem = dynamic_cast<SourceItem*>(source->concreteSources[i]);
+        REC_ASSERT(sourceItem);
+        
+        if (sourceItem->aspectRatioCode.empty() || !isValidAspectRatioCode(sourceItem->aspectRatioCode))
+        {
+            return false;
+        }
+    }
+    
+    return true;
+}
+
+bool Recorder::haveProfile(int id)
+{
+    LOCK_SECTION(_profileManagerMutex);
+
+    return _profileManager->getProfile(id) != NULL;
+}
+
+bool Recorder::getLastSessionProfileCopy(Profile* profileCopy)
+{
+    LOCK_SECTION(_profileManagerMutex);
+    
+    Profile* profile = _profileManager->getProfile(_lastSessionProfileId);
+    if (!profile)
+    {
+        return false;
+    }
+    
+    *profileCopy = *profile;
+    return true;
+}
+
+map<int, Profile> Recorder::getProfileCopies()
+{
+    LOCK_SECTION(_profileManagerMutex);
+    
+    const map<int, Profile*>& profiles = _profileManager->getProfiles();
+    
+    map<int, Profile> profileCopies;
+    map<int, Profile*>::const_iterator iter;
+    for (iter = profiles.begin(); iter != profiles.end(); iter++)
+    {
+        profileCopies[iter->first] = *(iter->second);
+    }
+    
+    return profileCopies;
+}
+
+bool Recorder::getProfileCopy(int id, Profile* profileCopy)
+{
+    LOCK_SECTION(_profileManagerMutex);
+    
+    Profile* profile = _profileManager->getProfile(id);
+    if (!profile)
+    {
+        return false;
+    }
+    
+    *profileCopy = profile;
+    return true;
+}
+
+bool Recorder::updateProfile(const Profile *updatedProfileCopy)
+{
+    LOCK_SECTION(_profileManagerMutex);
+    
+    Profile *profile = _profileManager->getProfile(updatedProfileCopy->getId());
+    if (!profile)
+    {
+        Logging::error("Failed to update unknown profile '%s'\n", updatedProfileCopy->getName().c_str());
+        return false;
+    }
+    
+    if (!profile->update(updatedProfileCopy))
+    {
+        Logging::error("Failed to update profile '%s'\n", updatedProfileCopy->getName().c_str());
+        return false;
+    }
+    
+    Logging::info("Updated profile '%s'\n", updatedProfileCopy->getName().c_str());
+    
+    _profileManager->storeProfiles();
+    
+    return true;
 }
 
 void Recorder::sessionDone()
@@ -967,5 +1472,59 @@ void Recorder::checkSessionStatus()
         
         _sessionDone = false;
     }
+}
+
+bool Recorder::isSourceVTR(int deviceTypeCode)
+{
+    size_t i;
+    for (i = 0; i < _sourceVTRDeviceTypeCodes.size(); i++)
+    {
+        if (deviceTypeCode == _sourceVTRDeviceTypeCodes[i])
+        {
+            return true;
+        }
+    }
+    
+    if (_sourceVTRDeviceTypeCodes.empty())
+    {
+        for (i = 0; i < _backupVTRDeviceTypeCodes.size(); i++)
+        {
+            if (deviceTypeCode == _backupVTRDeviceTypeCodes[i])
+            {
+                return false;
+            }
+        }
+        
+        return true;
+    }
+    
+    return false;
+}
+
+bool Recorder::isBackupVTR(int deviceTypeCode)
+{
+    size_t i;
+    for (i = 0; i < _backupVTRDeviceTypeCodes.size(); i++)
+    {
+        if (deviceTypeCode == _backupVTRDeviceTypeCodes[i])
+        {
+            return true;
+        }
+    }
+    
+    if (_backupVTRDeviceTypeCodes.empty())
+    {
+        for (i = 0; i < _sourceVTRDeviceTypeCodes.size(); i++)
+        {
+            if (deviceTypeCode == _sourceVTRDeviceTypeCodes[i])
+            {
+                return false;
+            }
+        }
+        
+        return true;
+    }
+    
+    return false;
 }
 

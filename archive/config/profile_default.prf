@@ -1,0 +1,13 @@
+profile_name = 'Default'
+ingest_format_BD = MXF_UNC_10,MXF_UNC_8,MXF_D10_50
+ingest_format_BS = MXF_UNC_8,MXF_D10_50,MXF_UNC_10
+ingest_format_BX = MXF_UNC_8,MXF_D10_50,MXF_UNC_10
+ingest_format_D3 = MXF_UNC_8,MXF_UNC_10,MXF_D10_50
+default_ingest_format = MXF_UNC_8,MXF_D10_50,MXF_UNC_10
+browse_enable = true
+browse_video_bit_rate = 2700
+pse_enable = false
+num_audio_tracks = 4
+include_crc32 = true
+primary_timecode = AUTO
+

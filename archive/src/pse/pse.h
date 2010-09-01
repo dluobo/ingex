@@ -1,5 +1,5 @@
 /*
- * $Id: pse.h,v 1.1 2008/07/08 16:24:58 philipn Exp $
+ * $Id: pse.h,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * Interface definition of a class implementing PSE analysis
  *
@@ -53,6 +53,9 @@ public:
     virtual bool fini(void) = 0;
     virtual bool open(void) = 0;
     virtual bool close(void) = 0;
+
+    virtual bool is_init(void) = 0;
+    virtual bool is_open(void) = 0;
 
     virtual bool analyse_frame(const uint8_t *video_frame) = 0;
     virtual bool get_remaining_results(std::vector<PSEResult> &p_results) = 0;

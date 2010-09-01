@@ -1,5 +1,5 @@
 /*
- * $Id: HTTPRecorder.cpp,v 1.1 2008/07/08 16:25:35 philipn Exp $
+ * $Id: HTTPRecorder.cpp,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * HTTP interface to the recorder
  *
@@ -34,6 +34,7 @@
  
 #include "HTTPRecorder.h"
 #include "JSONObject.h"
+#include "InfaxAccess.h"
 #include "RecorderDatabase.h"
 #include "Logging.h"
 #include "RecorderException.h"
@@ -50,8 +51,10 @@ using namespace rec;
 
 // all the HTTP service URLs handled by the HTTPRecorder
 static const char* g_recorderStatusURL = "/recorder/status.json";
+static const char* g_getProfileListURL = "/recorder/profilelist.json";
+static const char* g_getProfileURL = "/recorder/profile.json";
+static const char* g_updateProfileURL = "/recorder/updateprofile.json";
 static const char* g_sourceInfoURL = "/recorder/sourceinfo.json";
-static const char* g_updateSourceInfoURL = "/recorder/updatesourceinfo.json";
 static const char* g_checkSelectedDigibetaURL = "/recorder/checkselecteddigibeta.json";
 static const char* g_newSessionURL = "/recorder/newsession.json";
 static const char* g_sessionSourceInfoURL = "/recorder/session/sourceinfo.json";
@@ -84,10 +87,145 @@ static const char* g_pseReportFramedURL = "/psereport_framed.shtml";
 static const char* g_ssiGetPSEReportURL = "get_pse_report_url";
 
 
+static const char* g_urlUnknownAspectRatioCode = "-";
+
+
+
 
 static bool parse_int(string intStr, int* value)
 {
     return sscanf(intStr.c_str(), "%d", value) == 1; 
+}
+
+static bool parse_aspect_ratio_codes(string aspectRatioCodesString, vector<string>* aspectRatioCodes)
+{
+    string aspectRatioCode;
+    size_t i;
+    for (i = 0; i < aspectRatioCodesString.size(); i++)
+    {
+        if (aspectRatioCodesString[i] == ',')
+        {
+            if (aspectRatioCode.empty())
+            {
+                return false;
+            }
+
+            if (aspectRatioCode == g_urlUnknownAspectRatioCode)
+            {
+                aspectRatioCodes->push_back("");
+            }
+            else
+            {
+                aspectRatioCodes->push_back(aspectRatioCode);
+            }
+            aspectRatioCode.clear();
+        }
+        else
+        {
+            aspectRatioCode.push_back(aspectRatioCodesString[i]);
+        }
+    }
+    if (!aspectRatioCode.empty())
+    {
+        if (aspectRatioCode == g_urlUnknownAspectRatioCode)
+        {
+            aspectRatioCodes->push_back("");
+        }
+        else
+        {
+            aspectRatioCodes->push_back(aspectRatioCode);
+        }
+    }
+    
+    return true;
+}
+
+static bool parse_ingest_format(string arg, IngestFormat *defaultIngestFormat)
+{
+    int intValue;
+    if (!parse_int(arg, &intValue))
+    {
+        return false;
+    }
+    
+    if (intValue != UNKNOWN_INGEST_FORMAT &&
+        intValue != MXF_UNC_8BIT_INGEST_FORMAT &&
+        intValue != MXF_UNC_10BIT_INGEST_FORMAT &&
+        intValue != MXF_D10_50_INGEST_FORMAT)
+    {
+        return false;
+    }
+    
+    *defaultIngestFormat = (IngestFormat)intValue;
+    return true;
+}
+
+static vector<string> parse_string_array(string arg)
+{
+    vector<string> retValue;
+    size_t prevPos = 0;
+    size_t pos = 0;
+    while ((pos = arg.find(",", prevPos)) != string::npos)
+    {
+        retValue.push_back(arg.substr(prevPos, pos - prevPos));
+        prevPos = pos + 1;
+    }
+    if (prevPos < arg.size())
+    {
+        retValue.push_back(arg.substr(prevPos, arg.size() - prevPos));
+    }
+    
+    return retValue;
+}
+
+static bool parse_ingest_formats(string arg, map<string, IngestFormat> *ingestFormats)
+{
+    vector<string> strArray = parse_string_array(arg);
+    if (strArray.size() % 2 != 0)
+    {
+        return false;
+    }
+    
+    map<string, IngestFormat> retValue;
+    
+    IngestFormat ingestFormat;
+    size_t i;
+    for (i = 0; i < strArray.size(); i += 2)
+    {
+        if (strArray[i].empty())
+        {
+            return false;
+        }
+        
+        if (!parse_ingest_format(strArray[i + 1], &ingestFormat))
+        {
+            return false;
+        }
+        
+        retValue[strArray[i]] = ingestFormat;
+    }
+    
+    *ingestFormats = retValue;
+    return true;
+}
+
+static bool parse_primary_timecode(string arg, PrimaryTimecode *primaryTimecode)
+{
+    int intValue;
+    if (!parse_int(arg, &intValue))
+    {
+        return false;
+    }
+    
+    if (intValue != PRIMARY_TIMECODE_AUTO &&
+        intValue != PRIMARY_TIMECODE_LTC &&
+        intValue != PRIMARY_TIMECODE_VITC)
+    {
+        return false;
+    }
+    
+    *primaryTimecode = (PrimaryTimecode)intValue;
+    return true;
 }
 
 static string get_size_string(int64_t size)
@@ -212,599 +350,11 @@ static string get_vtr_state_string(VTRState state)
 
 
 
-class SourceInfoAgent : public ThreadWorker
-{
-public:
-    SourceInfoAgent(Recorder* recorder, string barcode, HTTPConnection* connection)
-    : _recorder(recorder), _barcode(barcode), _connection(connection), _hasStopped(false) 
-    {}
-    
-    virtual ~SourceInfoAgent()
-    {}
-    
-    virtual void start()
-    {
-        GUARD_THREAD_START(_hasStopped);
-        
-        
-        // load source info
-        
-        auto_ptr<Source> source(RecorderDatabase::getInstance()->loadSource(_barcode));
-        if (source.get() == 0)
-        {
-            JSONObject json;
-            json.setBool("error", true);
-            json.setString("barcode", _barcode);
-            json.setNumber("errorCode", 1);
-            json.setString("errorMessage", "Unknown source");
-            _connection->sendJSON(&json);
-            return;
-        }
-        Logging::info("Loaded source info '%s'\n", _barcode.c_str());
-        
-        
-        // check multi-item support
-        
-        if (!_recorder->checkMultiItemSupport(source.get()))
-        {
-            JSONObject json;
-            json.setBool("error", true);
-            json.setString("barcode", _barcode);
-            json.setNumber("errorCode", 2);
-            json.setString("errorMessage", "Multi-item ingest not enabled");
-            _connection->sendJSON(&json);
-            return;
-        }
-        
-
-        
-        // calculate the total Infax duration
-        
-        int64_t totalInfaxDuration = -1;
-        vector<ConcreteSource*>::const_iterator iter;
-        for (iter = source->concreteSources.begin(); iter != source->concreteSources.end(); iter++)
-        {
-            D3Source* d3Source = dynamic_cast<D3Source*>(*iter);
-            
-            if (d3Source->duration > 0)
-            {
-                if (totalInfaxDuration < 0)
-                {
-                    totalInfaxDuration = d3Source->duration;
-                }
-                else
-                {
-                    totalInfaxDuration += d3Source->duration;
-                }
-            }
-        }        
-        
-        
-        // generate the response
-
-        JSONObject json;
-        json.setBool("error", false);
-        json.setString("barcode", _barcode);
-            
-        JSONArray* itemArray = 0;
-        for (iter = source->concreteSources.begin(); iter != source->concreteSources.end(); iter++)
-        {
-            D3Source* d3Source = dynamic_cast<D3Source*>(*iter);
-            
-            if (iter == source->concreteSources.begin())
-            {
-                JSONObject* tapeInfo = json.setObject("tapeInfo");
-                tapeInfo->setString("format", d3Source->format);
-                tapeInfo->setString("spoolNo", d3Source->spoolNo);
-                tapeInfo->setString("accNo", d3Source->accNo);
-                tapeInfo->setString("spoolStatus", d3Source->spoolStatus);
-                tapeInfo->setString("stockDate", d3Source->stockDate.toString());
-                tapeInfo->setNumber("totalInfaxDuration", totalInfaxDuration);
-
-                itemArray = json.setArray("items");
-            }
-            
-            JSONObject* items = itemArray->appendObject();
-            items->setString("progTitle", d3Source->progTitle);
-            items->setString("spoolDescr", d3Source->spoolDescr);
-            items->setString("episodeTitle", d3Source->episodeTitle);
-            items->setString("txDate", d3Source->txDate.toString());
-            items->setString("progNo", get_complete_prog_no(d3Source->magPrefix, d3Source->progNo, d3Source->prodCode));
-            items->setNumber("infaxDuration", d3Source->duration);
-            items->setString("catDetail", d3Source->catDetail);
-            items->setString("memo", d3Source->memo);
-            items->setNumber("itemNo", d3Source->itemNo);
-        }
-
-        // set message to warn if the D3 has been ingested before
-        if (RecorderDatabase::getInstance()->d3UsedInCompletedSession(_barcode))
-        {
-            json.setNumber("warningCode", 0);
-            json.setString("warningMessage", "Warning: D3 has been ingested before");
-        }
-        
-        
-        _connection->sendJSON(&json);
-    }
-    
-    virtual void stop()
-    {
-        // nothing to stop
-    }
-    
-    virtual bool hasStopped() const
-    {
-        return _hasStopped;
-    }
-    
-private:
-    Recorder* _recorder;
-    string _barcode;
-    HTTPConnection* _connection;
-    bool _hasStopped;
-};
-
-
-// class to feed source properties from the HTTP POST data
-class HTTPPropertySource : public AssetPropertySource
-{
-public:
-    HTTPPropertySource(HTTPConnection* connection)
-    : _connection(connection)
-    {
-    }
-    virtual ~HTTPPropertySource() 
-    {}
-    
-    virtual bool haveValue(int assetId, string assetName)
-    {
-        string fullName = assetName + "-" + int_to_string(assetId);
-        return _connection->havePostValue(fullName);
-    }
-    
-    virtual string getValue(int assetId, string assetName)
-    {
-        string fullName = assetName + "-" + int_to_string(assetId);
-        return _connection->getPostValue(fullName);
-    }
-    
-private:
-    HTTPConnection* _connection;
-};
-
-
-class UpdateSourceInfoAgent : public ThreadWorker
-{
-public:
-    UpdateSourceInfoAgent(string barcode, HTTPConnection* connection)
-    : _barcode(barcode), _connection(connection), _hasStopped(false) 
-    {}
-    
-    virtual ~UpdateSourceInfoAgent()
-    {}
-    
-    virtual void start()
-    {
-        GUARD_THREAD_START(_hasStopped);
-        
-        // check that the source is not being used in a recording session
-        if (RecorderDatabase::getInstance()->sessionInProgress(_barcode))
-        {
-            JSONObject json;
-            json.setBool("error", true);
-            json.setString("barcode", _barcode);
-            json.setNumber("errorCode", 1);
-            json.setString("errorMessage", "A session is using the source");
-            _connection->sendJSON(&json);
-            return;
-        }
-        
-        // load source info
-        auto_ptr<Source> source(RecorderDatabase::getInstance()->loadSource(_barcode));
-        if (source.get() == 0)
-        {
-            JSONObject json;
-            json.setBool("error", true);
-            json.setString("barcode", _barcode);
-            json.setNumber("errorCode", 2);
-            json.setString("errorMessage", "Unknown source");
-            _connection->sendJSON(&json);
-            return;
-        }
-        else if (source->concreteSources.size() > 1)
-        {
-            JSONObject json;
-            json.setBool("error", true);
-            json.setString("barcode", _barcode);
-            json.setNumber("errorCode", 3);
-            json.setString("errorMessage", "Tape with multiple items is not currently supported");
-            _connection->sendJSON(&json);
-            return;
-        }
-        Logging::info("Loaded source info '%s' for update\n", _barcode.c_str());
-        
-        
-        // update and validate
-
-        HTTPPropertySource propSource(_connection);
-        string errMessage;
-        if (!source->concreteSources.front()->parseSourceProperties(&propSource, &errMessage))
-        {
-            JSONObject json;
-            json.setBool("error", true);
-            json.setString("barcode", _barcode);
-            json.setNumber("errorCode", 4);
-            json.setString("errorMessage", errMessage);
-            _connection->sendJSON(&json);
-            return;
-        }
-        try
-        {
-            RecorderDatabase::getInstance()->updateConcreteSource(source->concreteSources.front());
-        }
-        catch (...)
-        {
-            JSONObject json;
-            json.setBool("error", true);
-            json.setString("barcode", _barcode);
-            json.setNumber("errorCode", 5);
-            json.setString("errorMessage", "Failed to update source in database");
-            _connection->sendJSON(&json);
-            return;
-        }
-        
-        Logging::info("Updated source info for '%s'\n", _barcode.c_str());
-        
-        
-        // generate the response
-        
-        JSONObject json;
-        json.setBool("error", false);
-        json.setString("barcode", _barcode);
-        
-        JSONArray* values = json.setArray("values");
-        vector<AssetProperty> props = source->concreteSources.front()->getSourceProperties();
-        vector<AssetProperty>::const_iterator iter;
-        for (iter = props.begin(); iter != props.end(); iter++)
-        {
-            JSONObject* tv = values->appendObject();
-            tv->setString("name", (*iter).name + "-" + int_to_string((*iter).id));
-            tv->setString("title", (*iter).title);
-            tv->setString("value", (*iter).value);
-            tv->setString("type", (*iter).type);
-            tv->setNumber("maxSize", (*iter).maxSize);
-            tv->setBool("editable", (*iter).editable);
-        }
-        _connection->sendJSON(&json);
-    }
-    
-    virtual void stop()
-    {
-        // nothing to stop
-    }
-    
-    virtual bool hasStopped() const
-    {
-        return _hasStopped;
-    }
-    
-private:
-    string _barcode;
-    HTTPConnection* _connection;
-    bool _hasStopped;
-};
-
-
-class CheckDigibetaAgent : public ThreadWorker
-{
-public:
-    CheckDigibetaAgent(Recorder* recorder, string barcode, HTTPConnection* connection)
-    : _recorder(recorder), _barcode(barcode), _connection(connection), _hasStopped(false) 
-    {}
-    
-    virtual ~CheckDigibetaAgent()
-    {}
-    
-    virtual void start()
-    {
-        GUARD_THREAD_START(_hasStopped);
-        
-        // check that it is a valid barcode
-        if (!_recorder->isDigibetaBarcode(_barcode))
-        {
-            JSONObject json;
-            json.setBool("error", true);
-            json.setString("barcode", _barcode);
-            json.setNumber("errorCode", 0);
-            json.setString("errorMessage", "Barcode is not a Digibeta barcode");
-            _connection->sendJSON(&json);
-            return;
-        }
-        
-        // generate the response
-        
-        JSONObject json;
-        json.setBool("error", false);
-        json.setString("barcode", _barcode);
-        
-        // set message to warn if the digibeta has been used before in a completed session
-        if (RecorderDatabase::getInstance()->digibetaUsedInCompletedSession(_barcode))
-        {
-            json.setNumber("warningCode", 0);
-            json.setString("warningMessage", "Warning: digibeta has been used before");
-        }
-        
-        _connection->sendJSON(&json);
-    }
-    
-    virtual void stop()
-    {
-        // nothing to stop
-    }
-    
-    virtual bool hasStopped() const
-    {
-        return _hasStopped;
-    }
-    
-private:
-    Recorder* _recorder;
-    string _barcode;
-    HTTPConnection* _connection;
-    bool _hasStopped;
-};
-
-
-class StartSessionAgent : public ThreadWorker
-{
-public:
-    StartSessionAgent(string barcode, string digibetaBarcode, HTTPRecorder* httpRecorder, HTTPConnection* connection)
-    : _barcode(barcode), _digibetaBarcode(digibetaBarcode), _httpRecorder(httpRecorder), _connection(connection), _hasStopped(false) 
-    {}
-    
-    virtual ~StartSessionAgent()
-    {}
-    
-    virtual void start()
-    {
-        GUARD_THREAD_START(_hasStopped);
-        
-        
-        // get the source information
-        auto_ptr<Source> source(RecorderDatabase::getInstance()->loadSource(_barcode));
-        if (source.get() == 0)
-        {
-            JSONObject json;
-            json.setBool("error", true);
-            json.setString("errorMessage", "Unknown source");
-            json.setString("barcode", _barcode);
-            _connection->sendJSON(&json);
-            return;
-        }
-        Logging::info("Loaded source info '%s' for new session\n", _barcode.c_str());
-
-        
-        // create the session
-        RecordingSession* session;
-        int result = _httpRecorder->getRecorder()->startNewSession(source.release(), _digibetaBarcode, &session);
-        if (result != 0)
-        {
-            // an error has occurred
-            JSONObject json;
-            json.setBool("error", true);
-            json.setNumber("errorCode", result);
-            switch (result)
-            {
-                case SESSION_IN_PROGRESS_FAILURE:
-                    json.setString("errorMessage", "Session is already in progress");
-                    break;
-                case VIDEO_SIGNAL_BAD_FAILURE:
-                    json.setString("errorMessage", "Video signal is bad");
-                    break;
-                case AUDIO_SIGNAL_BAD_FAILURE:
-                    json.setString("errorMessage", "Audio signal is bad");
-                    break;
-                case D3_VTR_CONNECT_FAILURE:
-                    json.setString("errorMessage", "No D3 VTR connection");
-                    break;
-                case D3_VTR_REMOTE_LOCKOUT_FAILURE:
-                    json.setString("errorMessage", "D3 VTR remote lockout");
-                    break;
-                case NO_D3_TAPE:
-                    json.setString("errorMessage", "No D3 tape");
-                    break;
-                case DIGIBETA_VTR_CONNECT_FAILURE:
-                    json.setString("errorMessage", "No Digibeta VTR connection");
-                    break;
-                case DIGIBETA_VTR_REMOTE_LOCKOUT_FAILURE:
-                    json.setString("errorMessage", "Digibeta VTR remote lockout");
-                    break;
-                case NO_DIGIBETA_TAPE:
-                    json.setString("errorMessage", "No Digibeta tape");
-                    break;
-                case DISK_SPACE_FAILURE:
-                    json.setString("errorMessage", "Not enough disk space, <" + get_size_string(DISK_SPACE_MARGIN));
-                    break;
-                case MULTI_ITEM_MXF_EXISTS_FAILURE:
-                    json.setString("errorMessage", "Multi-item MXF files already in cache");
-                    break;
-                case MULTI_ITEM_NOT_ENABLED_FAILURE:
-                    json.setString("errorMessage", "Multi-item ingest not enabled");
-                    break;
-                case INTERNAL_FAILURE:
-                default:
-                    json.setString("errorMessage", "Internal server error");
-                    break;
-            }
-            json.setString("barcode", _barcode);
-            _connection->sendJSON(&json);
-            return;
-        }
-        
-        // reset the barcode
-        _httpRecorder->newBarcode("");
-        
-        
-        JSONObject json;
-        json.setBool("error", false);
-        json.setString("barcode", _barcode);
-        _connection->sendJSON(&json);
-    }
-    
-    virtual void stop()
-    {
-        // nothing to stop
-    }
-    
-    virtual bool hasStopped() const
-    {
-        return _hasStopped;
-    }
-    
-private:
-    string _barcode;
-    string _digibetaBarcode;
-    HTTPRecorder* _httpRecorder;
-    HTTPConnection* _connection;
-    bool _hasStopped;
-};
-
-
-class CacheContentsAgent : public ThreadWorker
-{
-public:
-    CacheContentsAgent(Recorder* recorder, HTTPConnection* connection)
-    : _recorder(recorder), _connection(connection), _hasStopped(false) 
-    {}
-    
-    virtual ~CacheContentsAgent()
-    {}
-    
-    virtual void start()
-    {
-        GUARD_THREAD_START(_hasStopped);
-        
-        
-        // load cache contents
-        auto_ptr<CacheContents> contents(_recorder->getCache()->getContents());
-        if (!contents.get())
-        {
-            Logging::warning("Failed to load cache contents\n");
-            _connection->sendServerError("Failed to load cache contents");
-            return;
-        }
-    
-        // get the cache status
-        CacheStatus status = _recorder->getCache()->getStatus();
-
-        
-        // generate the response
-        
-        JSONObject json;
-        
-        json.setString("path", contents->path);
-        json.setNumber("statusChangeCount", status.statusChangeCount);
-        
-        JSONArray* jitems = json.setArray("items");
-        vector<CacheContentItem*>::const_iterator iter;
-        for (iter = contents->items.begin(); iter != contents->items.end(); iter++)
-        {
-            JSONObject* tv = jitems->appendObject();
-            tv->setNumber("identifier", (*iter)->identifier);
-            tv->setString("srcSpoolNo", (*iter)->sourceSpoolNo);
-            tv->setNumber("srcItemNo", (*iter)->sourceItemNo);
-            tv->setString("srcMPProgNo", get_complete_prog_no((*iter)->sourceMagPrefix, (*iter)->sourceProgNo, (*iter)->sourceProdCode));
-            tv->setString("sessionCreation", get_timestamp_string((*iter)->sessionCreation));
-            tv->setNumber("sessionStatus", (*iter)->sessionStatus);
-            tv->setString("sessionStatusString", get_session_status_string((*iter)->sessionStatus));
-            tv->setString("name", (*iter)->name);
-            tv->setNumber("size", (*iter)->size);
-            tv->setNumber("duration", (*iter)->duration);
-            string pseURL = g_pseReportFramedURL;
-            pseURL += "?name=" + (*iter)->pseName;
-            tv->setString("pseURL", pseURL);
-            tv->setNumber("pseResult", (*iter)->pseResult);
-        }
-        _connection->sendJSON(&json);
-    }
-    
-    virtual void stop()
-    {
-        // nothing to stop
-    }
-    
-    virtual bool hasStopped() const
-    {
-        return _hasStopped;
-    }
-    
-private:
-    Recorder* _recorder;
-    HTTPConnection* _connection;
-    bool _hasStopped;
-};
-
-
-
-class ReplayFileAgent : public ThreadWorker
-{
-public:
-    ReplayFileAgent(Recorder* recorder, HTTPConnection* connection, string filename)
-    : _recorder(recorder), _connection(connection), _filename(filename), _hasStopped(false) 
-    {}
-    
-    virtual ~ReplayFileAgent()
-    {}
-    
-    virtual void start()
-    {
-        GUARD_THREAD_START(_hasStopped);
-        
-        
-        int result = _recorder->replayFile(_filename);
-        if (result != 0)
-        {
-            switch (result)
-            {
-                case SESSION_IN_PROGRESS_REPLAY_FAILURE:
-                    _connection->sendBadRequest("Recording session in progress");
-                    return;
-                case UNKNOWN_FILE_REPLAY_FAILURE:
-                    _connection->sendBadRequest("Unknown file");
-                    return;
-                case INTERNAL_REPLAY_FAILURE:
-                default:
-                    _connection->sendServerError("Replay failed");
-                    return;
-            }
-        }
-
-        _connection->sendOk();
-    }
-    
-    virtual void stop()
-    {
-        // nothing to stop
-    }
-    
-    virtual bool hasStopped() const
-    {
-        return _hasStopped;
-    }
-    
-private:
-    Recorder* _recorder;
-    HTTPConnection* _connection;
-    string _filename;
-    bool _hasStopped;
-};
-
 
 
 
 HTTPRecorder::HTTPRecorder(HTTPServer* server, Recorder* recorder, BarcodeScanner* scanner)
-: _recorder(recorder), _barcodeCount(0), _sourceInfoAgent(0), _checkDigibetaAgent(0), _updateSourceInfoAgent(0),
-_startSessionAgent(0), _cacheContentsAgent(0), _replayFileAgent(0)
+: _recorder(recorder), _barcodeCount(0)
 {
     HTTPServiceDescription* service;
     
@@ -815,23 +365,34 @@ _startSessionAgent(0), _cacheContentsAgent(0), _replayFileAgent(0)
     service->addArgument("cache", "boolean", false, "Include cache status information");
     service->addArgument("system", "boolean", false, "Include system information");
     
+    service = server->registerService(new HTTPServiceDescription(g_getProfileListURL), this);
+    service->setDescription("Returns the list of profile identifiers and names");
+    
+    service = server->registerService(new HTTPServiceDescription(g_getProfileURL), this);
+    service->setDescription("Returns the profile");
+    service->addArgument("id", "integer", true, "The profile identifier");
+    
+    service = server->registerService(new HTTPServiceDescription(g_updateProfileURL), this);
+    service->setDescription("Update the profile");
+    service->addArgument("id", "integer", true, "The profile identifier");
+    service->addArgument("defaultingestformat", "integer", true, "The default ingest format");
+    service->addArgument("ingestformats", "array of string,integer", true, "The selected ingest format for each source format code");
+    
     service = server->registerService(new HTTPServiceDescription(g_sourceInfoURL), this);
     service->setDescription("Returns the source information");
     service->addArgument("barcode", "string", true, "The barcode that uniquely identifies the source item");
-    
-    service = server->registerService(new HTTPServiceDescription(g_updateSourceInfoURL), this);
-    service->setDescription("Updates the source information and returns the validation result and the source information if ok (POST)");
-    service->addArgument("barcode", "string", true, "The barcode that uniquely identifies the source item");
-    service->addArgument("(field name)*", "string", true, "The list of updated field values");
+    service->addArgument("profiles", "boolean", false, "Include profile list");
     
     service = server->registerService(new HTTPServiceDescription(g_checkSelectedDigibetaURL), this);
-    service->setDescription("Checks the status of the selected digibeta tape");
+    service->setDescription("Checks the status of the selected digibeta backup tape");
     service->addArgument("barcode", "string", true, "The barcode that uniquely identifies the digibeta tape");
     
     service = server->registerService(new HTTPServiceDescription(g_newSessionURL), this);
     service->setDescription("Starts a new recording session");
     service->addArgument("barcode", "string", true, "The barcode that uniquely identifies the source item");
-    service->addArgument("digibetabarcode", "string", true, "The Digibeta barcode that uniquely identifies the Digibeta tape");
+    service->addArgument("profileid", "integer", true, "The profile identifier");
+    service->addArgument("digibetabarcode", "string", false, "The Digibeta barcode that uniquely identifies the Digibeta backup tape");
+    service->addArgument("aspectRatioCodes", "array of strings", false, "The aspect ratio code ('-' is unknown) for each source item");
     
     service = server->registerService(new HTTPServiceDescription(g_sessionSourceInfoURL), this);
     service->setDescription("Returns the source information associated with the current session");
@@ -929,12 +490,6 @@ _startSessionAgent(0), _cacheContentsAgent(0), _replayFileAgent(0)
 
 HTTPRecorder::~HTTPRecorder()
 {
-    delete _sourceInfoAgent;
-    delete _checkDigibetaAgent;
-    delete _updateSourceInfoAgent;
-    delete _startSessionAgent;
-    delete _cacheContentsAgent;
-    delete _replayFileAgent;
 }
 
 void HTTPRecorder::newBarcode(string barcode)
@@ -960,115 +515,123 @@ void HTTPRecorder::processRequest(HTTPServiceDescription* serviceDescription, HT
 {
     // route the connection to the correct function
     
-    if (serviceDescription->getURL().compare(g_recorderStatusURL) == 0)
+    if (serviceDescription->getURL() == g_recorderStatusURL)
     {
         getRecorderStatus(connection);
     }
-    else if (serviceDescription->getURL().compare(g_sourceInfoURL) == 0)
+    else if (serviceDescription->getURL() == g_getProfileListURL)
+    {
+        getProfileList(connection);
+    }
+    else if (serviceDescription->getURL() == g_getProfileURL)
+    {
+        getProfile(connection);
+    }
+    else if (serviceDescription->getURL() == g_updateProfileURL)
+    {
+        updateProfile(connection);
+    }
+    else if (serviceDescription->getURL() == g_sourceInfoURL)
     {
         getSourceInfo(connection);
     }
-    else if (serviceDescription->getURL().compare(g_updateSourceInfoURL) == 0)
-    {
-        updateSourceInfo(connection);
-    }
-    else if (serviceDescription->getURL().compare(g_checkSelectedDigibetaURL) == 0)
+    else if (serviceDescription->getURL() == g_checkSelectedDigibetaURL)
     {
         checkSelectedDigibeta(connection);
     }
-    else if (serviceDescription->getURL().compare(g_newSessionURL) == 0)
+    else if (serviceDescription->getURL() == g_newSessionURL)
     {
         startNewSession(connection);
     }
-    else if (serviceDescription->getURL().compare(g_sessionSourceInfoURL) == 0)
+    else if (serviceDescription->getURL() == g_sessionSourceInfoURL)
     {
         getSessionSourceInfo(connection);
     }
-    else if (serviceDescription->getURL().compare(g_startRecordingURL) == 0)
+    else if (serviceDescription->getURL() == g_startRecordingURL)
     {
         startRecording(connection);
     }
-    else if (serviceDescription->getURL().compare(g_stopRecordingURL) == 0)
+    else if (serviceDescription->getURL() == g_stopRecordingURL)
     {
         stopRecording(connection);
     }
-    else if (serviceDescription->getURL().compare(g_chunkFileURL) == 0)
+    else if (serviceDescription->getURL() == g_chunkFileURL)
     {
         chunkFile(connection);
     }
-    else if (serviceDescription->getURL().compare(g_completeSessionURL) == 0)
+    else if (serviceDescription->getURL() == g_completeSessionURL)
     {
         completeSession(connection);
     }
-    else if (serviceDescription->getURL().compare(g_abortSessionURL) == 0)
+    else if (serviceDescription->getURL() == g_abortSessionURL)
     {
         abortSession(connection);
     }
-    else if (serviceDescription->getURL().compare(g_setSessionCommentsURL) == 0)
+    else if (serviceDescription->getURL() == g_setSessionCommentsURL)
     {
         setSessionComments(connection);
     }
-    else if (serviceDescription->getURL().compare(g_getSessionCommentsURL) == 0)
+    else if (serviceDescription->getURL() == g_getSessionCommentsURL)
     {
         getSessionComments(connection);
     }
-    else if (serviceDescription->getURL().compare(g_cacheContentsURL) == 0)
+    else if (serviceDescription->getURL() == g_cacheContentsURL)
     {
         getCacheContents(connection);
     }
-    else if (serviceDescription->getURL().compare(g_confReplayURL) == 0)
+    else if (serviceDescription->getURL() == g_confReplayURL)
     {
         confReplayControl(connection);
     }
-    else if (serviceDescription->getURL().compare(g_replayFileURL) == 0)
+    else if (serviceDescription->getURL() == g_replayFileURL)
     {
         replayFile(connection);
     }
-    else if (serviceDescription->getURL().compare(g_playItemURL) == 0)
+    else if (serviceDescription->getURL() == g_playItemURL)
     {
         playItem(connection);
     }
-    else if (serviceDescription->getURL().compare(g_playPrevItemURL) == 0)
+    else if (serviceDescription->getURL() == g_playPrevItemURL)
     {
         playPrevItem(connection);
     }
-    else if (serviceDescription->getURL().compare(g_playNextItemURL) == 0)
+    else if (serviceDescription->getURL() == g_playNextItemURL)
     {
         playNextItem(connection);
     }
-    else if (serviceDescription->getURL().compare(g_seekToEOPURL) == 0)
+    else if (serviceDescription->getURL() == g_seekToEOPURL)
     {
         seekToEOP(connection);
     }
-    else if (serviceDescription->getURL().compare(g_markItemStartURL) == 0)
+    else if (serviceDescription->getURL() == g_markItemStartURL)
     {
         markItemStart(connection);
     }
-    else if (serviceDescription->getURL().compare(g_clearItemURL) == 0)
+    else if (serviceDescription->getURL() == g_clearItemURL)
     {
         clearItem(connection);
     }
-    else if (serviceDescription->getURL().compare(g_moveItemUpURL) == 0)
+    else if (serviceDescription->getURL() == g_moveItemUpURL)
     {
         moveItemUp(connection);
     }
-    else if (serviceDescription->getURL().compare(g_moveItemDownURL) == 0)
+    else if (serviceDescription->getURL() == g_moveItemDownURL)
     {
         moveItemDown(connection);
     }
-    else if (serviceDescription->getURL().compare(g_disableItemURL) == 0)
+    else if (serviceDescription->getURL() == g_disableItemURL)
     {
         disableItem(connection);
     }
-    else if (serviceDescription->getURL().compare(g_enableItemURL) == 0)
+    else if (serviceDescription->getURL() == g_enableItemURL)
     {
         enableItem(connection);
     }
-    else if (serviceDescription->getURL().compare(g_getItemClipInfoURL) == 0)
+    else if (serviceDescription->getURL() == g_getItemClipInfoURL)
     {
         getItemClipInfo(connection);
     }
-    else if (serviceDescription->getURL().compare(g_getItemSourceInfoURL) == 0)
+    else if (serviceDescription->getURL() == g_getItemSourceInfoURL)
     {
         getItemSourceInfo(connection);
     }
@@ -1080,7 +643,7 @@ void HTTPRecorder::processRequest(HTTPServiceDescription* serviceDescription, HT
 
 void HTTPRecorder::processSSIRequest(string name, HTTPConnection* connection)
 {
-    if (name.compare(g_ssiGetPSEReportURL) == 0)
+    if (name == g_ssiGetPSEReportURL)
     {
         if (connection->haveQueryValue("name"))
         {
@@ -1101,6 +664,8 @@ void HTTPRecorder::getRecorderStatus(HTTPConnection* connection)
     bool includeSessionReview = false;
     bool includeCache = false;
     bool includeSystem = false;
+    bool includeDeveloper = false;
+    bool includeReplay = false;
     string barcode;
     int barcodeCount = 0;
     SessionStatus sessionStatus;
@@ -1110,10 +675,12 @@ void HTTPRecorder::getRecorderStatus(HTTPConnection* connection)
     SessionResult lastSessionResult = UNKNOWN_SESSION_RESULT;
     string lastSessionSourceSpoolNo;
     string lastSessionFailureReason;
+    int apiVersion;
+    ConfidenceReplayStatus replayStatus;
 
     // process the URL query string
     string barcodeArg = connection->getQueryValue("barcode");
-    if (barcodeArg.compare("true") == 0)
+    if (barcodeArg == "true")
     {
         includeBarcode = true;
         
@@ -1126,34 +693,46 @@ void HTTPRecorder::getRecorderStatus(HTTPConnection* connection)
         }
     }
     string sessionArg = connection->getQueryValue("sessionrecord");
-    if (sessionArg.compare("true") == 0)
+    if (sessionArg == "true")
     {
         includeSessionRecord = true;
     }
     else
     {
         sessionArg = connection->getQueryValue("sessionreview");
-        if (sessionArg.compare("true") == 0)
+        if (sessionArg == "true")
         {
             includeSessionReview = true;
+            includeReplay = true;
         }
     }
-    if (includeSessionRecord || includeSessionReview)
+    string developerArg = connection->getQueryValue("developer");
+    if (developerArg == "true")
+    {
+        includeDeveloper = true;
+    }
+    string replayArg = connection->getQueryValue("replay");
+    if (includeReplay || replayArg == "true")
+    {
+        includeReplay = true;
+        replayStatus = _recorder->getConfidenceReplayStatus();
+    }
+    if (includeSessionRecord || includeSessionReview || includeDeveloper)
     {
         if (_recorder->haveSession())
         {
-            sessionStatus = _recorder->getSessionStatus();
+            sessionStatus = _recorder->getSessionStatus(&replayStatus);
         }
         _recorder->getLastSessionResult(&lastSessionResult, &lastSessionSourceSpoolNo, &lastSessionFailureReason);
     }
     string cacheArg = connection->getQueryValue("cache");
-    if (cacheArg.compare("true") == 0)
+    if (cacheArg == "true")
     {
         includeCache = true;
         cacheStatus = _recorder->getCache()->getStatus();
     }
     string systemArg = connection->getQueryValue("system");
-    if (systemArg.compare("true") == 0)
+    if (systemArg == "true")
     {
         includeSystem = true;
         systemStatus = _recorder->getSystemStatus();
@@ -1162,7 +741,7 @@ void HTTPRecorder::getRecorderStatus(HTTPConnection* connection)
     
     // get the recorder status
     RecorderStatus status = _recorder->getStatus();
-    if (includeSessionRecord || includeSessionReview)
+    if (includeSessionRecord || includeSessionReview || includeDeveloper)
     {
         sessionState = sessionStatus.state;
     }
@@ -1171,17 +750,27 @@ void HTTPRecorder::getRecorderStatus(HTTPConnection* connection)
         sessionState = _recorder->getSessionState();
     }
     
+    // get the API version
+    if (_recorder->tapeBackupEnabled())
+    {
+        apiVersion = 1;
+    }
+    else
+    {
+        apiVersion = 2;
+    }
     
     // generate JSON response
     
     JSONObject json;
     json.setString("recorderName", status.recorderName);
+    json.setNumber("apiVersion", apiVersion);
     json.setBool("database", status.databaseOk);
     json.setBool("sdiCard", status.sdiCardOk);
     json.setBool("video", status.videoOk);
     json.setBool("audio", status.audioOk);
     json.setBool("vtr", status.vtrOk);
-    json.setString("d3VTRState", get_vtr_state_string(status.d3VTRState));
+    json.setString("sourceVTRState", get_vtr_state_string(status.sourceVTRState));
     json.setString("digibetaVTRState", get_vtr_state_string(status.digibetaVTRState));
     json.setBool("readyToRecord", status.readyToRecord);
     if (includeBarcode && barcode.size() > 0)
@@ -1196,17 +785,20 @@ void HTTPRecorder::getRecorderStatus(HTTPConnection* connection)
         jsonSessionStatus->setNumber("state", sessionStatus.state);
         jsonSessionStatus->setNumber("itemCount", sessionStatus.itemCount);
         jsonSessionStatus->setNumber("sessionCommentsCount", sessionStatus.sessionCommentsCount);
-        jsonSessionStatus->setString("d3SpoolNo", sessionStatus.d3SpoolNo);
+        jsonSessionStatus->setString("sourceSpoolNo", sessionStatus.sourceSpoolNo);
         jsonSessionStatus->setString("digibetaSpoolNo", sessionStatus.digibetaSpoolNo);
         jsonSessionStatus->setString("statusMessage", sessionStatus.statusMessage);
         jsonSessionStatus->setString("vtrState", get_vtr_state_string(sessionStatus.vtrState));
         jsonSessionStatus->setNumber("vtrErrorCount", sessionStatus.vtrErrorCount);
+        jsonSessionStatus->setBool("digiBetaDropoutEnabled", sessionStatus.digiBetaDropoutEnabled);
+        jsonSessionStatus->setNumber("digiBetaDropoutCount", sessionStatus.digiBetaDropoutCount);
         jsonSessionStatus->setString("startVITC", sessionStatus.startVITC.toString());
         jsonSessionStatus->setString("startLTC", sessionStatus.startLTC.toString());
         jsonSessionStatus->setString("currentVITC", sessionStatus.currentVITC.toString());
         jsonSessionStatus->setString("currentLTC", sessionStatus.currentLTC.toString());
         jsonSessionStatus->setNumber("duration", sessionStatus.duration);
         jsonSessionStatus->setNumber("infaxDuration", sessionStatus.infaxDuration);
+        jsonSessionStatus->setString("fileFormat", sessionStatus.fileFormat);
         jsonSessionStatus->setString("filename", sessionStatus.filename);
         jsonSessionStatus->setNumber("fileSize", sessionStatus.fileSize);
         jsonSessionStatus->setNumber("diskSpace", sessionStatus.diskSpace);
@@ -1216,6 +808,18 @@ void HTTPRecorder::getRecorderStatus(HTTPConnection* connection)
         jsonSessionStatus->setBool("startBusy", sessionStatus.startBusy);
         jsonSessionStatus->setBool("stopBusy", sessionStatus.stopBusy);
         jsonSessionStatus->setBool("abortBusy", sessionStatus.abortBusy);
+        jsonSessionStatus->setNumber("lastSessionResult", lastSessionResult);
+        jsonSessionStatus->setString("lastSessionSourceSpoolNo", lastSessionSourceSpoolNo);
+        jsonSessionStatus->setString("lastSessionFailureReason", lastSessionFailureReason);
+        if (includeDeveloper)
+        {
+            jsonSessionStatus->setNumber("dvsBuffersEmpty", sessionStatus.dvsBuffersEmpty);
+            jsonSessionStatus->setNumber("numDVSBuffers", sessionStatus.numDVSBuffers);
+            jsonSessionStatus->setNumber("captureBufferPos", sessionStatus.captureBufferPos);
+            jsonSessionStatus->setNumber("storeBufferPos", sessionStatus.storeBufferPos);
+            jsonSessionStatus->setNumber("browseBufferPos", sessionStatus.browseBufferPos);
+            jsonSessionStatus->setNumber("ringBufferSize", sessionStatus.ringBufferSize);
+        }
     }
     else if (includeSessionReview)
     {
@@ -1224,10 +828,12 @@ void HTTPRecorder::getRecorderStatus(HTTPConnection* connection)
         jsonSessionStatus->setNumber("itemCount", sessionStatus.itemCount);
         jsonSessionStatus->setBool("readyToChunk", sessionStatus.readyToChunk);
         jsonSessionStatus->setNumber("sessionCommentsCount", sessionStatus.sessionCommentsCount);
-        jsonSessionStatus->setString("d3SpoolNo", sessionStatus.d3SpoolNo);
+        jsonSessionStatus->setString("sourceSpoolNo", sessionStatus.sourceSpoolNo);
         jsonSessionStatus->setString("digibetaSpoolNo", sessionStatus.digibetaSpoolNo);
         jsonSessionStatus->setString("statusMessage", sessionStatus.statusMessage);
         jsonSessionStatus->setNumber("vtrErrorCount", sessionStatus.vtrErrorCount);
+        jsonSessionStatus->setBool("digiBetaDropoutEnabled", sessionStatus.digiBetaDropoutEnabled);
+        jsonSessionStatus->setNumber("digiBetaDropoutCount", sessionStatus.digiBetaDropoutCount);
         jsonSessionStatus->setNumber("pseResult", sessionStatus.pseResult);
         jsonSessionStatus->setNumber("duration", sessionStatus.duration);
         jsonSessionStatus->setNumber("infaxDuration", sessionStatus.infaxDuration);
@@ -1237,8 +843,6 @@ void HTTPRecorder::getRecorderStatus(HTTPConnection* connection)
         jsonSessionStatus->setNumber("playingItemId", sessionStatus.playingItemId);
         jsonSessionStatus->setNumber("playingItemIndex", sessionStatus.playingItemIndex);
         jsonSessionStatus->setNumber("playingItemPosition", sessionStatus.playingItemPosition);
-        jsonSessionStatus->setNumber("playingFilePosition", sessionStatus.playingFilePosition);
-        jsonSessionStatus->setNumber("playingFileDuration", sessionStatus.playingFileDuration);
         jsonSessionStatus->setNumber("itemClipChangeCount", sessionStatus.itemClipChangeCount);
         jsonSessionStatus->setNumber("itemSourceChangeCount", sessionStatus.itemSourceChangeCount);
         jsonSessionStatus->setNumber("chunkingItemNumber", sessionStatus.chunkingItemNumber);
@@ -1259,32 +863,273 @@ void HTTPRecorder::getRecorderStatus(HTTPConnection* connection)
     {
         json.setString("version", get_version());
         json.setString("buildDate", get_build_date());
-        json.setNumber("numAudioTracks", systemStatus.numAudioTracks);
         json.setNumber("diskSpace", systemStatus.remDiskSpace);
         json.setNumber("recordingTime", systemStatus.remDuration);
+        json.setString("recordingTimeIngestFormat", ingest_format_to_string(systemStatus.remDurationIngestFormat, false));
+    }
+    if (includeReplay)
+    {
+        JSONObject* jsonReplayStatus = json.setObject("replayStatus");
+        jsonReplayStatus->setNumber("position", replayStatus.position);
+        jsonReplayStatus->setNumber("duration", replayStatus.duration);
+        jsonReplayStatus->setNumber("vtrErrorLevel", replayStatus.vtrErrorLevel);
+        jsonReplayStatus->setNumber("markFilter", replayStatus.markFilter);
     }
 
     connection->sendJSON(&json);
 }
 
-void HTTPRecorder::getSourceInfo(HTTPConnection* connection)
+void HTTPRecorder::getProfileList(HTTPConnection* connection)
 {
-    LOCK_SECTION(_sourceInfoAgentMutex);
+    JSONObject json;
+
+    JSONArray* jsonProfileArray = json.setArray("profiles");
     
-    if (_sourceInfoAgent != 0 &&
-        _sourceInfoAgent->isRunning())
+    // start with the last session profile
+    int lastSessionProfileId = -1;
+    Profile lastSessionProfileCopy;
+    if (_recorder->getLastSessionProfileCopy(&lastSessionProfileCopy))
     {
-        connection->sendServerBusy("Server is busy with the previous request");
+        JSONObject* jsonProfile = jsonProfileArray->appendObject();
+        jsonProfile->setNumber("id", lastSessionProfileCopy.getId());
+        jsonProfile->setString("name", lastSessionProfileCopy.getName());
+        
+        lastSessionProfileId = lastSessionProfileCopy.getId();
+    }
+    
+    map<int, Profile> profileCopies = _recorder->getProfileCopies();
+    map<int, Profile>::const_iterator iter;
+    for (iter = profileCopies.begin(); iter != profileCopies.end(); iter++)
+    {
+        if (iter->first != lastSessionProfileId)
+        {
+            JSONObject* jsonProfile = jsonProfileArray->appendObject();
+            jsonProfile->setNumber("id", iter->first);
+            jsonProfile->setString("name", iter->second.getName());
+        }
+    }
+
+    connection->sendJSON(&json);
+}
+
+void HTTPRecorder::getProfile(HTTPConnection* connection)
+{
+    Profile profileCopy;
+    int profileId;
+    string idArg = connection->getQueryValue("id");
+    if (idArg.empty())
+    {
+        JSONObject json;
+        json.setBool("error", true);
+        json.setString("errorMessage", "Missing 'id' argument");
+        connection->sendJSON(&json);
+        return;
+    }
+    else if (!parse_int(idArg, &profileId) || !_recorder->getProfileCopy(profileId, &profileCopy))
+    {
+        JSONObject json;
+        json.setBool("error", true);
+        json.setString("errorMessage", "Invalid ingest profile identifier");
+        connection->sendJSON(&json);
         return;
     }
     
-    // clean-up
-    if (_sourceInfoAgent != 0)
+    JSONObject json;
+    json.setNumber("id", profileCopy.getId());
+    json.setString("name", profileCopy.getName());
+    
+    JSONArray* jsonFormatArray = json.setArray("ingestformats");
+    
+    map<string, vector<IngestFormat> >::const_iterator iter;
+    for (iter = profileCopy.ingest_formats.begin(); iter != profileCopy.ingest_formats.end(); iter++)
     {
-        SAFE_DELETE(_sourceInfoAgent);
+        JSONObject* ingestFormat = jsonFormatArray->appendObject();
+        ingestFormat->setString("sourceformatcode", iter->first);
+        
+        JSONArray* alternativeFormats = 0;
+        size_t i;
+        for (i = 0; i < iter->second.size(); i++)
+        {
+            if (i == 0)
+            {
+                JSONObject* selectedFormat = ingestFormat->setObject("selected");
+                selectedFormat->setNumber("ingestformatid", iter->second[i]);
+                selectedFormat->setString("ingestformatname", ingest_format_to_string(iter->second[i], true));
+            }
+            else
+            {
+                if (!alternativeFormats)
+                {
+                    alternativeFormats = ingestFormat->setArray("alternatives");
+                }
+                
+                JSONObject* alternativeFormat = alternativeFormats->appendObject();
+                alternativeFormat->setNumber("ingestformatid", iter->second[i]);
+                alternativeFormat->setString("ingestformatname", ingest_format_to_string(iter->second[i], true));
+            }
+        }
+    }
+    
+    JSONObject* defaultIngestFormat = json.setObject("defaultingestformat");
+    JSONArray* alternativeFormats = 0;
+    size_t i;
+    for (i = 0; i < profileCopy.default_ingest_format.size(); i++)
+    {
+        if (i == 0)
+        {
+            JSONObject* selectedFormat = defaultIngestFormat->setObject("selected");
+            selectedFormat->setNumber("ingestformatid", profileCopy.default_ingest_format[i]);
+            selectedFormat->setString("ingestformatname", 
+                ingest_format_to_string(profileCopy.default_ingest_format[i], true));
+        }
+        else
+        {
+            if (!alternativeFormats)
+            {
+                alternativeFormats = defaultIngestFormat->setArray("alternatives");
+            }
+            
+            JSONObject* alternativeFormat = alternativeFormats->appendObject();
+            alternativeFormat->setNumber("ingestformatid", profileCopy.default_ingest_format[i]);
+            alternativeFormat->setString("ingestformatname", 
+                ingest_format_to_string(profileCopy.default_ingest_format[i], true));
+        }
     }
 
-    // process the URL and get the barcode argument
+    
+    JSONObject* primaryTimecode = json.setObject("primarytimecode");
+    JSONArray* alternativePrimaryTimecodes = 0;
+    PrimaryTimecode p;
+    for (p = PRIMARY_TIMECODE_AUTO; p <= PRIMARY_TIMECODE_VITC; p = (PrimaryTimecode)(p + 1))
+    {
+        if (p == profileCopy.primary_timecode)
+        {
+            JSONObject* selectedPrimaryTimecode = primaryTimecode->setObject("selected");
+            selectedPrimaryTimecode->setNumber("primarytimecodeid", (int)p);
+            selectedPrimaryTimecode->setString("primarytimecodename", primary_timecode_to_string(p));
+        }
+        else
+        {
+            if (!alternativePrimaryTimecodes)
+            {
+                alternativePrimaryTimecodes = primaryTimecode->setArray("alternatives");
+            }
+            
+            JSONObject* alternativePrimaryTimecode = alternativePrimaryTimecodes->appendObject();
+            alternativePrimaryTimecode->setNumber("primarytimecodeid", (int)p);
+            alternativePrimaryTimecode->setString("primarytimecodename", primary_timecode_to_string(p));
+        }
+    }
+    
+    
+    connection->sendJSON(&json);
+}
+
+void HTTPRecorder::updateProfile(HTTPConnection* connection)
+{
+    // parse and get the ingest profile
+    Profile profileCopy;
+    int profileId;
+    string idArg = connection->getQueryValue("id");
+    if (idArg.empty())
+    {
+        JSONObject json;
+        json.setBool("error", true);
+        json.setString("errorMessage", "Missing 'id' argument");
+        connection->sendJSON(&json);
+        return;
+    }
+    else if (!parse_int(idArg, &profileId) || !_recorder->getProfileCopy(profileId, &profileCopy))
+    {
+        JSONObject json;
+        json.setBool("error", true);
+        json.setStringP("errorMessage", "Invalid ingest profile id %d", idArg.c_str());
+        connection->sendJSON(&json);
+        return;
+    }
+    
+    // parse the updated default ingest format
+    IngestFormat defaultIngestFormat;
+    string defaultIngestFormatArg = connection->getQueryValue("defaultingestformat");
+    if (!defaultIngestFormatArg.empty() && !parse_ingest_format(defaultIngestFormatArg, &defaultIngestFormat))
+    {
+        JSONObject json;
+        json.setBool("error", true);
+        json.setStringP("errorMessage", "Invalid default ingest format value %s", defaultIngestFormatArg.c_str());
+        connection->sendJSON(&json);
+        return;
+    }
+    
+    // parse the updated ingest formats
+    map<string, IngestFormat> ingestFormats;
+    string ingestFormatsArg = connection->getQueryValue("ingestformats");
+    if (!ingestFormatsArg.empty() && !parse_ingest_formats(ingestFormatsArg, &ingestFormats))
+    {
+        JSONObject json;
+        json.setBool("error", true);
+        json.setStringP("errorMessage", "Invalid ingest formats value '%s'", ingestFormatsArg.c_str());
+        connection->sendJSON(&json);
+        return;
+    }
+
+    // parse the updated primary timecode
+    PrimaryTimecode primaryTimecode = PRIMARY_TIMECODE_AUTO;
+    string primaryTimecodeArg = connection->getQueryValue("primarytimecode");
+    if (!primaryTimecodeArg.empty() && !parse_primary_timecode(primaryTimecodeArg, &primaryTimecode))
+    {
+        JSONObject json;
+        json.setBool("error", true);
+        json.setStringP("errorMessage", "Invalid default primary timecode value %s", primaryTimecodeArg.c_str());
+        connection->sendJSON(&json);
+        return;
+    }
+    
+    
+    // update the profile copy
+    
+    if (!defaultIngestFormatArg.empty())
+    {
+        profileCopy.updateDefaultIngestFormat(defaultIngestFormat);
+    }
+    
+    if (!primaryTimecodeArg.empty())
+    {
+        profileCopy.primary_timecode = primaryTimecode;
+    }
+    
+    map<string, IngestFormat>::const_iterator iter;
+    for (iter = ingestFormats.begin(); iter != ingestFormats.end(); iter++)
+    {
+        if (!profileCopy.updateIngestFormat(iter->first, iter->second))
+        {
+            JSONObject json;
+            json.setBool("error", true);
+            json.setStringP("errorMessage", "Invalid ingest format value %d for source '%s'",
+                iter->second, iter->first.c_str());
+            connection->sendJSON(&json);
+            return;
+        }
+    }
+    
+    if (!_recorder->updateProfile(&profileCopy))
+    {
+        JSONObject json;
+        json.setBool("error", true);
+        json.setStringP("errorMessage", "Failed to update profile '%s'", profileCopy.getName().c_str());
+        connection->sendJSON(&json);
+        return;
+    }
+    
+    JSONObject json;
+    json.setBool("error", false);
+    json.setNumber("profileId", profileCopy.getId());
+    connection->sendJSON(&json);
+}
+
+void HTTPRecorder::getSourceInfo(HTTPConnection* connection)
+{
+    // process the URL
+    
     if (!connection->haveQueryValue("barcode"))
     {
         // no barcode query argument or zero length barcode
@@ -1296,79 +1141,162 @@ void HTTPRecorder::getSourceInfo(HTTPConnection* connection)
         connection->sendJSON(&json);
         return;
     }
+    string barcode = connection->getQueryValue("barcode");
 
+    bool includeProfiles = false;
+    string profilesArg = connection->getQueryValue("profiles");
+    if (profilesArg == "true")
+    {
+        includeProfiles = true;
+    }
     
-    // start the agent
-    _sourceInfoAgent = new Thread(new SourceInfoAgent(_recorder, connection->getQueryValue("barcode"), 
-        connection), true);
-    _sourceInfoAgent->start();
-}
 
-void HTTPRecorder::updateSourceInfo(HTTPConnection* connection)
-{
-    LOCK_SECTION(_startSessionOrUpdateSourceInfoAgentMutex);
+    // load source info
     
-    // cannot update source info if starting a new session or already busy
-    if (_updateSourceInfoAgent != 0 &&
-        _updateSourceInfoAgent->isRunning())
+    auto_ptr<Source> source(InfaxAccess::getInstance()->findSource(barcode));
+    if (source.get() == 0)
     {
-        connection->sendServerBusy("Server is busy with the previous request");
-        return;
-    }
-    if (_startSessionAgent != 0 &&
-        _startSessionAgent->isRunning())
-    {
-        connection->sendServerBusy("Server is about to start a new session");
-        return;
-    }
-    
-    // clean-up
-    if (_updateSourceInfoAgent != 0)
-    {
-        SAFE_DELETE(_updateSourceInfoAgent);
-    }
-    if (_startSessionAgent != 0)
-    {
-        SAFE_DELETE(_startSessionAgent);
-    }
-    
-    // check that the barcode argument is present
-    if (!connection->havePostValue("barcode"))
-    {
-        // no barcode query argument or zero length barcode
         JSONObject json;
         json.setBool("error", true);
-        json.setString("barcode", "");
-        json.setNumber("errorCode", 0);
-        json.setString("errorMessage", "Barcode is empty string");
+        json.setString("barcode", barcode);
+        json.setNumber("errorCode", 1);
+        json.setString("errorMessage", "Unknown source");
         connection->sendJSON(&json);
         return;
     }
-
+    Logging::info("Loaded source info '%s'\n", barcode.c_str());
     
-    // start the agent
-    _updateSourceInfoAgent = new Thread(new UpdateSourceInfoAgent(connection->getPostValue("barcode"), 
-        connection), true);
-    _updateSourceInfoAgent->start();
+    
+    // check multi-item support
+    
+    if (!_recorder->checkMultiItemSupport(source.get()))
+    {
+        JSONObject json;
+        json.setBool("error", true);
+        json.setString("barcode", barcode);
+        json.setNumber("errorCode", 2);
+        json.setString("errorMessage", "Multi-item ingest not enabled");
+        connection->sendJSON(&json);
+        return;
+    }
+    
+    
+    // calculate the total Infax duration
+    
+    int64_t totalInfaxDuration = -1;
+    vector<ConcreteSource*>::const_iterator iter;
+    for (iter = source->concreteSources.begin(); iter != source->concreteSources.end(); iter++)
+    {
+        SourceItem* sourceItem = dynamic_cast<SourceItem*>(*iter);
+        
+        if (sourceItem->duration > 0)
+        {
+            if (totalInfaxDuration < 0)
+            {
+                totalInfaxDuration = sourceItem->duration;
+            }
+            else
+            {
+                totalInfaxDuration += sourceItem->duration;
+            }
+        }
+    }        
+    
+    
+    // generate the response
+
+    JSONObject json;
+    json.setBool("error", false);
+    json.setString("barcode", barcode);
+        
+    JSONArray* itemArray = 0;
+    for (iter = source->concreteSources.begin(); iter != source->concreteSources.end(); iter++)
+    {
+        SourceItem* sourceItem = dynamic_cast<SourceItem*>(*iter);
+        
+        if (iter == source->concreteSources.begin())
+        {
+            JSONObject* tapeInfo = json.setObject("tapeInfo");
+            tapeInfo->setString("format", sourceItem->format);
+            tapeInfo->setString("spoolNo", sourceItem->spoolNo);
+            tapeInfo->setString("accNo", sourceItem->accNo);
+            tapeInfo->setString("spoolStatus", sourceItem->spoolStatus);
+            tapeInfo->setString("stockDate", sourceItem->stockDate.toString());
+            tapeInfo->setNumber("totalInfaxDuration", totalInfaxDuration);
+
+            itemArray = json.setArray("items");
+        }
+        
+        JSONObject* items = itemArray->appendObject();
+        items->setString("progTitle", sourceItem->progTitle);
+        items->setString("spoolDescr", sourceItem->spoolDescr);
+        items->setString("episodeTitle", sourceItem->episodeTitle);
+        items->setString("txDate", sourceItem->txDate.toString());
+        items->setString("progNo", get_complete_prog_no(sourceItem->magPrefix, sourceItem->progNo, sourceItem->prodCode));
+        items->setNumber("infaxDuration", sourceItem->duration);
+        items->setString("catDetail", sourceItem->catDetail);
+        items->setString("memo", sourceItem->memo);
+        items->setNumber("itemNo", sourceItem->itemNo);
+        items->setString("aspectRatioCode", sourceItem->aspectRatioCode);
+        if (Recorder::isValidAspectRatioCode(sourceItem->aspectRatioCode))
+        {
+            items->setString("rasterAspectRatio", Recorder::getRasterAspectRatio(sourceItem->aspectRatioCode).toAspectRatioString());
+        }
+    }
+    
+    if (includeProfiles)
+    {
+        JSONArray* profileArray = json.setArray("profiles");
+        
+        // start with the last session profile
+        int lastSessionProfileId = -1;
+        Profile lastSessionProfileCopy;
+        if (_recorder->getLastSessionProfileCopy(&lastSessionProfileCopy))
+        {
+            JSONObject* jsonProfile = profileArray->appendObject();
+            jsonProfile->setNumber("id", lastSessionProfileCopy.getId());
+            jsonProfile->setString("name", lastSessionProfileCopy.getName());
+            
+            lastSessionProfileId = lastSessionProfileCopy.getId();
+        }
+        
+        map<int, Profile> profileCopies = _recorder->getProfileCopies();
+        map<int, Profile>::const_iterator iter;
+        for (iter = profileCopies.begin(); iter != profileCopies.end(); iter++)
+        {
+            if (iter->first != lastSessionProfileId)
+            {
+                JSONObject* jsonProfile = profileArray->appendObject();
+                jsonProfile->setNumber("id", iter->first);
+                jsonProfile->setString("name", iter->second.getName());
+            }
+        }
+    }
+
+    // set message to warn if the source has been ingested before
+    if (RecorderDatabase::getInstance()->sourceUsedInCompletedSession(barcode))
+    {
+        json.setNumber("warningCode", 0);
+        json.setString("warningMessage", "Warning: source has been ingested before");
+    }
+    
+    
+    connection->sendJSON(&json);
 }
 
 void HTTPRecorder::checkSelectedDigibeta(HTTPConnection* connection)
 {
-    LOCK_SECTION(_checkDigibetaAgentMutex);
-    
-    if (_checkDigibetaAgent != 0 &&
-        _checkDigibetaAgent->isRunning())
+    // check tape backup is enabled
+    if (!_recorder->tapeBackupEnabled())
     {
-        connection->sendServerBusy("Server is busy with the previous request");
+        JSONObject json;
+        json.setBool("error", true);
+        json.setNumber("errorCode", 0);
+        json.setString("errorMessage", "Digibeta barcode check is disabled because tape backup is disabled");
+        connection->sendJSON(&json);
         return;
     }
     
-    // clean-up
-    if (_checkDigibetaAgent != 0)
-    {
-        SAFE_DELETE(_checkDigibetaAgent);
-    }
-
     // process the URL and get the barcode argument
     string barcode = connection->getQueryValue("barcode");
     if (!_recorder->isDigibetaBarcode(barcode))
@@ -1383,41 +1311,39 @@ void HTTPRecorder::checkSelectedDigibeta(HTTPConnection* connection)
     }
     
     
-    // start the agent
-    _checkDigibetaAgent = new Thread(new CheckDigibetaAgent(_recorder, barcode, connection), true);
-    _checkDigibetaAgent->start();
+    // check that it is a valid barcode
+    if (!_recorder->isDigibetaBarcode(barcode))
+    {
+        JSONObject json;
+        json.setBool("error", true);
+        json.setString("barcode", barcode);
+        json.setNumber("errorCode", 0);
+        json.setString("errorMessage", "Barcode is not a Digibeta barcode");
+        connection->sendJSON(&json);
+        return;
+    }
+    
+    // generate the response
+    
+    JSONObject json;
+    json.setBool("error", false);
+    json.setString("barcode", barcode);
+    
+    // set message to warn if the digibeta has been used before in a completed session
+    if (RecorderDatabase::getInstance()->digibetaUsedInCompletedSession(barcode))
+    {
+        json.setNumber("warningCode", 0);
+        json.setString("warningMessage", "Warning: digibeta has been used before");
+    }
+    
+    connection->sendJSON(&json);
 }
 
 void HTTPRecorder::startNewSession(HTTPConnection* connection)
 {
-    LOCK_SECTION(_startSessionOrUpdateSourceInfoAgentMutex);
-    
-    // cannot start a new session if updating source info or already busy
-    if (_updateSourceInfoAgent != 0 &&
-        _updateSourceInfoAgent->isRunning())
-    {
-        connection->sendServerBusy("Server is busy with the source info update");
-        return;
-    }
-    if (_startSessionAgent != 0 &&
-        _startSessionAgent->isRunning())
-    {
-        connection->sendServerBusy("Server is busy with the previous request");
-        return;
-    }
-    
-    // clean-up
-    if (_updateSourceInfoAgent != 0)
-    {
-        SAFE_DELETE(_updateSourceInfoAgent);
-    }
-    if (_startSessionAgent != 0)
-    {
-        SAFE_DELETE(_startSessionAgent);
-    }
-
     // process the URL and get the barcode argument
-    if (!connection->haveQueryValue("barcode"))
+    string barcode = connection->getQueryValue("barcode");
+    if (barcode.empty())
     {
         // no barcode query argument or zero length barcode
         JSONObject json;
@@ -1427,7 +1353,31 @@ void HTTPRecorder::startNewSession(HTTPConnection* connection)
         connection->sendJSON(&json);
         return;
     }
-    if (!connection->haveQueryValue("digibetabarcode"))
+    
+    // get the ingest profile
+    int profileId;
+    string profileIdArg = connection->getQueryValue("profileid");
+    if (profileIdArg.empty())
+    {
+        JSONObject json;
+        json.setBool("error", true);
+        json.setString("errorMessage", "Missing 'profileid' argument");
+        json.setString("barcode", "");
+        connection->sendJSON(&json);
+        return;
+    }
+    else if (!parse_int(profileIdArg, &profileId) || !_recorder->haveProfile(profileId))
+    {
+        JSONObject json;
+        json.setBool("error", true);
+        json.setString("errorMessage", "Invalid ingest profile identifier");
+        json.setString("barcode", "");
+        connection->sendJSON(&json);
+        return;
+    }
+    
+    string digibetaBarcode = connection->getQueryValue("digibetabarcode");
+    if (_recorder->tapeBackupEnabled() && digibetaBarcode.empty())
     {
         // no digibeta barcode query argument or zero length digibeta barcode
         JSONObject json;
@@ -1437,12 +1387,126 @@ void HTTPRecorder::startNewSession(HTTPConnection* connection)
         connection->sendJSON(&json);
         return;
     }
+    
+    string aspectRatioCodesString = connection->getQueryValue("aspectRatioCodes");
+    vector<string> aspectRatioCodes;
+    if (!aspectRatioCodesString.empty())
+    {
+        if (!parse_aspect_ratio_codes(aspectRatioCodesString, &aspectRatioCodes))
+        {
+            JSONObject json;
+            json.setBool("error", true);
+            json.setString("errorMessage", "Failed to parse 'aspectRatioCodes' argument");
+            json.setString("barcode", "");
+            connection->sendJSON(&json);
+            return;
+        }
+    }
+
+    // get the source information
+    auto_ptr<Source> source(InfaxAccess::getInstance()->findSource(barcode));
+    if (source.get() == 0)
+    {
+        JSONObject json;
+        json.setBool("error", true);
+        json.setString("errorMessage", "Unknown source");
+        json.setString("barcode", barcode);
+        connection->sendJSON(&json);
+        return;
+    }
+    Logging::info("Loaded source info '%s' for new session\n", barcode.c_str());
 
     
-    // start the agent
-    _startSessionAgent = new Thread(new StartSessionAgent(connection->getQueryValue("barcode"),
-        connection->getQueryValue("digibetabarcode"), this, connection), true);
-    _startSessionAgent->start();
+    // update the aspect ratio in the source items
+    if (aspectRatioCodes.size() > 0 &&
+        !_recorder->updateSourceAspectRatios(source.get(), aspectRatioCodes))
+    {
+        JSONObject json;
+        json.setBool("error", true);
+        json.setString("errorMessage", "Invalid 'aspectRatioCodes' argument");
+        json.setString("barcode", "");
+        connection->sendJSON(&json);
+        return;
+    }
+    
+    
+    // create the session
+    RecordingSession* session;
+    int result = _recorder->startNewSession(profileId, source.get(), digibetaBarcode, &session);
+    if (result != 0)
+    {
+        // an error has occurred
+        JSONObject json;
+        json.setBool("error", true);
+        json.setNumber("errorCode", result);
+        switch (result)
+        {
+            case SESSION_IN_PROGRESS_FAILURE:
+                json.setString("errorMessage", "Session is already in progress");
+                break;
+            case VIDEO_SIGNAL_BAD_FAILURE:
+                json.setString("errorMessage", "Video signal is bad");
+                break;
+            case AUDIO_SIGNAL_BAD_FAILURE:
+                json.setString("errorMessage", "Audio signal is bad");
+                break;
+            case SOURCE_VTR_CONNECT_FAILURE:
+                json.setString("errorMessage", "No source VTR connection");
+                break;
+            case SOURCE_VTR_REMOTE_LOCKOUT_FAILURE:
+                json.setString("errorMessage", "Source VTR remote lockout");
+                break;
+            case NO_SOURCE_TAPE:
+                json.setString("errorMessage", "No source tape");
+                break;
+            case DIGIBETA_VTR_CONNECT_FAILURE:
+                json.setString("errorMessage", "No Digibeta VTR connection");
+                break;
+            case DIGIBETA_VTR_REMOTE_LOCKOUT_FAILURE:
+                json.setString("errorMessage", "Digibeta VTR remote lockout");
+                break;
+            case NO_DIGIBETA_TAPE:
+                json.setString("errorMessage", "No Digibeta tape");
+                break;
+            case DISK_SPACE_FAILURE:
+                json.setString("errorMessage", "Not enough disk space, <" + get_size_string(DISK_SPACE_MARGIN));
+                break;
+            case MULTI_ITEM_MXF_EXISTS_FAILURE:
+                json.setString("errorMessage", "Multi-item MXF files already in cache");
+                break;
+            case MULTI_ITEM_NOT_ENABLED_FAILURE:
+                json.setString("errorMessage", "Multi-item ingest not enabled");
+                break;
+            case INVALID_ASPECT_RATIO_FAILURE:
+                json.setString("errorMessage", "Item with unknown/invalid aspect ratio");
+                break;
+            case UNKNOWN_PROFILE_FAILURE:
+                json.setString("errorMessage", "Unknown ingest profile identifier");
+                break;
+            case DISABLED_INGEST_FORMAT_FAILURE:
+                json.setString("errorMessage", "Ingest is disabled for given source format");
+                break;
+            case MULTI_ITEM_INGEST_FORMAT_FAILURE:
+                json.setString("errorMessage", "Multi-item ingest not supported for given ingest format");
+                break;
+            case INTERNAL_FAILURE:
+            default:
+                json.setString("errorMessage", "Internal server error");
+                break;
+        }
+        json.setString("barcode", barcode);
+        connection->sendJSON(&json);
+        return;
+    }
+    
+    // reset the barcode
+    newBarcode("");
+    
+    
+    JSONObject json;
+    json.setBool("error", false);
+    json.setString("barcode", barcode);
+    connection->sendJSON(&json);
 }
 
 void HTTPRecorder::getSessionSourceInfo(HTTPConnection* connection)
@@ -1479,11 +1543,11 @@ void HTTPRecorder::getSessionSourceInfo(HTTPConnection* connection)
         if (iter == items.begin())
         {
             JSONObject* tapeInfo = json.setObject("tapeInfo");
-            tapeInfo->setString("format", item.d3Source->format);
-            tapeInfo->setString("spoolNo", item.d3Source->spoolNo);
-            tapeInfo->setString("accNo", item.d3Source->accNo);
-            tapeInfo->setString("spoolStatus", item.d3Source->spoolStatus);
-            tapeInfo->setString("stockDate", item.d3Source->stockDate.toString());
+            tapeInfo->setString("format", item.sourceItem->format);
+            tapeInfo->setString("spoolNo", item.sourceItem->spoolNo);
+            tapeInfo->setString("accNo", item.sourceItem->accNo);
+            tapeInfo->setString("spoolStatus", item.sourceItem->spoolStatus);
+            tapeInfo->setString("stockDate", item.sourceItem->stockDate.toString());
             tapeInfo->setNumber("totalInfaxDuration", recordingItems->getTotalInfaxDuration());
 
             itemArray = json.setArray("items");
@@ -1498,15 +1562,20 @@ void HTTPRecorder::getSessionSourceInfo(HTTPConnection* connection)
         items->setNumber("itemDuration", item.duration);
         if (!item.isJunk)
         {
-            items->setString("progTitle", item.d3Source->progTitle);
-            items->setString("spoolDescr", item.d3Source->spoolDescr);
-            items->setString("episodeTitle", item.d3Source->episodeTitle);
-            items->setString("txDate", item.d3Source->txDate.toString());
-            items->setString("progNo", get_complete_prog_no(item.d3Source->magPrefix, item.d3Source->progNo, item.d3Source->prodCode));
-            items->setNumber("infaxDuration", item.d3Source->duration);
-            items->setString("catDetail", item.d3Source->catDetail);
-            items->setString("memo", item.d3Source->memo);
-            items->setNumber("itemNo", item.d3Source->itemNo);
+            items->setString("progTitle", item.sourceItem->progTitle);
+            items->setString("spoolDescr", item.sourceItem->spoolDescr);
+            items->setString("episodeTitle", item.sourceItem->episodeTitle);
+            items->setString("txDate", item.sourceItem->txDate.toString());
+            items->setString("progNo", get_complete_prog_no(item.sourceItem->magPrefix, item.sourceItem->progNo, item.sourceItem->prodCode));
+            items->setNumber("infaxDuration", item.sourceItem->duration);
+            items->setString("catDetail", item.sourceItem->catDetail);
+            items->setString("memo", item.sourceItem->memo);
+            items->setNumber("itemNo", item.sourceItem->itemNo);
+            items->setString("aspectRatioCode", item.sourceItem->aspectRatioCode);
+            if (Recorder::isValidAspectRatioCode(item.sourceItem->aspectRatioCode))
+            {
+                items->setString("rasterAspectRatio", Recorder::getRasterAspectRatio(item.sourceItem->aspectRatioCode).toAspectRatioString());
+            }
         }
     }
     
@@ -1616,25 +1685,49 @@ void HTTPRecorder::getSessionComments(HTTPConnection* connection)
 
 void HTTPRecorder::getCacheContents(HTTPConnection* connection)
 {
-    LOCK_SECTION(_cacheContentsAgentMutex);
-    
-    if (_cacheContentsAgent != 0 &&
-        _cacheContentsAgent->isRunning())
+    // load cache contents
+    auto_ptr<CacheContents> contents(_recorder->getCache()->getContents());
+    if (!contents.get())
     {
-        connection->sendServerBusy("Server is busy with the previous request");
+        Logging::warning("Failed to load cache contents\n");
+        connection->sendServerError("Failed to load cache contents");
         return;
     }
-    
-    // clean-up
-    if (_cacheContentsAgent != 0)
-    {
-        SAFE_DELETE(_cacheContentsAgent);
-    }
+
+    // get the cache status
+    CacheStatus status = _recorder->getCache()->getStatus();
 
     
-    // start the agent
-    _cacheContentsAgent = new Thread(new CacheContentsAgent(_recorder, connection), true);
-    _cacheContentsAgent->start();
+    // generate the response
+    
+    JSONObject json;
+    
+    json.setString("path", contents->path);
+    json.setNumber("statusChangeCount", status.statusChangeCount);
+    
+    JSONArray* jitems = json.setArray("items");
+    vector<CacheContentItem*>::const_iterator iter;
+    for (iter = contents->items.begin(); iter != contents->items.end(); iter++)
+    {
+        JSONObject* tv = jitems->appendObject();
+        tv->setNumber("identifier", (*iter)->identifier);
+        tv->setString("srcFormat", (*iter)->sourceFormat);
+        tv->setString("srcSpoolNo", (*iter)->sourceSpoolNo);
+        tv->setNumber("srcItemNo", (*iter)->sourceItemNo);
+        tv->setString("srcMPProgNo", get_complete_prog_no((*iter)->sourceMagPrefix, (*iter)->sourceProgNo, (*iter)->sourceProdCode));
+        tv->setString("sessionCreation", get_timestamp_string((*iter)->sessionCreation));
+        tv->setNumber("sessionStatus", (*iter)->sessionStatus);
+        tv->setString("sessionStatusString", get_session_status_string((*iter)->sessionStatus));
+        tv->setString("name", (*iter)->name);
+        tv->setNumber("size", (*iter)->size);
+        tv->setNumber("duration", (*iter)->duration);
+        string pseURL = g_pseReportFramedURL;
+        pseURL += "?name=" + (*iter)->pseName;
+        tv->setString("pseURL", pseURL);
+        tv->setNumber("pseResult", (*iter)->pseResult);
+    }
+    
+    connection->sendJSON(&json);
 }
 
 void HTTPRecorder::confReplayControl(HTTPConnection* connection)
@@ -1669,31 +1762,36 @@ void HTTPRecorder::confReplayControl(HTTPConnection* connection)
 
 void HTTPRecorder::replayFile(HTTPConnection* connection)
 {
-    LOCK_SECTION(_replayFileAgentMutex);
-    
-    if (_replayFileAgent != 0 &&
-        _replayFileAgent->isRunning())
-    {
-        connection->sendServerBusy("Server is busy with the previous request");
-        return;
-    }
-    
-    // clean-up
-    if (_replayFileAgent != 0)
-    {
-        SAFE_DELETE(_replayFileAgent);
-    }
-
     // check for the 'name' argument
     if (!connection->haveQueryValue("name"))
     {
         connection->sendBadRequest("Missing 'name' argument");
         return;
     }
+    string filename = connection->getQueryValue("name");
     
-    // start the agent
-    _replayFileAgent = new Thread(new ReplayFileAgent(_recorder, connection, connection->getQueryValue("name")), true);
-    _replayFileAgent->start();
+    // replay file
+    int result = _recorder->replayFile(filename);
+    if (result != 0)
+    {
+        switch (result)
+        {
+            case SESSION_IN_PROGRESS_REPLAY_FAILURE:
+                connection->sendBadRequest("Recording session in progress");
+                break;
+            case UNKNOWN_FILE_REPLAY_FAILURE:
+                connection->sendBadRequest("Unknown file");
+                break;
+            case INTERNAL_REPLAY_FAILURE:
+            default:
+                connection->sendServerError("Replay failed");
+                break;
+        }
+
+        return;
+    }
+
+    connection->sendOk();
 }
 
 void HTTPRecorder::playItem(HTTPConnection* connection)
@@ -2052,11 +2150,6 @@ void HTTPRecorder::getItemSourceInfo(HTTPConnection* connection)
     connection->sendJSON(&json);
 }
 
-Recorder* HTTPRecorder::getRecorder()
-{
-    return _recorder;
-}
-
 string HTTPRecorder::getPSEReportsURL()
 {
     return g_pseReportsURL;
@@ -2071,5 +2164,4 @@ void HTTPRecorder::checkBarcodeStatus()
         _barcode = "";
     }
 }
-
 

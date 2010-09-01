@@ -1,5 +1,5 @@
 /*
- * $Id: BarcodeScanner.cpp,v 1.1 2008/07/08 16:19:49 philipn Exp $
+ * $Id: BarcodeScanner.cpp,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * Used to reads barcodes from a scanner device
  *
@@ -25,13 +25,13 @@
     barcode to the listeners. 
 */
  
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <sys/time.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include <errno.h>
+#include <cerrno>
 
 #include <linux/input.h>
 

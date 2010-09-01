@@ -1,5 +1,5 @@
 /*
- * $Id: VTRControl.cpp,v 1.1 2008/07/08 16:27:11 philipn Exp $
+ * $Id: VTRControl.cpp,v 1.2 2010/09/01 16:05:23 philipn Exp $
  *
  * Used to control a VTR and monitor it's state
  *
@@ -57,12 +57,124 @@ typedef struct
 // NOTE: this table is indexed using DeviceType and needs to be kept in sync
 static const VTRDeviceInfo g_vtrDeviceInfo[] = 
 {
-    {UNKNOWN_DEVICE_TYPE,                   0x0000, "Unknown"},
-    {AJ_D350_NTSC_DEVICE_TYPE,              0xF019, "AJ-D350 NTSC"},
-    {AJ_D350_PAL_DEVICE_TYPE,               0xF119, "AJ-D350 PAL"},
-    {DVW_A500P_DEVICE_TYPE,                 0xB100, "DVW A500 PAL"},
-    {DVW_500P_DEVICE_TYPE,                  0xB110, "DVW 500 PAL"},
-    {SONY_J3_COMPACT_PLAYER_DEVICE_TYPE,    0xB170, "Sony J-3 Compact Player"}
+    {UNKNOWN_DEVICE_TYPE,                       0x0000, "Unknown"},
+    
+    // Panasonic VTRs
+    {AJ_D350_525LINE_DEVICE_TYPE,               0xF019, "AJ-D350 525 line"},
+    {AJ_D350_625LINE_DEVICE_TYPE,               0xF119, "AJ-D350 625 line"},
+    
+    // Sony VTRs
+    {BVW_10_525LINE_DEVICE_TYPE,                0x2000, "BVW-10 525 line"},
+    {BVW_10_625LINE_DEVICE_TYPE,                0x2100, "BVW-10 625 line"},
+    {BVW_11_525LINE_DEVICE_TYPE,                0x2002, "BVW-11 525 line"},
+    {BVW_11_625LINE_DEVICE_TYPE,                0x2102, "BVW-11 625 line"},
+    {BVW_15_525LINE_DEVICE_TYPE,                0x2003, "BVW-15 525 line"},
+    {BVW_15_625LINE_DEVICE_TYPE,                0x2103, "BVW-15 625 line"},
+    {BVW_35_525LINE_DEVICE_TYPE,                0x2010, "BVW-35 525 line"},
+    {BVW_35_625LINE_DEVICE_TYPE,                0x2110, "BVW-35 625 line"},
+    {BVW_40_525LINE_DEVICE_TYPE,                0x2001, "BVW-40 525 line"},
+    {BVW_40_625LINE_DEVICE_TYPE,                0x2101, "BVW-40 625 line"},
+    {BVW_50_525LINE_DEVICE_TYPE,                0x2030, "BVW-50 525 line"},
+    {BVW_50_625LINE_DEVICE_TYPE,                0x2130, "BVW-50 625 line"},
+    {BVW_60_525LINE_DEVICE_TYPE,                0x2020, "BVW-60 525 line"},
+    {BVW_60_625LINE_DEVICE_TYPE,                0x2120, "BVW-60 625 line"},
+    {BVW_65_525LINE_DEVICE_TYPE,                0x2021, "BVW-65 525 line"},
+    {BVW_65_625LINE_DEVICE_TYPE,                0x2121, "BVW-65 625 line"},
+    {BVW_95_525LINE_DEVICE_TYPE,                0x2022, "BVW-95 525 line"},
+    {BVW_95_625LINE_DEVICE_TYPE,                0x2122, "BVW-95 625 line"},
+    {BVW_96_525LINE_DEVICE_TYPE,                0x2023, "BVW-96 525 line"},
+    {BVW_96_625LINE_DEVICE_TYPE,                0x2123, "BVW-96 625 line"},
+    {BVW_70_525LINE_DEVICE_TYPE,                0x2024, "BVW-70 525 line"},
+    {BVW_70_625LINE_DEVICE_TYPE,                0x2124, "BVW-70 625 line"},
+    {BVW_75_525LINE_DEVICE_TYPE,                0x2025, "BVW-75 525 line"},
+    {BVW_75_625LINE_DEVICE_TYPE,                0x2125, "BVW-75 625 line"},
+    {BVW_D75_525LINE_DEVICE_TYPE,               0x2046, "BVW-D75 525 line"},
+    {BVW_D75_625LINE_DEVICE_TYPE,               0x2146, "BVW-D75 625 line"},
+    {BVW_D265_DEVICE_TYPE,                      0x2045, "BVW-D265"},
+    {BVW_9000_525LINE_DEVICE_TYPE,              0x2047, "BVW-9000 525 line"},
+    {BVW_9000_625LINE_DEVICE_TYPE,              0x2147, "BVW-9000 625 line"},
+    {BVW_35PM_DEVICE_TYPE,                      0x2018, "BVW-35PM"},
+    {BVW_65PM_DEVICE_TYPE,                      0x2029, "BVW-65PM"},
+    {BVW_95PM_DEVICE_TYPE,                      0x202A, "BVW-95PM"},
+    {BVW_75PM_DEVICE_TYPE,                      0x202D, "BVW-75PM"},
+    {BVW_85P_DEVICE_TYPE,                       0x2126, "BVW-85P"},
+    {BVW_70S_DEVICE_TYPE,                       0x212C, "BVW-70S"},
+    {BVW_75S_DEVICE_TYPE,                       0x212D, "BVW-75S"},
+    {WBR_700_DEVICE_TYPE,                       0x212F, "WBR-700"},
+    {DVW_A500_525LINE_DEVICE_TYPE,              0xB000, "DVW-A500 525 line"},
+    {DVW_A500_625LINE_DEVICE_TYPE,              0xB100, "DVW-A500 625 line"},
+    {DVW_A510_525LINE_DEVICE_TYPE,              0xB001, "DVW-A510 525 line"},
+    {DVW_A510_625LINE_DEVICE_TYPE,              0xB101, "DVW-A510 625 line"},
+    {DVW_CA510_525LINE_DEVICE_TYPE,             0xB003, "DVW-CA510 525 line"},
+    {DVW_CA510_625LINE_DEVICE_TYPE,             0xB103, "DVW-CA510 625 line"},
+    {DVW_500_525LINE_DEVICE_TYPE,               0xB010, "DVW-500 525 line"},
+    {DVW_500_625LINE_DEVICE_TYPE,               0xB110, "DVW-500 625 line"},
+    {DVW_510_525LINE_DEVICE_TYPE,               0xB011, "DVW-510 525 line"},
+    {DVW_510_625LINE_DEVICE_TYPE,               0xB111, "DVW-510 625 line"},
+    {DVW_250_525LINE_DEVICE_TYPE,               0xB030, "DVW-250 525 line"},
+    {DVW_250_625LINE_DEVICE_TYPE,               0xB130, "DVW-250 625 line"},
+    {DVW_2000_525LINE_DEVICE_TYPE,              0xB014, "DVW-2000 525 line"},
+    {DVW_2000_625LINE_DEVICE_TYPE,              0xB114, "DVW-2000 625 line"},
+    {DVW_M2000_525LINE_DEVICE_TYPE,             0xB004, "DVW-M2000 525 line"},
+    {DVW_M2000_625LINE_DEVICE_TYPE,             0xB104, "DVW-M2000 625 line"},
+    {DNW_30_525LINE_DEVICE_TYPE,                0xB049, "DNW-30 525 line"},
+    {DNW_30_625LINE_DEVICE_TYPE,                0xB149, "DNW-30 625 line"},
+    {DNW_A30_525LINE_DEVICE_TYPE,               0xB048, "DNW-A30 525 line"},
+    {DNW_A30_625LINE_DEVICE_TYPE,               0xB148, "DNW-A30 625 line"},
+    {DNW_A45_A50_525LINE_DEVICE_TYPE,           0xB045, "DNW-A45-A50 525 line"},
+    {DNW_A45_A50_625LINE_DEVICE_TYPE,           0xB145, "DNW-A45-A50 625 line"},
+    {DNW_65_525LINE_DEVICE_TYPE,                0xB04F, "DNW-65 525 line"},
+    {DNW_65_625LINE_DEVICE_TYPE,                0xB14F, "DNW-65 625 line"},
+    {DNW_A65_525LINE_DEVICE_TYPE,               0xB047, "DNW-A65 525 line"},
+    {DNW_A65_625LINE_DEVICE_TYPE,               0xB147, "DNW-A65 625 line"},
+    {DNW_75_525LINE_DEVICE_TYPE,                0xB04E, "DNW-75 525 line"},
+    {DNW_75_625LINE_DEVICE_TYPE,                0xB14E, "DNW-75 625 line"},
+    {DNW_A75_525LINE_DEVICE_TYPE,               0xB046, "DNW-A75 525 line"},
+    {DNW_A75_625LINE_DEVICE_TYPE,               0xB146, "DNW-A75 625 line"},
+    {DNW_A100_525LINE_DEVICE_TYPE,              0xB041, "DNW-A100 525 line"},
+    {DNW_A100_625LINE_DEVICE_TYPE,              0xB141, "DNW-A100 625 line"},
+    {DNW_A25_A25WS_525LINE_DEVICE_TYPE,         0xB04B, "DNW-A25/A25WS 525 line"},
+    {DNW_A25_A25WS_625LINE_DEVICE_TYPE,         0xB14B, "DNW-A25/A25WS 625 line"},
+    {DNW_A28_525LINE_DEVICE_TYPE,               0xB04D, "DNW-A28 525 line"},
+    {DNW_A28_625LINE_DEVICE_TYPE,               0xB14D, "DNW-A28 625 line"},
+    {DNW_A220_R_525LINE_DEVICE_TYPE,            0xB04A, "DNW-A220/R 525 line"},
+    {DNW_A220_R_625LINE_DEVICE_TYPE,            0xB14A, "DNW-A220/R 625 line"},
+    {DNW_A220_L_525LINE_DEVICE_TYPE,            0xB04C, "DNW-A220/L 525 line"},
+    {DNW_A220_L_625LINE_DEVICE_TYPE,            0xB14C, "DNW-A220/L 625 line"},
+    {MSW_2000_525LINE_DEVICE_TYPE,              0xB062, "MSW-2000 525 line"},
+    {MSW_2000_625LINE_DEVICE_TYPE,              0xB162, "MSW-2000 625 line"},
+    {MSW_A2000_525LINE_DEVICE_TYPE,             0xB061, "MSW-A2000 525 line"},
+    {MSW_A2000_625LINE_DEVICE_TYPE,             0xB161, "MSW-A2000 625 line"},
+    {MSW_M2000_M2000E_525LINE_DEVICE_TYPE,      0xB060, "MSW-M2000/M2000E 525 line"},
+    {MSW_M2000_M2000E_625LINE_DEVICE_TYPE,      0xB160, "MSW-M2000/M2000E 625 line"},
+    {MSW_M2100_M2100E_525LINE_DEVICE_TYPE,      0xB063, "MSW-M2100/M2100E 525 line"},
+    {MSW_M2100_M2100E_625LINE_DEVICE_TYPE,      0xB163, "MSW-M2100/M2100E 625 line"},
+    {HDW_F500_30FRAME_DEVICE_TYPE,              0x20E0, "HDW-F500_30 frame"},
+    {HDW_F500_25FRAME_DEVICE_TYPE,              0x21E0, "HDW-F500_25 frame"},
+    {HDW_F500_24FRAME_DEVICE_TYPE,              0x22E0, "HDW-F500_24 frame"},
+    {HDW_250_DEVICE_TYPE,                       0x20E1, "HDW-250"},
+    {HDW_2000_D2000_M2000_S2000_5994HZ_DEVICE_TYPE,
+                                                0x20E2, "HDW-2000/D2000/M2000/S2000 59.94Hz"},
+    {HDW_2000_D2000_M2000_S2000_50HZ_DEVICE_TYPE,
+                                                0x21E2, "HDW-2000/D2000/M2000/S2000 50Hz"},
+    {HDW_A2100_M2100_5994HZ_DEVICE_TYPE,        0x20E3, "HDW-A2100/M2100 59.94Hz"},
+    {HDW_A2100_M2100_50HZ_DEVICE_TYPE,          0x21E3, "HDW-A2100/M2100 50Hz"},
+    {HDW_S280_30FRAME_DEVICE_TYPE,              0x20E5, "HDW-S280 30 frame"},
+    {HDW_S280_25FRAME_DEVICE_TYPE,              0x21E5, "HDW-S280 25 frame"},
+    {HDW_S280_24FRAME_DEVICE_TYPE,              0x22E5, "HDW-S280 24 frame"},
+    {J1_J2_J3_J10_10SDI_30_30SDI_525LINE_DEVICE_TYPE,
+                                                0xB070, "J-series 525 line"},
+    {J1_J2_J3_J10_10SDI_30_30SDI_625LINE_DEVICE_TYPE,
+                                                0xB170, "J-series 625 line"},
+    {J_H3_30FRAME_DEVICE_TYPE,                  0x20E4, "J-H3 30 frame"},
+    {J_H3_25FRAME_DEVICE_TYPE,                  0x21E4, "J-H3 25 frame"},
+    {J_H3_24FRAME_DEVICE_TYPE,                  0x22E4, "J-H3 24 frame"},
+    {SRW_5000_30FRAME_DEVICE_TYPE,              0x20A0, "SRW-5000 30 frame"},
+    {SRW_5000_25FRAME_DEVICE_TYPE,              0x21A0, "SRW-5000 25 frame"},
+    {SRW_5000_24FRAME_DEVICE_TYPE,              0x22A0, "SRW-5000 24 frame"},
+    {SRW_5500_30FRAME_DEVICE_TYPE,              0x20A1, "SRW-5500 30 frame"},
+    {SRW_5500_25FRAME_DEVICE_TYPE,              0x21A1, "SRW-5500 25 frame"},
+    {SRW_5500_24FRAME_DEVICE_TYPE,              0x22A1, "SRW-5500 24 frame"},
 };
 
 
@@ -342,25 +454,29 @@ public:
             // poll extended state for VTR errors
             if (_pollExtState)
             {
-                if (_vtrControl->readExtState(&state, &errorCode))
+                if (_vtrControl->readExtState(&errorCode))
                 {
                     if (errorCode)
                     {
-                        Timecode ltc;
+                        Timecode ltc, vitc;
                         _vtrControl->readLtc(&ltc);
-                        _vtrControl->updateLtc(ltc);                        
-                        _vtrControl->updatePlaybackError(errorCode, ltc);
+                        _vtrControl->readVitc(&vitc);
+
+                        _vtrControl->updateLtc(ltc);
+                        _vtrControl->updateVitc(vitc);
+
+                        _vtrControl->updatePlaybackError(errorCode, ltc, vitc);
                     }
                 }
             }
 
             // poll timecodes
-            if (_pollVitc) 
+            if (_pollVitc && !errorCode) 
             {
-                Timecode vtc;
-                if (_vtrControl->readVitc(&vtc))
+                Timecode vitc;
+                if (_vtrControl->readVitc(&vitc))
                 {
-                    _vtrControl->updateVitc(vtc);
+                    _vtrControl->updateVitc(vitc);
                 }
             }
             if (_pollLtc && !errorCode)
@@ -451,14 +567,13 @@ bool DefaultVTRControl::serialPortIsAvailable(string deviceName)
 
 
 
-DefaultVTRControl::DefaultVTRControl(string deviceName)
-: _debugSerialPortOpen(false), _stateThread(0), _serialPortDeviceName(deviceName), _protocol(0),
-_state(NOT_CONNECTED_VTR_STATE), _deviceTypeCode(0), _deviceType(UNKNOWN_DEVICE_TYPE)
+DefaultVTRControl::DefaultVTRControl(string deviceName, SerialType type)
+: _debugSerialPortOpen(false), _stateThread(0), _serialPortDeviceName(deviceName), _serialPortDeviceType(type),
+  _protocol(0), _state(NOT_CONNECTED_VTR_STATE), _deviceTypeCode(0), _deviceType(UNKNOWN_DEVICE_TYPE)
 {
     memset(_stateBytes, 0, NUM_STATE_BYTES);
-    
-    _debugSerialPortOpen = Config::getBoolD("dbg_serial_port_open", false);
 
+    _debugSerialPortOpen = Config::dbg_serial_port_open;
     
     // use reopen function to open the port 
     if (!reopenPort())
@@ -492,6 +607,7 @@ void DefaultVTRControl::registerListener(VTRControlListener* listener)
     info.state = NOT_CONNECTED_VTR_STATE;
     info.errorCode = 0x00;
     info.ltcAtError.hour = 99;
+    info.vitcAtError.hour = 99;
     info.vitc.hour = 99;
     info.ltc.hour = 99;
     
@@ -554,7 +670,7 @@ DeviceType DefaultVTRControl::getDeviceType()
 
 bool DefaultVTRControl::isD3VTR()
 {
-    return _deviceType == AJ_D350_NTSC_DEVICE_TYPE || _deviceType == AJ_D350_PAL_DEVICE_TYPE;
+    return _deviceType == AJ_D350_525LINE_DEVICE_TYPE || _deviceType == AJ_D350_625LINE_DEVICE_TYPE;
 }
 
 bool DefaultVTRControl::isNonD3VTR()
@@ -711,7 +827,7 @@ bool DefaultVTRControl::openPort(string deviceName)
             Logging::debug("Opening VTR serial port '%s'...\n", deviceName.c_str());
         }
 
-        _protocol = SonyProtocol::open(deviceName);
+        _protocol = SonyProtocol::open(deviceName, _serialPortDeviceType);
         if (_protocol == 0)
         {
             if (_debugSerialPortOpen)
@@ -759,14 +875,16 @@ bool DefaultVTRControl::reopenPort()
     {
         // try MAX_PORT_DEVICE_NUMBER devices, substituting %d with the number 0..MAX_PORT_DEVICE_NUMBER
         // try the previously opened port last
+        // DVS ports are 1 to 4, all others are 0 to 3
 
         int i;
         string actualDeviceName;
         for (i = 0; i < MAX_PORT_DEVICE_NUMBER; i++)
         {
+            char deviceNumberBase = _serialPortDeviceType == TYPE_DVS ? '1' : '0';
             actualDeviceName = _serialPortDeviceName.substr(0, _serialPortDeviceName.size() - 2);
-            actualDeviceName.append(1, (char)('0' + i));
-            if (actualDeviceName.compare(prevActualDeviceName) != 0 &&
+            actualDeviceName.append(1, (char)(deviceNumberBase + i));
+            if (actualDeviceName != prevActualDeviceName &&
                 openPort(actualDeviceName))
             {
                 return true;
@@ -842,7 +960,7 @@ void DefaultVTRControl::updateState(VTRState state, const unsigned char* stateBy
     }    
 }
 
-void DefaultVTRControl::updatePlaybackError(int errorCode, Timecode ltc)
+void DefaultVTRControl::updatePlaybackError(int errorCode, Timecode ltc, Timecode vitc)
 {
     LOCK_SECTION(_listenerMutex);
     
@@ -850,11 +968,12 @@ void DefaultVTRControl::updatePlaybackError(int errorCode, Timecode ltc)
     for (iter = _listeners.begin(); iter != _listeners.end(); iter++)
     {
         if ((*iter).errorCode != errorCode ||
-            (*iter).ltcAtError != ltc)
+            (*iter).ltcAtError != ltc || (*iter).vitcAtError != vitc)
         {
-            (*iter).listener->vtrPlaybackError(this, errorCode, ltc);
+            (*iter).listener->vtrPlaybackError(this, errorCode, ltc, vitc);
             (*iter).errorCode = errorCode;
             (*iter).ltcAtError = ltc;
+            (*iter).vitcAtError = vitc;
         }
     }
 }
@@ -954,7 +1073,7 @@ bool DefaultVTRControl::readState(VTRState* state, unsigned char* stateBytes)
     return true;
 }
 
-bool DefaultVTRControl::readExtState(VTRState* state, int* errorCode)
+bool DefaultVTRControl::readExtState(int* errorCode)
 {
     LOCK_SECTION(_serialMutex);
 
@@ -985,8 +1104,8 @@ bool DefaultVTRControl::readExtState(VTRState* state, int* errorCode)
         return false;
     }
 
-    getStateFromData(response.getData(), state);
     getExtStateFromData(response.getData(), errorCode);
+
     return true;
 }
 
@@ -1145,7 +1264,24 @@ void DefaultVTRControl::getStateFromData(const unsigned char* data, VTRState* st
 
 void DefaultVTRControl::getExtStateFromData(const unsigned char* data, int* errorCode)
 {
-    *errorCode = data[8];
+    // The Sony 9-pin protocol specification states that bit 3 and bit 7 indicate the validity of the error level
+    // The validity bit is set to 1 when the error level is a valid value
+    // However, the D3 protocol specification has this bit undefined and the VTR doesn't set this bit to 1
+    
+    int mask = 0x77;
+    if (_deviceType != AJ_D350_625LINE_DEVICE_TYPE && _deviceType != AJ_D350_525LINE_DEVICE_TYPE)
+    {
+        if (!(data[8] & 0x80))
+        {
+            mask &= 0x0f;
+        }
+        if (!(data[8] & 0x08))
+        {
+            mask &= 0xf0;
+        }
+    }
+        
+    *errorCode = data[8] & mask;
 }
 
 void DefaultVTRControl::getTimecodeFromData(const unsigned char* data, Timecode* timecode)

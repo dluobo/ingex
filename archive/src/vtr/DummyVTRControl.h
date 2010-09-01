@@ -1,5 +1,5 @@
 /*
- * $Id: DummyVTRControl.h,v 1.1 2008/07/08 16:27:12 philipn Exp $
+ * $Id: DummyVTRControl.h,v 1.2 2010/09/01 16:05:23 philipn Exp $
  *
  * Implements a dummy VTR
  *
@@ -79,7 +79,7 @@ public:
 private:
     void updateDeviceType(int deviceTypeCode, DeviceType deviceType);
     void updateState(VTRState state, unsigned char* stateBytes);
-    void updatePlaybackError(int errorCode, Timecode ltc);
+    void updatePlaybackError(int errorCode, Timecode ltc, Timecode vitc);
     void updateVitc(Timecode vitc);
     void updateLtc(Timecode ltc);
 
@@ -93,6 +93,7 @@ private:
         VTRState state;
         int errorCode;
         Timecode ltcAtError;
+        Timecode vitcAtError;
         Timecode vitc;
         Timecode ltc;
     } VTRControlListenerInfo;

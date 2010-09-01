@@ -5,27 +5,45 @@
 
 OUTPUT_LOG_FILENAME="/tmp/qcreportout.txt"
 
-# create a KDE progress bar dialog
-dcopRef=`kdialog --progressbar "Processing QC session" 100`
 
-if ! (qc_report --print-qc-url --progress-dcop "$dcopRef" --progress-start 0 --progress-end 95 $@ > $OUTPUT_LOG_FILENAME)
+# create a KDE progress bar dialog
+REF=$(kdialog --progressbar "Processing QC session" 100)
+
+
+# generate report
+if ! (qc_report --print-qc-url --progress-ref "$REF" --progress-start 0 --progress-end 95 $@ > $OUTPUT_LOG_FILENAME)
 then
-	dcop $dcopRef close
+	if [[ $REF =~ ^org.kde.kdialog ]]
+	then
+		qdbus $REF close
+	else
+		dcop $REF close
+	fi
 	echo "Failed to process qc session"
-	kdialog --title "Failed to process QC session" --passivepopup "" 4
+	kdialog --title "Failed to process QC session" --passivepopup " " 4
 	exit 1
 fi
 
+
 # done creating report
-dcop $dcopRef setProgress 100
-dcop $dcopRef setLabel "Complete"
-sleep 1
-dcop $dcopRef close
+if [[ $REF =~ ^org.kde.kdialog ]]
+then
+	qdbus $REF Set org.kde.kdialog.ProgressDialog value 100
+	qdbus $REF setLabelText "Complete"
+	sleep 1
+	qdbus $REF close
+else
+	dcop $REF setProgress 100
+	dcop $REF setLabel "Complete"
+	sleep 1
+	dcop $REF close
+fi
 
 
 # open firefox with report for printing
-cat $OUTPUT_LOG_FILENAME | if read qcReportFilename; then firefox "$qcReportFilename"; fi
-
-
-
+REPORT_FILENAME=$(cat $OUTPUT_LOG_FILENAME)
+if [ "$REPORT_FILENAME" != "" ]
+then
+	firefox "$REPORT_FILENAME"
+fi
 

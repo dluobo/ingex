@@ -1,0 +1,92 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html>
+<head>
+
+<title>Ingex Recorder - Developer</title>
+<meta HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8"/>
+
+<script type="text/javascript">
+var apiVersion = 1;
+</script>
+
+<script type="text/javascript" src="scripts/common.js"></script>
+<script type="text/javascript" src="scripts/developer.js"></script>
+
+<link href="styles/developer.css" rel="stylesheet" rev="stylesheet" type="text/css"/>
+
+</head>
+
+<body onload="init_developer()">
+
+
+<!-- page top -->
+
+<div id="page-top">
+
+
+<!-- Status line -->
+
+<table id="status-line">
+	<tr>
+		<td id="connection-status" class="status-element">Connection</td>
+		<td id="database-status" class="status-element">Database</td>
+		<td id="sdi-card-status" class="status-element">SDI Card</td>
+		<td id="video-status" class="status-element">Video Signal</td>
+		<td id="audio-status" class="status-element">Audio Signal</td>
+		<td id="vtr-status" class="status-element">VTR</td>
+	</tr>		
+</table>
+
+<!-- Links -->
+
+<table id="link-line" cellspacing="5">
+	<tr>
+		<td><a id="index-link" href="index.html" target="_top">Home</a></td>
+		<td><a id="select-source-link" href="source.html" target="_top">Prepare</a></td>
+		<td><a id="record-link" href="record.html" target="_top">Record</a></td>
+		<td><a id="review-link" href="review.html" target="_top">Review</a></td>
+		<td><a id="vtr-control-link" href="vtrcontrol.html" target="_top">VTR Control</a></td>
+		<td><a id="cache-link" href="cache.html" target="_top">Cache</a></td>
+	</tr>
+</table>
+
+
+</div>
+
+
+<!-- page content -->
+
+<div id="page-content">
+
+<div id="dvs-fifo-state">
+	<h2 class="monitor-title">DVS FIFO buffers empty</h2>
+	<image id="dvs-buffer-image" class="buffer-pos-image" src="images/buffer_pos_bar_fg.png"/>
+	<span id="dvs-buffer-value" class="buffer-pos-value"></span>
+</div>
+
+<div id="capture-state">
+	<h2 class="monitor-title">Capture thread buffer position</h2>
+	<image id="capture-buffer-image" class="buffer-pos-image" src="images/buffer_pos_bar_fg.png"/>
+	<span id="capture-buffer-value" class="buffer-pos-value"></span>
+</div>
+
+<div id="store-state">
+	<h2 class="monitor-title">Store thread buffer position</h2>
+	<image id="store-buffer-image" class="buffer-pos-image" src="images/buffer_pos_bar_fg.png"/>
+	<span id="store-buffer-value" class="buffer-pos-value"></span>
+</div>
+
+<div id="browse-state">
+	<h2 class="monitor-title">Browse thread buffer position</h2>
+	<image id="browse-buffer-image" class="buffer-pos-image" src="images/buffer_pos_bar_fg.png"/>
+	<span id="browse-buffer-value" class="buffer-pos-value"></span>
+</div>
+
+
+</div>
+
+
+</body>
+</html>
+

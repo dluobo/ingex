@@ -1,0 +1,19 @@
+@import url("common.css");
+
+
+.buffer-pos-value {
+	font-size: 140%;
+	font-weight: bold;
+	position: relative;
+	top: -8px;
+	left: 5px;
+}
+
+.buffer-pos-image {
+	background: white url(../images/buffer_pos_bar_bg.png) top left no-repeat;
+	padding: 0px;
+	margin: 0px 0px 0px 0px;
+	background-position: 0px 0px;
+	outline: none;
+}
+

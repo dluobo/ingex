@@ -1,5 +1,5 @@
 /*
- * $Id: QCSessionFile.h,v 1.1 2008/07/08 16:25:22 philipn Exp $
+ * $Id: QCSessionFile.h,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * Provides access to information contained in a qc_player session file
  *
@@ -93,8 +93,5 @@ private:
 
 
 
-
-
 #endif
-
 

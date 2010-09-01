@@ -1,5 +1,5 @@
 /*
- * $Id: test_browse_encoder.c,v 1.1 2008/07/08 16:47:10 philipn Exp $
+ * $Id: test_browse_encoder.c,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * Use to test the browse_encoder.
  *
@@ -45,6 +45,8 @@ extern int main (int argc, char **argv)
 	int frames_read;
 	int idx = 1;
     struct timeval now, prev;
+    int aspect_ratio_num = 4;
+    int aspect_ratio_den = 3;
 
 	if (argc < 4)
 	{
@@ -81,19 +83,17 @@ extern int main (int argc, char **argv)
 		perror ("Error: ");
 		exit(-1);
 	}
-	dvd = browse_encoder_init (argv[idx+2], 2700, 4);
+	dvd = browse_encoder_init (argv[idx+2], aspect_ratio_num, aspect_ratio_den, 2700, 4);
 	if (dvd == NULL) {
 		return 1;
 	}
 	
-	ArchiveTimecode ltc = {10,0,0,0,0}, vitc = {10,0,0,0,0};
-
     gettimeofday(&prev, NULL);
-	while ((frames_read = fread (video_samples,  video_frame_size, 1, vfp)) == 1)
+	while ((frames_read = fread (video_samples, video_frame_size, 1, vfp)) == 1)
 	{
 		if (fread (audio_samples, sizeof(audio_samples), 1, afp) != 1)
 			break;
-		if (browse_encoder_encode (dvd, video_samples, audio_samples, ltc, vitc, frame_num)!= 0)
+		if (browse_encoder_encode (dvd, video_samples, audio_samples, frame_num)!= 0)
 			fprintf (stderr, "browse_encoder_encode failed\n");
 		if (frame_num >= 0)
 			++frame_num;

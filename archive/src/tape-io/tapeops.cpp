@@ -1,5 +1,5 @@
 /*
- * $Id: tapeops.cpp,v 1.1 2008/07/08 16:26:43 philipn Exp $
+ * $Id: tapeops.cpp,v 1.2 2010/09/01 16:05:23 philipn Exp $
  *
  * Provides tape I/O functions
  *
@@ -25,10 +25,11 @@
 #define _FILE_OFFSET_BITS 64
 #endif
 
-#include <stdio.h>
+#include <cstdio>
 #include <unistd.h>
 #include <fcntl.h>
-#include <errno.h>
+#include <cerrno>
+#include <cstring>
 
 #include <sys/ioctl.h>
 #include <sys/mtio.h>
@@ -182,7 +183,7 @@ bool tape_contains_tar_file(const char *device, string *p)
     char magic2[6] = {'u','s','t','a','r',' '};
     if (memcmp(pmagic, magic1, 6) == 0 || memcmp(pmagic, magic2, 6) == 0) {
         logTF("tape_contains_tar_file: found tar header, first file=%s\n", buf);
-        // Does it look like a D3 archive tape, starting with a txt file?
+        // Does it look like an archive tape, starting with a txt file?
 
         char *ext;
         if ((ext = strcasestr(buf, ".txt")) != NULL) {

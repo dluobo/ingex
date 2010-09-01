@@ -1,0 +1,115 @@
+#!/bin/sh
+#
+# /etc/init.d/ingex_recorder_setup
+#   and its symbolic link
+# /(usr/)sbin/rcingex_recorder_setup
+#
+### BEGIN INIT INFO
+# Provides:          Ingex recorder
+# Required-Start:    $syslog $remote_fs dvs_setup postgresql
+# Required-Stop:
+# Should-Stop:
+# Default-Start:     3 5
+# Default-Stop:      0 1 2 6
+# Short-Description: Service/daemon script for Ingex Recorder.
+# Description:       Ingex Recorder, used for ingesting video tape content via SDI.
+### END INIT INFO
+
+WORKING_DIR=/home/ingex/install/recorder/
+test -x $WORKING_DIR || { echo "Working directory: $WORKING_DIR not installed"; 
+	if [ "$1" = "stop" ]; then exit 0;
+	else exit 5; fi; }
+
+# Check for missing binaries (stale symlinks should not happen)
+# Note: Special treatment of stop for LSB conformance
+INGEX_REC=ingex_recorder
+test -x $WORKING_DIR/$INGEX_REC || { echo "$INGEX_REC not installed"; 
+	if [ "$1" = "stop" ]; then exit 0;
+	else exit 5; fi; }
+
+# Check for existence of needed config file and read it
+INGEX_REC_CONFIG=ingex.cfg
+test -r $WORKING_DIR/$INGEX_REC_CONFIG || { echo "$INGEX_REC_CONFIG not existing";
+	if [ "$1" = "stop" ]; then exit 0;
+	else exit 6; fi; }
+	
+# Read config	
+#. $INGEX_REC_CONFIG
+
+. /etc/rc.status
+
+# Reset status of this service
+rc_reset
+
+case "$1" in
+    start)
+	echo -n "Starting Ingex Recorder "
+	## Start daemon with startproc(8). If this fails
+	## the return value is set appropriately by startproc.
+	##/sbin/startproc -c $WORKING_DIR -u ingex ./$INGEX_REC --config $INGEX_REC_CONFIG
+	(cd $WORKING_DIR && sudo -u ingex ./$INGEX_REC --config $INGEX_REC_CONFIG > /dev/null 2>&1 &)
+
+	# Remember status and be verbose
+	rc_status -v
+	;;
+    stop)
+	echo -n "Shutting down Ingex Recorder "
+	## Stop daemon with killproc(8) and if this fails
+	## killproc sets the return value according to LSB.
+
+	/sbin/killproc -TERM $INGEX_REC
+
+	# Remember status and be verbose
+	rc_status -v
+	;;
+    try-restart|condrestart)
+	## Do a restart only if the service was active before.
+	## Note: try-restart is now part of LSB (as of 1.9).
+	## RH has a similar command named condrestart.
+	if test "$1" = "condrestart"; then
+		echo "${attn} Use try-restart ${done}(LSB)${attn} rather than condrestart ${warn}(RH)${norm}"
+	fi
+	$0 status
+	if test $? = 0; then
+		$0 restart
+	else
+		rc_reset	# Not running is not a failure.
+	fi
+	# Remember status and be quiet
+	rc_status
+	;;
+    restart)
+	## Stop the service and regardless of whether it was
+	## running or not, start it again.
+	$0 stop
+	$0 start
+
+	# Remember status and be quiet
+	rc_status
+	;;
+	
+    status)
+	echo -n "Checking for service Ingex Recorder "
+	## Check status with checkproc(8), if process is running
+	## checkproc will return with exit status 0.
+
+	# Return value is slightly different for the status command:
+	# 0 - service up and running
+	# 1 - service dead, but /var/run/  pid  file exists
+	# 2 - service dead, but /var/lock/ lock file exists
+	# 3 - service not running (unused)
+	# 4 - service status unknown :-(
+	# 5--199 reserved (5--99 LSB, 100--149 distro, 150--199 appl.)
+	
+	# NOTE: checkproc returns LSB compliant status values.
+	/sbin/checkproc $INGEX_REC
+	# NOTE: rc_status knows that we called this init script with
+	# "status" option and adapts its messages accordingly.
+	rc_status -v
+	;;
+    *)
+	echo "Usage: $0 {start|stop|restart|status}"
+	exit 1
+	;;
+esac
+rc_exit

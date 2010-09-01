@@ -1,5 +1,5 @@
 /*
- * $Id: Types.h,v 1.1 2008/07/08 16:23:45 philipn Exp $
+ * $Id: Types.h,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * Common types
  *
@@ -25,6 +25,7 @@
 
 
 #include <inttypes.h>
+#include <cstring>
 
 #include <string>
 
@@ -367,6 +368,60 @@ public:
 };
 
 static const UMID g_nullUMID = UMID();
+
+
+class Rational
+{
+public:
+    Rational() : numerator(0), denominator(0) {}
+    Rational(int32_t num, int32_t den) : numerator(num), denominator(den) {}
+    
+    bool operator == (const Rational& r) const
+    {
+        return numerator == r.numerator && denominator == r.denominator;
+    }
+
+    bool operator != (const Rational& r) const
+    {
+        return numerator != r.numerator || denominator != r.denominator;
+    }
+    
+    bool isNull() const
+    {
+        return numerator == 0;
+    }
+
+    std::string toString() const
+    {
+        char buf[32];
+        
+        sprintf(buf, "%d/%d", numerator, denominator);
+        
+        return buf;
+    }
+    
+    std::string toAspectRatioString() const
+    {
+        char buf[32];
+        
+        sprintf(buf, "%d:%d", numerator, denominator);
+        
+        return buf;
+    }
+    
+    int32_t numerator;
+    int32_t denominator;
+};
+
+static const Rational g_nullRational = Rational(0, 0);
+
+
+typedef enum
+{
+    PRIMARY_TIMECODE_AUTO = 0,
+    PRIMARY_TIMECODE_LTC = 1,
+    PRIMARY_TIMECODE_VITC = 2
+} PrimaryTimecode;
 
 
 };

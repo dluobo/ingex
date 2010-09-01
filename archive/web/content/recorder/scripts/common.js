@@ -293,7 +293,8 @@ function update_active_link(sessionState)
 
 function status_is_ok(status)
 {
-    return status != null && 
+    return status != null &&
+        check_api_version(status) &&
         status.database && 
         status.sdiCard && 
         status.video && 
@@ -366,6 +367,22 @@ function set_general_status(status, statusInterval)
     }
 }
 
+function check_api_version(status)
+{
+    if (status != null && status.apiVersion == apiVersion)
+    {
+        return true;
+    }
+    
+    return false;
+}
+
+function get_api_version(status)
+{
+    return apiVersion;
+}
+
+
 
 //
 // Replay buttons
@@ -390,5 +407,70 @@ function item_control_down(ele)
 function item_control_up(ele)
 {
     ele.parentNode.setAttribute("style", "");
+}
+
+
+//
+// General data
+//
+
+function get_aspect_ratio_string(aspectRatioCode, rasterAspectRatio)
+{
+    if (rasterAspectRatio == null || rasterAspectRatio.length == 0)
+    {
+        if (aspectRatioCode == null || aspectRatioCode.length == 0 ||
+            aspectRatioCode == "xxx12" || aspectRatioCode == "xxx16")
+        {
+            return "Unknown";
+        }
+        else
+        {
+            return "Unknown" +  " (" + aspectRatioCode + ")";
+        }
+    }
+    else
+    {
+        if (aspectRatioCode == null || aspectRatioCode.length == 0 ||
+            aspectRatioCode == "xxx12" || aspectRatioCode == "xxx16")
+        {
+            return rasterAspectRatio;
+        }
+        else
+        {
+            return rasterAspectRatio + " (" + aspectRatioCode + ")";
+        }
+    }
+}
+
+
+var formatCodeMap = 
+{
+    "D3"    : "D3",
+    "BD"    : "DigiBeta",
+    "BS"    : "BetaSP",
+    "DM"    : "DVCam",
+    "BX"    : "BetaSX",
+    "DP"    : "DVCPro",
+    "HM"    : "HDCam",
+    "HR"    : "HDCamSR",
+    "HP"    : "DVCProHD",
+};
+
+
+function get_format_string(code)
+{
+    if (formatCodeMap[code] == null)
+    {
+        if (code == null || code.length == 0)
+        {
+            return "Unknown";
+        }
+        else
+        {
+            return "Unknown" + " (" + code + ")";
+        }
+    }
+    
+    return formatCodeMap[code] + " (" + code + ")";
 }
 

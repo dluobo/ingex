@@ -1,5 +1,5 @@
 /*
- * $Id: browse_encoder.c,v 1.2 2008/10/24 19:14:07 john_f Exp $
+ * $Id: browse_encoder.c,v 1.3 2010/09/01 16:05:22 philipn Exp $
  *
  * MPEG-2 encodes planar YUV420 video and 16-bit PCM audio
  *
@@ -474,7 +474,7 @@ static void setup_tc_mask(internal_browse_encoder_t *dvd, int frame_number)
 #endif // not used
 
 /* add a video output stream */
-AVStream *add_video_stream(AVFormatContext *oc, int codec_id, int bit_rate, int thread_count)
+AVStream *add_video_stream(AVFormatContext *oc, int codec_id, int aspect_ratio_num, int aspect_ratio_den, int bit_rate, int thread_count)
 {
     //Modifiying all values to dvd format values
     AVCodecContext *c;
@@ -490,9 +490,41 @@ AVStream *add_video_stream(AVFormatContext *oc, int codec_id, int bit_rate, int 
     }
     avcodec_get_context_defaults2(st->codec, CODEC_TYPE_VIDEO);
 
+    c = st->codec;
+
     st->r_frame_rate.num = 25;
     st->r_frame_rate.den = 1;
-    c = st->codec;
+    if ((aspect_ratio_num == 4 && aspect_ratio_den == 3) ||
+        (aspect_ratio_num < 1 || aspect_ratio_den < 1))
+    {
+        /* 4:3 or unknown and default to 4:3 */
+#if LIBAVFORMAT_VERSION_INT > ((52<<16)+(20<<8)+0)
+        st->sample_aspect_ratio.num = 59;
+        st->sample_aspect_ratio.den = 54;
+        c->sample_aspect_ratio = st->sample_aspect_ratio;
+#else
+        c->sample_aspect_ratio.num = 59;
+        c->sample_aspect_ratio.den = 54;
+#endif
+    }
+    else if (aspect_ratio_num == 16 && aspect_ratio_den == 9)
+    {
+        /* 16:9 */
+#if LIBAVFORMAT_VERSION_INT > ((52<<16)+(20<<8)+0)
+        st->sample_aspect_ratio.num = 118;
+        st->sample_aspect_ratio.den = 81;
+        c->sample_aspect_ratio = st->sample_aspect_ratio;
+#else
+        c->sample_aspect_ratio.num = 118;
+        c->sample_aspect_ratio.den = 81;
+#endif
+    }
+    else
+    {
+        fprintf(stderr, "Aspect ratio %d/%d not supported\n", aspect_ratio_num, aspect_ratio_den);
+        return NULL;
+    }
+
     c->codec_id = codec_id;
     c->codec_type = CODEC_TYPE_VIDEO;
 
@@ -511,7 +543,6 @@ AVStream *add_video_stream(AVFormatContext *oc, int codec_id, int bit_rate, int 
     /* resolution must be a multiple of two */
     c->width = 720;  
     c->height = 576;
-    c->sample_aspect_ratio = av_d2q(4.0/3*576/720, 255);
     /* time base: this is the fundamental unit of time (in seconds) in terms
        of which frame timestamps are represented. for fixed-fps content,
        timebase should be 1/framerate and timestamp increments should be
@@ -747,7 +778,7 @@ static void cleanup (internal_browse_encoder_t *dvd)
 	}
 }
 
-extern browse_encoder_t *browse_encoder_init (const char *filename, uint32_t kbit_rate, int thread_count)
+extern browse_encoder_t *browse_encoder_init (const char *filename, int aspect_ratio_num, int aspect_ratio_den, uint32_t kbit_rate, int thread_count)
 {
 	internal_browse_encoder_t *browse;
 	AVOutputFormat *fmt;
@@ -769,7 +800,11 @@ extern browse_encoder_t *browse_encoder_init (const char *filename, uint32_t kbi
 	}
 
 	/* Allocate the output media context */
+#if LIBAVFORMAT_VERSION_INT > ((52<<16)+(25<<8)+0)
+	browse->oc = avformat_alloc_context();
+#else
 	browse->oc = av_alloc_format_context();
+#endif
 	if (!browse->oc)
 	{
 		cleanup(browse);
@@ -792,7 +827,7 @@ extern browse_encoder_t *browse_encoder_init (const char *filename, uint32_t kbi
 	*/
 	if (fmt->video_codec != CODEC_ID_NONE)
 	{
-		browse->video_st = add_video_stream(browse->oc, fmt->video_codec, kbit_rate, thread_count);
+		browse->video_st = add_video_stream(browse->oc, fmt->video_codec, aspect_ratio_num, aspect_ratio_den, kbit_rate, thread_count);
 		if (!browse->video_st)
 		{
 			cleanup(browse);
@@ -847,7 +882,7 @@ extern browse_encoder_t *browse_encoder_init (const char *filename, uint32_t kbi
 	return (browse_encoder_t *)browse;
 }
 
-static int write_audio_frame(internal_browse_encoder_t *dvd, int16_t *p_audio)
+static int write_audio_frame(internal_browse_encoder_t *dvd, const int16_t *p_audio)
 {
 	AVFormatContext *oc = dvd->oc;
 	AVStream *st = dvd->audio_st;
@@ -875,11 +910,11 @@ static int write_audio_frame(internal_browse_encoder_t *dvd, int16_t *p_audio)
 	return 0;
 }
 
-static void fill_yuv_image (uint8_t *p_video, AVFrame *pict, int width, int height)
+static void fill_yuv_image (const uint8_t *p_video, AVFrame *pict, int width, int height)
 {
 	int chroma_size = (width * height)/4;
-	uint8_t *u_comp = p_video + (width*height);
-	uint8_t *v_comp = u_comp + (width*height)/4;
+	const uint8_t *u_comp = p_video + (width*height);
+	const uint8_t *v_comp = u_comp + (width*height)/4;
 	/* Y */
 	memcpy (pict->data[0], p_video, width * height);
 	/* U */
@@ -1020,7 +1055,7 @@ static void burn_mask_yuv420(internal_browse_encoder_t *dvd)
 }
 #endif
 
-static int write_video_frame(internal_browse_encoder_t *dvd, uint8_t *p_video, int32_t frame_num)
+static int write_video_frame(internal_browse_encoder_t *dvd, const uint8_t *p_video, int32_t frame_num)
 {
 	AVFormatContext *oc = dvd->oc;
 	AVStream *st = dvd->video_st;
@@ -1058,7 +1093,7 @@ static int write_video_frame(internal_browse_encoder_t *dvd, uint8_t *p_video, i
         
         /* write the compressed frame in the media file */
 	if (0)
-		printf("pkt: pts=%20lld dts=%20lld sidx=%d fl=%d dur=%d pos=%lld size=%5d data[0..7]={%02x %02x %02x %02x %02x %02x %02x %02x}\n",
+		printf("pkt: pts=%20"PRId64" dts=%20"PRId64" sidx=%d fl=%d dur=%d pos=%"PRId64" size=%5d data[0..7]={%02x %02x %02x %02x %02x %02x %02x %02x}\n",
 				pkt.pts,
 				pkt.dts,
 				pkt.stream_index,
@@ -1081,7 +1116,7 @@ static int write_video_frame(internal_browse_encoder_t *dvd, uint8_t *p_video, i
 	return ret;
 }
 
-extern int browse_encoder_encode (browse_encoder_t *in_dvd, uint8_t *p_video, int16_t *p_audio, ArchiveTimecode ltc, ArchiveTimecode vitc, int32_t frame_number)
+extern int browse_encoder_encode (browse_encoder_t *in_dvd, const uint8_t *p_video, const int16_t *p_audio, int32_t frame_number)
 {
 	internal_browse_encoder_t *dvd = (internal_browse_encoder_t *)in_dvd;
 	if (!dvd)

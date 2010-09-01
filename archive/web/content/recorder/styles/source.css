@@ -23,6 +23,26 @@
 
 
 /***************************************************/
+/* Select Profile */
+/***************************************************/
+
+#select-profile-label {
+	color: green;
+	font-size: 120%;
+	font-weight: bold;
+}
+
+#select-profile {
+	font-weight: bold;
+	font-size: 120%;
+}
+
+#select-profile option {
+	padding-right: 10px;
+}
+
+
+/***************************************************/
 /* Source Info */
 /***************************************************/
 
@@ -51,6 +71,21 @@
 	border: 0px;
 }
 
+.aspect-ratio-select {
+	border-left: 0px;
+	border-top: 0;
+	border-bottom: 0;
+	padding: 0;
+	margin: 0;
+	font-weight: bold;
+	font-size: 100%;
+}
 
+.unknown-aspect-ratio {
+	background-color: red;
+}
 
+.known-aspect-ratio {
+	background-color: #FFFFCC; /* background colour of the table */
+}
 

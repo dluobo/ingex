@@ -1,5 +1,5 @@
 /*
- * $Id: QCReport.h,v 1.1 2008/07/08 16:25:21 philipn Exp $
+ * $Id: QCReport.h,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * Writes a QC report given a session file and D3 MXF file
  *
@@ -26,7 +26,7 @@
 
 #include <string>
 
-#include "D3MXFFile.h"
+#include "ArchiveMXFFile.h"
 #include "QCSessionFile.h"
 
 
@@ -47,7 +47,7 @@ typedef enum
 class QCReport
 {
 public:
-    QCReport(std::string filename, D3MXFFile* mxfFile, QCSessionFile* sessionFile);
+    QCReport(std::string filename, rec::ArchiveMXFFile* mxfFile, QCSessionFile* sessionFile);
     ~QCReport();
     
     void write(QCPSEResult pseResult);
@@ -56,7 +56,7 @@ private:
     void writeMark(Mark* mark);
     
     FILE* _report;
-    D3MXFFile* _mxfFile;
+    rec::ArchiveMXFFile* _mxfFile;
     QCSessionFile* _sessionFile;
 };
 
@@ -64,5 +64,4 @@ private:
 
 
 #endif
-
 

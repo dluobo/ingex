@@ -1,5 +1,5 @@
 /*
- * $Id: LTODirectory.h,v 1.1 2008/07/08 16:25:20 philipn Exp $
+ * $Id: LTODirectory.h,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * Provides a list of MXF and session file items in a LTO directory and can 
  * create a backup of the session files and index file
@@ -60,6 +60,4 @@ private:
 
 
 #endif
-
-
 

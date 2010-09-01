@@ -1,5 +1,5 @@
 /*
- * $Id: JSONObject.h,v 1.1 2008/07/08 16:24:41 philipn Exp $
+ * $Id: JSONObject.h,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * Utility class for serialising data to JSON text strings
  *
@@ -66,6 +66,7 @@ public:
 
     void set(std::string name, JSONValue* value);
     void setString(std::string name, std::string value);
+    void setStringP(std::string name, std::string format, ...);
     void setBool(std::string name, bool value);
     void setNumber(std::string name, int64_t value);
     void setNull(std::string name);

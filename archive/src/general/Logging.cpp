@@ -1,5 +1,5 @@
 /*
- * $Id: Logging.cpp,v 1.1 2008/07/08 16:23:28 philipn Exp $
+ * $Id: Logging.cpp,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * Provides methods for various levels of logging to standard streams and/or file
  *
@@ -20,11 +20,11 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
  
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <stdarg.h>
-#include <errno.h>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <cstdarg>
+#include <cerrno>
 #include <sys/time.h>
  
 #include "Logging.h"
@@ -486,7 +486,7 @@ void FileLogging::ivdebugMore(bool newLine, const char* format, va_list ap)
 
 bool FileLogging::reopenLogFile(string newFilename)
 {
-    if (newFilename.compare(_filename) == 0)
+    if (newFilename == _filename)
     {
         // already open
         return true;

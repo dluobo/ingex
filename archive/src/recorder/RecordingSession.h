@@ -1,5 +1,5 @@
 /*
- * $Id: RecordingSession.h,v 1.1 2008/07/08 16:25:51 philipn Exp $
+ * $Id: RecordingSession.h,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * Manages a recording session
  *
@@ -29,6 +29,7 @@
 #include "VTRControl.h"
 #include "RecordingItems.h"
 #include "Chunking.h"
+#include "Profile.h"
 
 #include <archive_types.h>
 
@@ -59,13 +60,14 @@ class SessionStatus
 {
 public:
     SessionStatus()
-    : state(NOT_STARTED_SESSION_STATE), vtrErrorCount(0), duration(-1), 
+    : state(NOT_STARTED_SESSION_STATE), vtrErrorCount(0),
+    digiBetaDropoutEnabled(false), digiBetaDropoutCount(0), duration(-1),
     abortBusy(false), browseBufferOverflow(false), itemCount(-1), sessionCommentsCount(0),
     vtrState(NOT_CONNECTED_VTR_STATE), infaxDuration(-1), fileSize(-1), diskSpace(-1), 
-    browseFileSize(-1), startBusy(false), stopBusy(false), 
+    browseFileSize(-1), startBusy(false), stopBusy(false),
+    dvsBuffersEmpty(0), numDVSBuffers(0), captureBufferPos(0), storeBufferPos(0), browseBufferPos(0), ringBufferSize(0),
     pseResult(0), chunkBusy(false), completeBusy(false), 
     playingItemId(-1), playingItemIndex(-1), playingItemPosition(-1), 
-    playingFilePosition(-1), playingFileDuration(-1), 
     itemClipChangeCount(0), itemSourceChangeCount(0),
     chunkingItemNumber(-1), chunkingPosition(-1), chunkingDuration(-1), readyToChunk(false)
     {}
@@ -74,11 +76,14 @@ public:
     // both Record and Review states
     
     SessionState state;
-    std::string d3SpoolNo;
+    std::string sourceSpoolNo;
     std::string digibetaSpoolNo;
     std::string statusMessage;
     long vtrErrorCount;
+    bool digiBetaDropoutEnabled;
+    long digiBetaDropoutCount;
     int64_t duration;
+    std::string fileFormat;
     std::string filename;
     std::string browseFilename;
     bool abortBusy;
@@ -98,6 +103,12 @@ public:
     int64_t browseFileSize;
     bool startBusy;
     bool stopBusy;
+    int dvsBuffersEmpty;
+    int numDVSBuffers;
+    int captureBufferPos;
+    int storeBufferPos;
+    int browseBufferPos;
+    int ringBufferSize;
     
     // Review only
     int pseResult;
@@ -106,8 +117,6 @@ public:
     int playingItemId;
     int playingItemIndex;
     int64_t playingItemPosition;
-    int64_t playingFilePosition;
-    int64_t playingFileDuration;
     int itemClipChangeCount;
     int itemSourceChangeCount;
     int chunkingItemNumber;
@@ -127,8 +136,8 @@ public:
     friend class Chunking;
     
 public:
-    RecordingSession(Recorder* recorder, RecordingItems* recordingItems, std::string digibetaBarcode, int replayPort,
-        VTRControl* d3VTRControl, VTRControl* digibetaVTRControl);
+    RecordingSession(Recorder* recorder, const Profile *profile, Source* infaxSource, std::string digibetaBarcode,
+        int replayPort, VTRControl* sourceVTRControl, VTRControl* digibetaVTRControl);
     virtual ~RecordingSession();
     
     // from ThreadWorker    
@@ -138,7 +147,7 @@ public:
     
     // from VTRControlListener    
     virtual void vtrState(VTRControl* vtrControl, VTRState state, const unsigned char* stateBytes);
-    virtual void vtrPlaybackError(VTRControl* vtrControl, int errorCode, Timecode ltc);
+    virtual void vtrPlaybackError(VTRControl* vtrControl, int errorCode, Timecode ltc, Timecode vitc);
 
     void startRecording();
     void stopRecording();
@@ -154,25 +163,33 @@ public:
     void seekToEOP();
     int markItemStart(int* id, bool* isJunk, int64_t* filePosition, int64_t* fileDuration);
     int clearItem(int id, int index, int64_t* filePosition);
+    int markItemStart();
+    int clearItem();
     int moveItemUp(int id, int index);
     int moveItemDown(int id, int index);
     int disableItem(int id, int index);
     int enableItem(int id, int index);
     
     SessionState getState();
-    SessionStatus getStatus();
+    SessionStatus getStatus(const ConfidenceReplayStatus* replayStatus);
     bool getSessionComments(std::string* comments, int* count);
     
     void browseBufferOverflow();
     
     bool confidenceReplayActive();
     void forwardConfidenceReplayControl(std::string command);
+    ConfidenceReplayStatus getConfidenceReplayStatus();
 
     RecordingItems* getRecordingItems();
     
-    void getFinalResult(SessionResult* result, std::string* sourceSpoolNo, std::string* failureReason); 
+    void getFinalResult(SessionResult* result, std::string* sourceSpoolNo, std::string* failureReason);
+    
+    uint32_t getContentPackageSize() const;
+    IngestFormat getIngestFormat() const { return _profile->getIngestFormat(); }
     
 private:
+    Source* createRecordingSource(Source* infaxSource);
+    
     void setSessionState(SessionState state);
     void setSessionState(SessionState state, SessionResult result, std::string sessionFailureReason);
     SessionState getSessionState();
@@ -190,14 +207,21 @@ private:
     
     void checkChunkingStatus();
     
-    HardDiskDestination* addHardDiskDestination(std::string mxfFilename, std::string browseFilename, 
-        std::string pseFilename, D3Source* d3Source, int ingestItemNo);
+    HardDiskDestination* addHardDiskDestination(std::string mxfFilename,
+        std::string browseFilename, std::string pseFilename, SourceItem* sourceItem, int ingestItemNo);
     DigibetaDestination* addDigibetaDestination(std::string barcode);
     void updateHardDiskDestination(HardDiskDestination* hddDest);
     
+    void stopVTRs(std::string errorContext);
+
+    const Profile* getProfile() const { return _profile; }
     
+private:
     Recorder* _recorder;
+    Profile* _profile;
     RecordingItems* _recordingItems;
+    
+    bool _videotapeBackup;
     
     Mutex _chunkingMutex;
     Thread* _chunking;
@@ -205,7 +229,7 @@ private:
     std::vector<Destination*> _destinations;
     std::string _digibetaSpoolNo;
     
-    VTRControl* _d3VTRControl;
+    VTRControl* _sourceVTRControl;
     VTRControl* _digibetaVTRControl;
 
     RecordingSessionTable* _sessionTable;
@@ -218,6 +242,7 @@ private:
     std::string _browseTimecodeFilename;
     std::string _browseInfoFilename;
     std::string _pseFilename;
+    std::string _eventFilename;
     
     // session status
     Mutex _sessionStateMutex;
@@ -231,6 +256,8 @@ private:
     int64_t _diskSpace;
     std::string _statusMessage;
     long _vtrErrorCount;
+    bool _digiBetaDropoutEnabled;
+    long _digiBetaDropoutCount;
     int _pseResult;
     bool _browseBufferOverflow;
     int64_t _duration;
@@ -265,17 +292,17 @@ private:
     // vtr errors
     std::vector<VTRError> _vtrErrors;
     Timecode _lastVTRErrorLTC;
+    Timecode _lastVTRErrorVITC;
     Mutex _vtrErrorsMutex;
 };
 
+
+
 };
-
-
 
 
 
 
 
 #endif
-
 

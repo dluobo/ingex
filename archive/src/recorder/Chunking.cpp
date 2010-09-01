@@ -1,5 +1,5 @@
 /*
- * $Id: Chunking.cpp,v 1.1 2008/07/08 16:25:33 philipn Exp $
+ * $Id: Chunking.cpp,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * Chunks an MXF file into MXF, browse copy and PSE report files for each item
  *
@@ -35,13 +35,16 @@
     near maximum tape transfer speed is maintained.
 */
 
-#include <errno.h>
+#include <cstdlib>
+#include <cerrno>
 
 #include "Chunking.h"
 #include "Recorder.h"
 #include "RecordingSession.h"
 #include "RecorderDatabase.h"
 #include "Cache.h"
+#include "ArchiveMXFWriter.h"
+#include "D10MXFWriter.h"
 #include "Logging.h"
 #include "RecorderException.h"
 #include "Utilities.h"
@@ -52,9 +55,6 @@
 #include "video_conversion.h"
 #include "PSEReport.h"
 
-#include <mxf/mxf_page_file.h>
-
-
 using namespace std;
 using namespace rec;
 
@@ -63,9 +63,17 @@ using namespace rec;
 #define THROTTLE_CHECK_INTERVAL         25
 
 
-static void convert_umid(mxfUMID* from, UMID* to)
+static ArchiveTimecode convert_timecode(rec::Timecode from)
 {
-    memcpy(to->bytes, &from->octet0, 32);
+    ArchiveTimecode to;
+    
+    to.dropFrame = false;
+    to.hour = from.hour;
+    to.min = from.min;
+    to.sec = from.sec;
+    to.frame = from.frame;
+    
+    return to;
 }
 
 
@@ -101,33 +109,62 @@ bool Chunking::readyForChunking(RecordingItems* recordingItems)
 
 
 Chunking::Chunking(RecordingSession* session, RecordingSessionTable* sessionTable, string mxfPageFilename, 
-    RecordingItems* recordingItems)
-: _session(session), _sessionTable(sessionTable), _recordingItems(recordingItems), 
-_stop(false), _hasStopped(false), _inputD3MXFFile(0), _hddDest(0), _stereoAudio(0), _yuv420Video(0)
+    RecordingItems* recordingItems, bool disablePSE)
+: _session(session), _sessionTable(sessionTable), _recordingItems(recordingItems), _disablePSE(disablePSE),
+_stop(false), _hasStopped(false), _threadCount(0), _chunkingThrottleFPS(0),
+_inputArchiveMXFFile(0), _inputD10MXFFile(0), _inputMXFFile(0),
+_hddDest(0), _stereoAudio(0), _yuv420Video(0)
 {
     try
     {
-        _inputD3MXFFile = new D3MXFFile(mxfPageFilename, MXF_PAGE_FILE_SIZE);
+        _tapeTransferLockFile = Config::tape_transfer_lock_file;
+        _threadCount = Config::browse_thread_count;
+        _chunkingThrottleFPS = Config::chunking_throttle_fps;
+        
+        switch (session->getProfile()->getIngestFormat())
+        {
+            case MXF_UNC_8BIT_INGEST_FORMAT:
+            case MXF_UNC_10BIT_INGEST_FORMAT:
+                _inputArchiveMXFFile = new ArchiveMXFFile(mxfPageFilename, MXF_PAGE_FILE_SIZE);
+                _inputMXFFile = _inputArchiveMXFFile;
+                break;
+            case MXF_D10_50_INGEST_FORMAT:
+                _inputD10MXFFile = new D10MXFFile(mxfPageFilename, MXF_PAGE_FILE_SIZE,
+                                                  session->_recorder->getCache()->getCreatingEventFilename(mxfPageFilename),
+                                                  true,
+                                                  _session->getProfile()->browse_enable);
+                _inputMXFFile = _inputD10MXFFile;
+                break;
+            case UNKNOWN_INGEST_FORMAT:
+                REC_ASSERT(false);
+        }
+        if (!_inputMXFFile->isComplete())
+        {
+            REC_LOGTHROW(("Cannot chunk incomplete MXF file '%s'", mxfPageFilename.c_str()));
+        }
 
         
         REC_ASSERT(recordingItems->getItems().size() > 0);
     
         _status.duration = recordingItems->getTotalDuration();
-        REC_ASSERT(_status.duration == _inputD3MXFFile->getDuration());
+        REC_ASSERT(_status.duration == _inputMXFFile->getDuration());
 
         
         _stereoAudio = new int16_t[1920 * 2];
         memset(_stereoAudio, 0, 1920 * 2 * sizeof(int16_t));
     
-        _yuv420Video = new unsigned char[720 * 576 * 3 / 2];
-        memset(_yuv420Video, 0, 720 * 576 * 3 / 2);
+        if (_inputArchiveMXFFile)
+        {
+            _yuv420Video = new unsigned char[720 * 576 * 3 / 2];
+            memset(_yuv420Video, 0, 720 * 576 * 3 / 2);
+        }
         
         _status.itemNumber = 1;
         _status.frameNumber = 0;
     }
     catch (...)
     {
-        delete _inputD3MXFFile;
+        delete _inputMXFFile;
         delete [] _stereoAudio;
         delete [] _yuv420Video;
 
@@ -137,8 +174,7 @@ _stop(false), _hasStopped(false), _inputD3MXFFile(0), _hddDest(0), _stereoAudio(
 
 Chunking::~Chunking()
 {
-    delete _inputD3MXFFile;
-    
+    delete _inputMXFFile;
     delete [] _stereoAudio;
     delete [] _yuv420Video;
 }
@@ -157,18 +193,18 @@ void Chunking::start()
         return;
     }
     
-    
-    int numAudioTracks = Config::getInt("num_audio_tracks");
-    int videoKBps = Config::getInt("browse_video_bit_rate");
-    int threadCount = Config::getInt("browse_thread_count");
-    int chunkingThrottleFPS = Config::getInt("chunking_throttle_fps");
-    
-    long chunkingThrottleUSec = (long)(40 * THROTTLE_CHECK_INTERVAL * 25.0 / chunkingThrottleFPS) * MSEC_IN_USEC; 
+    long chunkingThrottleUSec = (long)(40 * THROTTLE_CHECK_INTERVAL * 25.0 / _chunkingThrottleFPS) * MSEC_IN_USEC; 
     
     PSEFailure* pseFailures = 0;
-    long numPSEFailures = _inputD3MXFFile->getPSEFailures(&pseFailures);
+    long numPSEFailures = 0;
+    if (!_disablePSE)
+    {
+        // PSE analysis was done
+        numPSEFailures = _inputMXFFile->getPSEFailures(&pseFailures);
+    }
     VTRErrorAtPos* vtrPosErrors = 0;
-    long numVTRErrors = _inputD3MXFFile->getVTRErrors(&vtrPosErrors);
+    long numVTRErrors = 0;
+    numVTRErrors = _inputMXFFile->getVTRErrors(&vtrPosErrors);
     // note: vtrPosErrors does not include the timecode information and therefore
     // we create a second array of VTRErrors which will have the timecodes
     // filled in
@@ -177,25 +213,33 @@ void Chunking::start()
     {
         vtrErrors = new VTRError[numVTRErrors];
     }
+    DigiBetaDropout* digiBetaDropouts = 0;
+    long numDigiBetaDropouts = _inputMXFFile->getDigiBetaDropouts(&digiBetaDropouts);
     
     bool completed = false;
     Cache* cache = _session->_recorder->getCache();
     vector<RecordingItem>::iterator itemIter = items.begin();
     RecordingItem* item = &(*itemIter);
     int itemNumber = 1;
-    D3MXFFrame* d3MXFFrame = 0;
+    MXFContentPackage* contentPackage = 0;
+    ArchiveMXFContentPackage* archiveContentPackage = 0;
+    D10MXFContentPackage* d10ContentPackage = 0;
     int64_t inputFrameNumber = 0;
     int64_t itemFrameNumber = 0;
-    ArchiveMXFWriter* outputMXFFile = 0;
+    MXFWriter* outputMXFFile = 0;
     BrowseEncoder* browseEncoder = 0;
     FILE* timecodeFile = 0;
     long firstPSEFailure = 0;
     long firstVTRError = 0;
+    long firstDigiBetaDropout = 0;
     long numItemPSEFailures = 0;
     long numItemVTRErrors = 0;
+    long numItemDigiBetaDropouts = 0;
     int64_t diskSpaceCheckInterval = 0;
     Timer throttleTimer;
     bool noMore;
+    Timecode vitc;
+    Timecode ltc;
     try
     {
         setChunkingState(CHUNKING_IN_PROGRESS);
@@ -217,9 +261,9 @@ void Chunking::start()
                     }
                 
                     // skip frames
-                    if (!_inputD3MXFFile->skipFrames(item->duration))
+                    if (!_inputMXFFile->skipFrames(item->duration))
                     {
-                        REC_LOGTHROW(("D3 MXF file is missing frames"));
+                        REC_LOGTHROW(("MXF file is missing frames"));
                     }
 
                     inputFrameNumber += item->duration;
@@ -233,7 +277,7 @@ void Chunking::start()
                     }
 
                     
-                    // update PSE failure and VTR error counts
+                    // update PSE failure, VTR error and digibeta dropout counts
                     noMore = false;
                     while (!noMore)
                     {
@@ -258,6 +302,16 @@ void Chunking::start()
                                 noMore = false;
                             }
                         }
+                        if (digiBetaDropouts != 0 && firstDigiBetaDropout + numItemDigiBetaDropouts < numDigiBetaDropouts)
+                        {
+                            DigiBetaDropout* digiBetaDropout = &digiBetaDropouts[firstDigiBetaDropout + numItemDigiBetaDropouts];
+                            
+                            if (digiBetaDropout->position < inputFrameNumber)
+                            {
+                                numItemDigiBetaDropouts++;
+                                noMore = false;
+                            }
+                        }
                     }
                     
                     // junk it 
@@ -270,6 +324,8 @@ void Chunking::start()
                     numItemPSEFailures = 0;
                     firstVTRError += numItemVTRErrors;
                     numItemVTRErrors = 0;
+                    firstDigiBetaDropout += numItemDigiBetaDropouts;
+                    numItemDigiBetaDropouts = 0;
     
                     itemIter++;
                     if (itemIter == items.end() || (*itemIter).isDisabled)
@@ -289,33 +345,61 @@ void Chunking::start()
                 Logging::info("Starting chunking of item %d\n", itemNumber);
 
                 if (!_session->_recorder->getCache()->getMultiItemFilenames(_recordingItems->getSource()->barcode, 
-                    item->d3Source->itemNo, &_mxfFilename, &_browseFilename, &_browseTimecodeFilename, &_browseInfoFilename, &_pseFilename))
+                    item->sourceItem->itemNo, &_mxfFilename, &_browseFilename, &_browseTimecodeFilename,
+                    &_browseInfoFilename, &_pseFilename, &_eventFilename))
                 {
                     REC_LOGTHROW(("Failed to get unique filenames from the cache"));
                 }
 
-                _hddDest = _session->addHardDiskDestination(_mxfFilename, _browseFilename, _pseFilename, item->d3Source, itemNumber);
+                _hddDest = _session->addHardDiskDestination(_mxfFilename, _browseFilename, _pseFilename, item->sourceItem, itemNumber);
 
                 
-                REC_CHECK(prepare_archive_mxf_file(cache->getCompleteCreatingFilename(_mxfFilename).c_str(), numAudioTracks, 0, 1, &outputMXFFile));
+                Rational aspectRatio = Recorder::getRasterAspectRatio(item->sourceItem->aspectRatioCode);
                 
-                diskSpaceCheckInterval = MXF_PAGE_FILE_SIZE / get_archive_mxf_content_package_size(numAudioTracks);
+                if (_inputArchiveMXFFile)
+                {
+                    ArchiveMXFWriter* archiveOutputMXFFile = new ArchiveMXFWriter();
+                    outputMXFFile = archiveOutputMXFFile;
+                    archiveOutputMXFFile->setComponentDepth(_session->getProfile()->getIngestFormat() == MXF_UNC_8BIT_INGEST_FORMAT ? 8 : 10);
+                    archiveOutputMXFFile->setAspectRatio(aspectRatio);
+                    archiveOutputMXFFile->setNumAudioTracks(_session->getProfile()->num_audio_tracks);
+                    archiveOutputMXFFile->setIncludeCRC32(_session->getProfile()->include_crc32);
+                    archiveOutputMXFFile->setStartPosition(0);
+
+                    REC_CHECK(archiveOutputMXFFile->createFile(cache->getCompleteCreatingFilename(_mxfFilename)));
+                }
+                else
+                {
+                    D10MXFWriter* d10OutputMXFFile = new D10MXFWriter();
+                    outputMXFFile = d10OutputMXFFile;
+                    d10OutputMXFFile->setAspectRatio(aspectRatio);
+                    d10OutputMXFFile->setNumAudioTracks(_session->getProfile()->num_audio_tracks);
+                    d10OutputMXFFile->setPrimaryTimecode(_session->getProfile()->primary_timecode);
+                    d10OutputMXFFile->setEventFilename(cache->getCompleteCreatingEventFilename(_eventFilename));
+
+                    REC_CHECK(d10OutputMXFFile->createFile(cache->getCompleteCreatingFilename(_mxfFilename)));
+                }
+                
+                diskSpaceCheckInterval = MXF_PAGE_FILE_SIZE / _session->getContentPackageSize();
                 REC_ASSERT(diskSpaceCheckInterval > 0);
                 
-                
-                browseEncoder = BrowseEncoder::create(cache->getCompleteBrowseFilename(_browseFilename).c_str(), videoKBps, threadCount);
-                if (browseEncoder == 0)
+                if (_session->getProfile()->browse_enable)
                 {
-                    REC_LOGTHROW(("Failed to open the browse encoder"));
+                    browseEncoder = BrowseEncoder::create(cache->getCompleteBrowseFilename(_browseFilename).c_str(), aspectRatio,
+                        _session->getProfile()->browse_video_bit_rate, _threadCount);
+                    if (browseEncoder == 0)
+                    {
+                        REC_LOGTHROW(("Failed to open the browse encoder"));
+                    }
+                    
+                    timecodeFile = fopen(cache->getCompleteBrowseFilename(_browseTimecodeFilename).c_str(), "wb");
+                    if (timecodeFile == 0)
+                    {
+                        REC_LOGTHROW(("Failed to open the timecode file '%s': %s", _browseTimecodeFilename.c_str(), strerror(errno)));
+                    }
+    
+                    _session->writeBrowseInfo(cache->getCompleteBrowseFilename(_browseInfoFilename), item, false);
                 }
-                
-                timecodeFile = fopen(cache->getCompleteBrowseFilename(_browseTimecodeFilename).c_str(), "wb");
-                if (timecodeFile == 0)
-                {
-                    REC_LOGTHROW(("Failed to open the timecode file '%s': %s", _browseTimecodeFilename.c_str(), strerror(errno)));
-                }
-
-                _session->writeBrowseInfo(cache->getCompleteBrowseFilename(_browseInfoFilename), item, false);
             }
 
             // update status
@@ -327,9 +411,9 @@ void Chunking::start()
             
             
             // read next input frame
-            if (!_inputD3MXFFile->nextFrame(d3MXFFrame))
+            if (!_inputMXFFile->nextFrame(false, contentPackage))
             {
-                REC_LOGTHROW(("D3 MXF file is missing frames"));
+                REC_LOGTHROW(("MXF file is missing frames"));
             }
             
             // check every second if a tape transfer is in progress and if so
@@ -337,7 +421,7 @@ void Chunking::start()
             if (inputFrameNumber % 25 == 0)
             {
                 // if this file is locked then a tape transfer is in progress 
-                if (FileLock::isLocked(Config::getString("tape_transfer_lock_file")))
+                if (FileLock::isLocked(_tapeTransferLockFile))
                 {
                     throttleTimer.sleepRemainder();
                     throttleTimer.start(chunkingThrottleUSec);
@@ -351,20 +435,47 @@ void Chunking::start()
                 int64_t diskSpace = _session->_recorder->getRemainingDiskSpace();
                 if (diskSpace < DISK_SPACE_MARGIN)
                 {
-                    _inputD3MXFFile->forwardTruncate();
+                    _inputMXFFile->forwardTruncate();
                 }
+            }
+
+            // write frame
+            
+            if (_inputArchiveMXFFile)
+            {
+                archiveContentPackage = dynamic_cast<ArchiveMXFContentPackage*>(contentPackage);
+                
+                REC_ASSERT(_session->getProfile()->num_audio_tracks == archiveContentPackage->getNumAudioTracks());
+                outputMXFFile->writeContentPackage(contentPackage);
+
+                if (_session->getProfile()->browse_enable)
+                {
+                    writeBrowseFrame(archiveContentPackage, browseEncoder, itemFrameNumber);
+                    writeTimecodeFrame(archiveContentPackage, itemFrameNumber, timecodeFile);
+                }
+                
+                vitc = archiveContentPackage->getVITC();
+                ltc = archiveContentPackage->getLTC();
+            }
+            else
+            {
+                d10ContentPackage = dynamic_cast<D10MXFContentPackage*>(contentPackage);
+                
+                REC_ASSERT(_session->getProfile()->num_audio_tracks == d10ContentPackage->getNumAudioTracks());
+                outputMXFFile->writeContentPackage(contentPackage);
+
+                if (_session->getProfile()->browse_enable)
+                {
+                    writeBrowseFrame(d10ContentPackage, browseEncoder, itemFrameNumber);
+                    writeTimecodeFrame(d10ContentPackage, itemFrameNumber, timecodeFile);
+                }
+
+                vitc = d10ContentPackage->getVITC();
+                ltc = d10ContentPackage->getLTC();
             }
             
             
-            // write frame
-            
-            REC_ASSERT(numAudioTracks == d3MXFFrame->numAudioTracks);
-            writeMXFFrame(outputMXFFile, d3MXFFrame);
-            writeBrowseFrame(d3MXFFrame, browseEncoder, itemFrameNumber);
-            writeTimecodeFrame(d3MXFFrame, itemFrameNumber, timecodeFile);
-            
-            
-            // complete PSE failure and VTR error for current frame
+            // complete PSE failure, VTR error and digibeta dropout for current frame
             
             if (pseFailures != 0 && firstPSEFailure + numItemPSEFailures < numPSEFailures)
             {
@@ -372,8 +483,8 @@ void Chunking::start()
                 
                 if (pseFailure->position == inputFrameNumber)
                 {
-                    pseFailure->vitcTimecode = d3MXFFrame->vitc;
-                    pseFailure->ltcTimecode = d3MXFFrame->ltc;
+                    pseFailure->vitcTimecode = convert_timecode(vitc);
+                    pseFailure->ltcTimecode = convert_timecode(ltc);
                     pseFailure->position = itemFrameNumber; // position is now relative to start of item
                     
                     numItemPSEFailures++;
@@ -386,11 +497,22 @@ void Chunking::start()
                 
                 if (vtrPosError->position == inputFrameNumber)
                 {
-                    vtrError->vitcTimecode = d3MXFFrame->vitc;
-                    vtrError->ltcTimecode = d3MXFFrame->ltc;
+                    vtrError->vitcTimecode = convert_timecode(vitc);
+                    vtrError->ltcTimecode = convert_timecode(ltc);
                     vtrError->errorCode = vtrPosError->errorCode;
                     
                     numItemVTRErrors++;
+                }
+            }
+            if (digiBetaDropouts != 0 && firstDigiBetaDropout + numItemDigiBetaDropouts < numDigiBetaDropouts)
+            {
+                DigiBetaDropout* digiBetaDropout = &digiBetaDropouts[firstDigiBetaDropout + numItemDigiBetaDropouts];
+                
+                if (digiBetaDropout->position == inputFrameNumber)
+                {
+                    digiBetaDropout->position = itemFrameNumber; // position is now relative to start of item
+                    
+                    numItemDigiBetaDropouts++;
                 }
             }
             
@@ -411,26 +533,40 @@ void Chunking::start()
             {
                 // complete the item
                 
-                mxfUMID mxfMaterialPackageUID = get_material_package_uid(outputMXFFile);
-                mxfUMID mxfFilePackageUID = get_file_package_uid(outputMXFFile);
-                mxfUMID mxfTapePackageUID = get_tape_package_uid(outputMXFFile);
-                
                 InfaxData infaxData;
                 _session->getInfaxData(item, &infaxData);
                 
-                REC_CHECK(complete_archive_mxf_file(&outputMXFFile, &infaxData,
+                _hddDest->materialPackageUID = outputMXFFile->getMaterialPackageUID();
+                _hddDest->filePackageUID = outputMXFFile->getFileSourcePackageUID();
+                _hddDest->tapePackageUID = outputMXFFile->getTapeSourcePackageUID();
+                
+                REC_CHECK(outputMXFFile->complete(&infaxData,
                     (numItemPSEFailures > 0) ? &pseFailures[firstPSEFailure] : 0, numItemPSEFailures, 
-                    (numItemVTRErrors > 0) ? &vtrErrors[firstVTRError] : 0, numItemVTRErrors));
+                    (numItemVTRErrors > 0) ? &vtrErrors[firstVTRError] : 0, numItemVTRErrors,
+                    (numItemDigiBetaDropouts > 0) ? &digiBetaDropouts[firstDigiBetaDropout] : 0, numItemDigiBetaDropouts));
+                    
+                delete outputMXFFile;
+                outputMXFFile = 0;
                 
-                SAFE_DELETE(browseEncoder);
+                if (_session->getProfile()->browse_enable)
+                {
+                    SAFE_DELETE(browseEncoder);
+                    
+                    if (timecodeFile != 0)
+                    {
+                        fclose(timecodeFile);
+                    }
+                    timecodeFile = 0;
+    
+                    _session->writeBrowseInfo(cache->getCompleteBrowseFilename(_browseInfoFilename), item, false);
+                }
                 
-                fclose(timecodeFile);
-                timecodeFile = 0;
-
-                _session->writeBrowseInfo(cache->getCompleteBrowseFilename(_browseInfoFilename), item, false);
-                
-                int pseResult = writePSEReport(itemFrameNumber, &infaxData, 
-                    (numItemPSEFailures > 0) ? &pseFailures[firstPSEFailure] : 0, numItemPSEFailures);
+                int pseResult = 0;
+                if (!_disablePSE)
+                {
+                    pseResult = writePSEReport(itemFrameNumber, &infaxData, 
+                        (numItemPSEFailures > 0) ? &pseFailures[firstPSEFailure] : 0, numItemPSEFailures);
+                }
 
 
                 Logging::info("Completed chunking of item %d\n", itemNumber);
@@ -442,9 +578,6 @@ void Chunking::start()
                 _hddDest->pseResult = pseResult;
                 _hddDest->size = _session->_recorder->getCache()->getCreatingFileSize(_hddDest->name);
                 _hddDest->browseSize = _session->_recorder->getCache()->getBrowseFileSize(_hddDest->browseName);
-                convert_umid(&mxfMaterialPackageUID, &_hddDest->materialPackageUID);
-                convert_umid(&mxfFilePackageUID, &_hddDest->filePackageUID);
-                convert_umid(&mxfTapePackageUID, &_hddDest->tapePackageUID);
                 _session->updateHardDiskDestination(_hddDest);
                 
                 
@@ -459,6 +592,8 @@ void Chunking::start()
                 numItemPSEFailures = 0;
                 firstVTRError += numItemVTRErrors;
                 numItemVTRErrors = 0;
+                firstDigiBetaDropout += numItemDigiBetaDropouts;
+                numItemDigiBetaDropouts = 0;
 
                 itemIter++;
                 if (itemIter == items.end() || (*itemIter).isDisabled)
@@ -475,49 +610,27 @@ void Chunking::start()
         
         
         // check all frames from the input mxf file have been used 
-        if (completed && _inputD3MXFFile->nextFrame(d3MXFFrame))
+        if (completed && _inputMXFFile->nextFrame(false, contentPackage))
         {
-            REC_LOGTHROW(("D3 MXF file has extra frames"));
+            REC_LOGTHROW(("MXF file has extra frames"));
         }
 
         
-        // clean up
-        
-        if (pseFailures != 0)
-        {
-            free(pseFailures);
-            pseFailures = 0;
-        }
-        if (vtrPosErrors != 0)
-        {
-            free(vtrPosErrors);
-            vtrPosErrors = 0;
-        }
         delete [] vtrErrors;
-        vtrErrors = 0;
     }
     catch (...)
     {
-        if (outputMXFFile != 0)
+        delete outputMXFFile;
+        
+        if (_session->getProfile()->browse_enable)
         {
-            abort_archive_mxf_file(&outputMXFFile);
-        }
-        SAFE_DELETE(browseEncoder);
-        if (timecodeFile != 0)
-        {
-            fclose(timecodeFile);
+            SAFE_DELETE(browseEncoder);
+            if (timecodeFile != 0)
+            {
+                fclose(timecodeFile);
+            }
         }
 
-        if (pseFailures != 0)
-        {
-            free(pseFailures);
-            pseFailures = 0;
-        }
-        if (vtrPosErrors != 0)
-        {
-            free(vtrPosErrors);
-            vtrPosErrors = 0;
-        }
         delete [] vtrErrors;
         
         
@@ -565,63 +678,72 @@ ChunkingState Chunking::getChunkingState()
     return _status.state;
 }
 
-void Chunking::writeMXFFrame(ArchiveMXFWriter* writer, D3MXFFrame* frame)
-{
-    int i;
-    REC_CHECK(write_timecode(writer, frame->vitc, frame->ltc));
-    REC_CHECK(write_video_frame(writer, frame->video, frame->videoSize));
-    for (i = 0; i < frame->numAudioTracks; i++)
-    {
-        REC_CHECK(write_audio_frame(writer, frame->audio[i], frame->audioSize));
-    }
-}
-
-void Chunking::writeBrowseFrame(D3MXFFrame* frame, BrowseEncoder* browseEncoder, int64_t frameNumber)
+void Chunking::writeBrowseFrame(ArchiveMXFContentPackage* contentPackage, BrowseEncoder* browseEncoder,
+                                int64_t frameNumber)
 {
     // convert audio to 16 bit stereo
-    if (frame->numAudioTracks > 0)
+    if (contentPackage->getNumAudioTracks() > 0)
     {
-        uint16_t* outputA12 = (uint16_t*)_stereoAudio;
-        unsigned char* inputA1 = frame->audio[0];
-        unsigned char* inputA2 = frame->audio[1];
-        int i;
-        if (frame->numAudioTracks > 1)
-        {
-            for (i = 0; i < 1920 * 3; i += 3) 
-            {
-                *outputA12++ = (((uint16_t)inputA1[i + 2]) << 8) | inputA1[i + 1];
-                *outputA12++ = (((uint16_t)inputA2[i + 2]) << 8) | inputA2[i + 1];
-            }
-        }
-        else
-        {
-            for (i = 0; i < 1920 * 3; i += 3) 
-            {
-                *outputA12++ = (((uint16_t)inputA1[i + 2]) << 8) | inputA1[i + 1];
-                *outputA12++ = 0;
-            }
-        }
+        convertAudio(contentPackage->getNumAudioTracks(),
+                     contentPackage->getAudio(0), contentPackage->getAudio(1),
+                     (uint16_t*)_stereoAudio);
     }
     
-    // convert video to yuv420    
-    uyvy_to_yuv420(720, 576, 0, frame->video, _yuv420Video);
+    // convert video to yuv420
+    uyvy_to_yuv420(720, 576, 0, contentPackage->getVideo8Bit(), _yuv420Video);
 
     // encode
-    REC_CHECK(browseEncoder->encode(_yuv420Video, _stereoAudio, frame->ltc, frame->vitc, frameNumber));
+    REC_CHECK(browseEncoder->encode(_yuv420Video, _stereoAudio, frameNumber));
 }
             
-void Chunking::writeTimecodeFrame(D3MXFFrame* frame, int64_t frameNumber, FILE* timecodeFile)
+void Chunking::writeTimecodeFrame(ArchiveMXFContentPackage* contentPackage, int64_t frameNumber, FILE* timecodeFile)
 {
-    ArchiveTimecode ctc;
+    Timecode ctc, vitc, ltc;
+
     ctc.hour = frameNumber / (60 * 60 * 25);
     ctc.min = (frameNumber % (60 * 60 * 25)) / (60 * 25);
     ctc.sec = ((frameNumber % (60 * 60 * 25)) % (60 * 25)) / 25;
     ctc.frame = ((frameNumber % (60 * 60 * 25)) % (60 * 25)) % 25;
     
+    vitc = contentPackage->getVITC();
+    ltc = contentPackage->getLTC();
+    
     fprintf(timecodeFile, "C%02d:%02d:%02d:%02d V%02d:%02d:%02d:%02d L%02d:%02d:%02d:%02d\n", 
-    ctc.hour, ctc.min, ctc.sec, ctc.frame,
-    frame->vitc.hour, frame->vitc.min, frame->vitc.sec, frame->vitc.frame,
-    frame->ltc.hour, frame->ltc.min, frame->ltc.sec, frame->ltc.frame);
+            ctc.hour, ctc.min, ctc.sec, ctc.frame,
+            vitc.hour, vitc.min, vitc.sec, vitc.frame,
+            ltc.hour, ltc.min, ltc.sec, ltc.frame);
+}
+            
+void Chunking::writeBrowseFrame(D10MXFContentPackage* contentPackage, BrowseEncoder* browseEncoder, int64_t frameNumber)
+{
+    // convert audio to 16 bit stereo
+    if (contentPackage->getNumAudioTracks() > 0)
+    {
+        convertAudio(contentPackage->getNumAudioTracks(),
+                     contentPackage->getAudio(0), contentPackage->getAudio(1),
+                     (uint16_t*)_stereoAudio);
+    }
+
+    // encode
+    REC_CHECK(browseEncoder->encode(contentPackage->getDecodedVideo(), _stereoAudio, frameNumber));
+}
+            
+void Chunking::writeTimecodeFrame(D10MXFContentPackage* contentPackage, int64_t frameNumber, FILE* timecodeFile)
+{
+    Timecode ctc, vitc, ltc;
+    
+    ctc.hour = frameNumber / (60 * 60 * 25);
+    ctc.min = (frameNumber % (60 * 60 * 25)) / (60 * 25);
+    ctc.sec = ((frameNumber % (60 * 60 * 25)) % (60 * 25)) / 25;
+    ctc.frame = ((frameNumber % (60 * 60 * 25)) % (60 * 25)) % 25;
+    
+    vitc = contentPackage->getVITC();
+    ltc = contentPackage->getLTC();
+    
+    fprintf(timecodeFile, "C%02d:%02d:%02d:%02d V%02d:%02d:%02d:%02d L%02d:%02d:%02d:%02d\n", 
+            ctc.hour, ctc.min, ctc.sec, ctc.frame,
+            vitc.hour, vitc.min, vitc.sec, vitc.frame,
+            ltc.hour, ltc.min, ltc.sec, ltc.frame);
 }
             
 int Chunking::writePSEReport(int64_t duration, InfaxData* infaxData, PSEFailure* pseFailures, long numPSEFailures)
@@ -647,6 +769,29 @@ int Chunking::writePSEReport(int64_t duration, InfaxData* infaxData, PSEFailure*
     {
         delete pseReport;
         throw;
+    }
+}
+
+void Chunking::convertAudio(int numAudioTracks, const unsigned char *inputA1, const unsigned char *inputA2,
+                            uint16_t *outputA12)
+{
+    // convert audio to 16 bit stereo
+    int i;
+    if (numAudioTracks > 1)
+    {
+        for (i = 0; i < 1920 * 3; i += 3) 
+        {
+            *outputA12++ = (((uint16_t)inputA1[i + 2]) << 8) | inputA1[i + 1];
+            *outputA12++ = (((uint16_t)inputA2[i + 2]) << 8) | inputA2[i + 1];
+        }
+    }
+    else
+    {
+        for (i = 0; i < 1920 * 3; i += 3) 
+        {
+            *outputA12++ = (((uint16_t)inputA1[i + 2]) << 8) | inputA1[i + 1];
+            *outputA12++ = 0;
+        }
     }
 }
 

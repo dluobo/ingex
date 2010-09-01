@@ -1,5 +1,5 @@
 /*
- * $Id: main.cpp,v 1.2 2008/10/08 10:22:13 john_f Exp $
+ * $Id: main.cpp,v 1.3 2010/09/01 16:05:22 philipn Exp $
  *
  * Utility to generate a QC and PSE report from one or more QC sessions
  *
@@ -23,7 +23,7 @@
 /* 
     This utility is called by the qc_player application, via the 
     qc_report_script.sh script, when a session is completed. The session file 
-    and D3 MXF file are used to create the QC report and PSE report. The 
+    and archive MXF file are used to create the QC report and PSE report. The 
     progress is shown using a KDE progress bar dialog.
     
     The URL of the QC report is printed to stdout so that the calling script, 
@@ -36,18 +36,18 @@
 */
 
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <errno.h>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <cerrno>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include <time.h>
+#include <ctime>
 
 #include <string>
 
-#include "D3MXFFile.h"
+#include "ArchiveMXFFile.h"
 #include "LTODirectory.h"
 #include "QCSessionFile.h"
 #include "QCReport.h"
@@ -66,17 +66,13 @@ static const int g_defaultReportPort = 9006;
 class KDEProgressBar
 {
 public:
-    KDEProgressBar() : _progressPercentage(0.0), _start(0.0), _end(100.0) {}
+    KDEProgressBar() : _isDBUSRef(false), _progressPercentage(0.0), _start(0.0), _end(100.0) {}
     ~KDEProgressBar() {}
     
-    void enable(string dcopRef) 
+    void enable(string ref)
     { 
-        _dcopRef = dcopRef;
-    }
-    
-    bool isEnabled() 
-    { 
-        return !_dcopRef.empty();
+        _ref = ref;
+        _isDBUSRef = (ref.compare(0, strlen("org.kde.kdialog"), "org.kde.kdialog") == 0);
     }
     
     void start(float start)
@@ -113,21 +109,42 @@ public:
             {
                 _progressPercentage = _start;
             }
-        }            
+        }
         
+        if (_ref.empty())
+        {
+            return;
+        }
+
+
         char cmd[128];
 
-        // update the progress percentage        
-        sprintf(cmd, "dcop \"%s\" setProgress %d", _dcopRef.c_str(), (int)_progressPercentage);
+        // update the progress percentage
+        if (_isDBUSRef)
+        {
+            sprintf(cmd, "qdbus %s Set org.kde.kdialog.ProgressDialog value %d", _ref.c_str(), (int)_progressPercentage);
+        }
+        else
+        {
+            sprintf(cmd, "dcop \"%s\" setProgress %d", _ref.c_str(), (int)_progressPercentage);
+        }
         system(cmd);
         
-        // update the label        
-        sprintf(cmd, "dcop \"%s\" setLabel \"%s\"", _dcopRef.c_str(), label.c_str());
+        // update the label
+        if (_isDBUSRef)
+        {
+            sprintf(cmd, "qdbus %s setLabelText \"%s\"", _ref.c_str(), label.c_str());
+        }
+        else
+        {
+            sprintf(cmd, "dcop \"%s\" setLabel \"%s\"", _ref.c_str(), label.c_str());
+        }
         system(cmd);
     }
     
 private:    
-    string _dcopRef;
+    string _ref;
+    bool _isDBUSRef;
     float _progressPercentage;
     float _start;
     float _end;
@@ -256,7 +273,7 @@ void usage(const char* cmd)
     fprintf(stderr, "* --log <dir>                  Log messages to file in <dir>\n");
     fprintf(stderr, "  --session <name>             QC session filename in LTO directory\n");
     fprintf(stderr, "  --report-port <num>          The HTTP port of the reports server (default %d)\n", g_defaultReportPort);
-    fprintf(stderr, "  --progress-dcop <name>       Name of KDE DCOP used for the progress bar\n");
+    fprintf(stderr, "  --progress-ref <ref>         KDE DCOP/DBUS reference used for the progress bar\n");
     fprintf(stderr, "  --progress-start <perc>      Start percentage showing KDE progress bar\n");
     fprintf(stderr, "  --progress-end <perc>        End percentage showing KDE progress bar\n");
     fprintf(stderr, "  --backup-only                Don't create reports but backup only\n");
@@ -359,7 +376,7 @@ int main(int argc, const char** argv)
             }
             cmdlnIndex += 2;
         }
-        else if (strcmp(argv[cmdlnIndex], "--progress-dcop") == 0)
+        else if (strcmp(argv[cmdlnIndex], "--progress-ref") == 0)
         {
             if (cmdlnIndex + 1 >= argc)
             {
@@ -500,10 +517,7 @@ int main(int argc, const char** argv)
     
     try
     {
-        if (progressBar.isEnabled())
-        {
-            progressBar.update("Creating/checking directories", 1.0);
-        }
+        progressBar.update("Creating/checking directories", 1.0);
         
         // create the report directory if it doesn't already exist
         if (!directory_exists(reportDirectoryName))
@@ -538,10 +552,7 @@ int main(int argc, const char** argv)
 
         
         
-        if (progressBar.isEnabled())
-        {
-            progressBar.update("Reading list of files", 1.0);
-        }
+        progressBar.update("Reading list of files", 1.0);
         
         LTODirectory ltoDir(ltoDirectoryName, sessionName);
         vector<LTOItem> items = ltoDir.getItems();
@@ -597,15 +608,12 @@ int main(int argc, const char** argv)
                 {
                     // output the PSE report only
     
-                    D3MXFFile mxfFile(join_path(ltoDirectoryName, item.mxfFilename));
+                    ArchiveMXFFile mxfFile(join_path(ltoDirectoryName, item.mxfFilename));
     
                     
                     // PSE report
                     
-                    if (progressBar.isEnabled())
-                    {
-                        progressBar.update(item.mxfFilename + ": PSE Report", progressIncrement);
-                    }
+                    progressBar.update(item.mxfFilename + ": PSE Report", progressIncrement);
 
                     string pseReportName = join_path(reportDirectoryName, item.mxfFilename) + "_pse_report.html";
                     if (!mxfFile.isComplete())
@@ -625,15 +633,12 @@ int main(int argc, const char** argv)
                     // generate both the PSE and QC report
                 
                     QCSessionFile sessionFile(join_path(ltoDirectoryName, item.sessionFilename));
-                    D3MXFFile mxfFile(join_path(ltoDirectoryName, item.mxfFilename));
+                    ArchiveMXFFile mxfFile(join_path(ltoDirectoryName, item.mxfFilename));
                     
                     
                     // PSE report
                     
-                    if (progressBar.isEnabled())
-                    {
-                        progressBar.update(item.mxfFilename + ": PSE Report", progressIncrement);
-                    }
+                    progressBar.update(item.mxfFilename + ": PSE Report", progressIncrement);
                 
                     QCPSEResult pseResult = PSE_RESULT_UNKNOWN;
                     string pseReportName = join_path(reportDirectoryName, item.mxfFilename) + "_pse_report.html";
@@ -652,10 +657,7 @@ int main(int argc, const char** argv)
                     
                     // QC report
                     
-                    if (progressBar.isEnabled())
-                    {
-                        progressBar.update(item.mxfFilename + ": QC Report", progressIncrement);
-                    }
+                    progressBar.update(item.mxfFilename + ": QC Report", progressIncrement);
                 
                     string qcReportName = join_path(reportDirectoryName, item.mxfFilename) + "_qc_report.html";
                     if (!mxfFile.isComplete())
@@ -719,10 +721,7 @@ int main(int argc, const char** argv)
         
         // backup session files and index file
         
-        if (progressBar.isEnabled())
-        {
-            progressBar.update("Backup of session files", 5.0);
-        }
+        progressBar.update("Backup of session files", 5.0);
         
         Logging::info("Backing up session files and index file to '%s'\n", backupDirectoryName.c_str());
         ltoDir.backup(backupDirectoryName);

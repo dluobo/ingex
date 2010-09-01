@@ -1,5 +1,5 @@
 /*
- * $Id: Recorder.h,v 1.1 2008/07/08 16:25:49 philipn Exp $
+ * $Id: Recorder.h,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * Provides main access to the recorder application
  *
@@ -35,20 +35,26 @@
 #include "RecordingSession.h"
 #include "Threads.h"
 #include "VTRControl.h"
+#include "JogShuttleControl.h"
+#include "Profile.h"
 
 // return failure codes for startNewSession
 #define SESSION_IN_PROGRESS_FAILURE         1
 #define VIDEO_SIGNAL_BAD_FAILURE            2
 #define AUDIO_SIGNAL_BAD_FAILURE            3
-#define D3_VTR_CONNECT_FAILURE              4
-#define D3_VTR_REMOTE_LOCKOUT_FAILURE       5
-#define DIGIBETA_VTR_CONNECT_FAILURE        6
-#define DIGIBETA_VTR_REMOTE_LOCKOUT_FAILURE 7
-#define DISK_SPACE_FAILURE                  8
-#define NO_D3_TAPE                          9
-#define NO_DIGIBETA_TAPE                    10
+#define SOURCE_VTR_CONNECT_FAILURE          4
+#define SOURCE_VTR_REMOTE_LOCKOUT_FAILURE   5
+#define NO_SOURCE_TAPE                      6
+#define DIGIBETA_VTR_CONNECT_FAILURE        7
+#define DIGIBETA_VTR_REMOTE_LOCKOUT_FAILURE 8
+#define NO_DIGIBETA_TAPE                    9
+#define DISK_SPACE_FAILURE                  10
 #define MULTI_ITEM_MXF_EXISTS_FAILURE       11
 #define MULTI_ITEM_NOT_ENABLED_FAILURE      12
+#define INVALID_ASPECT_RATIO_FAILURE        13
+#define UNKNOWN_PROFILE_FAILURE             14
+#define DISABLED_INGEST_FORMAT_FAILURE      15
+#define MULTI_ITEM_INGEST_FORMAT_FAILURE    16
 #define INTERNAL_FAILURE                    20
 
 // return failure codes for replayFile
@@ -72,7 +78,7 @@ class RecorderStatus
 public:
     RecorderStatus() : databaseOk(false), sdiCardOk(false), videoOk(false), audioOk(false), 
         readyToRecord(false),
-        d3VTRState(NOT_CONNECTED_VTR_STATE), digibetaVTRState(NOT_CONNECTED_VTR_STATE),
+        sourceVTRState(NOT_CONNECTED_VTR_STATE), digibetaVTRState(NOT_CONNECTED_VTR_STATE),
         replayActive(false) {}
     
     std::string recorderName;
@@ -82,7 +88,7 @@ public:
     bool audioOk;
     bool vtrOk;
     bool readyToRecord;
-    VTRState d3VTRState;
+    VTRState sourceVTRState;
     VTRState digibetaVTRState;
     bool replayActive;
     std::string replayFilename;
@@ -91,13 +97,13 @@ public:
 class RecorderSystemStatus
 {
 public:
-    RecorderSystemStatus() : remDiskSpace(0), remDuration(0), d3VTRState(NOT_CONNECTED_VTR_STATE), 
-        digibetaVTRState(NOT_CONNECTED_VTR_STATE) {}
+    RecorderSystemStatus() : remDiskSpace(0), remDuration(0), remDurationIngestFormat(UNKNOWN_INGEST_FORMAT),
+        sourceVTRState(NOT_CONNECTED_VTR_STATE), digibetaVTRState(NOT_CONNECTED_VTR_STATE) {}
     
-    int numAudioTracks;
     int64_t remDiskSpace;
     int64_t remDuration;
-    VTRState d3VTRState;
+    IngestFormat remDurationIngestFormat;
+    VTRState sourceVTRState;
     VTRState digibetaVTRState;
 };
 
@@ -106,15 +112,21 @@ public:
 class Recorder : public CaptureListener, public VTRControlListener
 {
 public:
+    static bool isValidAspectRatioCode(std::string aspectRatioCode);
+    static Rational getRasterAspectRatio(std::string aspectRatioCode);
+
+    
+public:
     friend class RecordingSession;
     
 public:
-    Recorder(std::string name, std::string cacheDirectory, std::string browseDirectory, std::string pseDirectory, 
+    Recorder(std::string name, std::string cacheDirectory, std::string browseDirectory, std::string pseDirectory,
         int replayPort, std::string vtrSerialDeviceName1, std::string vtrSerialDeviceName2);
     virtual ~Recorder();
     
     // from CaptureListener
-    virtual void sdiStatusChanged(bool videoOK, bool audioOK, bool recordingOK);
+    virtual void sdiStatusChanged(bool videoOK, bool audioOK, bool dltcOk, bool vitcOk, bool recordingOK);
+    virtual void sdiCaptureDroppedFrame();
     virtual void mxfBufferOverflow();
     virtual void browseBufferOverflow();
     
@@ -122,7 +134,7 @@ public:
     virtual void vtrDeviceType(VTRControl* vtrControl, int deviceTypeCode, DeviceType deviceType);
     
     // returns 0 when successful; else see failure codes above
-    int startNewSession(Source* source, std::string digibetaBarcode, RecordingSession** session);
+    int startNewSession(int profileId, Source* source, std::string digibetaBarcode, RecordingSession** session);
     bool haveSession();
 
     void startRecording();
@@ -134,12 +146,13 @@ public:
     void setSessionComments(std::string comments);
 
     SessionState getSessionState();
-    SessionStatus getSessionStatus();
+    SessionStatus getSessionStatus(const ConfidenceReplayStatus* replayStatus);
     RecordingItems* getSessionRecordingItems();
     bool getSessionComments(std::string* comments, int* count);
     
     bool confidenceReplayActive();
     void forwardConfidenceReplayControl(std::string command);
+    ConfidenceReplayStatus getConfidenceReplayStatus();
     
     int replayFile(std::string filename);
     
@@ -149,6 +162,8 @@ public:
     void seekToEOP();
     int markItemStart(int* id, bool* isJunk, int64_t* filePosition, int64_t* fileDuration);
     int clearItem(int id, int index, int64_t* filePosition);
+    int markItemStart();
+    int clearItem();
     int moveItemUp(int id, int index);
     int moveItemDown(int id, int index);
     int disableItem(int id, int index);
@@ -157,33 +172,60 @@ public:
     
     RecorderStatus getStatus();
     RecorderSystemStatus getSystemStatus();
-    void getLastSessionResult(SessionResult* result, std::string* sourceSpoolNo, std::string* failureReason); 
+    void getLastSessionResult(SessionResult* result, std::string* sourceSpoolNo, std::string* failureReason);
     
     int64_t getRemainingDiskSpace();
     
     Cache* getCache();
     ::Capture* getCapture();
-    VTRControl* getD3VTRControl();
-    VTRControl* getDigibetaVTRControl();
+    VTRControl* getSourceVTRControl();
+    VTRControl* getBackupVTRControl();
     std::vector<VTRControl*> getVTRControls();
     
     RecorderTable* getRecorderTable();
     std::string getName();
     
+    bool tapeBackupEnabled();
+    
     bool isDigibetaBarcode(string barcode);
     
+    bool isDigibetaSource(Source* source);
+    
     bool checkMultiItemSupport(Source* source);
+    
+    bool updateSourceAspectRatios(Source* source, std::vector<string> aspectRatioCodes);
+    bool checkSourceAspectRatios(Source* source);
+    
+    bool haveProfile(int id);
+    bool getLastSessionProfileCopy(Profile* profileCopy);
+    std::map<int, Profile> getProfileCopies();
+    bool getProfileCopy(int id, Profile* profileCopy);
+    
+    bool updateProfile(const Profile *updatedProfileCopy);
     
 private:
     void sessionDone(); // called by RecordingSession
     void checkSessionStatus();
     
+    bool isSourceVTR(int deviceTypeCode);
+    bool isBackupVTR(int deviceTypeCode);
+    
+private:
+    Mutex _profileManagerMutex;
+    ProfileManager *_profileManager;
+    int _lastSessionProfileId;
+    
     std::string _name;
-    int _numAudioTracks; // TODO: should be stored in config and not in the Recorder
-    int64_t _remDurationFactor;
-    int _replayPort;
+    bool _videotapeBackup;
+    std::vector<int> _sourceVTRDeviceTypeCodes;
+    std::vector<int> _backupVTRDeviceTypeCodes;
     std::vector<std::string> _digibetaBarcodePrefixes;
+    int _replayPort;
 
+    Mutex _remDurationMutex;
+    uint32_t _remDurationFactor;
+    IngestFormat _remDurationIngestFormat;
+    
     ::Capture* _capture;
     
     VTRControl* _vtrControl1;
@@ -207,6 +249,8 @@ private:
     
     Mutex _replayMutex;
     ConfidenceReplay* _replay;
+    
+    JogShuttleControl* _jogShuttleControl;
 };
 
 

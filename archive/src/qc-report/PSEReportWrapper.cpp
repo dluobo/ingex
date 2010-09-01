@@ -1,5 +1,5 @@
 /*
- * $Id: PSEReportWrapper.cpp,v 1.1 2008/07/08 16:25:16 philipn Exp $
+ * $Id: PSEReportWrapper.cpp,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * Wraps the PSEReport class and provides it with the info to write the report 
  *
@@ -22,8 +22,8 @@
 
 #define __STDC_FORMAT_MACROS 1
 
-#include <stdio.h>
-#include <errno.h>
+#include <cstdio>
+#include <cerrno>
 #include <inttypes.h>
 
 #include <PSEReport.h>
@@ -39,7 +39,7 @@ using namespace rec;
 
 
 
-PSEReportWrapper::PSEReportWrapper(string filename, D3MXFFile* mxfFile, QCSessionFile* sessionFile)
+PSEReportWrapper::PSEReportWrapper(string filename, ArchiveMXFFile* mxfFile, QCSessionFile* sessionFile)
 : _report(0), _mxfFile(mxfFile), _sessionFile(sessionFile)
 {
     _report = PSEReport::open(filename);
@@ -56,10 +56,10 @@ PSEReportWrapper::~PSEReportWrapper()
 
 void PSEReportWrapper::write()
 {
-    const InfaxData& d3InfaxData = _mxfFile->getD3InfaxData();
+    const InfaxData* sourceInfaxData = _mxfFile->getSourceInfaxData();
     Mark programmeClip;
     const PSEFailure* firstPSEFailure;
-    int numPSEFailures;
+    long numPSEFailures;
     
     if (_sessionFile != 0)
     {
@@ -72,29 +72,31 @@ void PSEReportWrapper::write()
     // generate report
     
     int64_t firstFrame = (programmeClip.duration > 0) ? programmeClip.position : 0;
-    int64_t lastFrame = (programmeClip.duration > 0) ? programmeClip.position + programmeClip.duration - 1 : _mxfFile->getMXFDuration() - 1;
+    int64_t lastFrame = (programmeClip.duration > 0) ? programmeClip.position + programmeClip.duration - 1 : _mxfFile->getDuration() - 1;
     
     bool dummy;
-    REC_CHECK(_report->write(firstFrame, lastFrame, _mxfFile->getFilename(), &d3InfaxData, 
+    REC_CHECK(_report->write(firstFrame, lastFrame, _mxfFile->getFilename(), sourceInfaxData, 
         firstPSEFailure, numPSEFailures, &dummy));
 }
 
 bool PSEReportWrapper::getPSEResult()
 {
     const PSEFailure* firstPSEFailure;
-    int numPSEFailures;
+    long numPSEFailures;
     getPSEResultRange(&firstPSEFailure, &numPSEFailures);
     
     return PSEReport::hasPassed(firstPSEFailure, numPSEFailures);
 }
 
-void PSEReportWrapper::getPSEResultRange(PSEFailure const ** firstPSEFailure, int* numPSEFailures)
+void PSEReportWrapper::getPSEResultRange(PSEFailure const ** firstPSEFailure, long* numPSEFailures)
 {
-    const vector<PSEFailure>& pseFailures = _mxfFile->getPSEFailures();
+    PSEFailure* pseFailures = 0;
+    long intnumPSEFailures = _mxfFile->getPSEFailures(&pseFailures);
+    
     Mark programmeClip;
     
     // no failures means it has passed
-    if (pseFailures.empty())
+    if (intnumPSEFailures == 0)
     {
         *firstPSEFailure = 0;
         *numPSEFailures = 0;
@@ -110,10 +112,10 @@ void PSEReportWrapper::getPSEResultRange(PSEFailure const ** firstPSEFailure, in
     {
         *numPSEFailures = 0;
         *firstPSEFailure = 0;
-        vector<PSEFailure>::const_iterator iter;
-        for (iter = pseFailures.begin(); iter != pseFailures.end(); iter++)
+        long i;
+        for (i = 0; i < intnumPSEFailures; i++)
         {
-            const PSEFailure& pseFailure = *iter;
+            const PSEFailure& pseFailure = pseFailures[i];
             
             if (pseFailure.position < programmeClip.position)
             {
@@ -136,8 +138,7 @@ void PSEReportWrapper::getPSEResultRange(PSEFailure const ** firstPSEFailure, in
     else
     {
         *firstPSEFailure = &pseFailures[0];
-        *numPSEFailures = pseFailures.size();
+        *numPSEFailures = intnumPSEFailures;
     }
 }
-
 

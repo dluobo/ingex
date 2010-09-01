@@ -6,10 +6,14 @@
 <title>Ingex Recorder - Review</title>
 <meta HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8"/>
 
-<script type="text/javascript" src="scripts/common.js"/>
-<script type="text/javascript" src="scripts/replay_control.js"/>
-<script type="text/javascript" src="scripts/progressbar.js"/>
-<script type="text/javascript" src="scripts/review.js"/>
+<script type="text/javascript">
+var apiVersion = 1;
+</script>
+
+<script type="text/javascript" src="scripts/common.js"></script>
+<script type="text/javascript" src="scripts/replay_control.js"></script>
+<script type="text/javascript" src="scripts/progressbar.js"></script>
+<script type="text/javascript" src="scripts/review.js"></script>
 
 <link href="styles/review.css" rel="stylesheet" rev="stylesheet" type="text/css"/>
 
@@ -42,6 +46,7 @@
 <table id="link-line" cellspacing="5">
 	<tr>
 		<td><a id="index-link" href="index.html" target="_top">Home</a></td>
+		<td><a id="setup-link" href="setup.html">Setup</a></td>
 		<td><a id="select-source-link" href="source.html" target="_top">Prepare</a></td>
 		<td><a id="record-link" href="record.html" target="_top">Record</a></td>
 		<td><a id="review-link" class="current-page-link" href="review.html" target="_top">Review</a></td>
@@ -207,8 +212,8 @@
 				<td><input id="next-mark-cmd" type="image" src="images/nextmark_symbol.png" title="next mark" onclick="seek_next_mark()" onmousedown="flat_button_down(this)" onmouseup="flat_button_up(this)"/></td>
 			</tr>
 			<tr>
-				<td/>
-				<td/>
+				<td><input id="show-marks-cmd" type="image" src="images/show_all_marks.png" title="show marks" onclick="next_show_marks()" onmousedown="flat_button_down(this)" onmouseup="flat_button_up(this)"/></td>
+				<td><input id="next-vtr-error-level" type="image" src="images/vtr_error_l1_symbol.png" title="next vtr error level" onclick="next_vtr_error_level(this)" onmousedown="flat_button_down(this)" onmouseup="flat_button_up(this)"/></td>
 				<td><input id="next-osd-cmd" type="image" src="images/osd_symbol.png" title="toggle display" onclick="next_osd_screen()" onmousedown="flat_button_down(this)" onmouseup="flat_button_up(this)"/></td>
 				<td><input id="next-tc-cmd" type="image" src="images/tc_symbol.png" title="toggle timecode" onclick="next_osd_timecode()" onmousedown="flat_button_down(this)" onmouseup="flat_button_up(this)"/></td>
 				<td><input id="review-cmd" type="image" src="images/review_symbol.png" title="review 10 sec" onclick="review()" onmousedown="flat_button_down(this)" onmouseup="flat_button_up(this)"/></td>

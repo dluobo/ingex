@@ -8,10 +8,13 @@ SOURCES = RecorderException.cpp \
 	Utilities.cpp \
 	DirectoryWatch.cpp \
 	Config.cpp \
+	Profile.cpp \
 	Timing.cpp \
 	FileLock.cpp \
 	ByteArray.cpp
 
+
+INCLUDES += $(DATABASE_INC) $(VTR_INC) $(DVS_INC)
 
 
 .PHONY: all

@@ -1,7 +1,7 @@
 /*
- * $Id: QCReport.cpp,v 1.3 2008/10/24 19:14:07 john_f Exp $
+ * $Id: QCReport.cpp,v 1.4 2010/09/01 16:05:22 philipn Exp $
  *
- * Writes a QC report given a session file and D3 MXF file
+ * Writes a QC report given a session file and archive MXF file
  *
  * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
  *
@@ -24,14 +24,15 @@
     An HTML template HTML, qc_report_template.html, is converted into a .cpp 
     file when building with GEN_QC_REPORT_TEMPLATE set. This compiled in 
     template is filled in using information provided by the qc_player session 
-    file and the D3 MXF file.
+    file and the archive MXF file.
 */
  
 #define __STDC_FORMAT_MACROS 1
 
-#include <stdio.h>
-#include <ctype.h>
-#include <errno.h>
+#include <cstdio>
+#include <cctype>
+#include <cerrno>
+#include <cstring>
 #include <inttypes.h>
 
 #include "QCReport.h"
@@ -138,25 +139,13 @@ static string get_duration_string(int64_t duration)
     return buf;
 }
 
-static string get_timecode_string(Timecode& tc)
+static string get_timecode_string(Timecode tc)
 {
     char buf[64];
 
     sprintf(buf, "%02d:%02d:%02d:%02d", tc.hour, tc.min, tc.sec, tc.frame);
     
     return buf;
-}
-
-static Timecode get_timecode_from_pos(int64_t position)
-{
-    Timecode tc;
-
-    tc.hour = (int)(position / (60 * 60 * 25));
-    tc.min = (int)((position % (60 * 60 * 25)) / (60 * 25));
-    tc.sec = (int)(((position % (60 * 60 * 25)) % (60 * 25)) / 25);
-    tc.frame = (int)(((position % (60 * 60 * 25)) % (60 * 25)) % 25);
-    
-    return tc;
 }
 
 static string get_prog_no(string magPrefix, string progNo, string prodCode)
@@ -266,7 +255,7 @@ static string string_to_html(string value)
 
 
 
-QCReport::QCReport(string filename, D3MXFFile* mxfFile, QCSessionFile* sessionFile)
+QCReport::QCReport(string filename, ArchiveMXFFile* mxfFile, QCSessionFile* sessionFile)
 : _report(0), _mxfFile(mxfFile), _sessionFile(sessionFile)
 {
     _report = fopen(filename.c_str(), "wb");
@@ -283,8 +272,8 @@ QCReport::~QCReport()
 
 void QCReport::write(QCPSEResult pseResult)
 {
-    const InfaxData& d3InfaxData = _mxfFile->getD3InfaxData();
-    const InfaxData& ltoInfaxData = _mxfFile->getLTOInfaxData();
+    const InfaxData* sourceInfaxData = _mxfFile->getSourceInfaxData();
+    const InfaxData* ltoInfaxData = _mxfFile->getLTOInfaxData();
     Mark programmeClip = _sessionFile->getProgrammeClip();
     const std::vector<Mark>& userMarks = _sessionFile->getUserMarks();
     const int TimeStampSize = 15;	// yyyymmdd_hhmmss
@@ -303,7 +292,7 @@ void QCReport::write(QCPSEResult pseResult)
     set_html_value(reportHeader, "$Filename2", _mxfFile->getFilename());
     
     set_html_value(reportHeader, "$Filename3", _mxfFile->getFilename());
-    set_html_value(reportHeader, "$Carrier", ltoInfaxData.spoolNo);
+    set_html_value(reportHeader, "$Carrier", ltoInfaxData->spoolNo);
     set_html_value(reportHeader, "$CarrierType", "LTO-3");
 
     if (programmeClip.position >= 0)
@@ -316,7 +305,7 @@ void QCReport::write(QCPSEResult pseResult)
     {
         set_html_value(reportHeader, "$ProgStart", "?");
         set_html_value(reportHeader, "$ProgEnd", "?");        
-        set_html_value(reportHeader, "$ProgDuration", get_duration_string(_mxfFile->getMXFDuration()));
+        set_html_value(reportHeader, "$ProgDuration", get_duration_string(_mxfFile->getDuration()));
     }
     
     set_html_value(reportHeader, "$ClassQCResult", _sessionFile->requireRetransfer() ? "qcresult-fail": "qcresult-pass");
@@ -349,14 +338,14 @@ void QCReport::write(QCPSEResult pseResult)
     set_html_value(reportHeader, "$SessionFilename", last_path_component(_sessionFile->getFilename()).c_str());
     set_html_value(reportHeader, "$LoadedSessionFilename", last_path_component(_sessionFile->getLoadedSessionFilename()));
 
-    set_html_value(reportHeader, "$SrcSpoolNo", d3InfaxData.spoolNo);
-    set_html_value(reportHeader, "$SrcSpoolType", "D3");
-    set_html_value(reportHeader, "$ItemNo", get_int_string(d3InfaxData.itemNo >= 1 ? d3InfaxData.itemNo : 1));
-    set_html_value(reportHeader, "$ProgNo", get_prog_no(d3InfaxData.magPrefix, d3InfaxData.progNo, d3InfaxData.prodCode));
-    set_html_value(reportHeader, "$ProgTitle", d3InfaxData.progTitle);
-    set_html_value(reportHeader, "$EpisodeTitle", d3InfaxData.epTitle);
-    set_html_value(reportHeader, "$TxDate", get_date_string(d3InfaxData.txDate));
-    set_html_value(reportHeader, "$InfaxDur", get_duration_string(d3InfaxData.duration * 25 /* infax duration is in seconds */));
+    set_html_value(reportHeader, "$SrcSpoolNo", sourceInfaxData->spoolNo);
+    set_html_value(reportHeader, "$SrcSpoolFormat", sourceInfaxData->format);
+    set_html_value(reportHeader, "$ItemNo", get_int_string(sourceInfaxData->itemNo >= 1 ? sourceInfaxData->itemNo : 1));
+    set_html_value(reportHeader, "$ProgNo", get_prog_no(sourceInfaxData->magPrefix, sourceInfaxData->progNo, sourceInfaxData->prodCode));
+    set_html_value(reportHeader, "$ProgTitle", sourceInfaxData->progTitle);
+    set_html_value(reportHeader, "$EpisodeTitle", sourceInfaxData->epTitle);
+    set_html_value(reportHeader, "$TxDate", get_date_string(sourceInfaxData->txDate));
+    set_html_value(reportHeader, "$InfaxDur", get_duration_string(sourceInfaxData->duration * 25 /* infax duration is in seconds */));
     
 
     
@@ -412,10 +401,12 @@ void QCReport::write(QCPSEResult pseResult)
 
 void QCReport::writeMark(Mark* mark)
 {
-    TimecodeGroup timecodeGroup;
-    timecodeGroup.ctc = get_timecode_from_pos(mark->position);
+    MXFContentPackage* contentPackage;
+    ArchiveMXFContentPackage* archiveContentPackage;
+    if (!_mxfFile->readFrame(mark->position, true, contentPackage))
+        return;
+    archiveContentPackage = dynamic_cast<ArchiveMXFContentPackage*>(contentPackage);
     
-    _mxfFile->completeTimecodeInfo(timecodeGroup);
     
     fprintf(_report, "<tr>\n");
     
@@ -423,13 +414,13 @@ void QCReport::writeMark(Mark* mark)
     fprintf(_report, "%s", get_int64_string(mark->position).c_str());
     fprintf(_report, "</td>\n");
     fprintf(_report, "<td class='m2'>");
-    fprintf(_report, "%s", get_timecode_string(timecodeGroup.ctc).c_str());
+    fprintf(_report, "%s", get_timecode_string(archiveContentPackage->getCTC()).c_str());
     fprintf(_report, "</td>\n");
     fprintf(_report, "<td class='m3'>");
-    fprintf(_report, "%s", get_timecode_string(timecodeGroup.vitc).c_str());
+    fprintf(_report, "%s", get_timecode_string(archiveContentPackage->getVITC()).c_str());
     fprintf(_report, "</td>\n");
     fprintf(_report, "<td class='m4'>");
-    fprintf(_report, "%s", get_timecode_string(timecodeGroup.ltc).c_str());
+    fprintf(_report, "%s", get_timecode_string(archiveContentPackage->getLTC()).c_str());
     fprintf(_report, "</td>\n");
 
     if (mark->duration != 0)

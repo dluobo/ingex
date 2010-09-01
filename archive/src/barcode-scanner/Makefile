@@ -15,12 +15,11 @@ GENERAL_OBJECTS=$(GENERAL_DIR)/.objs/Threads.o \
 INCLUDES += $(GENERAL_INC)
 
 
-
 .PHONY: all
 all: $(OBJECTS) barcode_scanner
 
 
-barcode_scanner: general $(OBJECTS) .objs/main.o  
+barcode_scanner: .objs/main.o $(OBJECTS) $(GENERAL_OBJECTS)
 	$(COMPILE) .objs/main.o $(OBJECTS) $(GENERAL_OBJECTS) -lpthread -lrt -o $@
 	
 	

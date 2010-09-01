@@ -1,0 +1,98 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html>
+<head>
+
+<title>Ingex Recorder</title>
+<meta HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8"/>
+
+<script type="text/javascript">
+var apiVersion = 2;
+</script>
+
+<script type="text/javascript" src="scripts/common.js"></script>
+<script type="text/javascript" src="scripts/vtrcontrol.js"></script>
+
+<link href="styles/vtrcontrol.css" rel="stylesheet" rev="stylesheet" type="text/css"/>
+
+</head>
+
+<body onload="init_vtrcontrol()">
+
+
+<!-- page top -->
+
+<div id="page-top">
+
+
+<!-- Status line -->
+
+<table id="status-line">
+	<tr>
+		<td id="connection-status" class="status-element">Connection</td>
+		<td id="database-status" class="status-element">Database</td>
+		<td id="sdi-card-status" class="status-element">SDI Card</td>
+		<td id="video-status" class="status-element">Video Signal</td>
+		<td id="audio-status" class="status-element">Audio Signal</td>
+		<td id="vtr-status" class="status-element">VTR</td>
+	</tr>		
+</table>
+
+
+<!-- Links -->
+
+<table id="link-line" cellspacing="5">
+	<tr>
+		<td><a id="index-link" href="index.html">Home</a></td>
+		<td><a id="setup-link" href="setup.html">Setup</a></td>
+		<td><a id="select-source-link" href="source.html">Prepare</a></td>
+		<td><a id="record-link" href="record.html">Record</a></td>
+		<td><a id="review-link" href="review.html">Review</a></td>
+		<td><a id="vtr-control-link" class="current-page-link" href="vtrcontrol.html">VTR Control</a></td>
+		<td><a id="cache-link" href="cache.html">Cache</a></td>
+	</tr>
+</table>
+
+
+</div>
+
+
+
+<!-- page content -->
+
+<div id="page-content">
+
+
+<!-- VTR control -->
+
+<h2>VTR Control</h2>
+
+<table>
+	<tr>
+		<td style="color:blue">Status:</td>
+		<td id="status">Not Connected</td>
+	</tr>
+	<tr>
+		<td style="color:blue">Device:</td>
+		<td id="device-type">Unknown (0x00)</td>
+	</tr>
+</table>
+
+<table id="vtr-control-buttons">
+	<tr>
+		<td><div class="vtr-button"><input id="fr-button" type="image" src="images/fr_large_symbol.png" title="Fast Rewind" onclick="vtr_control_command('fr', true)"/></div></td>
+		<td><div class="vtr-button"><input id="play-button" type="image" src="images/play_large_symbol.png" title="Play" onclick="vtr_control_command('play', true)"/></div></td>
+		<td><div class="vtr-button"><input id="stop-button" type="image" src="images/stop_large_symbol.png" title="Stop" onclick="vtr_control_command('stop', true)"/></div></div></td>
+		<td><div class="vtr-button"><input id="standby-button" type="image" src="images/standby_large_symbol.png" title="Standby" onclick="toggle_standby(true)"/></div></td>
+		<td><div class="vtr-button"><input id="ff-button" type="image" src="images/ff_large_symbol.png" title="Fast Forward" onclick="vtr_control_command('ff', true)"/></div></td>
+		<td><div class="vtr-button"><input id="eject-button" type="image" src="images/eject_large_symbol.png" title="Eject" onclick="vtr_control_command('eject', true)"/></div></td>
+	</tr>
+</table>
+
+
+
+</div>
+
+</body>
+</html>
+

@@ -1,5 +1,5 @@
 /*
- * $Id: TapeExportSession.h,v 1.1 2008/07/08 16:26:15 philipn Exp $
+ * $Id: TapeExportSession.h,v 1.2 2010/09/01 16:05:23 philipn Exp $
  *
  * Manages a tape export session
  *
@@ -56,6 +56,7 @@ public:
     std::string cacheName; // name of file in cache
     int64_t size;
     int64_t duration;
+    std::string sourceFormat;
     std::string sourceSpoolNo;
     uint32_t sourceItemNo;
     std::string sourceProgNo;
@@ -149,7 +150,7 @@ private:
     void updateTransferStatus();
     void getInfaxData(LTOFileTable* ltoFileTable, InfaxData* infax);    
     
-    
+private:
     TapeExport* _tapeExport;
     std::string _barcode;
     std::vector<long> _itemIds;
@@ -157,6 +158,8 @@ private:
     int64_t _minTotalSize;
     int _maxFiles;
     bool _autoTransferMethod;
+    std::string _tapeTransferLockFile;
+    bool _keepLTOFiles;
     
     
     // session status

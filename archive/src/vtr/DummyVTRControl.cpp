@@ -1,5 +1,5 @@
 /*
- * $Id: DummyVTRControl.cpp,v 1.1 2008/07/08 16:26:56 philipn Exp $
+ * $Id: DummyVTRControl.cpp,v 1.2 2010/09/01 16:05:23 philipn Exp $
  *
  * Implements a dummy VTR
  *
@@ -157,6 +157,7 @@ void DummyVTRControl::registerListener(VTRControlListener* listener)
     info.state = NOT_CONNECTED_VTR_STATE;
     info.errorCode = 0x00;
     info.ltcAtError.hour = 99;
+    info.vitcAtError.hour = 99;
     info.vitc.hour = 99;
     info.ltc.hour = 99;
     
@@ -212,7 +213,7 @@ DeviceType DummyVTRControl::getDeviceType()
 
 bool DummyVTRControl::isD3VTR()
 {
-    return _deviceType == AJ_D350_NTSC_DEVICE_TYPE || _deviceType == AJ_D350_PAL_DEVICE_TYPE; 
+    return _deviceType == AJ_D350_525LINE_DEVICE_TYPE || _deviceType == AJ_D350_625LINE_DEVICE_TYPE; 
 }
 
 bool DummyVTRControl::isNonD3VTR()
@@ -366,7 +367,7 @@ void DummyVTRControl::updateState(VTRState state, unsigned char* stateBytes)
     }    
 }
 
-void DummyVTRControl::updatePlaybackError(int errorCode, Timecode ltc)
+void DummyVTRControl::updatePlaybackError(int errorCode, Timecode ltc, Timecode vitc)
 {
     LOCK_SECTION(_listenerMutex);
     
@@ -374,11 +375,12 @@ void DummyVTRControl::updatePlaybackError(int errorCode, Timecode ltc)
     for (iter = _listeners.begin(); iter != _listeners.end(); iter++)
     {
         if ((*iter).errorCode != errorCode ||
-            (*iter).ltcAtError != ltc)
+            (*iter).ltcAtError != ltc || (*iter).vitcAtError != vitc)
         {
-            (*iter).listener->vtrPlaybackError(this, errorCode, ltc);
+            (*iter).listener->vtrPlaybackError(this, errorCode, ltc, vitc);
             (*iter).errorCode = errorCode;
             (*iter).ltcAtError = ltc;
+            (*iter).vitcAtError = vitc;
         }
     }
 }

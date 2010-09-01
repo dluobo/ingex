@@ -1,5 +1,5 @@
 /*
- * $Id: BrowseEncoder.h,v 1.1 2008/07/08 16:21:26 philipn Exp $
+ * $Id: BrowseEncoder.h,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * C++ wrapper for browse_encoder
  *
@@ -25,17 +25,18 @@
 
 
 #include "browse_encoder.h"
+#include "Types.h"
 
 
 class BrowseEncoder
 {
 public:
-    static BrowseEncoder* create(const char *filename, uint32_t kbit_rate, int thread_count);
+    static BrowseEncoder* create(const char *filename, rec::Rational aspectRatio, uint32_t kbit_rate, int thread_count);
     
 public:
     ~BrowseEncoder();
     
-    bool encode(uint8_t *p_video, int16_t *p_audio, ArchiveTimecode ltc, ArchiveTimecode vitc, int32_t frame_number);
+    bool encode(const uint8_t *p_video, const int16_t *p_audio, int32_t frame_number);
     
 private:
     BrowseEncoder(browse_encoder_t* encoder);

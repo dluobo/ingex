@@ -1,5 +1,5 @@
 /*
- * $Id: main.cpp,v 1.1 2008/07/08 16:27:02 philipn Exp $
+ * $Id: main.cpp,v 1.2 2010/09/01 16:05:23 philipn Exp $
  *
  * Application for controlling a VTR using a web browser
  *
@@ -20,9 +20,9 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
  
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 
 #include <string>
 
@@ -137,17 +137,17 @@ int main(int argc, const char** argv)
         return 1;
     }
 
-    Config::setBool("dbg_serial_port_open", true);
+    Config::dbg_serial_port_open = true;
     
     // start
     try
     {
-        HTTPServer httpServer(port, documentRoot, vector<pair<string, string> > ());
+        HTTPServer httpServer(port, documentRoot, vector<pair<string, string> > (), 5);
         
         auto_ptr<VTRControl> vtrControl;
         if (useDummyVTR)
         {
-            vtrControl = auto_ptr<VTRControl>(new DummyVTRControl(AJ_D350_PAL_DEVICE_TYPE));
+            vtrControl = auto_ptr<VTRControl>(new DummyVTRControl(AJ_D350_625LINE_DEVICE_TYPE));
         }
         else
         {
@@ -177,6 +177,4 @@ int main(int argc, const char** argv)
     
     return 0;
 }
-
-
 

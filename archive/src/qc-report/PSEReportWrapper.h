@@ -1,5 +1,5 @@
 /*
- * $Id: PSEReportWrapper.h,v 1.1 2008/07/08 16:25:21 philipn Exp $
+ * $Id: PSEReportWrapper.h,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * Wraps the PSEReport class and provides it with the info to write the report 
  *
@@ -27,7 +27,7 @@
 #include <string>
 #include <vector>
 
-#include "D3MXFFile.h"
+#include "ArchiveMXFFile.h"
 #include "QCSessionFile.h"
 
 #include <PSEReport.h>
@@ -36,7 +36,7 @@
 class PSEReportWrapper
 {
 public:
-    PSEReportWrapper(std::string filename, D3MXFFile* mxfFile, QCSessionFile* sessionFile);
+    PSEReportWrapper(std::string filename, rec::ArchiveMXFFile* mxfFile, QCSessionFile* sessionFile);
     ~PSEReportWrapper();
 
     void write();
@@ -44,10 +44,10 @@ public:
     bool getPSEResult();
     
 private:
-    void getPSEResultRange(PSEFailure const ** firstPSEFailure, int* numPSEFailures);
+    void getPSEResultRange(PSEFailure const ** firstPSEFailure, long* numPSEFailures);
 
     PSEReport* _report;
-    D3MXFFile* _mxfFile;
+    rec::ArchiveMXFFile* _mxfFile;
     QCSessionFile* _sessionFile;
 };
 

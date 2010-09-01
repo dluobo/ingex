@@ -88,6 +88,7 @@ div#content-middle-left {
 }
 
 div#content-middle-right {
+	float: left;
 }
 
 
@@ -97,6 +98,7 @@ div#content-middle-left-left {
 }
 
 div#content-middle-left-right {
+	float: left;
 	padding-top: 10px;
 }
 

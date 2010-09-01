@@ -1,5 +1,5 @@
 /*
- * $Id: ByteArray.h,v 1.1 2008/07/08 16:23:31 philipn Exp $
+ * $Id: ByteArray.h,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * Manages a dynamic array of bytes
  *

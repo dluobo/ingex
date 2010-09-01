@@ -4,8 +4,7 @@ include $(TOPLEVEL)/vars.mk
 QC_REPORT_INSTALL_PREFIX = /usr/local
 
 
-SOURCES = D3MXFFile.cpp \
-	QCSessionFile.cpp \
+SOURCES = QCSessionFile.cpp \
 	LTODirectory.cpp \
 	QCReport.cpp \
 	PSEReportWrapper.cpp \
@@ -17,29 +16,30 @@ GENERAL_OBJECTS = $(GENERAL_DIR)/.objs/Logging.o \
 PSE_OBJECTS = $(PSE_DIR)/.objs/PSEReport.o \
 	$(PSE_DIR)/.objs/pse_report_template.o
 	
+RECMXF_OBJECTS = $(RECMXF_DIR)/.objs/ArchiveMXFContentPackage.o \
+	$(RECMXF_DIR)/.objs/ArchiveMXFFile.o \
+	$(RECMXF_DIR)/.objs/MXFFileReader.o
+
+
 MXF_INC = $(LIBMXF_INC) $(LIBMXF_ARCHIVE_INC) $(LIBMXF_ARCHIVE_INFO_INC) $(LIBMXF_READER_INC)
 MXF_LIB = $(LIBMXF_ARCHIVE_INFO_LIB) $(LIBMXF_READER_LIB) $(LIBMXF_LIB)
 
-INCLUDES += $(GENERAL_INC) $(MXF_INC) $(PSE_INC)
+INCLUDES += $(GENERAL_INC) $(MXF_INC) $(PSE_INC) $(RECMXF_INC) $(INGEX_COMMON_INC)
 
 
 
 .PHONY: all
 all: qc_report
 
-.PHONY: ingex-deps
-ingex-deps: ingex-libmxf
 
-
-	
 qc_report_template.cpp: qc_report_template.html QCReport.cpp
 	$(COMPILE) -DGEN_QC_REPORT_TEMPLATE=1 QCReport.cpp -o gen_qc_report_template
 	./gen_qc_report_template qc_report_template.html $@
-	
 
-qc_report: general capture $(OBJECTS) .objs/main.o
-	$(COMPILE) .objs/main.o $(OBJECTS) $(GENERAL_OBJECTS) $(PSE_OBJECTS) $(MXF_LIB) -o $@
-	
+
+qc_report: .objs/main.o $(OBJECTS) $(GENERAL_OBJECTS) $(RECMXF_OBJECTS) $(PSE_OBJECTS)
+	$(COMPILE) .objs/main.o $(OBJECTS) $(GENERAL_OBJECTS) $(RECMXF_OBJECTS) $(PSE_OBJECTS) $(INGEX_COMMON_LIB) $(MXF_LIB) -o $@
+
 
 
 .PHONY: install

@@ -1,5 +1,5 @@
 /*
- * $Id: Chunking.h,v 1.1 2008/07/08 16:25:40 philipn Exp $
+ * $Id: Chunking.h,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * Chunks an MXF file into MXF, browse copy and PSE report files for each item
  *
@@ -26,10 +26,10 @@
 
 #include "RecordingItems.h"
 #include "Threads.h"
-#include "D3MXFFile.h"
 #include "BrowseEncoder.h"
+#include "ArchiveMXFFile.h"
+#include "D10MXFFile.h"
 
-#include <write_archive_mxf.h>
 
 
 namespace rec
@@ -67,7 +67,7 @@ public:
     
 public:
     Chunking(RecordingSession* session, RecordingSessionTable* sessionTable, 
-        std::string mxfPageFilename, RecordingItems* recordingItems);
+        std::string mxfPageFilename, RecordingItems* recordingItems, bool disablePSE);
     ~Chunking();
     
     virtual void start();
@@ -80,25 +80,40 @@ private:
     void setChunkingState(ChunkingState state);
     ChunkingState getChunkingState();
     
-    void writeMXFFrame(ArchiveMXFWriter* writer, D3MXFFrame* frame);
-    void writeBrowseFrame(D3MXFFrame* frame, BrowseEncoder* browseEncoder, int64_t frameNumber);    
-    void writeTimecodeFrame(D3MXFFrame* frame, int64_t frameNumber, FILE* timecodeFile);
+    void writeBrowseFrame(ArchiveMXFContentPackage* contentPackage, BrowseEncoder* browseEncoder, int64_t frameNumber);    
+    void writeTimecodeFrame(ArchiveMXFContentPackage* contentPackage, int64_t frameNumber, FILE* timecodeFile);
+    
+    void writeBrowseFrame(D10MXFContentPackage* contentPackage, BrowseEncoder* browseEncoder, int64_t frameNumber);    
+    void writeTimecodeFrame(D10MXFContentPackage* contentPackage, int64_t frameNumber, FILE* timecodeFile);
     
     int writePSEReport(int64_t duration, InfaxData* infax, PSEFailure* pseFailures, long numPSEFailures);
 
+    void convertAudio(int numAudioTracks, const unsigned char *inputA1, const unsigned char *inputA2,
+                      uint16_t *outputA12);
+    
+private:
     RecordingSession* _session;
     RecordingSessionTable* _sessionTable;
     RecordingItems* _recordingItems;
+    bool _disablePSE;
     bool _stop;
     bool _hasStopped;
     
-    D3MXFFile* _inputD3MXFFile;
+    int _threadCount;
+    int _chunkingThrottleFPS;
+    
+    std::string _tapeTransferLockFile;
+    
+    ArchiveMXFFile* _inputArchiveMXFFile;
+    D10MXFFile* _inputD10MXFFile;
+    MXFFileReader* _inputMXFFile; // equals one of the above
     
     std::string _mxfFilename;
     std::string _browseFilename;
     std::string _browseTimecodeFilename;
     std::string _browseInfoFilename;
     std::string _pseFilename;
+    std::string _eventFilename;
     HardDiskDestination* _hddDest;
     
     int16_t* _stereoAudio;
@@ -111,25 +126,9 @@ private:
 
 
 
-
-
-
-
-
-
-
-
-
-
 };
 
 
 
-
-
-
-
 #endif
-
-
 

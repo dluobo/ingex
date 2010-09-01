@@ -1,5 +1,5 @@
 /*
- * $Id: convert_binary_tc.c,v 1.1 2008/07/08 16:47:12 philipn Exp $
+ * $Id: convert_binary_tc.c,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * Converts legacy binary timecode files to text timecode files.
  *

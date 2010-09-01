@@ -1,22 +1,26 @@
-Summary: D3 Archive Recorder
-Name: ingex_archive
-Version: 0.9.6
+Summary: DMI R1 Ingex Recorder
+Name: ingex_DMI_R1
+Version: 0.11.0
 Release: 1
 License: GPL
 Group: System Environment/Daemons
 Url: http://ingex.sourceforge.net
 BuildRoot: %{_tmppath}/%{name}-root
 PreReq: /sbin/chkconfig /sbin/service
-Requires: dvsdriver
+Requires: dvsdriver = 3.4.0.2
+Requires: ffmpeg-DNxHD-h264-aac = 0.5-4
+Requires: codecs-for-ffmpeg = 20081215-2
+Requires: portaudio
+Requires: postgresql
+Requires: postgresql-server
 
 %description
-The ingex archive system records uncompressed video and audio from an SDI
-input to an uncompressed MXF file.  
+Ingex Archive / DMI Release 1 tape ingest system.
 
-A player application is provided to playback the uncompressed MXF files
-to either an SDI output or an X11 window or both.
 
 %prep
+rm -rf $RPM_BUILD_ROOT
+
 
 %build
 
@@ -31,88 +35,76 @@ fi
 export INGEX_ARCHIVE_DIR=$INGEX_DIR/archive
 
 
-# executables
+# Sample Database
+mkdir -p $RPM_BUILD_ROOT/home/ingex/install/database
+cp -R $INGEX_ARCHIVE_DIR/database/* $RPM_BUILD_ROOT/home/ingex/install/database
+
+# The recorder
+mkdir -p $RPM_BUILD_ROOT/home/ingex/install/recorder/logs
+cp -a $INGEX_ARCHIVE_DIR/src/recorder/ingex_recorder $RPM_BUILD_ROOT/home/ingex/install/recorder/ingex_recorder
+cp -R $INGEX_ARCHIVE_DIR/web/content $RPM_BUILD_ROOT/home/ingex/install/recorder/www
+cp -a $INGEX_ARCHIVE_DIR/config/ingex.cfg.dmi $RPM_BUILD_ROOT/home/ingex/install/recorder/ingex.cfg
+cp -a $INGEX_ARCHIVE_DIR/scripts/run_recorder.sh $RPM_BUILD_ROOT/home/ingex/install/recorder/run_recorder.sh
+
+# Player executables
 mkdir -p $RPM_BUILD_ROOT/usr/local/bin
-mkdir -p $RPM_BUILD_ROOT/usr/lib
-cp -a $INGEX_ARCHIVE_DIR/src/tape-export/ingex_tape_export $RPM_BUILD_ROOT/usr/local/bin
-cp -a $INGEX_ARCHIVE_DIR/src/recorder/ingex_recorder $RPM_BUILD_ROOT/usr/local/bin
-cp -a $INGEX_ARCHIVE_DIR/src/vtr/vtr_control $RPM_BUILD_ROOT/usr/local/bin
-cp -a $INGEX_ARCHIVE_DIR/src/barcode-scanner/barcode_scanner $RPM_BUILD_ROOT/usr/local/bin
 cp -a $INGEX_DIR/player/ingex_player/player $RPM_BUILD_ROOT/usr/local/bin
 cp -a $INGEX_DIR/player/ingex_player/qc_player $RPM_BUILD_ROOT/usr/local/bin
-cp -a $INGEX_DIR/libMXF/examples/archive/info/d3_mxf_info $RPM_BUILD_ROOT/usr/local/bin
 
 # PSE library
-cp -a $INGEX_ARCHIVE_DIR/bbc-internal/pse/libfpacore2.so $RPM_BUILD_ROOT/usr/lib
-
-# working directories
-mkdir -p $RPM_BUILD_ROOT/home/archive
-mkdir -p $RPM_BUILD_ROOT/home/archive/http_recorder
-mkdir -p $RPM_BUILD_ROOT/home/archive/http_recorder/logs
-mkfifo $RPM_BUILD_ROOT/home/archive/http_recorder/barcode_for_recorder.fifo
-mkfifo $RPM_BUILD_ROOT/home/archive/http_recorder/barcode_for_tape_export.fifo
- 
-# destination directories
-mkdir -p $RPM_BUILD_ROOT/video/http_recorder
-mkdir -p $RPM_BUILD_ROOT/video/http_recorder/cache
-# NOTE: the browse and pse are for testing only
-mkdir -p $RPM_BUILD_ROOT/video/http_recorder/browse
-mkdir -p $RPM_BUILD_ROOT/video/http_recorder/pse
-
-# shttpd server html files, excluding the CVS directories
-cp -a $INGEX_ARCHIVE_DIR/web/content $RPM_BUILD_ROOT/home/archive/http_recorder/www
-find $RPM_BUILD_ROOT/home/archive/http_recorder/www -name CVS | xargs rm -Rf
-
-# scripts go into /home/archive/http_recorder
-cp -a $INGEX_ARCHIVE_DIR/scripts/run_barcode_scanner.sh $RPM_BUILD_ROOT/home/archive/http_recorder/
-cp -a $INGEX_ARCHIVE_DIR/scripts/run_recorder.sh $RPM_BUILD_ROOT/home/archive/http_recorder/
-cp -a $INGEX_ARCHIVE_DIR/scripts/run_tape_export.sh $RPM_BUILD_ROOT/home/archive/http_recorder/
-
-# configuration file templates
-cp -a $INGEX_ARCHIVE_DIR/config/ingex.cfg.channel $RPM_BUILD_ROOT/home/archive/http_recorder/
-cp -a $INGEX_ARCHIVE_DIR/config/ingex.cfg.testbed $RPM_BUILD_ROOT/home/archive/http_recorder/
+#cp -a $INGEX_ARCHIVE_DIR/bbc-internal/pse/libfpacore2.so $RPM_BUILD_ROOT/usr/lib
 
 # Desktop
-mkdir -p $RPM_BUILD_ROOT/home/archive/Desktop
-cp -a $INGEX_ARCHIVE_DIR/kde-desktop/Config $RPM_BUILD_ROOT/home/archive/Desktop/
-cp -a $INGEX_ARCHIVE_DIR/kde-desktop/Logs $RPM_BUILD_ROOT/home/archive/Desktop/
-cp -a $INGEX_ARCHIVE_DIR/kde-desktop/Cache $RPM_BUILD_ROOT/home/archive/Desktop/
-cp -a $INGEX_ARCHIVE_DIR/kde-desktop/Recorder.desktop $RPM_BUILD_ROOT/home/archive/Desktop/
-cp -a "$INGEX_ARCHIVE_DIR/kde-desktop/Tape Export.desktop" $RPM_BUILD_ROOT/home/archive/Desktop/
+mkdir -p $RPM_BUILD_ROOT/home/ingex/Desktop
+cp -a $INGEX_ARCHIVE_DIR/kde-desktop/Ingex.desktop $RPM_BUILD_ROOT/home/ingex/Desktop/Ingex.desktop
 
-# scripts, utilities etc
-cp -a $INGEX_ARCHIVE_DIR/scripts/resettape $RPM_BUILD_ROOT/usr/local/bin/
-cp -a $INGEX_ARCHIVE_DIR/scripts/rewindtape $RPM_BUILD_ROOT/usr/local/bin
-
-# startup scripts
+# init scripts
 mkdir -p $RPM_BUILD_ROOT/etc/init.d
-cp -a $INGEX_ARCHIVE_DIR/spec/dvs.conf $RPM_BUILD_ROOT/etc
-cp -a $INGEX_ARCHIVE_DIR/spec/ingex_setup $RPM_BUILD_ROOT/etc/init.d
+cp $INGEX_ARCHIVE_DIR/scripts/ingex_recorder_setup $RPM_BUILD_ROOT/etc/init.d
 
 %post
-# Remove old init.d scripts if any
-/sbin/chkconfig --del ingex_setup 2>/dev/null || true
-# Add new init.d scripts and start
-/sbin/chkconfig --add ingex_setup
-/sbin/service ingex_setup start
 
-# create the config script
-HOSTNAME=`uname -n`
-IS_CHANNEL=`echo $HOSTNAME | sed 's\channel[0-9]*\true\'`
-if [ $IS_CHANNEL = "true" ]
+# -----------------------------------------------------------
+# Create Ingex udev rules
+UDEVRULESFILE=/etc/udev/rules.d/45-ingex.rules
+
+(
+cat <<'ENDOFUDEVRULES'
+# Rules for the Ingex Archive system
+# Read/write access to the LTO tape drive
+KERNEL=="st[0-9]*", NAME="%k", MODE="0666"
+KERNEL=="nst[0-9]*", NAME="%k", MODE="0666"
+# Read access to the jog-shuttle control device
+KERNEL=="event*", NAME="input/%k", MODE="0644"
+ENDOFUDEVRULES
+) > $UDEVRULESFILE
+
+
+if [ -f "$UDEVRULESFILE" ]
 then
-	sed "s|CHANNEL_NAME|$HOSTNAME|g" < $RPM_BUILD_ROOT/home/archive/http_recorder/ingex.cfg.channel > $RPM_BUILD_ROOT/home/archive/http_recorder/ingex.cfg
+  # Restart the udev service
+  /sbin/service boot.udev restart
 else
-	cp $RPM_BUILD_ROOT/home/archive/http_recorder/ingex.cfg.testbed $RPM_BUILD_ROOT/home/archive/http_recorder/ingex.cfg
+  echo "Problem creating file: \"$UDEVRULESFILE\""
+  exit $E_CREATERULES
 fi
-chown archive.users $RPM_BUILD_ROOT/home/archive/http_recorder/ingex.cfg
 
+chown root /home/ingex/install/recorder/ingex_recorder
+chmod u+s /home/ingex/install/recorder/ingex_recorder
+chmod 744 /etc/init.d/ingex_recorder_setup
+
+# remove old version if any
+/sbin/chkconfig --del ingex_recorder_setup 2>/dev/null || true
+# add boot-time script
+/sbin/chkconfig --add ingex_recorder_setup
 
 %preun
+
 if [ "$1" = "0" ]; then
-	/sbin/service ingex_setup stop > /dev/null 2>&1
-	/sbin/chkconfig --del ingex_setup
+	/sbin/service ingex_recorder_setup stop > /dev/null 2>&1
+	/sbin/chkconfig --del ingex_recorder_setup
 fi
+
 exit 0
 
 %clean
@@ -120,21 +112,26 @@ rm -rf $RPM_BUILD_ROOT
 
 %files
 %defattr(-,root,root)
-/etc/dvs.conf
-/etc/init.d/ingex_setup
 /usr/local/bin/
-/usr/lib/
-%defattr(-,archive,users)
-/home/archive/http_recorder
-/video/http_recorder
-/home/archive/Desktop/Config
-/home/archive/Desktop/Logs
-/home/archive/Desktop/Cache
-/home/archive/Desktop/Recorder.desktop
-"/home/archive/Desktop/Tape Export.desktop"
+%defattr(-,ingex,users)
+/home/ingex/install
+/home/ingex/Desktop/Ingex.desktop
+/etc/init.d/ingex_recorder_setup
 
 
 %changelog
+* Tue May 18 2010 Philip de Nier 0.11.0
+- Added ingest Profiles
+- Added support for IMX-50
+- Reduced out-of-date description
+- Updated ffmpeg-DNxHD-h264-aac and codecs-for-ffmpeg dependency versions
+
+* Thu Jan 28 2010 Tim Jobling (tim@cambridgeimaging.co.uk) 0.10.0
+- Updated for DMI R1 operations.
+- Recorder runs as a deamon/service.
+- KDE-desktop icon links to open the web interface added.
+- Package dependencies added.
+
 * Thu Jun 19 2008 Philip de Nier 0.9.5
 - Added config option to set the max files to put on a LTO for the auto
   transfer method

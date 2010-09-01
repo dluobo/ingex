@@ -7,9 +7,13 @@
 <meta HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8"/>
 
 
-<script type="text/javascript" src="scripts/common.js"/>
-<script type="text/javascript" src="scripts/replay_control.js"/>
-<script type="text/javascript" src="scripts/cache.js"/>
+<script type="text/javascript">
+var apiVersion = 1;
+</script>
+
+<script type="text/javascript" src="scripts/common.js"></script>
+<script type="text/javascript" src="scripts/replay_control.js"></script>
+<script type="text/javascript" src="scripts/cache.js"></script>
 
 <link href="styles/cache.css" rel="stylesheet" rev="stylesheet" type="text/css"/>
 
@@ -43,6 +47,7 @@
 <table id="link-line" cellspacing="5">
 	<tr>
 		<td><a id="index-link" href="index.html">Home</a></td>
+		<td><a id="setup-link" href="setup.html">Setup</a></td>
 		<td><a id="select-source-link" href="source.html">Prepare</a></td>
 		<td><a id="record-link" href="record.html">Record</a></td>
 		<td><a id="review-link" href="review.html">Review</a></td>
@@ -84,12 +89,12 @@
 		<td><input id="next-mark-cmd" type="image" src="images/nextmark_symbol.png" title="next mark" onclick="seek_next_mark()" onmousedown="flat_button_down(this)" onmouseup="flat_button_up(this)"/></td>
 	</tr>
 	<tr>
-		<td><input id="stop-cmd" type="image" src="images/eject_symbol.png" title="stop" onclick="stop()" onmousedown="flat_button_down(this)" onmouseup="flat_button_up(this)"/></td>
-		<td/>
+		<td><input id="show-marks-cmd" type="image" src="images/show_all_marks.png" title="show marks" onclick="next_show_marks()" onmousedown="flat_button_down(this)" onmouseup="flat_button_up(this)"/></td>
+		<td><input id="next-vtr-error-level" type="image" src="images/vtr_error_l1_symbol.png" title="next vtr error level" onclick="next_vtr_error_level(this)" onmousedown="flat_button_down(this)" onmouseup="flat_button_up(this)"/></td>
 		<td><input id="next-osd-cmd" type="image" src="images/osd_symbol.png" title="toggle display" onclick="next_osd_screen()" onmousedown="flat_button_down(this)" onmouseup="flat_button_up(this)"/></td>
 		<td><input id="next-tc-cmd" type="image" src="images/tc_symbol.png" title="toggle timecode" onclick="next_osd_timecode()" onmousedown="flat_button_down(this)" onmouseup="flat_button_up(this)"/></td>
 		<td><input id="review-cmd" type="image" src="images/review_symbol.png" title="review 10 sec" onclick="review()" onmousedown="flat_button_down(this)" onmouseup="flat_button_up(this)"/></td>
-		<td/>
+		<td><input id="stop-cmd" type="image" src="images/eject_symbol.png" title="stop" onclick="stop()" onmousedown="flat_button_down(this)" onmouseup="flat_button_up(this)"/></td>
 	</tr>
 </table>
 
@@ -107,6 +112,7 @@
 
 <table id="cache-contents">
 	<tr style="color:blue">
+		<td>Format</td>
 		<td>Spool No</td>
 		<td>Item No</td>
 		<td>Prog No</td>

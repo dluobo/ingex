@@ -1,5 +1,5 @@
 /*
- * $Id: test_tape.cpp,v 1.1 2008/07/08 16:26:44 philipn Exp $
+ * $Id: test_tape.cpp,v 1.2 2010/09/01 16:05:23 philipn Exp $
  *
  * Tests the tape transfer class
  *
@@ -20,8 +20,8 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#include <stdio.h>
-#include <stdlib.h>
+#include <cstdio>
+#include <cstdlib>
 #include <unistd.h>
 #include <ncurses.h>
 #include <pthread.h>

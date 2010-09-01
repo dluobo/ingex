@@ -182,6 +182,10 @@ function set_cache_contents(contents)
     rowE.appendChild(colSelectE);
     var checkBoxE;
     
+    var colFormatE = document.createElement("td");
+    colFormatE.innerHTML = "Spool No";
+    rowE.appendChild(colFormatE);
+    
     var colSpoolNoE = document.createElement("td");
     colSpoolNoE.innerHTML = "Spool No";
     rowE.appendChild(colSpoolNoE);
@@ -241,6 +245,10 @@ function set_cache_contents(contents)
         }
         rowE.appendChild(colSelectE);
     
+        colFormatE = document.createElement("td");
+        colFormatE.innerHTML = contents.items[i].srcFormat;
+        rowE.appendChild(colFormatE);
+
         colSpoolNoE = document.createElement("td");
         colSpoolNoE.innerHTML = contents.items[i].srcSpoolNo.replace(/\ /g, "&nbsp;");
         rowE.appendChild(colSpoolNoE);

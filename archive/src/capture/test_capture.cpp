@@ -1,5 +1,5 @@
 /*
- * $Id: test_capture.cpp,v 1.1 2008/07/08 16:22:30 philipn Exp $
+ * $Id: test_capture.cpp,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * Test recording of a number of frames using the capture.cpp code
  *
@@ -20,14 +20,19 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#include <stdio.h>
-#include <stdlib.h>
+#define __STDC_FORMAT_MACROS 1
+
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <cerrno>
 #include <unistd.h>
 #include <ncurses.h>
 #include <pthread.h>
 
 #include "logF.h"
 #include "capture.h"
+#include "MXFWriter.h"
 
 static bool term = false;       // Use ncurses terminal?
 
@@ -70,10 +75,10 @@ static void *status_thread(void *arg)
         if (gen.recording) {
             p->get_record_stats(&rec);
             if (term) {
-                MT_mvprintw(5,0,"     : recording: state=%d  framecount=%d  filesize=%llu\n", rec.record_state, rec.current_framecount, rec.file_size);
+                MT_mvprintw(5,0,"     : recording: state=%d  framecount=%d  filesize=%"PRIu64"\n", rec.record_state, rec.current_framecount, rec.file_size);
             }
             else {
-                printf("  recording: state=%d framecount=%d filesize=%llu\n", rec.record_state, rec.current_framecount, rec.file_size);
+                printf("  recording: state=%d framecount=%d filesize=%"PRIu64"\n", rec.record_state, rec.current_framecount, rec.file_size);
             }
         }
         else {
@@ -102,6 +107,7 @@ int main(int argc, char ** argv)
     char browse_timecode_file[FILENAME_MAX];
     char pse_file[FILENAME_MAX];
     int num_frames = 75;
+    rec::Rational aspect_ratio(4, 3);
 
     int n;
     for (n = 1; n < argc; n++)
@@ -167,12 +173,13 @@ int main(int argc, char ** argv)
 
     const char infax_data_string[] = "D3|D3 preservation programme||2006-02-02||LME1306H|71|T|2006-01-01|PROGRAMME BACKING COPY|Bla bla bla|1732|DGN377505|DC193783|LONPROG|1";
     InfaxData infax_data;
-    parse_infax_data(infax_data_string, &infax_data, 1);
+    rec::MXFWriter::parseInfaxData(infax_data_string, &infax_data);
     
 
     if (term) {
         while (1) {
             int psePassed;
+            long digiBetaDropoutCount;
             int c = getch();
             MT_mvprintw(15,0,"                              ");
             switch (c) {
@@ -182,7 +189,7 @@ int main(int argc, char ** argv)
                     break;
                 case 's': case 'S':
                     // start record
-                    if (capture.start_record(mxf_file, browse_file, browse_timecode_file, pse_file)) {
+                    if (capture.start_record(mxf_file, browse_file, browse_timecode_file, pse_file, "", &aspect_ratio)) {
                         MT_mvprintw(7,0,"start_record: Success                  ");
                     }
                     else {
@@ -191,7 +198,7 @@ int main(int argc, char ** argv)
                     break;
                 case 't': case 'T':
                     // stop record
-                    if (capture.stop_record(-1, &infax_data, NULL, 0, &psePassed)) {
+                    if (capture.stop_record(-1, &infax_data, NULL, 0, &psePassed, &digiBetaDropoutCount)) {
                         MT_mvprintw(7,0,"stop_record: Success       ");
                     }
                     else {
@@ -215,7 +222,7 @@ int main(int argc, char ** argv)
     } while (! gen.video_ok);
 
     // Start record
-    if (capture.start_record(mxf_file, browse_file, browse_timecode_file, pse_file)) {
+    if (capture.start_record(mxf_file, browse_file, browse_timecode_file, pse_file, "", &aspect_ratio)) {
         printf("start_record succeeded\n");
     }
     else {
@@ -227,7 +234,8 @@ int main(int argc, char ** argv)
     usleep(num_frames * 40 * 1000);     // sleep for specified number of frames
 
     int psePassed;
-    if (capture.stop_record(-1, &infax_data, NULL, 0, &psePassed)) {
+    long digiBetaDropoutCount;
+    if (capture.stop_record(-1, &infax_data, NULL, 0, &psePassed, &digiBetaDropoutCount)) {
         printf("stop_record succeeded\n");
     }
     else {

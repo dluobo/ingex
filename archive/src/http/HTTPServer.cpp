@@ -1,5 +1,5 @@
 /*
- * $Id: HTTPServer.cpp,v 1.2 2008/11/10 14:51:43 philipn Exp $
+ * $Id: HTTPServer.cpp,v 1.3 2010/09/01 16:05:22 philipn Exp $
  *
  * Wraps the shttpd embedded web server
  *
@@ -34,7 +34,7 @@
     HTTPServer and are called when data is required for a SSI HTML page
 */
  
-#include <string.h>
+#include <cstring>
 #include <sstream>
 
 #include "HTTPServer.h"
@@ -130,15 +130,39 @@ void http_ssi_handler(struct shttpd_arg* arg)
 };
 
 
-
-
-class HTTPServerThreadWorker : public ThreadWorker
+class HTTPServerChildThreadWorker : public ThreadWorker
 {
 public:
-    HTTPServerThreadWorker(struct shttpd_ctx* ctx)
-    : _ctx(ctx), _hasStopped(false), _stop(false)
-    {}
-    virtual ~HTTPServerThreadWorker()
+    HTTPServerChildThreadWorker(std::string documentRoot, std::vector<std::pair<std::string, std::string> > aliases)
+    : _ctx(0), _hasStopped(false), _stop(false)
+    {
+        if (aliases.empty())
+        {
+            REC_CHECK((_ctx = shttpd_init(NULL, 
+                "document_root", documentRoot.c_str(),
+                "io_buf_size", HTTP_IO_BUFFER_SIZE_STR,
+                NULL)) != NULL);
+        }
+        else
+        {
+            string aliasString;
+            vector<pair<string, string> >::const_iterator iter;
+            for (iter = aliases.begin(); iter != aliases.end(); iter++)
+            {
+                if (iter != aliases.begin())
+                {
+                    aliasString += ",";
+                }
+                aliasString += (*iter).first + "=" + (*iter).second;
+            }
+            REC_CHECK((_ctx = shttpd_init(NULL, 
+                "document_root", documentRoot.c_str(),
+                "io_buf_size", HTTP_IO_BUFFER_SIZE_STR,
+                "aliases", aliasString.c_str(),
+                NULL)) != NULL);
+        }
+    }
+    virtual ~HTTPServerChildThreadWorker()
     {
         shttpd_fini(_ctx);
     }
@@ -151,7 +175,12 @@ public:
         
         while (!_stop)
         {
-            shttpd_poll(_ctx, 1000);
+            // Note: when the poll times out it will disconnect the socket connection and
+            // this allows the assigment of each connection to a different thread to work
+            // Choosing a larger timeout will result in more (serial) request processing in
+            // the same thread, thus losing the benefit of having multiple threads
+            // This is why the poll timeout is set to 100 msec
+            shttpd_poll(_ctx, 100);
         }
     }
     
@@ -165,10 +194,139 @@ public:
         return _hasStopped;
     }
     
+    
+    struct shttpd_ctx* getContext() const
+    {
+        return _ctx;
+    }
+    
 private:
     struct shttpd_ctx* _ctx;
     bool _hasStopped;
     bool _stop;
+};
+
+
+class HTTPServerMainThreadWorker : public ThreadWorker
+{
+public:
+    HTTPServerMainThreadWorker(int port, std::string documentRoot,
+        std::vector<std::pair<std::string, std::string> > aliases, int numThreads)
+    : _ctx(0), _lsn(-1), _lastDelegateChildIndex(0), _hasStopped(false), _stop(false)
+    {
+        REC_CHECK((_ctx = shttpd_init(NULL, NULL)) != NULL);
+        REC_CHECK((_lsn = shttpd_listen(_ctx, port, 0)) >= 0);
+        
+        int i;
+        for (i = 0; i < numThreads; i++)
+        {
+            _childThreads.push_back(new Thread(new HTTPServerChildThreadWorker(documentRoot, aliases), true));
+        }
+    }
+    
+    virtual ~HTTPServerMainThreadWorker()
+    {
+        size_t i;
+        for (i = 0; i < _childThreads.size(); i++)
+        {
+            delete _childThreads[i];
+        }
+
+        shttpd_fini(_ctx);
+    }
+    
+    virtual void start()
+    {
+        GUARD_THREAD_START(_hasStopped);
+        
+        _stop = false;
+        
+        int sock;
+        size_t i;
+        size_t delegateChildIndex;
+        HTTPServerChildThreadWorker* delegateChild;
+
+        for (i = 0; i < _childThreads.size(); i++)
+        {
+            _childThreads[i]->start();
+        }
+        
+        while (!_stop)
+        {
+            if ((sock = shttpd_accept(_lsn, 1000)) == -1)
+                continue;
+            
+            delegateChildIndex = (size_t)(-1);
+
+            // choose a child thread that is not active
+            for (i = 0; i < _childThreads.size(); i++)
+            {
+                delegateChild = dynamic_cast<HTTPServerChildThreadWorker*>(_childThreads[i]->getWorker());
+
+                if (shttpd_active(delegateChild->getContext()) == 0)
+                {
+                    delegateChildIndex = i;
+                    break;
+                }
+            }
+            
+            // if all children are active then select the next child from the last
+            if (delegateChildIndex == (size_t)(-1))
+            {
+                delegateChildIndex = (_lastDelegateChildIndex + 1) % _childThreads.size();
+            }
+
+            delegateChild = dynamic_cast<HTTPServerChildThreadWorker*>(_childThreads[delegateChildIndex]->getWorker());            
+            _lastDelegateChildIndex = delegateChildIndex;
+
+
+            // delegate socket processing to child thread
+            shttpd_add_socket(delegateChild->getContext(), sock, 0);
+        }
+    }
+    
+    virtual void stop()
+    {
+        _stop = true;
+    }
+    
+    virtual bool hasStopped() const
+    {
+        return _hasStopped;
+    }
+    
+    
+    void registerURI(const char* uri, shttpd_callback_t callback, void* userData)
+    {
+        HTTPServerChildThreadWorker* child;
+        size_t i;
+        for (i = 0; i < _childThreads.size(); i++)
+        {
+            child = dynamic_cast<HTTPServerChildThreadWorker*>(_childThreads[i]->getWorker());
+            
+            shttpd_register_uri(child->getContext(), uri, callback, userData);
+        }
+    }
+    
+    void registerSSI(const char* name, shttpd_callback_t callback, void* userData)
+    {
+        HTTPServerChildThreadWorker* child;
+        size_t i;
+        for (i = 0; i < _childThreads.size(); i++)
+        {
+            child = dynamic_cast<HTTPServerChildThreadWorker*>(_childThreads[i]->getWorker());
+            
+            shttpd_register_ssi_func(child->getContext(), name, callback, userData);
+        }
+    }
+    
+private:
+    struct shttpd_ctx* _ctx;
+    int _lsn;
+    size_t _lastDelegateChildIndex;
+    bool _hasStopped;
+    bool _stop;
+    std::vector<Thread*> _childThreads;
 };
 
 
@@ -456,7 +614,7 @@ bool HTTPConnection::requestIsReady()
     // TODO: check for closed connection
     
     // append POST data
-    if (_requestMethod.compare("POST") == 0)
+    if (_requestMethod == "POST")
     {
         if (_arg->in.num_bytes < _arg->in.len)
         {
@@ -539,42 +697,16 @@ HTTPSSIHandlerInfo::~HTTPSSIHandlerInfo()
 
 
 
-HTTPServer::HTTPServer(int port, string documentRoot, vector<pair<string, string> > aliases)
-: _ctx(0), _serverThread(0), _started(false)
+HTTPServer::HTTPServer(int port, string documentRoot, vector<pair<string, string> > aliases, int numThreads)
+: _serverThread(0), _started(false)
 {
-    if (aliases.empty())
-    {
-        REC_CHECK((_ctx = shttpd_init(NULL, 
-            "document_root", documentRoot.c_str(),
-            "io_buf_size", HTTP_IO_BUFFER_SIZE_STR,
-            NULL)) != NULL);
-    }
-    else
-    {
-        string aliasString;
-        vector<pair<string, string> >::const_iterator iter;
-        for (iter = aliases.begin(); iter != aliases.end(); iter++)
-        {
-            if (iter != aliases.begin())
-            {
-                aliasString += ",";
-            }
-            aliasString += (*iter).first + "=" + (*iter).second;
-        }
-        REC_CHECK((_ctx = shttpd_init(NULL, 
-            "document_root", documentRoot.c_str(),
-            "io_buf_size", HTTP_IO_BUFFER_SIZE_STR,
-            "aliases", aliasString.c_str(),
-            NULL)) != NULL);
-    }
-    REC_CHECK(shttpd_listen(_ctx, port, 0) >= 0);
+    REC_ASSERT(numThreads > 0);
     
-    
+    _serverThread = new Thread(new HTTPServerMainThreadWorker(port, documentRoot, aliases, numThreads), true);
+
     HTTPServiceDescription* serviceDesc;
     serviceDesc = registerService(new HTTPServiceDescription(g_servicesURL), this);
     serviceDesc->setDescription(g_servicesURLDescription);
-
-    _serverThread = new Thread(new HTTPServerThreadWorker(_ctx), true);
 
     Logging::info("HTTP server is listening on port %d\n", port);
 }
@@ -609,8 +741,9 @@ HTTPServiceDescription* HTTPServer::registerService(HTTPServiceDescription* serv
         REC_LOGTHROW(("Attempting to register a HTTP service ('%s') that is already registered", 
             serviceDescription->getURL().c_str()));
     }
-        
-    shttpd_register_uri(_ctx, serviceDescription->getURL().c_str(), http_service, (*result.first).second);
+    
+    HTTPServerMainThreadWorker* worker = dynamic_cast<HTTPServerMainThreadWorker*>(_serverThread->getWorker());
+    worker->registerURI(serviceDescription->getURL().c_str(), http_service, (*result.first).second);
     
     return (*result.first).second->description;
 }
@@ -628,7 +761,8 @@ void HTTPServer::registerSSIHandler(string name, HTTPSSIHandler* handler)
             name.c_str()));
     }
     
-    shttpd_register_ssi_func(_ctx, name.c_str(), http_ssi_handler, (*result.first).second);
+    HTTPServerMainThreadWorker* worker = dynamic_cast<HTTPServerMainThreadWorker*>(_serverThread->getWorker());
+    worker->registerSSI(name.c_str(), http_ssi_handler, (*result.first).second);
 }
 
 void HTTPServer::start()

@@ -1,5 +1,5 @@
 /*
- * $Id: BrowseEncoder.cpp,v 1.1 2008/07/08 16:21:24 philipn Exp $
+ * $Id: BrowseEncoder.cpp,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * C++ wrapper for browse_encoder
  *
@@ -27,9 +27,9 @@ using namespace std;
 
 
 
-BrowseEncoder* BrowseEncoder::create(const char *filename, uint32_t kbit_rate, int thread_count)
+BrowseEncoder* BrowseEncoder::create(const char *filename, rec::Rational aspectRatio, uint32_t kbit_rate, int thread_count)
 {
-    browse_encoder_t* encoder = browse_encoder_init(filename, kbit_rate, thread_count);
+    browse_encoder_t* encoder = browse_encoder_init(filename, aspectRatio.numerator, aspectRatio.denominator, kbit_rate, thread_count);
     if (encoder == 0)
     {
         return 0;
@@ -55,8 +55,8 @@ BrowseEncoder::~BrowseEncoder()
     }
 }
 
-bool BrowseEncoder::encode(uint8_t *p_video, int16_t *p_audio, ArchiveTimecode ltc, ArchiveTimecode vitc, int32_t frame_number)
+bool BrowseEncoder::encode(const uint8_t *p_video, const int16_t *p_audio, int32_t frame_number)
 {
-    return browse_encoder_encode(_encoder, p_video, p_audio, ltc, vitc, frame_number) == 0;
+    return browse_encoder_encode(_encoder, p_video, p_audio, frame_number) == 0;
 }
 

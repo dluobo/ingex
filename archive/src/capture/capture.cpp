@@ -1,5 +1,5 @@
 /*
- * $Id: capture.cpp,v 1.1 2008/07/08 16:22:29 philipn Exp $
+ * $Id: capture.cpp,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * Read frames from the DVS SDI capture card, write to an MXF file, generate a 
  * browse copy file and perform PSE analysis  
@@ -39,12 +39,12 @@
     caught up.
     
     A stop_record() call stops the capture and the MXF file writing is completed 
-    with the D3 Infax data, PSE failures and VTR errors. The browse copy 
+    with the source Infax data, PSE failures and VTR errors. The browse copy 
     generation will normally complete shortly thereafter and the 
     store_browse_thread is stopped.
     
     The start_multi_item_record() and stop_multi_item_record() methods are used 
-    for multi-item D3 tapes where the initial MXF file is only temporary. This 
+    for multi-item source tapes where the initial MXF file is only temporary. This 
     MXF file is written in segments to minimise the disk space requirements when 
     chunking the file into the individual MXF files for each item.
     
@@ -69,20 +69,25 @@
     later SDK versions which are said not to have the A/V synchronization 
     issues when the SDI signal is disrupted.
 */
- 
-#include <stdio.h>
-#include <stdlib.h>
+
+#define __STDC_FORMAT_MACROS 1
+
+
+#include <cstdio>
+#include <cstdlib>
 #include <malloc.h>
 #include <inttypes.h>
-#include <string.h>
+#include <cstring>
 #include <strings.h>
 #include <libgen.h>
+#include <cassert>
+#include <syscall.h>
 
 #include <signal.h>
 #include <unistd.h> 
-#include <errno.h>
+#include <cerrno>
 #include <limits.h>
-#include <time.h>
+#include <ctime>
 #include <sys/stat.h>
 
 #include <pthread.h>
@@ -96,9 +101,14 @@
 #include "video_VITC.h"
 #include "video_conversion.h"
 #include "video_test_signals.h"
+#include "video_conversion_10bits.h"
 #include "avsync_analysis.h"
+
+#include "ArchiveMXFFrameWriter.h"
+#include "D10MXFFrameWriter.h"
 #include "PSEReport.h"
 #include "BrowseEncoder.h"
+#include "Timing.h"
 
 #include <mxf/mxf_page_file.h>
 
@@ -109,12 +119,6 @@
 #endif
 
 
-// make sure we are compiling and linking with DVS SDK version 2.7p57
-#if !(DVS_VERSION_MAJOR == 2 && DVS_VERSION_MINOR == 7 && DVS_VERSION_PATCH == 57)
-#error Capture code requires DVS SDK version 2.7p57.
-#endif
-
-
 using std::string;
 using std::make_pair;
 
@@ -122,6 +126,13 @@ using std::make_pair;
 #define VIDEO_FRAME_HEIGHT      576
 #define VIDEO_FRAME_SIZE        (VIDEO_FRAME_WIDTH * VIDEO_FRAME_HEIGHT * 2)
 #define AUDIO_FRAME_SIZE        1920 * 3        // 1 channel, 48000Hz sample rate at 24bits per sample
+
+// need this amount of good frames before frames are stored in the capture buffer
+// WAIT_GOOD_FRAME_COUNT must be >= 2 to ensure the first frame stored has a valid LTC when using AUDIO_TRACK_LTC_SOURCE
+#define WAIT_GOOD_FRAME_COUNT               10
+// wait this number of good frames after an error in the SDI signal
+// WAIT_GOOD_FRAME_AFTER_ERROR_COUNT must be > WAIT_GOOD_FRAME_COUNT
+#define WAIT_GOOD_FRAME_AFTER_ERROR_COUNT   32
 
 #define CHK(x) {if (! (x)) { logTF("failed at %s line %d\n", __FILE__, __LINE__); } }
 
@@ -176,6 +187,11 @@ private:
     bool* _isRunning;
 };
 
+static void log_thread_id(const char* name)
+{
+    logTF("%s thread id: %ld\n", name, syscall(__NR_gettid));
+}
+
 static void sleep_msec(int64_t msec)
 {
     struct timespec rem;
@@ -225,14 +241,10 @@ static uint64_t get_filesize(const char *file)
     return buf.st_size;
 }
 
-// Redirect MXF log messages to local log function
-// Enabled by assigning to extern variable mxf_log
-void redirect_mxf_logs(MXFLogLevel level, const char* format, ...)
+// Redirect MXF vlog messages to local vlog function
+// Enabled by assigning to extern variable mxf_vlog
+void redirect_mxf_vlogs(MXFLogLevel level, const char* format, va_list ap)
 {
-    va_list     ap;
-
-    va_start(ap, format);
-
     const char *level_str = "Unknown";
     switch (level)
     {
@@ -251,28 +263,17 @@ void redirect_mxf_logs(MXFLogLevel level, const char* format, ...)
     };
     logTF("MXF %s: \n", level_str);
     vlogTF(format, ap);
-
-    va_end(ap);
 }
 
-static void dvsaudio32_to_24bitmono(int channel, uint8_t *buf32, uint8_t *buf24)
+// Redirect MXF log messages to local log function
+// Enabled by assigning to extern variable mxf_log
+void redirect_mxf_logs(MXFLogLevel level, const char* format, ...)
 {
-    int i;
-    // A DVS audio buffer contains a mix of two 32bits-per-sample channels
-    // Data for one sample pair is 8 bytes:
-    //  a0 a0 a0 a0  a1 a1 a1 a1
+    va_list ap;
 
-    int channel_offset = 0;
-    if (channel == 1)
-        channel_offset = 4;
-
-    // Skip every other channel, copying 24 most significant bits of 32 bits
-    // from little-endian DVS format to little-endian 24bits
-    for (i = channel_offset; i < 1920*4*2; i += 8) {
-        *buf24++ = buf32[i+1];
-        *buf24++ = buf32[i+2];
-        *buf24++ = buf32[i+3];
-    }
+    va_start(ap, format);
+    redirect_mxf_vlogs(level, format, ap);
+    va_end(ap);
 }
 
 static void dvsaudio32_to_16bitstereo(uint8_t *buf32, int16_t *buf16)
@@ -288,7 +289,7 @@ static void dvsaudio32_to_16bitstereo(uint8_t *buf32, int16_t *buf16)
     }
 }
 
-static void int_to_timecode(int tc_as_int, ArchiveTimecode *p)
+static void int_to_timecode(int tc_as_int, rec::Timecode *p)
 {
     if (tc_as_int == -1) {      // invalid timecode, set all values to zero
         p->frame = 0;
@@ -304,7 +305,25 @@ static void int_to_timecode(int tc_as_int, ArchiveTimecode *p)
     p->sec = (int) ((tc_as_int - (p->hour * 60 * 60 * 25) - (p->min * 60 * 25)) / 25);
 }
 
-static void write_browse_timecode(FILE* tcFile, ArchiveTimecode ctc, ArchiveTimecode vitc, ArchiveTimecode ltc)
+static void int_to_archive_timecode(int tc_as_int, ArchiveTimecode *p)
+{
+    if (tc_as_int == -1) {      // invalid timecode, set all values to zero
+        p->dropFrame = false;
+        p->frame = 0;
+        p->hour = 0;
+        p->min = 0;
+        p->sec = 0;
+        return;
+    }
+
+    p->dropFrame = false;
+    p->frame = tc_as_int % 25;
+    p->hour = (int) (tc_as_int / (60 * 60 * 25));
+    p->min = (int) ((tc_as_int - (p->hour * 60 * 60 * 25)) / (60 * 25));
+    p->sec = (int) ((tc_as_int - (p->hour * 60 * 60 * 25) - (p->min * 60 * 25)) / 25);
+}
+
+static void write_browse_timecode(FILE* tcFile, rec::Timecode ctc, rec::Timecode vitc, rec::Timecode ltc)
 {
     fprintf(tcFile, "C%02d:%02d:%02d:%02d V%02d:%02d:%02d:%02d L%02d:%02d:%02d:%02d\n", 
         ctc.hour, ctc.min, ctc.sec, ctc.frame,
@@ -319,6 +338,12 @@ static const char *videomode2str(VideoMode videomode)
     }
     else if (videomode == PALFF) {
         return "PALFF";
+    }
+    else if (videomode == PAL_10BIT) {
+        return "PAL_10BIT";
+    }
+    else if (videomode == PALFF_10BIT) {
+        return "PALFF_10BIT";
     }
     else if (videomode == NTSC) {
         return "NTSC";
@@ -335,21 +360,30 @@ static bool check_videomode(sv_handle *sv, VideoMode videomode)
     sv_status(sv, &status_info);
     int width = status_info.xsize;
     int height = status_info.ysize;
+    int nbit = status_info.nbit;
 
     if (videomode == PAL) {
-        if (width != 720 || height != 576)
+        if (width != 720 || height != 576 || nbit != 8)
             return false;
     }
     else if (videomode == PALFF) {
-        if (width != 720 || height != 592)
+        if (width != 720 || height != 592 || nbit != 8)
+            return false;
+    }
+    else if (videomode == PAL_10BIT) {
+        if (width != 720 || height != 576 || nbit != 10)
+            return false;
+    }
+    else if (videomode == PALFF_10BIT) {
+        if (width != 720 || height != 592 || nbit != 10)
             return false;
     }
     else if (videomode == NTSC) {
-        if (width != 720 || height != 486)
+        if (width != 720 || height != 486 || nbit != 8)
             return false;
     }
     else if (videomode == HD1080i50) {
-        if (width != 1920 || height != 1080)
+        if (width != 1920 || height != 1080 || nbit != 8)
             return false;
     }
     else {
@@ -364,15 +398,39 @@ static bool set_videomode(sv_handle *sv, VideoMode videomode)
     int mode;
     if (videomode == PAL) {
         mode = SV_MODE_PAL;
+        
+        mode &= ~SV_MODE_NBIT_MASK;
+        mode |= SV_MODE_NBIT_8B;
+    }
+    else if (videomode == PAL_10BIT) {
+        mode = SV_MODE_PAL;
+        
+        mode &= ~SV_MODE_NBIT_MASK;
+        mode |= SV_MODE_NBIT_10B;
     }
     else if (videomode == PALFF) {
         mode = SV_MODE_PALFF;
+        
+        mode &= ~SV_MODE_NBIT_MASK;
+        mode |= SV_MODE_NBIT_8B;
+    }
+    else if (videomode == PALFF_10BIT) {
+        mode = SV_MODE_PALFF;
+        
+        mode &= ~SV_MODE_NBIT_MASK;
+        mode |= SV_MODE_NBIT_10B;
     }
     else if (videomode == NTSC) {
         mode = SV_MODE_NTSC;
+        
+        mode &= ~SV_MODE_NBIT_MASK;
+        mode |= SV_MODE_NBIT_8B;
     }
     else if (videomode == HD1080i50) {
         mode = SV_MODE_SMPTE274_25I;
+        
+        mode &= ~SV_MODE_NBIT_MASK;
+        mode |= SV_MODE_NBIT_8B;
     }
     else {
         logFF("Unknown video mode");
@@ -390,13 +448,47 @@ static bool set_videomode(sv_handle *sv, VideoMode videomode)
     mode &= ~SV_MODE_AUDIOBITS_MASK;
     mode |=  SV_MODE_AUDIOBITS_32;
 
-    // mode should be 1080033280 for PALFF, 1080033280 for PAL
     int res = sv_videomode(sv, mode);
     if (res != SV_OK) {
         logFF("Set video mode to %s: sv_videomode( %d (0x%08x)) (res=%d)\n", videomode2str(videomode), mode, mode, res);
         return false;
     }
 
+    return true;
+}
+
+bool open_dvs(bool input_only, sv_handle **sv)
+{
+    int res;
+    char setup[64];
+    int opentype;
+    
+    if (input_only)
+        opentype = SV_OPENTYPE_INPUT | SV_OPENTYPE_MASK_MULTIPLE;
+    else
+        opentype = SV_OPENTYPE_INPUT | SV_OPENTYPE_OUTPUT | SV_OPENTYPE_MASK_MULTIPLE;
+    
+    sprintf(setup, "PCI,card=0,channel=0");
+    res = sv_openex(sv,
+                    setup,
+                    SV_OPENPROGRAM_APPLICATION,
+                    opentype,
+                    0,
+                    0);
+    if (res == SV_ERROR_WRONGMODE) {
+        // Multichannel mode not on so doesn't like "channel=0"
+        sprintf(setup, "PCI,card=0");
+        res = sv_openex(sv, setup,
+                        SV_OPENPROGRAM_APPLICATION,
+                        opentype,
+                        0,
+                        0);
+    }
+    if (res != SV_OK) {
+        logTF("%s: %s\n", setup, sv_geterrortext(res));
+        return false;
+    }
+    
     return true;
 }
 
@@ -468,6 +560,39 @@ void Capture::set_pse_enable(bool enable)
     pse_enabled = enable;
 }
 
+void Capture::set_digibeta_dropout_enable(bool enable)
+{
+    digibeta_dropout_enabled = enable;
+}
+
+void Capture::set_digibeta_dropout_thresholds(int lower_threshold, int upper_threshold, int store_threshold)
+{
+    digibeta_dropout_lower_threshold = lower_threshold;
+    digibeta_dropout_upper_threshold = upper_threshold;
+    digibeta_dropout_store_threshold = store_threshold;
+}
+
+void Capture::set_ingest_format(rec::IngestFormat format)
+{
+    ingest_format = format;
+}
+
+void Capture::set_ltc_source(LTCSource source, int audio_track)
+{
+    ltc_source = source;
+    ltc_audio_track = audio_track;
+}
+
+void Capture::set_vitc_source(VITCSource source)
+{
+    vitc_source = source;
+}
+
+void Capture::set_palff_mode(bool enable)
+{
+    palff_mode = enable;
+}
+
 void Capture::set_vitc_lines(int* lines, int num_lines)
 {
     if (num_lines > MAX_VBI_LINES)
@@ -508,6 +633,16 @@ void Capture::set_ltc_lines(int* lines, int num_lines)
     num_ltc_lines = num_lines;
 }
 
+void Capture::set_include_crc32(bool enable)
+{
+    include_crc32 = enable;
+}
+
+void Capture::set_primary_timecode(rec::PrimaryTimecode ptimecode)
+{
+    primary_timecode = ptimecode;
+}
+
 void Capture::set_debug_avsync(bool enable)
 {
     debug_clapper_avsync = enable;
@@ -528,18 +663,27 @@ uint8_t *Capture::rec_ring_frame(int frame)
 {
     return rec_ring + (frame % ring_buffer_size) * element_size;
 }
+
+uint8_t *Capture::rec_ring_8bit_video_frame(int frame)
+{
+    return rec_8bit_video_ring + (frame % ring_buffer_size) * video_8bit_size;
+}
+
 int Capture::ring_element_size(void)
 {
     return element_size;
 }
+
 int Capture::ring_audio_pair_offset(int channelPair)
 {
     return audio_pair_offset[channelPair];
 }
+
 int Capture::ring_vitc_offset(void)
 {
     return element_size - sizeof(int) * 1;
 }
+
 int Capture::ring_ltc_offset(void)
 {
     return element_size - sizeof(int) * 2;
@@ -599,6 +743,8 @@ void Capture::get_general_stats(GeneralStats *p)
 {
     p->video_ok = video_ok;
     p->audio_ok = audio_ok;
+    p->dltc_ok = dltc_ok;
+    p->vitc_ok = vitc_ok;
     p->recording = g_record_start;
 }
 
@@ -618,22 +764,40 @@ void Capture::get_record_stats(RecordStats *p)
     int_to_timecode(current_ltc, &p->current_ltc);
 
     p->current_framecount = g_frames_written;
-    pthread_mutex_lock(&m_mxfout);
-    if (mxfout != 0)
     {
-        // use the archive mxf 'class' because multi-item sources will
-        // result in mxf page files being used which are split of 1 or more files
-        p->file_size = get_archive_mxf_file_size(mxfout);
+        LOCK_SECTION(mxfout_mutex);
+        if (mxfout)
+        {
+            // use the writer class because multi-item sources will
+            // result in mxf page files being used which are split of 1 or more files
+            p->file_size = mxfout->getFileSize();
+        }
+        else
+        {
+            p->file_size = 0;
+        }
     }
-    else
-    {
-        p->file_size = 0;
-    }
-    pthread_mutex_unlock(&m_mxfout);
     p->browse_file_size = get_filesize(browse_filename);
     p->materialPackageUID = g_materialPackageUID;
     p->filePackageUID = g_filePackageUID;
     p->tapePackageUID = g_tapePackageUID;
+
+    pthread_mutex_lock(&m_dropout_detector);
+    p->digiBetaDropoutCount = 0;
+    if (dropout_detector)
+    {
+        p->digiBetaDropoutCount = dropout_detector->getNumDropouts();
+    }
+    pthread_mutex_unlock(&m_dropout_detector);
+
+    pthread_mutex_lock(&m_buffer_state);
+    p->dvs_buffers_empty = dvs_buffers_empty;
+    p->num_dvs_buffers = num_dvs_buffers;
+    p->capture_buffer_pos = capture_buffer_pos;
+    p->store_buffer_pos = store_buffer_pos;
+    p->browse_buffer_pos = browse_buffer_pos;
+    p->ring_buffer_size = ring_buffer_size;
+    pthread_mutex_unlock(&m_buffer_state);
 }
 
 void Capture::set_recording_status(bool recording_state)
@@ -642,37 +806,41 @@ void Capture::set_recording_status(bool recording_state)
     {
         recording_ok = recording_state;
     
-        if (_listener) {
-            _listener->sdiStatusChanged(video_ok, audio_ok, recording_ok);
-        }
+        if (_listener)
+            _listener->sdiStatusChanged(video_ok, audio_ok, dltc_ok, vitc_ok, recording_ok);
     }
 }
 
-void Capture::set_input_SDI_status(bool video_state, bool audio_state)
+void Capture::set_input_SDI_status(bool video_state, bool audio_state, bool dltc_state, bool vitc_state)
 {
-    if (video_state != video_ok || audio_state != audio_ok)
+    if (video_state != video_ok || audio_state != audio_ok || dltc_state != dltc_ok || vitc_state != vitc_ok)
     {
         video_ok = video_state;
         audio_ok = audio_state;
+        dltc_ok = dltc_state;
+        vitc_ok = vitc_state;
     
-        if (_listener) {
-            _listener->sdiStatusChanged(video_ok, audio_ok, recording_ok);
-        }
+        if (_listener)
+            _listener->sdiStatusChanged(video_ok, audio_ok, dltc_ok, vitc_ok, recording_ok);
     }
+}
+
+void Capture::report_sdi_capture_dropped_frame()
+{
+    if (_listener)
+        _listener->sdiCaptureDroppedFrame();
 }
 
 void Capture::report_mxf_buffer_overflow()
 {
-    if (_listener) {
+    if (_listener)
         _listener->mxfBufferOverflow();
-    }
 }
 
 void Capture::report_browse_buffer_overflow()
 {
-    if (_listener) {
+    if (_listener)
         _listener->browseBufferOverflow();
-    }
 }
 
 int Capture::read_timecode(uint8_t* video_data, int stride, int line, const char* type_str)
@@ -684,7 +852,7 @@ int Capture::read_timecode(uint8_t* video_data, int stride, int line, const char
     if (palff_line >= 0)
     {
         vbiline = video_data + stride * palff_line * 2;
-        if (readVITC(vbiline, &hh, &mm, &ss, &ff)) {
+        if (readVITC(vbiline, 1, &hh, &mm, &ss, &ff)) {
             if (loglev > 1) logFFi("%s (%d): %02u:%02u:%02u:%02u", type_str, line, hh, mm, ss, ff);
             return tc_to_int(hh, mm, ss, ff);
         }
@@ -700,41 +868,275 @@ int Capture::read_timecode(uint8_t* video_data, int stride, int line, const char
     return -1;
 }
 
+// code copied from ingex/studio/capture/dvs_sdi.c
+int Capture::read_fifo_vitc(sv_fifo_buffer *pbuffer, bool vitc1_valid, bool vitc2_valid)
+{
+    // SMPTE-12M VITC
+    int vitc1_tc = pbuffer->timecode.vitc_tc;
+    int vitc2_tc = pbuffer->timecode.vitc_tc2;
 
+
+    int vitc_tc;
+    if (vitc1_valid && !vitc2_valid)
+    {
+        vitc_tc = vitc1_tc;
+    }
+    else if (vitc2_valid && !vitc1_valid)
+    {
+        vitc_tc = vitc2_tc;
+    }
+    else
+    {
+        // Handle buggy field order (can happen with misconfigured camera)
+        // Incorrect field order causes vitc_tc and vitc2 to be swapped.
+        // If the high bit is set on vitc use vitc2 instead.
+        if ((unsigned)vitc1_tc >= 0x80000000 && (unsigned)vitc2_tc < 0x80000000)
+        {
+            vitc_tc = vitc2_tc;
+            if (loglev > 3) //(verbose)
+            {
+                logTF("1st vitc value >= 0x80000000 (0x%08x), using 2nd vitc (0x%08x)\n", vitc1_tc, vitc2_tc);
+            }
+        }
+        else
+        {
+            vitc_tc = vitc1_tc;
+        }
+    }
+
+    // dvs_tc_to_int will mask off the irrelevant bits in the timecodes.
+    return dvs_tc_to_int(vitc_tc);
+}
+
+// code copied from ingex/studio/capture/dvs_sdi.c
+int Capture::read_fifo_dltc(sv_fifo_buffer *pbuffer)
+{
+    // "DLTC" timecode from RP188/RP196 ANC data
+    int ltc_anc = pbuffer->anctimecode.dltc_tc;
+
+
+    // Handle buggy field order (can happen with misconfigured camera)
+    // Incorrect field order causes vitc_tc and vitc2 to be swapped.
+    // If the high bit is set on vitc use vitc2 instead.
+    // A similar check must be done for LTC since the field
+    // flag is occasionally set when the fifo call returns
+    if ((unsigned)ltc_anc >= 0x80000000)
+    {
+        if (loglev > 3) //(verbose)
+        {
+            logTF("dltc tc >= 0x80000000 (0x%08x), masking high bit\n", ltc_anc);
+        }
+        ltc_anc = (unsigned)ltc_anc & 0x7fffffff;
+    }
+
+    // dvs_tc_to_int will mask off the irrelevant bits in the timecodes.
+    return dvs_tc_to_int(ltc_anc);
+}
+
+// code copied from ingex/studio/capture/dvs_sdi.c
+int Capture::read_fifo_ltc(sv_fifo_buffer *pbuffer)
+{
+    // SMPTE-12M LTC
+    int ltc_tc = pbuffer->timecode.ltc_tc;
+
+
+    // Handle buggy field order (can happen with misconfigured camera)
+    // Incorrect field order causes vitc_tc and vitc2 to be swapped.
+    // If the high bit is set on vitc use vitc2 instead.
+    // A similar check must be done for LTC since the field
+    // flag is occasionally set when the fifo call returns
+    if ((unsigned)ltc_tc >= 0x80000000)
+    {
+        if (loglev > 3) //(verbose)
+        {
+            logTF("ltc tc >= 0x80000000 (0x%08x), masking high bit\n", ltc_tc);
+        }
+        ltc_tc = (unsigned)ltc_tc & 0x7fffffff;
+    }
+
+    // dvs_tc_to_int will mask off the irrelevant bits in the timecodes.
+    return dvs_tc_to_int(ltc_tc);
+}
+
+bool Capture::read_audio_track_ltc(uint8_t *dvs_audio_pair, int channel, int *ltc_as_int, bool *is_prev_frame)
+{
+    // extract the audio track and convert to 8-bit
+
+    // A DVS audio buffer contains a mix of two 32bits-per-sample channels
+    // Data for one sample pair is 8 bytes:
+    //  a0 a0 a0 a0  a1 a1 a1 a1
+    
+    unsigned char buf_8bit[1920];
+
+    int channel_offset = 0;
+    if (channel == 1)
+        channel_offset = 4;
+
+    int i;
+    for (i = channel_offset; i < 1920*4*2; i += 8) {
+        buf_8bit[i/8] = 128 + (char)(dvs_audio_pair[i+3]);
+    }
+
+
+    // process frame of audio data
+    
+    ltc_decoder.processFrame(buf_8bit, 1920);
+    if (!ltc_decoder.havePrevFrameTimecode() && !ltc_decoder.haveThisFrameTimecode())
+        return false;
+    
+    rec::Timecode ltc = ltc_decoder.getTimecode();
+    *is_prev_frame = ltc_decoder.havePrevFrameTimecode();
+    *ltc_as_int = ltc.hour * 60 * 60 * 25 + ltc.min * 60 * 25 + ltc.sec * 25 + ltc.frame; 
+    
+    return true;
+}
+
+void Capture::update_capture_buffer_pos(int dvs_nbuffers, int dvs_availbuffers, int pos)
+{
+    pthread_mutex_lock(&m_buffer_state);
+    dvs_buffers_empty = (dvs_nbuffers - 1) - dvs_availbuffers;
+    num_dvs_buffers = dvs_nbuffers;
+    capture_buffer_pos = pos % ring_buffer_size;
+    pthread_mutex_unlock(&m_buffer_state);
+}
+
+void Capture::update_store_buffer_pos(int pos)
+{
+    pthread_mutex_lock(&m_buffer_state);
+    store_buffer_pos = pos % ring_buffer_size;
+    pthread_mutex_unlock(&m_buffer_state);
+}
+
+void Capture::update_browse_buffer_pos(int pos)
+{
+    pthread_mutex_lock(&m_buffer_state);
+    browse_buffer_pos = pos % ring_buffer_size;
+    pthread_mutex_unlock(&m_buffer_state);
+}
 
 extern void *capture_video_thread_wrapper(void *p_obj)
 {
+    log_thread_id("Capture");
+    
     Capture *p = (Capture *)(p_obj);
     p->capture_video_thread();
+    
     return NULL;
 }
 
 extern void *store_video_thread_wrapper(void *p_obj)
 {
+    log_thread_id("Store");
+    
     Capture *p = (Capture *)(p_obj);
     p->store_video_thread();
+    
     return NULL;
 }
 
 extern void *store_browse_thread_wrapper(void *p_obj)
 {
+    log_thread_id("Browse");
+    
     Capture *p = (Capture *)(p_obj);
     p->store_browse_thread();
+    
     return NULL;
 }
 
 extern void *encode_browse_thread_wrapper(void *p_obj)
 {
+    log_thread_id("Browse encode");
+    
     Capture *p = (Capture *)(p_obj);
     p->encode_browse_thread();
+    
     return NULL;
 }
 
-bool Capture::start_record(const char *filename, const char *browseFilename, const char *browseTimecodeFilename, 
-    const char *pseReportFilename)
+bool Capture::open_mxf_file_writer(bool page_file)
 {
-    logFF("start_record(filename=%s, browseFilename=%s, browseTimecodeFilename=%s, pseReportFilename=%s)\n",
-        filename, browseFilename, browseTimecodeFilename, pseReportFilename);
+    bool result;
+    MXFFile *mxf_file = 0;
+    
+    if (page_file) {
+        MXFPageFile *mxf_page_file;
+        if (!mxf_page_file_open_new(mxf_filename, mxf_page_size, &mxf_page_file))
+            return false;
+        mxf_file = mxf_page_file_get_file(mxf_page_file);
+    }
+
+    if (ingest_format == rec::MXF_UNC_8BIT_INGEST_FORMAT ||
+        ingest_format == rec::MXF_UNC_10BIT_INGEST_FORMAT)
+    {
+        rec::ArchiveMXFWriter *mxf_writer = new rec::ArchiveMXFWriter();
+        mxf_writer->setComponentDepth(ingest_format == rec::MXF_UNC_8BIT_INGEST_FORMAT ? 8 : 10);
+        mxf_writer->setAspectRatio(aspect_ratio);
+        mxf_writer->setNumAudioTracks(num_audio_tracks);
+        mxf_writer->setIncludeCRC32(include_crc32);
+        mxf_writer->setStartPosition(0);
+        if (mxf_file)
+            result = mxf_writer->createFile(&mxf_file, mxf_filename);
+        else
+            result = mxf_writer->createFile(mxf_filename);
+        if (!result) {
+            if (mxf_file)
+                mxf_file_close(&mxf_file);
+            delete mxf_writer;
+            return false;
+        }
+
+        frame_writer = new rec::ArchiveMXFFrameWriter(element_size, palff_mode, mxf_writer);
+
+        mxfout = mxf_writer;
+    }
+    else // ingest_format == rec::MXF_D10_50_INGEST_FORMAT
+    {
+        rec::D10MXFWriter *mxf_writer = new rec::D10MXFWriter();
+        mxf_writer->setAspectRatio(aspect_ratio);
+        mxf_writer->setNumAudioTracks(num_audio_tracks);
+        mxf_writer->setPrimaryTimecode(primary_timecode);
+        mxf_writer->setEventFilename(event_filename);
+        if (mxf_file)
+            result = mxf_writer->createFile(&mxf_file, mxf_filename);
+        else
+            result = mxf_writer->createFile(mxf_filename);
+        if (!result) {
+            if (mxf_file)
+                mxf_file_close(&mxf_file);
+            delete mxf_writer;
+            return false;
+        }
+        
+        frame_writer = new rec::D10MXFFrameWriter(element_size, palff_mode, mxf_writer);
+
+        mxfout = mxf_writer;
+    }
+
+    return true;
+}
+
+void Capture::close_mxf_file_writer()
+{
+    delete mxfout;
+    mxfout = 0;
+    
+    delete frame_writer;
+    frame_writer = 0;
+}
+
+bool Capture::start_record(const char *filename,
+                           const char *browseFilename,
+                           const char *browseTimecodeFilename,
+                           const char *pseReportFilename,
+                           const char *eventFilename,
+                           const rec::Rational *aspectRatio)
+{
+    // TODO: code shouldn't rely on all being non-null
+    assert(filename && browseFilename && browseTimecodeFilename && pseReportFilename && eventFilename);
+    
+    logFF("start_record(filename=%s, browseFilename=%s, browseTimecodeFilename=%s, pseReportFilename=%s, eventFilename=%s)\n",
+        filename, browseFilename, browseTimecodeFilename, pseReportFilename, eventFilename);
     logFF("browse_enabled=%s; pse_enabled=%s\n", browse_enabled ? "true" : "false", pse_enabled ? "true" : "false"); 
 
     if (g_record_start) {           // already started recording
@@ -748,32 +1150,23 @@ bool Capture::start_record(const char *filename, const char *browseFilename, con
             return false;
         }
     }
+    
+    aspect_ratio = *aspectRatio;
 
     // reset the stop frame after we know the browse thread is not running 
     g_record_stop_frame = -2;
     
-    
-    // take capture out of suspend and re-suspend if something fails further below
-    int prev_last_frame_captured = last_captured();
+
+    // restart capturing
     CaptureSuspendGuard captureSuspendGuard(&g_suspend_capture);
-    
-    // wait for first frame to be captured
-    int count = 100; // wait maximum 1 second for first frame to be captured
-    while (last_captured() <= prev_last_frame_captured && count > 0)
+    int last_frame_captured;
+    if (!restart_capture(3000, &last_frame_captured))
     {
-        sleep_msec(10);
-        count--;
-    }
-    if (count == 0)
-    {
-        logTF("start_record: failed to start capturing within 1 second of starting\n");
+        logTF("start_record: failed to start capturing within 3 second of starting\n");
         return false;
     }
-    
-    // For start 'now' operation, record current frame now
-    int last_frame_captured = last_captured();
     logFF("start_record: last_frame_captured=%d\n", last_frame_captured);
-
+    
     // We don't check for input video status since it is ok to
     // start recording without a good signal, but the recording will
     // fail if we don't get a good signal soon
@@ -782,6 +1175,7 @@ bool Capture::start_record(const char *filename, const char *browseFilename, con
     strcpy(mxf_filename, filename);
     strcpy(browse_filename, browseFilename);
     strcpy(browse_timecode_filename, browseTimecodeFilename);
+    strcpy(event_filename, eventFilename);
 
     // make MXF directory if not present
     int res;
@@ -796,18 +1190,19 @@ bool Capture::start_record(const char *filename, const char *browseFilename, con
     }
 
     // Open MXF file for writing
-    pthread_mutex_lock(&m_mxfout);
-    res = prepare_archive_mxf_file(mxf_filename, num_audio_tracks, 0, strict_MXF_checking, &mxfout);
-    pthread_mutex_unlock(&m_mxfout);
-    if (!res) {
-        logTF("Failed to prepare MXF writer\n");
-        return false;
-    }
+    {
+        LOCK_SECTION(mxfout_mutex);
 
-    // get the package UIDs
-    g_materialPackageUID = get_material_package_uid(mxfout);
-    g_filePackageUID = get_file_package_uid(mxfout);
-    g_tapePackageUID = get_tape_package_uid(mxfout);
+        if (!open_mxf_file_writer(false)) {
+            logTF("Failed to prepare MXF writer\n");
+            return false;
+        }
+
+        // get the package UIDs
+        g_materialPackageUID = mxfout->getMaterialPackageUID();
+        g_filePackageUID = mxfout->getFileSourcePackageUID();
+        g_tapePackageUID = mxfout->getTapeSourcePackageUID();
+    }
 
 
     // Crash record: start from last captured frame
@@ -836,21 +1231,19 @@ bool Capture::start_record(const char *filename, const char *browseFilename, con
 
         // create browse store thread and browse encode thread
         
-        pthread_t   browse_thread;
+        pthread_t browse_thread;
         if ((res = pthread_create(&browse_thread, NULL, store_browse_thread_wrapper, this)) != 0) {
             logTF("Failed to create browse thread: %s\n", strerror(res));
             return false;
         }
-        logTF("browse thread id = %lu\n", browse_thread);
 
-        pthread_t   encode_browse_thread;
+        pthread_t encode_browse_thread;
         if ((res = pthread_create(&encode_browse_thread, NULL, encode_browse_thread_wrapper, this)) != 0) {
             logTF("Failed to create encode browse thread: %s\n", strerror(res));
             return false;
         }
-        logTF("encode browse thread id = %lu\n", browse_thread);
     }
-
+    
     // record start vitc and ltc (for record stats)
     uint8_t *addr = rec_ring_frame(first_frame_to_write);
     memcpy(&start_ltc, addr + ring_ltc_offset(), sizeof(start_ltc));
@@ -865,8 +1258,26 @@ bool Capture::start_record(const char *filename, const char *browseFilename, con
     // Open a new PSE analysis
     if (pse_enabled)
     {
-        pse_report = pseReportFilename;
-        pse->open();
+        if (pse->is_init())
+        {
+            pse_report = pseReportFilename;
+            if (!pse->open())
+            {
+                logTF("Failed to open PSE engine\n");
+            }
+        }
+        else
+        {
+            logTF("Not performing PSE analysis because engine initialization failed\n");
+        }
+    }
+
+    // Setup digibeta dropout detection
+    if (digibeta_dropout_enabled) {
+        pthread_mutex_lock(&m_dropout_detector);
+        dropout_detector = new DigiBetaDropoutDetector(video_width, video_height,
+            digibeta_dropout_lower_threshold, digibeta_dropout_upper_threshold, digibeta_dropout_store_threshold);
+        pthread_mutex_unlock(&m_dropout_detector);
     }
 
     // Clear timecodes list
@@ -880,7 +1291,8 @@ bool Capture::start_record(const char *filename, const char *browseFilename, con
     return true;
 }
 
-bool Capture::stop_record(int duration, InfaxData* infaxData, VTRError *vtrErrors, int numVTRErrors, int* pseResult)
+bool Capture::stop_record(int duration, InfaxData* infaxData, VTRError *vtrErrors, long numVTRErrors,
+    int* pseResult, long* digiBetaDropoutCount)
 {
     *pseResult = -1; // only set to 0 or 1 later on if the analysis was completed
     
@@ -911,9 +1323,10 @@ bool Capture::stop_record(int duration, InfaxData* infaxData, VTRError *vtrError
     g_suspend_capture = true;
 
     // Get all PSE results
-    int numPSEFailues = 0;
+    long numPSEFailues = 0;
     PSEFailure *pseFailures = 0;
-    if (pse_enabled)
+    bool pse_was_open = pse->is_open();
+    if (pse_enabled && pse_was_open)
     {
         std::vector<PSEResult> results;
         pse->get_remaining_results(results);
@@ -921,9 +1334,9 @@ bool Capture::stop_record(int duration, InfaxData* infaxData, VTRError *vtrError
     
         // Convert PSE results to C array for MXF call
         numPSEFailues = results.size();
-        logFF("PSE failures = %d\n", numPSEFailues);
+        logFF("PSE failures = %ld\n", numPSEFailues);
         pseFailures = new PSEFailure[numPSEFailues];
-        for (int i = 0; i < numPSEFailues; i++) {
+        for (long i = 0; i < numPSEFailues; i++) {
             pseFailures[i].position = results[i].position;
             pseFailures[i].vitcTimecode = timecodes[pseFailures[i].position].first;
             pseFailures[i].ltcTimecode = timecodes[pseFailures[i].position].second;
@@ -931,7 +1344,7 @@ bool Capture::stop_record(int duration, InfaxData* infaxData, VTRError *vtrError
             pseFailures[i].luminanceFlash = results[i].flash;
             pseFailures[i].spatialPattern = results[i].spatial;
             pseFailures[i].extendedFailure = results[i].extended;
-            logFF("    %4d: pos=%6llu VITC=%02d:%02d:%02d:%02d LTC=%02d:%02d:%02d:%02d red=%4d fls=%4d spt=%4d ext=%d\n", i, pseFailures[i].position,
+            logFF("    %4ld: pos=%6"PRIu64" VITC=%02d:%02d:%02d:%02d LTC=%02d:%02d:%02d:%02d red=%4d fls=%4d spt=%4d ext=%d\n", i, pseFailures[i].position,
                     pseFailures[i].vitcTimecode.hour, pseFailures[i].vitcTimecode.min,
                     pseFailures[i].vitcTimecode.sec, pseFailures[i].vitcTimecode.frame,
                     pseFailures[i].ltcTimecode.hour, pseFailures[i].ltcTimecode.min,
@@ -939,18 +1352,35 @@ bool Capture::stop_record(int duration, InfaxData* infaxData, VTRError *vtrError
                     pseFailures[i].redFlash, pseFailures[i].luminanceFlash, pseFailures[i].spatialPattern, pseFailures[i].extendedFailure);
         }
     }
+    
+    // get digibeta dropouts
+    long numDigiBetaDropouts = 0;
+    DigiBetaDropout *digiBetaDropouts = 0;
+    if (dropout_detector && dropout_detector->getNumDropouts() > 0) {
+        digiBetaDropouts = &dropout_detector->getDropouts()[0];
+        numDigiBetaDropouts = (long)dropout_detector->getNumDropouts();
+    }
+
 
     // Complete MXF file
-    pthread_mutex_lock(&m_mxfout);
-    int res = complete_archive_mxf_file(&mxfout, infaxData, pseFailures, numPSEFailues, vtrErrors, numVTRErrors);
-    if (!res) {
-        logFF("Failed to complete writing Archive MXF file\n");
-    }
-    mxfout = 0;
-    pthread_mutex_unlock(&m_mxfout);
+    {
+        LOCK_SECTION(mxfout_mutex);
+        
+        int res = mxfout->complete(infaxData,
+            pseFailures, numPSEFailues,
+            vtrErrors, numVTRErrors,
+            digiBetaDropouts, numDigiBetaDropouts);
+        if (!res) {
+            logFF("Failed to complete writing Archive MXF file\n");
+        }
 
+        close_mxf_file_writer();
+    }
+
+
+    
     // Write PSE resport
-    if (pse_enabled)
+    if (pse_enabled && pse_was_open)
     {
         PSEReport* pseReport = PSEReport::open(pse_report);
         if (pseReport == 0)
@@ -963,12 +1393,12 @@ bool Capture::stop_record(int duration, InfaxData* infaxData, VTRError *vtrError
             bool result = pseReport->write(0, g_frames_written - 1, "", infaxData, pseFailures, numPSEFailues, &passed);
             if (result) 
             {
-                logFF("generate_PSE_report() succeeded. file=%s\n", pse_report.c_str());
+                logFF("pseReport->write() succeeded. file=%s\n", pse_report.c_str());
                 *pseResult = passed ? 0 : 1;
             }
             else 
             {
-                logFF("generate_PSE_report() failed. file=%s\n", pse_report.c_str());
+                logFF("pseReport->write() failed. file=%s\n", pse_report.c_str());
             }
 
             delete pseReport;
@@ -976,50 +1406,58 @@ bool Capture::stop_record(int duration, InfaxData* infaxData, VTRError *vtrError
 
         delete [] pseFailures;
     }
+    
+    *digiBetaDropoutCount = 0;
+    if (dropout_detector)
+    {
+        *digiBetaDropoutCount = dropout_detector->getNumDropouts();
+        
+        pthread_mutex_lock(&m_dropout_detector);
+        delete dropout_detector;
+        dropout_detector = 0;
+        pthread_mutex_unlock(&m_dropout_detector);
+    }
 
 
     logFF("stop_record: finished, g_frames_written=%d\n", g_frames_written);
     return true;
 }
 
-bool Capture::start_multi_item_record(const char* filename)
+bool Capture::start_multi_item_record(const char *filename,
+                                      const char *eventFilename,
+                                      const rec::Rational *aspectRatio)
 {
+    // TODO: code shouldn't rely on all being non-null
+    assert(filename && eventFilename);
+    
     if (strstr(filename, "%d") == 0)
     {
         logTF("start_multi_item_record: invalid page filename '%s'\n", filename);
         return false;
     }
     
-    logFF("start_multi_item_record(filename=%s)\n", filename);
+    logFF("start_multi_item_record(filename=%s, eventFilename=%s)\n", filename, eventFilename);
 
     if (g_record_start) {           // already started recording
         logTF("start_multi_item_record: FAILED - recording in progress\n");
         return false;
     }
+    
+    aspect_ratio = *aspectRatio;
 
     // reset the stop frame after we know the browse thread is not running 
     g_record_stop_frame = -2;
     
-    // take capture out of suspend and re-suspend if something fails further below
-    int prev_last_frame_captured = last_captured();
+    // restart capturing
     CaptureSuspendGuard captureSuspendGuard(&g_suspend_capture);
-    
-    // wait for first frame to be captured
-    int count = 100; // wait maximum 1 second for first frame to be captured
-    while (last_captured() <= prev_last_frame_captured && count > 0)
+    int last_frame_captured;
+    if (!restart_capture(3000, &last_frame_captured))
     {
-        sleep_msec(10);
-        count--;
-    }
-    if (count == 0)
-    {
-        logTF("start_record: failed to start capturing within 1 second of starting\n");
+        logTF("start_record: failed to start capturing within 3 second of starting\n");
         return false;
     }
-    
-    // For start 'now' operation, record current frame now
-    int last_frame_captured = last_captured();
     logFF("start_multi_item_record: last_frame_captured=%d\n", last_frame_captured);
+    
 
     // We don't check for input video status since it is ok to
     // start recording without a good signal, but the recording will
@@ -1029,6 +1467,7 @@ bool Capture::start_multi_item_record(const char* filename)
     strcpy(mxf_filename, filename);
     strcpy(browse_filename, "");
     strcpy(browse_timecode_filename, "");
+    strcpy(event_filename, eventFilename);
 
     // make MXF directory if not present
     int res;
@@ -1043,28 +1482,19 @@ bool Capture::start_multi_item_record(const char* filename)
     }
 
     // Open MXF file for writing
-    MXFPageFile* mxfPageFile;
-    MXFFile* mxfFile;
-    if (!mxf_page_file_open_new(mxf_filename, mxf_page_size, &mxfPageFile))
     {
-        logTF("start_multi_item_record: Failed to open MXF page file\n");
-        return false;
-    }
-    mxfFile = mxf_page_file_get_file(mxfPageFile);
+        LOCK_SECTION(mxfout_mutex);
+        
+        if (!open_mxf_file_writer(true)) {
+            logTF("start_multi_item_record: Failed to prepare MXF writer\n");
+            return false;
+        }
     
-    pthread_mutex_lock(&m_mxfout);
-    res = prepare_archive_mxf_file_2(&mxfFile, mxf_filename, num_audio_tracks, 0, strict_MXF_checking, &mxfout);
-    pthread_mutex_unlock(&m_mxfout);
-    if (!res) {
-        logTF("start_multi_item_record: Failed to prepare MXF writer\n");
-        mxf_file_close(&mxfFile);
-        return false;
+        // get the package UIDs
+        g_materialPackageUID = mxfout->getMaterialPackageUID();
+        g_filePackageUID = mxfout->getFileSourcePackageUID();
+        g_tapePackageUID = mxfout->getTapeSourcePackageUID();
     }
-
-    // get the package UIDs
-    g_materialPackageUID = get_material_package_uid(mxfout);
-    g_filePackageUID = get_file_package_uid(mxfout);
-    g_tapePackageUID = get_tape_package_uid(mxfout);
 
     // Crash record: start from last captured frame
     int first_frame_to_write;
@@ -1086,10 +1516,28 @@ bool Capture::start_multi_item_record(const char* filename)
     // Open a new PSE analysis
     if (pse_enabled)
     {
-        pse_report = "";
-        pse->open();
+        if (pse->is_init())
+        {
+            pse_report = "";
+            if (!pse->open())
+            {
+                logTF("Failed to open PSE engine\n");
+            }
+        }
+        else
+        {
+            logTF("Not performing PSE analysis because engine initialization failed\n");
+        }
     }
 
+    // Setup digibeta dropout detection
+    if (digibeta_dropout_enabled) {
+        pthread_mutex_lock(&m_dropout_detector);
+        dropout_detector = new DigiBetaDropoutDetector(video_width, video_height,
+            digibeta_dropout_lower_threshold, digibeta_dropout_upper_threshold, digibeta_dropout_store_threshold);
+        pthread_mutex_unlock(&m_dropout_detector);
+    }
+    
     // Clear timecodes list
     timecodes.clear();
 
@@ -1101,7 +1549,8 @@ bool Capture::start_multi_item_record(const char* filename)
     return true;
 }
 
-bool Capture::stop_multi_item_record(int duration, VTRError *vtrErrors, int numVTRErrors, int* pseResult)
+bool Capture::stop_multi_item_record(int duration, VTRError *vtrErrors, long numVTRErrors,
+    int* pseResult, long* digiBetaDropoutCount)
 {
     InfaxData infaxData;
     memset(&infaxData, 0, sizeof(InfaxData));
@@ -1135,9 +1584,10 @@ bool Capture::stop_multi_item_record(int duration, VTRError *vtrErrors, int numV
     g_suspend_capture = true;
 
     // Get all PSE result
-    int numPSEFailues = 0;
+    long numPSEFailues = 0;
     PSEFailure *pseFailures = 0;
-    if (pse_enabled)
+    bool pse_was_open = pse->is_open();
+    if (pse_enabled && pse_was_open)
     {
         std::vector<PSEResult> results;
         pse->get_remaining_results(results);
@@ -1145,9 +1595,9 @@ bool Capture::stop_multi_item_record(int duration, VTRError *vtrErrors, int numV
     
         // Convert PSE results to C array for MXF call
         numPSEFailues = results.size();
-        logFF("PSE failures = %d\n", numPSEFailues);
+        logFF("PSE failures = %ld\n", numPSEFailues);
         pseFailures = new PSEFailure[numPSEFailues];
-        for (int i = 0; i < numPSEFailues; i++) {
+        for (long i = 0; i < numPSEFailues; i++) {
             pseFailures[i].position = results[i].position;
             pseFailures[i].vitcTimecode = timecodes[pseFailures[i].position].first;
             pseFailures[i].ltcTimecode = timecodes[pseFailures[i].position].second;
@@ -1155,7 +1605,7 @@ bool Capture::stop_multi_item_record(int duration, VTRError *vtrErrors, int numV
             pseFailures[i].luminanceFlash = results[i].flash;
             pseFailures[i].spatialPattern = results[i].spatial;
             pseFailures[i].extendedFailure = results[i].extended;
-            logFF("    %4d: pos=%6llu VITC=%02d:%02d:%02d:%02d LTC=%02d:%02d:%02d:%02d red=%4d fls=%4d spt=%4d ext=%d\n", i, pseFailures[i].position,
+            logFF("    %4ld: pos=%6"PRIu64" VITC=%02d:%02d:%02d:%02d LTC=%02d:%02d:%02d:%02d red=%4d fls=%4d spt=%4d ext=%d\n", i, pseFailures[i].position,
                     pseFailures[i].vitcTimecode.hour, pseFailures[i].vitcTimecode.min,
                     pseFailures[i].vitcTimecode.sec, pseFailures[i].vitcTimecode.frame,
                     pseFailures[i].ltcTimecode.hour, pseFailures[i].ltcTimecode.min,
@@ -1164,17 +1614,34 @@ bool Capture::stop_multi_item_record(int duration, VTRError *vtrErrors, int numV
         }
     }
 
-    // Complete MXF file
-    pthread_mutex_lock(&m_mxfout);
-    int res = complete_archive_mxf_file(&mxfout, &infaxData, pseFailures, numPSEFailues, vtrErrors, numVTRErrors);
-    if (!res) {
-        logFF("stop_multi_item_record: Failed to complete writing Archive MXF file\n");
+    // get digibeta dropouts
+    long numDigiBetaDropouts = 0;
+    DigiBetaDropout *digiBetaDropouts = 0;
+    if (dropout_detector && dropout_detector->getNumDropouts() > 0) {
+        digiBetaDropouts = &dropout_detector->getDropouts()[0];
+        numDigiBetaDropouts = (long)dropout_detector->getNumDropouts();
     }
-    mxfout = 0;
-    pthread_mutex_unlock(&m_mxfout);
 
+    
+    // Complete MXF file
+    {
+        LOCK_SECTION(mxfout_mutex);
+
+        int res = mxfout->complete(&infaxData,
+                                   pseFailures, numPSEFailues,
+                                   vtrErrors, numVTRErrors,
+                                   digiBetaDropouts, numDigiBetaDropouts);
+        if (!res) {
+            logFF("stop_multi_item_record: Failed to complete writing Archive MXF file\n");
+        }
+
+        close_mxf_file_writer();
+    }
+
+
+    
     // Get the overall PSE result
-    if (pse_enabled)
+    if (pse_enabled && pse_was_open)
     {
         bool result = PSEReport::hasPassed(pseFailures, numPSEFailues);
         *pseResult = result ? 0 : 1;
@@ -1183,6 +1650,17 @@ bool Capture::stop_multi_item_record(int duration, VTRError *vtrErrors, int numV
         delete [] pseFailures;
     }
 
+    *digiBetaDropoutCount = 0;
+    if (dropout_detector)
+    {
+        *digiBetaDropoutCount = dropout_detector->getNumDropouts();
+        
+        pthread_mutex_lock(&m_dropout_detector);
+        delete dropout_detector;
+        dropout_detector = 0;
+        pthread_mutex_unlock(&m_dropout_detector);
+    }
+    
 
     logFF("stop_multi_item_record: finished, g_frames_written=%d\n", g_frames_written);
     return true;
@@ -1220,46 +1698,82 @@ bool Capture::abort_record(void)
 
 
     // abort MXF writing
-    pthread_mutex_lock(&m_mxfout);
     bool res = true;
-    if (mxfout != 0)
     {
-        res = abort_archive_mxf_file(&mxfout);
-        logFF("abort_record: abort_archive_mxf_file() returned %d\n", res);
-        mxfout = 0;
-    
-        // delete file
-        if (mxf_page_file_is_page_filename(mxf_filename))
+        LOCK_SECTION(mxfout_mutex);
+
+        if (mxfout)
         {
-            int status = mxf_page_file_remove(mxf_filename);
-            logFF("abort_record: mxf_page_file_remove(%s) returned %d\n", mxf_filename, status);
-            if (!status) {
-                logFF("abort_record: mxf_page_file_remove failed\n");
-                res = 0;    // abort failed to remove file
+            res = mxfout->abort();
+            logFF("abort_record: abort_archive_mxf_file() returned %d\n", res);
+            
+            close_mxf_file_writer();
+        
+            
+            // delete file
+            if (mxf_page_file_is_page_filename(mxf_filename))
+            {
+                int status = mxf_page_file_remove(mxf_filename);
+                logFF("abort_record: mxf_page_file_remove(%s) returned %d\n", mxf_filename, status);
+                if (!status) {
+                    logFF("abort_record: mxf_page_file_remove failed\n");
+                    res = 0;    // abort failed to remove file
+                }
             }
-        }
-        else
-        {
-            int status = remove(mxf_filename);
-            logFF("abort_record: remove(%s) returned %d\n", mxf_filename, status);
-            if (status != 0) {
-                logFF("abort_record: remove failed: %s\n", strerror(status));
-                res = 0;    // abort failed to remove file
+            else
+            {
+                int status = remove(mxf_filename);
+                logFF("abort_record: remove(%s) returned %d\n", mxf_filename, status);
+                if (status != 0) {
+                    logFF("abort_record: remove failed: %s\n", strerror(status));
+                    res = 0;    // abort failed to remove file
+                }
             }
         }
     }
-    pthread_mutex_unlock(&m_mxfout);
 
     // Close PSE analysis
-    if (pse_enabled)
+    if (pse_enabled && pse->is_open())
     {
         pse->close();
     }
 
+    // close digibeta dropout detection
+    // Note that we assume the dropout detector is running in the store_video_thread thread which has
+    // finished writing
+    if (dropout_detector) {
+        pthread_mutex_lock(&m_dropout_detector);
+        delete dropout_detector;
+        dropout_detector = 0;
+        pthread_mutex_unlock(&m_dropout_detector);
+    }
+    
     g_aborted = true;
 
     logFF("abort_record: returning %d\n", res);
     return res;
+}
+
+bool Capture::restart_capture(long timeout_ms, int *last_frame_captured)
+{
+    int prev_last_frame_captured = last_captured();
+    *last_frame_captured = prev_last_frame_captured;
+    
+    // TODO: use conditional variables to communicate between threads
+    // wait for first frame to be captured
+    rec::Timer timer;
+    timer.start(timeout_ms * MSEC_IN_USEC);
+    while ((*last_frame_captured) <= prev_last_frame_captured && timer.timeLeft() > 0)
+    {
+        rec::sleep_msec(10);
+        (*last_frame_captured) = last_captured();
+    }
+    if ((*last_frame_captured) <= prev_last_frame_captured)
+    {
+        return false;
+    }
+    
+    return true;
 }
 
 BrowseFrame* Capture::get_browse_frame_write()
@@ -1303,7 +1817,7 @@ void Capture::browse_end_sequence()
     pthread_mutex_unlock(&m_browse_frame_ready_cond);
 }
 
-void Capture::browse_add_frame(uint8_t *video, uint8_t *audio, ArchiveTimecode ltc, ArchiveTimecode vitc)
+void Capture::browse_add_frame(uint8_t *video, uint8_t *audio, rec::Timecode ltc, rec::Timecode vitc)
 {
     BrowseFrame* frame = get_browse_frame_write();
     
@@ -1342,7 +1856,7 @@ void Capture::browse_add_frame(uint8_t *video, uint8_t *audio, ArchiveTimecode l
     pthread_mutex_unlock(&m_browse_frame_ready_cond);
 }
 
-void Capture::browse_add_black_frame(ArchiveTimecode ltc, ArchiveTimecode vitc)
+void Capture::browse_add_black_frame(rec::Timecode ltc, rec::Timecode vitc)
 {
     BrowseFrame* frame = get_browse_frame_write();
     
@@ -1362,7 +1876,7 @@ void Capture::encode_browse_thread(void)
 {
     ThreadRunningGuard guard(&browse_thread_running);
     
-    BrowseEncoder* encoder = BrowseEncoder::create(browse_filename, browse_kbps, browse_thread_count);
+    BrowseEncoder* encoder = BrowseEncoder::create(browse_filename, aspect_ratio, browse_kbps, browse_thread_count);
     if (encoder == 0)
     {
         logTF("Failed to create the browse encoder for file '%s'\n", browse_filename);
@@ -1383,14 +1897,14 @@ void Capture::encode_browse_thread(void)
 
         if (frame->isBlackFrame)
         {
-            if (!encoder->encode(black_browse_video, silent_browse_audio, frame->ltc, frame->vitc, g_browse_written++)) 
+            if (!encoder->encode(black_browse_video, silent_browse_audio, g_browse_written++)) 
             {
                 logTF("browse_encoder_encode failed\n");
             }
         }
         else
         {
-            if (!encoder->encode(frame->video, frame->audio, frame->ltc, frame->vitc, g_browse_written++)) 
+            if (!encoder->encode(frame->video, frame->audio, g_browse_written++)) 
             {
                 logTF("browse_encoder_encode failed\n");
             }
@@ -1488,12 +2002,12 @@ void Capture::store_browse_thread(void)
             continue;
         }
 
-        // Check we haven't wrapped around ring buffer
+        // Pre-check we haven't wrapped around ring buffer (-1 because of the 1 frame capture delay and buffer)
         if (overflow_count == 0 && 
-            last_frame_captured - g_last_browse_frame_written >= ring_buffer_size) 
+            last_frame_captured - g_last_browse_frame_written >= ring_buffer_size - 1) 
         {
-            logTF("Browse failed: ring buffer overflow: last_frame_captured(%d)-last_frame_written(%d) >= ring_buffer_size(%d)\n",
-                last_frame_captured, g_last_browse_frame_written, ring_buffer_size);
+            logTF("Browse failed: ring buffer overflow: last_frame_captured(%d)-last_frame_written(%d) >= ring_buffer_size-1(%d)\n",
+                last_frame_captured, g_last_browse_frame_written, ring_buffer_size - 1);
                 
             // we don't stop the recording if the browse fails - just report the problem
             report_browse_buffer_overflow();
@@ -1510,7 +2024,7 @@ void Capture::store_browse_thread(void)
         {
             // write black frame
             
-            ArchiveTimecode ltc, vitc, ctc;
+            rec::Timecode ltc, vitc, ctc;
             int_to_timecode(0, &ltc);
             int_to_timecode(0, &vitc);
             int_to_timecode(browse_frames_written, &ctc);
@@ -1528,29 +2042,54 @@ void Capture::store_browse_thread(void)
         else
         {
             // next frame which needs to be written
-            uint8_t *full_video = rec_ring_frame(g_last_browse_frame_written + 1);
-            uint8_t *active_video = full_video + 16 * 720*2; 
+            uint8_t *frame = rec_ring_frame(g_last_browse_frame_written + 1);
+            uint8_t *video_8bit = rec_ring_8bit_video_frame(g_last_browse_frame_written + 1);
+            uint8_t *active_video = video_8bit;
+            if (palff_mode)
+                active_video += 16 * 720*2; // VBI is not included in the browse copy
         
             // read ltc and vitc from ring buffer
             int ltc_as_int, vitc_as_int;
-            memcpy(&ltc_as_int, full_video + ring_ltc_offset(), sizeof(ltc_as_int));
-            memcpy(&vitc_as_int, full_video + ring_vitc_offset(), sizeof(vitc_as_int));
+            memcpy(&ltc_as_int, frame + ring_ltc_offset(), sizeof(ltc_as_int));
+            memcpy(&vitc_as_int, frame + ring_vitc_offset(), sizeof(vitc_as_int));
     
-            ArchiveTimecode ltc, vitc, ctc;
+            rec::Timecode ltc, vitc, ctc;
             int_to_timecode(ltc_as_int, &ltc);
             int_to_timecode(vitc_as_int, &vitc);
             int_to_timecode(browse_frames_written, &ctc);
             browse_frames_written++;
             
             // Add frame to browse encoding
-            browse_add_frame(active_video, full_video + ring_audio_pair_offset(0), ltc, vitc);
+            browse_add_frame(active_video, frame + ring_audio_pair_offset(0), ltc, vitc);
             
             // write timecodes to file
             // control timecode, vertical interval timecode and linear timecode
             write_browse_timecode(timecodeFile, ctc, vitc, ltc);
         }
 
+        // Post-check we haven't wrapped around ring buffer (-1 because of the 1 frame capture delay and buffer)
+        last_frame_captured = last_captured();
+        if (overflow_count == 0 && 
+            last_frame_captured - g_last_browse_frame_written >= ring_buffer_size - 1)
+        {
+            logTF("Browse failed: ring buffer overflow: last_frame_captured(%d)-last_frame_written(%d) >= ring_buffer_size-1(%d)\n",
+                last_frame_captured, g_last_browse_frame_written, ring_buffer_size - 1);
+                
+            // we don't stop the recording if the browse fails - just report the problem
+            report_browse_buffer_overflow();
+            
+            // skip 3/4 of the frames to try and catch up
+            overflow_count += browse_overflow_frames;
+            overflow_count = (overflow_count > ring_buffer_size) ? ring_buffer_size : overflow_count;
+            logTF("Writing %d black frames to browse file\n", browse_overflow_frames);
+            
+            continue;
+        }
+        
         g_last_browse_frame_written++;
+        
+        // update buffer state
+        update_browse_buffer_pos(g_last_browse_frame_written);
         
         if (debug_store_thread_buffer)
         {
@@ -1678,6 +2217,7 @@ void Capture::wait_for_good_SDI_signal(int required_good_frames)
             }
         }
 
+        
         sleep_msec(18);        // sleep slightly less than one tick (20,000)
     }
 
@@ -1689,34 +2229,49 @@ void Capture::poll_sdi_signal_status(void)
     int videoin, audioin;
     unsigned int h_clock, l_clock;
     int current_tick;
-    int res1, res2, res3;
+    int valid_timecode;
+    int res1, res2, res3, res4;
     int query_ok;
     
     res1 = sv_currenttime(sv, SV_CURRENTTIME_CURRENT, &current_tick, &h_clock, &l_clock);
     res2 = sv_query(sv, SV_QUERY_VIDEOINERROR, 0, &videoin);
     res3 = sv_query(sv, SV_QUERY_AUDIOINERROR, 0, &audioin);
-    query_ok = (res1 == SV_OK && res2 == SV_OK && res3 == SV_OK);
+    res4 = sv_query(sv, SV_QUERY_VALIDTIMECODE, 0, &valid_timecode);
+    query_ok = (res1 == SV_OK && res2 == SV_OK && res3 == SV_OK && res4 == SV_OK);
 
-    set_input_SDI_status(query_ok && videoin == SV_OK, query_ok && audioin == SV_OK);
+    set_input_SDI_status(query_ok && videoin == SV_OK,
+                         query_ok && audioin == SV_OK,
+                         query_ok && (valid_timecode & SV_VALIDTIMECODE_DLTC),
+                         query_ok && (valid_timecode & SV_VALIDTIMECODE_VITC_F1));
 }
 
 // Capture frames from sv fifo and write to ring buffer
 // Read VITC and burnt-in LTC from VBI when using PALFF mode
 void Capture::capture_video_thread(void)
 {
+    // log the scheduling policy
+    int policy;
+    struct sched_param param;
+    pthread_getschedparam(pthread_self(), &policy, &param);
+    logTF("capture scheduling policy='%s' with priority=%d\n",
+        policy == SCHED_RR ? "realtime" : "non-realtime", param.sched_priority);
+        
     // Boolean controlling whether the sv_fifo_getbuffer flushes the fifo. 
     // DVS support suggests this is only done once the first time sv_fifo_getbuffer is called
     bool first_sv_fifo_getbuffer = true;
 
     // Loop forever capturing frames into ring buffer
+    int wait_good_frame_count = 0;
     int last_res = SV_OK;
     bool start_input_fifo = true;
+    bool have_previous_capture_frame = false;
     while (1) {
         
         // wait and poll the SDI status if the capture has been suspended
         if (g_suspend_capture)
         {
             logFF("Suspended capturing\n");
+            flushLogFile();
             
             if (!start_input_fifo)
             {
@@ -1740,8 +2295,12 @@ void Capture::capture_video_thread(void)
             init_start_input_fifo();
             start_input_fifo = false;
             first_sv_fifo_getbuffer = true;
+            wait_good_frame_count = WAIT_GOOD_FRAME_COUNT;
+            have_previous_capture_frame = false;
+            ltc_decoder.reset();
             
             logFF("Starting capturing\n");
+            flushLogFile();
         }
         else
         {
@@ -1750,6 +2309,12 @@ void Capture::capture_video_thread(void)
         
         
         int last_frame_captured = last_captured();
+
+        // the index of the next frame to be captured is the reported last frame captured (for consumption by 
+        // other threads) + 2, unless there is not previous frame, in which case it is + 1
+        int capture_buffer_index = last_frame_captured + 1;
+        if (have_previous_capture_frame)
+            capture_buffer_index++;
 
         // Get sv memmory buffer
         sv_fifo_buffer      *pbuffer;
@@ -1762,7 +2327,7 @@ void Capture::capture_video_thread(void)
         if ((res = sv_fifo_getbuffer(sv, pinput, &pbuffer, NULL, flags)) == SV_OK) {
             
             // sdi signal is good
-            set_input_SDI_status(true, true);
+            set_input_SDI_status(true, true, true, true);
 
             if (res != last_res)
                 logFF("capture succeeded with video and audio OK\n");
@@ -1770,15 +2335,17 @@ void Capture::capture_video_thread(void)
         }
         else {
             logFF("sv_fifo_getbuffer(pinput) failed: %s\n", sv_geterrortext(res));
+            logFF("wait for good frame count: %d\n", wait_good_frame_count);
 
             // sdi signal is bad
-            set_input_SDI_status(false, false);
+            set_input_SDI_status(false, false, false, false);
 
             // Stop fifo and wait for good signal before continuing
             stop_input_fifo();
             start_input_fifo = true;
 
-            wait_for_good_SDI_signal(32);       // wait for 32 good frames
+            assert(WAIT_GOOD_FRAME_AFTER_ERROR_COUNT - WAIT_GOOD_FRAME_COUNT > 0);
+            wait_for_good_SDI_signal(WAIT_GOOD_FRAME_AFTER_ERROR_COUNT - WAIT_GOOD_FRAME_COUNT);
             
             // Video signal should now be good, try capture again
             // or capture has been suspended
@@ -1786,8 +2353,16 @@ void Capture::capture_video_thread(void)
         }
 
         // store new frame into next element in ring buffer
-        uint8_t *addr = rec_ring_frame(last_frame_captured + 1);
-        pbuffer->dma.addr = (char *)addr;
+        uint8_t *prev_frame;
+        uint8_t *frame;
+        if (have_previous_capture_frame) {
+            prev_frame = rec_ring_frame(capture_buffer_index - 1);
+            frame = rec_ring_frame(capture_buffer_index);
+        } else {
+            prev_frame = 0;
+            frame = rec_ring_frame(capture_buffer_index);
+        }
+        pbuffer->dma.addr = (char *)frame;
         pbuffer->dma.size = ring_element_size();
         if (audio_pair_offset[0] == 0) {
             audio_pair_offset[0] = (unsigned long)pbuffer->audio[0].addr[0];
@@ -1799,106 +2374,195 @@ void Capture::capture_video_thread(void)
         // Transfer video to host memory
         if ((res = sv_fifo_putbuffer(sv, pinput, pbuffer, NULL)) != SV_OK) {
             logTF("sv_fifo_putbuffer(pinput) failed: %s\n", sv_geterrortext(res));
+            logFF("wait for good frame count: %d\n", wait_good_frame_count);
+
+            // update recording status
+            set_recording_status(false);
+
+            // suspend capture
+            g_suspend_capture = true;
+            
+            continue;
         }
+
+        // only start storing frames if we have the number of good frames
+        if (wait_good_frame_count > 0) {
+            logFF("wait for good frame count: %d\n", wait_good_frame_count);
+            wait_good_frame_count--;
+
+            // process audio track with LTC to ensure the LTC decoder has found the sync word and has all samples
+            // needed to set the LTC for the first frame
+            if (ltc_source == AUDIO_TRACK_LTC_SOURCE) {
+                int dummy_ltc_as_int;
+                bool dummy_is_prev_frame_ltc;
+                read_audio_track_ltc(frame + ring_audio_pair_offset(ltc_audio_track / 2), ltc_audio_track % 2,
+                                     &dummy_ltc_as_int, &dummy_is_prev_frame_ltc);
+            }
+
+            continue;
+        }
+        
+        // 10- to 8-bit conversion
+        uint8_t *video_8bit = rec_ring_8bit_video_frame(capture_buffer_index);
+        DitherFrame(video_8bit, frame, video_width * 2, (video_width + 5) / 6 * 16, video_width, video_height);
+        
 
         if (debug_clapper_avsync) {
             int line_size = 720*2;
-            int flash = find_red_flash_uyvy(addr + line_size * 16,  line_size);     // skip 16 lines
+            int flash;
+            if (palff_mode)
+                flash = find_red_flash_uyvy(video_8bit + line_size * 16,  line_size);     // skip 16 lines
+            else
+                flash = find_red_flash_uyvy(video_8bit,  line_size);
             int click1 = 0, click1_off = -1;
             int click2 = 0, click2_off = -1;
             int click3 = 0, click3_off = -1;
             int click4 = 0, click4_off = -1;
-            find_audio_click_32bit_stereo(addr + ring_audio_pair_offset(0),
+            find_audio_click_32bit_stereo(frame + ring_audio_pair_offset(0),
                                                         &click1, &click1_off,
                                                         &click2, &click2_off);
-            find_audio_click_32bit_stereo(addr + ring_audio_pair_offset(1),
+            find_audio_click_32bit_stereo(frame + ring_audio_pair_offset(1),
                                                         &click3, &click3_off,
                                                         &click4, &click4_off);
 
             if (flash || click1 || click2 || click3 || click4) {
                 if (flash)
-                    logFF(" %5d  red-flash      \n", last_frame_captured + 1);
+                    logFF(" %5d  red-flash      \n", capture_buffer_index);
                 if (click1)
-                    logFF(" %5d  a1off=%d %.1fms\n", last_frame_captured + 1, click1_off, click1_off / 1920.0 * 40);
+                    logFF(" %5d  a1off=%d %.1fms\n", capture_buffer_index, click1_off, click1_off / 1920.0 * 40);
                 if (click2)
-                    logFF(" %5d  a2off=%d %.1fms\n", last_frame_captured + 1, click2_off, click2_off / 1920.0 * 40);
+                    logFF(" %5d  a2off=%d %.1fms\n", capture_buffer_index, click2_off, click2_off / 1920.0 * 40);
                 if (click3)
-                    logFF(" %5d  a3off=%d %.1fms\n", last_frame_captured + 1, click3_off, click3_off / 1920.0 * 40);
+                    logFF(" %5d  a3off=%d %.1fms\n", capture_buffer_index, click3_off, click3_off / 1920.0 * 40);
                 if (click4)
-                    logFF(" %5d  a4off=%d %.1fms\n", last_frame_captured + 1, click4_off, click4_off / 1920.0 * 40);
+                    logFF(" %5d  a4off=%d %.1fms\n", capture_buffer_index, click4_off, click4_off / 1920.0 * 40);
             }
         }
 
         // get status such as dropped frames
-        sv_fifo_info info;
-        if (sv_fifo_status(sv, pinput, &info) == SV_OK) {
-            hw_dropped_frames = info.dropped;
+        sv_fifo_info fifo_info;
+        if (sv_fifo_status(sv, pinput, &fifo_info) == SV_OK) {
+            if (fifo_info.dropped > 0)
+            {
+                logTF("Recording failed: DVS dropped frame: last_frame_captured(%d)\n", last_frame_captured);
+
+                // report the dropped frame
+                report_sdi_capture_dropped_frame();
+                
+                // suspend capture
+                g_suspend_capture = true;
+                
+                // update recording status
+                set_recording_status(false);
+    
+                continue;
+            }
         }
 
         if (loglev > 1)
-            logFF("last_frame_captured=%6d drop=%d %s",
-                last_frame_captured + 1, hw_dropped_frames, g_record_start ? "rec " : "");
+            logFF("last_frame_captured=%6d %s", last_frame_captured + 1, g_record_start ? "rec " : "");
 
-        // Do 10bit to 8bit conversion
-        //TODO
 
-        // Read two separate timecodes
-        int stride = 720*2;
-
-        // VITC
+        // read timecodes
+        
         int i;
-        int vitc_as_int = -1;
-        for (i = 0; i < num_vitc_lines; i++)
-        {
-            vitc_as_int = read_timecode(addr, stride, vitc_lines[i], "VITC");
-            if (vitc_as_int >= 0)
-            {
-                // read success
-                break;
-            }
-        }
-        memcpy(addr + ring_vitc_offset(), &vitc_as_int, sizeof(vitc_as_int));
+        int valid_timecode;
+        int valid_timecode_result = sv_query(sv, SV_QUERY_VALIDTIMECODE, 0, &valid_timecode);
 
-        // LTC
-        int ltc_as_int = -1;
-        for (i = 0; i < num_ltc_lines; i++)
+        // read vitc
+        int vitc_as_int = -1;
+        switch (vitc_source)
         {
-            ltc_as_int = read_timecode(addr, stride, ltc_lines[i], "  LTC");
-            if (ltc_as_int >= 0)
-            {
-                // read success
+            case ANALOGUE_VITC_SOURCE:
+                if (valid_timecode_result == SV_OK &&
+                    ((valid_timecode & SV_VALIDTIMECODE_VITC_F1) || (valid_timecode & SV_VALIDTIMECODE_VITC_F2)))
+                {
+                    vitc_as_int = read_fifo_vitc(pbuffer, (valid_timecode & SV_VALIDTIMECODE_VITC_F1),
+                        (valid_timecode & SV_VALIDTIMECODE_VITC_F2));
+                }
                 break;
-            }
+            case VBI_VITC_SOURCE:
+                assert(palff_mode);
+                for (i = 0; i < num_vitc_lines; i++)
+                {
+                    vitc_as_int = read_timecode(video_8bit, 720 * 2, vitc_lines[i], "VITC");
+                    if (vitc_as_int >= 0)
+                    {
+                        // got it
+                        break;
+                    }
+                }
+                break;
+            case NO_VITC_SOURCE:
+                break;
         }
-        memcpy(addr + ring_ltc_offset(), &ltc_as_int, sizeof(ltc_as_int));
+        memcpy(frame + ring_vitc_offset(), &vitc_as_int, sizeof(vitc_as_int));
+        
+        // read ltc
+        int ltc_as_int = -1;
+        bool is_prev_frame_ltc;
+        switch (ltc_source)
+        {
+            case DIGITAL_LTC_SOURCE:
+                if (valid_timecode_result == SV_OK && (valid_timecode & SV_VALIDTIMECODE_DLTC))
+                {
+                    ltc_as_int = read_fifo_dltc(pbuffer);
+                }
+                break;
+            case ANALOGUE_LTC_SOURCE:
+                if (valid_timecode_result == SV_OK && (valid_timecode & SV_VALIDTIMECODE_LTC))
+                {
+                    ltc_as_int = read_fifo_ltc(pbuffer);
+                }
+                break;
+            case VBI_LTC_SOURCE:
+                assert(palff_mode);
+                for (i = 0; i < num_ltc_lines; i++)
+                {
+                    ltc_as_int = read_timecode(frame, 720 * 2, ltc_lines[i], "  LTC");
+                    if (ltc_as_int >= 0)
+                    {
+                        // got it
+                        break;
+                    }
+                }
+                break;
+            case AUDIO_TRACK_LTC_SOURCE:
+                if (read_audio_track_ltc(frame + ring_audio_pair_offset(ltc_audio_track / 2), ltc_audio_track % 2,
+                                         &ltc_as_int, &is_prev_frame_ltc))
+                {
+                    if (is_prev_frame_ltc) {
+                         if (have_previous_capture_frame)
+                             memcpy(prev_frame + ring_ltc_offset(), &ltc_as_int, sizeof(ltc_as_int));
+                        ltc_as_int = -1;    // this frame's LTC is unknown at this point
+                    }
+                }
+                break;
+            case NO_LTC_SOURCE:
+                break;
+        }
+        memcpy(frame + ring_ltc_offset(), &ltc_as_int, sizeof(ltc_as_int));
 
         if (loglev > 1) logFFi("\n");
 
-        // update stats
-        current_vitc = vitc_as_int;
-        current_ltc = ltc_as_int;
-
-        // update shared variable to signal to disk writing thread
-        update_last_captured(last_frame_captured + 1);
+        
+        if (have_previous_capture_frame) {
+            // the previous frame is ready for consumption
+            // last_frame_captured + 1 == capture_buffer_index - 1
+            
+            // update stats
+            memcpy(&current_vitc, prev_frame + ring_vitc_offset(), sizeof(current_vitc));
+            memcpy(&current_ltc, prev_frame + ring_ltc_offset(), sizeof(current_ltc));
+            
+            // update buffer state
+            update_capture_buffer_pos(fifo_info.nbuffers, fifo_info.availbuffers, last_frame_captured + 1);
+            
+            // update shared variable to signal to disk writing thread
+            update_last_captured(last_frame_captured + 1);
+        } else {
+            have_previous_capture_frame = true;
+        }
     }
-}
-
-bool Capture::display_output_caption(void)
-{
-    int res;
-    sv_fifo_buffer *pbuffer;
-    if ((res = sv_fifo_getbuffer(sv, poutput, &pbuffer, NULL, 0)) != SV_OK) {
-        logTF("display_output_caption: sv_fifo_getbuffer(poutput) failed: %s\n", sv_geterrortext(res));
-        return false;
-    }
-    pbuffer->dma.addr = (char *)blank_frame;
-    pbuffer->dma.size = video_size;
-
-    if ((res = sv_fifo_putbuffer(sv, poutput, pbuffer, NULL)) != SV_OK) {
-        logTF("display_output_caption: sv_fifo_putbuffer(poutput) failed: %s\n", sv_geterrortext(res));
-        return false;
-    }
-    return true;
 }
 
 // Read from ring memory buffer, write to disk file
@@ -1947,53 +2611,72 @@ void Capture::store_video_thread(void)
         }
 
 
-        // Check we haven't wrapped around ring buffer
-        if (last_frame_captured - last_frame_written >= ring_buffer_size) {
-            // Indicate to listener that recording failed
-            set_recording_status(false);
-
-            logTF("Recording failed: ring buffer overflow: last_frame_captured(%d)-last_frame_written(%d) >= ring_buffer_size(%d)\n",
-                last_frame_captured, last_frame_written, ring_buffer_size);
-
-            // Stop recording
-            g_record_stop_frame = last_frame_written;
+        // Pre-check we haven't wrapped around ring buffer (-1 because of the 1 frame capture delay and buffer)
+        if (last_frame_captured - last_frame_written >= ring_buffer_size - 1) {
+            logTF("Recording failed: ring buffer overflow: last_frame_captured(%d)-last_frame_written(%d) >= ring_buffer_size-1(%d)\n",
+                last_frame_captured, last_frame_written, ring_buffer_size - 1);
 
             // report the overflow
             report_mxf_buffer_overflow();
             
+            // Stop recording
+            g_record_stop_frame = last_frame_written;
+
+            // update recording status
+            set_recording_status(false);
+
             continue;
         }
 
         // next frame which needs to be written
-        uint8_t *full_video = rec_ring_frame(last_frame_written + 1);
-        uint8_t *active_video = full_video + 16 * 720*2; 
+        uint8_t *ring_frame = rec_ring_frame(last_frame_written + 1);
+        uint8_t *video_8bit = rec_ring_8bit_video_frame(last_frame_written + 1);
+        uint8_t *active_8bit_video = video_8bit;
+        if (palff_mode) 
+        {
+            active_8bit_video += 720 * 2 * 16;
+        }
+        
+        frame_writer->setAudioPairOffset(0, audio_pair_offset[0]);
+        frame_writer->setAudioPairOffset(1, audio_pair_offset[1]);
+        frame_writer->setAudioPairOffset(2, audio_pair_offset[2]);
+        frame_writer->setAudioPairOffset(3, audio_pair_offset[3]);
+        frame_writer->setRingFrame(ring_frame, video_8bit);
+        
+        frame_writer->writeFrame();
+
     
         // read ltc and vitc from ring buffer
         int ltc_as_int, vitc_as_int;
-        memcpy(&ltc_as_int, full_video + ring_ltc_offset(), sizeof(ltc_as_int));
-        memcpy(&vitc_as_int, full_video + ring_vitc_offset(), sizeof(vitc_as_int));
+        memcpy(&ltc_as_int, ring_frame + ring_ltc_offset(), sizeof(ltc_as_int));
+        memcpy(&vitc_as_int, ring_frame + ring_vitc_offset(), sizeof(vitc_as_int));
 
-        ArchiveTimecode ltc, vitc;
-        int_to_timecode(ltc_as_int, &ltc);
-        int_to_timecode(vitc_as_int, &vitc);
-
-        // Write timecode to MXF file
-        CHK(write_timecode(mxfout, vitc, ltc));
-
+        
         // Record timecodes for later use by PSE report
+        ArchiveTimecode ltc, vitc;
+        int_to_archive_timecode(ltc_as_int, &ltc);
+        int_to_archive_timecode(vitc_as_int, &vitc);
         timecodes.push_back( make_pair(vitc, ltc) );
 
-        // Write video to MXF file
-        CHK(write_video_frame(mxfout, active_video, VIDEO_FRAME_SIZE));
 
-        // Convert and write audio to MXF file
-        int i;
-        for (i = 0; i < num_audio_tracks; i++)
-        {
-            dvsaudio32_to_24bitmono(i % 2, full_video + ring_audio_pair_offset(i / 2), audiobuf24bit);
-            CHK(write_audio_frame(mxfout, audiobuf24bit, AUDIO_FRAME_SIZE));
+        // Post-check we haven't wrapped around ring buffer (-1 because of the 1 frame capture delay and buffer)
+        last_frame_captured = last_captured();
+        if (last_frame_captured - last_frame_written >= ring_buffer_size - 1) {
+            logTF("Recording failed: ring buffer overflow: last_frame_captured(%d)-last_frame_written(%d) >= ring_buffer_size-1(%d)\n",
+                last_frame_captured, last_frame_written, ring_buffer_size - 1);
+
+            // report the overflow
+            report_mxf_buffer_overflow();
+            
+            // Stop recording
+            g_record_stop_frame = last_frame_written;
+
+            // update recording status
+            set_recording_status(false);
+            
+            continue;
         }
-
+        
         g_frames_written++;
 
         // preserve first frame recorded to calculate duration later
@@ -2004,15 +2687,15 @@ void Capture::store_video_thread(void)
 
         if (debug_clapper_avsync) {
             int line_size = 720*2;
-            int flash = find_red_flash_uyvy(active_video, line_size);
+            int flash = find_red_flash_uyvy(active_8bit_video, line_size);
             int click1 = 0, click1_off = -1;
             int click2 = 0, click2_off = -1;
             int click3 = 0, click3_off = -1;
             int click4 = 0, click4_off = -1;
-            find_audio_click_32bit_stereo(full_video + ring_audio_pair_offset(0),
+            find_audio_click_32bit_stereo(ring_frame + ring_audio_pair_offset(0),
                                                         &click1, &click1_off,
                                                         &click2, &click2_off);
-            find_audio_click_32bit_stereo(full_video + ring_audio_pair_offset(1),
+            find_audio_click_32bit_stereo(ring_frame + ring_audio_pair_offset(1),
                                                         &click3, &click3_off,
                                                         &click4, &click4_off);
 
@@ -2031,11 +2714,21 @@ void Capture::store_video_thread(void)
         }
 
         // Add frame to PSE analysis
-        if (pse_enabled)
+        if (pse_enabled && pse->is_open())
         {
-            pse->analyse_frame(active_video);
+            pse->analyse_frame(active_8bit_video);
+        }
+        
+        // digibeta dropout detection
+        if (dropout_detector)
+        {
+            pthread_mutex_lock(&m_dropout_detector);
+            dropout_detector->processPicture(active_8bit_video, 720 * 576 * 2);
+            pthread_mutex_unlock(&m_dropout_detector);
         }
 
+        // update buffer state
+        update_store_buffer_pos(last_frame_written + 1);
 
         if (debug_store_thread_buffer)
         {
@@ -2050,9 +2743,18 @@ Capture::Capture(CaptureListener* listener) : _listener(listener)
     rec_ring = NULL;
     ring_buffer_size = 125;
     memset(audio_pair_offset, 0, sizeof(audio_pair_offset));
+    rec_8bit_video_ring = 0;
 
     g_last_frame_captured = -1;
     g_suspend_capture = true;
+    
+    ingest_format = rec::MXF_UNC_8BIT_INGEST_FORMAT;
+    
+    ltc_source = NO_LTC_SOURCE;
+    ltc_audio_track = -1;
+    vitc_source = NO_VITC_SOURCE;
+    
+    palff_mode = false;
 
     g_last_frame_written = -1;
     g_last_browse_frame_written = -1;
@@ -2061,9 +2763,6 @@ Capture::Capture(CaptureListener* listener) : _listener(listener)
     g_record_stop_frame = -2; // -2 means not set, -1 means stop before any frame is captured
     g_frames_written = 0;
     g_browse_written = 0;
-    g_materialPackageUID = g_Null_UMID;
-    g_filePackageUID = g_Null_UMID;
-    g_tapePackageUID = g_Null_UMID;
     g_aborted = false;
     start_vitc = 0;
     start_ltc = 0;
@@ -2080,16 +2779,32 @@ Capture::Capture(CaptureListener* listener) : _listener(listener)
     mxf_page_size = 100 * 1024 * 1024; // 100 MB
     video_ok = false;
     audio_ok = false;
+    dltc_ok = false;
+    vitc_ok = false;
     recording_ok = true;
-
+    
+    dvs_buffers_empty = 0;
+    num_dvs_buffers = 0;
+    capture_buffer_pos = 0;
+    store_buffer_pos = 0;
+    browse_buffer_pos = 0;
+    
+    digibeta_dropout_enabled = false;
+    digibeta_dropout_lower_threshold = 100;
+    digibeta_dropout_upper_threshold = 400;
+    digibeta_dropout_store_threshold = 150;
+    dropout_detector = 0;
+    
+    include_crc32 = false;
+    
+    primary_timecode = rec::PRIMARY_TIMECODE_AUTO;
+    
     strcpy(mxf_filename, "");
     strcpy(browse_filename, "");
     strcpy(browse_timecode_filename, "");
     
     mxfout = 0;
-
-    // contains space for 2 channels at 24bits per sample
-    audiobuf24bit = new uint8_t[AUDIO_FRAME_SIZE*2];
+    frame_writer = 0;
 
     // tmp space for one 720x576x2 YUV420P frame
     video_420 = new uint8_t[720*576*2];
@@ -2102,21 +2817,11 @@ Capture::Capture(CaptureListener* listener) : _listener(listener)
     yuv420p_black_frame(720, 576, black_browse_video);
     
 
-    // Start off with no video or audio, and no recording error
-    set_input_SDI_status(false, false);
+    // Start off with no video, audio or timecode, and no recording error
+    set_input_SDI_status(false, false, false, false);
     set_recording_status(true);
 
-    // Setup captions (buffers need to hold video + audio)
-    blank_frame = (uint8_t*)valloc(720*592*2 + 0x8000);
-    caption_frame = (uint8_t*)valloc(720*592*2 + 0x8000);
-    uyvy_black_frame(720, 592, blank_frame);
-    uyvy_color_bars(720, 592, caption_frame);
-    memset(blank_frame + 720*592*2, 0, 0x8000);
-    memset(caption_frame + 720*592*2, 0, 0x8000);
-
     
-    hw_dropped_frames = 0;
-
     // Init PSE engine
     pse_enabled = true;
 #ifdef HAVE_PSE_FPA
@@ -2124,7 +2829,10 @@ Capture::Capture(CaptureListener* listener) : _listener(listener)
 #else
     pse = new PSE_Simple();
 #endif
-    pse->init();
+    if (!pse->init())
+    {
+        logTF("Failed to initialize the PSE engine\n");
+    }
 
     // Browse
     browse_enabled = true;
@@ -2145,7 +2853,13 @@ Capture::Capture(CaptureListener* listener) : _listener(listener)
     browse_thread_running = false;
 
     // debug stuff
-    mxf_log = redirect_mxf_logs;        // assign log function
+    
+    // redirect libMXF logging if set to defaults
+    if (mxf_log == mxf_log_default)
+        mxf_log = redirect_mxf_logs;
+    if (mxf_vlog == mxf_vlog_default)
+        mxf_vlog = redirect_mxf_vlogs;
+    
     loglev = 3;
     debug_clapper_avsync = false;
     fp_saved_lines = NULL;
@@ -2158,7 +2872,7 @@ Capture::~Capture()
     sv_close(sv);
 
     free(rec_ring);
-    delete [] audiobuf24bit;
+    delete [] rec_8bit_video_ring;
     delete [] video_420;
     delete [] audio_16bitstereo;
     delete [] black_browse_video;
@@ -2167,43 +2881,52 @@ Capture::~Capture()
     delete [] browse_frames[0].audio;
     delete [] browse_frames[1].video;
     delete [] browse_frames[1].audio;
+    
+    delete mxfout;
+    delete frame_writer;
 }
 
-bool Capture::init_capture(int ringBufferSize, VideoMode required_videomode)
+bool Capture::init_capture(int ringBufferSize)
 {
     ring_buffer_size = ringBufferSize;
-    
+
     logTF("Recorder version: date=%s %s\n", __DATE__, __TIME__);
 
-    // get handle to SDI capture hardware: DVS card 0
-    int res;
-    char setup[] = "PCI,card=0";
-    if ((res = sv_openex(   &sv,
-                            setup,
-                            SV_OPENPROGRAM_APPLICATION,
-                            SV_OPENTYPE_DELAYEDOPEN|SV_OPENTYPE_MASK_MULTIPLE,
-                            0,
-                            0)) != SV_OK) {
-        logTF("card 0: %s\n", sv_geterrortext(res));
+    VideoMode required_videomode = (palff_mode ? PALFF_10BIT : PAL_10BIT);
+    
+    // get handle to SDI capture hardware: DVS card 0, input only
+    if (!open_dvs(true, &sv))
         return false;
-    }
 
     // Check if video mode is set to required mode
     if (! check_videomode(sv, required_videomode)) {
         // Only change video mode if necessary (setting mode can take > 1 sec)
+        
+        // need to open input and output to set video mode for both
+        sv_close(sv);
+        if (!open_dvs(false, &sv))
+            return false;
         if (! set_videomode(sv, required_videomode)) {
             logTF("Could not set video mode to %s\n", videomode2str(required_videomode));
             return false;
         }
+
+        // back to input only
+        sv_close(sv);
+        if (!open_dvs(true, &sv))
+            return false;
     }
     video_mode = required_videomode;
+    logTF("Set video mode '%s'\n", videomode2str(video_mode));
+
 
     // get video dimensions
     sv_info status_info;
     sv_status(sv, &status_info);
     video_width = status_info.xsize;
     video_height = status_info.ysize;
-    video_size = video_width * video_height * 2;
+    video_8bit_size = video_width * video_height * 2;
+    video_size = (video_width + 5) / 6 * 16 * video_height;
     logTF("capture card opened: video raster %dx%d\n", video_width, video_height);
 
     // set size of one element in ring buffer = video size + audio size
@@ -2218,6 +2941,9 @@ bool Capture::init_capture(int ringBufferSize, VideoMode required_videomode)
         return false;
     }
     
+    rec_8bit_video_ring = new uint8_t[ring_buffer_size * video_8bit_size];
+    
+    
     // reset the browse buffer overflow if it exceeds ring_buffer_size
     if (browse_overflow_frames > ring_buffer_size)
     {
@@ -2229,11 +2955,13 @@ bool Capture::init_capture(int ringBufferSize, VideoMode required_videomode)
     pthread_mutex_init(&m_last_frame_written, NULL);
     pthread_mutex_init(&m_frame_ready_cond, NULL);
     pthread_mutex_init(&m_browse_frame_ready_cond, NULL);
-    pthread_mutex_init(&m_mxfout, NULL);
+    pthread_mutex_init(&m_dropout_detector, NULL);
+    pthread_mutex_init(&m_buffer_state, NULL);
 
     // initialise conditionals to use the monotonic clock
     pthread_condattr_t attr;
     pthread_condattr_init(&attr);
+    int res;
     if ((res = pthread_condattr_setclock(&attr, CLOCK_MONOTONIC)) != 0)
     {
         logTF("Failed to set monotonic clock for conditional attribute: %s\n", strerror(res));
@@ -2266,20 +2994,69 @@ bool Capture::init_capture(int ringBufferSize, VideoMode required_videomode)
     pthread_condattr_destroy(&attr);
     
     
-    // Start disk writing thread
-    pthread_t   capture_thread;
-    if ((res = pthread_create(&capture_thread, NULL, capture_video_thread_wrapper, this)) != 0) {
-        logTF("Failed to create write thread: %s\n", strerror(res));
+    // Start the capture thread with realtime scheduling policy
+    
+#if defined(ENABLE_DEBUG)
+    logTF("Warning: not setting realtime scheduling policy for capture thread\n");
+    
+    pthread_t capture_thread;
+    res = pthread_create(&capture_thread, NULL, capture_video_thread_wrapper, this);
+    if (res != 0) {
+        logTF("Failed to create capture thread: %s\n", strerror(res));
         return false;
     }
-    logTF("capture thread id = %lu\n", capture_thread);
+#else
+    pthread_attr_t thread_attr;
+    struct sched_param thread_param;
+    pthread_t capture_thread;
+    uid_t previous_euid = geteuid();
+    int min_priority = sched_get_priority_min(SCHED_RR);
+    int max_priority = sched_get_priority_max(SCHED_RR);
+    
+    pthread_attr_init(&thread_attr);
+    if (pthread_attr_setschedpolicy(&thread_attr, SCHED_RR) != 0)
+    {
+        logTF("Failed to set realtime scheduling policy: %s\n", strerror(errno));
+        return false;
+    }
+    thread_param.sched_priority = (min_priority + max_priority) / 2;
+    if (pthread_attr_setschedparam(&thread_attr, &thread_param) != 0)
+    {
+        logTF("Failed set realtime scheduling parameter: %s\n", strerror(errno));
+        return false;
+    }
+    if (pthread_attr_setinheritsched(&thread_attr, PTHREAD_EXPLICIT_SCHED) != 0)
+    {
+        logTF("Failed set explicit inherited scheduling: %s\n", strerror(errno));
+        return false;
+    }
+    
+    if (seteuid(0) != 0) // set effective user to root for call to pthread_create
+    {
+        logTF("Failed to set effective user to root: %s\n", strerror(errno));
+        return false;
+    }
+    res = pthread_create(&capture_thread, &thread_attr, capture_video_thread_wrapper, this);
+    if (seteuid(previous_euid) != 0)
+    {
+        logTF("Failed to restore effective user: %s\n", strerror(errno));
+        return false;
+    }
+    pthread_attr_destroy(&thread_attr);
 
+    if (res != 0) {
+        logTF("Failed to create capture thread: %s\n", strerror(res));
+        return false;
+    }
+#endif
+
+
+    // start the store thread
     pthread_t   store_thread;
     if ((res = pthread_create(&store_thread, NULL, store_video_thread_wrapper, this)) != 0) {
         logTF("Failed to create store thread: %s\n", strerror(res));
         return false;
     }
-    logTF("store thread id = %lu\n", store_thread);
 
     return true;
 }

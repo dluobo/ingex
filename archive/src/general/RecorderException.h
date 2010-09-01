@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderException.h,v 1.1 2008/07/08 16:23:36 philipn Exp $
+ * $Id: RecorderException.h,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * General purpose exception class
  *
@@ -31,7 +31,7 @@
 #define REC_CHECK(cmd) \
     if (!(cmd)) \
     { \
-        fprintf(stderr, "'%s' failed, at %s:%d\n", #cmd, __FILE__, __LINE__); \
+        Logging::error("'%s' failed, at %s:%d\n", #cmd, __FILE__, __LINE__); \
         throw RecorderException("'%s' failed, at %s:%d\n", #cmd, __FILE__, __LINE__); \
     }
 

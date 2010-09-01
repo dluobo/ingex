@@ -1,5 +1,5 @@
 /*
- * $Id: PostgresDatabase.h,v 1.1 2008/07/08 16:23:04 philipn Exp $
+ * $Id: PostgresDatabase.h,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * Provides a PostgreSQL database connection and utility methods
  *
@@ -72,10 +72,12 @@ public:
     long readLong(pqxx::result::field field, long nullValue);
     int64_t readInt64(pqxx::result::field field, int64_t nullValue);
     bool readBool(pqxx::result::field field, bool nullValue);
+    int readEnum(pqxx::result::field field);
     std::string readString(pqxx::result::field field);
     Date readDate(pqxx::result::field field, Date nullValue);
     Timestamp readTimestamp(pqxx::result::field field, Timestamp nullValue);
-    
+    Rational readRational(pqxx::result::field field1, pqxx::result::field field2, Rational nullValue);
+
     std::string writeTimestamp(Timestamp value);
     std::string writeDate(Date value);
     

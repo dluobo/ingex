@@ -1,5 +1,5 @@
 /*
- * $Id: Utilities.cpp,v 1.1 2008/07/08 16:23:31 philipn Exp $
+ * $Id: Utilities.cpp,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * Common utility functions
  *
@@ -76,7 +76,7 @@ string rec::strip_name(string filename)
     {
         return filename.substr(0, sepIndex);
     }
-    return filename;
+    return "";
 }
 
 
@@ -130,6 +130,42 @@ string rec::int64_to_string(int64_t value)
     char buf[32];
     sprintf(buf, "%"PRIi64"", value);
     return buf;
+}
+
+string rec::primary_timecode_to_string(PrimaryTimecode primaryTimecode)
+{
+    switch (primaryTimecode)
+    {
+        case PRIMARY_TIMECODE_AUTO:
+            return "AUTO";
+        case PRIMARY_TIMECODE_LTC:
+            return "LTC";
+        case PRIMARY_TIMECODE_VITC:
+            return "VITC";
+    }
+    
+    return ""; // for the compiler
+}
+
+bool rec::primary_timecode_from_string(string strValue, PrimaryTimecode *primaryTimecode)
+{
+    if (strValue == "AUTO")
+    {
+        *primaryTimecode = PRIMARY_TIMECODE_AUTO;
+        return true;
+    }
+    else if (strValue == "LTC")
+    {
+        *primaryTimecode = PRIMARY_TIMECODE_LTC;
+        return true;
+    }
+    else if (strValue == "VITC")
+    {
+        *primaryTimecode = PRIMARY_TIMECODE_VITC;
+        return true;
+    }
+    
+    return false;
 }
 
 Date rec::get_todays_date()
@@ -279,31 +315,6 @@ bool rec::file_exists(string filename)
     return false;
 }
 
-bool rec::parse_log_level_string(string levelStr, LogLevel* level)
-{
-    if (levelStr.compare("DEBUG") == 0)
-    {
-        *level = LOG_LEVEL_DEBUG;
-        return true;
-    }
-    else if (levelStr.compare("INFO") == 0)
-    {
-        *level = LOG_LEVEL_INFO;
-        return true;
-    }
-    else if (levelStr.compare("WARNING") == 0)
-    {
-        *level = LOG_LEVEL_WARNING;
-        return true;
-    }
-    else if (levelStr.compare("ERROR") == 0)
-    {
-        *level = LOG_LEVEL_ERROR;
-        return true;
-    }
-    return false;
-}
-
 string rec::trim_string(string val)
 {
     size_t start;
@@ -373,5 +384,13 @@ bool rec::is_valid_barcode(string barcode)
     }
     
     return true;
+}
+
+int64_t rec::timecode_to_position(const rec::Timecode &tc)
+{
+    return tc.hour * 60 * 60 * 25 +
+           tc.min * 60 * 25 +
+           tc.sec * 25 +
+           tc.frame;
 }
 

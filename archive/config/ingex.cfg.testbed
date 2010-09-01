@@ -22,6 +22,18 @@ db_password = ingex
 
 tape_transfer_lock_file = /video/http_recorder/.tapelockfile
 
+player_exe = /usr/local/bin/player
+
+
+############
+# Infax access
+############
+
+local_infax_db_host = localhost
+local_infax_db_name = localinfaxdb
+local_infax_db_user = ingex
+local_infax_db_password = ingex
+
 
 ############
 # recorder
@@ -29,16 +41,31 @@ tape_transfer_lock_file = /video/http_recorder/.tapelockfile
 
 # DEBUG or INFO or WARNING or ERROR
 recorder_log_level = DEBUG
-# default is 3, smaller means less logging, larger means more logging
-capture_log_level = 3
+# smaller means less logging, larger means more logging
+capture_log_level = 1
 
-recorder_www_root = www/recorder
+recorder_www_root = www/recorder_v2
 recorder_www_port = 9000
 recorder_www_replay_port = 9005
+recorder_www_threads = 5
+
+# videotape_backup equals true if a backup copy is made
+# the source_vtr and backup_vtr are used to identify the source vtr and
+# the backup vtr
+# source_vtr and backup_vtr are ignored if videotape_backup equals false
+# source_vtr and backup_vtr define a comma separated list of vtrs. Each vtr
+# is identified by a symbol with the last 4 characters equal to the hexadecimal
+# vtr identification number. See src/vtr/VTRControl.cpp for the list of
+# identification numbers. One of source_vtr or backup_vtr can be left blank to
+# indicate all other vtr types
+videotape_backup = false
+source_vtr = D3_VTR_0xF119
+backup_vtr =
 
 # use special device DUMMY_D3 for testing with a dummy D3 VTR or DUMMY_DIGIBETA 
 # for testing with a dummy Digibeta VTR
 # use %d to indicate that the system must try with %d substituted with 0, 1, 2, 3
+# if videotape_backup equals false then only recorder_vtr_device_1 is used
 recorder_vtr_device_1 = /dev/ttyUSB%d
 recorder_vtr_device_2 = /dev/ttyUSB%d
 
@@ -46,34 +73,44 @@ recorder_vtr_device_2 = /dev/ttyUSB%d
 recorder_server_barcode_scanner = false
 recorder_barcode_fifo = barcode_for_recorder.fifo
 
+# Profile directory and suffix
+profile_directory =
+profile_filename_suffix = .prf
+
 # buffer size (frames) used in capture system; default is 125
 ring_buffer_size = 250
 
 # browse file generation
-browse_enable = true
-browse_video_bit_rate = 2700 # video bit rate in kbps (256kbps audio)
 # number of threads to use when encoding the video; 0 means no threads
 browse_thread_count = 4
 # number of black frames encoded as a replacement of the real frames when the 
 # browse buffer overflows; ring_buffer_size is the maximum 
 browse_overflow_frames = 100
 
-# PSE analysis and report
-pse_enable = true
+# DigiBeta dropout detection strength thresholds
+# a strength < lower threshold should mean definitely not a dropout
+# a strength >= upper threshold should mean definitely a dropout
+# a strength >= store threshold will get stored in the MXF file
+# These threshold values are not normalized
+# If dropouts are missed then store threshold should be decreased
+# If non-dropouts are stored then the store threshold should be increased
+digibeta_dropout_lower_threshold = 100
+digibeta_dropout_upper_threshold = 400
+digibeta_dropout_store_threshold = 150
 
 # VBI lines containing VITC and LTC timecodes
 # format is "<line>(,<line>)*"
 # The line number is a field 1 line number: >= 15 and <= 22
 # if a line could not be read then the next one is tried in order
+# vitc_lines and ltc_lines are ignored if palff_mode equals false
+palff_mode = false
 vitc_lines = 19,21,20,18,22
 ltc_lines = 15,17
 
 # Digibeta barcodes must have the following prefix
 # format is "<prefix>(,<prefix>)*"
+# this is ignored if videotape_backup equals false
 digibeta_barcode_prefixes = "CU "
-
-# number of audio tracks to record, maximum is 8
-num_audio_tracks = 4
 
 # limit the chunking frames per second to this value if a tape transfer is in progress
 chunking_throttle_fps = 40
@@ -83,6 +120,19 @@ enable_chunking_junk = true
 
 # allow multi-item tapes to be ingested
 enable_multi_item = true
+
+# number of frames in the player source buffer
+# set to zero if tape export is enabled to avoid causing the tape transfer
+# rate falling below the minimum
+player_source_buffer_size = 0
+
+# if read_analogue_ltc (SMPTE 12M) is true then read the analogue LTC from the DVS card
+# else if read_digital_ltc (ATC) is true then read the digital LTC from the DVS card
+# else if read_audio_track_ltc >= 0 is true then decode the LTC from the given audio track
+# else if palff_mode is true then decode the LTC from the VBI
+read_analogue_ltc = true
+read_digital_ltc = false
+read_audio_track_ltc = -1
 
 
 ############
@@ -96,6 +146,7 @@ tape_log_level = 1
 
 tape_export_www_root = www/tape
 tape_export_www_port = 9001
+tape_export_www_threads = 5
 
 # if tape_export_server_barcode_scanner is false then tape_export_barcode_fifo is ignored 
 tape_export_server_barcode_scanner = false
@@ -124,8 +175,11 @@ dbg_av_sync = false
 # if true log VITC lines to a file when failed to read
 dbg_vitc_failures = false
 
-# if true output confidence replay to X11 screen and not to the SDI output
+# if dbg_vga_replay is true then output confidence replay to VGA screen and not to the SDI output
+# if dbg_force_x11 is true then use --x11 option in player command; this is needed
+# for systems that pretend to support accelerated video (Xv) but actually don't
 dbg_vga_replay = false
+dbg_force_x11 = false
 
 # if true use the null barcode scanner device
 dbg_null_barcode_scanner = false

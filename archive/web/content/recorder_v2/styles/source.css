@@ -1,0 +1,89 @@
+@import url("common.css");
+
+
+
+#vtr-status {
+	border-bottom: 8px solid white;
+}
+
+#source-select-status {
+	border-top: 8px solid white;
+}
+
+
+.formbutton {
+	font-size: 180%;
+}
+
+.forminlinetextbox {
+	font-size: 180%;
+}
+
+
+/***************************************************/
+/* Select Profile */
+/***************************************************/
+
+#select-profile-label {
+	color: green;
+	font-size: 120%;
+	font-weight: bold;
+}
+
+#select-profile {
+	font-weight: bold;
+	font-size: 120%;
+}
+
+#select-profile option {
+	padding-right: 10px;
+}
+
+
+/***************************************************/
+/* Source Info */
+/***************************************************/
+
+.source-info-table {
+	background-color: #FFFFCC;
+	border-collapse: collapse;
+	width: 800px;
+}
+
+.source-info-table td {
+	border: 1px solid grey;
+	padding: 3px;
+	text-align: left;
+}
+
+.source-info-table td.item-heading {
+	color: blue;
+	font-size: 80%;
+}
+
+.source-info-table th {
+	background-color: Khaki;
+	color: black;
+	font-weight: bold;
+	text-align: left;
+	border: 0px;
+}
+
+.aspect-ratio-select {
+	border-left: 0px;
+	border-top: 0;
+	border-bottom: 0;
+	padding: 0;
+	margin: 0;
+	font-weight: bold;
+	font-size: 100%;
+}
+
+.unknown-aspect-ratio {
+	background-color: red;
+}
+
+.known-aspect-ratio {
+	background-color: #FFFFCC; /* background colour of the table */
+}
+

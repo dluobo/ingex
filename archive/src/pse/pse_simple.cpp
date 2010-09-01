@@ -1,5 +1,5 @@
 /*
- * $Id: pse_simple.cpp,v 1.1 2008/07/08 16:24:57 philipn Exp $
+ * $Id: pse_simple.cpp,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * Simple PSE analysis (currently does no analysis and always passes)
  *
@@ -53,6 +53,16 @@ bool PSE_Simple::open(void)
 
     opened = true;
     return true;
+}
+
+bool PSE_Simple::is_init(void)
+{
+    return initialised;
+}
+
+bool PSE_Simple::is_open(void)
+{
+    return opened;
 }
 
 bool PSE_Simple::analyse_frame(const uint8_t *video_frame)

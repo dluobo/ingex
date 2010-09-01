@@ -1,5 +1,5 @@
 /*
- * $Id: FileLock.cpp,v 1.1 2008/07/08 16:23:27 philipn Exp $
+ * $Id: FileLock.cpp,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * Manages an advisory file lock
  *
@@ -21,7 +21,8 @@
  */
  
 #include <sys/file.h>
-#include <errno.h>
+#include <cstring>
+#include <cerrno>
 
 #include "FileLock.h"
 #include "RecorderException.h"
@@ -71,12 +72,14 @@ FileLock::FileLock(string filename, bool createIfNotExists)
 : _fd(0), _haveLock(false)
 {
     int flags = O_RDONLY;
+    int mode = 0;
     if (createIfNotExists)
     {
         flags += O_CREAT;
+        mode = 0644;
     }
     
-    _fd = open(filename.c_str(), flags);
+    _fd = open(filename.c_str(), flags, mode);
     if (_fd < 0)
     {
         REC_LOGTHROW(("Failed to open file for locking: %s", strerror(errno)));

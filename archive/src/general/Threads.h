@@ -1,5 +1,5 @@
 /*
- * $Id: Threads.h,v 1.1 2008/07/08 16:23:39 philipn Exp $
+ * $Id: Threads.h,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * Provides classes to manage mutexes, RW locks and threads
  *

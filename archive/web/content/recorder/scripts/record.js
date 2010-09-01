@@ -2,12 +2,43 @@ var statusRequest = null;
 var sourceInfoRequest = null;
 var recorderControlRequest = null;
 var enableRecorderControlRequest = true;
+var enableVersionAlert = true;
 
 var lastSessionState = null;
 
 // a status update is performed every 1/2 second
 var statusInterval = 500;
 
+
+function set_last_session_result(result, sourceSpoolNo, failureReason)
+{
+    var resultText;    
+    switch (result)
+    {
+        case 1: // 1 == COMPLETED_SESSION_RESULT
+            resultText = "<span class='last-session-completed-result'>Successfully completed ingest of '" + 
+                sourceSpoolNo.replace(/\ /g, "&nbsp;") + "'</span>";  
+            if (update_tag_value("last-session-result", resultText, escape(resultText)))
+            {
+                update_tag_attr("last-session-result", "style", "");
+            }
+            break;
+            
+        case 2: // 2 == FAILED_SESSION_RESULT
+            resultText = "<span class='last-session-failed-result'>Failed to complete ingest of '" + 
+                sourceSpoolNo.replace(/\ /g, "&nbsp;") + "': " + failureReason + "</span>";  
+            if (update_tag_value("last-session-result", resultText, escape(resultText)))
+            {
+                update_tag_attr("last-session-result", "style", "");
+            }
+            break;
+            
+        case 0: // 0 == UNKNOWN_SESSION_RESULT
+        default:
+            update_tag_attr("last-session-result", "style", "display: none;");
+            break;
+    }
+}
 
 function set_eta(duration, infaxDuration)
 {
@@ -198,6 +229,7 @@ function set_session_status(status)
         update_tag_value("current-ltc", "", "");
         update_tag_value("duration", "", "");
         set_eta(-1, -1);
+        update_tag_value("file-format", "", "");
         update_tag_value("filename", "", "");
         update_tag_value("file-size", "", "");
         update_tag_value("disk-space", "", "");
@@ -210,6 +242,14 @@ function set_session_status(status)
         set_button_busy_state("start-record-button", false);
         set_button_busy_state("stop-record-button", false);
         set_button_busy_state("abort-button", false);
+        if (status != null && status.sessionStatus.state == 0) // 0 == NOT_STARTED_SESSION_STATE
+        {
+            set_last_session_result(status.sessionStatus.lastSessionResult, status.sessionStatus.lastSessionSourceSpoolNo, status.sessionStatus.lastSessionFailureReason);
+        }
+        else
+        {
+            set_last_session_result(0, "", "");
+        }
     }
     else
     {
@@ -223,6 +263,7 @@ function set_session_status(status)
         var durationString = get_duration_string(status.sessionStatus.duration);
         update_tag_value("duration", durationString, durationString);
         set_eta(status.sessionStatus.duration, status.sessionStatus.infaxDuration);
+        update_tag_value("file-format", status.sessionStatus.fileFormat, escape(status.sessionStatus.fileFormat));
         update_tag_value("filename", status.sessionStatus.filename, escape(status.sessionStatus.filename));
         var fileSizeString = get_size_string(status.sessionStatus.fileSize);
         update_tag_value("file-size", fileSizeString, fileSizeString);
@@ -247,6 +288,14 @@ function set_session_status(status)
         set_button_busy_state("start-record-button", status.sessionStatus.startBusy);
         set_button_busy_state("stop-record-button", status.sessionStatus.stopBusy);
         set_button_busy_state("abort-button", status.sessionStatus.abortBusy);
+        if (status.sessionStatus.state == 0) // 0 == NOT_STARTED_SESSION_STATE
+        {
+            set_last_session_result(status.sessionStatus.lastSessionResult, status.sessionStatus.lastSessionSourceSpoolNo, status.sessionStatus.lastSessionFailureReason);
+        }
+        else
+        {
+            set_last_session_result(0, "", "");
+        }
     }
 }
 
@@ -262,6 +311,19 @@ function status_handler()
             }
             
             var status = eval("(" + statusRequest.responseText + ")");
+
+            if (!check_api_version(status))
+            {
+                if (enableVersionAlert)
+                {
+                    alert("Invalid API version " + get_api_version() +
+                        ". Require version " + status.apiVersion);
+                    enableVersionAlert = false;
+                }
+                throw "Invalid API version";
+            }
+            enableVersionAlert = true;
+
             set_general_status(status, statusInterval);
             
             if (status.sessionStatus.state != 0) // 0 == NOT_STARTED_SESSION_STATE
@@ -295,7 +357,7 @@ function status_handler()
             }
             else
             {
-                set_session_status(null);
+                set_session_status(status);
             }
             
             // set timer for next status request

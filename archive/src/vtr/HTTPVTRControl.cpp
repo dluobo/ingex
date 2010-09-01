@@ -1,5 +1,5 @@
 /*
- * $Id: HTTPVTRControl.cpp,v 1.1 2008/07/08 16:27:00 philipn Exp $
+ * $Id: HTTPVTRControl.cpp,v 1.2 2010/09/01 16:05:23 philipn Exp $
  *
  * Provides access to a VTR through HTTP requests 
  *
@@ -26,22 +26,9 @@
 #include "RecorderException.h"
 #include "Utilities.h"
 
-
 using namespace std;
 using namespace rec;
 
-
-typedef enum
-{
-    HTTP_PLAY_COMMAND,
-    HTTP_STOP_COMMAND,
-    HTTP_STANDBY_ON_COMMAND,
-    HTTP_STANDBY_OFF_COMMAND,
-    HTTP_FR_COMMAND,
-    HTTP_FF_COMMAND,
-    HTTP_EJECT_COMMAND,
-    HTTP_RECORD_COMMAND
-} HTTPControlCommand;
 
 
 // all the HTTP service URLs handled by the HTTPVTRControl
@@ -104,55 +91,6 @@ public:
     {
         GUARD_THREAD_START(_hasStopped);
         
-        bool result;
-        switch (_command)
-        {
-            case HTTP_PLAY_COMMAND:
-                result = _vtrControl->play();
-                Logging::debug("Sent play command to VTR: %s\n", result ? "Success" : "Failed");
-                break;
-            case HTTP_STOP_COMMAND:
-                result = _vtrControl->stop();
-                Logging::debug("Sent stop command to VTR: %s\n", result ? "Success" : "Failed");
-                break;
-            case HTTP_STANDBY_ON_COMMAND:
-                result = _vtrControl->standbyOn();
-                Logging::debug("Sent standby on command to VTR: %s\n", result ? "Success" : "Failed");
-                break;
-            case HTTP_STANDBY_OFF_COMMAND:
-                result = _vtrControl->standbyOff();
-                Logging::debug("Sent standby off command to VTR: %s\n", result ? "Success" : "Failed");
-                break;
-            case HTTP_FR_COMMAND:
-                result = _vtrControl->fastRewind();
-                Logging::debug("Sent fast rewind command to VTR: %s\n", result ? "Success" : "Failed");
-                break;
-            case HTTP_FF_COMMAND:
-                result = _vtrControl->fastForward();
-                Logging::debug("Sent fast forward command to VTR: %s\n", result ? "Success" : "Failed");
-                break;
-            case HTTP_EJECT_COMMAND:
-                result = _vtrControl->eject();
-                Logging::debug("Sent eject command to VTR: %s\n", result ? "Success" : "Failed");
-                break;
-            case HTTP_RECORD_COMMAND:
-                result = _vtrControl->record();
-                Logging::debug("Sent record command to VTR: %s\n", result ? "Success" : "Failed");
-                break;
-            default:
-                Logging::warning("Unknown HTTP command\n");
-                result = false;
-                break;
-        }
-        
-        if (result)
-        {
-            _connection->sendOk();
-        }
-        else
-        {
-            _connection->sendServerError("Command failed");
-        }
     }
     
     virtual void stop()
@@ -175,7 +113,7 @@ private:
 
 SingleVTRControl::SingleVTRControl(VTRControl* vc)
 : vtrControl(vc), deviceTypeCode(0), deviceType(UNKNOWN_DEVICE_TYPE), 
-state(NOT_CONNECTED_VTR_STATE), errorCode(0), controlAgent(0)
+state(NOT_CONNECTED_VTR_STATE), errorCode(0)
 {
     
     // TODO/NOTE: no guarantee that the state or device type will not change after
@@ -190,9 +128,60 @@ state(NOT_CONNECTED_VTR_STATE), errorCode(0), controlAgent(0)
 
 SingleVTRControl::~SingleVTRControl()
 {
-    delete controlAgent;
 }
+
+void SingleVTRControl::runCommand(HTTPConnection* connection, HTTPControlCommand command)
+{
+    bool result;
+    switch (command)
+    {
+        case HTTP_PLAY_COMMAND:
+            result = vtrControl->play();
+            Logging::debug("Sent play command to VTR: %s\n", result ? "Success" : "Failed");
+            break;
+        case HTTP_STOP_COMMAND:
+            result = vtrControl->stop();
+            Logging::debug("Sent stop command to VTR: %s\n", result ? "Success" : "Failed");
+            break;
+        case HTTP_STANDBY_ON_COMMAND:
+            result = vtrControl->standbyOn();
+            Logging::debug("Sent standby on command to VTR: %s\n", result ? "Success" : "Failed");
+            break;
+        case HTTP_STANDBY_OFF_COMMAND:
+            result = vtrControl->standbyOff();
+            Logging::debug("Sent standby off command to VTR: %s\n", result ? "Success" : "Failed");
+            break;
+        case HTTP_FR_COMMAND:
+            result = vtrControl->fastRewind();
+            Logging::debug("Sent fast rewind command to VTR: %s\n", result ? "Success" : "Failed");
+            break;
+        case HTTP_FF_COMMAND:
+            result = vtrControl->fastForward();
+            Logging::debug("Sent fast forward command to VTR: %s\n", result ? "Success" : "Failed");
+            break;
+        case HTTP_EJECT_COMMAND:
+            result = vtrControl->eject();
+            Logging::debug("Sent eject command to VTR: %s\n", result ? "Success" : "Failed");
+            break;
+        case HTTP_RECORD_COMMAND:
+            result = vtrControl->record();
+            Logging::debug("Sent record command to VTR: %s\n", result ? "Success" : "Failed");
+            break;
+        default:
+            Logging::warning("Unknown HTTP command\n");
+            result = false;
+            break;
+    }
     
+    if (result)
+    {
+        connection->sendOk();
+    }
+    else
+    {
+        connection->sendServerError("Command failed");
+    }
+}
 
 
 
@@ -339,111 +328,111 @@ SingleVTRControl* HTTPVTRControl::getSingleVTRControl(VTRTarget target, int inde
 
 void HTTPVTRControl::processRequest(HTTPServiceDescription* serviceDescription, HTTPConnection* connection)
 {
-    if (serviceDescription->getURL().compare(g_vtrStatusURL) == 0)
+    if (serviceDescription->getURL() == g_vtrStatusURL)
     {
         getVTRStatus(connection, INDEXED_VTR_TARGET, 0);
     }
-    else if (serviceDescription->getURL().compare(g_playCommandURL) == 0)
+    else if (serviceDescription->getURL() == g_playCommandURL)
     {
         playCommand(connection, INDEXED_VTR_TARGET, 0);
     }
-    else if (serviceDescription->getURL().compare(g_stopCommandURL) == 0)
+    else if (serviceDescription->getURL() == g_stopCommandURL)
     {
         stopCommand(connection, INDEXED_VTR_TARGET, 0);
     }
-    else if (serviceDescription->getURL().compare(g_standbyOnCommandURL) == 0)
+    else if (serviceDescription->getURL() == g_standbyOnCommandURL)
     {
         standbyOnCommand(connection, INDEXED_VTR_TARGET, 0);
     }
-    else if (serviceDescription->getURL().compare(g_standbyOffCommandURL) == 0)
+    else if (serviceDescription->getURL() == g_standbyOffCommandURL)
     {
         standbyOffCommand(connection, INDEXED_VTR_TARGET, 0);
     }
-    else if (serviceDescription->getURL().compare(g_frCommandURL) == 0)
+    else if (serviceDescription->getURL() == g_frCommandURL)
     {
         frCommand(connection, INDEXED_VTR_TARGET, 0);
     }
-    else if (serviceDescription->getURL().compare(g_ffCommandURL) == 0)
+    else if (serviceDescription->getURL() == g_ffCommandURL)
     {
         ffCommand(connection, INDEXED_VTR_TARGET, 0);
     }
-    else if (serviceDescription->getURL().compare(g_ejectCommandURL) == 0)
+    else if (serviceDescription->getURL() == g_ejectCommandURL)
     {
         ejectCommand(connection, INDEXED_VTR_TARGET, 0);
     }
-    else if (serviceDescription->getURL().compare(g_recordCommandURL) == 0)
+    else if (serviceDescription->getURL() == g_recordCommandURL)
     {
         recordCommand(connection, INDEXED_VTR_TARGET, 0);
     }
-    else if (serviceDescription->getURL().compare(g_d3VTRStatusURL) == 0)
+    else if (serviceDescription->getURL() == g_d3VTRStatusURL)
     {
         getVTRStatus(connection, D3_VTR_TARGET, 0);
     }
-    else if (serviceDescription->getURL().compare(g_d3PlayCommandURL) == 0)
+    else if (serviceDescription->getURL() == g_d3PlayCommandURL)
     {
         playCommand(connection, D3_VTR_TARGET, 0);
     }
-    else if (serviceDescription->getURL().compare(g_d3StopCommandURL) == 0)
+    else if (serviceDescription->getURL() == g_d3StopCommandURL)
     {
         stopCommand(connection, D3_VTR_TARGET, 0);
     }
-    else if (serviceDescription->getURL().compare(g_d3StandbyOnCommandURL) == 0)
+    else if (serviceDescription->getURL() == g_d3StandbyOnCommandURL)
     {
         standbyOnCommand(connection, D3_VTR_TARGET, 0);
     }
-    else if (serviceDescription->getURL().compare(g_d3StandbyOffCommandURL) == 0)
+    else if (serviceDescription->getURL() == g_d3StandbyOffCommandURL)
     {
         standbyOffCommand(connection, D3_VTR_TARGET, 0);
     }
-    else if (serviceDescription->getURL().compare(g_d3FRCommandURL) == 0)
+    else if (serviceDescription->getURL() == g_d3FRCommandURL)
     {
         frCommand(connection, D3_VTR_TARGET, 0);
     }
-    else if (serviceDescription->getURL().compare(g_d3FFCommandURL) == 0)
+    else if (serviceDescription->getURL() == g_d3FFCommandURL)
     {
         ffCommand(connection, D3_VTR_TARGET, 0);
     }
-    else if (serviceDescription->getURL().compare(g_d3EjectCommandURL) == 0)
+    else if (serviceDescription->getURL() == g_d3EjectCommandURL)
     {
         ejectCommand(connection, D3_VTR_TARGET, 0);
     }
-    else if (serviceDescription->getURL().compare(g_d3RecordCommandURL) == 0)
+    else if (serviceDescription->getURL() == g_d3RecordCommandURL)
     {
         recordCommand(connection, D3_VTR_TARGET, 0);
     }
-    else if (serviceDescription->getURL().compare(g_digibetaVTRStatusURL) == 0)
+    else if (serviceDescription->getURL() == g_digibetaVTRStatusURL)
     {
         getVTRStatus(connection, DIGIBETA_VTR_TARGET, 0);
     }
-    else if (serviceDescription->getURL().compare(g_digibetaPlayCommandURL) == 0)
+    else if (serviceDescription->getURL() == g_digibetaPlayCommandURL)
     {
         playCommand(connection, DIGIBETA_VTR_TARGET, 0);
     }
-    else if (serviceDescription->getURL().compare(g_digibetaStopCommandURL) == 0)
+    else if (serviceDescription->getURL() == g_digibetaStopCommandURL)
     {
         stopCommand(connection, DIGIBETA_VTR_TARGET, 0);
     }
-    else if (serviceDescription->getURL().compare(g_digibetaStandbyOnCommandURL) == 0)
+    else if (serviceDescription->getURL() == g_digibetaStandbyOnCommandURL)
     {
         standbyOnCommand(connection, DIGIBETA_VTR_TARGET, 0);
     }
-    else if (serviceDescription->getURL().compare(g_digibetaStandbyOffCommandURL) == 0)
+    else if (serviceDescription->getURL() == g_digibetaStandbyOffCommandURL)
     {
         standbyOffCommand(connection, DIGIBETA_VTR_TARGET, 0);
     }
-    else if (serviceDescription->getURL().compare(g_digibetaFRCommandURL) == 0)
+    else if (serviceDescription->getURL() == g_digibetaFRCommandURL)
     {
         frCommand(connection, DIGIBETA_VTR_TARGET, 0);
     }
-    else if (serviceDescription->getURL().compare(g_digibetaFFCommandURL) == 0)
+    else if (serviceDescription->getURL() == g_digibetaFFCommandURL)
     {
         ffCommand(connection, DIGIBETA_VTR_TARGET, 0);
     }
-    else if (serviceDescription->getURL().compare(g_digibetaEjectCommandURL) == 0)
+    else if (serviceDescription->getURL() == g_digibetaEjectCommandURL)
     {
         ejectCommand(connection, DIGIBETA_VTR_TARGET, 0);
     }
-    else if (serviceDescription->getURL().compare(g_digibetaRecordCommandURL) == 0)
+    else if (serviceDescription->getURL() == g_digibetaRecordCommandURL)
     {
         recordCommand(connection, DIGIBETA_VTR_TARGET, 0);
     }
@@ -478,7 +467,7 @@ void HTTPVTRControl::vtrState(VTRControl* vtrControl, VTRState state, const unsi
     }
 }
 
-void HTTPVTRControl::vtrPlaybackError(VTRControl* vtrControl, int errorCode, Timecode ltc)
+void HTTPVTRControl::vtrPlaybackError(VTRControl* vtrControl, int errorCode, Timecode ltc, Timecode vitc)
 {
     SingleVTRControl* svtrControl = getSingleVTRControl(vtrControl);
     REC_ASSERT(svtrControl != 0);
@@ -488,6 +477,7 @@ void HTTPVTRControl::vtrPlaybackError(VTRControl* vtrControl, int errorCode, Tim
         
         svtrControl->errorCode = errorCode;
         svtrControl->errorLTC = ltc;
+        svtrControl->errorVITC = vitc;
     }
 }
 
@@ -523,6 +513,7 @@ void HTTPVTRControl::getVTRStatus(HTTPConnection* connection, VTRTarget target, 
     VTRState state;
     int errorCode;
     Timecode errorLTC;
+    Timecode errorVITC;
     Timecode vitc;
     Timecode ltc;
     
@@ -543,6 +534,7 @@ void HTTPVTRControl::getVTRStatus(HTTPConnection* connection, VTRTarget target, 
         state = svtrControl->state;
         errorCode = svtrControl->errorCode;
         errorLTC = svtrControl->errorLTC;
+        errorVITC = svtrControl->errorVITC;
         vitc = svtrControl->vitc;
         ltc = svtrControl->ltc;
     }
@@ -559,6 +551,7 @@ void HTTPVTRControl::getVTRStatus(HTTPConnection* connection, VTRTarget target, 
     timecode_to_json(json.setObject("ltc"), ltc);
     json.setNumber("errorCode", errorCode);
     timecode_to_json(json.setObject("errorLTC"), errorLTC);
+    timecode_to_json(json.setObject("errorVITC"), errorVITC);
     
 
     connection->sendJSON(&json);
@@ -574,27 +567,7 @@ void HTTPVTRControl::playCommand(HTTPConnection* connection, VTRTarget target, i
         return;
     }
 
-    
-    {    
-        LOCK_SECTION(svtrControl->controlAgentMutex);
-        
-        if (svtrControl->controlAgent != 0 &&
-            svtrControl->controlAgent->isRunning())
-        {
-            connection->sendServerBusy("Server is busy with the previous request");
-            return;
-        }
-        
-        // clean-up
-        if (svtrControl->controlAgent != 0)
-        {
-            SAFE_DELETE(svtrControl->controlAgent);
-        }
-        
-        // start the agent
-        svtrControl->controlAgent = new Thread(new ControlAgent(HTTP_PLAY_COMMAND, svtrControl->vtrControl, connection), true);
-        svtrControl->controlAgent->start();
-    }
+    svtrControl->runCommand(connection, HTTP_PLAY_COMMAND);
 }
 
 void HTTPVTRControl::stopCommand(HTTPConnection* connection, VTRTarget target, int index)
@@ -607,27 +580,7 @@ void HTTPVTRControl::stopCommand(HTTPConnection* connection, VTRTarget target, i
         return;
     }
 
-    
-    {    
-        LOCK_SECTION(svtrControl->controlAgentMutex);
-        
-        if (svtrControl->controlAgent != 0 &&
-            svtrControl->controlAgent->isRunning())
-        {
-            connection->sendServerBusy("Server is busy with the previous request");
-            return;
-        }
-        
-        // clean-up
-        if (svtrControl->controlAgent != 0)
-        {
-            SAFE_DELETE(svtrControl->controlAgent);
-        }
-        
-        // start the agent
-        svtrControl->controlAgent = new Thread(new ControlAgent(HTTP_STOP_COMMAND, svtrControl->vtrControl, connection), true);
-        svtrControl->controlAgent->start();
-    }
+    svtrControl->runCommand(connection, HTTP_STOP_COMMAND);
 }
 
 void HTTPVTRControl::standbyOnCommand(HTTPConnection* connection, VTRTarget target, int index)
@@ -640,27 +593,7 @@ void HTTPVTRControl::standbyOnCommand(HTTPConnection* connection, VTRTarget targ
         return;
     }
 
-    
-    {    
-        LOCK_SECTION(svtrControl->controlAgentMutex);
-        
-        if (svtrControl->controlAgent != 0 &&
-            svtrControl->controlAgent->isRunning())
-        {
-            connection->sendServerBusy("Server is busy with the previous request");
-            return;
-        }
-        
-        // clean-up
-        if (svtrControl->controlAgent != 0)
-        {
-            SAFE_DELETE(svtrControl->controlAgent);
-        }
-        
-        // start the agent
-        svtrControl->controlAgent = new Thread(new ControlAgent(HTTP_STANDBY_ON_COMMAND, svtrControl->vtrControl, connection), true);
-        svtrControl->controlAgent->start();
-    }
+    svtrControl->runCommand(connection, HTTP_STANDBY_ON_COMMAND);
 }
 
 void HTTPVTRControl::standbyOffCommand(HTTPConnection* connection, VTRTarget target, int index)
@@ -673,27 +606,7 @@ void HTTPVTRControl::standbyOffCommand(HTTPConnection* connection, VTRTarget tar
         return;
     }
 
-    
-    {    
-        LOCK_SECTION(svtrControl->controlAgentMutex);
-        
-        if (svtrControl->controlAgent != 0 &&
-            svtrControl->controlAgent->isRunning())
-        {
-            connection->sendServerBusy("Server is busy with the previous request");
-            return;
-        }
-        
-        // clean-up
-        if (svtrControl->controlAgent != 0)
-        {
-            SAFE_DELETE(svtrControl->controlAgent);
-        }
-        
-        // start the agent
-        svtrControl->controlAgent = new Thread(new ControlAgent(HTTP_STANDBY_OFF_COMMAND, svtrControl->vtrControl, connection), true);
-        svtrControl->controlAgent->start();
-    }
+    svtrControl->runCommand(connection, HTTP_STANDBY_OFF_COMMAND);
 }
 
 void HTTPVTRControl::frCommand(HTTPConnection* connection, VTRTarget target, int index)
@@ -706,27 +619,7 @@ void HTTPVTRControl::frCommand(HTTPConnection* connection, VTRTarget target, int
         return;
     }
 
-    
-    {    
-        LOCK_SECTION(svtrControl->controlAgentMutex);
-        
-        if (svtrControl->controlAgent != 0 &&
-            svtrControl->controlAgent->isRunning())
-        {
-            connection->sendServerBusy("Server is busy with the previous request");
-            return;
-        }
-        
-        // clean-up
-        if (svtrControl->controlAgent != 0)
-        {
-            SAFE_DELETE(svtrControl->controlAgent);
-        }
-        
-        // start the agent
-        svtrControl->controlAgent = new Thread(new ControlAgent(HTTP_FR_COMMAND, svtrControl->vtrControl, connection), true);
-        svtrControl->controlAgent->start();
-    }
+    svtrControl->runCommand(connection, HTTP_FR_COMMAND);
 }
 
 void HTTPVTRControl::ffCommand(HTTPConnection* connection, VTRTarget target, int index)
@@ -739,27 +632,7 @@ void HTTPVTRControl::ffCommand(HTTPConnection* connection, VTRTarget target, int
         return;
     }
 
-    
-    {    
-        LOCK_SECTION(svtrControl->controlAgentMutex);
-        
-        if (svtrControl->controlAgent != 0 &&
-            svtrControl->controlAgent->isRunning())
-        {
-            connection->sendServerBusy("Server is busy with the previous request");
-            return;
-        }
-        
-        // clean-up
-        if (svtrControl->controlAgent != 0)
-        {
-            SAFE_DELETE(svtrControl->controlAgent);
-        }
-        
-        // start the agent
-        svtrControl->controlAgent = new Thread(new ControlAgent(HTTP_FF_COMMAND, svtrControl->vtrControl, connection), true);
-        svtrControl->controlAgent->start();
-    }
+    svtrControl->runCommand(connection, HTTP_FF_COMMAND);
 }
 
 void HTTPVTRControl::ejectCommand(HTTPConnection* connection, VTRTarget target, int index)
@@ -772,27 +645,7 @@ void HTTPVTRControl::ejectCommand(HTTPConnection* connection, VTRTarget target, 
         return;
     }
 
-    
-    {    
-        LOCK_SECTION(svtrControl->controlAgentMutex);
-        
-        if (svtrControl->controlAgent != 0 &&
-            svtrControl->controlAgent->isRunning())
-        {
-            connection->sendServerBusy("Server is busy with the previous request");
-            return;
-        }
-        
-        // clean-up
-        if (svtrControl->controlAgent != 0)
-        {
-            SAFE_DELETE(svtrControl->controlAgent);
-        }
-        
-        // start the agent
-        svtrControl->controlAgent = new Thread(new ControlAgent(HTTP_EJECT_COMMAND, svtrControl->vtrControl, connection), true);
-        svtrControl->controlAgent->start();
-    }
+    svtrControl->runCommand(connection, HTTP_EJECT_COMMAND);
 }
 
 void HTTPVTRControl::recordCommand(HTTPConnection* connection, VTRTarget target, int index)
@@ -805,34 +658,7 @@ void HTTPVTRControl::recordCommand(HTTPConnection* connection, VTRTarget target,
         return;
     }
 
-    
-    {    
-        LOCK_SECTION(svtrControl->controlAgentMutex);
-        
-        if (svtrControl->controlAgent != 0 &&
-            svtrControl->controlAgent->isRunning())
-        {
-            connection->sendServerBusy("Server is busy with the previous request");
-            return;
-        }
-        
-        // clean-up
-        if (svtrControl->controlAgent != 0)
-        {
-            SAFE_DELETE(svtrControl->controlAgent);
-        }
-        
-        // only allow record for non-D3 VTRs
-        if (svtrControl->vtrControl->isD3VTR())
-        {
-            connection->sendBadRequest("D3 VTR Record is not permitted");
-            return;
-        }
-        
-        // start the agent
-        svtrControl->controlAgent = new Thread(new ControlAgent(HTTP_RECORD_COMMAND, svtrControl->vtrControl, connection), true);
-        svtrControl->controlAgent->start();
-    }
+    svtrControl->runCommand(connection, HTTP_RECORD_COMMAND);
 }
 
 
@@ -849,5 +675,4 @@ SingleVTRControl* HTTPVTRControl::getSingleVTRControl(VTRControl* vtrControl)
     
     return 0;
 }
-
 

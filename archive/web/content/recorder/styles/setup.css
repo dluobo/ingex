@@ -1,0 +1,84 @@
+@import url("common.css");
+
+
+h2 {
+	font-size: 160%;
+}
+
+/***************************************************/
+/* Select Profile */
+/***************************************************/
+
+#selectprofileform input {
+	font-size: 140%;
+}
+
+#selectprofileform select {
+	font-size: 140%;
+	padding-right: 3px;
+	color: blue;
+}
+
+
+/***************************************************/
+/* Profile Info */
+/***************************************************/
+
+#profile {
+	margin-top: 10px;
+}
+
+#profile table td {
+	background-color: #FFFFCC;
+	border: 1px solid grey;
+	padding: 5px;
+	text-align: left;
+	vertical-align: top;
+	font-size: 90%;
+}
+
+#profile table table td {
+	border: none;
+	padding-right: 2px;
+	padding-bottom: 8px;
+	vertical-align: middle;
+}
+
+#profile select {
+	font-size: 130%;
+	font-weight: bold;
+	padding-right: 3px;
+}
+
+#profile .alternative-option {
+	color: magenta;
+}
+
+#profile table table select {
+	font-size: 144%;
+}
+
+td.property-heading {
+	color: blue;
+	font-size: 100%;
+}
+
+#update-profile-button {
+	font-size: 140%;
+	margin-top: 5px;
+}
+
+#update-result {
+	margin-top: 5px;
+}
+
+#update-result.result-success {
+	color: green;
+	font-weight: bold;
+}
+
+#update-result.result-error {
+	color: red;
+	font-weight: bold;
+}
+

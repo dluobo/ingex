@@ -1,5 +1,5 @@
 /*
- * $Id: HTTPVTRControl.h,v 1.1 2008/07/08 16:27:15 philipn Exp $
+ * $Id: HTTPVTRControl.h,v 1.2 2010/09/01 16:05:23 philipn Exp $
  *
  * Provides access to a VTR through HTTP requests 
  *
@@ -42,6 +42,18 @@ typedef enum
     DIGIBETA_VTR_TARGET
 } VTRTarget;
 
+typedef enum
+{
+    HTTP_PLAY_COMMAND,
+    HTTP_STOP_COMMAND,
+    HTTP_STANDBY_ON_COMMAND,
+    HTTP_STANDBY_OFF_COMMAND,
+    HTTP_FR_COMMAND,
+    HTTP_FF_COMMAND,
+    HTTP_EJECT_COMMAND,
+    HTTP_RECORD_COMMAND
+} HTTPControlCommand;
+
 
 class SingleVTRControl
 {
@@ -49,6 +61,9 @@ public:
     SingleVTRControl(VTRControl* vc);
     ~SingleVTRControl();
     
+    void runCommand(HTTPConnection* connection, HTTPControlCommand command);
+
+public:
     VTRControl* vtrControl;
     
     int deviceTypeCode;
@@ -56,12 +71,10 @@ public:
     VTRState state;
     int errorCode;
     Timecode errorLTC;
+    Timecode errorVITC;
     Timecode vitc;
     Timecode ltc;
     Mutex vtrStateMutex;
-    
-    Thread* controlAgent;
-    Mutex controlAgentMutex;
 };
 
 
@@ -77,7 +90,7 @@ public:
     // from VTRControlListener
     virtual void vtrDeviceType(VTRControl* vtrControl, int deviceTypeCode, DeviceType deviceType);
     virtual void vtrState(VTRControl* vtrControl, VTRState state, const unsigned char* stateBytes);
-    virtual void vtrPlaybackError(VTRControl* vtrControl, int errorCode, Timecode ltc);
+    virtual void vtrPlaybackError(VTRControl* vtrControl, int errorCode, Timecode ltc, Timecode vitc);
     virtual void vtrVITC(VTRControl* vtrControl, Timecode vitc);
     virtual void vtrLTC(VTRControl* vtrControl, Timecode ltc);
 

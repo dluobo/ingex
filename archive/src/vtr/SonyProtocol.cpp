@@ -1,5 +1,5 @@
 /*
- * $Id: SonyProtocol.cpp,v 1.1 2008/07/08 16:27:06 philipn Exp $
+ * $Id: SonyProtocol.cpp,v 1.2 2010/09/01 16:05:23 philipn Exp $
  *
  * Implements the Sony VTR protocol
  *
@@ -20,6 +20,8 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
  
+#include <cstring>
+
 #include "SonyProtocol.h"
 #include "RecorderException.h"
 #include "Logging.h"
@@ -63,7 +65,7 @@ void CommandBlock::setData(const unsigned char* data, int dataCount)
     REC_ASSERT(dataCount <= 15);
     
     memcpy(&_block[2], data, dataCount);
-    _block[0] = (_block[0] & 0xf0) | (((unsigned char)dataCount) && 0x0f);
+    _block[0] = (_block[0] & 0xf0) | (((unsigned char)dataCount) & 0x0f);
     
     _blockSize = dataCount + MIN_COMMAND_BLOCK_SIZE;
     setChecksum();
@@ -195,10 +197,10 @@ void CommandBlock::setChecksum()
 
 
 
-SonyProtocol* SonyProtocol::open(string serialDeviceName)
+SonyProtocol* SonyProtocol::open(string serialDeviceName, SerialType type)
 {
     SerialPort* serialPort = SerialPort::open(serialDeviceName, BAUD_38400, CHAR_SIZE_8,
-        STOP_BITS_1, PARITY_ODD);
+        STOP_BITS_1, PARITY_ODD, type);
     if (serialPort == 0)
     {
         return 0;

@@ -1,5 +1,5 @@
 /*
- * $Id: PSEReport.cpp,v 1.1 2008/07/08 16:24:56 philipn Exp $
+ * $Id: PSEReport.cpp,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * Used to write a PSE report.
  *
@@ -33,9 +33,11 @@
 
 #define __STDC_FORMAT_MACROS 1
 
-#include <stdio.h>
-#include <ctype.h>
-#include <errno.h>
+#include <cstdio>
+#include <cctype>
+#include <cerrno>
+#include <cstring>
+#include <cerrno>
 #include <inttypes.h>
 
 #include "PSEReport.h"
@@ -395,8 +397,9 @@ bool PSEReport::write(int64_t firstAnalysisFrame, int64_t lastAnalysisFrame,
 #else // GEN_PSE_REPORT_TEMPLATE 
 
 
-#include <stdio.h>
-#include <errno.h>
+#include <cstdio>
+#include <cerrno>
+#include <cstring>
 
 #include <string>
 

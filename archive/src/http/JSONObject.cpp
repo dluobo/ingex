@@ -1,5 +1,5 @@
 /*
- * $Id: JSONObject.cpp,v 1.1 2008/07/08 16:24:40 philipn Exp $
+ * $Id: JSONObject.cpp,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * Utility class for serialising data to JSON text strings
  *
@@ -23,6 +23,7 @@
 #define __STDC_FORMAT_MACROS 1
 
 #include <sstream>
+#include <cstdarg>
 
 #include "JSONObject.h"
 #include "Utilities.h"
@@ -146,6 +147,33 @@ void JSONObject::set(string name, JSONValue* value)
 void JSONObject::setString(string name, string value)
 {
     _value.push_back(pair<JSONString*, JSONValue*>(new JSONString(name), new JSONString(value)));
+}
+
+void JSONObject::setStringP(std::string name, string format, ...)
+{
+    va_list ap;
+    va_start(ap, format);
+    
+    int bufferSize = format.size() + 256;
+    char* buffer;
+    while (true)
+    {
+        buffer = new char[bufferSize];
+        
+        if (vsnprintf(buffer, bufferSize, format.c_str(), ap) < bufferSize)
+        {
+            break;
+        }
+        
+        delete [] buffer;
+        bufferSize += 256;
+    }
+    
+    va_end(ap);
+    
+    setString(name, buffer);
+    
+    delete [] buffer;
 }
 
 void JSONObject::setBool(string name, bool value)

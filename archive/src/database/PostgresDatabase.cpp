@@ -1,5 +1,5 @@
 /*
- * $Id: PostgresDatabase.cpp,v 1.1 2008/07/08 16:23:00 philipn Exp $
+ * $Id: PostgresDatabase.cpp,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * Provides a PostgreSQL database connection and utility methods
  *
@@ -19,7 +19,9 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
- 
+
+#include <cstdlib>
+
 #include "PostgresDatabase.h"
 #include "Logging.h"
 #include "RecorderException.h"
@@ -180,7 +182,19 @@ bool PostgresDatabase::readBool(result::field field, bool nullValue)
     field.to(value);
     return value;
 }
+
+int PostgresDatabase::readEnum(result::field field)
+{
+    int result;
+
+    if (field.is_null())
+        return 0;
+
+    field.to(result);
     
+    return result;
+}
+
 string PostgresDatabase::readString(result::field field)
 {
     const char* result = "";
@@ -237,7 +251,22 @@ Timestamp PostgresDatabase::readTimestamp(result::field field, Timestamp nullVal
     
     return result;
 }
+
+Rational PostgresDatabase::readRational(result::field field1, result::field field2, Rational nullValue)
+{
+    Rational result;
     
+    if (field1.is_null() || field2.is_null())
+    {
+        return nullValue;
+    }
+
+    result.numerator = readInt(field1, 0);
+    result.denominator = readInt(field2, 0);
+    
+    return result;
+}
+
 string PostgresDatabase::writeTimestamp(Timestamp value)
 {
     char buf[128];

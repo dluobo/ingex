@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderDatabase.h,v 1.1 2008/07/08 16:23:05 philipn Exp $
+ * $Id: RecorderDatabase.h,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * Provides access to the recorder data in a PostgreSQL database
  *
@@ -52,9 +52,9 @@ public:
     virtual void saveRecorder(RecorderTable* recorder) = 0;
     
     virtual Source* loadSource(std::string barcode) = 0;
-    virtual long getNewSourceRecordingInstance(long sourceId) = 0;
+    virtual long getNewSourceRecordingInstance(std::string barcode, long sourceId) = 0;
     virtual void resetSourceRecordingInstance(long sourceId, long firstTry, long lastTry) = 0;
-    virtual void updateConcreteSource(ConcreteSource* source) = 0;
+    virtual void saveSource(Source* source) = 0;
     
     virtual std::vector<RecordingSessionTable*> loadMinimalSessions(long recorderId, int status) = 0;
     virtual void saveSession(RecordingSessionTable* session) = 0;
@@ -88,7 +88,7 @@ public:
     
     virtual bool ltoUsedInCompletedSession(std::string spoolNo) = 0;
     virtual bool digibetaUsedInCompletedSession(std::string spoolNo) = 0;
-    virtual bool d3UsedInCompletedSession(std::string spoolNo) = 0;
+    virtual bool sourceUsedInCompletedSession(std::string spoolNo) = 0;
 
     virtual void saveInfaxExport(InfaxExportTable* infaxExport) = 0;
     
@@ -113,9 +113,9 @@ public:
     virtual void saveRecorder(RecorderTable* recorder);
     
     virtual Source* loadSource(std::string barcode);
-    virtual long getNewSourceRecordingInstance(long sourceId);
+    virtual long getNewSourceRecordingInstance(std::string barcode, long sourceId);
     virtual void resetSourceRecordingInstance(long sourceId, long firstTry, long lastTry);
-    virtual void updateConcreteSource(ConcreteSource* source);
+    virtual void saveSource(Source* source);
 
     virtual std::vector<RecordingSessionTable*> loadMinimalSessions(long recorderId, int status);
     virtual void saveSession(RecordingSessionTable* session);
@@ -149,7 +149,7 @@ public:
 
     virtual bool ltoUsedInCompletedSession(std::string spoolNo);
     virtual bool digibetaUsedInCompletedSession(std::string spoolNo);
-    virtual bool d3UsedInCompletedSession(std::string spoolNo);
+    virtual bool sourceUsedInCompletedSession(std::string spoolNo);
     
     virtual void saveInfaxExport(InfaxExportTable* infaxExport);
 
@@ -165,7 +165,8 @@ private:
     HardDiskDestination* loadHardDiskDestination(pqxx::work& ts, long destDatabaseId);
     DigibetaDestination* loadDigibetaDestination(pqxx::work& ts, long destDatabaseId);
     
-    std::vector<ConcreteSource*> loadD3Sources(pqxx::work& ts, long databaseId);
+    std::vector<ConcreteSource*> loadSourceItems(pqxx::work& ts, long sourceDatabaseId);
+    void saveSourceItem(pqxx::work& ts, long sourceDatabaseId, SourceItem* sourceItem);
     
     LTOTable* loadSessionLTO(pqxx::work& ts, long sessionId);
     std::vector<LTOFileTable*> loadLTOFiles(pqxx::work& ts, long ltoId);

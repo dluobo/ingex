@@ -1,5 +1,5 @@
 /*
- * $Id: sv_dummy.c,v 1.1 2008/07/08 16:47:11 philipn Exp $
+ * $Id: sv_dummy.c,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * Implements a dummy DVS API to allow testing without a DVS card 
  *
@@ -42,15 +42,28 @@ typedef struct {
 #include <string.h>         // For memcpy
 #include <stdlib.h>         // For malloc
 #include <unistd.h>         // For usleep
+#include <time.h>           // for time
+#include <stdio.h>          // for FILE and printf
 
 #include "dvs_clib.h"
 #include "dvs_fifo.h"
 
+#include "video_conversion_10bits.h"
+
 static unsigned char *source_dmabuf = NULL;
+static int source_video_size = 0;
 static int source_frame_size = 0;
 static int source_width = 0;
 static int source_height = 0;
+static int dvs_videomode = SV_MODE_PALFF;
 static sv_fifo_buffer fifo_buffer;
+static unsigned char *sample_vitc_10bit = NULL;
+static unsigned int sample_vitc_10bit_size = 0;
+#if defined(DVS_DUMMY_SOURCE_FILE)
+static const char *source_filename = "/tmp/dummy.uyvy";
+static FILE *source_file = NULL;
+#endif
+static int hour = 0, min = 0, sec = 0, frame = 0;
 
 static unsigned char sample_vitc[] = {
 0x80,0x10,0x80,0x10,0x80,0x10,0x80,0x10,0x80,0x10,0x80,0x10,0x80,0x10,0x80,0x10,
@@ -148,128 +161,158 @@ static unsigned char sample_vitc[] = {
 // Represent the colour and position of a colour bar
 typedef struct {
     double          position;
-    unsigned char   colour[4];
+    unsigned short  colour[4];
 } bar_colour_t;
 
-// Generate a video buffer containing uncompressed UYVY video representing
-// the familiar colour bars test signal (or YUY2 video if specified).
-static void create_colour_bars(unsigned char *video_buffer, int width, int height)
+// Routine to pack 12 unsigned shorts into 16 bytes of 10-bit output
+static void pack4(unsigned short *pIn, unsigned char *pOut)
 {
-    int             i,j,b;
-    bar_colour_t    UYVY_table[] = {
-                {52/720.0,  {0x80,0xEB,0x80,0xEB}}, // white
-                {140/720.0, {0x10,0xD2,0x92,0xD2}}, // yellow
-                {228/720.0, {0xA5,0xA9,0x10,0xA9}}, // cyan
-                {316/720.0, {0x35,0x90,0x22,0x90}}, // green
-                {404/720.0, {0xCA,0x6A,0xDD,0x6A}}, // magenta
-                {492/720.0, {0x5A,0x51,0xF0,0x51}}, // red
-                {580/720.0, {0xf0,0x29,0x6d,0x29}}, // blue
-                {668/720.0, {0x80,0x10,0x80,0x10}}, // black
-                {720/720.0, {0x80,0xEB,0x80,0xEB}}  // white
-            };
+    int     i;
 
-    for (j = 0; j < height; j++)
+    for (i = 0; i < 4; i++)
     {
-        for (i = 0; i < width; i+=2)
+        *pOut++ = *pIn & 0xff;
+        *pOut = (*pIn++ >> 8) & 0x03;
+        *pOut++ += (*pIn & 0x3f) << 2;
+        *pOut = (*pIn++ >> 6) & 0x0f;
+        *pOut++ += (*pIn & 0x0f) << 4;
+        *pOut++ = (*pIn++ >> 4) & 0x3f;
+    }
+}
+
+// Generate a video buffer containing uncompressed UYVY video representing
+// the familiar colour bars test signal
+static void create_colour_bars(unsigned char *video_buffer, int depth_8Bit, int width, int height)
+{
+    int i,j,b;
+
+    if (depth_8Bit)
+    {
+        bar_colour_t UYVY_table[] = {
+            {52/720.0,  {0x80,0xEB,0x80,0xEB}}, // white
+            {140/720.0, {0x10,0xD2,0x92,0xD2}}, // yellow
+            {228/720.0, {0xA5,0xA9,0x10,0xA9}}, // cyan
+            {316/720.0, {0x35,0x90,0x22,0x90}}, // green
+            {404/720.0, {0xCA,0x6A,0xDD,0x6A}}, // magenta
+            {492/720.0, {0x5A,0x51,0xF0,0x51}}, // red
+            {580/720.0, {0xf0,0x29,0x6d,0x29}}, // blue
+            {668/720.0, {0x80,0x10,0x80,0x10}}, // black
+            {720/720.0, {0x80,0xEB,0x80,0xEB}}  // white
+        };
+                
+        for (j = 0; j < height; j++)
         {
-            for (b = 0; b < 9; b++)
+            for (i = 0; i < width; i+=2)
             {
-                if ((i / ((double)width)) < UYVY_table[b].position)
+                for (b = 0; b < 9; b++)
                 {
-                    // UYVY packing
-                    video_buffer[j*width*2 + i*2 + 0] = UYVY_table[b].colour[0];
-                    video_buffer[j*width*2 + i*2 + 1] = UYVY_table[b].colour[1];
-                    video_buffer[j*width*2 + i*2 + 2] = UYVY_table[b].colour[2];
-                    video_buffer[j*width*2 + i*2 + 3] = UYVY_table[b].colour[3];
-                    break;
+                    if ((i / ((double)width)) < UYVY_table[b].position)
+                    {
+                        video_buffer[j*width*2 + i*2 + 0] = UYVY_table[b].colour[0];
+                        video_buffer[j*width*2 + i*2 + 1] = UYVY_table[b].colour[1];
+                        video_buffer[j*width*2 + i*2 + 2] = UYVY_table[b].colour[2];
+                        video_buffer[j*width*2 + i*2 + 3] = UYVY_table[b].colour[3];
+
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    else
+    {
+        bar_colour_t UYVY_table[] = {
+            {52/720.0,  {0x0200,0x03ac,0x0200,0x03ac}}, // white
+            {140/720.0, {0x0040,0x0348,0x0248,0x0348}}, // yellow
+            {228/720.0, {0x0294,0x02a4,0x0040,0x02a4}}, // cyan
+            {316/720.0, {0x00d4,0x0240,0x0088,0x0240}}, // green
+            {404/720.0, {0x0328,0x01a8,0x0374,0x01a8}}, // magenta
+            {492/720.0, {0x0168,0x0144,0x03c0,0x0144}}, // red
+            {580/720.0, {0x03c0,0x00a4,0x01b4,0x00a4}}, // blue
+            {668/720.0, {0x0200,0x0040,0x0200,0x0040}}, // black
+            {720/720.0, {0x0200,0x03ac,0x0200,0x03ac}}  // white
+        };
+                
+        unsigned short uyvy_group[12];
+        int lineStride = (width + 5) / 6 * 16;
+        
+        for (j = 0; j < height; j++)
+        {
+            for (i = 0; i < width; i+=6)
+            {
+                for (b = 0; b < 9; b++)
+                {
+                    if ((i / ((double)width)) < UYVY_table[b].position)
+                    {
+                        memcpy(uyvy_group, UYVY_table[b].colour, sizeof(unsigned short) * 4);
+                        memcpy(&uyvy_group[4], UYVY_table[b].colour, sizeof(unsigned short) * 4);
+                        memcpy(&uyvy_group[8], UYVY_table[b].colour, sizeof(unsigned short) * 4);
+                        
+                        pack4(uyvy_group, &video_buffer[j*lineStride + i/6*16]);
+                        break;
+                    }
                 }
             }
         }
     }
 }
 
-// SV implementations
-int sv_fifo_init(sv_handle * sv, sv_fifo ** ppfifo, int bInput, int bShared, int bDMA, int flagbase, int nframes)
+static void init_fifo_buffer(int videomode)
 {
-    return SV_OK;
-}
-int sv_fifo_free(sv_handle * sv, sv_fifo * pfifo)
-{
-    return SV_OK;
-}
-int sv_fifo_start(sv_handle * sv, sv_fifo * pfifo)
-{
-    return SV_OK;
-}
-int sv_fifo_getbuffer(sv_handle * sv, sv_fifo * pfifo, sv_fifo_buffer ** pbuffer, sv_fifo_bufferinfo * bufferinfo, int flags)
-{
-    *pbuffer = &fifo_buffer;
-
-    // simulate typical behaviour of recording fifo by sleeping
-    usleep(39 * 1000);
-
-    return SV_OK;
-}
-int sv_fifo_putbuffer(sv_handle * sv, sv_fifo * pfifo, sv_fifo_buffer * pbuffer, sv_fifo_bufferinfo * bufferinfo)
-{
-    // For record, copy video + audio to dma.addr
-    memcpy(pbuffer->dma.addr, source_dmabuf, source_frame_size);
-
-    // Update timecodes
-    // TODO
-
-    return SV_OK;
-}
-int sv_fifo_stop(sv_handle * sv, sv_fifo * pfifo, int flags)
-{
-    return SV_OK;
-}
-int sv_query(sv_handle * sv, int cmd, int par, int *val)
-{
-    *val = SV_OK;
-    return SV_OK;
-}
-int sv_currenttime(sv_handle * sv, int brecord, int *ptick, uint32 *pclockhigh, uint32 *pclocklow)
-{
-    return SV_OK;
-}
-
-int sv_fifo_status(sv_handle * sv, sv_fifo * pfifo, sv_fifo_info * pinfo)
-{
-    // Pretend everything is working correctly
-    pinfo->dropped = 0;
-
-    return SV_OK;
-}
-
-int sv_videomode(sv_handle * sv, int videomode)
-{
-    return SV_OK;
-}
-
-int sv_openex(sv_handle ** psv, char * setup, int openprogram, int opentype, int timeout, int spare)
-{
-    // Initialise with D3 sample frame for recording
+    int is_palff_mode = (videomode & SV_MODE_PALFF);
+    int depth_8bit = (videomode & SV_MODE_NBIT_8B);
+    
+    // Initialise with sample frame for recording
     int width = 720;
-    int height = 576 + 16;                              // 16 lines of VBI
-    int video_size = width * height * 2;
+    int height = 576;
+    if (is_palff_mode)
+        height += 16;           // 16 lines of VBI
+    int line_stride;
+    if (depth_8bit)
+        line_stride = width * 2;
+    else
+        line_stride = (width + 5) / 6 * 16;
+    
+    source_video_size = line_stride * height;
 
     // DVS dma transfer buffer is:
     // <video (UYVY)><audio ch 1+2 with fill to 0x4000><audio ch 3+4 with fill>
-    source_frame_size = video_size + 0x4000 + 0x4000;
+    source_frame_size = source_video_size + 0x4000 + 0x4000;
+    if (source_dmabuf) {
+        free(source_dmabuf);
+        source_dmabuf = NULL;
+    }
     source_dmabuf = malloc(source_frame_size);
     unsigned char *video = source_dmabuf;
-    unsigned char *audio12 = video + video_size;
+    unsigned char *audio12 = video + source_video_size;
     unsigned char *audio34 = audio12 + 0x4000;
 
-    // copy sample VITC into VBI
     int i;
-    for (i = 0; i < 16; i++) {
-        memcpy(video + i * sizeof(sample_vitc), sample_vitc, sizeof(sample_vitc));
+    if (is_palff_mode) {
+        // copy sample VITC into VBI
+        if (depth_8bit)
+        {
+            for (i = 0; i < 16; i++)
+                memcpy(video + i * sizeof(sample_vitc), sample_vitc, sizeof(sample_vitc));
+        }
+        else
+        {
+            if (!sample_vitc_10bit) {
+                sample_vitc_10bit_size = line_stride;
+                sample_vitc_10bit = malloc(sample_vitc_10bit_size);
+                ConvertFrame8to10(sample_vitc_10bit, sample_vitc, line_stride, width * 2, width, 1);
+            }
+
+            for (i = 0; i < 16; i++)
+                memcpy(video + i * sample_vitc_10bit_size, sample_vitc_10bit, sample_vitc_10bit_size);
+        }
     }
 
     // setup colorbars
-    create_colour_bars(video + width * 16 * 2, width, 576);
+    unsigned char *active_video = video;
+    if (is_palff_mode)
+        active_video += line_stride * 16;
+    create_colour_bars(active_video, depth_8bit, width, 576);
 
     // TODO: create audio tone or click
     for (i = 0; i < 0x4000; i += 8) {
@@ -284,18 +327,163 @@ int sv_openex(sv_handle ** psv, char * setup, int openprogram, int opentype, int
     }
 
     // Setup fifo_buffer which contains offsets to audio buffers
-    fifo_buffer.audio[0].addr[0] = (char*)video_size;
-    fifo_buffer.audio[0].addr[1] = (char*)(video_size + 0x4000);
+    fifo_buffer.audio[0].addr[0] = (char*)0 + source_video_size;
+    fifo_buffer.audio[0].addr[1] = (char*)0 + source_video_size + 0x4000;
 
     source_width = width;
     source_height = height;
+}
+
+// SV implementations
+int sv_fifo_init(sv_handle * sv, sv_fifo ** ppfifo, int bInput, int bShared, int bDMA, int flagbase, int nframes)
+{
+    return SV_OK;
+}
+int sv_fifo_free(sv_handle * sv, sv_fifo * pfifo)
+{
+    return SV_OK;
+}
+int sv_fifo_start(sv_handle * sv, sv_fifo * pfifo)
+{
+    // set starting timecode to local time
+    time_t epoch_secs = time(NULL);
+    struct tm now;
+    localtime_r(&epoch_secs, &now);
+    hour = now.tm_hour;
+    min = now.tm_min;
+    sec = now.tm_sec;
+    frame = 0;
+
+    return SV_OK;
+}
+int sv_fifo_getbuffer(sv_handle * sv, sv_fifo * pfifo, sv_fifo_buffer ** pbuffer, sv_fifo_bufferinfo * bufferinfo, int flags)
+{
+#if defined(DVS_DUMMY_SOURCE_FILE)
+    // read the next video frame
+    if (source_file)
+    {
+        size_t num_read;
+        num_read = fread(source_dmabuf, source_video_size, 1, source_file);
+        if (num_read != 1)
+        {
+            if (fseek(source_file, 0, SEEK_SET))
+            {
+                fread(source_dmabuf, source_video_size, 1, source_file);
+            }
+        }
+    }
+#endif
+
+    // increment timecode
+    frame++;
+    if (frame >= 25) {
+        frame = 0;
+        sec++;
+        if (sec >= 60) {
+            sec = 0;
+            min++;
+            if (min >= 60) {
+                min = 0;
+                hour++;
+                if (hour >= 24) {
+                    hour = 0;
+                }
+            }
+        }
+    }
+
+    // convert to SMPTE 12M timecode
+    int dvs_sys_tc = 0;
+    ((unsigned char*)&dvs_sys_tc)[0] = ((frame % 10) & 0x0f) | (((frame / 10) & 0x3) << 4);
+    ((unsigned char*)&dvs_sys_tc)[1] = ((sec % 10) & 0x0f) | (((sec / 10) & 0x7) << 4);
+    ((unsigned char*)&dvs_sys_tc)[2] = ((min % 10) & 0x0f) | (((min / 10) & 0x7) << 4);
+    ((unsigned char*)&dvs_sys_tc)[3] = ((hour % 10) & 0x0f) | (((hour / 10) & 0x3) << 4);
     
+    fifo_buffer.timecode.vitc_tc = dvs_sys_tc;
+    fifo_buffer.timecode.vitc_tc2 = dvs_sys_tc;
+    fifo_buffer.anctimecode.dvitc_tc[0] = dvs_sys_tc;
+    fifo_buffer.anctimecode.dvitc_tc[1] = dvs_sys_tc;
+    fifo_buffer.timecode.ltc_tc = dvs_sys_tc;
+    fifo_buffer.anctimecode.dltc_tc = dvs_sys_tc;
+    
+    *pbuffer = &fifo_buffer;
+
+    // simulate typical behaviour of recording fifo by sleeping
+    usleep(39 * 1000);
+
+    return SV_OK;
+}
+int sv_fifo_putbuffer(sv_handle * sv, sv_fifo * pfifo, sv_fifo_buffer * pbuffer, sv_fifo_bufferinfo * bufferinfo)
+{
+    // For record, copy video + audio to dma.addr
+    memcpy(pbuffer->dma.addr, source_dmabuf, source_frame_size);
+
+    return SV_OK;
+}
+int sv_fifo_stop(sv_handle * sv, sv_fifo * pfifo, int flags)
+{
+    return SV_OK;
+}
+int sv_query(sv_handle * sv, int cmd, int par, int *val)
+{
+    if (cmd == SV_QUERY_VALIDTIMECODE)
+    {
+        *val = SV_VALIDTIMECODE_VITC_F1 | SV_VALIDTIMECODE_VITC_F2 |
+               SV_VALIDTIMECODE_DVITC_F1 | SV_VALIDTIMECODE_DVITC_F2 |
+               SV_VALIDTIMECODE_LTC |
+               SV_VALIDTIMECODE_DLTC;
+    }
+    else
+    {
+        *val = SV_OK;
+    }
+    return SV_OK;
+}
+int sv_currenttime(sv_handle * sv, int brecord, int *ptick, uint32 *pclockhigh, uint32 *pclocklow)
+{
+    return SV_OK;
+}
+
+int sv_fifo_status(sv_handle * sv, sv_fifo * pfifo, sv_fifo_info * pinfo)
+{
+    // pretend half of the buffers are empty
+    pinfo->nbuffers = 31;
+    pinfo->availbuffers = pinfo->nbuffers / 2;
+    
+    // Pretend everything is working correctly
+    pinfo->dropped = 0;
+
+    return SV_OK;
+}
+
+int sv_videomode(sv_handle * sv, int videomode)
+{
+    dvs_videomode = videomode;
+    init_fifo_buffer(dvs_videomode);
+    return SV_OK;
+}
+
+int sv_openex(sv_handle ** psv, char * setup, int openprogram, int opentype, int timeout, int spare)
+{
+#if defined(DVS_DUMMY_SOURCE_FILE)
+    if (!source_file)
+    {
+        source_file = fopen(source_filename, "rb");
+        if (!source_file)
+        {
+            return SV_ERROR_FILEOPEN;
+        }
+    }
+#endif
+    
+    init_fifo_buffer(dvs_videomode);
     return SV_OK;
 }
 
 int sv_close(sv_handle * sv)
 {
     free(source_dmabuf);
+    source_dmabuf = 0;
     return SV_OK;
 }
 
@@ -319,4 +507,19 @@ int sv_stop(sv_handle * sv)
     return SV_OK;
 }
 
+
+int sv_rs422_open(sv_handle * sv, int device, int baudrate, int flags)
+{
+    return SV_OK;
+}
+
+int sv_rs422_close(sv_handle * sv, int device)
+{
+    return SV_OK;
+}
+
+int  sv_rs422_rw(sv_handle * sv, int device, int bwrite, char * buffer, int buffersize, int * pbytecount, int flags)
+{
+    return SV_OK;
+}
 

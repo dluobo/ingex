@@ -1,5 +1,5 @@
 /*
- * $Id: browse_encoder.h,v 1.1 2008/07/08 16:21:26 philipn Exp $
+ * $Id: browse_encoder.h,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * MPEG-2 encodes planar YUV420 video and 16-bit PCM audio
  *
@@ -24,8 +24,6 @@
 #define BROWSE_ENCODER_H
 #include <inttypes.h>
 
-#include <archive_types.h>
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -35,12 +33,13 @@ typedef void browse_encoder_t;
 * browse_encoder_init : Creates a format context for the "browse" format and returns
 *                    a pointer to it.
 * Input            : filename  - file name to write "browse" formatted data to
+*                  : aspect_ratio - picture aspect ratio; either 4/3 or 16/9
 *                  : kbit_rate - required bit_rate in kilobits per sec
 *                  : thread_count - number ffmpeg threads to use for encoding the video; 0 means none
 * Return           : Pointer to browse_encoder_t object if successful
 *                    NULL if a problem occurred
 */
-extern browse_encoder_t *browse_encoder_init (const char *filename, uint32_t kbit_rate, int thread_count);
+extern browse_encoder_t *browse_encoder_init (const char *filename, int aspect_ratio_num, int aspect_ratio_den, uint32_t kbit_rate, int thread_count);
 
 /*
 * browse_encoder_encode : Encodes the input video and audio frames to the format
@@ -55,7 +54,7 @@ extern browse_encoder_t *browse_encoder_init (const char *filename, uint32_t kbi
 *					NOTE: expects an SD VIDEO frames in Planar YUV420 format
 *					      MP2 audion - stero 16 bits/sample
 */
-extern int browse_encoder_encode (browse_encoder_t *in_browse, uint8_t *p_video, int16_t *p_audio, ArchiveTimecode ltc, ArchiveTimecode vitc, int32_t frame_number);
+extern int browse_encoder_encode (browse_encoder_t *in_browse, const uint8_t *p_video, const int16_t *p_audio, int32_t frame_number);
 
 /*
 * browse_encoder_close : Releases resources allocated by the browse_encoder_init

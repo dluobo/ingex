@@ -1,5 +1,5 @@
 /*
- * $Id: main.cpp,v 1.1 2008/07/08 16:26:05 philipn Exp $
+ * $Id: main.cpp,v 1.2 2010/09/01 16:05:23 philipn Exp $
  *
  * Tape export main function
  *
@@ -20,10 +20,10 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
  
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <errno.h>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <cerrno>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -41,10 +41,10 @@
 #include "HTTPServer.h"
 #include "RecorderException.h"
 #include "Logging.h"
+#include "MXFCommon.h"
 #include "Utilities.h"
 #include "Timing.h"
 #include "version.h"
-
 
 using namespace std;
 using namespace rec;
@@ -55,41 +55,6 @@ static const char* g_tapeExportLogSuffix = ".log";
 static const char* g_tapeLogPrefix = "tape_";
 static const char* g_tapeLogSuffix = ".log";
 
-static const ConfigSpec g_configSpec[] = 
-{
-    // common
-    {"log_dir", NON_EMPTY_STRING_CONFIG_TYPE, true, 0},
-    {"keep_logs", INT_CONFIG_TYPE, true, "30"},
-    {"cache_dir", NON_EMPTY_STRING_CONFIG_TYPE, true, 0},
-    // browse_dir not used
-    {"pse_dir", NON_EMPTY_STRING_CONFIG_TYPE, true, 0},
-    {"db_host", NON_EMPTY_STRING_CONFIG_TYPE, true, 0},
-    {"db_name", NON_EMPTY_STRING_CONFIG_TYPE, true, 0},
-    {"db_user", NON_EMPTY_STRING_CONFIG_TYPE, true, 0},
-    {"db_password", NON_EMPTY_STRING_CONFIG_TYPE, true, 0},
-    {"recorder_name", NON_EMPTY_STRING_CONFIG_TYPE, true, 0},
-    {"tape_transfer_lock_file", NON_EMPTY_STRING_CONFIG_TYPE, true, 0},
-
-    // recorder
-    // num_audio_tracks is used to calculate the remaining recording time
-    {"num_audio_tracks", INT_CONFIG_TYPE, true, "4"},
-
-    // tape export
-    {"tape_export_log_level", NON_EMPTY_STRING_CONFIG_TYPE, true, "DEBUG"},
-    {"tape_log_level", INT_CONFIG_TYPE, true, "1"},
-    {"tape_export_www_root", NON_EMPTY_STRING_CONFIG_TYPE, true, 0},
-    {"tape_export_www_port", INT_CONFIG_TYPE, true, 0},
-    {"tape_export_server_barcode_scanner", BOOL_CONFIG_TYPE, true, "false"},
-    {"tape_export_barcode_fifo", NON_EMPTY_STRING_CONFIG_TYPE, false, 0},
-    {"tape_device", NON_EMPTY_STRING_CONFIG_TYPE, true, 0},
-    {"lto_barcode_prefixes", NON_EMPTY_STRING_ARRAY_CONFIG_TYPE, true, "LTA"},
-    {"max_auto_files_on_lto", INT_CONFIG_TYPE, true, "10"},
-    {"max_lto_size_gb", INT_CONFIG_TYPE, true, "390"},
-    
-    // debug
-    {"dbg_null_barcode_scanner", BOOL_CONFIG_TYPE, true, "false"},
-    {"dbg_keep_lto_files", BOOL_CONFIG_TYPE, true, "false"},
-};
 
 
 // from version.h
@@ -129,14 +94,12 @@ static void usage(const char* cmd)
     fprintf(stderr, "  -h, --help                   Display this usage message\n");
     fprintf(stderr, "  -v | --version               Display the version and exit\n");
     fprintf(stderr, "* -c | --config <name>         The configuration filename\n");
-    fprintf(stderr, "  --config-string <value>      Configuration string (name/value pairs separated by ;). Overrides configuration file entries.\n");
 }
 
 int main(int argc, const char** argv)
 {
     int cmdlnIndex = 1;
     string configFilename;
-    string configString;
     string recorderName;
     string logDir;
     LogLevel logLevel;
@@ -150,6 +113,10 @@ int main(int argc, const char** argv)
     int port;
     string tapeDeviceName;
     string scannerFIFO;
+    int numHTTPThreads;
+    int keepLogs;
+    bool haveBarcodeScanner;
+    bool debugBarcodeScanner = false;
 
     
     // parse command line arguments
@@ -179,17 +146,6 @@ int main(int argc, const char** argv)
             configFilename = argv[cmdlnIndex + 1];
             cmdlnIndex += 2;
         }
-        else if (strcmp(argv[cmdlnIndex], "--config-string") == 0)
-        {
-            if (cmdlnIndex + 1 >= argc)
-            {
-                usage(argv[0]);
-                fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
-                return 1;
-            }
-            configString = argv[cmdlnIndex + 1];
-            cmdlnIndex += 2;
-        }
         else
         {
             usage(argv[0]);
@@ -205,13 +161,7 @@ int main(int argc, const char** argv)
         return 1;
     }
     
-    // setup, read and validate config
-    
-    if (!Config::setSpec(g_configSpec, sizeof(g_configSpec) / sizeof(ConfigSpec)))
-    {
-        fprintf(stderr, "Failed to set default configuration\n");
-        return 1;
-    }
+    // read and validate config
     
     if (!Config::readFromFile(configFilename))
     {
@@ -219,16 +169,7 @@ int main(int argc, const char** argv)
         return 1;
     }
 
-    if (!configString.empty())
-    {
-        if (!Config::readFromString(configString))
-        {
-            fprintf(stderr, "Failed to read configuration from string '%s'\n", configString.c_str());
-            return 1;
-        }
-    }
-
-    if (!Config::haveValue("recorder_name"))
+    if (Config::recorder_name.empty())
     {
         string hostName = get_host_name();
         if (hostName.empty())
@@ -236,11 +177,11 @@ int main(int argc, const char** argv)
             fprintf(stderr, "Failed to get the hostname to set the default recorder name: %s\n", strerror(errno));
             return 1;
         }
-        Config::setString("recorder_name", hostName);
+        Config::recorder_name = hostName;
     }
     
     string configError;
-    if (!Config::validate(&configError))
+    if (!Config::validateTapeExportConfig(&configError))
     {
         fprintf(stderr, "Invalid configuration: %s\n", configError.c_str());
         return 1;
@@ -249,61 +190,52 @@ int main(int argc, const char** argv)
     
     // read config values and do further checks
 
-    logDir = Config::getString("log_dir");
+    logDir = Config::log_dir;
     if (!directory_exists(logDir))
     {
         fprintf(stderr, "Log directory '%s' does not exist\n", logDir.c_str());
         return 1;
     }
 
-    if (!parse_log_level_string(Config::getString("tape_export_log_level"), &logLevel))
-    {
-        fprintf(stderr, "Invalid tape_export_log_level in configuration file\n");
-        return 1;
-    }
+    logLevel = Config::tape_export_log_level;
     
-    cacheDir = Config::getString("cache_dir");
+    cacheDir = Config::cache_dir;
     if (!check_absolute_directory_exists(cacheDir, "Cache"))
     {
         return 1;
     }
     
-    pseDir = Config::getString("pse_dir");
-    if (!check_absolute_directory_exists(pseDir, "PSE"))
+    dbHost = Config::db_host;
+    dbName = Config::db_name;
+    dbUser = Config::db_user;
+    dbPassword = Config::db_password;
+    
+    recorderName = Config::recorder_name;
+    
+    documentRoot = Config::recorder_www_root;
+    port = Config::recorder_www_port;
+    numHTTPThreads = Config::recorder_www_threads;
+    
+    tapeDeviceName = Config::tape_device;
+    
+    haveBarcodeScanner = Config::tape_export_server_barcode_scanner;
+    if (haveBarcodeScanner)
     {
-        return 1;
-    }
-
-    dbHost = Config::getString("db_host");
-    dbName = Config::getString("db_name");
-    dbUser = Config::getString("db_user");
-    dbPassword = Config::getString("db_password");
-    
-    recorderName = Config::getString("recorder_name");
-    
-    documentRoot = Config::getString("tape_export_www_root");
-    port = Config::getInt("tape_export_www_port");
-    
-    tapeDeviceName = Config::getString("tape_device");
-    
-    if (Config::getBool("tape_export_server_barcode_scanner"))
-    {
-        if (!Config::getString("tape_export_barcode_fifo", &scannerFIFO))
-        {
-            fprintf(stderr, "Missing tape_export_barcode_fifo in configuration file\n");
-            return 1;
-        }
-        else if (!file_exists(scannerFIFO))
+        debugBarcodeScanner = Config::dbg_null_barcode_scanner;
+        scannerFIFO = Config::tape_export_barcode_fifo;
+        if (!file_exists(scannerFIFO))
         {
             fprintf(stderr, "Scanner FIFO file '%s' does not exist\n", scannerFIFO.c_str());
             return 1;
         }
     }
+    
+    keepLogs = Config::keep_logs;
 
     
     // clear old log files
-    clear_old_log_files(logDir, g_tapeExportLogPrefix, g_tapeExportLogSuffix, Config::getInt("keep_logs"));    
-    clear_old_log_files(logDir, g_tapeLogPrefix, g_tapeLogSuffix, Config::getInt("keep_logs"));    
+    clear_old_log_files(logDir, g_tapeExportLogPrefix, g_tapeExportLogSuffix, keepLogs);
+    clear_old_log_files(logDir, g_tapeLogPrefix, g_tapeLogSuffix, keepLogs);
     
     
     // initialise logging to file and console
@@ -331,6 +263,10 @@ int main(int argc, const char** argv)
     Logging::info("Configuration: %s\n", Config::writeToString().c_str());
 
     
+    // redirect libMXF log messages
+    redirect_mxf_logging();
+    
+    
     // initialise the database
     try
     {
@@ -344,11 +280,16 @@ int main(int argc, const char** argv)
 
     // open the scanner - either using exclusive device access or a fifo written to by an another process
     BarcodeScanner* scanner = 0;
-    if (Config::getBool("tape_export_server_barcode_scanner"))
+    if (haveBarcodeScanner)
     {
         try
         {
-            if (scannerFIFO.size() > 0)
+            if (debugBarcodeScanner)
+            {
+                scanner = new BarcodeScanner();
+                Logging::warning("Using null barcode scanner device\n");
+            }
+            else if (scannerFIFO.size() > 0)
             {
                 scanner = new BarcodeScannerFIFO(scannerFIFO);
             }
@@ -372,7 +313,7 @@ int main(int argc, const char** argv)
         // add an alias to the pse directory so that we can html link to files
         vector<pair<string, string> > pseAlias;
         pseAlias.push_back(pair<string, string>(HTTPTapeExport::getPSEReportsURL(), pseDir));
-        HTTPServer httpServer(port, documentRoot, pseAlias);
+        HTTPServer httpServer(port, documentRoot, pseAlias, numHTTPThreads);
         
         TapeExport tapeExport(tapeDeviceName, recorderName, cacheDir);
         HTTPTapeExport httpTapeExport(&httpServer, &tapeExport, scanner);
@@ -391,7 +332,7 @@ int main(int argc, const char** argv)
             if (dateNow != logFileStartDate)
             {
                 string newTapeExportLogFilename = join_path(logDir, add_timestamp_to_filename(g_tapeExportLogPrefix, g_tapeExportLogSuffix));
-                if (newTapeExportLogFilename.compare(tapeExportLogFilename) != 0)
+                if (newTapeExportLogFilename != tapeExportLogFilename)
                 {
                     FileLogging* fileLogging = dynamic_cast<FileLogging*>(Logging::getInstance());
                     if (fileLogging != 0)
@@ -402,7 +343,7 @@ int main(int argc, const char** argv)
                             Logging::info("Reopened log file from '%s'\n", tapeExportLogFilename.c_str());
                             tapeExportLogFilename = newTapeExportLogFilename;
                             
-                            clear_old_log_files(logDir, g_tapeExportLogPrefix, g_tapeExportLogSuffix, Config::getInt("keep_logs"));    
+                            clear_old_log_files(logDir, g_tapeExportLogPrefix, g_tapeExportLogSuffix, keepLogs);    
     
                             Logging::info("Tape export for recorder '%s'\n", recorderName.c_str());
                             Logging::info("Version: %s (build %s)\n", get_version().c_str(), get_build_date().c_str());
@@ -416,7 +357,7 @@ int main(int argc, const char** argv)
                 }
             
                 string newTapeLogFilename = join_path(logDir, add_timestamp_to_filename(g_tapeLogPrefix, g_tapeLogSuffix));
-                if (newTapeLogFilename.compare(tapeLogFilename) != 0)
+                if (newTapeLogFilename != tapeLogFilename)
                 {
                     logTF("Reopening log file '%s'\n", newTapeLogFilename.c_str());
                     if (reopenLogFile(newTapeLogFilename.c_str()))
@@ -424,7 +365,7 @@ int main(int argc, const char** argv)
                         logTF("Reopened log file from '%s'\n", newTapeLogFilename.c_str());
                         tapeLogFilename = newTapeLogFilename;
     
-                        clear_old_log_files(logDir, g_tapeLogPrefix, g_tapeLogSuffix, Config::getInt("keep_logs"));    
+                        clear_old_log_files(logDir, g_tapeLogPrefix, g_tapeLogSuffix, keepLogs);    
                     }
                     else
                     {

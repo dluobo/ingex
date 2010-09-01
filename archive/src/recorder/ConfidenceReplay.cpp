@@ -1,5 +1,5 @@
 /*
- * $Id: ConfidenceReplay.cpp,v 1.1 2008/07/08 16:25:33 philipn Exp $
+ * $Id: ConfidenceReplay.cpp,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * Runs and provides access to a player running in a separate process
  *
@@ -27,10 +27,11 @@
  
 #define __STDC_FORMAT_MACROS 1
 
+#include <cstdlib>
 #include <sys/types.h>
 #include <unistd.h>
-#include <errno.h>
-#include <signal.h>
+#include <cerrno>
+#include <csignal>
 #include <sys/wait.h>
 
 #include <curl/curl.h>
@@ -56,6 +57,13 @@ using namespace rec;
 
 // poll the player state every 1/5 second
 #define PLAYER_STATE_POLL_INTERVAL          (200 * MSEC_IN_USEC)
+
+// player mark types
+#define ALL_MARK_TYPE               0xffffffff
+#define VTR_ERROR_MARK_TYPE         0x00010000
+#define PSE_FAILURE_MARK_TYPE       0x00020000
+#define DIGIBETA_DROPOUT_MARK_TYPE  0x00040000
+#define TIMECODE_BREAK_MARK_TYPE    0x00080000
 
 
 // TODO: make ConfidenceReplay a singelton because of these global variables
@@ -139,14 +147,27 @@ private:
 };
     
 
+static string int_to_hex_string(int value)
+{
+    char buffer[32];
+    sprintf(buffer, "0x%08x", value);
+    return buffer;
+}
+
 
 class ConfidenceReplayWorker : public ThreadWorker
 {
 public:    
-    ConfidenceReplayWorker(string filename, int httpAccessPort, int64_t startPosition, bool showSecondMarkBar)
-    : _hasStopped(false), _filename(filename), _httpAccessPort(httpAccessPort), _startPosition(startPosition), 
-    _showSecondMarkBar(showSecondMarkBar), _playerPid(-1)
+    ConfidenceReplayWorker(string filename, string eventFilename,
+                           int httpAccessPort, int64_t startPosition, bool showSecondMarkBar)
+    : _hasStopped(false), _filename(filename), _eventFilename(eventFilename), _httpAccessPort(httpAccessPort),
+    _startPosition(startPosition), _showSecondMarkBar(showSecondMarkBar), _playerPid(-1)
     {
+        _playerExe = Config::player_exe;
+        _dbgVGAReplay = Config::dbg_vga_replay;
+        _dbgForceX11 = Config::dbg_force_x11;
+        _srcBufferSize = Config::player_source_buffer_size;
+        
         _curl = curl_easy_init();
         if (!_curl)
         {
@@ -163,6 +184,13 @@ public:
     {
         GUARD_THREAD_START(_hasStopped);
         
+        // check whether the event filename exists
+        string existingEventFilename;
+        if (file_exists(_eventFilename))
+        {
+            existingEventFilename = _eventFilename;
+        }
+        
         _playerPid = fork();
         if (_playerPid < 0)
         {
@@ -173,46 +201,103 @@ public:
         
         if (_playerPid == 0) // child
         {
+            vector<string> args;
+            args.push_back(_playerExe);  // the executable name
+            args.push_back("-m"); // input MXF file
+                args.push_back(_filename);
+            args.push_back("--audio-mon"); // show audio levels for maximum 8 audio streams
+                args.push_back("8");
+            args.push_back("--show-tc"); // show VITC
+                args.push_back("VITC.0");
+            args.push_back("--mark-vtr-errors"); // mark VTR errors on the progress bar
+            args.push_back("--vtr-error-level"); // initially show all VTR errors
+                args.push_back("1");
+            args.push_back("--mark-digi-dropouts"); // mark digibeta dropouts on the progress bar
+            args.push_back("--mark-tc-breaks"); // mark timecode breaks on the progress bar
+            args.push_back("--config-marks"); // show item start, vtr error and digibeta dropout mark types
+                args.push_back("9,itemstart,red"
+                               ":17,vtrerror,yellow"
+                               ":19,digidropout,light-grey"
+                               ":20,tcbreak,green");
+            args.push_back("--vitc-read"); // read VITC from lines 19 and 21
+                args.push_back("19,21");
+            args.push_back("--qc-control"); // use the QC control input mapping
+            args.push_back("--disable-console-mon"); // disable console monitoring of the player
+            args.push_back("--log-file");  // no logging
+                args.push_back("/dev/null");
+            args.push_back("--http-access");  // port for sending control commands
+                args.push_back(int_to_string(_httpAccessPort));
+            args.push_back("--disable-shuttle");  // recorder uses the jog-shuttle control
+            args.push_back("--start");  // start playing from this position
+                args.push_back(int64_to_string(_startPosition));
+            
+            if (_srcBufferSize > 0)
+            {
+                args.push_back("--src-buf");  // source buffer
+                    args.push_back(int_to_string(_srcBufferSize));
+            }
+
             if (_showSecondMarkBar)
             {
-                execl("/usr/local/bin/player", // the executable
-                    "/usr/local/bin/player", // the executable name
-                    Config::getBool("dbg_vga_replay") ? 
-                        "--x11" : // output to the X11 display 
-                        "--dvs", // output to SDI
-                    "--audio-mon", "8", // show audio levels for maximum 8 audio streams
-                    "--show-tc", "VITC.0", // show VITC in place of control timecode
-                    "--mark-vtr-errors", // mark VTR errors on the progress bar
-                    "--config-marks", "9,itemstart,red:17,vtrerror,yellow", // show item start and vtr error mark types
-                    "--qc-control", // use the QC control input mapping
-                    "--disable-console-mon", // disable console monitoring of the player
-                    "--log-file", "/dev/null", // no logging
-                    "--http-access", int_to_string(_httpAccessPort).c_str(), // port for sending control commands
-                    "--start", int64_to_string(_startPosition).c_str(), // start playing from this position
-                    "--pb-mark-mask", "0xfffcffff", // mask for everything but PSE and VTR marks on the progress bar
-                    "--pb-mark-mask", "0x00030000", // mask for PSE and VTR marks on the second progress bar
-                    "-m", _filename.c_str(), // input file
-                    (char *) NULL);
+                // mask out VTR, DigiBeta dropout and timecode break marks on the first progress bar
+                // mask out everything but VTR, DigiBeta dropout and timecode break marks on the second progress bar
+                args.push_back("--mark-filter");
+                    args.push_back(int_to_hex_string(ALL_MARK_TYPE &
+                                                    ~VTR_ERROR_MARK_TYPE &
+                                                    ~DIGIBETA_DROPOUT_MARK_TYPE &
+                                                    ~TIMECODE_BREAK_MARK_TYPE));
+                args.push_back("--mark-filter");
+                    args.push_back(int_to_hex_string(VTR_ERROR_MARK_TYPE |
+                                                     DIGIBETA_DROPOUT_MARK_TYPE |
+                                                     TIMECODE_BREAK_MARK_TYPE));
+                args.push_back("--pb-mark-mask");
+                    args.push_back(int_to_hex_string(ALL_MARK_TYPE &
+                                                    ~VTR_ERROR_MARK_TYPE &
+                                                    ~DIGIBETA_DROPOUT_MARK_TYPE &
+                                                    ~TIMECODE_BREAK_MARK_TYPE));
+                args.push_back("--pb-mark-mask");
+                    args.push_back(int_to_hex_string(VTR_ERROR_MARK_TYPE |
+                                                     DIGIBETA_DROPOUT_MARK_TYPE |
+                                                     TIMECODE_BREAK_MARK_TYPE));
             }
             else
             {
-                execl("/usr/local/bin/player", // the executable
-                    "/usr/local/bin/player", // the executable name
-                    Config::getBool("dbg_vga_replay") ? 
-                        "--x11" : // output to the X11 display 
-                        "--dvs", // output to SDI
-                    "--audio-mon", "8", // show audio levels for maximum 8 audio streams
-                    "--show-tc", "VITC.0", // show VITC in place of control timecode
-                    "--mark-vtr-errors", // mark VTR errors on the progress bar
-                    "--config-marks", "9,itemstart,red:17,vtrerror,yellow", // show item start and vtr error mark types
-                    "--qc-control", // use the QC control input mapping
-                    "--disable-console-mon", // disable console monitoring of the player
-                    "--log-file", "/dev/null", // no logging
-                    "--http-access", int_to_string(_httpAccessPort).c_str(), // port for sending control commands
-                    "--start", int64_to_string(_startPosition).c_str(), // start playing from this position
-                    "-m", _filename.c_str(), // input file
-                    (char *) NULL);
+                // mask out everything but VTR, DigiBeta dropout and timecode break marks
+                args.push_back("--mark-filter");
+                    args.push_back(int_to_hex_string(VTR_ERROR_MARK_TYPE |
+                                                     DIGIBETA_DROPOUT_MARK_TYPE |
+                                                     TIMECODE_BREAK_MARK_TYPE));
             }
+            
+            if (_dbgVGAReplay)  // output to the VGA display
+            {
+                if (_dbgForceX11)
+                {
+                    args.push_back("--x11"); // force use of X11 player sink
+                }
+            }
+            else
+            {
+                args.push_back("--dvs"); // output to SDI
+            }
+            
+            // add event file
+            if (!existingEventFilename.empty())
+            {
+                args.push_back("-m");
+                    args.push_back(existingEventFilename);
+            }
+            
+            const char* c_args[64];
+            size_t i;
+            for (i = 0; i < args.size(); i++)
+            {
+                c_args[i] = args[i].c_str();
+            }
+            c_args[i] = NULL;
+            
+            execv(_playerExe.c_str(), const_cast<char* const*>(c_args));
+
             Logging::error("Failed to execute player command for confidence replay: %s\n", strerror(errno));
             exit(1);
         }
@@ -333,7 +418,22 @@ public:
             return;
         }
         
-        _commands.push_back(command);
+        if (command.find("next-show-marks") == 0)
+        {
+            // modify next-show-marks command to select the progress bar with the VTR errors and DigiBeta dropouts
+            if (_showSecondMarkBar)
+            {
+                _commands.push_back("next-show-marks?sel=1");
+            }
+            else
+            {
+                _commands.push_back("next-show-marks?sel=0");
+            }
+        }
+        else
+        {
+            _commands.push_back(command);
+        }
     }
     
     void sendCommand(string command)
@@ -357,8 +457,14 @@ public:
     }
     
 private:
+    string _playerExe;
+    bool _dbgVGAReplay;
+    bool _dbgForceX11;
+    int _srcBufferSize;
+    
     bool _hasStopped;
     string _filename;
+    string _eventFilename;
     int _httpAccessPort;
     int64_t _startPosition;
     bool _showSecondMarkBar;
@@ -376,7 +482,8 @@ class StateMonitorWorker : public ThreadWorker
 {
 public:    
     StateMonitorWorker( int httpAccessPort)
-    : _stop(false), _hasStopped(false), _httpAccessPort(httpAccessPort), _duration(-1), _position(-1)
+    : _stop(false), _hasStopped(false), _httpAccessPort(httpAccessPort),
+    _duration(-1), _position(-1), _vtrErrorLevel(-1), _markFilter(-1)
     {
         _curl = curl_easy_init();
         if (!_curl)
@@ -417,18 +524,14 @@ public:
     }
     
 
-    int64_t getDuration()
+    void getStatus(ConfidenceReplayStatus* status)
     {
         LOCK_SECTION(_stateMutex);
         
-        return _duration;
-    }
-    
-    int64_t getPosition()
-    {
-        LOCK_SECTION(_stateMutex);
-        
-        return _position;
+        status->duration = _duration;
+        status->position = _position;
+        status->vtrErrorLevel = _vtrErrorLevel;
+        status->markFilter = _markFilter;
     }
     
 
@@ -479,6 +582,9 @@ private:
         int64_t position;
         int64_t startOffset;
         int64_t length;
+        int vtrErrorLevel;
+        int numMarkSelections;
+        unsigned int markFilter;
         
         if (!_playerState.getInt64("length", &length))
         {
@@ -495,12 +601,50 @@ private:
             Logging::warning("Failed to parse 'position' from player state\n");
             return;
         }
+        if (!_playerState.getInt("vtrErrorLevel", &vtrErrorLevel))
+        {
+            Logging::warning("Failed to parse 'vtrErrorLevel' from player state\n");
+            return;
+        }
+
+        // the VTR error and DigiBeta dropouts are on the second progress bar if numMarkSelections == 2, else
+        // it is on the first
+        if (!_playerState.getInt("numMarkSelections", &numMarkSelections))
+        {
+            Logging::warning("Failed to parse 'numMarkSelections' from player state\n");
+            return;
+        }
+        if (numMarkSelections == 0)
+        {
+            // player is still starting up
+            markFilter = (unsigned int)(-1);
+        }
+        else if (numMarkSelections == 2)
+        {
+            if (!_playerState.getUInt("markFilter_1", &markFilter))
+            {
+                Logging::warning("Failed to parse 'markFilter_1' from player state\n");
+                return;
+            }
+        }
+        else
+        {
+            if (!_playerState.getUInt("markFilter_0", &markFilter))
+            {
+                Logging::warning("Failed to parse 'markFilter_0' from player state\n");
+                return;
+            }
+        }
 
         
-        LOCK_SECTION(_stateMutex);
-        
-        _duration = length;
-        _position = startOffset + position;
+        {
+            LOCK_SECTION(_stateMutex);
+            
+            _duration = length;
+            _position = startOffset + position;
+            _vtrErrorLevel = vtrErrorLevel;
+            _markFilter = markFilter;
+        }
     }
 
     
@@ -513,14 +657,17 @@ private:
     PlayerState _playerState;
     int64_t _duration;
     int64_t _position;
+    int _vtrErrorLevel;
+    unsigned int _markFilter;
     
     CURL* _curl;
 };
 
 
 
-ConfidenceReplay::ConfidenceReplay(std::string filename, int httpAccessPort, int64_t startPosition, bool showSecondMarkBar)
-: Thread(new ConfidenceReplayWorker(filename, httpAccessPort, startPosition, showSecondMarkBar), true), _filename(filename), _stateMonitor(0)
+ConfidenceReplay::ConfidenceReplay(string filename, string eventFilename,
+                                   int httpAccessPort, int64_t startPosition, bool showSecondMarkBar)
+: Thread(new ConfidenceReplayWorker(filename, eventFilename, httpAccessPort, startPosition, showSecondMarkBar), true), _filename(filename), _stateMonitor(0)
 {
     _stateMonitor = new Thread(new StateMonitorWorker(httpAccessPort), true);
     _stateMonitor->start();
@@ -573,7 +720,7 @@ void ConfidenceReplay::play()
 
 void ConfidenceReplay::seekPositionOrPlay(int64_t position)
 {
-    if (getPosition() == position)
+    if (getStatus().position == position)
     {
         play();
     }
@@ -583,21 +730,14 @@ void ConfidenceReplay::seekPositionOrPlay(int64_t position)
     }
 }
 
-int64_t ConfidenceReplay::getDuration()
+ConfidenceReplayStatus ConfidenceReplay::getStatus()
 {
+    ConfidenceReplayStatus status;
     StateMonitorWorker* monitorWorker = dynamic_cast<StateMonitorWorker*>(_stateMonitor->getWorker());
-    return monitorWorker->getDuration();
+    
+    status.filename = _filename;
+    monitorWorker->getStatus(&status);
+    
+    return status;
 }
-
-int64_t ConfidenceReplay::getPosition()
-{
-    StateMonitorWorker* monitorWorker = dynamic_cast<StateMonitorWorker*>(_stateMonitor->getWorker());
-    return monitorWorker->getPosition();
-}
-
-string ConfidenceReplay::getFilename()
-{
-    return _filename;
-}
-
 

@@ -1,5 +1,5 @@
 /*
- * $Id: ConfidenceReplay.h,v 1.1 2008/07/08 16:25:41 philipn Exp $
+ * $Id: ConfidenceReplay.h,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * Runs and provides access to a player running in a separate process
  *
@@ -25,6 +25,7 @@
 
 
 #include <string>
+#include <vector>
 
 #include "Threads.h"
 
@@ -35,12 +36,26 @@
 namespace rec
 {
 
+class ConfidenceReplayStatus
+{
+public:
+    ConfidenceReplayStatus()
+    : duration(-1), position(-1), vtrErrorLevel(-1), markFilter(-1)
+    {}
+    
+    int64_t duration;
+    int64_t position;
+    int vtrErrorLevel;
+    unsigned int markFilter;
+    std::string filename;
+};
 
 
 class ConfidenceReplay : public Thread
 {
 public:
-    ConfidenceReplay(std::string filename, int httpAccessPort, int64_t startPosition, bool showSecondMarkBar);
+    ConfidenceReplay(std::string filename, std::string eventFilename,
+                     int httpAccessPort, int64_t startPosition, bool showSecondMarkBar);
     virtual ~ConfidenceReplay();
     
     void forwardControl(std::string command);
@@ -51,9 +66,7 @@ public:
     void play();
     void seekPositionOrPlay(int64_t position);
     
-    int64_t getDuration();
-    int64_t getPosition();
-    std::string getFilename();
+    ConfidenceReplayStatus getStatus();
     
 private:
     std::string _filename;

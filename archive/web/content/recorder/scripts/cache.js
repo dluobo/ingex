@@ -5,6 +5,7 @@ var deleteItemsRequest = null;
 var enableDeleteItemsRequest = true;
 var playFileRequest = null;
 var enablePlayFileRequest = true;
+var enableVersionAlert = true;
 
 // a status update is performed every 1/2 second
 var statusInterval = 500;
@@ -57,6 +58,10 @@ function set_cache_contents(contents)
     var rowE = document.createElement("tr");
     rowE.setAttribute("style", "color:blue");
     
+    var colFormatE = document.createElement("td");
+    colFormatE.innerHTML = "Format";
+    rowE.appendChild(colFormatE);
+    
     var colSpoolNoE = document.createElement("td");
     colSpoolNoE.innerHTML = "Spool No";
     rowE.appendChild(colSpoolNoE);
@@ -105,6 +110,10 @@ function set_cache_contents(contents)
     {
         rowE = document.createElement("tr");
         
+        colFormatE = document.createElement("td");
+        colFormatE.innerHTML = contents.items[i].srcFormat;
+        rowE.appendChild(colFormatE);
+
         colSpoolNoE = document.createElement("td");
         colSpoolNoE.innerHTML = contents.items[i].srcSpoolNo.replace(/\ /g, "&nbsp;");
         rowE.appendChild(colSpoolNoE);
@@ -164,10 +173,9 @@ function set_cache_contents(contents)
                 colPSEReportE.innerHTML = "<a href='" + contents.items[i].pseURL + "' style='color:red'>" + 
                     "FAILED</a>";
             }
-            else // result is not known
+            else // unknown result means no report file
             {
-                colPSEReportE.innerHTML = "<a href='" + contents.items[i].pseURL + "'>" + 
-                    "Result?</a>";
+                colPSEReportE.innerHTML = "";
             }
         }
         rowE.appendChild(colPSEReportE);
@@ -233,10 +241,25 @@ function status_handler()
             }
             
             var status = eval("(" + statusRequest.responseText + ")");
+
+            if (!check_api_version(status))
+            {
+                if (enableVersionAlert)
+                {
+                    alert("Invalid API version " + get_api_version() +
+                        ". Require version " + status.apiVersion);
+                    enableVersionAlert = false;
+                }
+                throw "Invalid API version";
+            }
+            enableVersionAlert = true;
+
             set_general_status(status, statusInterval);
             
             update_replay_state(status.replayActive, status.replayFilename);
-            
+            update_vtr_error_level_state(status.replayStatus.vtrErrorLevel);
+            update_mark_filter_state(status.replayStatus.markFilter);
+
             if (status.statusChangeCount != cacheStatusChangeCount)
             {
                 // cache was updated
@@ -250,6 +273,9 @@ function status_handler()
     catch (err)
     {
         set_general_status(null, statusInterval);
+        update_replay_state(false, "");
+        update_vtr_error_level_state(-1);
+        update_mark_filter_state(-1);
         
         // set timer for next status request
         statusTimer = setTimeout("request_status()", statusInterval);
@@ -279,7 +305,7 @@ function play_file_handler()
 function request_status()
 {
     statusRequest = new XMLHttpRequest();
-    statusRequest.open("GET", "/recorder/status.json?cache=true", true);
+    statusRequest.open("GET", "/recorder/status.json?cache=true&replay=true", true);
     statusRequest.onreadystatechange = status_handler;
     statusRequest.send(null);
 }

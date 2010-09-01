@@ -1,5 +1,5 @@
 /*
- * $Id: HTTPServer.h,v 1.1 2008/07/08 16:24:41 philipn Exp $
+ * $Id: HTTPServer.h,v 1.2 2010/09/01 16:05:22 philipn Exp $
  *
  * Wraps the shttpd embedded web server
  *
@@ -185,7 +185,8 @@ public:
 class HTTPServer : public HTTPConnectionHandler
 {
 public:
-    HTTPServer(int port, std::string documentRoot, std::vector<std::pair<std::string, std::string> > aliases);
+    HTTPServer(int port, std::string documentRoot, std::vector<std::pair<std::string, std::string> > aliases,
+        int numThreads);
     ~HTTPServer();
     
     // register all handlers before calling start()
@@ -202,7 +203,6 @@ public:
     virtual void processRequest(HTTPServiceDescription* serviceDescription, HTTPConnection* connection);
     
 private:
-    struct shttpd_ctx* _ctx;
     Thread* _serverThread;
     bool _started;
     std::map<std::string, HTTPService*> _services;
@@ -212,10 +212,6 @@ private:
 
 
 };
-
-
-
-
 
 
 
