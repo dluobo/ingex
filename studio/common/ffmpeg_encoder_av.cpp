@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder_av.cpp,v 1.8 2010/09/06 13:48:24 john_f Exp $
+ * $Id: ffmpeg_encoder_av.cpp,v 1.9 2010/09/06 18:22:24 john_f Exp $
  *
  * Encode AV and write to file.
  *
@@ -100,6 +100,7 @@ typedef struct
     int input_height;
     struct SwsContext * scale_context;
     int scale_image;
+    int crop_480_ntsc_dv;
 } internal_ffmpeg_encoder_t;
 
 
@@ -359,6 +360,10 @@ int init_video_dv(internal_ffmpeg_encoder_t * enc, MaterialResolution::EnumType 
             codec_context->pix_fmt = PIX_FMT_YUV411P;
             encoded_frame_size = 120000;
             top_field_first = 0;
+            enc->input_width = 720;
+            enc->input_height = 486;
+            avcodec_set_dimensions(codec_context, 720, 480);
+            enc->crop_480_ntsc_dv = 1;
             break;
         default:
             break;
@@ -380,6 +385,10 @@ int init_video_dv(internal_ffmpeg_encoder_t * enc, MaterialResolution::EnumType 
             codec_context->pix_fmt = PIX_FMT_YUV422P;
             encoded_frame_size = 240000;
             top_field_first = 0;
+            enc->input_width = 720;
+            enc->input_height = 486;
+            avcodec_set_dimensions(codec_context, 720, 480);
+            enc->crop_480_ntsc_dv = 1;
             break;
         default:
             break;
@@ -701,6 +710,20 @@ int write_video_frame(internal_ffmpeg_encoder_t * enc, uint8_t * p_video)
             enc->tmpFrame->data, enc->tmpFrame->linesize,
             0, enc->input_height,
             enc->inputFrame->data, enc->inputFrame->linesize);
+    }
+    else if (enc->crop_480_ntsc_dv)
+    {
+        AVPicture * picture = (AVPicture *) enc->inputFrame;
+
+        // Use avpicture_fill to set pointers and linesizes
+        avpicture_fill(picture, (uint8_t*)p_video,
+            c->pix_fmt,
+            enc->input_width, enc->input_height);
+
+        // Skip top 4 lines
+        picture->data[0] += 4 * picture->linesize[0];
+        picture->data[1] += 4 * picture->linesize[1];
+        picture->data[2] += 4 * picture->linesize[2];
     }
     else
     {

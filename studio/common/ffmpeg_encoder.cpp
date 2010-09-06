@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder.cpp,v 1.6 2010/09/06 13:48:24 john_f Exp $
+ * $Id: ffmpeg_encoder.cpp,v 1.7 2010/09/06 18:22:24 john_f Exp $
  *
  * Encode uncompressed video to DV using libavcodec
  *
@@ -123,6 +123,7 @@ typedef struct
     int scale_image;
     int padtop;
     int padColour[3];
+    int crop_480_ntsc_dv;
 } internal_ffmpeg_encoder_t;
 
 
@@ -257,6 +258,8 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init(MaterialResolution::EnumType res, 
             case Ingex::VideoRaster::NTSC:
             case Ingex::VideoRaster::NTSC_4x3:
             case Ingex::VideoRaster::NTSC_16x9:
+                height = 480;
+                encoder->crop_480_ntsc_dv = 1;
                 encoded_frame_size = 120000;
                 break;
             default:
@@ -276,6 +279,8 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init(MaterialResolution::EnumType res, 
             case Ingex::VideoRaster::NTSC:
             case Ingex::VideoRaster::NTSC_4x3:
             case Ingex::VideoRaster::NTSC_16x9:
+                height = 480;
+                encoder->crop_480_ntsc_dv = 1;
                 encoded_frame_size = 240000;
                 break;
             default:
@@ -593,6 +598,7 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init(MaterialResolution::EnumType res, 
         encoder->inputFrame->interlaced_frame = interlaced;
 
         /* allocate output buffer */
+        //fprintf(stderr, "encoded_frame_size = %d\n", encoded_frame_size);
         encoder->bufferSize = encoded_frame_size + 50000; // not sure why extra is needed
         encoder->outputBuffer = (uint8_t *)av_mallocz(encoder->bufferSize);
     }
@@ -689,6 +695,20 @@ extern int ffmpeg_encoder_encode(ffmpeg_encoder_t * in_encoder, const uint8_t * 
             0, encoder->input_height,
             encoder->inputFrame->data, encoder->inputFrame->linesize);
     }
+    else if (encoder->crop_480_ntsc_dv)
+    {
+        AVPicture * picture = (AVPicture *) encoder->inputFrame;
+
+        // Use avpicture_fill to set pointers and linesizes
+        avpicture_fill(picture, (uint8_t*)p_video,
+            encoder->codec_context->pix_fmt,
+            encoder->input_width, encoder->input_height);
+
+        // Skip top 4 lines
+        picture->data[0] += 4 * picture->linesize[0];
+        picture->data[1] += 4 * picture->linesize[1];
+        picture->data[2] += 4 * picture->linesize[2];
+    }
     else
     {
         /* set pointers in inputFrame to point to planes in p_video */
@@ -698,6 +718,7 @@ extern int ffmpeg_encoder_encode(ffmpeg_encoder_t * in_encoder, const uint8_t * 
     }
 
     /* compress video */
+    //fprintf(stderr, "outputBuffer = %p, bufferSize = %d\n", encoder->outputBuffer, encoder->bufferSize);
     int size = avcodec_encode_video(encoder->codec_context,
         encoder->outputBuffer, encoder->bufferSize, encoder->inputFrame);
     if (size < 0)
