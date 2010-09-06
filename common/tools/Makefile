@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.8 2010/07/14 13:06:35 john_f Exp $
+# $Id: Makefile,v 1.9 2010/09/06 13:44:07 john_f Exp $
 #
 # Makefile for building useful command-line tools
 #
@@ -37,7 +37,7 @@ YUV_LIB = -L../YUVlib -lYUVlib
 
 PROGS = convert_audio convert_10bit_video create_video_test_signal detect_digibeta_dropouts \
 	compare_archive_mxf clapperboard_avsync disk_rw_benchmark send_video receive_video \
-	create_audio_test_signal dump_vc3
+	create_audio_test_signal dump_vc3 simple_mxf_demux
 
 .PHONY: all
 all: $(PROGS) dvs_hardware
@@ -74,6 +74,9 @@ receive_video: receive_video.o $(LIB_COMMON)
 	$(CXX) $(CXXFLAGS) $(TARGET_ARCH) -o $@ $< $(LIB_COMMON) $(YUV_LIB) -lpthread -lm
 
 dump_vc3: dump_vc3.o
+	$(CC) $(CXXFLAGS) $(TARGET_ARCH) -o $@ $<
+
+simple_mxf_demux: simple_mxf_demux.o
 	$(CC) $(CXXFLAGS) $(TARGET_ARCH) -o $@ $<
 
 clean:
