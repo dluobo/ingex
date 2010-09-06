@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderSettings.h,v 1.11 2010/07/21 16:29:34 john_f Exp $
+ * $Id: RecorderSettings.h,v 1.12 2010/09/06 15:08:47 john_f Exp $
  *
  * Recorder Configuration.
  *
@@ -60,8 +60,6 @@ public:
     bool Update(prodauto::Recorder * rec);
 
     // Record Parameters
-    prodauto::Rational image_aspect;
-
     std::vector<EncodeParams> encodings;
 
     bool browse_audio;

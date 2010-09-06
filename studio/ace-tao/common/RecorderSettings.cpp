@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderSettings.cpp,v 1.13 2010/07/21 16:29:34 john_f Exp $
+ * $Id: RecorderSettings.cpp,v 1.14 2010/09/06 15:08:47 john_f Exp $
  *
  * Recorder Configuration.
  *
@@ -29,8 +29,6 @@
 
 // These are the default values that will be used if
 // config cannot be read from the database.
-
-const prodauto::Rational    IMAGE_ASPECT    = prodauto::g_16x9ImageAspect;
 
 const int           ENCODE1_RESOLUTION      = MaterialResolution::MJPEG21_MXF_ATOM;
 const bool          ENCODE1_BITC            = false;
@@ -84,7 +82,6 @@ RecorderSettings * RecorderSettings::Instance()
 
 // Constructor
 RecorderSettings::RecorderSettings() :
-    image_aspect(IMAGE_ASPECT),
     browse_audio(BROWSE_AUDIO),
     mpeg2_bitrate(MPEG2_BITRATE),
     raw_audio_bits(RAW_AUDIO_BITS),
@@ -133,8 +130,6 @@ bool RecorderSettings::Update(prodauto::Recorder * rec)
 
     if (rc)
     {
-        image_aspect = rc->getRationalParam("IMAGE_ASPECT", IMAGE_ASPECT);
-
         encode1_resolution = rc->getIntParam("ENCODE1_RESOLUTION", ENCODE1_RESOLUTION);
         encode1_bitc = rc->getBoolParam("ENCODE1_BITC", ENCODE1_BITC);
         encode1_dir = rc->getStringParam("ENCODE1_DIR", ENCODE1_DIR);
@@ -163,8 +158,6 @@ bool RecorderSettings::Update(prodauto::Recorder * rec)
     }
     else
     {
-        image_aspect = IMAGE_ASPECT;
-
         encode1_resolution = ENCODE1_RESOLUTION;
         encode1_bitc = ENCODE1_BITC;
         encode1_dir = ENCODE1_DIR;
