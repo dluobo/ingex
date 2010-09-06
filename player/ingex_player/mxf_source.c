@@ -1,5 +1,5 @@
 /*
- * $Id: mxf_source.c,v 1.18 2010/08/27 17:41:32 john_f Exp $
+ * $Id: mxf_source.c,v 1.19 2010/09/06 13:41:45 john_f Exp $
  *
  *
  *
@@ -1250,7 +1250,12 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
             }
             if (mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(SD_Unc_625_50i_422_135_FrameWrapped)) ||
                 mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(SD_Unc_625_50i_422_135_ClipWrapped)) ||
-                mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(HD_Unc_1080_50i_422_ClipWrapped)))
+                mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(SD_Unc_525_5994i_422_135_FrameWrapped)) ||
+                mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(SD_Unc_525_5994i_422_135_ClipWrapped)) ||
+                mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(HD_Unc_1080_50i_422_FrameWrapped)) ||
+                mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(HD_Unc_1080_50i_422_ClipWrapped)) ||
+                mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(HD_Unc_1080_5994i_422_FrameWrapped)) ||
+                mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(HD_Unc_1080_5994i_422_ClipWrapped)))
             {
                 CHK_OFAIL(track->video.componentDepth == 8 || track->video.componentDepth == 10);
                 if (track->video.componentDepth == 8)
