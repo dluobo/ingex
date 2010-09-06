@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderPackageCreator.cpp,v 1.4 2010/07/21 16:29:34 john_f Exp $
+ * $Id: RecorderPackageCreator.cpp,v 1.5 2010/09/06 15:09:50 john_f Exp $
  *
  * Recorder package group creator
  *
@@ -254,6 +254,20 @@ void RecorderPackageCreator::CreateTapeSourcePackage(SourceConfig *source_config
     mTapeSourcePackage = source_config->getSourcePackage();
     PA_ASSERT(mTapeSourcePackage);
     mOwnTapeSourcePackage = false;
+    
+    // check tape package video edit rates and warn if different from project edit rate
+    size_t i;
+    for (i = 0; i < mTapeSourcePackage->tracks.size(); i++) {
+        if (mTapeSourcePackage->tracks[i]->dataDef == PICTURE_DATA_DEFINITION &&
+            mTapeSourcePackage->tracks[i]->editRate != mProjectEditRate)
+        {
+            Logging::warning("Tape source package edit rate (%d/%d) does not match clip edit rate (%d/%d)\n",
+                             mTapeSourcePackage->tracks[i]->editRate.numerator, mTapeSourcePackage->tracks[i]->editRate.denominator,
+                             mProjectEditRate.numerator, mProjectEditRate.denominator);
+            break;
+        }
+    }
+    
     
     // TODO: adjust the track origins if neccessary and in some cases a new source package must be created if
     // the start timecode extends beyond the length of the tracks
