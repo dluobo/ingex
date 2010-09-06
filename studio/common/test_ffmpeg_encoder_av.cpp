@@ -1,5 +1,5 @@
 /*
- * $Id: test_ffmpeg_encoder_av.cpp,v 1.4 2010/09/06 13:48:24 john_f Exp $
+ * $Id: test_ffmpeg_encoder_av.cpp,v 1.5 2010/09/06 15:11:11 john_f Exp $
  *
  * Test ffmpeg encoder av
  *
@@ -432,11 +432,15 @@ int main(int argc, const char **argv)
     {
         case MaterialResolution::DVD:
         case MaterialResolution::MPEG4_MOV:
+            output_width = 720;
+            output_height = 576;
+            raster = Ingex::VideoRaster::PAL;
+            break;
         case MaterialResolution::DV25_MOV:
         case MaterialResolution::DV50_MOV:
             output_width = 720;
             output_height = 576;
-            raster = Ingex::VideoRaster::PAL;
+            raster = Ingex::VideoRaster::PAL_B;
             break;
         case MaterialResolution::DV100_MOV:
         case MaterialResolution::XDCAMHD422_MOV:
@@ -517,9 +521,11 @@ int main(int argc, const char **argv)
             ffmpeg_encoder_av_encode_audio(encoder, 0, 1920, audio_16bit);
         }
         
-        frame_count++;
         if (frame_count % 100 == 0)
+        {
             printf("Frame %d\n", frame_count);
+        }
+        frame_count++;
     }
     
     printf("Total frames = %d\n", frame_count);
