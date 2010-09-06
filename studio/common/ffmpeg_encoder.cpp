@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder.cpp,v 1.5 2010/08/12 16:32:44 john_f Exp $
+ * $Id: ffmpeg_encoder.cpp,v 1.6 2010/09/06 13:48:24 john_f Exp $
  *
  * Encode uncompressed video to DV using libavcodec
  *
@@ -247,12 +247,40 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init(MaterialResolution::EnumType res, 
         case MaterialResolution::DV25_RAW:
         case MaterialResolution::DV25_MXF_ATOM:
         case MaterialResolution::DV25_MOV:
-            encoded_frame_size = 144000;
+            switch (raster)
+            {
+            case Ingex::VideoRaster::PAL_B:
+            case Ingex::VideoRaster::PAL_B_4x3:
+            case Ingex::VideoRaster::PAL_B_16x9:
+                encoded_frame_size = 144000;
+                break;
+            case Ingex::VideoRaster::NTSC:
+            case Ingex::VideoRaster::NTSC_4x3:
+            case Ingex::VideoRaster::NTSC_16x9:
+                encoded_frame_size = 120000;
+                break;
+            default:
+                break;
+            }
             break;
         case MaterialResolution::DV50_RAW:
         case MaterialResolution::DV50_MXF_ATOM:
         case MaterialResolution::DV50_MOV:
-            encoded_frame_size = 288000;
+            switch (raster)
+            {
+            case Ingex::VideoRaster::PAL_B:
+            case Ingex::VideoRaster::PAL_B_4x3:
+            case Ingex::VideoRaster::PAL_B_16x9:
+                encoded_frame_size = 288000;
+                break;
+            case Ingex::VideoRaster::NTSC:
+            case Ingex::VideoRaster::NTSC_4x3:
+            case Ingex::VideoRaster::NTSC_16x9:
+                encoded_frame_size = 240000;
+                break;
+            default:
+                break;
+            }
             break;
         case MaterialResolution::IMX30_MXF_ATOM:
         case MaterialResolution::IMX30_MXF_1A:
@@ -307,21 +335,35 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init(MaterialResolution::EnumType res, 
         case MaterialResolution::DV100_RAW:
         case MaterialResolution::DV100_MXF_ATOM:
         case MaterialResolution::DV100_MOV:
-            if (720 == height)
+            switch (raster)
             {
-                // 720p50
-                width = 960;                        // coded width (input scaled horizontally from 1280)
-                height = 720;
-                encoder->scale_image = 1;
-                encoded_frame_size = 576000;        // SMPTE 370M spec
-            }
-            else
-            {
-                // 1080i25
+            case Ingex::VideoRaster::SMPTE274_25I:
                 width = 1440;                       // coded width (input scaled horizontally from 1920)
                 height = 1080;
                 encoder->scale_image = 1;
                 encoded_frame_size = 576000;        // SMPTE 370M spec
+                break;
+            case Ingex::VideoRaster::SMPTE274_29I:
+                width = 1280;                       // coded width (input scaled horizontally from 1920)
+                height = 1080;
+                encoder->scale_image = 1;
+                encoded_frame_size = 480000;        // SMPTE 370M spec
+                break;
+            // 720p formats not tested
+            case Ingex::VideoRaster::SMPTE296_50P:
+                width = 960;                       // coded width (input scaled horizontally from 1920)
+                height = 720;
+                encoder->scale_image = 1;
+                encoded_frame_size = 288000;        // SMPTE 370M spec
+                break;
+            case Ingex::VideoRaster::SMPTE296_59P:
+                width = 960;                       // coded width (input scaled horizontally from 1920)
+                height = 720;
+                encoder->scale_image = 1;
+                encoded_frame_size = 240000;        // SMPTE 370M spec
+                break;
+            default:
+                break;
             }
             break;
 
@@ -330,11 +372,11 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init(MaterialResolution::EnumType res, 
             codec_id = CODEC_ID_MPEG2VIDEO; 
             codec_type = CODEC_TYPE_VIDEO;
             buffer_size = 364083330; //= 364 MB seems about right.
-            bit_rate =50000000;
+            bit_rate = 50000000;
             width = 1920;
             height = 1080;
-            encoded_frame_size = (bit_rate / 200)+2000000;
-            encoder->codec_context->bit_rate =bit_rate;
+            encoded_frame_size = (bit_rate / 200) + 2000000;
+            encoder->codec_context->bit_rate = bit_rate;
             encoder->codec_context->gop_size = 14;
             encoder->codec_context->b_frame_strategy = 0;
 #if defined(FFMPEG_NONLINEAR_PATCH)
@@ -500,27 +542,37 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init(MaterialResolution::EnumType res, 
         avcodec_set_dimensions(encoder->codec_context, width, height + encoder->padtop);
 
 
-        if (MaterialResolution::DV100_MOV == res ||
-            MaterialResolution::XDCAMHD422_MOV == res)
+        /* Set aspect ratio */
+        AVRational sar;
+        switch (raster)
         {
-            encoder->codec_context->sample_aspect_ratio.num = 1;
-            encoder->codec_context->sample_aspect_ratio.den = 1;
+        case Ingex::VideoRaster::PAL_4x3:
+        case Ingex::VideoRaster::PAL_B_4x3:
+            sar.num = 59;
+            sar.den = 54;
+            break;
+        case Ingex::VideoRaster::PAL:
+        case Ingex::VideoRaster::PAL_B:
+        case Ingex::VideoRaster::PAL_16x9:
+        case Ingex::VideoRaster::PAL_B_16x9:
+            sar.num = 118;
+            sar.den = 81;
+            break;
+        case Ingex::VideoRaster::NTSC_4x3:
+            sar.num = 10;
+            sar.den = 11;
+            break;
+        case Ingex::VideoRaster::NTSC:
+        case Ingex::VideoRaster::NTSC_16x9:
+            sar.num = 40;
+            sar.den = 33;
+            break;
+        default:
+            sar.num = 1;
+            sar.den = 1;
+            break;
         }
-        else
-        {
-            //encoder->codec_context->sample_aspect_ratio = av_d2q(16.0/9*576/720, 255); // {64, 45}
-            // Actually the active picture is less than 720 wide, the correct numbers appear below
-        #if 0
-            // 4:3
-            encoder->codec_context->sample_aspect_ratio.num = 59;
-            encoder->codec_context->sample_aspect_ratio.den = 54;
-        #else
-            // 16:9
-            encoder->codec_context->sample_aspect_ratio.num = 118;
-            encoder->codec_context->sample_aspect_ratio.den = 81;
-        #endif
-            // Need to set sample aspect ratio depending on raster
-        }
+        encoder->codec_context->sample_aspect_ratio = sar;
 
 
         /* prepare codec */

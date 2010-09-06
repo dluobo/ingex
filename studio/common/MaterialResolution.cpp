@@ -1,5 +1,5 @@
 /*
- * $Id: MaterialResolution.cpp,v 1.5 2010/08/12 16:29:46 john_f Exp $
+ * $Id: MaterialResolution.cpp,v 1.6 2010/09/06 13:48:24 john_f Exp $
  *
  * Material resolution codes and details
  *
@@ -353,39 +353,66 @@ bool MaterialResolution::CheckVideoFormat(MaterialResolution::EnumType res,
     case MaterialResolution::DV25_RAW:
     case MaterialResolution::DV25_MXF_ATOM:
     case MaterialResolution::DV25_MOV:
-        if ((Ingex::VideoRaster::PAL_B == raster && Ingex::PixelFormat::YUV_PLANAR_420_DV == format)
-            || (Ingex::VideoRaster::NTSC == raster && Ingex::PixelFormat::YUV_PLANAR_411 == format))
+        switch (raster)
         {
-            result = true;
+        case Ingex::VideoRaster::PAL_B:
+        case Ingex::VideoRaster::PAL_B_4x3:
+        case Ingex::VideoRaster::PAL_B_16x9:
+            if (Ingex::PixelFormat::YUV_PLANAR_420_DV == format)
+            {
+                result = true;
+            }
+            break;
+        case Ingex::VideoRaster::NTSC:
+        case Ingex::VideoRaster::NTSC_4x3:
+        case Ingex::VideoRaster::NTSC_16x9:
+            if (Ingex::PixelFormat::YUV_PLANAR_411 == format)
+            {
+                result = true;
+            }
+            break;
+        default:
+            break;
         }
         break;
     case MaterialResolution::DV50_RAW:
     case MaterialResolution::DV50_MXF_ATOM:
     case MaterialResolution::DV50_MOV:
-        if ((Ingex::VideoRaster::PAL_B == raster && Ingex::PixelFormat::YUV_PLANAR_422 == format)
-            || (Ingex::VideoRaster::NTSC == raster && Ingex::PixelFormat::YUV_PLANAR_422 == format))
+        switch (raster)
         {
-            result = true;
+        case Ingex::VideoRaster::PAL_B:
+        case Ingex::VideoRaster::PAL_B_4x3:
+        case Ingex::VideoRaster::PAL_B_16x9:
+        case Ingex::VideoRaster::NTSC:
+        case Ingex::VideoRaster::NTSC_4x3:
+        case Ingex::VideoRaster::NTSC_16x9:
+            if (Ingex::PixelFormat::YUV_PLANAR_422 == format)
+            {
+                result = true;
+            }
+            break;
+        default:
+            break;
         }
         break;
     case MaterialResolution::DV100_RAW:
     case MaterialResolution::DV100_MXF_ATOM:
     case MaterialResolution::DV100_MOV:
-        if (Ingex::PixelFormat::YUV_PLANAR_422 == format)
+        switch (raster)
         {
-            switch (raster)
+        case Ingex::VideoRaster::SMPTE274_25I:
+        case Ingex::VideoRaster::SMPTE274_25PSF:
+        case Ingex::VideoRaster::SMPTE274_25P:
+        case Ingex::VideoRaster::SMPTE274_29I:
+        case Ingex::VideoRaster::SMPTE274_29PSF:
+        case Ingex::VideoRaster::SMPTE274_29P:
+            if (Ingex::PixelFormat::YUV_PLANAR_422 == format)
             {
-            case Ingex::VideoRaster::SMPTE274_25I:
-            case Ingex::VideoRaster::SMPTE274_25PSF:
-            case Ingex::VideoRaster::SMPTE274_25P:
-            case Ingex::VideoRaster::SMPTE274_29I:
-            case Ingex::VideoRaster::SMPTE274_29PSF:
-            case Ingex::VideoRaster::SMPTE274_29P:
                 result = true;
-                break;
-            default:
-                break;
             }
+            break;
+        default:
+            break;
         }
         break;
     case MaterialResolution::IMX30_MXF_ATOM:
@@ -394,12 +421,23 @@ bool MaterialResolution::CheckVideoFormat(MaterialResolution::EnumType res,
     case MaterialResolution::IMX30_MXF_1A:
     case MaterialResolution::IMX40_MXF_1A:
     case MaterialResolution::IMX50_MXF_1A:
-        if ((Ingex::VideoRaster::PAL == raster && Ingex::PixelFormat::YUV_PLANAR_422 == format)
-            || (Ingex::VideoRaster::PAL_592 == raster && Ingex::PixelFormat::YUV_PLANAR_422 == format)
-            || (Ingex::VideoRaster::PAL_608 == raster && Ingex::PixelFormat::YUV_PLANAR_422 == format)
-            || (Ingex::VideoRaster::NTSC == raster && Ingex::PixelFormat::YUV_PLANAR_422 == format))
+        switch (raster)
         {
-            result = true;
+        case Ingex::VideoRaster::PAL:
+        case Ingex::VideoRaster::PAL_4x3:
+        case Ingex::VideoRaster::PAL_16x9:
+        case Ingex::VideoRaster::PAL_592:
+        case Ingex::VideoRaster::PAL_608:
+        case Ingex::VideoRaster::NTSC:
+        case Ingex::VideoRaster::NTSC_4x3:
+        case Ingex::VideoRaster::NTSC_16x9:
+            if (Ingex::PixelFormat::YUV_PLANAR_422 == format)
+            {
+                result = true;
+            }
+            break;
+        default:
+            break;
         }
         break;
     case MaterialResolution::MJPEG21_MXF_ATOM:
@@ -408,105 +446,131 @@ bool MaterialResolution::CheckVideoFormat(MaterialResolution::EnumType res,
     case MaterialResolution::MJPEG101M_MXF_ATOM:
     case MaterialResolution::MJPEG151S_MXF_ATOM:
     case MaterialResolution::MJPEG201_MXF_ATOM:
-        if ((Ingex::VideoRaster::PAL == raster && Ingex::PixelFormat::YUV_PLANAR_422 == format)
-            || (Ingex::VideoRaster::NTSC == raster && Ingex::PixelFormat::YUV_PLANAR_422 == format))
+        switch (raster)
         {
-            result = true;
+        case Ingex::VideoRaster::PAL:
+        case Ingex::VideoRaster::PAL_4x3:
+        case Ingex::VideoRaster::PAL_16x9:
+        case Ingex::VideoRaster::NTSC:
+        case Ingex::VideoRaster::NTSC_4x3:
+        case Ingex::VideoRaster::NTSC_16x9:
+            if (Ingex::PixelFormat::YUV_PLANAR_422 == format)
+            {
+                result = true;
+            }
+            break;
+        default:
+            break;
         }
         break;
     case MaterialResolution::DNX36P_MXF_ATOM:
-        if (Ingex::PixelFormat::YUV_PLANAR_422 == format)
+        switch (raster)
         {
-            switch (raster)
+        case Ingex::VideoRaster::SMPTE274_25I:
+        case Ingex::VideoRaster::SMPTE274_25PSF:
+        case Ingex::VideoRaster::SMPTE274_25P:
+        case Ingex::VideoRaster::SMPTE274_29I:
+        case Ingex::VideoRaster::SMPTE274_29PSF:
+        case Ingex::VideoRaster::SMPTE274_29P:
+            if (Ingex::PixelFormat::YUV_PLANAR_422 == format)
             {
-            case Ingex::VideoRaster::SMPTE274_25I:
-            case Ingex::VideoRaster::SMPTE274_25PSF:
-            case Ingex::VideoRaster::SMPTE274_25P:
-            case Ingex::VideoRaster::SMPTE274_29I:
-            case Ingex::VideoRaster::SMPTE274_29PSF:
-            case Ingex::VideoRaster::SMPTE274_29P:
                 result = true;
-                break;
-            default:
-                break;
             }
+            break;
+        default:
+            break;
         }
         break;
     case MaterialResolution::DNX120I_MXF_ATOM:
     case MaterialResolution::DNX185I_MXF_ATOM:
-        if (Ingex::PixelFormat::YUV_PLANAR_422 == format)
+        switch (raster)
         {
-            switch (raster)
+        case Ingex::VideoRaster::SMPTE274_25I:
+        case Ingex::VideoRaster::SMPTE274_29I:
+            if (Ingex::PixelFormat::YUV_PLANAR_422 == format)
             {
-            case Ingex::VideoRaster::SMPTE274_25I:
-            case Ingex::VideoRaster::SMPTE274_29I:
                 result = true;
-                break;
-            default:
-                break;
             }
+            break;
+        default:
+            break;
         }
         break;
     case MaterialResolution::DNX120P_MXF_ATOM:
     case MaterialResolution::DNX185P_MXF_ATOM:
-        if (Ingex::PixelFormat::YUV_PLANAR_422 == format)
+        switch (raster)
         {
-            switch (raster)
+        case Ingex::VideoRaster::SMPTE274_25PSF:
+        case Ingex::VideoRaster::SMPTE274_25P:
+        case Ingex::VideoRaster::SMPTE274_29PSF:
+        case Ingex::VideoRaster::SMPTE274_29P:
+            if (Ingex::PixelFormat::YUV_PLANAR_422 == format)
             {
-            case Ingex::VideoRaster::SMPTE274_25PSF:
-            case Ingex::VideoRaster::SMPTE274_25P:
-            case Ingex::VideoRaster::SMPTE274_29PSF:
-            case Ingex::VideoRaster::SMPTE274_29P:
                 result = true;
-                break;
-            default:
-                break;
             }
+            break;
+        default:
+            break;
         }
         break;
     case MaterialResolution::XDCAMHD422_RAW:
     case MaterialResolution::XDCAMHD422_MOV:
     case MaterialResolution::XDCAMHD422_MXF_1A:
-        if (Ingex::PixelFormat::YUV_PLANAR_422 == format)
+        switch (raster)
         {
-            switch (raster)
+        case Ingex::VideoRaster::SMPTE274_25I:
+        case Ingex::VideoRaster::SMPTE274_25PSF:
+        case Ingex::VideoRaster::SMPTE274_25P:
+        case Ingex::VideoRaster::SMPTE274_29I:
+        case Ingex::VideoRaster::SMPTE274_29PSF:
+        case Ingex::VideoRaster::SMPTE274_29P:
+            if (Ingex::PixelFormat::YUV_PLANAR_422 == format)
             {
-            case Ingex::VideoRaster::SMPTE274_25I:
-            case Ingex::VideoRaster::SMPTE274_25PSF:
-            case Ingex::VideoRaster::SMPTE274_25P:
-            case Ingex::VideoRaster::SMPTE274_29I:
-            case Ingex::VideoRaster::SMPTE274_29PSF:
-            case Ingex::VideoRaster::SMPTE274_29P:
                 result = true;
-                break;
-            default:
-                break;
             }
+            break;
+        default:
+            break;
         }
         break;
     case MaterialResolution::DVD:
     case MaterialResolution::MPEG4_MOV:
-        if ((Ingex::VideoRaster::PAL == raster && Ingex::PixelFormat::YUV_PLANAR_420_MPEG == format)
-            || (Ingex::VideoRaster::NTSC == raster && Ingex::PixelFormat::YUV_PLANAR_420_MPEG == format))
+        switch (raster)
         {
-            result = true;
+        case Ingex::VideoRaster::PAL:
+        case Ingex::VideoRaster::PAL_4x3:
+        case Ingex::VideoRaster::PAL_16x9:
+        case Ingex::VideoRaster::NTSC:
+        case Ingex::VideoRaster::NTSC_4x3:
+        case Ingex::VideoRaster::NTSC_16x9:
+            if (Ingex::PixelFormat::YUV_PLANAR_420_MPEG == format)
+            {
+                result = true;
+            }
+            break;
+        default:
+            break;
         }
         break;
     case MaterialResolution::UNC_RAW:
     case MaterialResolution::UNC_MXF_ATOM:
-        if (Ingex::PixelFormat::UYVY_422 == format)
+        switch (raster)
         {
-            switch (raster)
+        case Ingex::VideoRaster::PAL:
+        case Ingex::VideoRaster::PAL_4x3:
+        case Ingex::VideoRaster::PAL_16x9:
+        case Ingex::VideoRaster::NTSC:
+        case Ingex::VideoRaster::NTSC_4x3:
+        case Ingex::VideoRaster::NTSC_16x9:
+        case Ingex::VideoRaster::SMPTE274_25I:
+        case Ingex::VideoRaster::SMPTE274_29I:
+            if (Ingex::PixelFormat::UYVY_422 == format)
             {
-            case Ingex::VideoRaster::PAL:
-            case Ingex::VideoRaster::NTSC:
-            case Ingex::VideoRaster::SMPTE274_25I:
-            case Ingex::VideoRaster::SMPTE274_29I:
                 result = true;
-                break;
-            default:
-                break;
             }
+            break;
+        default:
+            break;
         }
         break;
     case MaterialResolution::MP3:

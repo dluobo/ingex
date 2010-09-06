@@ -1,5 +1,5 @@
 /*
- * $Id: EncodeFrameBuffer.cpp,v 1.3 2010/01/25 20:01:07 john_f Exp $
+ * $Id: EncodeFrameBuffer.cpp,v 1.4 2010/09/06 13:48:24 john_f Exp $
  *
  * Buffer to handle video/audio data during encoding process.
  *
@@ -31,7 +31,7 @@
 // EncodeFrameTrack class
 
 EncodeFrameTrack::EncodeFrameTrack()
-: mData(0), mSize(0), mDel(false), mCoded(false), mFrameIndex(0), mpFrameIndex(0), mError(false)
+: mData(0), mSize(0), mSamples(0), mDel(false), mCoded(false), mFrameIndex(0), mpFrameIndex(0), mError(false)
 { }
 
 /**
@@ -43,7 +43,7 @@ If coded true, data is coded rather than input data.
 p_index, if non-zero, points to a location that should contain the index of the frame,
 to allow checking that volatile input data is still valid.
 */
-void EncodeFrameTrack::Init(void * data, size_t size, bool copy, bool del, bool coded,
+void EncodeFrameTrack::Init(void * data, size_t size, unsigned int samples, bool copy, bool del, bool coded,
                                 int frame_index, int * p_frame_index)
 {
     if (mData && mDel)
@@ -66,6 +66,7 @@ void EncodeFrameTrack::Init(void * data, size_t size, bool copy, bool del, bool 
             mpFrameIndex = p_frame_index;
         }
         mSize = size;
+        mSamples = samples;
         mCoded = coded;
         mFrameIndex = frame_index;
     }
@@ -73,6 +74,7 @@ void EncodeFrameTrack::Init(void * data, size_t size, bool copy, bool del, bool 
     {
         mData = 0;
         mSize = 0;
+        mSamples = 0;
         mDel = false;
         mCoded = false;
         mFrameIndex = 0;

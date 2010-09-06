@@ -1,5 +1,5 @@
 /*
- * $Id: recorder_functions.cpp,v 1.43 2010/09/01 14:07:10 john_f Exp $
+ * $Id: recorder_functions.cpp,v 1.44 2010/09/06 13:48:24 john_f Exp $
  *
  * Functions which execute in recording threads.
  *
@@ -300,8 +300,6 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     bool raw = !mxf;
 
     // Encode parameters
-    prodauto::Rational image_aspect = settings->image_aspect;
-    int wide_aspect = (image_aspect == prodauto::g_16x9ImageAspect ? 1 : 0);
     //int raw_audio_bits = settings->raw_audio_bits;
     int raw_audio_bits = 16; // has to be 16 with current deinterleave function
     //int mxf_audio_bits = settings->mxf_audio_bits;
@@ -496,6 +494,17 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         WIDTH = secondary_width;
         HEIGHT = secondary_height;
         pixel_format = secondary_pixel_format;
+    }
+
+    //prodauto::Rational image_aspect = settings->image_aspect;
+    prodauto::Rational image_aspect;
+    if (Ingex::VideoRaster::Is4x3(raster))
+    {
+        image_aspect = prodauto::g_4x3ImageAspect;
+    }
+    else
+    {
+        image_aspect = prodauto::g_16x9ImageAspect;
     }
 
     int VIDEO_SIZE;
@@ -820,7 +829,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             break;
         }
         enc_av = ffmpeg_encoder_av_init(package_creator->GetFileLocation().c_str(), resolution, raster,
-            wide_aspect, start_tc, ffmpeg_threads, ff_av_num_audio_streams, ff_av_audio_channels_per_stream);
+            start_tc, ffmpeg_threads, ff_av_num_audio_streams, ff_av_audio_channels_per_stream);
         if (!enc_av)
         {
             ACE_DEBUG((LM_ERROR, ACE_TEXT("%C: ffmpeg_encoder_av_init() failed\n"), src_name.c_str()));
@@ -1129,6 +1138,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                 p_frame_number = &(nfd->frame_number);
 
                 bool copy = false;
+                unsigned int samples;
                 if (mp_trk->dataDef == PICTURE_DATA_DEFINITION)
                 {
                     if (use_primary_video)
@@ -1141,6 +1151,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                     }
                     p_inp_video = p;
                     size = VIDEO_SIZE;
+                    samples = 1;
                 }
                 else
                 {
@@ -1148,12 +1159,13 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                     p = IngexShm::Instance()->pSecondaryAudio(channel_i, frame[channel_i], hw.track - 1);
 
                     size = audio_samples_per_frame * 2;	// 16bit audio
+                    samples = audio_samples_per_frame;
                 }
                 
                 /*
                 ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C thread %d Track %d data %@\n"), src_name.c_str(), p_opt->index, i, p));
                 */
-                ef.Track(i).Init(p, size, copy, false, false, *p_frame_number, p_frame_number);
+                ef.Track(i).Init(p, size, samples, copy, false, false, *p_frame_number, p_frame_number);
             }
 
             // Timecode value from first track (usually video)
@@ -1249,7 +1261,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
 
                 // Source for encoding is now the quad buffer
                 p_inp_video = quad_frame.Y.buff;
-                ef.Track(0).Init(p_inp_video, VIDEO_SIZE, false, false, false, 0, 0);
+                ef.Track(0).Init(p_inp_video, VIDEO_SIZE, 1, false, false, false, 0, 0);
             }
 
             // Add timecode overlay
@@ -1288,7 +1300,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
 
                 // Source for encoding is now the timecode overlay buffer
                 p_inp_video = tc_overlay_buffer;
-                ef.Track(0).Init(p_inp_video, VIDEO_SIZE, false, false, false, 0, 0);
+                ef.Track(0).Init(p_inp_video, VIDEO_SIZE, 1, false, false, false, 0, 0);
             }
  
             // Mix audio for browse version
@@ -1311,7 +1323,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             if (ENCODER_FFMPEG_AV == encoder && enc_av && p_inp_video)
             {
                 int result = 0;
-                if (ff_av_num_audio_streams == 1)
+                if (ff_av_audio_channels_per_stream == 2)
                 {
                     result |= ffmpeg_encoder_av_encode_video(enc_av, (uint8_t *)p_inp_video);
                     result |= ffmpeg_encoder_av_encode_audio(enc_av, 0, audio_samples_per_frame, mixed_audio);
@@ -1328,7 +1340,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                         }
                         else if (SOUND_DATA_DEFINITION == mp_trk->dataDef && astream_i < ff_av_num_audio_streams)
                         {
-                            result |= ffmpeg_encoder_av_encode_audio(enc_av, astream_i++, audio_samples_per_frame, (short *) ef.Track(i).Data());
+                            result |= ffmpeg_encoder_av_encode_audio(enc_av, astream_i++, ef.Track(i).Samples(), (short *) ef.Track(i).Data());
                         }
                     }
                 }
@@ -1359,7 +1371,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                 else
                 {
                     size_enc_video = ffmpeg_encoder_encode(ffmpeg_encoder, (uint8_t *)ef.Track(0).Data(), &p_enc_video);
-                    ef.Track(0).Init(p_enc_video, size_enc_video, false, false, true, 0, 0);
+                    ef.Track(0).Init(p_enc_video, size_enc_video, 1, false, false, true, 0, 0);
                 }
             }
 
@@ -1377,7 +1389,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                 {
                     size_enc_video = mjpeg_compress_frame_yuv(mj_encoder, y, u, v, WIDTH, WIDTH/2, WIDTH/2, &p_enc_video);
                 }
-                ef.Track(0).Init(p_enc_video, size_enc_video, false, false, true, 0, 0);
+                ef.Track(0).Init(p_enc_video, size_enc_video, 1, false, false, true, 0, 0);
             }
 
             // "Encode" uncompressed video and PCM audio, i.e. mark it as coded.
@@ -1491,7 +1503,6 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
 
                         if (mxf && !DEBUG_NOWRITE)
                         {
-                            uint32_t num_samples = (SOUND_DATA_DEFINITION == mp_trk->dataDef ? audio_samples_per_frame : 1);
                             /*
                             ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C thread %d WriteSamples track %u, track id %u, num_samples %u, data %@, size %u\n"),
                                 src_name.c_str(), p_opt->index,
@@ -1499,7 +1510,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                             */
                             try
                             {
-                                writer->WriteSamples(mp_trk->id, num_samples, (uint8_t *)eft.Data(), eft.Size());
+                                writer->WriteSamples(mp_trk->id, eft.Samples(), (uint8_t *)eft.Data(), eft.Size());
                             }
                             catch (const prodauto::MXFWriterException & e)
                             {
@@ -1531,8 +1542,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                                 else if (mp_trk->dataDef == SOUND_DATA_DEFINITION)
                                 {
                                     // Audio
-                                    //write_audio(fp, (uint8_t *)p_input[i], audio_samples_per_frame, 32, raw_audio_bits);
-                                    write_audio(fp, (uint8_t *)eft.Data(), audio_samples_per_frame, 16, raw_audio_bits);
+                                    write_audio(fp, (uint8_t *)eft.Data(), eft.Samples(), 16, raw_audio_bits);
                                 }
                             }
                         }

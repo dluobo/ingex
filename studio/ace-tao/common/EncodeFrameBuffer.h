@@ -1,5 +1,5 @@
 /*
- * $Id: EncodeFrameBuffer.h,v 1.2 2010/01/14 14:07:13 john_f Exp $
+ * $Id: EncodeFrameBuffer.h,v 1.3 2010/09/06 13:48:24 john_f Exp $
  *
  * Buffer to handle video/audio data during encoding process.
  *
@@ -34,10 +34,11 @@ class EncodeFrameTrack
 public:
     EncodeFrameTrack();
     ~EncodeFrameTrack();
-    void Init(void * data, size_t size, bool copy, bool del, bool coded,
+    void Init(void * data, size_t size, unsigned int samples, bool copy, bool del, bool coded,
                 int frame_index, int * p_frame_index);
     void * Data() { return mData; }
     size_t Size() { return mSize; }
+    unsigned int Samples() { return mSamples; }
     void Coded(bool b) { mCoded = b; }
     bool Coded() const { return mCoded; }
     int FrameIndex() { return mFrameIndex; }
@@ -47,6 +48,7 @@ public:
 private:
     void * mData;
     size_t mSize;
+    unsigned int mSamples;
     bool mDel;
     bool mCoded;
     int mFrameIndex;

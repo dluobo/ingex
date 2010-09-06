@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: timepos.h,v 1.13 2010/08/27 17:44:05 john_f Exp $           *
+ *   $Id: timepos.h,v 1.14 2010/09/06 13:48:24 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -76,11 +76,9 @@ class Timepos : public wxEvtHandler
         ProdAuto::MxfTimecode mLastKnownTimecode;
         ProdAuto::MxfTimecode mTriggerTimecode;
         ProdAuto::MxfTimecode mRunningTimecode;
-	wxTimeSpan mRunningDuration;
+        wxTimeSpan mRunningDuration;
         wxEvtHandler * mTriggerHandler;
-        wxDateTime mStartDate;
         bool mTriggerCarry;
-
     DECLARE_EVENT_TABLE()
 };
 

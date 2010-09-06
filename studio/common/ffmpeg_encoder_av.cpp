@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder_av.cpp,v 1.7 2010/08/27 19:12:02 john_f Exp $
+ * $Id: ffmpeg_encoder_av.cpp,v 1.8 2010/09/06 13:48:24 john_f Exp $
  *
  * Encode AV and write to file.
  *
@@ -54,14 +54,14 @@ extern "C" {
 #include "ffmpeg_encoder_av.h"
 
 #define MPA_FRAME_SIZE              1152 // taken from ffmpeg's private mpegaudio.h
-#define PAL_VIDEO_FRAME_AUDIO_SIZE  1920
+#define MAX_VIDEO_FRAME_AUDIO_SIZE  1920
 #define MAX_AUDIO_STREAMS 8
 
 typedef struct
 {
     AVStream * audio_st;
     int num_audio_channels;
-    int audio_samples_per_input_frame;
+    int is_pcm;
     int audio_samples_per_output_frame;
     short * audio_inbuf;
     int audio_inbuf_size;
@@ -330,7 +330,7 @@ int init_video_mpeg4(internal_ffmpeg_encoder_t * enc, int64_t start_tc)
 }
 
 /* initialise video stream for DV encoding */
-int init_video_dv(internal_ffmpeg_encoder_t * enc, MaterialResolution::EnumType res, int64_t start_tc)
+int init_video_dv(internal_ffmpeg_encoder_t * enc, MaterialResolution::EnumType res, Ingex::VideoRaster::EnumType raster, int64_t start_tc)
 {
     AVCodecContext * codec_context = enc->video_st->codec;
 
@@ -340,32 +340,118 @@ int init_video_dv(internal_ffmpeg_encoder_t * enc, MaterialResolution::EnumType 
     int encoded_frame_size = 0;
     int top_field_first = 1;
 
+    // Set coding parameters according to SMPTE 370M (note horizontal scaling in HD formats)
     switch (res)
     {
     case MaterialResolution::DV25_MOV:
-        codec_context->pix_fmt = PIX_FMT_YUV420P;
-        encoded_frame_size = 144000;
-        top_field_first = 0;
+        switch (raster)
+        {
+        case Ingex::VideoRaster::PAL_B:
+        case Ingex::VideoRaster::PAL_B_4x3:
+        case Ingex::VideoRaster::PAL_B_16x9:
+            codec_context->pix_fmt = PIX_FMT_YUV420P;
+            encoded_frame_size = 144000;
+            top_field_first = 0;
+            break;
+        case Ingex::VideoRaster::NTSC:
+        case Ingex::VideoRaster::NTSC_4x3:
+        case Ingex::VideoRaster::NTSC_16x9:
+            codec_context->pix_fmt = PIX_FMT_YUV411P;
+            encoded_frame_size = 120000;
+            top_field_first = 0;
+            break;
+        default:
+            break;
+        }
         break;
     case MaterialResolution::DV50_MOV:
-        codec_context->pix_fmt = PIX_FMT_YUV422P;
-        encoded_frame_size = 288000;
-        top_field_first = 0;
-        break;
+        switch (raster)
+        {
+        case Ingex::VideoRaster::PAL_B:
+        case Ingex::VideoRaster::PAL_B_4x3:
+        case Ingex::VideoRaster::PAL_B_16x9:
+            codec_context->pix_fmt = PIX_FMT_YUV422P;
+            encoded_frame_size = 288000;
+            top_field_first = 0;
+            break;
+        case Ingex::VideoRaster::NTSC:
+        case Ingex::VideoRaster::NTSC_4x3:
+        case Ingex::VideoRaster::NTSC_16x9:
+            codec_context->pix_fmt = PIX_FMT_YUV422P;
+            encoded_frame_size = 240000;
+            top_field_first = 0;
+            break;
+        default:
+            break;
+        }
     case MaterialResolution::DV100_MOV:
         codec_context->pix_fmt = PIX_FMT_YUV422P;
-        enc->scale_image = 1;
-        enc->input_width = 1920;
-        enc->input_height = 1080;
+        switch (raster)
         {
-            int width = 1440;    // coded width (input scaled horizontally from 1920)
-            int height = 1080;
-            enc->inputBuffer = (uint8_t *)av_mallocz(width * height * 2);
-            avcodec_set_dimensions(codec_context, width, height);
+        case Ingex::VideoRaster::SMPTE274_25I:
+        case Ingex::VideoRaster::SMPTE274_25PSF:
+        case Ingex::VideoRaster::SMPTE274_25P:
+            enc->scale_image = 1;
+            enc->input_width = 1920;
+            enc->input_height = 1080;
+            {
+                int width = 1440;
+                int height = 1080;
+                enc->inputBuffer = (uint8_t *)av_mallocz(width * height * 2);
+                avcodec_set_dimensions(codec_context, width, height);
+            }
+            enc->tmpFrame = (AVPicture *)av_mallocz(sizeof(AVPicture));
+            encoded_frame_size = 576000;
+            top_field_first = 1;
+            break;
+        case Ingex::VideoRaster::SMPTE274_29I:
+        case Ingex::VideoRaster::SMPTE274_29PSF:
+        case Ingex::VideoRaster::SMPTE274_29P:
+            enc->scale_image = 1;
+            enc->input_width = 1920;
+            enc->input_height = 1080;
+            {
+                int width = 1280;
+                int height = 1080;
+                enc->inputBuffer = (uint8_t *)av_mallocz(width * height * 2);
+                avcodec_set_dimensions(codec_context, width, height);
+            }
+            enc->tmpFrame = (AVPicture *)av_mallocz(sizeof(AVPicture));
+            encoded_frame_size = 480000;
+            top_field_first = 0;
+            break;
+        // 720p formats not tested
+        case Ingex::VideoRaster::SMPTE296_50P:
+            enc->scale_image = 1;
+            enc->input_width = 1280;
+            enc->input_height = 720;
+            {
+                int width = 960;
+                int height = 720;
+                enc->inputBuffer = (uint8_t *)av_mallocz(width * height * 2);
+                avcodec_set_dimensions(codec_context, width, height);
+            }
+            enc->tmpFrame = (AVPicture *)av_mallocz(sizeof(AVPicture));
+            encoded_frame_size = 288000;
+            top_field_first = 1;
+            break;
+        case Ingex::VideoRaster::SMPTE296_59P:
+            enc->scale_image = 1;
+            enc->input_width = 1280;
+            enc->input_height = 720;
+            {
+                int width = 960;
+                int height = 720;
+                enc->inputBuffer = (uint8_t *)av_mallocz(width * height * 2);
+                avcodec_set_dimensions(codec_context, width, height);
+            }
+            enc->tmpFrame = (AVPicture *)av_mallocz(sizeof(AVPicture));
+            encoded_frame_size = 240000;
+            top_field_first = 1;
+            break;
+        default:
+            break;
         }
-        enc->tmpFrame = (AVPicture *)av_mallocz(sizeof(AVPicture));
-        encoded_frame_size = 576000;        // SMPTE 370M spec
-        top_field_first = 1;
         break;
     default:
         break;
@@ -449,14 +535,15 @@ int init_audio_pcm(audio_encoder_t * aenc)
         return -1;
     }
 
+    /* set flag for PCM codec */
+    aenc->is_pcm = 1;
+
     /* Set up audio buffer parameters */
     int nch = aenc->num_audio_channels;
-    aenc->audio_samples_per_input_frame = PAL_VIDEO_FRAME_AUDIO_SIZE;
-    aenc->audio_inbuf_size = aenc->audio_samples_per_input_frame * nch * sizeof(short);
+    aenc->audio_inbuf_size = MAX_VIDEO_FRAME_AUDIO_SIZE * nch * sizeof(short);
 
-    aenc->audio_samples_per_output_frame = PAL_VIDEO_FRAME_AUDIO_SIZE;
-    /* coded frame size */
-    aenc->audio_outbuf_size = aenc->audio_samples_per_output_frame * nch * sizeof(short);
+    /* coded frame max size */
+    aenc->audio_outbuf_size = MAX_VIDEO_FRAME_AUDIO_SIZE * nch * sizeof(short);
 
     return 0;
 }
@@ -493,9 +580,8 @@ int init_audio_dvd(audio_encoder_t * aenc)
 
     /* Set up audio buffer parameters */
     int nch = aenc->num_audio_channels;
-    aenc->audio_samples_per_input_frame = PAL_VIDEO_FRAME_AUDIO_SIZE;
     /* We have to do some buffering of input, hence the * 2 on the end */
-    aenc->audio_inbuf_size = aenc->audio_samples_per_input_frame * nch * sizeof(short) * 2;
+    aenc->audio_inbuf_size = MAX_VIDEO_FRAME_AUDIO_SIZE * nch * sizeof(short) * 2;
 
     /* samples per coded frame */
     aenc->audio_samples_per_output_frame = MPA_FRAME_SIZE;
@@ -538,9 +624,8 @@ int init_audio_mp3(audio_encoder_t * aenc)
 
     /* Set up audio buffer parameters */
     int nch = aenc->num_audio_channels;
-    aenc->audio_samples_per_input_frame = PAL_VIDEO_FRAME_AUDIO_SIZE;
     /* We have to do some buffering of input, hence the * 2 on the end */
-    aenc->audio_inbuf_size = aenc->audio_samples_per_input_frame * nch * sizeof(short) * 2;
+    aenc->audio_inbuf_size = MAX_VIDEO_FRAME_AUDIO_SIZE * nch * sizeof(short) * 2;
 
     /* samples per coded frame */
     aenc->audio_samples_per_output_frame = MPA_FRAME_SIZE;
@@ -557,8 +642,7 @@ void cleanup (internal_ffmpeg_encoder_t * enc)
         if (enc->oc)
         {
             // free the streams
-            unsigned int i;
-            for (i = 0; i < enc->oc->nb_streams; ++i)
+            for (unsigned int i = 0; i < enc->oc->nb_streams; ++i)
             {
                 av_freep(&enc->oc->streams[i]);
             }
@@ -570,8 +654,7 @@ void cleanup (internal_ffmpeg_encoder_t * enc)
         av_free(enc->inputBuffer);
         av_free(enc->tmpFrame);
 
-        int i;
-        for (i = 0; i < enc->num_audio_streams; ++i)
+        for (int i = 0; i < enc->num_audio_streams; ++i)
         {
             audio_encoder_t * aenc = enc->audio_encoder[i];
             av_free(aenc->audio_outbuf);
@@ -630,6 +713,9 @@ int write_video_frame(internal_ffmpeg_encoder_t * enc, uint8_t * p_video)
     /* encode the image */
     out_size = avcodec_encode_video(c, enc->video_outbuf, enc->video_outbuf_size, enc->inputFrame);
 
+    /* debug */
+    //fprintf(stderr, "avcodec_encode_video() returned %d\n", out_size);
+
     if (out_size > 0)
     {
         AVPacket pkt;
@@ -654,6 +740,9 @@ int write_video_frame(internal_ffmpeg_encoder_t * enc, uint8_t * p_video)
         
         /* write the compressed frame to the media file */
         ret = av_write_frame(oc, &pkt);
+
+        /* debug */
+        //fprintf(stderr, "av_write_frame (video) returned %d\n", ret);
     }
     else
     {
@@ -673,7 +762,7 @@ int write_video_frame(internal_ffmpeg_encoder_t * enc, uint8_t * p_video)
     }
 }
 
-int write_audio_frame(internal_ffmpeg_encoder_t * enc, int stream_i, short * p_audio)
+int write_audio_frame(internal_ffmpeg_encoder_t * enc, int stream_i, short * p_audio, int num_samples)
 {
     AVFormatContext * oc = enc->oc;
     audio_encoder_t * aenc = enc->audio_encoder[stream_i];
@@ -684,7 +773,15 @@ int write_audio_frame(internal_ffmpeg_encoder_t * enc, int stream_i, short * p_a
     av_init_packet(&pkt);
 
     //fprintf(stderr, "Writing audio frame, to audio stream %d, outbuf_size = %d\n", stream_i, aenc->audio_outbuf_size);
-    pkt.size = avcodec_encode_audio(c, aenc->audio_outbuf, aenc->audio_outbuf_size, p_audio);
+    if (aenc->is_pcm)
+    {
+        int nch = aenc->num_audio_channels;
+        pkt.size = avcodec_encode_audio(c, aenc->audio_outbuf, num_samples * nch * 2, p_audio);
+    }
+    else
+    {
+        pkt.size = avcodec_encode_audio(c, aenc->audio_outbuf, aenc->audio_outbuf_size, p_audio);
+    }
 
     pkt.pts = av_rescale_q(c->coded_frame->pts, c->time_base, st->time_base);
     pkt.flags |= PKT_FLAG_KEY;
@@ -705,9 +802,12 @@ int write_audio_frame(internal_ffmpeg_encoder_t * enc, int stream_i, short * p_a
 
 extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename,
                                                         MaterialResolution::EnumType res, Ingex::VideoRaster::EnumType raster,
-                                                        int wide_aspect, int64_t start_tc, int num_threads,
+                                                        int64_t start_tc, int num_threads,
                                                         int num_audio_streams, int num_audio_channels_per_stream)
 {
+    /* check number of audio streams */
+    //fprintf(stderr, "ffmpeg_encoder_av_init(): %d audio streams requested\n", num_audio_streams);
+
     internal_ffmpeg_encoder_t * enc;
     AVOutputFormat * fmt;
     const char * fmt_name = 0;
@@ -765,8 +865,7 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename,
     }
 
     /* Allocate audio encoder objects and set all members to zero */
-    int i;
-    for (i = 0; i < num_audio_streams; ++i)
+    for (int i = 0; i < num_audio_streams; ++i)
     {
         enc->audio_encoder[i] = (audio_encoder_t *)av_mallocz (sizeof(audio_encoder_t));
     }
@@ -814,30 +913,26 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename,
     AVRational sar;
     switch (raster)
     {
+    case Ingex::VideoRaster::PAL_4x3:
+    case Ingex::VideoRaster::PAL_B_4x3:
+        sar.num = 59;
+        sar.den = 54;
+        break;
     case Ingex::VideoRaster::PAL:
     case Ingex::VideoRaster::PAL_B:
-        if (wide_aspect)
-        {
-            sar.num = 118;
-            sar.den = 81;
-        }
-        else
-        {
-            sar.num = 59;
-            sar.den = 54;
-        }
+    case Ingex::VideoRaster::PAL_16x9:
+    case Ingex::VideoRaster::PAL_B_16x9:
+        sar.num = 118;
+        sar.den = 81;
+        break;
+    case Ingex::VideoRaster::NTSC_4x3:
+        sar.num = 10;
+        sar.den = 11;
         break;
     case Ingex::VideoRaster::NTSC:
-        if (wide_aspect)
-        {
-            sar.num = 40;
-            sar.den = 33;
-        }
-        else
-        {
-            sar.num = 10;
-            sar.den = 11;
-        }
+    case Ingex::VideoRaster::NTSC_16x9:
+        sar.num = 40;
+        sar.den = 33;
         break;
     default:
         sar.num = 1;
@@ -917,7 +1012,7 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename,
     case MaterialResolution::DV25_MOV:
     case MaterialResolution::DV50_MOV:
     case MaterialResolution::DV100_MOV:
-        init_video_dv(enc, res, start_tc);
+        init_video_dv(enc, res, raster, start_tc);
         break;
     case MaterialResolution::XDCAMHD422_MOV:
         init_video_xdcam(enc, start_tc);
@@ -927,7 +1022,7 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename,
     }
 
     /* Add the audio streams */
-    for (i = 0; i < enc->num_audio_streams; ++i)
+    for (int i = 0; i < enc->num_audio_streams; ++i)
     {
         audio_encoder_t * aenc = enc->audio_encoder[i];
 
@@ -941,7 +1036,7 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename,
     }
 
     /* Initialise audio codecs */
-    for (i = 0; i < enc->num_audio_streams; ++i)
+    for (int i = 0; i < enc->num_audio_streams; ++i)
     {
         audio_encoder_t * aenc = enc->audio_encoder[i];
         aenc->num_audio_channels = num_audio_channels_per_stream;
@@ -976,7 +1071,7 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename,
         || !strcmp(enc->oc->oformat->name, "3gp"))
     {
         enc->video_st->codec->flags |= CODEC_FLAG_GLOBAL_HEADER;
-        for (i = 0; i < enc->num_audio_streams; ++i)
+        for (int i = 0; i < enc->num_audio_streams; ++i)
         {
             audio_encoder_t * aenc = enc->audio_encoder[i];
             aenc->audio_st->codec->flags |= CODEC_FLAG_GLOBAL_HEADER;
@@ -1006,6 +1101,9 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename,
             return NULL;
         }
     }
+
+    /* check number of audio streams */
+    //fprintf(stderr, "ffmpeg_encoder_av_init(): %d streams total\n", enc->oc->nb_streams);
 
     /* Write stream header if any */
     av_write_header(enc->oc);
@@ -1042,7 +1140,14 @@ extern int ffmpeg_encoder_av_encode_audio (ffmpeg_encoder_av_t * in_enc, int str
     int nch = aenc->num_audio_channels;
 
     /* encode and write audio */
-    if (p_audio)
+    if (p_audio && aenc->is_pcm)
+    {
+        if (write_audio_frame (enc, stream_i, p_audio, num_samples) == -1)
+        {
+            return -1;
+        }
+    }
+    else if (p_audio)
     {
         /*
         Audio comes in in video frames (num_samples e.g. 1920) but may be encoded
@@ -1056,7 +1161,7 @@ extern int ffmpeg_encoder_av_encode_audio (ffmpeg_encoder_av_t * in_enc, int str
         int diff;
         while ((diff = aenc->audio_inbuf_offset - (aenc->audio_samples_per_output_frame * nch)) >= 0)
         {
-            if (write_audio_frame (enc, stream_i, aenc->audio_inbuf) == -1)
+            if (write_audio_frame (enc, stream_i, aenc->audio_inbuf, num_samples) == -1)
             {
                 return -1;
             }
@@ -1081,8 +1186,7 @@ extern int ffmpeg_encoder_av_close (ffmpeg_encoder_av_t * in_enc)
         avcodec_close(enc->video_st->codec);
         enc->video_st = NULL;
     }
-    int i;
-    for (i = 0; i < enc->num_audio_streams; ++i)
+    for (int i = 0; i < enc->num_audio_streams; ++i)
     {
         audio_encoder_t * aenc = enc->audio_encoder[i];
         if (aenc->audio_st)

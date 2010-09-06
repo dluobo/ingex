@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_resolutions.cpp,v 1.3 2010/07/21 16:29:34 john_f Exp $
+ * $Id: ffmpeg_resolutions.cpp,v 1.4 2010/09/06 13:48:24 john_f Exp $
  *
  * Info on ffmpeg parameters for a particular MaterialResolution
  *
@@ -34,11 +34,15 @@ void get_ffmpeg_params(MaterialResolution::EnumType res, Ingex::VideoRaster::Enu
         switch (raster)
         {
         case Ingex::VideoRaster::PAL_B:
+        case Ingex::VideoRaster::PAL_B_4x3:
+        case Ingex::VideoRaster::PAL_B_16x9:
             codec_id = CODEC_ID_DVVIDEO;
             codec_type = CODEC_TYPE_VIDEO;
             pix_fmt = PIX_FMT_YUV420P;
             break;
         case Ingex::VideoRaster::NTSC:
+        case Ingex::VideoRaster::NTSC_4x3:
+        case Ingex::VideoRaster::NTSC_16x9:
             codec_id = CODEC_ID_DVVIDEO;
             codec_type = CODEC_TYPE_VIDEO;
             pix_fmt = PIX_FMT_YUV411P;
@@ -55,7 +59,11 @@ void get_ffmpeg_params(MaterialResolution::EnumType res, Ingex::VideoRaster::Enu
         switch (raster)
         {
         case Ingex::VideoRaster::PAL_B:
+        case Ingex::VideoRaster::PAL_B_4x3:
+        case Ingex::VideoRaster::PAL_B_16x9:
         case Ingex::VideoRaster::NTSC:
+        case Ingex::VideoRaster::NTSC_4x3:
+        case Ingex::VideoRaster::NTSC_16x9:
             codec_id = CODEC_ID_DVVIDEO;
             codec_type = CODEC_TYPE_VIDEO;
             pix_fmt = PIX_FMT_YUV422P;
@@ -82,9 +90,13 @@ void get_ffmpeg_params(MaterialResolution::EnumType res, Ingex::VideoRaster::Enu
         switch (raster)
         {
         case Ingex::VideoRaster::PAL:
+        case Ingex::VideoRaster::PAL_4x3:
+        case Ingex::VideoRaster::PAL_16x9:
         case Ingex::VideoRaster::PAL_592:
         case Ingex::VideoRaster::PAL_608:
         case Ingex::VideoRaster::NTSC:
+        case Ingex::VideoRaster::NTSC_4x3:
+        case Ingex::VideoRaster::NTSC_16x9:
             codec_id = CODEC_ID_MPEG2VIDEO;
             codec_type = CODEC_TYPE_VIDEO;
             pix_fmt = PIX_FMT_YUV422P;

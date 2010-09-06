@@ -1,5 +1,5 @@
 /*
- * $Id: MtEncoder.cpp,v 1.5 2010/06/02 13:09:53 john_f Exp $
+ * $Id: MtEncoder.cpp,v 1.6 2010/09/06 13:48:24 john_f Exp $
  *
  * Video encoder using multiple threads.
  *
@@ -116,7 +116,7 @@ int MtEncoder::svc()
             int frame_index = eft.FrameIndex();
 
             // Replace input data with coded data
-            eft.Init(p_enc_video, size_enc_video, true, false, true, frame_index, 0);
+            eft.Init(p_enc_video, size_enc_video, 1, true, false, true, frame_index, 0);
             if (!valid)
             {
                 eft.Error(true);

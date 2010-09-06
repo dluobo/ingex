@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: timepos.cpp,v 1.14 2010/08/27 17:44:05 john_f Exp $             *
+ *   $Id: timepos.cpp,v 1.15 2010/09/06 13:48:24 john_f Exp $             *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -97,8 +97,8 @@ void Timepos::UpdateTimecodeAndDuration()
         //update duration - work out based on previous duration to be able to keep track of number of days reliably
         if (mPositionRunning) { //assumes mStartTimecode is sane
             timespan -= wxTimeSpan(0, 0, 0, (long) (INT64_C(1000) * mStartTimecode.samples * mStartTimecode.edit_rate.denominator / mStartTimecode.edit_rate.numerator)); //relative duration within 24 hours
-            timespan += mRunningDuration.GetDays(); //total duration assuming same day component as before
-            if (timespan < 0) timespan += wxTimeSpan::Day(); //might not be strictly necessary but otherwise it happens continually in the next line (as the day component of mRunningDuration will be zero between -24h and +24, so won't remember the change) - and in the next line there's a THRESHOLD_SECONDS cutoff
+            if (timespan < 0) timespan += wxTimeSpan::Day(); //make sure positive
+            timespan += wxTimeSpan::Days(mRunningDuration.GetDays()); //total duration assuming same day component as before
             if (mRunningDuration - timespan > wxTimeSpan(0, 0, THRESHOLD_SECONDS, 0)) { //new duration is a lot less than the old, so day component must have incremented
                 timespan += wxTimeSpan::Day();
             }
@@ -169,10 +169,9 @@ bool Timepos::SetTrigger(const ProdAuto::MxfTimecode * tc, wxEvtHandler * handle
 int64_t Timepos::GetFrameCount()
 {
     int64_t frameCount = 0;
-    if (mPositionRunning && mStartTimecode.edit_rate.denominator) { //latter a sanity check
+    if (mPositionRunning) { //mStartTimecode's denominator will be OK
         wxTimeSpan duration = GetDuration(); //make sure it's up to date
-        frameCount = (duration - wxTimeSpan::Days(duration.GetDays())).GetMilliseconds().GetValue() * mStartTimecode.edit_rate.numerator / mStartTimecode.edit_rate.denominator / 1000;
-        frameCount += (int64_t) duration.GetDays() * 86400 / mStartTimecode.edit_rate.denominator * mStartTimecode.edit_rate.numerator;
+        frameCount = duration.GetMilliseconds().GetValue() * mStartTimecode.edit_rate.numerator / mStartTimecode.edit_rate.denominator / 1000;
     }
     return frameCount;
 }
@@ -225,7 +224,6 @@ const wxString Timepos::Record(const ProdAuto::MxfTimecode tc)
     if (mTimecodeRunning && !tc.undefined && tc.edit_rate.numerator && tc.edit_rate.denominator) { //sensible values: no chance of divide by zero!
         mStartTimecode = tc; //for calculating exact duration
         mRunningDuration = 0; //to clear day component
-        mStartDate = wxDateTime::Today();
         mPositionRunning = true;
         mPostrolling = false; //could still be postrolling a previous recording
     }

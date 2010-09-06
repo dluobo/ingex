@@ -1,5 +1,5 @@
 /*
- * $Id: VideoRaster.h,v 1.3 2010/08/13 15:18:44 john_f Exp $
+ * $Id: VideoRaster.h,v 1.4 2010/09/06 13:48:24 john_f Exp $
  *
  * Video raster codes and details
  *
@@ -23,6 +23,8 @@
  
 #ifndef VideoRaster_h
 #define VideoRaster_h
+
+#include "Rational.h"
 
 #include <string>
 
@@ -50,12 +52,18 @@ public:
         NONE,
 
         PAL,
+        PAL_4x3,
+        PAL_16x9,
         PAL_592,
         PAL_608,
         PAL_B,     ///< PAL modified to be bottom field first
+        PAL_B_4x3,
+        PAL_B_16x9,
         PAL_592_B, ///< PAL_592 modified to be bottom field first
         PAL_608_B, ///< PAL_608 modified to be bottom field first
         NTSC,
+        NTSC_4x3,
+        NTSC_16x9,
 
         SMPTE274_25I,
         SMPTE274_29I,
@@ -74,6 +82,14 @@ public:
             int & width, int & height, int & fps_num, int & fps_den, Interlace::EnumType & interlace);
 
     static bool IsRec601(VideoRaster::EnumType raster);
+
+    static bool Is4x3(VideoRaster::EnumType raster);
+
+    static void ModifyLineShift(VideoRaster::EnumType & raster, bool shifted);
+
+    static int LineShift(VideoRaster::EnumType raster);
+
+    static void ModifyAspect(VideoRaster::EnumType & raster, const Ingex::Rational & aspect);
 };
 
 class PixelFormat

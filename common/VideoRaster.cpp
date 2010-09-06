@@ -1,5 +1,5 @@
 /*
- * $Id: VideoRaster.cpp,v 1.3 2010/08/13 15:18:44 john_f Exp $
+ * $Id: VideoRaster.cpp,v 1.4 2010/09/06 13:48:24 john_f Exp $
  *
  * Video raster codes and details
  *
@@ -77,6 +77,12 @@ std::string Ingex::VideoRaster::Name(Ingex::VideoRaster::EnumType e)
     case PAL:
         name = "PAL";
         break;
+    case PAL_4x3:
+        name = "PAL 4x3";
+        break;
+    case PAL_16x9:
+        name = "PAL 16x9";
+        break;
     case PAL_592:
         name = "PAL 592";
         break;
@@ -86,6 +92,12 @@ std::string Ingex::VideoRaster::Name(Ingex::VideoRaster::EnumType e)
     case PAL_B:
         name = "PAL (reversed field order)";
         break;
+    case PAL_B_4x3:
+        name = "PAL 4x3 (reversed field order)";
+        break;
+    case PAL_B_16x9:
+        name = "PAL 16x9 (reversed field order)";
+        break;
     case PAL_592_B:
         name = "PAL 592 (reversed field order)";
         break;
@@ -94,6 +106,12 @@ std::string Ingex::VideoRaster::Name(Ingex::VideoRaster::EnumType e)
         break;
     case NTSC:
         name = "NTSC";
+        break;
+    case NTSC_4x3:
+        name = "NTSC 4x3";
+        break;
+    case NTSC_16x9:
+        name = "NTSC 16x9";
         break;
     case SMPTE274_25I:
         name = "1920x1080 25i";
@@ -132,6 +150,8 @@ void Ingex::VideoRaster::GetInfo(Ingex::VideoRaster::EnumType raster,
     switch (raster)
     {
     case PAL:
+    case PAL_4x3:
+    case PAL_16x9:
         width = 720;
         height = 576;
         fps_num = 25;
@@ -153,6 +173,8 @@ void Ingex::VideoRaster::GetInfo(Ingex::VideoRaster::EnumType raster,
         interlace = Ingex::Interlace::TOP_FIELD_FIRST;
         break;
     case PAL_B:
+    case PAL_B_4x3:
+    case PAL_B_16x9:
         width = 720;
         height = 576;
         fps_num = 25;
@@ -174,6 +196,8 @@ void Ingex::VideoRaster::GetInfo(Ingex::VideoRaster::EnumType raster,
         interlace = Ingex::Interlace::BOTTOM_FIELD_FIRST;
         break;
     case NTSC:
+    case NTSC_4x3:
+    case NTSC_16x9:
         width = 720;
         height = 486;
         fps_num = 30000;
@@ -241,12 +265,18 @@ bool Ingex::VideoRaster::IsRec601(VideoRaster::EnumType raster)
     switch (raster)
     {
     case PAL:
+    case PAL_4x3:
+    case PAL_16x9:
     case PAL_592:
     case PAL_608:
     case PAL_B:
+    case PAL_B_4x3:
+    case PAL_B_16x9:
     case PAL_592_B:
     case PAL_608_B:
     case NTSC:
+    case NTSC_4x3:
+    case NTSC_16x9:
         is_rec_601 = true;
         break;
     default:
@@ -255,5 +285,97 @@ bool Ingex::VideoRaster::IsRec601(VideoRaster::EnumType raster)
     }
 
     return is_rec_601;
+}
+
+bool Ingex::VideoRaster::Is4x3(VideoRaster::EnumType raster)
+{
+    bool is_4x3;
+
+    switch (raster)
+    {
+    case PAL_4x3:
+    case PAL_B_4x3:
+    case NTSC_4x3:
+        is_4x3 = true;
+        break;
+    default:
+        is_4x3 = false;
+        break;
+    }
+
+    return is_4x3;
+}
+
+void Ingex::VideoRaster::ModifyLineShift(VideoRaster::EnumType & raster, bool shifted)
+{
+    switch (raster)
+    {
+    case PAL:
+    case PAL_B:
+        raster = shifted ? PAL_B : PAL;
+        break;
+    case PAL_4x3:
+    case PAL_B_4x3:
+        raster = shifted ? PAL_B_4x3 : PAL_4x3;
+        break;
+    case PAL_16x9:
+    case PAL_B_16x9:
+        raster = shifted ? PAL_B_16x9 : PAL_16x9;
+        break;
+    case PAL_592:
+    case PAL_592_B:
+        raster = shifted ? PAL_592_B : PAL_592;
+        break;
+    case PAL_608:
+    case PAL_608_B:
+        raster = shifted ? PAL_608_B : PAL_608;
+        break;
+    default:
+        break;
+    }
+}
+
+int Ingex::VideoRaster::LineShift(VideoRaster::EnumType raster)
+{
+    int shift;
+    switch (raster)
+    {
+    case PAL_B:
+    case PAL_B_4x3:
+    case PAL_B_16x9:
+    case PAL_592_B:
+    case PAL_608_B:
+        shift = 1;
+        break;
+    default:
+        shift = 0;
+        break;
+    }
+
+    return shift;
+}
+
+void Ingex::VideoRaster::ModifyAspect(VideoRaster::EnumType & raster, const Ingex::Rational & aspect)
+{
+    switch (raster)
+    {
+    case PAL:
+    case PAL_4x3:
+    case PAL_16x9:
+        raster = Ingex::RATIONAL_4_3 == aspect ? PAL_4x3 : PAL_16x9;
+        break;
+    case PAL_B:
+    case PAL_B_4x3:
+    case PAL_B_16x9:
+        raster = Ingex::RATIONAL_4_3 == aspect ? PAL_B_4x3 : PAL_B_16x9;
+        break;
+    case NTSC:
+    case NTSC_4x3:
+    case NTSC_16x9:
+        raster = Ingex::RATIONAL_4_3 == aspect ? NTSC_4x3 : NTSC_16x9;
+        break;
+    default:
+        break;
+    }
 }
 

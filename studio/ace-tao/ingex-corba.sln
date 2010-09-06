@@ -19,15 +19,13 @@ EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "prodautodbLib", "..\database\src\prodautodbLib.vcproj", "{6B2A26A7-FECA-1BAD-23D6-A88692A72F36}"
 	ProjectSection(ProjectDependencies) = postProject
 	EndProjectSection
+	ProjectSection(ProjectDependencies) = postProject
+	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "RecorderClient", "RecorderClient\RecorderClient.vcproj", "{4B35EE27-FECA-1BAD-ABD4-A97AC8E97EC0}"
 	ProjectSection(ProjectDependencies) = postProject
 		{096B5C35-FECA-1BAD-8AF0-8C91516EF201} = {096B5C35-FECA-1BAD-8AF0-8C91516EF201}
 		{56CACC4C-FECA-1BAD-8D65-768875D5B9C7} = {56CACC4C-FECA-1BAD-8D65-768875D5B9C7}
-	EndProjectSection
-EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "CopyManager", "CopyManager\CopyManager.vcproj", "{5AAE2154-1509-41C5-95AC-3F73F2E2F389}"
-	ProjectSection(ProjectDependencies) = postProject
 	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "routerlogger", "routerlog\routerlogger.vcproj", "{2B4E910A-FECA-1BAD-5902-AECD38EFCAF5}"
@@ -45,12 +43,18 @@ EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "commonLib", "..\..\common\commonLib.vcproj", "{50BFEE33-FECA-1BAD-AA95-11DAF63D975C}"
 	ProjectSection(ProjectDependencies) = postProject
 	EndProjectSection
+	ProjectSection(ProjectDependencies) = postProject
+	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "CreateAAF", "..\processing\createaaf\CreateAAF.vcproj", "{0D3255CB-FECA-1BAD-1510-C90184CAB406}"
 	ProjectSection(ProjectDependencies) = postProject
 	EndProjectSection
+	ProjectSection(ProjectDependencies) = postProject
+	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "studiocommonLib", "..\common\studiocommonLib.vcproj", "{57FCDCCC-FECA-1BAD-8565-65E9ACA0C3E0}"
+	ProjectSection(ProjectDependencies) = postProject
+	EndProjectSection
 	ProjectSection(ProjectDependencies) = postProject
 	EndProjectSection
 EndProject
@@ -59,6 +63,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "acetaocommonLib", "common\a
 	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "mxfreader", "..\mxfreader\mxfreader.vcproj", "{A71043BE-FECA-1BAD-724A-6B2076C498E7}"
+	ProjectSection(ProjectDependencies) = postProject
+	EndProjectSection
 	ProjectSection(ProjectDependencies) = postProject
 	EndProjectSection
 EndProject
@@ -88,10 +94,6 @@ Global
 		{4B35EE27-FECA-1BAD-ABD4-A97AC8E97EC0}.Debug.Build.0 = Debug|Win32
 		{4B35EE27-FECA-1BAD-ABD4-A97AC8E97EC0}.Release.ActiveCfg = Release|Win32
 		{4B35EE27-FECA-1BAD-ABD4-A97AC8E97EC0}.Release.Build.0 = Release|Win32
-		{5AAE2154-1509-41C5-95AC-3F73F2E2F389}.Debug.ActiveCfg = Debug|Win32
-		{5AAE2154-1509-41C5-95AC-3F73F2E2F389}.Debug.Build.0 = Debug|Win32
-		{5AAE2154-1509-41C5-95AC-3F73F2E2F389}.Release.ActiveCfg = Release|Win32
-		{5AAE2154-1509-41C5-95AC-3F73F2E2F389}.Release.Build.0 = Release|Win32
 		{2B4E910A-FECA-1BAD-5902-AECD38EFCAF5}.Debug.ActiveCfg = Debug|Win32
 		{2B4E910A-FECA-1BAD-5902-AECD38EFCAF5}.Debug.Build.0 = Debug|Win32
 		{2B4E910A-FECA-1BAD-5902-AECD38EFCAF5}.Release.ActiveCfg = Release|Win32

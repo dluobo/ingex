@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.cpp,v 1.9 2010/09/01 14:22:34 john_f Exp $
+ * $Id: dvs_sdi.cpp,v 1.10 2010/09/06 13:48:24 john_f Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -35,6 +35,7 @@
 #include "avsync_analysis.h"
 #include "time_utils.h"
 #include "YUV_scale_pic.h"
+#include "Rational.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -108,6 +109,7 @@ int             frame_rate_numer = 0, frame_rate_denom = 0;
 VideoRaster::EnumType primary_video_raster = VideoRaster::NONE;
 VideoRaster::EnumType secondary_video_raster = VideoRaster::NONE;
 Interlace::EnumType interlace = Interlace::NONE;
+Ingex::Rational image_aspect = Ingex::RATIONAL_16_9;
 int             element_size = 0, dma_video_size = 0, dma_total_size = 0;
 int      audio_offset = 0, audio_size = 0;
 int      secondary_audio_offset = 0, secondary_audio_size = 0;
@@ -115,8 +117,8 @@ int      secondary_video_offset = 0;
 
 int             frame_data_offset = 0;
 
-CaptureFormat   video_format = Format422PlanarYUV;    // Only retained for backward compatibility
-CaptureFormat   video_secondary_format = FormatNone;  // Only retained for backward compatibility
+CaptureFormat   primary_video_format = Format422PlanarYUV; // Only retained for backward compatibility
+CaptureFormat   secondary_video_format = FormatNone;  // Only retained for backward compatibility
 Ingex::PixelFormat::EnumType primary_pixel_format = Ingex::PixelFormat::NONE;
 Ingex::PixelFormat::EnumType secondary_pixel_format = Ingex::PixelFormat::NONE;
 int primary_line_shift = 0;
@@ -402,13 +404,21 @@ VideoRaster::EnumType sd_raster(VideoRaster::EnumType raster)
     VideoRaster::EnumType sd_raster;
     switch (raster)
     {
+    case VideoRaster::PAL_4x3:
+        sd_raster = VideoRaster::PAL_4x3;
+        break;
     case VideoRaster::PAL:
+    case VideoRaster::PAL_16x9:
     case VideoRaster::SMPTE274_25I:
     case VideoRaster::SMPTE274_25PSF:
     case VideoRaster::SMPTE296_50P:
-        sd_raster = VideoRaster::PAL;
+        sd_raster = VideoRaster::PAL_16x9;
+        break;
+    case VideoRaster::NTSC_4x3:
+        sd_raster = VideoRaster::NTSC_4x3;
         break;
     case VideoRaster::NTSC:
+    case VideoRaster::NTSC_16x9:
     case VideoRaster::SMPTE274_29I:
     case VideoRaster::SMPTE274_29PSF:
     case VideoRaster::SMPTE296_59P:
@@ -714,13 +724,13 @@ int allocate_shared_buffers(int num_channels, long long max_memory)
 
     p_control->pri_video_raster = primary_video_raster;
     p_control->pri_pixel_format = primary_pixel_format;
-    p_control->pri_video_format = video_format;
+    p_control->pri_video_format = primary_video_format;
     p_control->width = width;
     p_control->height = height;
     
     p_control->sec_video_raster = secondary_video_raster;
     p_control->sec_pixel_format = secondary_pixel_format;
-    p_control->sec_video_format = video_secondary_format;
+    p_control->sec_video_format = secondary_video_format;
     p_control->sec_width = sec_width;
     p_control->sec_height = sec_height;
 
@@ -1841,6 +1851,9 @@ int write_dummy_frames(sv_handle *sv, int chan, int current_frame_tick, int tick
             switch (primary_video_raster)
             {
             case Ingex::VideoRaster::PAL:
+            case Ingex::VideoRaster::PAL_4x3:
+            case Ingex::VideoRaster::PAL_16x9:
+            case Ingex::VideoRaster::PAL_B:
             case Ingex::VideoRaster::SMPTE274_25I:
             case Ingex::VideoRaster::SMPTE274_25PSF:
             case Ingex::VideoRaster::SMPTE274_25P:
@@ -1848,6 +1861,8 @@ int write_dummy_frames(sv_handle *sv, int chan, int current_frame_tick, int tick
                 n_audio_samples = PAL_AUDIO_SAMPLES;
                 break;
             case Ingex::VideoRaster::NTSC:
+            case Ingex::VideoRaster::NTSC_4x3:
+            case Ingex::VideoRaster::NTSC_16x9:
             case Ingex::VideoRaster::SMPTE274_29I:
             case Ingex::VideoRaster::SMPTE274_29PSF:
             case Ingex::VideoRaster::SMPTE274_29P:
@@ -2147,6 +2162,8 @@ void usage_exit(void)
     fprintf(stderr, "                         1280x720p50, 1280x720p59\n");
     fprintf(stderr, "                         AUDIO8 enables 8 audio channels per SDI input\n");
     fprintf(stderr, "                         E.g. -mode 1920x1080i29:AUDIO8\n");
+    fprintf(stderr, "    -16x9                Video aspect ratio is 16x9 (default)\n");
+    fprintf(stderr, "    -4x3                 Video aspect ratio is 4x3\n");
     fprintf(stderr, "    -sync <type>         set input sync type on all DVS cards, sync is one of:\n");
     fprintf(stderr, "                         bilevel   - analog bilevel sync [default for PAL/NTSC mode]\n");
     fprintf(stderr, "                         trilevel  - analog trilevel sync [default for HD modes]\n");
@@ -2349,6 +2366,14 @@ int main (int argc, char ** argv)
             }
             n++;
         }
+        else if (strcmp(argv[n], "-16x9") == 0)
+        {
+            image_aspect = Ingex::RATIONAL_16_9;
+        }
+        else if (strcmp(argv[n], "-4x3") == 0)
+        {
+            image_aspect = Ingex::RATIONAL_4_3;
+        }
         else if (strcmp(argv[n], "-sync") == 0)
         {
             if (argc <= n+1)
@@ -2416,7 +2441,7 @@ int main (int argc, char ** argv)
             }
             else if (strcmp(argv[n+1], "None") == 0)
             {
-                video_secondary_format = FormatNone;
+                secondary_video_format = FormatNone;
             }
             else if (strcmp(argv[n+1], "YUV422") == 0)
             {
@@ -2757,6 +2782,9 @@ int main (int argc, char ** argv)
     }
 
     // We now know primary_video_raster, width, height, frame_rate and interlace (from card).
+
+    // Modify primary raster to include aspect ratio.
+    Ingex::VideoRaster::ModifyAspect(primary_video_raster, image_aspect);
     
     // Set secondary_video_raster
     if (NONE != secondary_capture_format)
@@ -2765,33 +2793,46 @@ int main (int argc, char ** argv)
         secondary_video_raster = sd_raster(primary_video_raster);
     }
 
+    // Modify PAL rasters for line shift
+    if (DV50 == primary_capture_format)
+    {
+        Ingex::VideoRaster::ModifyLineShift(primary_video_raster, true);
+    }
+    primary_line_shift = Ingex::VideoRaster::LineShift(primary_video_raster);
+    if (DV50 == secondary_capture_format || DV25 == secondary_capture_format)
+    {
+        Ingex::VideoRaster::ModifyLineShift(secondary_video_raster, true);
+    }
+    secondary_line_shift = Ingex::VideoRaster::LineShift(secondary_video_raster);
+
     // Set pixel format needed for capture format and raster
     switch (primary_capture_format)
     {
     case UYVY:
         primary_pixel_format = Ingex::PixelFormat::UYVY_422;
-        video_format = Format422UYVY;
+        primary_video_format = Format422UYVY;
         break;
     case YUV422:
         primary_pixel_format = Ingex::PixelFormat::YUV_PLANAR_422;
-        video_format = Format422PlanarYUV;
+        primary_video_format = Format422PlanarYUV;
         break;
     case DV50:
-        if (Ingex::VideoRaster::PAL == primary_video_raster)
+        switch (primary_video_raster)
         {
+        case Ingex::VideoRaster::PAL_B:
+        case Ingex::VideoRaster::PAL_B_4x3:
+        case Ingex::VideoRaster::PAL_B_16x9:
             primary_pixel_format = Ingex::PixelFormat::YUV_PLANAR_422;
-            primary_line_shift = 1;
-            primary_video_raster = Ingex::VideoRaster::PAL_B;
-            video_format = Format422PlanarYUVShifted;
-        }
-        else if (Ingex::VideoRaster::NTSC == primary_video_raster)
-        {
+            primary_video_format = Format422PlanarYUVShifted;
+            break;
+        case Ingex::VideoRaster::NTSC:
+        case Ingex::VideoRaster::NTSC_4x3:
+        case Ingex::VideoRaster::NTSC_16x9:
             primary_pixel_format = Ingex::PixelFormat::YUV_PLANAR_422;
-            video_format = Format422PlanarYUV;
-        }
-        else
-        {
-            // Not valid
+            primary_video_format = Format422PlanarYUV;
+            break;
+        default:
+            break;
         }
         break;
     case MPEG:
@@ -2805,46 +2846,48 @@ int main (int argc, char ** argv)
     {
     case YUV422:
         secondary_pixel_format = Ingex::PixelFormat::YUV_PLANAR_422;
-        video_secondary_format = Format422PlanarYUV;
+        secondary_video_format = Format422PlanarYUV;
         break;
     case DV50:
-        if (Ingex::VideoRaster::PAL == secondary_video_raster)
+        switch (secondary_video_raster)
         {
+        case Ingex::VideoRaster::PAL_B:
+        case Ingex::VideoRaster::PAL_B_4x3:
+        case Ingex::VideoRaster::PAL_B_16x9:
             secondary_pixel_format = Ingex::PixelFormat::YUV_PLANAR_422;
-            secondary_line_shift = 1;
-            secondary_video_raster = Ingex::VideoRaster::PAL_B;
-            video_secondary_format = Format422PlanarYUVShifted;
-        }
-        else if (Ingex::VideoRaster::NTSC == secondary_video_raster)
-        {
+            secondary_video_format = Format422PlanarYUVShifted;
+            break;
+        case Ingex::VideoRaster::NTSC:
+        case Ingex::VideoRaster::NTSC_4x3:
+        case Ingex::VideoRaster::NTSC_16x9:
             secondary_pixel_format = Ingex::PixelFormat::YUV_PLANAR_422;
-            video_secondary_format = Format422PlanarYUV;
-        }
-        else
-        {
-            // Not valid
+            secondary_video_format = Format422PlanarYUV;
+            break;
+        default:
+            break;
         }
         break;
     case MPEG:
         secondary_pixel_format = Ingex::PixelFormat::YUV_PLANAR_420_MPEG;
-        video_secondary_format = Format420PlanarYUV;
+        secondary_video_format = Format420PlanarYUV;
         break;
     case DV25:
-        if (Ingex::VideoRaster::PAL == secondary_video_raster)
+        switch (secondary_video_raster)
         {
+        case Ingex::VideoRaster::PAL_B:
+        case Ingex::VideoRaster::PAL_B_4x3:
+        case Ingex::VideoRaster::PAL_B_16x9:
             secondary_pixel_format = Ingex::PixelFormat::YUV_PLANAR_420_DV;
-            secondary_line_shift = 1;
-            secondary_video_raster = Ingex::VideoRaster::PAL_B;
-            video_secondary_format = Format420PlanarYUVShifted;
-        }
-        else if (Ingex::VideoRaster::NTSC == secondary_video_raster)
-        {
+            secondary_video_format = Format420PlanarYUVShifted;
+            break;
+        case Ingex::VideoRaster::NTSC:
+        case Ingex::VideoRaster::NTSC_4x3:
+        case Ingex::VideoRaster::NTSC_16x9:
             secondary_pixel_format = Ingex::PixelFormat::YUV_PLANAR_411;
-            video_secondary_format = Format411PlanarYUV;
-        }
-        else
-        {
-            // Not valid
+            secondary_video_format = Format411PlanarYUV;
+            break;
+        default:
+            break;
         }
         break;
     case UYVY:
@@ -2852,7 +2895,7 @@ int main (int argc, char ** argv)
         break;
     case NONE:
         secondary_pixel_format = Ingex::PixelFormat::NONE;
-        video_secondary_format = FormatNone;
+        secondary_video_format = FormatNone;
         break;
     }
 
@@ -2865,7 +2908,7 @@ int main (int argc, char ** argv)
 
     /*
     // Display info on primary video format
-    switch (video_format)
+    switch (primary_video_format)
     {
         case Format422UYVY:
                 logTF("Capturing video as UYVY (4:2:2)\n"); break;
@@ -2879,7 +2922,7 @@ int main (int argc, char ** argv)
     }
 
     // Display info on secondary video format
-    switch (video_secondary_format)
+    switch (secondary_video_format)
     {
         case FormatNone:
                 logTF("Secondary video buffer is disabled\n"); break;
@@ -2926,9 +2969,15 @@ int main (int argc, char ** argv)
         {
         case Ingex::VideoRaster::PAL:
         case Ingex::VideoRaster::PAL_B:
+        case Ingex::VideoRaster::PAL_4x3:
+        case Ingex::VideoRaster::PAL_B_4x3:
+        case Ingex::VideoRaster::PAL_16x9:
+        case Ingex::VideoRaster::PAL_B_16x9:
             dma_video_size = 0xCC000;
             break;
         case Ingex::VideoRaster::NTSC:
+        case Ingex::VideoRaster::NTSC_4x3:
+        case Ingex::VideoRaster::NTSC_16x9:
             dma_video_size = 0xAC000;
             break;
         case Ingex::VideoRaster::SMPTE274_25I:

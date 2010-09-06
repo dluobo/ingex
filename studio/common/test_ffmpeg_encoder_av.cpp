@@ -1,5 +1,5 @@
 /*
- * $Id: test_ffmpeg_encoder_av.cpp,v 1.3 2010/08/12 16:32:44 john_f Exp $
+ * $Id: test_ffmpeg_encoder_av.cpp,v 1.4 2010/09/06 13:48:24 john_f Exp $
  *
  * Test ffmpeg encoder av
  *
@@ -199,7 +199,7 @@ static void usage(const char *cmd)
 
 int main(int argc, const char **argv)
 {
-    MaterialResolution::EnumType output_format = MaterialResolution::NONE;
+    MaterialResolution::EnumType output_format = MaterialResolution::DV25_MOV;
     int start = 0;
     int hour, min, sec, frame;
     int notwide = 0;
@@ -448,6 +448,9 @@ int main(int argc, const char **argv)
             raster = Ingex::VideoRaster::PAL;
             break;
     }
+
+    Ingex::Rational image_aspect = notwide ? Ingex::RATIONAL_4_3 : Ingex::RATIONAL_16_9;
+    Ingex::VideoRaster::ModifyAspect(raster, image_aspect);
     
     output_filename = argv[cmdln_index];
     
@@ -480,7 +483,7 @@ int main(int argc, const char **argv)
 
     
     /* init encoder */
-    encoder = ffmpeg_encoder_av_init(output_filename, output_format, raster, !notwide, start, num_ffmpeg_threads,
+    encoder = ffmpeg_encoder_av_init(output_filename, output_format, raster, start, num_ffmpeg_threads,
                                      num_audio_inputs, nch);
     
     frame_count = 0;

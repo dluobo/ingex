@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder_av.h,v 1.6 2010/08/12 16:32:44 john_f Exp $
+ * $Id: ffmpeg_encoder_av.h,v 1.7 2010/09/06 13:48:24 john_f Exp $
  *
  * Encode AV and write to file.
  *
@@ -43,7 +43,7 @@ typedef void ffmpeg_encoder_av_t;
 */
 extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, MaterialResolution::EnumType res,
                                                         Ingex::VideoRaster::EnumType raster,
-                                                        int wide_aspect, int64_t start_tc, int num_threads,
+                                                        int64_t start_tc, int num_threads,
                                                         int num_audio_streams, int num_audio_channels_per_stream);
 
 /*
