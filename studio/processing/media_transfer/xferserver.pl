@@ -1,7 +1,7 @@
 #! /usr/bin/perl -w
 
 #/***************************************************************************
-# * $Id: xferserver.pl,v 1.16 2010/07/06 14:15:14 john_f Exp $             *
+# * $Id: xferserver.pl,v 1.17 2010/09/06 13:42:55 john_f Exp $             *
 # *                                                                         *
 # *   Copyright (C) 2008-2010 British Broadcasting Corporation              *
 # *   - all rights reserved.                                                *
@@ -62,7 +62,7 @@ use IO::Socket;
 use IO::Select;
 use IO::File;
 use Getopt::Std;
-our $VERSION = '$Revision: 1.16 $'; #used by Getopt in the case of --version or --help
+our $VERSION = '$Revision: 1.17 $'; #used by Getopt in the case of --version or --help
 $VERSION =~ s/\s*\$Revision:\s*//;
 $VERSION =~ s/\s*\$\s*$//;
 $Getopt::Std::STANDARD_HELP_VERSION = 1; #so it stops after version message
@@ -592,6 +592,7 @@ sub ScanDir {
  if (opendir(SRC, $srcPath)) {
 	($normalOK, $extraOK) = (1, defined $extraDestRoot);
 	my $ftpOK = 1;
+	my $prevLatestCtime = 0;
 	my $loop = 0;
 	do { #loop to make sure we get all the files with the latest ctime we find
 		my $scanTime = time;
@@ -707,7 +708,9 @@ sub ScanDir {
 				}
 			}
 		}
-		$loop = ($normalOK || $extraOK) && $latestCtime >= $scanTime; #if we find files with the same or later ctime as when (just before) the scan started, scan again in case more files have appeared with the same ctime as the latest found
+		$loop = ($normalOK || $extraOK) #we've not bailed out so there is a point in scanning again
+ 		 && $latestCtime >= $scanTime #files have been found with the same or later ctime as when (just before) the scan started, so scan again in case more files have appeared with the same ctime as the latest found
+		 && $latestCtime != $prevLatestCtime; #trap to prevent continuous looping if system time has been moved back since recordings were made.  The second's delay before scanning again will ensure that all the files up to $latestCtime will have been captured if it's the same as $prevLatestCtime.
  		if (!$normalOK || $loop) {
  			@normalFiles = ();
 			$totalNormalToCopy = 0;
@@ -720,6 +723,7 @@ sub ScanDir {
 		}
 		if ($loop) {
 			$totalSrcFiles = 0;
+			$prevLatestCtime = $latestCtime;
 			$latestCtime = 0;
 			rewinddir SRC;
 			sleep 1; #delay the retry to prevent a possible deluge of scans
