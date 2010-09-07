@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder.cpp,v 1.7 2010/09/06 18:22:24 john_f Exp $
+ * $Id: ffmpeg_encoder.cpp,v 1.8 2010/09/07 15:53:46 john_f Exp $
  *
  * Encode uncompressed video to DV using libavcodec
  *
@@ -291,22 +291,67 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init(MaterialResolution::EnumType res, 
         case MaterialResolution::IMX30_MXF_1A:
             bit_rate = 30 * 1000000;
             buffer_size = 30 * 40000;
-            encoded_frame_size = bit_rate * fps_den / (fps_num * 8);
             intra_matrix = imx30_intra_matrix;
+            //encoded_frame_size = (bit_rate / 8) * fps_den / fps_num;
+            switch (raster)
+            {
+            case Ingex::VideoRaster::PAL:
+            case Ingex::VideoRaster::PAL_4x3:
+            case Ingex::VideoRaster::PAL_16x9:
+                encoded_frame_size = 150000;
+                break;
+            case Ingex::VideoRaster::NTSC:
+            case Ingex::VideoRaster::NTSC_4x3:
+            case Ingex::VideoRaster::NTSC_16x9:
+                encoded_frame_size = 125125;
+                break;
+            default:
+                break;
+            }
             break;
         case MaterialResolution::IMX40_MXF_ATOM:
         case MaterialResolution::IMX40_MXF_1A:
             bit_rate = 40 * 1000000;
             buffer_size = 40 * 40000;
-            encoded_frame_size = bit_rate * fps_den / (fps_num * 8);
             intra_matrix = imx4050_intra_matrix;
+            //encoded_frame_size = (bit_rate / 8) * fps_den / fps_num;
+            switch (raster)
+            {
+            case Ingex::VideoRaster::PAL:
+            case Ingex::VideoRaster::PAL_4x3:
+            case Ingex::VideoRaster::PAL_16x9:
+                encoded_frame_size = 200000;
+                break;
+            case Ingex::VideoRaster::NTSC:
+            case Ingex::VideoRaster::NTSC_4x3:
+            case Ingex::VideoRaster::NTSC_16x9:
+                encoded_frame_size = 166833;
+                break;
+            default:
+                break;
+            }
             break;
         case MaterialResolution::IMX50_MXF_ATOM:
         case MaterialResolution::IMX50_MXF_1A:
             bit_rate = 50 * 1000000;
             buffer_size = 50 * 40000;
-            encoded_frame_size = bit_rate * fps_den / (fps_num * 8);
             intra_matrix = imx4050_intra_matrix;
+            //encoded_frame_size = (bit_rate / 8) * fps_den / fps_num;
+            switch (raster)
+            {
+            case Ingex::VideoRaster::PAL:
+            case Ingex::VideoRaster::PAL_4x3:
+            case Ingex::VideoRaster::PAL_16x9:
+                encoded_frame_size = 250000;
+                break;
+            case Ingex::VideoRaster::NTSC:
+            case Ingex::VideoRaster::NTSC_4x3:
+            case Ingex::VideoRaster::NTSC_16x9:
+                encoded_frame_size = 208541;
+                break;
+            default:
+                break;
+            }
             break;
         case MaterialResolution::DNX36P_MXF_ATOM:
             encoder->codec_context->bit_rate = 36 * 1000000;
@@ -451,13 +496,20 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init(MaterialResolution::EnumType res, 
         case MaterialResolution::IMX40_MXF_1A:
         case MaterialResolution::IMX50_MXF_1A:
             // stored image height is 608 for PAL and 512 for NTSC
-            if (raster == Ingex::VideoRaster::NTSC)
+            switch (raster)
             {
-                encoder->padtop = 512 - height;
-            }
-            else
-            {
+            case Ingex::VideoRaster::PAL:
+            case Ingex::VideoRaster::PAL_4x3:
+            case Ingex::VideoRaster::PAL_16x9:
                 encoder->padtop = 608 - height;
+                break;
+            case Ingex::VideoRaster::NTSC:
+            case Ingex::VideoRaster::NTSC_4x3:
+            case Ingex::VideoRaster::NTSC_16x9:
+                encoder->padtop = 512 - height;
+                break;
+            default:
+                break;
             }
 
             encoder->codec_context->rc_min_rate = bit_rate;

@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder_av.cpp,v 1.9 2010/09/06 18:22:24 john_f Exp $
+ * $Id: ffmpeg_encoder_av.cpp,v 1.10 2010/09/07 15:53:46 john_f Exp $
  *
  * Encode AV and write to file.
  *
@@ -101,6 +101,7 @@ typedef struct
     struct SwsContext * scale_context;
     int scale_image;
     int crop_480_ntsc_dv;
+    int crop_480_ntsc_mpeg;
 } internal_ffmpeg_encoder_t;
 
 
@@ -194,11 +195,10 @@ int init_video_xdcam(internal_ffmpeg_encoder_t * enc, int64_t start_tc)
         }
 
     return 0;
-
 }
 
 /* initialise video stream for DVD encoding */
-int init_video_dvd(internal_ffmpeg_encoder_t * enc)
+int init_video_dvd(internal_ffmpeg_encoder_t * enc, Ingex::VideoRaster::EnumType raster)
 {
     AVCodecContext * codec_context = enc->video_st->codec;
 
@@ -230,6 +230,29 @@ int init_video_dvd(internal_ffmpeg_encoder_t * enc)
         codec_context->mb_decision = 2;
     }
 
+    /* set coding parameters which depend on video raster */
+    int top_field_first;
+    switch (raster)
+    {
+    case Ingex::VideoRaster::PAL:
+    case Ingex::VideoRaster::PAL_4x3:
+    case Ingex::VideoRaster::PAL_16x9:
+        top_field_first = 1;
+        break;
+    case Ingex::VideoRaster::NTSC:
+    case Ingex::VideoRaster::NTSC_4x3:
+    case Ingex::VideoRaster::NTSC_16x9:
+        top_field_first = 0;
+        enc->input_width = 720;
+        enc->input_height = 486;
+        avcodec_set_dimensions(codec_context, 720, 480);
+        enc->crop_480_ntsc_mpeg = 1;
+        break;
+    default:
+        top_field_first = 1;
+        break;
+    }
+
     /* find the video encoder */
     AVCodec * codec = avcodec_find_encoder(codec_context->codec_id);
     if (!codec)
@@ -253,7 +276,7 @@ int init_video_dvd(internal_ffmpeg_encoder_t * enc)
         fprintf(stderr, "Could not allocate input frame\n");
         return 0;
     }
-    enc->inputFrame->top_field_first = 1;
+    enc->inputFrame->top_field_first = top_field_first;
 
     /* allocate output buffer */
     enc->video_outbuf = NULL;
@@ -267,7 +290,7 @@ int init_video_dvd(internal_ffmpeg_encoder_t * enc)
 }
 
 /* initialise video stream for MPEG-4 encoding */
-int init_video_mpeg4(internal_ffmpeg_encoder_t * enc, int64_t start_tc)
+int init_video_mpeg4(internal_ffmpeg_encoder_t * enc, Ingex::VideoRaster::EnumType raster, int64_t start_tc)
 {
     AVCodecContext * codec_context = enc->video_st->codec;
 
@@ -293,6 +316,29 @@ int init_video_mpeg4(internal_ffmpeg_encoder_t * enc, int64_t start_tc)
         codec_context->flags |= CODEC_FLAG_GLOBAL_HEADER;
     }
 
+    /* set coding parameters which depend on video raster */
+    int top_field_first;
+    switch (raster)
+    {
+    case Ingex::VideoRaster::PAL:
+    case Ingex::VideoRaster::PAL_4x3:
+    case Ingex::VideoRaster::PAL_16x9:
+        top_field_first = 1;
+        break;
+    case Ingex::VideoRaster::NTSC:
+    case Ingex::VideoRaster::NTSC_4x3:
+    case Ingex::VideoRaster::NTSC_16x9:
+        top_field_first = 0;
+        enc->input_width = 720;
+        enc->input_height = 486;
+        avcodec_set_dimensions(codec_context, 720, 480);
+        enc->crop_480_ntsc_mpeg = 1;
+        break;
+    default:
+        top_field_first = 1;
+        break;
+    }
+
     /* find the video encoder */
     AVCodec * codec = avcodec_find_encoder(codec_context->codec_id);
     if (!codec)
@@ -316,7 +362,7 @@ int init_video_mpeg4(internal_ffmpeg_encoder_t * enc, int64_t start_tc)
         fprintf(stderr, "Could not allocate input frame\n");
         return 0;
     }
-    enc->inputFrame->top_field_first = 1;
+    enc->inputFrame->top_field_first = top_field_first;
 
     /* allocate output buffer */
     enc->video_outbuf = NULL;
@@ -720,10 +766,28 @@ int write_video_frame(internal_ffmpeg_encoder_t * enc, uint8_t * p_video)
             c->pix_fmt,
             enc->input_width, enc->input_height);
 
-        // Skip top 4 lines
+        // Skip top 4 lines.
+        // See SMPTE 314M-2005
         picture->data[0] += 4 * picture->linesize[0];
         picture->data[1] += 4 * picture->linesize[1];
         picture->data[2] += 4 * picture->linesize[2];
+    }
+    else if (enc->crop_480_ntsc_mpeg)
+    {
+        AVPicture * picture = (AVPicture *) enc->inputFrame;
+
+        // Use avpicture_fill to set pointers and linesizes
+        avpicture_fill(picture, (uint8_t*)p_video,
+            c->pix_fmt,
+            enc->input_width, enc->input_height);
+
+        // Should skip top 4 lines (same as for DV)
+        // See SMPTE RP 202-2008
+        // Numbers a bit wierd because it's 4:2:0
+        picture->data[0] += 4 * picture->linesize[0];
+        picture->data[1] += 2 * picture->linesize[1];
+        picture->data[2] += 2 * picture->linesize[2];
+        //fprintf(stderr, "NTSC MPEG linesizes: %d %d %d\n", picture->linesize[0], picture->linesize[1], picture->linesize[2]);
     }
     else
     {
@@ -1027,10 +1091,10 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename,
     switch (res)
     {
     case MaterialResolution::DVD:
-        init_video_dvd(enc);
+        init_video_dvd(enc, raster);
         break;
     case MaterialResolution::MPEG4_MOV:
-        init_video_mpeg4(enc, start_tc);
+        init_video_mpeg4(enc, raster, start_tc);
         break;
     case MaterialResolution::DV25_MOV:
     case MaterialResolution::DV50_MOV:
