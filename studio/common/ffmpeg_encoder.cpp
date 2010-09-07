@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder.cpp,v 1.8 2010/09/07 15:53:46 john_f Exp $
+ * $Id: ffmpeg_encoder.cpp,v 1.9 2010/09/07 18:30:11 john_f Exp $
  *
  * Encode uncompressed video to DV using libavcodec
  *
@@ -290,7 +290,6 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init(MaterialResolution::EnumType res, 
         case MaterialResolution::IMX30_MXF_ATOM:
         case MaterialResolution::IMX30_MXF_1A:
             bit_rate = 30 * 1000000;
-            buffer_size = 30 * 40000;
             intra_matrix = imx30_intra_matrix;
             //encoded_frame_size = (bit_rate / 8) * fps_den / fps_num;
             switch (raster)
@@ -308,11 +307,11 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init(MaterialResolution::EnumType res, 
             default:
                 break;
             }
+            buffer_size = encoded_frame_size * 8;
             break;
         case MaterialResolution::IMX40_MXF_ATOM:
         case MaterialResolution::IMX40_MXF_1A:
             bit_rate = 40 * 1000000;
-            buffer_size = 40 * 40000;
             intra_matrix = imx4050_intra_matrix;
             //encoded_frame_size = (bit_rate / 8) * fps_den / fps_num;
             switch (raster)
@@ -330,11 +329,11 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init(MaterialResolution::EnumType res, 
             default:
                 break;
             }
+            buffer_size = encoded_frame_size * 8;
             break;
         case MaterialResolution::IMX50_MXF_ATOM:
         case MaterialResolution::IMX50_MXF_1A:
             bit_rate = 50 * 1000000;
-            buffer_size = 50 * 40000;
             intra_matrix = imx4050_intra_matrix;
             //encoded_frame_size = (bit_rate / 8) * fps_den / fps_num;
             switch (raster)
@@ -352,6 +351,7 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init(MaterialResolution::EnumType res, 
             default:
                 break;
             }
+            buffer_size = encoded_frame_size * 8;
             break;
         case MaterialResolution::DNX36P_MXF_ATOM:
             encoder->codec_context->bit_rate = 36 * 1000000;
