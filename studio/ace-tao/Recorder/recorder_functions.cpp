@@ -1,5 +1,5 @@
 /*
- * $Id: recorder_functions.cpp,v 1.44 2010/09/06 13:48:24 john_f Exp $
+ * $Id: recorder_functions.cpp,v 1.45 2010/09/07 18:28:48 john_f Exp $
  *
  * Functions which execute in recording threads.
  *
@@ -472,7 +472,6 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     else
     {
         ACE_DEBUG((LM_ERROR, ACE_TEXT("Capture format(s) not suitable for %C\n"), resolution_name.c_str()));
-        p_rec->NoteFailure();
         incompatible_format = true;
     }
 
@@ -752,6 +751,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             if (!ffmpeg_audio_encoder)
             {
                 ACE_DEBUG((LM_ERROR, ACE_TEXT("%C: ffmpeg audio encoder init failed.\n"), src_name.c_str()));
+                init_error = true;
             }
         }
         else
@@ -782,6 +782,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             if (!ffmpeg_encoder)
             {
                 ACE_DEBUG((LM_ERROR, ACE_TEXT("%C: ffmpeg encoder init failed.\n"), src_name.c_str()));
+                init_error = true;
             }
         }
     }
@@ -833,6 +834,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         if (!enc_av)
         {
             ACE_DEBUG((LM_ERROR, ACE_TEXT("%C: ffmpeg_encoder_av_init() failed\n"), src_name.c_str()));
+            init_error = true;
         }
     }
 
@@ -870,14 +872,12 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         {
             LOG_RECORD_ERROR("Database exception: %C\n", dbe.getMessage().c_str());
             init_error = true;
-            p_rec->NoteFailure();
             mxf = false;
         }
         catch (const prodauto::MXFWriterException & e)
         {
             LOG_RECORD_ERROR("MXFWriterException (PrepareToWrite): %C\n", e.getMessage().c_str());
             init_error = true;
-            p_rec->NoteFailure();
             mxf = false;
         }
     }
@@ -965,12 +965,16 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     }
 
     // Set track error flags if there was a problem during setup
+    bool finished_record = false;
     if (init_error)
     {
         for (unsigned int i = 0; i < package_creator->GetMaterialPackage()->tracks.size(); ++i)
         {
             p_impl->NoteRecError(mp_stc_dbids[i]);
         }
+        // No point carrying on
+        finished_record = true;
+        p_rec->NoteFailure();
     }
 
     // Buffer to hold frame data during encoding
@@ -1010,7 +1014,6 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
 
     p_opt->FramesWritten(0);
     p_opt->FramesDropped(0);
-    bool finished_record = false;
     while (!finished_record)
     {
         // We read lastframe counter from shared memory in a thread safe manner.
