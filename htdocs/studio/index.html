@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
 <html>
-<!-- $Id: index.html,v 1.8 2010/07/06 14:15:13 john_f Exp $ $Name:  $ -->
+<!-- $Id: index.html,v 1.9 2010/09/09 16:21:39 john_f Exp $ $Name:  $ -->
 <head>
 	<style type="text/css">
 	body { font-family: arial,helvetica,sans-serif; font-size: 1.0em; margin: 1; }
@@ -21,7 +21,7 @@
 <H2>Hardware requirements</H2>
 <p>
 The Ingex developers have used the <a href="http://www.dvs.de/english/products/oem/centaurus_II.html">DVS Centaurus II</a> SDI I/O boards to develop and test the Ingex software.
-The SDI hardware capture software is isolated to the <a href="http://ingex.cvs.sourceforge.net/ingex/ingex/studio/capture/dvs_sdi.c">dvs_sdi.c</a> source file so adding support for other capture hardware would require replacing this source file with one supporting the new hardware.
+The SDI hardware capture software is isolated to the <a href="http://ingex.cvs.sourceforge.net/ingex/ingex/studio/capture/dvs_sdi.cpp">dvs_sdi.cpp</a> source file so adding support for other capture hardware would require replacing this source file with one supporting the new hardware.
 A simulated hardware capture program can be used to test Ingex Studio without requiring any special SDI capture hardware, by running the <b>dvs_dummy</b> process instead of <b>dvs_sdi</b>.
 <p>
 The PC hardware required depends greatly upon how many channels will be captured and how many software transcodes will be run together in real-time.  The following table can be used as a rough guide, but extensive testing will be necessary to prove real-time capability and overall reliability.
@@ -38,28 +38,29 @@ A benchmarking tool <a href="http://ingex.cvs.sourceforge.net/viewvc/*checkout*/
 
 <H2>Installing Ingex Studio</H2>
 <p>
-The <a href="../contact.html">authors</a> of Ingex develop and test using <a href="http://en.opensuse.org">openSUSE</a> 10.3 and 11.1.
+The <a href="../contact.html">authors</a> of Ingex develop and test using <a href="http://en.opensuse.org">openSUSE</a> 11.1.
 
-Although we plan to provide updated RPMs for the various modules that make up
+Although we plan to provide RPMs for the various modules that make up
 the software, currently it needs to be built from the source code. This
-is available from <a href="http://ingex.cvs.sourceforge.net/ingex/ingex/studio">cvs</a>.
+is available from <a href="http://sourceforge.net/cvs/?group_id=157898">cvs</a>
+or as release packages for <a href="http://sourceforge.net/projects/ingex/files">download</a>.
 
 <p>
 Instructions on how to build and install the Ingex Studio software are in the file below.
 <ul>
-<li><a href="buildingIngex-v1.10.pdf">Build Instructions (v1.10)</a> (pdf)
+<li><a href="IngexInstallationGuide.pdf">Installation Guide</a> (pdf)
 </li></ul>
 
 <p>
 Instructions on how to configure the Ingex Studio software are in the file below.
 <ul>
-<li><a href="ingexConfigurationGuide-v1.00.pdf">Configuration Guide (v1.00)</a> (pdf)
+<li><a href="IngexConfigurationGuide.pdf">Configuration Guide</a> (pdf)
 </li></ul>
 
 <p>
 Instructions for using the Ingex Studio software are in the file below.
 <ul>
-<li><a href="IngexUserGuide-0.1.pdf">User Guide (v0.1)</a> (pdf)
+<li><a href="IngexUserGuide.pdf">User Guide</a> (pdf)
 </li></ul>
 
 <p>
