@@ -1,7 +1,7 @@
 #! /usr/bin/perl -w
 
 #/***************************************************************************
-# * $Id: xferserver.pl,v 1.17 2010/09/06 13:42:55 john_f Exp $             *
+# * $Id: xferserver.pl,v 1.18 2010/09/10 17:22:00 john_f Exp $             *
 # *                                                                         *
 # *   Copyright (C) 2008-2010 British Broadcasting Corporation              *
 # *   - all rights reserved.                                                *
@@ -62,7 +62,7 @@ use IO::Socket;
 use IO::Select;
 use IO::File;
 use Getopt::Std;
-our $VERSION = '$Revision: 1.17 $'; #used by Getopt in the case of --version or --help
+our $VERSION = '$Revision: 1.18 $'; #used by Getopt in the case of --version or --help
 $VERSION =~ s/\s*\$Revision:\s*//;
 $VERSION =~ s/\s*\$\s*$//;
 $Getopt::Std::STANDARD_HELP_VERSION = 1; #so it stops after version message
@@ -105,7 +105,7 @@ use constant TC_COLOUR => 'on_yellow'; #for traffic control on/off messages
 use constant UP_TO_DATE => 0;
 use constant PROCESSING => 1;
 use constant STALE => 2;
-use vars qw($childPid %opts $curl $interface @ftpDetails $recSock $monSock $pathsFile $byAge %extns);
+use vars qw($childPid %opts @curl $interface @ftpDetails $recSock $monSock $pathsFile $byAge %extns $url);
 
 foreach ((EXTNS)) {
 	$extns{$_} = 1;
@@ -160,15 +160,17 @@ if ($opts{f}) {
 		Report("TRAFFIC CONTROL ON\n", 1, \%transfers, TC_COLOUR, 1);
 	}
 	#generate curl common options
-	$curl = "curl --proxy ''";
-	$curl .= " --user $ftpDetails[1]:$ftpDetails[2]" if 3 == scalar @ftpDetails; #non-anonymous
+	@curl = ('curl', '--proxy', '');
+	push @curl, '--user', "$ftpDetails[1]:$ftpDetails[2]" if 3 == scalar @ftpDetails; #non-anonymous
 	if (system "curl --help | grep 'keepalive-time' > /dev/null") { #not found
 		Report("WARNING: curl doesn't support '--keepalive-time' option so long transfers may fail, depending on the characteristics of the network\n", 1, \%transfers, WARNING_COLOUR, 1);
 	}
 	else {
-		$curl .= ' --keepalive-time 600';
+		push @curl, qw(--keepalive-time 600);
 	}
-	$curl .= ' -v' if $opts{v};
+	push @curl, '-v' if $opts{v};
+	#generate URL stem for curl
+	$url = "ftp://$ftpDetails[0]" . (FTP_ROOT ne '' ? '/' . FTP_ROOT : '');
 }
 $transfers{pid} = 0;
 
@@ -182,12 +184,15 @@ my $share = IPC::ShareLite->new( #use a my variable and pass it as a parameter o
 my $terminate;
 $SIG{INT} = \&Abort;
 $SIG{TERM} = \&Abort;
+my $parentPID = $$; #so child can kill parent
 #start the copying thread - it won't do anything until kicked, so don't need to worry about locking the share yet
-if (!defined ($childPid = open(CHILD, "|-"))) {
+if (!defined ($childPid = open CHILD, '|-')) {
 	die "failed to fork: $!\n";
 }
 elsif ($childPid == 0) { # child - copying
 	&childLoop($share);
+	kill "TERM", $parentPID;
+	exit 1;
 }
 CHILD->autoflush(1);
 
@@ -756,13 +761,17 @@ sub CheckDest
  my $fullDest = "$destDir/$name";
  my $copied = 0;
  if ($opts{f} && $ftpFileList) {
-	my $url = "ftp://$ftpDetails[0]/" . (FTP_ROOT ne '' ? FTP_ROOT . '/' : '') . "$destDir/";
+	my $fullUrl = "$url/$destDir/";
 	if (!exists $$ftpFileList{$destDir}) { #haven't got a listing of this directory yet
-		#use curl to get a directory listing.  Need stderr to get messages in case it fails, but disable the progress meter as it puts stuff in the middle of listing lines.
-		my $cmd = "$curl -s -S --ftp-create-dirs $url 2>&1"; #allow creation of dirs to prevent an error if directory doesn't exist; FIXME: doesn't detect if it fails to open the directory
-		my @listing = `$cmd`;
+		#use curl to get a directory listing and create directory tree on server if necessary.
+		open LISTING, '-|', @curl,
+		 qw(-s -S --stderr -), #disable the progress meter as it puts stuff in the middle of listing lines; redirect error messages to stdout to capture them
+		 '--ftp-create-dirs',
+		 $fullUrl;
+		my @listing = <LISTING>;
+		close LISTING;
 		if ($?) {
-			Report("WARNING: couldn't get listing of '$url':\n@{listing}Abandoning this destination directory\n", 0, $share, WARNING_COLOUR); #$! doesn't work
+			Report("WARNING: couldn't get listing of '$fullUrl':\n@{listing}Abandoning this destination directory\n", 0, $share, WARNING_COLOUR); #$! doesn't work
 			return 0, 0, 0;
 		}
 		foreach (@listing) {
@@ -781,8 +790,15 @@ sub CheckDest
 				return 1, 0, 0;
 			}
 			else {
-				if (system "$curl --quote '-RNFR $name' --quote '-RNTO $altName' $url 2>/dev/null") { # FIXME: can't handle spaces in paths
-					Report("WARNING: Failed to rename file in '$url': $!: abandoning this destination directory\n", 0, $share, WARNING_COLOUR);
+				#try to rename the file
+				open RENAME, '-|', @curl,
+				 qw(-s -S --stderr -), #disable the progress meter; redirect error messages to stdout to capture them
+				 '--quote', "RNFR $name", '--quote', "RNTO $altName", #do this before the transfer command so we don't get a listing in the error message
+				 $fullUrl;
+				my $msgs = join '', <RENAME>;
+				close RENAME;
+				if ($?) {
+					Report("WARNING: Failed to rename file in '$fullUrl':\n${msgs}Abandoning this destination directory\n", 0, $share, WARNING_COLOUR);
 					return 1, 0, 0;
 				}
 				#now the entry in %$ftpFileList for this file is wrong, but doesn't matter as it won't be looked at again
@@ -810,6 +826,7 @@ sub CheckDest
 }
 
 #does nothing until kicked by writing to its STDIN
+#only returns if serious error
 sub childLoop {
  my $share = shift;
  $SIG{INT} = sub { exit; };
@@ -936,9 +953,9 @@ sub childLoop {
 			}
 
 			#add information to copying details
-  			$pairs{$srcPath}{normalNFiles} = $pairNormalToCopy; #so we can determine when all files in this directory have been copied
-  			$pairs{$srcPath}{extraNFiles} = $pairExtraToCopy; #so we can determine when all files in this directory have been copied (if used)
-  			$pairs{$srcPath}{latestCtime} = $pairLatestCtime; #for updating saved value correctly even if youngest file doesn't need to be copied
+			$pairs{$srcPath}{normalNFiles} = $pairNormalToCopy; #so we can determine when all files in this directory have been copied
+			$pairs{$srcPath}{extraNFiles} = $pairExtraToCopy; #so we can determine when all files in this directory have been copied (if used)
+			$pairs{$srcPath}{latestCtime} = $pairLatestCtime; #for updating saved value correctly even if youngest file doesn't need to be copied
 			#update global vbls
 			$priNormalFiles += $pairs{$srcPath}{normalNFiles};
 			$priExtraFiles += $pairs{$srcPath}{extraNFiles};
@@ -1027,7 +1044,7 @@ sub childLoop {
 				}
 				Report("$msg): '$essenceFile->{srcDir}/$essenceFile->{name}' -> '$incomingPath/':\n", 1, $transfers, $essenceFile->{extra} ? EXTRA_COPY_COLOUR : MAIN_COPY_COLOUR);
 				if (!defined ($cpPid = open(COPYCHILD, '-|'))) {
-					die "failed to fork: $!";
+					return;
 				}
 				elsif ($cpPid == 0) { # child
 					STDOUT->autoflush(1);
@@ -1038,8 +1055,7 @@ sub childLoop {
 						SLOW_LIMIT, # the bandwidth limit at slow speed
 						"$essenceFile->{srcDir}/$essenceFile->{name}", #source file
 						"$incomingPath/$essenceFile->{name}" #dest file
-					or print "failed to exec copy command: $!";
-					exit 1;
+					or return;
 				}
 				STDOUT->autoflush(1);
 				# note the PID so that the foreground process can signal the copy program
@@ -1080,36 +1096,27 @@ sub childLoop {
 				$share->unlock;
 				close COPYCHILD;
 			}
-			else { #ftp transfer (never done for extra destination
+			else { #ftp transfer (never done for extra destination)
 				local $SIG{INT} = sub { kill 'INT', $cpPid; };
 				local $SIG{TERM} = sub { kill 'TERM', $cpPid; };
-				my $url = "ftp://$ftpDetails[0]/" . (FTP_ROOT ne '' ? FTP_ROOT . '/' : '') . "$incomingPath/";
+				my $fullUrl = "$url/$incomingPath/";
 				my $msg = "Prio $priority ($transfers->{current}{totalNormalFiles} to go";
 				$msg .= ", plus $transfers->{current}{totalExtraFiles} to extra destination" if $transfers->{current}{totalExtraFiles};
-				Report("$msg): '$essenceFile->{srcDir}/$essenceFile->{name}' ->  '$url':\n", 1, $transfers, MAIN_COPY_COLOUR);
-				# run copy program with a forking open so that we can get its stdout
-				if (!defined ($cpPid = open COPYCHILD, '-|')) {
-					die "failed to fork: $!";
-				}
-				elsif ($cpPid == 0) { # child
-					STDOUT->autoflush(1);
-					# exec to maintain PID so we can send signals to the copy program
-					exec "$curl" . #use shell because curl sends progress bar to stderr so need to redirect
-						" --ftp-create-dirs" .
-						" --upload-file $essenceFile->{srcDir}/$essenceFile->{name}" .
-						" --quote '-RNFR $essenceFile->{name}' --quote '-RNTO ../$essenceFile->{name}'" . #move out of incoming dir after copying
-						" $url" .
-						' 2>&1' #do not remove DEST_INCOMING here or whole operation will fail if it can't remove the dir (eg if it's not empty due to another copying process)
-					or print "failed to exec ftp command: $!";
-					exit 1;
-				}
+				Report("$msg): '$essenceFile->{srcDir}/$essenceFile->{name}' ->  '$fullUrl':\n", 1, $transfers, MAIN_COPY_COLOUR);
+
+				$cpPid = open COPY, '-|', @curl,
+				 qw(--stderr - --ftp-create-dirs), #create the incoming directory if necessary
+				 '--upload-file', "$essenceFile->{srcDir}/$essenceFile->{name}",
+				 '--quote', "-RNFR $essenceFile->{name}", '--quote', "-RNTO ../$essenceFile->{name}", #move out of incoming dir after copying
+				 $fullUrl; #do not remove DEST_INCOMING here or whole operation will fail if it can't remove the dir (eg if it's not empty due to another copying process)
+				return unless defined $cpPid;
 				STDOUT->autoflush(1);
 				# get progress from the copy while waiting for it to finish
 				my ($buf, $progress, $line);
-				while (sysread(COPYCHILD, $buf, 100)) { # can't use <> because there aren't any intermediate newlines
+				while (sysread COPY, $buf, 100) { # can't use <> because there aren't any intermediate newlines
 					$line .= $buf;
 					$line =~ s/^(.*?)([\r\n]?)$/$2/s; #remove everything up to any trailing return/newline as we might want to overwrite this line
-					Report($1, 0, $share, MAIN_COPY_COLOUR, 1) if !$?; #don't print error messages twice
+					Report($1, 0, $share, MAIN_COPY_COLOUR, 1) unless $2; #don't print error messages (which have trailing newlines) twice
 					$childMsgs .= $1;
 					$childMsgs =~ s/.*[\r\n]//s; #remove anything before last line
 					$progress .= $buf;
@@ -1123,7 +1130,7 @@ sub childLoop {
 						$progress = ''; #assume not more than one will be present
 					}
 				}
-				close COPYCHILD;
+				close COPY;
 			}
 			# check result
 			if ($? & 127) { #child has received terminate signal so terminate
@@ -1170,7 +1177,7 @@ sub childLoop {
 				$transfers->{current}{totalNormalSize} -= $essenceFile->{size};
 			}
 			if (!--$pairs{$essenceFile->{srcRoot}}{$essenceFile->{extra} ? 'extraNFiles' : 'normalNFiles'}) { #this set all copied
-				Report("All files from '$essenceFile->{srcRoot}/' and subdirectories successfully copied to '$essenceFile->{destRoot}/' / subdirectories.\n", 1, $transfers, $essenceFile->{extra} ? EXTRA_COPY_COLOUR : MAIN_COPY_COLOUR);
+				Report("All files from '$essenceFile->{srcRoot}/' and subdirectories successfully copied to '$essenceFile->{destRoot}/' and subdirectories.\n", 1, $transfers, $essenceFile->{extra} ? EXTRA_COPY_COLOUR : MAIN_COPY_COLOUR);
 				if (!exists $pairs{$essenceFile->{srcRoot}}{$essenceFile->{extra} ? 'normalNFiles' : 'extraNFiles'} || !$pairs{$essenceFile->{srcRoot}}{$essenceFile->{extra} ? 'normalNFiles' : 'extraNFiles'}) { #other set not present or all copied
 					#mark this source dir as up to date
 					if (exists $transfers->{transfers}{$priority}{$essenceFile->{srcRoot}}) { #pair hasn't disappeared
@@ -1197,11 +1204,14 @@ sub childLoop {
 		rmdir;
 	}
 	foreach (keys %{ $incomingDirs{ftp} }) {
-		my $url = "ftp://$ftpDetails[0]/" . (FTP_ROOT ne '' ? FTP_ROOT . '/' : '') . "$_/$incomingDirs{ftp}{$_}/";
-		Report("WARNING: failed to remove directory '$incomingDirs{ftp}{$_}/' from '$_' in '$url' (may be another upload to this directory in progress)\n", 0, $share, WARNING_COLOUR) if 21 << 8 == system "$curl" .
-			" --quote '-CWD ..' --quote '-RMD $incomingDirs{ftp}{$_}/'" . #will fail at this point with rc of 21 if directory not empty
-			" $url" . #will fail at this point with rc of 9 if directory not present (which doesn't matter - another copying process has removed it in the mean time)
-			' 2>/dev/null';
+		my $fullUrl = "$url/$_/$incomingDirs{ftp}{$_}/";
+		open REMOVE, '-|', @curl,
+		 qw(-s -S --stderr -), #disable the progress meter; redirect error messages to stdout to capture them
+		 '--quote', '-CWD ..', '--quote', "-RMD $incomingDirs{ftp}{$_}/", #will fail at this point with rc of 21 if directory not empty
+		 $fullUrl; #will fail at this point with rc of 9 if directory not present (which doesn't matter - another copying process has removed it in the mean time)
+		my $msgs = join '', <REMOVE>;
+		close REMOVE;
+		Report("WARNING: failed to remove directory '$incomingDirs{ftp}{$_}/' from '$_' in '$fullUrl' (may be another upload to this directory in progress)\n", 0, $share, WARNING_COLOUR) if 21 << 8 == $?;
 	}
 	if ($interrupting) {
 		Report("Interrupting copying to check for new files of a higher priority\n", 0, $share); #rescan will start immediately because the child process will have been kicked
@@ -1267,7 +1277,7 @@ sub Report {
 		$transfers->{date} = $newdate;
 		$update = 1;
 	}
-	$msg = sprintf "%s%02d:%02d:%02d $msg", $transfers->{startOfLine} eq '1' ? '' : "\n", (@now)[2, 1, 0];
+	$msg = sprintf '%s%02d:%02d:%02d %s', $transfers->{startOfLine} eq '1' ? '' : "\n", (@now)[2, 1, 0], $msg;
  }
  if (defined $colour && $colour ne '' && !$opts{m}) {
 	my @parts = split /([\r\n]+)/, $msg; #keep but do not colour these characters as it can confuse terminal if background attributes are present
