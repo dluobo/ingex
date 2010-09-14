@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.cpp,v 1.10 2010/09/06 13:48:24 john_f Exp $
+ * $Id: dvs_sdi.cpp,v 1.11 2010/09/14 16:07:41 john_f Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -73,12 +73,15 @@ extern "C"
 using namespace Ingex;
 
 const bool CHECK_AUDIO_OFFSET = false;
+const bool AUDIO_INTERLEAVED = false;
 
 const int PAL_AUDIO_SAMPLES = 1920;
 const int NTSC_AUDIO_SAMPLES[5] = { 1602, 1601, 1602, 1601, 1602 };
 static int ntsc_audio_seq = 0;
 
 const int64_t microseconds_per_day = 24 * 60 * 60 * INT64_C(1000000);
+
+const size_t DMA_ALIGN = 16;
 
 // Each thread uses the following thread-specific data
 typedef struct {
@@ -970,8 +973,11 @@ int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_from_vi
         logTF("chan %d: Setting SV_FIFO_FLAG_FLUSH\n", chan);
     }
 
-    // tmp test
-    //flags |= SV_FIFO_FLAG_AUDIOINTERLEAVED;
+    // For testing
+    if (AUDIO_INTERLEAVED)
+    {
+        flags |= SV_FIFO_FLAG_AUDIOINTERLEAVED;
+    }
 
     /*
     Call sv_fifo_getbuffer().
@@ -1093,6 +1099,37 @@ int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_from_vi
         SV_CHECK( sv_fifo_start(sv, poutput) );
     }
     //logTF("chan %d: sv_fifo_putbuffer() returned ok\n", chan);
+
+    if (0)
+    {
+        // Special debug code
+        static int saved_frame_num = 0;
+        fprintf(stderr, "chan=%d, audio_offset=%x dm_dest+audio_offset=%p, audio[0].addr[0]=%p, audio[0-3].size=[%d,%d,%d,%d]\n",
+            chan,
+            audio_offset,
+            dma_dest + audio_offset,
+            pbuffer->audio[0].addr[0],
+            pbuffer->audio[0].size,
+            pbuffer->audio[1].size,
+            pbuffer->audio[2].size,
+            pbuffer->audio[3].size);
+
+        if (pbuffer->audio[0].size > 0 && saved_frame_num < 25 * 10)	// write 10 seconds worth at 25 fps
+        {
+            char buf[100];
+            sprintf(buf, "rawaudio/frame%04d.pcm", saved_frame_num);
+            FILE *fp_tmp = fopen(buf, "wb");
+            if (!fp_tmp)
+            {
+                fprintf(stderr, "failed to open %s\n", buf);
+                perror("fopen");
+                exit(1);
+            }
+            fwrite(dma_dest + audio_offset, 1, pbuffer->audio[0].size, fp_tmp);
+            fclose(fp_tmp);
+            saved_frame_num++;
+        }
+    }
 
     // set flag so we can zero audio if not present
     int no_audio = (SV_ERROR_INPUT_AUDIO_NOAIV == get_res
@@ -2574,11 +2611,13 @@ int main (int argc, char ** argv)
             }
             if (res == SV_OK)
             {
-                /*
-                int alignment = 0;
-                sv_query(a_sv[channel], SV_QUERY_DMAALIGNMENT, 0, &alignment);
-                fprintf(stderr, "Minimum memory alignment for DMA transfers = %d\n", alignment);
-                */
+                if (0)
+                {
+                    // Check required memory alignment for DMA
+                    int alignment = 0;
+                    sv_query(a_sv[channel], SV_QUERY_DMAALIGNMENT, 0, &alignment);
+                    fprintf(stderr, "Minimum memory alignment for DMA transfers is %d; we are using %zu.\n", alignment, DMA_ALIGN);
+                }
 
                 //sv_status(a_sv[channel], &status_info);
                 //sv_query(a_sv[channel], SV_QUERY_MODE_CURRENT, 0, &current_video_mode);
@@ -3038,6 +3077,11 @@ int main (int argc, char ** argv)
         logTF("Audio 8 channel mode enabled\n");
     }
 
+    if (AUDIO_INTERLEAVED)
+    {
+        logTF("Audio interleaved mode enabled\n");
+    }
+
     // Set up audio sizes for DMA transferred audio and reformatted secondary audio
     int audio_pair_size = 0x4000;
     if (audio8ch)
@@ -3205,7 +3249,7 @@ int main (int argc, char ** argv)
     {
         if (chan < num_sdi_threads)
         {
-            video_work_area[chan] = (uint8_t *) memalign(16, dma_total_size);
+            video_work_area[chan] = (uint8_t *) memalign(DMA_ALIGN, dma_total_size);
             if (!video_work_area[chan])
             {
                 fprintf(stderr, "Failed to allocate video work buffer.\n");
