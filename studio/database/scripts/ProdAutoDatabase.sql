@@ -1091,9 +1091,6 @@ SELECT setval('rec_id_seq', max(rec_identifier)) FROM RecorderConfig;
 
 
 INSERT INTO RecorderParameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('IMAGE_ASPECT', '16/9', 1, 1);
-    
-INSERT INTO RecorderParameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('ENCODE1_RESOLUTION', '50', 1, 1);
 INSERT INTO RecorderParameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('ENCODE1_BITC', 'false', 1, 1);
