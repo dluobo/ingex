@@ -1,5 +1,5 @@
 /*
- * $Id: VideoRaster.h,v 1.4 2010/09/06 13:48:24 john_f Exp $
+ * $Id: VideoRaster.h,v 1.5 2010/09/23 17:17:58 john_f Exp $
  *
  * Video raster codes and details
  *
@@ -90,6 +90,8 @@ public:
     static int LineShift(VideoRaster::EnumType raster);
 
     static void ModifyAspect(VideoRaster::EnumType & raster, const Ingex::Rational & aspect);
+
+    static Ingex::Rational SampleAspectRatio(VideoRaster::EnumType raster);
 };
 
 class PixelFormat

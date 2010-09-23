@@ -1,5 +1,5 @@
 /*
- * $Id: VideoRaster.cpp,v 1.4 2010/09/06 13:48:24 john_f Exp $
+ * $Id: VideoRaster.cpp,v 1.5 2010/09/23 17:17:58 john_f Exp $
  *
  * Video raster codes and details
  *
@@ -379,3 +379,38 @@ void Ingex::VideoRaster::ModifyAspect(VideoRaster::EnumType & raster, const Inge
     }
 }
 
+Ingex::Rational Ingex::VideoRaster::SampleAspectRatio(VideoRaster::EnumType raster)
+{
+    Ingex::Rational sar;
+
+    switch (raster)
+    {
+    case PAL_4x3:
+    case PAL_B_4x3:
+        sar.numerator = 59;
+        sar.denominator = 54;
+        break;
+    case PAL:
+    case PAL_B:
+    case PAL_16x9:
+    case PAL_B_16x9:
+        sar.numerator = 118;
+        sar.denominator = 81;
+        break;
+    case NTSC_4x3:
+        sar.numerator = 10;
+        sar.denominator = 11;
+        break;
+    case NTSC:
+    case NTSC_16x9:
+        sar.numerator = 40;
+        sar.denominator = 33;
+        break;
+    default:
+        sar.numerator = 1;
+        sar.denominator = 1;
+        break;
+    }
+
+    return sar;
+}
