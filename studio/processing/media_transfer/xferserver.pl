@@ -1,7 +1,7 @@
 #! /usr/bin/perl -w
 
 #/***************************************************************************
-# * $Id: xferserver.pl,v 1.18 2010/09/10 17:22:00 john_f Exp $             *
+# * $Id: xferserver.pl,v 1.19 2010/09/23 17:32:13 john_f Exp $             *
 # *                                                                         *
 # *   Copyright (C) 2008-2010 British Broadcasting Corporation              *
 # *   - all rights reserved.                                                *
@@ -62,7 +62,7 @@ use IO::Socket;
 use IO::Select;
 use IO::File;
 use Getopt::Std;
-our $VERSION = '$Revision: 1.18 $'; #used by Getopt in the case of --version or --help
+our $VERSION = '$Revision: 1.19 $'; #used by Getopt in the case of --version or --help
 $VERSION =~ s/\s*\$Revision:\s*//;
 $VERSION =~ s/\s*\$\s*$//;
 $Getopt::Std::STANDARD_HELP_VERSION = 1; #so it stops after version message
@@ -580,7 +580,7 @@ sub addPair {
 
 # scan a source/destination directory pair, make a list of files that need to be copied, and delete unneeded source files
 # $srcRoot: root of source directory to scan
-# $subDir: subdir of source directory to scan (or empty string)
+# $subDir: subdir of source directory to scan, if defined
 # $normalDestRoot: path of main destination directory (excluding any subdirectories, if used)
 # $ctimeCleared: stage copying has reached in increasing order of ctime value
 # $share: shared memory object
@@ -593,7 +593,7 @@ sub ScanDir {
  my ($totalSrcFiles, $latestCtime, $totalNormalToCopy, $totalExtraToCopy, $totalNormalSize, $totalExtraSize) = (0, 0, 0, 0, 0, 0);
  my (@normalFiles, @extraFiles);
  my ($normalDestPath, $extraDestPath);
- my $srcPath = $subDir ? "$srcRoot/$subDir" : $srcRoot;
+ my $srcPath = defined $subDir ? "$srcRoot/$subDir" : $srcRoot;
  if (opendir(SRC, $srcPath)) {
 	($normalOK, $extraOK) = (1, defined $extraDestRoot);
 	my $ftpOK = 1;
@@ -605,22 +605,23 @@ sub ScanDir {
 		while (@fileNames && ($normalOK || $extraOK)) {
 			my $srcName = shift @fileNames;
 			my $fullSource = "$srcPath/$srcName";
+			#check it's not a directory
 			if (-d $fullSource) {
 				Report("d  $srcName\n", 0, $share) if $opts{v} && $srcName !~ /^\.\.?$/;
 				next;
 			}
-			#check filename and generate temp dest path
+			#check it's a recognised filename and generate temp dest path
 			if (
 			 $srcName =~ /\.([^.]+)$/ && exists $extns{"\L$1\E"} #recognised extension
 			 && ($opts{d} || $srcName =~ /^(\d{8})_/) #date in filename if using date subdirectories
 			) {
 				$normalDestPath = $normalDestRoot;
 				$normalDestPath .= "/$1" unless $opts{d}; #add date subdirectory if being used
-				$normalDestPath .= "/$subDir" if $subDir;
+				$normalDestPath .= "/$subDir" if defined $subDir;
 				if (defined $extraDestRoot) {
 					$extraDestPath = $extraDestRoot;
 					$extraDestPath .= "/$1" unless $opts{d}; #add date subdirectory if being used
-					$extraDestPath .= "/$subDir" if $subDir;
+					$extraDestPath .= "/$subDir" if defined $subDir;
 				}
 			}
 			else {
@@ -628,7 +629,7 @@ sub ScanDir {
 				next;
 			}
 			$totalSrcFiles++;
-			#get info about the file
+			#get info about the source file
 			#Use ctime to test for files to be ignored that have been copied already.
 			#This is because ctime is updated when the completed files are atomically moved to the source directories,
 			#so we can guarantee that files with an earlier ctime won't appear after we've copied everything up to a certain ctime,
@@ -636,7 +637,7 @@ sub ScanDir {
 			#Use mtime to test for deleting old files, because age of file since creation/modification is what is important.
 			my ($dev, $size, $mtime, $ctime) = (stat $fullSource)[0, 7, 9, 10];
 			unless ($dev) { #if lstat fails then it returns a null list
-				Report("WARNING: failed to stat '$fullSource': $!: abandoning this directory for this copying cycle\n", 0, $share, WARNING_COLOUR);
+				Report("WARNING: failed to stat '$fullSource': $!: abandoning this directory\n", 0, $share, WARNING_COLOUR);
 				$normalOK = 0;
 				$extraOK = 0;
 				last;
@@ -652,7 +653,7 @@ sub ScanDir {
 			my @checkDest;
 			if ($ftpOK) {
 				@checkDest = CheckDest($srcPath, $normalDestPath, $srcName, $size, $altName, $share, $ftpFileList); #even if this dir has been abandoned, still check for a copy to see if we can delete the source file
-				$ftpOK = $checkDest[1]; #will always be 1 if not using FTP
+				$ftpOK = $checkDest[0]; #will always be 1 if not using FTP
 			}
 			else {
 				#don't make repeated FTP attempts as it can get very slow...
@@ -714,7 +715,7 @@ sub ScanDir {
 			}
 		}
 		$loop = ($normalOK || $extraOK) #we've not bailed out so there is a point in scanning again
- 		 && $latestCtime >= $scanTime #files have been found with the same or later ctime as when (just before) the scan started, so scan again in case more files have appeared with the same ctime as the latest found
+		 && $latestCtime >= $scanTime #files have been found with the same or later ctime as when (just before) the scan started, so scan again in case more files have appeared with the same ctime as the latest found
 		 && $latestCtime != $prevLatestCtime; #trap to prevent continuous looping if system time has been moved back since recordings were made.  The second's delay before scanning again will ensure that all the files up to $latestCtime will have been captured if it's the same as $prevLatestCtime.
  		if (!$normalOK || $loop) {
  			@normalFiles = ();
@@ -886,10 +887,10 @@ sub childLoop {
 			  $normalSize, #number of bytes to copy to normal destination
 			  $extraSize, #number of bytes to copy to extra destination
 			  @essenceFiles) #array of hashes of transfer details
-			 = ScanDir($srcPath, '', $pairs{$srcPath}{dest}, $pairs{$srcPath}{normalCtimeCleared}, $share, $extra ? $transfers->{extraDest} : undef, $pairs{$srcPath}{extraCtimeCleared}, \%ftpFileList); #the main directory
-			while (1) {
-				#check scan
-				if (!$normalOK || ($extra && !$extraOK)) {
+			 = ScanDir($srcPath, undef, $pairs{$srcPath}{dest}, $pairs{$srcPath}{normalCtimeCleared}, $share, $extra ? $transfers->{extraDest} : undef, $pairs{$srcPath}{extraCtimeCleared}, \%ftpFileList); #the main directory
+			while (1) { #subdirectory loop
+				#check previous scan
+				unless ($normalOK || ($extra && $extraOK)) {
 					$retry = 1;
 					last; #abandon whole pair as common ctime value for main and subdirectories
 				}
