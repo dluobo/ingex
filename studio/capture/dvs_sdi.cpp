@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.cpp,v 1.11 2010/09/14 16:07:41 john_f Exp $
+ * $Id: dvs_sdi.cpp,v 1.12 2010/09/23 17:21:19 john_f Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -73,7 +73,8 @@ extern "C"
 using namespace Ingex;
 
 const bool CHECK_AUDIO_OFFSET = false;
-const bool AUDIO_INTERLEAVED = false;
+// Option for selecting more efficient SV_FIFO_FLAG_AUDIOINTERLEAVED for audio capture
+bool AUDIO_INTERLEAVED = false;
 
 const int PAL_AUDIO_SAMPLES = 1920;
 const int NTSC_AUDIO_SAMPLES[5] = { 1602, 1601, 1602, 1601, 1602 };
@@ -140,6 +141,12 @@ int aes_routing = 0;
 int use_ffmpeg_hd_sd_scaling = 0;
 int use_yuvlib_filter = 0;
 uint8_t *hd2sd_workspace[MAX_CHANNELS];
+
+// Use a function pointer to switch between two audio reformatting functions
+// depending on -audint option
+void dvsaudio32_to_mono_audio(uint8_t *src, uint8_t *dst32, uint8_t *dst16, int num_samples, int audio8);
+void dvs_interleaved16_audio_to_mono_audio(uint8_t *src, uint8_t *dst32, uint8_t *dst16, int num_samples, int audio8);
+void (*reformat_dvs_audio_to_mono_audio)(uint8_t *, uint8_t *, uint8_t *, int, int) = dvsaudio32_to_mono_audio;
 
 pthread_mutex_t m_log = PTHREAD_MUTEX_INITIALIZER;      // logging mutex to prevent intermixing logs
 
@@ -912,6 +919,106 @@ void dvsaudio32_to_mono_audio(uint8_t *src, uint8_t *dst32, uint8_t *dst16, int 
 	}
 }
 
+void dvs_interleaved16_deinterleave_32bit(uint8_t *audio_16channels, uint8_t *a32[], int num_samples)
+{
+    // Copy all 32bits, de-interleaving pairs
+    for (int i = 0; i < num_samples; i++) {
+        int src_idx = i*4*2;                // index into 32bit interleaved pairs
+        int mon_idx = i*4;                  // index into 32bit mono audio
+        a32[0][mon_idx + 0] = audio_16channels[src_idx +  0];
+        a32[0][mon_idx + 1] = audio_16channels[src_idx +  1];
+        a32[0][mon_idx + 2] = audio_16channels[src_idx +  2];
+        a32[0][mon_idx + 3] = audio_16channels[src_idx +  3];
+
+        a32[1][mon_idx + 0] = audio_16channels[src_idx +  4];
+        a32[1][mon_idx + 1] = audio_16channels[src_idx +  5];
+        a32[1][mon_idx + 2] = audio_16channels[src_idx +  6];
+        a32[1][mon_idx + 3] = audio_16channels[src_idx +  7];
+
+        a32[2][mon_idx + 0] = audio_16channels[src_idx +  8];
+        a32[2][mon_idx + 1] = audio_16channels[src_idx +  9];
+        a32[2][mon_idx + 2] = audio_16channels[src_idx + 10];
+        a32[2][mon_idx + 3] = audio_16channels[src_idx + 11];
+
+        a32[3][mon_idx + 0] = audio_16channels[src_idx + 12];
+        a32[3][mon_idx + 1] = audio_16channels[src_idx + 13];
+        a32[3][mon_idx + 2] = audio_16channels[src_idx + 14];
+        a32[3][mon_idx + 3] = audio_16channels[src_idx + 15];
+    }
+}
+
+void dvs_interleaved16_deinterleave_16bit(uint8_t *audio_16channels, uint8_t *a16[], int num_samples)
+{
+    // Copy 16 most significant bits out of 32 bit audio pairs
+    // for 4 channels each loop iteraction
+    for (int i = 0; i < num_samples; i++) {
+        int tmp_idx = i*4*16;               // index into 32bit interleaved 16 channels
+        int sec_idx = i*2;                  // index into 16bit mono audio buffers
+        a16[0][sec_idx + 0] = audio_16channels[tmp_idx +  2];
+        a16[0][sec_idx + 1] = audio_16channels[tmp_idx +  3];
+
+        a16[1][sec_idx + 0] = audio_16channels[tmp_idx +  6];
+        a16[1][sec_idx + 1] = audio_16channels[tmp_idx +  7];
+
+        a16[2][sec_idx + 0] = audio_16channels[tmp_idx + 10];
+        a16[2][sec_idx + 1] = audio_16channels[tmp_idx + 11];
+
+        a16[3][sec_idx + 0] = audio_16channels[tmp_idx + 14];
+        a16[3][sec_idx + 1] = audio_16channels[tmp_idx + 15];
+    }
+}
+
+void dvs_interleaved16_to_4_mono_tracks(uint8_t *src, uint8_t *dst32, uint8_t *dst16, int num_samples)
+{
+    // src contains 16 channels as interleaved 32bit samples
+    // where each pair is aligned on a 0x4000 boundary
+
+    // De-interleave to 32bit mono buffers
+    //
+    // Setup pointers for 32bit mono audio
+    uint8_t *a32[4];
+    a32[0] = dst32;
+    a32[1] = dst32 + MAX_AUDIO_SAMPLES_PER_FRAME*4 * 1;
+    a32[2] = dst32 + MAX_AUDIO_SAMPLES_PER_FRAME*4 * 2;
+    a32[3] = dst32 + MAX_AUDIO_SAMPLES_PER_FRAME*4 * 3;
+
+    dvs_interleaved16_deinterleave_32bit(src, a32, num_samples);
+
+    // De-interleave and truncate to 16bit mono
+    //
+    // Setup pointers for 16bit mono audio
+    uint8_t *a16[4];
+    a16[0] = dst16;
+    a16[1] = dst16 + MAX_AUDIO_SAMPLES_PER_FRAME*2 * 1;
+    a16[2] = dst16 + MAX_AUDIO_SAMPLES_PER_FRAME*2 * 2;
+    a16[3] = dst16 + MAX_AUDIO_SAMPLES_PER_FRAME*2 * 3;
+
+    dvs_interleaved16_deinterleave_16bit(src, a16, num_samples);
+}
+
+void dvs_interleaved16_audio_to_mono_audio(uint8_t *src, uint8_t *dst32, uint8_t *dst16, int num_samples, int audio8)
+{
+    // For historical reasons, format of audio buffer in shared mem is:
+    // <video> <audio12><audio34><audio56><audio78>
+    // where audio34 is fixed at 0x4000 offset and audio56 is fixed at 0x8000
+
+    // src and dst32 can be the same buffer, so first read full src audio into tmp buffer
+    uint8_t tmp[audio_size];
+
+    memcpy(tmp, src, audio_size);
+
+    dvs_interleaved16_to_4_mono_tracks(tmp, dst32, dst16, num_samples);
+
+    if (audio8)
+    {
+        dvs_interleaved16_to_4_mono_tracks(tmp + MAX_AUDIO_SAMPLES_PER_FRAME * 4 * 4,
+                                    dst32 + 0x8000,
+                                    dst16 + MAX_AUDIO_SAMPLES_PER_FRAME*2 * 4,
+                                    num_samples);
+    }
+}
+
+
 // Given a 64bit time-of-day corresponding to when a frame was captured,
 // calculate a derived timecode from the global master timecode.
 Ingex::Timecode derive_timecode_from_master(int64_t tod_rec, int64_t *p_diff_to_master)
@@ -973,7 +1080,6 @@ int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_from_vi
         logTF("chan %d: Setting SV_FIFO_FLAG_FLUSH\n", chan);
     }
 
-    // For testing
     if (AUDIO_INTERLEAVED)
     {
         flags |= SV_FIFO_FLAG_AUDIOINTERLEAVED;
@@ -1197,7 +1303,7 @@ int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_from_vi
         // copy audio to match
         if (!no_audio)
         {
-            dvsaudio32_to_mono_audio(
+            reformat_dvs_audio_to_mono_audio(
                     dma_dest + audio_offset,              // src
                     vid_dest + audio_offset,              // 32bit dest
                     vid_dest + secondary_audio_offset,    // 16bit dest
@@ -1212,7 +1318,7 @@ int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_from_vi
         {
             // reformats 32bit interleaved and writes back to same audio buffer
             // adds 16bit version of same audio to secondary audio buffer
-            dvsaudio32_to_mono_audio(
+            reformat_dvs_audio_to_mono_audio(
                     vid_dest + audio_offset,              // src
                     vid_dest + audio_offset,              // 32bit dest
                     vid_dest + secondary_audio_offset,    // 16bit dest
@@ -2214,6 +2320,7 @@ void usage_exit(void)
     fprintf(stderr, "    -aes                 use AES/EBU audio with default routing\n");
     fprintf(stderr, "    -aes4                use AES/EBU audio with 4,4 routing\n");
     fprintf(stderr, "    -aes8                use AES/EBU audio with 8,8 routing\n");
+    fprintf(stderr, "    -audint              use interleaved audio for capture (not available on SDStation cards)\n");
     fprintf(stderr, "    -avsync              perform avsync analysis - requires clapper-board input video\n");
     fprintf(stderr, "    -b <video_sample>    benchmark using video_sample instead of captured UYVY video frames\n");
     fprintf(stderr, "    -q                   quiet operation (fewer messages)\n");
@@ -2520,6 +2627,11 @@ int main (int argc, char ** argv)
         {
             aes_audio = 1;
             aes_routing = 8;
+        }
+        else if (strcmp(argv[n], "-audint") == 0)
+        {
+            AUDIO_INTERLEAVED = true;
+            reformat_dvs_audio_to_mono_audio = dvs_interleaved16_audio_to_mono_audio;
         }
         else if (strcmp(argv[n], "-h2s_ffmpeg") == 0)
         {
@@ -3092,6 +3204,14 @@ int main (int argc, char ** argv)
     {
         audio_size = audio_pair_size * 2;
     }
+    // For interleaved audio capture, audio size is fixed at 16 channels
+    // NB. could make a difference here between audio size in DMA and
+    // audio size in ring buffer.
+    if (AUDIO_INTERLEAVED)
+    {
+        audio_size = PAL_AUDIO_SAMPLES * 16 * 4;
+    }
+
     audio_offset = dma_video_size;
 
     // Max audio_size (8ch) is 0x10000      = 65536
