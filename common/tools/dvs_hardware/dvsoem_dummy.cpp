@@ -1,5 +1,5 @@
 /*
- * $Id: dvsoem_dummy.cpp,v 1.7 2010/08/31 18:30:46 john_f Exp $
+ * $Id: dvsoem_dummy.cpp,v 1.8 2010/09/24 18:08:34 john_f Exp $
  *
  * Implement a debug-only DVS hardware library for testing.
  *
@@ -80,6 +80,8 @@ typedef struct {
     DvsTcQuality tc_quality;
     struct timeval start_time;
     sv_fifo_buffer fifo_buffer;
+    int fifo_flags;
+    int audio_interleaved_converted_frames;
     unsigned char *source_dmabuf;
 #ifdef DVSDUMMY_LOGGING
     FILE *log_fp;
@@ -88,43 +90,27 @@ typedef struct {
 
 static DvsCard * dvs_channel[] = { 0, 0, 0, 0, 0, 0, 0, 0 };
 
-static inline void write_bcd(unsigned char* target, int val)
+static inline uint8_t write_bcd(int val)
 {
-    *target = ((val / 10) << 4) + (val % 10);
+    return ((val / 10) << 4) + (val % 10);
 }
-
-/*
-static int int_to_dvs_tc(int tc)
-{
-    // e.g. turn 1020219 into hex 0x11200819
-    int fr = tc % 25;
-    int hr = (int)(tc / (60*60*25));
-    int mi = (int)((tc - (hr * 60*60*25)) / (60 * 25));
-    int se = (int)((tc - (hr * 60*60*25) - (mi * 60*25)) / 25);
-
-    unsigned char raw_tc[4];
-    write_bcd(raw_tc + 0, fr);
-    write_bcd(raw_tc + 1, se);
-    write_bcd(raw_tc + 2, mi);
-    write_bcd(raw_tc + 3, hr);
-    int result = *(int *)(raw_tc);
-    return result;
-}
-*/
 
 static int timecode_to_dvs_tc(const Ingex::Timecode & tc)
 {
-    // e.g. turn 1020219 into hex 0x11200819
-    unsigned char raw_tc[4];
-    write_bcd(raw_tc + 0, tc.Frames());
-    write_bcd(raw_tc + 1, tc.Seconds());
-    write_bcd(raw_tc + 2, tc.Minutes());
-    write_bcd(raw_tc + 3, tc.Hours());
+    // convert timecode into DVS timecode-as-integer format
+    // e.g. turn 11:20:08:19 timecode into hex 0x11200819 integer
+    uint8_t ff = write_bcd(tc.Frames());
+    uint8_t ss = write_bcd(tc.Seconds());
+    uint8_t mm = write_bcd(tc.Minutes());
+    uint8_t hh = write_bcd(tc.Hours());
     if (tc.DropFrame())
     {
-        raw_tc[0] |= 0x00000040;
+        ff |= 0x00000040;
     }
-    int result = *(int *)(raw_tc);
+    int result =    (hh << 24) |
+                    (mm << 16) |
+                    (ss << 8) |
+                    (ff << 0);
     return result;
 }
 
@@ -144,12 +130,6 @@ static int is_rec601(int videomode)
 
     return is_601;
 }
-
-// Represent the colour and position of a colour bar for dummy video
-typedef struct {
-    double          position;
-    unsigned char   colour[4];
-} bar_colour_t;
 
 // Dummy audio: 500Hz tone fits neatly into 1920 samples (1 PAL video frame).
 // Use a simple table of signed 16bit samples to avoid linking maths library,
@@ -180,14 +160,61 @@ static int16_t tone_1000Hz_16bit_1cycle[48] =
 0xf20b, 0xf337, 0xf49b, 0xf630, 0xf7f1, 0xf9d5, 0xfbd4, 0xfde5
 };
 
+static void convert_audio_to_interleaved(DvsCard *dvs)
+{
+    // Convert original DVS audio format to SV_FIFO_FLAG_AUDIOINTERLEAVED formatted audio.
+    // Interleave all 8 audio channels into first audio buffer as follows:
+    //
+    // A1 A1 A1 A1  A2 A2 A2 A2  A3 A3 A3 A3  A4 A4 A4 A4
+    // A5 A5 A5 A5  A6 A6 A6 A6  A7 A7 A7 A7  A8 A8 A8 A8
+    // 00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00
+    // 00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00
+    //
+    int video_size = dvs->width * dvs->height * 2;
+    uint8_t *video = dvs->source_dmabuf;
+    uint32_t *audio12 = (uint32_t*)(video + video_size);
+    uint32_t *audio34 = (uint32_t*)(video + video_size + 0x4000);
+    uint32_t *audio56 = (uint32_t*)(video + video_size + 0x8000);
+    uint32_t *audio78 = (uint32_t*)(video + video_size + 0x8000 + 0x4000);
+ 
+    uint32_t tmp[1920 * 16];        // maximum audio size for 1 frame, 16 channels, 32bit
+    memset(tmp, 0, sizeof(tmp));
+
+    for (int i = 0; i < 1920; i++) {
+        uint32_t ch1 = audio12[i*2 + 0];
+        uint32_t ch2 = audio12[i*2 + 1];
+        uint32_t ch3 = audio34[i*2 + 0];
+        uint32_t ch4 = audio34[i*2 + 1];
+
+        tmp[i * 16 + 0] = ch1;
+        tmp[i * 16 + 1] = ch2;
+        tmp[i * 16 + 2] = ch3;
+        tmp[i * 16 + 3] = ch4;
+
+        if (dvs->audio_channels == 8) {
+            uint32_t ch5 = audio56[i*2 + 0];
+            uint32_t ch6 = audio56[i*2 + 1];
+            uint32_t ch7 = audio78[i*2 + 0];
+            uint32_t ch8 = audio78[i*2 + 1];
+
+            tmp[i * 16 + 4] = ch5;
+            tmp[i * 16 + 5] = ch6;
+            tmp[i * 16 + 6] = ch7;
+            tmp[i * 16 + 7] = ch8;
+        }
+    }
+
+    memcpy(audio12, tmp, 1920 * 16 * 4);
+}
+
 static void setup_source_buf(DvsCard * dvs)
 {
-    //fprintf(stderr, "DUMMY: setup_source_buf()\n");
-
     // A ring buffer can be used for sample video and audio loaded from files
     FILE *fp_video = NULL, *fp_audio = NULL;
     int64_t vidfile_size = 0;
     dvs->source_input_frames = 1;
+    dvs->fifo_flags = 0;
+    dvs->audio_interleaved_converted_frames = 0;
 
     // Check DVSDUMMY_PARAM environment variable and change defaults if necessary.
     // The value is a ':' separated list of parameters such as:
@@ -314,6 +341,12 @@ static void setup_source_buf(DvsCard * dvs)
         dvs->frame_size += 0x4000 + 0x4000;    // 4 extra audio channels
     }
 
+    // Since SV_FIFO_FLAG_AUDIOINTERLEAVED requires a single buffer holding
+    // 16 channels of 32bit audio for each sample, use this as the maximum
+    // size of audio, but which will be partially unused if SV_FIFO_FLAG_AUDIOINTERLEAVED
+    // is not set
+    dvs->frame_size = video_size + 1920 * 16 * 4;
+
     if (fp_video && fp_audio && vidfile_size) {
         int max_memory = 103680000;         // 5 seconds of 720x576
         if (vidfile_size < max_memory)
@@ -420,6 +453,7 @@ int sv_fifo_getbuffer(sv_handle * sv, sv_fifo * pfifo, sv_fifo_buffer ** pbuffer
 {
     DvsCard *dvs = (DvsCard*)sv;
     *pbuffer = &dvs->fifo_buffer;
+    dvs->fifo_flags = flags;
 
     return SV_OK;
 }
@@ -430,10 +464,6 @@ int sv_fifo_putbuffer(sv_handle * sv, sv_fifo * pfifo, sv_fifo_buffer * pbuffer,
     // Initialise start_time for first call
     if (dvs->start_time.tv_sec == 0)
         gettimeofday(&dvs->start_time, NULL);
-
-    // For record, copy video + audio to dma.addr
-    int source_offset = dvs->frame_count % dvs->source_input_frames;
-    memcpy(pbuffer->dma.addr, dvs->source_dmabuf + source_offset * dvs->frame_size, dvs->frame_size);
 
     // Update frame count and timecodes
     dvs->frame_count++;
@@ -485,6 +515,19 @@ int sv_fifo_putbuffer(sv_handle * sv, sv_fifo * pfifo, sv_fifo_buffer * pbuffer,
 
     // audio size is samples *2 (channels) *4 (32bit)
     dvs->fifo_buffer.audio[0].size = num_samples * 2 * 4;
+
+    // SV_FIFO_FLAG_AUDIOINTERLEAVED requires different audio layout to original DVS format
+    if (dvs->fifo_flags & SV_FIFO_FLAG_AUDIOINTERLEAVED) {
+        if (dvs->audio_interleaved_converted_frames < dvs->source_input_frames) {
+            // Convert dummy audio frame once only
+            convert_audio_to_interleaved(dvs);
+            dvs->audio_interleaved_converted_frames++;
+        }
+    }
+
+    // For capture, copy video and audio bytes to dma.addr
+    int source_offset = dvs->frame_count % dvs->source_input_frames;
+    memcpy(pbuffer->dma.addr, dvs->source_dmabuf + source_offset * dvs->frame_size, dvs->frame_size);
 
     // Burn timecode in video at x,y offset 40,40
     burn_mask_uyvy(dvs->timecode, 40, 40, dvs->width, dvs->height, (unsigned char *)pbuffer->dma.addr);
