@@ -1,0 +1,31 @@
+# Example benchmark config file
+
+# base = <ingex 'base' dir>                  # use current dir's tree by default
+recorder = Ingex2                            # recorder name in database
+ORBRef = corbaloc:iiop:192.168.2.1:8888      # required by Corba clients
+duration = 60                                # in seconds
+sdi_program = dvs_dummy                      # or dvs_sdi
+sdi_memory_size = 250                        # size in MB of capture ring buffer
+
+# Benchmark pictures are optional - if not set, SDI input is used
+# (or colourbars for dummy capture), but it is useful to use a
+# consistent real-world picture for realistic benchmarks.
+# Picture format is one frame of uncompressed UYVY video.
+benchmark_picture_1080 = /home/stuartc/work/samples_uyvy/cotswolds_1920_1080.uyvy
+benchmark_picture_720 = /home/stuartc/work/samples_uyvy/cotswolds_1280_720.uyvy
+benchmark_picture_576 = /home/stuartc/work/samples_uyvy/cotswolds_720x576.uyvy
+
+benchmarks:
+# format is: number-of-channels, ENCODE1, ENCODE2, ENCODE3
+# (use None to disable a channel)
+  1, MJPEG 2:1 OP-ATOM,          MJPEG 20:1 OP-ATOM,   None
+  1, MJPEG 10:1 OP-ATOM,         MJPEG 15:1s OP-ATOM,  None
+  1, DV50 OP-ATOM,               DV25 OP-ATOM,         None
+  1, Uncompressed UYVY OP_ATOM,  MJPEG 15:1s OP-ATOM,  None
+  1, VC3-185i OP-ATOM,           VC3-36p OP-ATOM,      MPEG4 Quicktime
+
+  2, MJPEG 2:1 OP-ATOM,          MJPEG 20:1 OP-ATOM,   None
+  2, MJPEG 10:1 OP-ATOM,         MJPEG 15:1s OP-ATOM,  None
+  2, DV50 OP-ATOM,               DV25 OP-ATOM,         None
+  2, Uncompressed UYVY OP_ATOM,  MJPEG 15:1s OP-ATOM,  None
+  2, VC3-185i OP-ATOM,           VC3-36p OP-ATOM,      MPEG4 Quicktime
