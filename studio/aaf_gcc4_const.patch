@@ -1,0 +1,12 @@
+diff -u -r1.13 aaflibsgi.cpp
+--- AAF-src-1.1.4-DR1/ref-impl/aaflib/aaflibsgi.cpp	1 Jun 2009 11:46:57 -0000	1.13
++++ AAF-src-1.1.4-DR1/ref-impl/aaflib/aaflibsgi.cpp	26 Sep 2010 06:48:47 -0000
+@@ -68,7 +68,7 @@
+    if (name == NULL)
+       return false;
+ 
+-   char *pExt = strrchr(name, '.');
++   const char *pExt = strrchr(name, '.');
+ 
+    return (pExt && strcmp(++pExt, pluginExt) == 0);
+ }
