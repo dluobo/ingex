@@ -1,4 +1,4 @@
-# $Id: ingex-studio.spec,v 1.3 2009/01/29 07:36:58 stuart_hc Exp $
+# $Id: ingex-studio.spec,v 1.4 2010/09/26 12:32:08 stuart_hc Exp $
 Summary: Ingex Studio applications
 Name: ingex-studio
 Version: 2.1.0
@@ -6,10 +6,11 @@ Release: 1
 License: GPL
 Group: System Environment/Daemons
 Source: ingex-%{version}.tar.gz
-Source1: AAF-src-1.1.3.tar.gz
+Source1: AAF-src-1.1.4-DR1.tar.gz
+Patch0: aaf_gcc4_const.patch
 Url: http://ingex.sourceforge.net
 BuildRoot: %{_tmppath}/%{name}-root
-BuildRequires: libodbc++ unixODBC-devel
+#BuildRequires:
 
 %ifarch x86_64
 %define AAF_arch_dir AAFx86_64LinuxSDK/g++
@@ -42,16 +43,17 @@ Group:          System Environment/Daemons
 Graphical user interface for controller Ingex studio system.
 
 %prep
-rm -rf $RPM_BUILD_ROOT
+#rm -rf $RPM_BUILD_ROOT
 
 # unpack the source
 %setup -q -c -n build
 %setup -q -T -D -a 1 -n build
+%patch0 -p0
 
 %build
-cd AAF-src-1.1.3 && make install && make examples && cd ..
+cd AAF-src-1.1.4-DR1 && make install && make examples && cd ..
 
-cd ingex-%{version} && make AAFSDKINSTALL=`pwd`/../AAF-src-1.1.3/%{AAF_arch_dir} AAFSDK=`pwd`/../AAF-src-1.1.3
+cd ingex-%{version} && make AAFSDKINSTALL=`pwd`/../AAF-src-1.1.4-DR1/%{AAF_arch_dir} AAFSDK=`pwd`/../AAF-src-1.1.4-DR1
 
 %install
 mkdir -p $RPM_BUILD_ROOT/usr/local/bin
@@ -65,11 +67,13 @@ cp	studio/ace-tao/Recorder/Recorder \
 	studio/ace-tao/Recorder/run_* \
 	studio/ace-tao/RecorderClient/RecorderClient \
 	studio/ace-tao/RecorderClient/run_client.sh \
+	studio/database/scripts/create_bamzooki_user.sh \
 	studio/database/scripts/create_prodautodb.sh \
 	studio/database/scripts/ProdAutoDatabase.sql \
-	studio/database/scripts/wl_config.sql \
-	studio/database/scripts/create_bamzooki_user.sh \
+	studio/database/scripts/basic_config.sql \
+	studio/database/scripts/basic_config_8ch.sql \
 	studio/database/scripts/add_basic_config.sh \
+	studio/database/scripts/add_config.sh \
 		$RPM_BUILD_ROOT/usr/local/bin
 
 cp	studio/processing/media_transfer/{cpfs,media_transfer.pl,xferclient.pl,xferserver.pl} \
@@ -79,7 +83,7 @@ cp	studio/processing/media_transfer/{cpfs,media_transfer.pl,xferclient.pl,xferse
 	studio/ace-tao/routerlog/run_routerlogger.sh \
 	studio/ace-tao/routerlog/routerlogger		$RPM_BUILD_ROOT/usr/local/bin
 
-cp -pr	studio/scripts/* $RPM_BUILD_ROOT/usr/local/bin
+cp -r studio/scripts/* $RPM_BUILD_ROOT/usr/local/bin
 
 (cd studio/web/WebIngex && sh ./install.sh $RPM_BUILD_ROOT/srv/www)
 
@@ -89,11 +93,11 @@ cp	libMXF/examples/writeavidmxf/writeavidmxf \
 cp player/ingex_player/player $RPM_BUILD_ROOT/usr/local/bin
 
 cp libMXF/test/MXFDump/MXFDump $RPM_BUILD_ROOT/usr/local/bin
-cp ../AAF-src-1.1.3/%{AAF_arch_dir}/bin/debug/InfoDumper $RPM_BUILD_ROOT/usr/local/bin
+cp ../AAF-src-1.1.4-DR1/%{AAF_arch_dir}/bin/debug/InfoDumper $RPM_BUILD_ROOT/usr/local/bin
 mkdir -p $RPM_BUILD_ROOT/usr/%{arch_lib}
 mkdir -p $RPM_BUILD_ROOT/usr/%{arch_lib}/aafext
-cp ../AAF-src-1.1.3/%{AAF_arch_dir}/bin/debug/libcom-api.so $RPM_BUILD_ROOT/usr/%{arch_lib}
-cp ../AAF-src-1.1.3/%{AAF_arch_dir}/bin/debug/aafext/*.so $RPM_BUILD_ROOT/usr/%{arch_lib}/aafext
+cp ../AAF-src-1.1.4-DR1/%{AAF_arch_dir}/bin/debug/libcom-api.so $RPM_BUILD_ROOT/usr/%{arch_lib}
+cp ../AAF-src-1.1.4-DR1/%{AAF_arch_dir}/bin/debug/aafext/*.so $RPM_BUILD_ROOT/usr/%{arch_lib}/aafext
 
 %clean
 rm -rf $RPM_BUILD_ROOT
@@ -108,8 +112,11 @@ rm -rf $RPM_BUILD_ROOT
 /usr/local/bin/ProdAutoDatabase.sql
 /usr/local/bin/Recorder
 /usr/local/bin/RecorderClient
+/usr/local/bin/add_config.sh
 /usr/local/bin/add_basic_config.sh
 /usr/local/bin/avidmxfinfo
+/usr/local/bin/basic_config.sql
+/usr/local/bin/basic_config_8ch.sql
 /usr/local/bin/capture.sh
 /usr/local/bin/convert_audio
 /usr/local/bin/cpfs
@@ -147,6 +154,10 @@ rm -rf $RPM_BUILD_ROOT
 /usr/local/bin/run_routerlogger.sh
 /usr/local/bin/run_transcode.sh
 /usr/local/bin/set_mode.sh
+/usr/local/bin/startIngex_kde4.sh
+/usr/local/bin/startIngex_kde41.sh
+/usr/local/bin/start_multicastv6.sh
+/usr/local/bin/stop_all.sh
 /usr/local/bin/startIngex.sh
 /usr/local/bin/start_ingex.sh
 /usr/local/bin/start_multicast.sh
@@ -155,7 +166,6 @@ rm -rf $RPM_BUILD_ROOT
 /usr/local/bin/system_info_web
 /usr/local/bin/testgen
 /usr/local/bin/transcode_avid_mxf
-/usr/local/bin/wl_config.sql
 /usr/local/bin/writeavidmxf
 /usr/local/bin/xferclient.pl
 /usr/local/bin/xferserver.pl
