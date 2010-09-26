@@ -1,0 +1,71 @@
+#!/usr/bin/perl
+#
+# $Id: nightly_ingex_build.dumper,v 1.1 2010/09/26 12:40:56 stuart_hc Exp $
+#
+# This is a configuration file to be used with nightly_cvs_build.pl from
+#   http://aaf.cvs.sourceforge.net/viewvc/aaf/AAF/build/tools/nightly_cvs_build.pl
+#
+# This file will be evaluated using perl 'eval' - it is not intended to be run stand-alone
+
+$VAR1 = {
+
+	'config' => {	tree => '/home/stuartc/nightly',
+					cvs_module => 'ingex',
+					cvs_command => 'cvs -d /project/ap/cvsroot',
+					scp_web_dest => 'stuart_hc,ingex@web.sourceforge.net:htdocs/studio/build',
+					scp_command => 'tsocks scp',
+					rsync_command => 'tsocks rsync -a'
+					},
+
+	'x86_64Linux'	=> {host=>'igor', prefix=>'nightly', copy=>'rsync',
+						make_command=>'make AAFSDK=$HOME/nightly/AAF-cvs-tip-x86_64Linux AAFSDKINSTALL=$HOME/nightly/AAF-cvs-tip-x86_64Linux/AAFx86_64LinuxSDK/g++',
+						check_command=>'make AAFSDKINSTALL=$HOME/nightly/AAF-cvs-tip-x86_64Linux/AAFx86_64LinuxSDK/g++ check',
+						make_opts=>'AAFSDK=$HOME/nightly/AAF-cvs-tip-x86_64Linux'},
+
+	'i686Linux'		=> {host=>'pilot20', prefix=>'nightly', copy=>'rsync',
+						make_command=>'make AAFSDK=$HOME/nightly/AAF-cvs-tip-i686Linux AAFSDKINSTALL=$HOME/nightly/AAF-cvs-tip-i686Linux/AAFi686LinuxSDK/g++',
+						check_command=>'make AAFSDKINSTALL=$HOME/nightly/AAF-cvs-tip-i686Linux/AAFi686LinuxSDK/g++',
+						make_opts=>'AAFSDK=$HOME/nightly/AAF-cvs-tip-i686Linux',
+						},
+	'suse113_32bit'		=> {host=>'vm-suse113', prefix=>'nightly', copy=>'rsync',
+						make_command=>'sudo /sbin/service ntp restart ; make AAFSDK=$HOME/nightly/AAF-cvs-tip-suse113_32bit AAFSDKINSTALL=$HOME/nightly/AAF-cvs-tip-suse113_32bit/AAFi686LinuxSDK/g++',
+						check_command=>'make AAFSDKINSTALL=$HOME/nightly/AAF-cvs-tip-suse113_32bit/AAFi686LinuxSDK/g++ check',
+	# To build the rpm, the AAF SDK source tarball is placed into /usr/src/packages/SOURCES
+	# and referenced from the ingex spec file.
+	# First the checked out CVS tree is packed up into a tarball with a dated version number.
+	# Then an rpmbuild is performed using a tmp ingex spec file modified with the date version number.
+	# Then the built rpms is tested for successful rpm installation (using rpm --test).
+	# Then the built rpms are removed to save space.
+	# Note we need to escape the space in the perl subst. using four backslashes
+	package_cmd => q{version=`date +%Y%m%d` ; \
+		set -x ; \
+		cd ../ && \
+		rm -f ingex-$version && \
+		ln -s ingex-cvs-tip-suse113_32bit ingex-$version && \
+		cp ingex-$version/studio/ingex-studio.spec ingextmp.spec && \
+		perl -p -i -e 's/^Version:.+/Version:\\\\ '$version/ ingextmp.spec && \
+		tar czf /usr/src/packages/SOURCES/ingex-$version.tar.gz -h --exclude CVS --exclude d3dump_20080311.txt --exclude log --exclude cvs.log ingex-$version && \
+		rpmbuild -bb ingextmp.spec && \
+		rm /usr/src/packages/SOURCES/ingex-$version.tar.gz && \
+		rm ingextmp.spec && \
+		rpm -ivh --test /usr/src/packages/RPMS/i586/ingex-studio-$version-1.i586.rpm /usr/src/packages/RPMS/i586/ingex-gui-$version-1.i586.rpm /usr/src/packages/RPMS/i586/ingex-player-$version-1.i586.rpm && \
+		rm /usr/src/packages/RPMS/i586/ingex-studio-$version-1.i586.rpm /usr/src/packages/RPMS/i586/ingex-gui-$version-1.i586.rpm /usr/src/packages/RPMS/i586/ingex-player-$version-1.i586.rpm },
+						},
+	'suse113_64bit'		=> {host=>'vm-suse113x64', prefix=>'nightly', copy=>'rsync',
+						make_command=>'sudo /sbin/service ntp restart ; make AAFSDK=$HOME/nightly/AAF-cvs-tip-suse113_64bit AAFSDKINSTALL=$HOME/nightly/AAF-cvs-tip-suse113_64bit/AAFx86_64LinuxSDK/g++',
+						check_command=>'make AAFSDKINSTALL=$HOME/nightly/AAF-cvs-tip-suse113_32bit/AAFx86_64LinuxSDK/g++ check',
+	package_cmd => q{version=`date +%Y%m%d` ; \
+		set -x ; \
+		cd ../ && \
+		rm -f ingex-$version && \
+		ln -s ingex-cvs-tip-suse113_64bit ingex-$version && \
+		cp ingex-$version/studio/ingex-studio.spec ingextmp.spec && \
+		perl -p -i -e 's/^Version:.+/Version:\\\\ '$version/ ingextmp.spec && \
+		tar czf /usr/src/packages/SOURCES/ingex-$version.tar.gz -h --exclude CVS --exclude d3dump_20080311.txt --exclude log --exclude cvs.log ingex-$version && \
+		rpmbuild -bb ingextmp.spec && \
+		rm /usr/src/packages/SOURCES/ingex-$version.tar.gz && \
+		rm ingextmp.spec && \
+		rpm -ivh --test /usr/src/packages/RPMS/x86_64/ingex-studio-$version-1.x86_64.rpm && \
+		rm /usr/src/packages/RPMS/x86_64/ingex-studio-$version-1.x86_64.rpm },
+						},
+};
