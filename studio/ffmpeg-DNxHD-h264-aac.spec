@@ -1,7 +1,17 @@
+# To build the swpat restricted version, set the environment variable
+# BUILD_FFMPEG_SWPAT_RESTRICTED=1
+# otherwise a normal build is made with all useful codecs
+%define build_swpat_restricted %(if test -z "$BUILD_FFMPEG_SWPAT_RESTRICTED" ; then echo 0 ; else echo $BUILD_FFMPEG_SWPAT_RESTRICTED ; fi)
+
+%if %{build_swpat_restricted}
+Summary: FFmpeg library with PCM, DV and MJPEG codecs
+Name: ffmpeg-swpat-restricted
+%else
 Summary: FFmpeg library with DNxHD(VC-3) DVCPRO-HD H.264 AAC MP3 A52(AC-3) codecs
 Name: ffmpeg-DNxHD-h264-aac
+%endif
 Version: 0.5
-Release: 6
+Release: 7
 License: GPL
 Group: System Environment/Daemons
 Source: ffmpeg-%{version}.tar.bz2
@@ -22,6 +32,12 @@ BuildRoot: %{_tmppath}/%{name}-root
 BuildRequires: autoconf nasm
 Provides: ffmpeg libavcodec.a libavformat.a libavutil.a
 
+%if %{build_swpat_restricted}
+%description
+FFmpeg library with limited codec support to avoid software patent
+encumbered codecs.
+Tarball taken from http://www.ffmpeg.org/releases/ffmpeg-0.5.tar.bz2
+%else
 %description
 FFmpeg library with DNxHD(VC-3), DVCPRO-HD, H.264, AAC, MP3, A52(AC-3) codecs.
 Tarball taken from http://www.ffmpeg.org/releases/ffmpeg-0.5.tar.bz2
@@ -33,6 +49,7 @@ Patched to support:
   - Various DNxHD fixes
   - Avid Nitris decoder compatibility
   - Ingex Archive MXF file support
+%endif
 
 %prep
 rm -rf $RPM_BUILD_ROOT
@@ -55,7 +72,19 @@ rm -rf $RPM_BUILD_ROOT
 %patch11
 
 %build
-./configure --prefix=/usr --enable-pthreads --disable-demuxer=ogg --enable-swscale --enable-libx264 --enable-libmp3lame --enable-gpl --enable-libfaac --enable-libfaad
+%if %{build_swpat_restricted}
+
+# Restrict encoders and decoders to pcm_s16le, pcm_s16be, dvvideo, mjpeg
+# avoiding software patent encumbered codecs
+./configure --prefix=/usr --enable-shared --enable-pthreads --disable-demuxer=ogg --enable-swscale --disable-encoders --disable-decoders --disable-parser=h264 --enable-gpl --enable-encoder=pcm_s16le --enable-encoder=pcm_s16be --enable-encoder=dvvideo --enable-encoder=mjpeg --enable-decoder=pcm_s16le --enable-decoder=pcm_s16be --enable-decoder=dvvideo --enable-decoder=mjpeg
+
+%else
+
+# build ffmpeg normally enabling all useful codecs for television post production
+./configure --prefix=/usr --enable-shared --enable-pthreads --disable-demuxer=ogg --enable-swscale --enable-libx264 --enable-libmp3lame --enable-gpl --enable-libfaac --enable-libfaad
+
+%endif
+
 make -j 3
 
 %install
@@ -63,6 +92,11 @@ make install DESTDIR=$RPM_BUILD_ROOT
 make install-man DESTDIR=$RPM_BUILD_ROOT
 %ifarch x86_64
 mv $RPM_BUILD_ROOT/usr/lib $RPM_BUILD_ROOT/usr/lib64
+%endif
+
+%if %{build_swpat_restricted}
+# remove unnecessary libx264 presets
+rm -rf $RPM_BUILD_ROOT/usr/share/ffmpeg/libx264*
 %endif
 
 %clean
@@ -80,6 +114,12 @@ rm -rf $RPM_BUILD_ROOT
 /usr/share/
 
 %changelog
+* Wed Sep 12 2010 Stuart Cunningham 0.5-7
+- Add build-time switch to build swpat restricted version of ffmpeg
+  named ffmpeg-swpat-restricted
+- Turn on shared libraries for both builds so ffmpeg libs can be
+  changed without recompiling applications that depend on ffmpeg
+
 * Wed Aug 11 2010 Philip de Nier 0.5-6
 - Comment out 'encoded frame too large' log message for IMX
 
