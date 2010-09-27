@@ -1,5 +1,5 @@
 /*
- * $Id: dvsoem_dummy.cpp,v 1.8 2010/09/24 18:08:34 john_f Exp $
+ * $Id: dvsoem_dummy.cpp,v 1.9 2010/09/27 16:12:29 john_f Exp $
  *
  * Implement a debug-only DVS hardware library for testing.
  *
@@ -527,7 +527,8 @@ int sv_fifo_putbuffer(sv_handle * sv, sv_fifo * pfifo, sv_fifo_buffer * pbuffer,
 
     // For capture, copy video and audio bytes to dma.addr
     int source_offset = dvs->frame_count % dvs->source_input_frames;
-    memcpy(pbuffer->dma.addr, dvs->source_dmabuf + source_offset * dvs->frame_size, dvs->frame_size);
+    int copy_size = pbuffer->dma.size;                   // caller sets size of receiving buffer
+    memcpy(pbuffer->dma.addr, dvs->source_dmabuf + source_offset * dvs->frame_size, copy_size);
 
     // Burn timecode in video at x,y offset 40,40
     burn_mask_uyvy(dvs->timecode, 40, 40, dvs->width, dvs->height, (unsigned char *)pbuffer->dma.addr);
