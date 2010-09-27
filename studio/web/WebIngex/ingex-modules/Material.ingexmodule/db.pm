@@ -413,9 +413,10 @@ sub load_times
             					material_pkg.pkg_identifier = material_trk.trk_package_id AND
             				
 						file_trk.trk_id = 1 AND
-            					material_pkg.pkg_descriptor_id IS NULL AND
+						file_trk.trk_data_def = 1 AND
+            			material_pkg.pkg_descriptor_id IS NULL AND
 						material_trk.trk_id = 1 AND
-           					material_pkg.pkg_project_name_id = ?
+           				material_pkg.pkg_project_name_id = ?
 						AND CAST(material_pkg.pkg_creation_date AS TEXT) ~ ?;
 				";
 
