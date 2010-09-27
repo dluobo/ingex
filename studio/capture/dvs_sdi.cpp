@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.cpp,v 1.12 2010/09/23 17:21:19 john_f Exp $
+ * $Id: dvs_sdi.cpp,v 1.13 2010/09/27 16:14:10 john_f Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -824,7 +824,7 @@ time_t today_midnight_time(void)
 
 void dvsaudio32_deinterleave_32bit(uint8_t *audio12, uint8_t *audio34, uint8_t *a32[], int num_samples)
 {
-	// Copy all 32bits, de-interleaving pairs
+    // Copy all 32bits, de-interleaving pairs
     for (int i = 0; i < num_samples; i++)
     {
         int src_idx = i*4*2;                // index into 32bit interleaved pairs
@@ -846,7 +846,7 @@ void dvsaudio32_deinterleave_32bit(uint8_t *audio12, uint8_t *audio34, uint8_t *
         a32[3][mon_idx + 1] = audio34[src_idx + 5];
         a32[3][mon_idx + 2] = audio34[src_idx + 6];
         a32[3][mon_idx + 3] = audio34[src_idx + 7];
-	}
+    }
 }
 
 void dvsaudio32_deinterleave_16bit(uint8_t *audio12, uint8_t *audio34, uint8_t *a16[], int num_samples)
@@ -885,7 +885,7 @@ void dvsaudio32_to_4_mono_tracks(uint8_t *src, uint8_t *dst32, uint8_t *dst16, i
     a32[2] = dst32 + MAX_AUDIO_SAMPLES_PER_FRAME*4 * 2;
     a32[3] = dst32 + MAX_AUDIO_SAMPLES_PER_FRAME*4 * 3;
 
-	dvsaudio32_deinterleave_32bit(audio12, audio34, a32, num_samples);
+    dvsaudio32_deinterleave_32bit(audio12, audio34, a32, num_samples);
 
     // De-interleave and truncate to 16bit mono
     //
@@ -896,7 +896,7 @@ void dvsaudio32_to_4_mono_tracks(uint8_t *src, uint8_t *dst32, uint8_t *dst16, i
     a16[2] = dst16 + MAX_AUDIO_SAMPLES_PER_FRAME*2 * 2;
     a16[3] = dst16 + MAX_AUDIO_SAMPLES_PER_FRAME*2 * 3;
 
-	dvsaudio32_deinterleave_16bit(audio12, audio34, a16, num_samples);
+    dvsaudio32_deinterleave_16bit(audio12, audio34, a16, num_samples);
 }
 
 void dvsaudio32_to_mono_audio(uint8_t *src, uint8_t *dst32, uint8_t *dst16, int num_samples, int audio8)
@@ -906,17 +906,17 @@ void dvsaudio32_to_mono_audio(uint8_t *src, uint8_t *dst32, uint8_t *dst16, int 
 
     memcpy(tmp, src, audio_size);
 
-	dvsaudio32_to_4_mono_tracks(tmp, dst32, dst16, num_samples);
+    dvsaudio32_to_4_mono_tracks(tmp, dst32, dst16, num_samples);
 
-	if (audio8)
-	{
-		// 32bit buffer is fixed by DVS internals to have channel 5,6 at offset 0x8000
-		// 16bit buffer has channel 5 start immediately after channel 4
-		dvsaudio32_to_4_mono_tracks(tmp + 0x8000,
-						            dst32 + 0x8000,
-									dst16 + MAX_AUDIO_SAMPLES_PER_FRAME * 2 * 4,
+    if (audio8)
+    {
+        // 32bit buffer is fixed by DVS internals to have channel 5,6 at offset 0x8000
+        // 16bit buffer has channel 5 start immediately after channel 4
+        dvsaudio32_to_4_mono_tracks(tmp + 0x8000,
+                                    dst32 + 0x8000,
+                                    dst16 + MAX_AUDIO_SAMPLES_PER_FRAME * 2 * 4,
                                     num_samples);
-	}
+    }
 }
 
 void dvs_interleaved16_deinterleave_32bit(uint8_t *audio_16channels, uint8_t *a32[], int num_samples)
@@ -1011,7 +1011,7 @@ void dvs_interleaved16_audio_to_mono_audio(uint8_t *src, uint8_t *dst32, uint8_t
 
     if (audio8)
     {
-        dvs_interleaved16_to_4_mono_tracks(tmp + MAX_AUDIO_SAMPLES_PER_FRAME * 4 * 4,
+        dvs_interleaved16_to_4_mono_tracks(tmp,
                                     dst32 + 0x8000,
                                     dst16 + MAX_AUDIO_SAMPLES_PER_FRAME*2 * 4,
                                     num_samples);
@@ -1220,7 +1220,7 @@ int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_from_vi
             pbuffer->audio[2].size,
             pbuffer->audio[3].size);
 
-        if (pbuffer->audio[0].size > 0 && saved_frame_num < 25 * 10)	// write 10 seconds worth at 25 fps
+        if (pbuffer->audio[0].size > 0 && saved_frame_num < 25 * 10)    // write 10 seconds worth at 25 fps
         {
             char buf[100];
             sprintf(buf, "rawaudio/frame%04d.pcm", saved_frame_num);
@@ -3209,7 +3209,7 @@ int main (int argc, char ** argv)
     // audio size in ring buffer.
     if (AUDIO_INTERLEAVED)
     {
-        audio_size = PAL_AUDIO_SAMPLES * 16 * 4;
+        audio_size = MAX_AUDIO_SAMPLES_PER_FRAME * 16 * 4;
     }
 
     audio_offset = dma_video_size;
@@ -3262,7 +3262,7 @@ int main (int argc, char ** argv)
             break;
         }
     }
-	secondary_video_offset = secondary_audio_offset + secondary_audio_size;
+    secondary_video_offset = secondary_audio_offset + secondary_audio_size;
 
     // Element size made up from DMA transferred buffer plus 16bit audio, plus secondary video (if any)
     //
