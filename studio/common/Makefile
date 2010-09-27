@@ -1,9 +1,10 @@
 #
-# $Id: Makefile,v 1.6 2010/08/12 16:32:44 john_f Exp $
+# $Id: Makefile,v 1.7 2010/09/27 16:16:18 john_f Exp $
 #
 # Makefile for building studio common functions
 #
-# Copyright (C) 2005  Stuart Cunningham <stuart_hc@users.sourceforge.net>
+# Copyright (C) 2005 - 2010
+# British Broadcasting Corporation
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
