@@ -1,0 +1,66 @@
+Building the ingex-studio rpm
+-----------------------------
+Ingex requires a number of development tools and libraries to be installed
+before it can be built.  These are described in the Ingex Installation Guide.
+
+The only additional step is to copy the required AAF source tarball into
+  /usr/src/packages/SOURCES
+so that it can be accessed by rpmbuild when building the rpm.  Currently
+AAF-src-1.1.4-DR1.tar.gz is specified in the ingex-studio.spec file.
+
+To build the rpm run:
+  rpmbuild -bb ingex-studio.spec
+
+This produces three rpm packages:
+  ingex-studio
+  ingex-gui
+  ingex-player
+
+The packages are separated into ingex-player and ingex-gui so that machines
+which are used for control but not recording can install just the ingex-gui
+and ingex-player packages.
+
+
+rpms required by ingex
+----------------------
+Other rpms, such as shttpd and ffmpeg, are built not on a nightly basis but
+when necessary to add new features or fix bugs.  The procedure is illustrated
+with the following example:
+  # install the source code, patches and spec file into /usr/src/packages/
+  #
+  rpm -i ffmpeg-DNxHD-h264-aac-0.5-2.src.rpm
+  #
+  # edit the spec file to update sources or add patches
+  #
+  rpmbuild -ba /usr/src/packages/SPECS/ffmpeg-DNxHD-h264-aac.spec
+
+The output rpm files will be found in /usr/src/packages/RPMS/
+
+
+Software patent restricted ffmpeg
+---------------------------------
+Ingex can be distributed with one of two versions of the ffmpeg rpm.
+The regular ffmpeg rpm named ffmpeg-DNxHD-h264-aac has all useful codecs
+included.  A software patent restricted version, named ffmpeg-swpat-restricted,
+excludes all codecs which may be software patent encumbered.  Ingex uses
+runtime detection to determine which codecs are available so the two versions
+of rpm can be interchanged without requiring recompilation of ingex.
+
+For example, replace the restricted rpm with the unrestricted rpm
+(no recompilation or re-installing of ingex is required):
+  sudo rpm -e ffmpeg-swpat-restricted
+  sudo rpm -ivh ffmpeg-DNxHD-h264-aac-0.5-7.i586.rpm
+
+To simplify maintenance of the ffmpeg rpm spec file, both versions of the
+ffmpeg rpm are built from the same ffmpeg-DNxHD-h264-aac.spec file.  By
+default the unrestricted package ffmpeg-DNxHD-h264-aac is built.  To
+switch on the restricted build use the following command:
+  env BUILD_FFMPEG_SWPAT_RESTRICTED=1 rpmbuild -bb ffmpeg-DNxHD-h264-aac.spec
+
+N.B. It is important not to have any other versions of ffmpeg
+or codecs used by ffmpeg (such as libmp3lame and libfaad) installed.
+Otherwise, ingex may be inadvertantly built with static libraries from
+an unintended version of ffmpeg, if those libraries appear first in the
+linker's search path.
+
+

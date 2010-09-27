@@ -1,0 +1,187 @@
+Introduction
+--------------
+Nightly builds are intended to catch bugs early in the development and
+release process.  First a current snapshot is checked out from CVS, then
+it is compiled, then test programs are run, then a package (such as an
+rpm or tarball) is produced.
+
+Results of each step in this process are uploaded to a web visible status
+page as illustrated by the follow examples:
+  http://ingex.sourceforge.net/libMXF/build/
+  http://ingex.sourceforge.net/studio/build/
+
+Nightly builds of ingex are performed by the nightly_cvs_build.pl script which
+is maintained in the AAF SDK repository.  Although originally written for
+building the AAF SDK, most recent features added to nightly_cvs_build.pl
+have enabled building of rpm packages for Ingex, and tarball binary snapshots
+for libMXF.
+
+
+Installation of nightly_cvs_build.pl and cron job
+-------------------------------------------------
+Copy nightly_cvs_build.pl from 
+http://aaf.cvs.sourceforge.net/viewvc/aaf/AAF/build/tools/nightly_cvs_build.pl
+to a suitable directory such as $HOME/bin/
+
+Create a cron job by running "crontab -e" and adding the following line:
+00 01 * * * $HOME/bin/nightly_cvs_build.pl -c $HOME/nightly_ingex_build.dumper
+
+Check the cron job is correct with "crontab -l".
+
+
+Configuration of build script
+-------------------------------
+The nightly_ingex_build.dumper file is a configuration file which specifies
+all the necessary variables summarised below:
+ - location of a local directory to store the initial CVS checkout
+ - cvs command to perform checkout
+ - scp URL for uploading the build results
+ - scp and rsync commands for traversing proxies
+
+For each node in the compile farm the following can be specified:
+ - hostname
+ - remote directory in which to perform build
+ - make command
+ - command for running tests e.g. "make check"
+ - packaging command to create a tarball or rpm (optional)
+
+A sample nightly build configuration file, nightly_ingex_build.dumper,
+is available in to the ingex/studio/ directory.  This includes building
+and testing of the ingex source code on several machines.
+
+A nightly rpm build and installation test is also specified in the
+'package_cmd' parameter.  This is implemented as an in-line shell command
+to avoid maintaining a shell script on several machines.  It creates a
+new rpm spec file each time it is run with the current data as the version
+number of the rpm, before building the rpm with the temporary spec file.
+After the nightly rpm is built it is tested to verify it can be installed
+using the rpm install command.
+
+
+nightly build reference documentation
+---------------------------------------
+NAME
+    nightly_cvs_build.pl - script to automate nightly builds and generation
+    of web page results
+
+SYNOPSIS
+    perl nightly_cvs_build.pl
+
+DESCRIPTION
+    nightly_cvs_build.pl is a developer's tool to run nightly builds across
+    a variety of build hosts. It has been designed to only require readily
+    available tools such as perl and ssh to execute builds on remote hosts,
+    collect the results and to create a static web page of results.
+
+    Features include:
+
+    *   Compile farm hosts are simple to setup. All you need is a compiler
+        and sshd running. No networked filesystems are used, instead scp or
+        rsync copies the source tree to the compile farm host.
+
+    *   Collection of results from multiple compile farms. When the script
+        is run from different compile farms, results are merged into the
+        single results table. If a developer has different hardware or
+        compiler versions their results will be included in a new column in
+        the results table.
+
+    *   Compile farm hosts can be woken from suspension using Wake-On-Lan
+        and reliably used for unattended compilation. After the build has
+        finished a host can return to idle and go back to sleep.
+
+    There are two main usage patterns:
+
+    nightly_cvs_build.pl
+            Using the configuration in $HOME/.nightly_cvs_build.dumper run
+            an unattended build across the configured compile farm hosts by
+            first checking out the latest CVS changes, building, running the
+            tests, collecting the results and publishing a web page. The
+            build state is stored using perl Data::Dumper to a file on the
+            web host, so that future runs will preserve and update the
+            results.
+
+            This usage can be automated using a cronjob. A typical crontab
+            entry to run the script every morning at 0100 would be: 00 01 *
+            * * $HOME/bin/nightly_cvs_build.pl
+
+    nightly_cvs_build.pl -l path_to_local_source_tree
+            Given a source tree, copy it to all configured compile farm
+            hosts, build, test and collect the results in log files and a
+            summary on the terminal. No update of files on the web host is
+            made. This is very useful for developers to check their changes
+            on several local machines before committing.
+
+CONFIGURATION
+    The configuration file (default location
+    $HOME/.nightly_cvs_build.dumper) is in the format of a Perl hash
+    containing all configuration variables. The variables are best described
+    using an example. The 'config' section sets the location for the local
+    source tree and the remote CVS and web host paths.
+
+      'config' => {
+           # parent directory where CVS source tree will be created or updated
+           tree => '/home/stuartc/source',
+
+           # CVS module name
+           cvs_module => 'AAF',
+
+           # build only a subdirectory of a csv module, not the whole tree
+           cvs_subdir => 'libMXF'
+
+           # command for accessing CVS (in this example a socks proxy is used)
+           cvs_command => 'env CVS_RSH=ssh socksify cvs -z3 -d:ext:stuart_hc@aaf.cvs.sourceforge.net:/cvsroot/aaf',
+
+           # command to update source tree on compile farm hosts
+           rsync_command => 'rsync -aiv --delete -e ssh'
+
+           # Web host destination for generated html and build state
+           scp_web_dest => 'stuart_hc@shell.sf.net:/home/groups/a/aa/aaf/htdocs/build'
+       },
+
+    All other entries will describe a single compile farm host target. E.g.
+
+      'x86_64Linux' => {
+           host=>'igor',         # hostname
+           prefix=>'nightly',    # directory on remote host to store build tree
+           wakeup=>'pilot35',    # hostname or ethernet address for wake-on-lan command
+           copy=>'rsync',        # use rsync instead of simple copy command 'cp' to update  source tree
+
+                                 # 'tarball' will package up a snapshot of binaries or libraries
+                                 # which will be uploaded to the web site
+           tarball=>'cd AAFi686LinuxSDK/g++/bin/debug && tar cf - libcom-api.so aafext | gzip'
+       },
+
+      'x86_64Linux-rel' => {
+           host=>'igor',
+           prefix=>'nightly',
+           aafopts => q{AAFTARGET=Release},  # args passed to make command for Release
+       },
+
+BUILD STATE
+    The build state file stores the results of all previous builds in
+    Data::Dumper format. It is stored at
+    $config{scp_web_dest}/build_state_$config{cvs_module}.dumper on the
+    remote host. Before each build, unless it is a local build with the -l
+    option, the previous build state is read so that new build results can
+    be merged into the previous results and an updated table of results can
+    be generated.
+
+    The first time nightly_cvs.build.pl is run, an initial build state file
+    can be a plain text file consisting of one character, the digit 1.
+
+INTERNAL DESIGN DETAILS
+    The parent process forks creating multiple children: one for each build.
+    Parent waits with timeout for children to return - if any child returns
+    error 1 or does not return in time, ignore build - if child returns 0 or
+    > 1 return, process build & test logs to report
+
+    Each child will run the build and log output to file on local
+    filesystem. Each child will use ssh command to run remote builds and
+    read all output over the ssh link. Each child will exit with an exit
+    status as follows 0 build and test succeeded 1 timeout, either network
+    related or build took much too long 2 preparation failed (autoreconf &&
+    make dist && scp / rm -rf && scp) 3 ./configure failed 4 make failed 5
+    test failed
+
+    Results are collated, HTML formatted and scp'd to sourceforge web site.
+
