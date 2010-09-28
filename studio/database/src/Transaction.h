@@ -1,5 +1,5 @@
 /*
- * $Id: Transaction.h,v 1.3 2010/08/20 16:12:51 john_f Exp $
+ * $Id: Transaction.h,v 1.4 2010/09/28 08:11:20 john_f Exp $
  *
  * A database transaction
  *
@@ -56,8 +56,9 @@ protected:
 };
 
 
-class Transaction : protected ConnectionReturner, public pqxx::work
+class Transaction : public ConnectionReturner, public pqxx::work
 {
+/* ConnectionReturner is the leftmost base class and so is destructed after pqxx::work */
 public:
     Transaction(Database *database, pqxx::connection *conn, std::string name);
     virtual ~Transaction() throw();
