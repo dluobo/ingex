@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.cpp,v 1.13 2010/09/27 16:14:10 john_f Exp $
+ * $Id: dvs_sdi.cpp,v 1.14 2010/09/28 17:39:40 john_f Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -1011,7 +1011,7 @@ void dvs_interleaved16_audio_to_mono_audio(uint8_t *src, uint8_t *dst32, uint8_t
 
     if (audio8)
     {
-        dvs_interleaved16_to_4_mono_tracks(tmp,
+        dvs_interleaved16_to_4_mono_tracks(tmp + 4 * 4,		// skip first 4 32bit samples
                                     dst32 + 0x8000,
                                     dst16 + MAX_AUDIO_SAMPLES_PER_FRAME*2 * 4,
                                     num_samples);
