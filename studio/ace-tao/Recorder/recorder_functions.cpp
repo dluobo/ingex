@@ -1,5 +1,5 @@
 /*
- * $Id: recorder_functions.cpp,v 1.45 2010/09/07 18:28:48 john_f Exp $
+ * $Id: recorder_functions.cpp,v 1.46 2010/09/29 09:40:49 john_f Exp $
  *
  * Functions which execute in recording threads.
  *
@@ -39,8 +39,8 @@
 #include "EncodeFrameBuffer.h"
 #include "MtEncoder.h"
 
-#include "YUVlib/YUV_frame.h"
-#include "YUVlib/YUV_quarter_frame.h"
+#include "YUV_frame.h"
+#include "YUV_quarter_frame.h"
 
 // prodauto database
 #include "Database.h"
