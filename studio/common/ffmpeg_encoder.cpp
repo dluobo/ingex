@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder.cpp,v 1.9 2010/09/07 18:30:11 john_f Exp $
+ * $Id: ffmpeg_encoder.cpp,v 1.10 2010/09/29 16:57:37 john_f Exp $
  *
  * Encode uncompressed video to DV using libavcodec
  *
@@ -49,30 +49,9 @@ extern "C" {
 #include "VideoRaster.h"
 #include "ffmpeg_resolutions.h"
 #include "ffmpeg_encoder.h"
+#include "ffmpeg_defs.h"
 
-
-const uint16_t imx30_intra_matrix[] = {
-  32, 16, 16, 17, 19, 22, 26, 34,
-  16, 16, 18, 19, 21, 26, 33, 37,
-  19, 18, 19, 23, 21, 28, 35, 45,
-  18, 19, 20, 22, 28, 35, 32, 49,
-  18, 20, 23, 29, 32, 33, 44, 45,
-  18, 20, 20, 25, 35, 39, 52, 58,
-  20, 22, 23, 28, 31, 44, 51, 57,
-  19, 21, 26, 30, 38, 48, 45, 75
-};
-
-const uint16_t imx4050_intra_matrix[] = {
-  32, 16, 16, 17, 19, 22, 23, 31,
-  16, 16, 17, 19, 20, 23, 29, 29,
-  19, 17, 19, 22, 19, 25, 28, 35,
-  17, 19, 19, 20, 25, 28, 25, 33,
-  17, 19, 22, 25, 26, 25, 31, 31,
-  17, 19, 17, 20, 26, 28, 35, 36,
-  19, 19, 19, 20, 22, 29, 32, 35,
-  16, 17, 19, 22, 25, 31, 28, 45 
-};
-
+/*
 const uint16_t jpeg2to1_intra_matrix[] = {
   1,  1,  1,  1,  1,  1,  1,  1,
   1,  1,  1,  1,  1,  1,  1,  1,
@@ -94,7 +73,7 @@ const uint16_t jpeg2to1_chroma_intra_matrix[] = {
   5,  5,  5,  5,  5,  5,  5,  5,
   5,  5,  5,  5,  5,  5,  5,  5,
 };
-
+*/
 
 
 typedef struct 
@@ -154,6 +133,22 @@ static void cleanup (internal_ffmpeg_encoder_t * encoder)
 }
 
 } // namespace
+
+extern bool ffmpeg_encoder_check_available(MaterialResolution::EnumType res, Ingex::VideoRaster::EnumType raster)
+{
+    enum CodecID codec_id;
+    enum CodecType codec_type;
+    PixelFormat pix_fmt;
+    get_ffmpeg_params(res, raster, codec_id, codec_type, pix_fmt);
+
+    av_register_all();
+    if (avcodec_find_encoder(codec_id))
+    {
+        return true;
+    }
+
+    return false;
+}
 
 extern ffmpeg_encoder_t * ffmpeg_encoder_init(MaterialResolution::EnumType res, Ingex::VideoRaster::EnumType raster, int num_threads)
 {
@@ -600,37 +595,9 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init(MaterialResolution::EnumType res, 
 
 
         /* Set aspect ratio */
-        AVRational sar;
-        switch (raster)
-        {
-        case Ingex::VideoRaster::PAL_4x3:
-        case Ingex::VideoRaster::PAL_B_4x3:
-            sar.num = 59;
-            sar.den = 54;
-            break;
-        case Ingex::VideoRaster::PAL:
-        case Ingex::VideoRaster::PAL_B:
-        case Ingex::VideoRaster::PAL_16x9:
-        case Ingex::VideoRaster::PAL_B_16x9:
-            sar.num = 118;
-            sar.den = 81;
-            break;
-        case Ingex::VideoRaster::NTSC_4x3:
-            sar.num = 10;
-            sar.den = 11;
-            break;
-        case Ingex::VideoRaster::NTSC:
-        case Ingex::VideoRaster::NTSC_16x9:
-            sar.num = 40;
-            sar.den = 33;
-            break;
-        default:
-            sar.num = 1;
-            sar.den = 1;
-            break;
-        }
-        encoder->codec_context->sample_aspect_ratio = sar;
-
+        Ingex::Rational sar = Ingex::VideoRaster::SampleAspectRatio(raster);
+        encoder->codec_context->sample_aspect_ratio.num = sar.numerator;
+        encoder->codec_context->sample_aspect_ratio.den = sar.denominator;
 
         /* prepare codec */
         if (avcodec_open(encoder->codec_context, encoder->codec) < 0)

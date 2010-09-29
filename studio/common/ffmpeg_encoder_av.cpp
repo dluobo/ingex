@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder_av.cpp,v 1.10 2010/09/07 15:53:46 john_f Exp $
+ * $Id: ffmpeg_encoder_av.cpp,v 1.11 2010/09/29 16:57:37 john_f Exp $
  *
  * Encode AV and write to file.
  *
@@ -207,28 +207,19 @@ int init_video_dvd(internal_ffmpeg_encoder_t * enc, Ingex::VideoRaster::EnumType
     codec_context->codec_type = CODEC_TYPE_VIDEO;
     codec_context->pix_fmt = PIX_FMT_YUV420P;
 
-    const int dvd_kbit_rate = 5000;
-
 
     /* put dvd parameters */
-    codec_context->bit_rate = dvd_kbit_rate * 1000;
+    codec_context->bit_rate = 5000000;
     codec_context->rc_max_rate = 9000000;
     codec_context->rc_min_rate = 0;
     codec_context->rc_buffer_size = 224*1024*8;
     codec_context->gop_size = 15; /* emit one intra frame every 15 frames at most */
+    codec_context->max_b_frames = 2; /* also add B frames */
 
-    if (codec_context->codec_id == CODEC_ID_MPEG2VIDEO)
-    {
-        /* just for testing, we also add B frames */
-        codec_context->max_b_frames = 2;
-    }
-    if (codec_context->codec_id == CODEC_ID_MPEG1VIDEO)
-    {
-        /* needed to avoid using macroblocks in which some coeffs overflow 
-           this doesnt happen with normal video, it just happens here as the 
-           motion of the chroma plane doesnt match the luma plane */
-        codec_context->mb_decision = 2;
-    }
+    /* needed to avoid using macroblocks in which some coeffs overflow 
+       this doesnt happen with normal video, it just happens here as the 
+       motion of the chroma plane doesnt match the luma plane */
+    codec_context->mb_decision = 2;
 
     /* set coding parameters which depend on video raster */
     int top_field_first;
@@ -996,37 +987,6 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename,
     Ingex::VideoRaster::GetInfo(raster, width, height, fps_num, fps_den, interlace);
 
 
-    /* Set aspect ratio for video stream */
-    AVRational sar;
-    switch (raster)
-    {
-    case Ingex::VideoRaster::PAL_4x3:
-    case Ingex::VideoRaster::PAL_B_4x3:
-        sar.num = 59;
-        sar.den = 54;
-        break;
-    case Ingex::VideoRaster::PAL:
-    case Ingex::VideoRaster::PAL_B:
-    case Ingex::VideoRaster::PAL_16x9:
-    case Ingex::VideoRaster::PAL_B_16x9:
-        sar.num = 118;
-        sar.den = 81;
-        break;
-    case Ingex::VideoRaster::NTSC_4x3:
-        sar.num = 10;
-        sar.den = 11;
-        break;
-    case Ingex::VideoRaster::NTSC:
-    case Ingex::VideoRaster::NTSC_16x9:
-        sar.num = 40;
-        sar.den = 33;
-        break;
-    default:
-        sar.num = 1;
-        sar.den = 1;
-        break;
-    }
-
     /* Add the video stream */
     enc->video_st = av_new_stream(enc->oc, 0);
     if (!enc->video_st)
@@ -1036,8 +996,12 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename,
         return NULL;
     }
 
-    enc->video_st->sample_aspect_ratio = sar;
-    enc->video_st->codec->sample_aspect_ratio = sar;
+    /* Set sample aspect for stream and codec */
+    Ingex::Rational sar = Ingex::VideoRaster::SampleAspectRatio(raster);
+    enc->video_st->sample_aspect_ratio.num = sar.numerator;
+    enc->video_st->sample_aspect_ratio.den = sar.denominator;
+    enc->video_st->codec->sample_aspect_ratio.num = sar.numerator;
+    enc->video_st->codec->sample_aspect_ratio.den = sar.denominator;
 
     /* Set size for video codec */
     avcodec_set_dimensions(enc->video_st->codec, width, height);

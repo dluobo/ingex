@@ -149,6 +149,12 @@ extern int main(int argc, char *argv[])
     Ingex::Interlace::EnumType interlace;
     Ingex::VideoRaster::GetInfo(raster, width, height, fps_num, fps_den, interlace);
 
+    if (! ffmpeg_encoder_check_available(res, raster))
+    {
+        fprintf(stderr, "codec not avaiable for requested resolution\n");
+        return 1;
+    }
+
     // Open input file
     if ( (input_fp = fopen(argv[n], "rb")) == NULL)
     {

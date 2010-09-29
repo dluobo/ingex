@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder.h,v 1.8 2010/06/02 13:10:46 john_f Exp $
+ * $Id: ffmpeg_encoder.h,v 1.9 2010/09/29 16:57:37 john_f Exp $
  *
  * Encode uncompressed video to DV frames using libavcodec
  *
@@ -31,6 +31,14 @@
 
 typedef void ffmpeg_encoder_t;
 
+
+/*
+* ffmpeg_encoder_check_available : Tests whether the supplied resolution and raster
+*                                  can be encoded using currently installed codecs
+* Input            : encoding resolution and raster
+* Return           : true or false
+*/
+extern bool ffmpeg_encoder_check_available(MaterialResolution::EnumType res, Ingex::VideoRaster::EnumType raster);
 
 /*
 * ffmpeg_encoder_init : Creates a format context for an avcodec
