@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.10 2010/09/29 09:01:14 john_f Exp $
+# $Id: Makefile,v 1.11 2010/09/29 09:32:43 john_f Exp $
 #
 # Makefile for building useful command-line tools
 #
@@ -25,7 +25,7 @@ include ../../common/libmxf.mk
 
 CC = gcc
 
-INCLUDE=-I.. -I../YUVlib $(LIBMXF_INCLUDE)
+INCLUDE=-I.. -I../../YUVlib $(LIBMXF_INCLUDE)
 
 CPPFLAGS = -Wall -W -Wno-unused-parameter -g -DDEBUG -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE $(INCLUDE)
 CFLAGS = -Wall -W -Wno-unused-parameter -g -O3
@@ -81,5 +81,5 @@ simple_mxf_demux: simple_mxf_demux.o
 
 clean:
 	cd dvs_hardware && $(MAKE) $@
-	rm -f $(PROGS)
+	rm -f *.o $(PROGS)
 
