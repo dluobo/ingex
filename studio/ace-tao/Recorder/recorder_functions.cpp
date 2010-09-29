@@ -1,5 +1,5 @@
 /*
- * $Id: recorder_functions.cpp,v 1.46 2010/09/29 09:40:49 john_f Exp $
+ * $Id: recorder_functions.cpp,v 1.47 2010/09/29 09:44:29 john_f Exp $
  *
  * Functions which execute in recording threads.
  *
@@ -72,7 +72,6 @@ static ACE_Thread_Mutex avcodec_mutex;
 const bool THREADED_MJPEG = false;
 const bool MT_ENABLE = true;
 const bool DEBUG_NOWRITE = false;
-const bool SAVE_PACKAGE_DATA = true; // Write to database for non-MXF files
 
 #define USE_SOURCE   0 // Eventually will move to encoding a source, rather than a hardware input
 
@@ -619,7 +618,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
 
     // Create package data to go into database.
     
-    prodauto::RecorderPackageCreator *package_creator;
+    prodauto::RecorderPackageCreator * package_creator;
     
     switch (op)
     {
@@ -729,17 +728,21 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
 
     // Initialisation for browse audio
     ffmpeg_encoder_t * ffmpeg_audio_encoder = 0;
+    std::string browse_audio_creating_pathname;
+    std::string browse_audio_destination_pathname;
     FILE * fp_audio_browse = NULL;
     if (browse_audio)
     {
-        std::ostringstream fname;
-        fname << p_opt->dir << PATH_SEPARATOR << p_opt->file_ident
-            << (browse_mp3 ? ".mp3" : ".wav");
+        std::string filename = p_opt->file_ident + (browse_mp3 ? ".mp3" : ".wav");
+        std::string destination_path = p_opt->dir;
+        std::string creating_path = destination_path + PATH_SEPARATOR + CREATING_SUBDIR;
+        browse_audio_destination_pathname = destination_path + PATH_SEPARATOR + filename;
+        browse_audio_creating_pathname = creating_path + PATH_SEPARATOR + filename;
 
-        if (NULL == (fp_audio_browse = fopen(fname.str().c_str(), "wb")))
+        if (NULL == (fp_audio_browse = fopen(browse_audio_creating_pathname.c_str(), "wb")))
         {
             browse_audio = false;
-            ACE_DEBUG((LM_ERROR, ACE_TEXT("Could not open %s\n"), fname.str().c_str()));
+            ACE_DEBUG((LM_ERROR, ACE_TEXT("Could not open %s\n"), browse_audio_creating_pathname.c_str()));
         }
         else if (browse_mp3)
         {
@@ -1417,12 +1420,12 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                 {
                     uint8_t * p_enc_audio = 0;
                     int size_enc_audio = ffmpeg_encoder_encode_audio(ffmpeg_audio_encoder, audio_samples_per_frame, mixed_audio, &p_enc_audio);
-                    if (size_enc_audio > 0)
+                    if (fp_audio_browse && size_enc_audio > 0)
                     {
                         size_t n = fwrite(p_enc_audio, size_enc_audio, 1, fp_audio_browse);
                         if (n == 0)
                         {
-                            ACE_DEBUG((LM_ERROR, ACE_TEXT("Browse audio file write error!\n")));
+                            ACE_DEBUG((LM_ERROR, ACE_TEXT("mp3 audio file write error!\n")));
                             fclose(fp_audio_browse);
                             fp_audio_browse = NULL;
                         }
@@ -1592,8 +1595,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             prodauto::Track * mp_trk = package_creator->GetMaterialPackage()->tracks[i];
             if (mp_trk->dataDef == SOUND_DATA_DEFINITION)
             {
-                update_WAV_header(fp);
-                // This also closes the file
+                update_WAV_header(fp); // Also closes the file
             }
             else
             {
@@ -1606,7 +1608,20 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     {
         if (!browse_mp3)
   	    {
-            update_WAV_header(fp_audio_browse);
+            update_WAV_header(fp_audio_browse); // Also closes the file
+        }
+        else
+        {
+            fclose(fp_audio_browse);
+        }
+
+        // Move out of creating sub-dir
+        if (rename(browse_audio_creating_pathname.c_str(), browse_audio_destination_pathname.c_str()))
+        {
+            ACE_DEBUG((LM_ERROR, ACE_TEXT("Failed to rename browse audio file from '%C' to '%C': %C\n"),
+                                          browse_audio_creating_pathname.c_str(),
+                                          browse_audio_destination_pathname.c_str(),
+                                          strerror(errno)));
         }
     }
 
@@ -1736,7 +1751,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     // Store recordings in database
     try
     {
-        if (mxf || (SAVE_PACKAGE_DATA && ENCODER_FFMPEG_AV == encoder && !quad_video))
+        if (mxf || (ENCODER_FFMPEG_AV == encoder && !quad_video))
         {
             package_creator->SaveToDatabase();
             ACE_DEBUG((LM_DEBUG, ACE_TEXT("Saved package group '%C' to database\n"), package_creator->GetMaterialPackage()->name.c_str()));
@@ -1750,7 +1765,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     // Store recording metadata to file
     try
     {
-        if (mxf || (SAVE_PACKAGE_DATA && ENCODER_FFMPEG_AV == encoder && !quad_video))
+        if (mxf || (ENCODER_FFMPEG_AV == encoder && !quad_video))
         {
             std::ostringstream creating_metadata_filename;
             creating_metadata_filename << p_opt->dir << PATH_SEPARATOR <<
@@ -1794,7 +1809,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
 
             std::string fname = package_creator->GetFileLocation(mp_trk->id);
 
-            // Now need to find out which member of mTracks we are dealing with
+            // Need to find out which member of mTracks we are dealing with
             unsigned int track_index = p_impl->TrackIndexMap(mp_stc_dbids[i]);
             p_rec->mFileNames[track_index] = fname;
 
