@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.4 2010/07/14 13:06:36 john_f Exp $
+# $Id: Makefile,v 1.5 2010/09/29 09:01:14 john_f Exp $
 #
 # Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
 # Author: Philip de Nier
@@ -23,6 +23,7 @@ include ../../common/libmxf.mk
 C_INGEX_PLAYER_DIR = ../ingex_player
 INGEX_PLAYER_DIR = ../IngexPlayer
 COMMON_DIR = ../../common
+YUVLIB_DIR = ../../YUVlib
 
 
 ifneq ($(MAKECMDGOALS),clean)
@@ -74,7 +75,7 @@ INCLUDES = -I. -I$(C_INGEX_PLAYER_DIR) -I$(INGEX_PLAYER_DIR) \
 LIBS = -L. -L$(INGEX_PLAYER_DIR) -lIngexPlayer \
 	$(ARCHIVEMXFINFO_LIB) $(MXFREADER_LIB) $(LIBMXF_LIB) \
 	-L$(COMMON_DIR) -lcommon \
-	-L$(COMMON_DIR)/YUVlib -lYUVlib \
+	-L$(YUVLIB_DIR) -lYUVlib \
 	-lshttpd -lX11 -lXv -lpthread -lfreetype -lfontconfig
 
 

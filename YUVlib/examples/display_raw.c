@@ -208,7 +208,7 @@ static void XVideoReleasePort( Display *p_display, int i_port )
     XvUngrabPort( p_display, i_port, CurrentTime );
 }
 
-static int	average_sleep = 0;
+static int  average_sleep = 0;
 static void sleep_diff(long delay, const struct timeval *now, const struct timeval *last)
 {
     long diff_usec;
@@ -225,22 +225,22 @@ static void sleep_diff(long delay, const struct timeval *now, const struct timev
 
 int main(int argc, char *argv[])
 {
-    int				xvport;
-    Display*			display;
-    Window			window;
-    XSetWindowAttributes	x_attr;
-    GC				gc;
-    XEvent			event;
-    int				pic_width = 720, pic_height = 576;
-    int				dsply_height = pic_height;
-    int				dsply_width = dsply_height * 16 / 9;
-    XvImage*			yuv_image = NULL;
-    unsigned char*		frame_buff = NULL;
-    int				frame_size;
-    int32_t			frame_format;
-    struct timeval		now_time, last_frame_time;
-    char*			in_name = "stdin";
-    FILE*			in_fd = stdin;
+    int             xvport;
+    Display*            display;
+    Window          window;
+    XSetWindowAttributes    x_attr;
+    GC              gc;
+    XEvent          event;
+    int             pic_width = 720, pic_height = 576;
+    int             dsply_height = pic_height;
+    int             dsply_width = dsply_height * 16 / 9;
+    XvImage*        yuv_image = NULL;
+    char*           frame_buff = NULL;
+    int             frame_size;
+    int32_t         frame_format;
+    struct timeval  now_time, last_frame_time;
+    char*           in_name = "stdin";
+    FILE*           in_fd = stdin;
 
     frame_format = X11_FOURCC('I','4','2','0');
     // get command line options
@@ -373,8 +373,8 @@ int main(int argc, char *argv[])
 
         // Display on xv port
         XvPutImage(display, xvport, window, gc, yuv_image,
-            0, 0, pic_width, pic_height,	// source w,h
-            0, 0, dsply_width, dsply_height);	// scaled to w.h
+            0, 0, pic_width, pic_height,    // source w,h
+            0, 0, dsply_width, dsply_height);   // scaled to w.h
         XSync(display, False);
 
         // Display frame 0.040 seconds after last frame displayed

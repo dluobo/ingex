@@ -1,9 +1,7 @@
 /*
- * $Id: YUV_ffmpeg.h,v 1.4 2010/06/02 10:52:38 philipn Exp $
+ * $Id: YUV_blend.h,v 1.1 2010/09/29 09:01:13 john_f Exp $
  *
- *
- *
- * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Copyright (C) 2009 British Broadcasting Corporation, All Rights Reserved
  * Author: Jim Easterbrook
  *
  * This program is free software; you can redistribute it and/or modify
@@ -21,29 +19,25 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifndef __YUVLIB_FFMPEG__
-#define __YUVLIB_FFMPEG__
+#ifndef __YUVLIB_BLEND__
+#define __YUVLIB_BLEND__
+
+#include "YUV_frame.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#ifdef FFMPEG_OLD_INCLUDE_PATHS
-#include <ffmpeg/avformat.h>
-#else
-#include <libavformat/avformat.h>
-#endif
-
-#include "YUV_frame.h"
-
-/* Set a YUV_frame to point at the contents of an ffmpeg AVFrame.
+/* Mix two YUV frames using a constant 'alpha'.
+ * Output is (a * in1) + ((1 - a) * in2) i.e. the normal "compositing
+ * equation".
+ * The "invert" switch allows in2 to be inverted, making a difference signal.
  */
-extern int YUV_frame_from_AVFrame(YUV_frame* dest,
-                                  AVCodecContext *avctx, AVFrame* source);
+int blend(YUV_frame* in_frame1, YUV_frame* in_frame2, YUV_frame* out_frame,
+          const double alpha, const int invert);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif // __YUVLIB_FFMPEG__
-
+#endif // __YUVLIB_BLEND__

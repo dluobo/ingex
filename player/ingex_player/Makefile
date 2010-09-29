@@ -3,6 +3,7 @@ include ../../common/libmxf.mk
 PLAYER_INSTALL_PREFIX ?= /usr/local
 
 COMMON_DIR = ../../common
+YUVLIB_DIR = ../../YUVlib
 
 ifneq ($(MAKECMDGOALS),clean)
 	ifneq ($(MAKECMDGOALS),install)
@@ -153,8 +154,8 @@ endif
 ifndef TEST_UDP_PATH
 	CFLAGS += -DDISABLE_UDP_SOURCE
 else
-	INCLUDES += -I$(COMMON_DIR) -I$(COMMON_DIR)/YUVlib
-	LIBS += -L$(COMMON_DIR) -L$(COMMON_DIR)/YUVlib -lcommon -lYUVlib
+	INCLUDES += -I$(COMMON_DIR) -I$(YUVLIB_DIR)
+	LIBS += -L$(COMMON_DIR) -L$(YUVLIB_DIR) -lcommon -lYUVlib
 endif
 
 ifdef HAVE_PORTAUDIO
@@ -187,7 +188,7 @@ SOURCES = multiple_sources.c dvs_sink.c connection_matrix.c stream_connect.c uti
 	clapper_source.c sdl_sink.c clip_source.c video_switch_database.c source_event.c \
 	dnxhd_stream_connect.c qc_http_access.c mouse_input.c mouse_input_connect.c raw_dv_source.c \
 	ffmpeg_source.c audio_switch_sink.c overlay.c clapper_source_data.c \
-	media_player_marks.c vitc_reader_sink_source.c mov_helper.c
+	media_player_marks.c vitc_reader_sink_source.c mov_helper.c picture_scale_sink.c
 OBJECTS = $(patsubst %.c,.objs/%.o,$(SOURCES))
 DEPENDENCIES = $(patsubst %.c,.deps/%.d,$(SOURCES))
 

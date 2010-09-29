@@ -1,5 +1,5 @@
 /*
- * $Id: YUV_DirectShow.cpp,v 1.2 2009/09/18 15:07:23 philipn Exp $
+ * $Id: YUV_DirectShow.cpp,v 1.1 2010/09/29 09:01:13 john_f Exp $
  *
  *
  *

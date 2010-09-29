@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.5 2010/07/21 18:51:26 john_f Exp $
+# $Id: Makefile,v 1.6 2010/09/29 09:01:13 john_f Exp $
 #
 # Makefile for building the Ingex suite of applications
 #
@@ -35,6 +35,7 @@ ifndef USE_INSTALLED_LIBMXF
 	$(MAKE) -C libMXF
 	$(MAKE) -C libMXF++
 endif
+	$(MAKE) -C YUVlib
 	$(MAKE) -C common
 	$(MAKE) -C player
 	$(MAKE) -C studio
@@ -56,6 +57,7 @@ ifndef USE_INSTALLED_LIBMXF
 	$(MAKE) -C libMXF $@
 	$(MAKE) -C libMXF++ $@
 endif
+	$(MAKE) -C YUVlib $@
 	$(MAKE) -C common $@
 	$(MAKE) -C player $@
 	$(MAKE) -C studio realclean

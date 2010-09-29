@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.3 2008/07/08 14:59:21 philipn Exp $
+# $Id: Makefile,v 1.1 2010/09/29 09:01:13 john_f Exp $
 #
 # Makefile for building YUVlib
 #

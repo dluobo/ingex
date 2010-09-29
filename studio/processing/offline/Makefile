@@ -1,4 +1,4 @@
-# $Id: Makefile,v 1.13 2010/07/21 16:29:34 john_f Exp $
+# $Id: Makefile,v 1.14 2010/09/29 09:01:14 john_f Exp $
 #
 
 include ../../../common/libmxf.mk
@@ -7,7 +7,7 @@ DATABASELIB_DIR = ../../database/src
 MXFWRITER_DIR = ../../mxfwriter
 STUDIOCOMMON_DIR = ../../common
 COMMON_DIR = ../../../common
-YUVLIB_DIR = $(COMMON_DIR)/YUVlib
+YUVLIB_DIR = ../../../YUVlib
 
 
 CC = gcc

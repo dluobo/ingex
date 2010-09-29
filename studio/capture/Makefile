@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.16 2010/08/12 16:27:08 john_f Exp $
+# $Id: Makefile,v 1.17 2010/09/29 09:01:14 john_f Exp $
 #
 # Makefile for building ingex server and utilities.
 #
@@ -33,12 +33,12 @@ else
   SDI_PROGS=dvs_dummy testgen
 endif
 
-CPPFLAGS = -DDEBUG -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE -DUSE_FFMPEG -I../../common -I../../common/YUVlib -I../common -I../database/src
+CPPFLAGS = -DDEBUG -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE -DUSE_FFMPEG -I../../common -I../../YUVlib -I../common -I../database/src
 CXXFLAGS = -Wall -g -O3
 TARGET_ARCH = -mmmx -msse2
 
 LIBS = -lstudiocommon -lcommon -lYUVlib
-LIBPATHS = -L../common -L../../common -L../../common/YUVlib
+LIBPATHS = -L../common -L../../common -L../../YUVlib
 
 FFMPEG_LIBS = -lavformat -lavcodec -lswscale -lavutil -lz -lbz2 -lmp3lame -lx264 -lfaac -lfaad -lm -lpthread
 
@@ -72,7 +72,7 @@ nexus_save: nexus_save.o
 	$(CXX) $(TARGET_ARCH) $< $(LIBPATHS) $(LIBS) $(FFMPEG_LIBS) -lpthread -o $@
 
 nexus_multicast: nexus_multicast.o multicast_compressed.o
-	$(CXX) $(TARGET_ARCH) nexus_multicast.o multicast_compressed.o -o $@ $(LIBPATHS) $(LIBS) -L../../common/YUVlib -lYUVlib $(FFMPEG_LIBS)
+	$(CXX) $(TARGET_ARCH) nexus_multicast.o multicast_compressed.o -o $@ $(LIBPATHS) $(LIBS) $(FFMPEG_LIBS)
 
 nexus_xv: nexus_xv.o
 	$(CXX) $(TARGET_ARCH) $< -o nexus_xv $(LIBPATHS) $(LIBS) -L/usr/X11R6/lib -L/usr/X11R6/lib64 -lXv

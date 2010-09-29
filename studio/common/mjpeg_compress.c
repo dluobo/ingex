@@ -1,5 +1,5 @@
 /*
- * $Id: mjpeg_compress.c,v 1.5 2010/06/02 13:10:46 john_f Exp $
+ * $Id: mjpeg_compress.c,v 1.6 2010/09/29 09:01:14 john_f Exp $
  *
  * MJPEG encoder.
  *
@@ -42,7 +42,7 @@
 #include <assert.h>
 
 #include "mjpeg_compress.h"
-#include "YUVlib/YUV_scale_pic.h"
+#include "YUV_scale_pic.h"
 
 // Following two tables were found in Avid Media Composer 3.0 MXF files for 2:1.
 // Content was brightly lit colourful studio for childrens' television.

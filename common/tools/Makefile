@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.9 2010/09/06 13:44:07 john_f Exp $
+# $Id: Makefile,v 1.10 2010/09/29 09:01:14 john_f Exp $
 #
 # Makefile for building useful command-line tools
 #
@@ -33,7 +33,7 @@ CXXFLAGS = -Wall -W -Wno-unused-parameter -g -O3
 TARGET_ARCH = -mmmx -msse2
 
 LIB_COMMON = ../libcommon.a
-YUV_LIB = -L../YUVlib -lYUVlib
+YUV_LIB = -L../../YUVlib -lYUVlib
 
 PROGS = convert_audio convert_10bit_video create_video_test_signal detect_digibeta_dropouts \
 	compare_archive_mxf clapperboard_avsync disk_rw_benchmark send_video receive_video \

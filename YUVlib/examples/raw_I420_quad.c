@@ -1,11 +1,13 @@
+#ifndef _LARGEFILE64_SOURCE
 #define _LARGEFILE64_SOURCE
+#endif
 
-#include <stdlib.h>	/* atoi() */
+#include <stdlib.h> /* atoi() */
 #include <string.h>     /* strcmp() */
 #include <getopt.h>
 #include <limits.h>
-#include <fcntl.h>	/* open() */
-#include <unistd.h>	/* close() */
+#include <fcntl.h>  /* open() */
+#include <unistd.h> /* close() */
 #include <stdio.h>
 
 #include "planar_YUV_io.h"
@@ -30,8 +32,8 @@ static struct option long_options[] =
     {"skip",      1, NULL, 22},
     {"count",     1, NULL, 23},
     {"timecode",  1, NULL, 24},
-    {"label",	  1, NULL, 25},
-    {"alltext",	  0, NULL, 26},
+    {"label",     1, NULL, 25},
+    {"alltext",   0, NULL, 26},
     {0, 0, 0, 0}
 };
 
@@ -51,49 +53,50 @@ static void usage(char* name)
 
 typedef struct
 {
-    int		valid;
-    char	text[1024];
-    overlay	ovly;
-    int		x, y;
+    int     valid;
+    char    text[1024];
+    overlay ovly;
+    int     x, y;
 } title_info;
 
 typedef struct
 {
-    int		valid;
-    int		fd;
-    char	name[1024];
-    int		skip;
-    int		count;
+    int     valid;
+    int     fd;
+    char    name[1024];
+    int     skip;
+    int     count;
 } input_info;
 
-#define QUADRANTS	4
-#define	LABEL_LINES	5
+#define QUADRANTS   4
+#define LABEL_LINES 5
 
 int main(int argc, char *argv[])
 {
-    int			height = 576;
-    int			width = 720;
-    int			fd_out;
-    int			i, n;
-    YUV_frame		in_frame;
-    YUV_frame		out_frame;
-    int			OK;
-    int			interlace_mode = 0;
-    int			h_filter = 0;
-    int			v_filter = 0;
-    int			quadrant = 0;
-    title_info		title[QUADRANTS];
-    input_info		input[QUADRANTS];
-    int			frameNo = 0;
-    int			tc_quadrant = -1;
-    int			tc_x, tc_y;
-    title_info		label[LABEL_LINES];
-    char		label_string[1024];
-    int			label_quadrant = 1;
-    int			all_quadrant = -1;
-    p_info_rec		at_info = NULL;
-    timecode_data	tc_data;
-    BYTE		Y, U, V;	// label colour
+    int         height = 576;
+    int         width = 720;
+    int         fd_out;
+    int         i, n;
+    YUV_frame       in_frame;
+    YUV_frame       out_frame;
+    int         OK;
+    int         interlace_mode = 0;
+    int         h_filter = 0;
+    int         v_filter = 0;
+    int         quadrant = 0;
+    title_info      title[QUADRANTS];
+    input_info      input[QUADRANTS];
+    int         frameNo = 0;
+    int         tc_quadrant = -1;
+    int         tc_x = 0;
+    int         tc_y = 0;
+    title_info      label[LABEL_LINES];
+    char        label_string[1024];
+    int         label_quadrant = 1;
+    int         all_quadrant = -1;
+    p_info_rec      at_info = NULL;
+    timecode_data   tc_data;
+    BYTE        Y, U, V;    // label colour
 
     // initialise vars
     for (n = 0; n < LABEL_LINES; n++)
@@ -292,9 +295,9 @@ int main(int argc, char *argv[])
     // construct label overlays
     if (label[0].valid)
     {
-        char*	sub_str;
-        int	count;
-        int	length;
+        char*   sub_str;
+        int count;
+        int length;
 
         // convert '\', 'n' sequences to ' ', '\n'
         length = strlen(label_string);
@@ -338,7 +341,7 @@ int main(int argc, char *argv[])
     unsigned char workSpace[width * 3];
     while (1)
     {
-        OK = 0;		// Assume no inputs still active
+        OK = 0;     // Assume no inputs still active
         for (n = 0; n < 4; n++)
         {
             input[n].skip++;
@@ -347,7 +350,7 @@ int main(int argc, char *argv[])
             {
                 // Read an input frame
                 if (read_frame(&in_frame, input[n].fd))
-                    OK = 1;		// still got an input
+                    OK = 1;     // still got an input
                 else
                 {
                     fprintf(stderr, "end of file %d\n", n);

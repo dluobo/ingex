@@ -1,5 +1,5 @@
 /*
- * $Id: YUV_quarter_frame.h,v 1.2 2009/09/18 15:07:24 philipn Exp $
+ * $Id: YUV_resample.h,v 1.1 2010/09/29 09:01:13 john_f Exp $
  *
  *
  *
@@ -21,8 +21,8 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifndef __YUVLIB_QUARTER_FRAME__
-#define __YUVLIB_QUARTER_FRAME__
+#ifndef __YUVLIB_RESAMPLE__
+#define __YUVLIB_RESAMPLE__
 
 #include "YUV_frame.h"
 
@@ -30,13 +30,13 @@
 extern "C" {
 #endif
 
-// Make a 2:1 down coonverted copy of in_frame in out_frame at position x,y
-void quarter_frame(YUV_frame* in_frame, YUV_frame* out_frame,
-                   int x, int y, int intlc, int hfil, int vfil,
-                   void* workSpace);
+/* Resample UV to 444.
+ */
+int to_444(YUV_frame* in_frame, YUV_frame* out_frame,
+           void* workSpace);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif // __YUVLIB_QUARTER_FRAME__
+#endif // __YUVLIB_RESAMPLE__

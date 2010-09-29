@@ -1,5 +1,5 @@
 /*
- * $Id: YUV_DirectShow.h,v 1.2 2009/09/18 15:07:24 philipn Exp $
+ * $Id: YUV_ffmpeg.h,v 1.1 2010/09/29 09:01:13 john_f Exp $
  *
  *
  *
@@ -21,17 +21,29 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifndef __YUVLIB_DIRECTSHOW__
-#define __YUVLIB_DIRECTSHOW__
+#ifndef __YUVLIB_FFMPEG__
+#define __YUVLIB_FFMPEG__
 
-// Interface between DirectShow video samples and simple video frame
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-// Get bit map info header from a media type
-extern BITMAPINFOHEADER*
-GetBMI(const AM_MEDIA_TYPE *mt);
+#ifdef FFMPEG_OLD_INCLUDE_PATHS
+#include <ffmpeg/avformat.h>
+#else
+#include <libavformat/avformat.h>
+#endif
 
-// Assign a DirectShow YUV sample to a YUV_frame
-extern HRESULT
-YUV_frame_from_DirectShow(const CMediaType* pMT, BYTE* buff, YUV_frame* pFrame);
+#include "YUV_frame.h"
 
-#endif // __YUVLIB_DIRECTSHOW__
+/* Set a YUV_frame to point at the contents of an ffmpeg AVFrame.
+ */
+extern int YUV_frame_from_AVFrame(YUV_frame* dest,
+                                  AVCodecContext *avctx, AVFrame* source);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // __YUVLIB_FFMPEG__
+

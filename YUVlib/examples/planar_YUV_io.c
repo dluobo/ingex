@@ -1,11 +1,14 @@
+#ifndef _LARGEFILE64_SOURCE
 #define _LARGEFILE64_SOURCE
-#include <unistd.h>	/* read(), write() lseek() */
+#endif
+#include <unistd.h> /* read(), write() lseek() */
+#include <stdio.h>  /* perror() */
 
 #include "planar_YUV_io.h"
 
 int read_all(int fd, void *buf, size_t count)
 {
-    size_t	n;
+    size_t  n;
 
     while (count > 0)
     {
@@ -25,7 +28,7 @@ int read_all(int fd, void *buf, size_t count)
 
 int write_all(int fd, const void *buf, size_t count)
 {
-    size_t	n;
+    size_t  n;
 
     while (count > 0)
     {
@@ -57,9 +60,9 @@ int skip_frames(YUV_frame* frame, int fd, int frames)
 
 int read_frame(YUV_frame* frame, int fd)
 {
-    unsigned char*	ptr;
-    int			result;
-    int			y;
+    unsigned char*  ptr;
+    int         result;
+    int         y;
 
     ptr = frame->Y.buff;
     for (y = 0; y < frame->Y.h; y++)
@@ -90,9 +93,9 @@ int read_frame(YUV_frame* frame, int fd)
 
 int write_frame(YUV_frame* frame, int fd)
 {
-    unsigned char*	ptr;
-    int			result;
-    int			y;
+    unsigned char*  ptr;
+    int         result;
+    int         y;
 
     ptr = frame->Y.buff;
     for (y = 0; y < frame->Y.h; y++)

@@ -1,5 +1,5 @@
 /*
- * $Id: YUV_resample.c,v 1.4 2010/01/12 16:09:16 john_f Exp $
+ * $Id: YUV_resample.c,v 1.1 2010/09/29 09:01:13 john_f Exp $
  *
  *
  *

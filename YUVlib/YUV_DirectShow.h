@@ -1,5 +1,5 @@
 /*
- * $Id: YUV_quarter_frame.c,v 1.2 2009/09/18 15:07:24 philipn Exp $
+ * $Id: YUV_DirectShow.h,v 1.1 2010/09/29 09:01:13 john_f Exp $
  *
  *
  *
@@ -21,14 +21,17 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#include "YUV_frame.h"
-#include "YUV_quarter_frame.h"
-#include "YUV_small_pic.h"
+#ifndef __YUVLIB_DIRECTSHOW__
+#define __YUVLIB_DIRECTSHOW__
 
-void quarter_frame(YUV_frame* in_frame, YUV_frame* out_frame,
-                   int x, int y, int intlc, int hfil, int vfil,
-                   void* workSpace)
-{
-    small_pic(in_frame, out_frame, x, y, 2, 2,
-              intlc, hfil ? 1 : 0, vfil ? 2 : 0, workSpace);
-}
+// Interface between DirectShow video samples and simple video frame
+
+// Get bit map info header from a media type
+extern BITMAPINFOHEADER*
+GetBMI(const AM_MEDIA_TYPE *mt);
+
+// Assign a DirectShow YUV sample to a YUV_frame
+extern HRESULT
+YUV_frame_from_DirectShow(const CMediaType* pMT, BYTE* buff, YUV_frame* pFrame);
+
+#endif // __YUVLIB_DIRECTSHOW__

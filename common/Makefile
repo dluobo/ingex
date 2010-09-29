@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.10 2010/07/06 14:15:13 john_f Exp $
+# $Id: Makefile,v 1.11 2010/09/29 09:01:13 john_f Exp $
 #
 # Makefile for building common functions
 #
@@ -23,7 +23,7 @@
 
 CC=gcc
 OPT=-DNDEBUG -O3 -mmmx -msse2
-INCLUDES=-IYUVlib
+INCLUDES=-I../YUVlib
 CFLAGS=-Wall -W -Wno-unused-parameter -g -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE $(OPT) $(INCLUDES)
 CXXFLAGS=-Wall -W -Wno-unused-parameter -g -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE $(OPT) $(INCLUDES)
 
@@ -47,7 +47,7 @@ LIBCOMMON=libcommon.a
 PROGS=unittests
 
 .PHONY: all
-all: YUVlib $(LIBCOMMON) $(PROGS) tools
+all: $(LIBCOMMON) $(PROGS) tools
 
 $(LIBCOMMON): $(OBJECTS)
 	ar rcv $(LIBCOMMON) $(OBJECTS)
@@ -66,13 +66,8 @@ valgrind-check: all
 .PHONY: clean
 clean:
 	rm -f $(LIBCOMMON) $(OBJECTS) $(PROGS)
-	cd YUVlib && $(MAKE) $@
 	cd tools && $(MAKE) $@
 	
-.PHONY: YUVlib
-YUVlib:
-	cd YUVlib && $(MAKE)
-
 .PHONY: tools
 tools:
 	cd tools && $(MAKE)

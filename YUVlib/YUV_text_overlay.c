@@ -1,5 +1,5 @@
 /*
- * $Id: YUV_text_overlay.c,v 1.6 2010/08/27 17:41:32 john_f Exp $
+ * $Id: YUV_text_overlay.c,v 1.1 2010/09/29 09:01:13 john_f Exp $
  *
  *
  *

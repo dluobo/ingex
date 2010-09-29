@@ -1,5 +1,5 @@
 /*
- * $Id: YUV_resample.h,v 1.2 2009/09/18 15:07:24 philipn Exp $
+ * $Id: YUV_quarter_frame.c,v 1.1 2010/09/29 09:01:13 john_f Exp $
  *
  *
  *
@@ -21,22 +21,14 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifndef __YUVLIB_RESAMPLE__
-#define __YUVLIB_RESAMPLE__
-
 #include "YUV_frame.h"
+#include "YUV_quarter_frame.h"
+#include "YUV_small_pic.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-/* Resample UV to 444.
- */
-int to_444(YUV_frame* in_frame, YUV_frame* out_frame,
-           void* workSpace);
-
-#ifdef __cplusplus
+void quarter_frame(YUV_frame* in_frame, YUV_frame* out_frame,
+                   int x, int y, int intlc, int hfil, int vfil,
+                   void* workSpace)
+{
+    small_pic(in_frame, out_frame, x, y, 2, 2,
+              intlc, hfil ? 1 : 0, vfil ? 2 : 0, workSpace);
 }
-#endif
-
-#endif // __YUVLIB_RESAMPLE__

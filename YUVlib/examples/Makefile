@@ -6,11 +6,10 @@ CFLAGS		+= -O3 -mmmx -msse2 -Wall -g -D_FILE_OFFSET_BITS=64 \
 		   -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE
 CPPFLAGS	+= -I.. \
 		   -I/usr/include/freetype2 \
-		   -I/usr/include/fontconfig \
-		   -I/usr/local/include/ffmpeg
+		   -I/usr/include/fontconfig
 LDFLAGS		+= -L.. -L/usr/X11R6/lib
 LDLIBS		+= -lYUVlib -lXv -lXext -lX11 \
-			-lfreetype -lfontconfig -lavcodec -lavformat
+			-lfreetype -lfontconfig -lavformat -lavcodec -lswscale -lavutil -lz -lbz2 -lmp3lame -lx264 -lfaac -lfaad -lm -lpthread
 
 .PHONY : all clean test test2
 

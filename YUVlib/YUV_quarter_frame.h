@@ -1,7 +1,9 @@
 /*
- * $Id: YUV_blend.h,v 1.1 2009/12/17 15:43:29 john_f Exp $
+ * $Id: YUV_quarter_frame.h,v 1.1 2010/09/29 09:01:13 john_f Exp $
  *
- * Copyright (C) 2009 British Broadcasting Corporation, All Rights Reserved
+ *
+ *
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
  * Author: Jim Easterbrook
  *
  * This program is free software; you can redistribute it and/or modify
@@ -19,8 +21,8 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifndef __YUVLIB_BLEND__
-#define __YUVLIB_BLEND__
+#ifndef __YUVLIB_QUARTER_FRAME__
+#define __YUVLIB_QUARTER_FRAME__
 
 #include "YUV_frame.h"
 
@@ -28,16 +30,13 @@
 extern "C" {
 #endif
 
-/* Mix two YUV frames using a constant 'alpha'.
- * Output is (a * in1) + ((1 - a) * in2) i.e. the normal "compositing
- * equation".
- * The "invert" switch allows in2 to be inverted, making a difference signal.
- */
-int blend(YUV_frame* in_frame1, YUV_frame* in_frame2, YUV_frame* out_frame,
-          const double alpha, const int invert);
+// Make a 2:1 down coonverted copy of in_frame in out_frame at position x,y
+void quarter_frame(YUV_frame* in_frame, YUV_frame* out_frame,
+                   int x, int y, int intlc, int hfil, int vfil,
+                   void* workSpace);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif // __YUVLIB_BLEND__
+#endif // __YUVLIB_QUARTER_FRAME__
