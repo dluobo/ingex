@@ -1,5 +1,5 @@
 /*
- * $Id: LocalIngexPlayer.cpp,v 1.22 2010/06/18 09:44:51 philipn Exp $
+ * $Id: LocalIngexPlayer.cpp,v 1.23 2010/10/01 15:56:21 john_f Exp $
  *
  * Copyright (C) 2008-2010 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
@@ -54,6 +54,7 @@
 #include <mjpeg_stream_connect.h>
 #include <audio_sink.h>
 #include <audio_level_sink.h>
+#include "picture_scale_sink.h"
 #include <utils.h>
 #include <logging.h>
 
@@ -608,7 +609,7 @@ LocalIngexPlayer::LocalIngexPlayer(IngexPlayerListenerRegistry* listenerRegistry
     _config.numFFMPEGThreads = 4;
     _config.initiallyLocked = false;
     _config.useWorkerThreads = true;
-    _config.applySplitFilter = true;
+    _config.applyScaleFilter = true;
     _config.srcBufferSize = 0;
     _config.disableSDIOSD = false;
     _config.disableX11OSD = false;
@@ -621,6 +622,7 @@ LocalIngexPlayer::LocalIngexPlayer(IngexPlayerListenerRegistry* listenerRegistry
     _config.numAudioLevelMonitors = 2;
     _config.audioLineupLevel = -18.0;
     _config.enableAudioSwitch = true;
+    _config.useDisplayDimensions = false;
     memset(&_config.externalWindowInfo, 0, sizeof(_config.externalWindowInfo));
     
     _nextConfig = _config;
@@ -747,10 +749,10 @@ void LocalIngexPlayer::setUseWorkerThreads(bool enable)
     PTHREAD_MUTEX_UNLOCK(&_configMutex);
 }
 
-void LocalIngexPlayer::setApplySplitFilter(bool enable)
+void LocalIngexPlayer::setApplyScaleFilter(bool enable)
 {
     PTHREAD_MUTEX_LOCK(&_configMutex);
-    _nextConfig.applySplitFilter = enable;
+    _nextConfig.applyScaleFilter = enable;
     PTHREAD_MUTEX_UNLOCK(&_configMutex);
 }
 
@@ -857,6 +859,13 @@ void LocalIngexPlayer::setSDIOSDEnable(bool enable)
 {
     PTHREAD_MUTEX_LOCK(&_configMutex);
     _nextConfig.disableSDIOSD = !enable;
+    PTHREAD_MUTEX_UNLOCK(&_configMutex);
+}
+
+void LocalIngexPlayer::setUseDisplayDimensions(bool enable)
+{
+    PTHREAD_MUTEX_LOCK(&_configMutex);
+    _nextConfig.useDisplayDimensions = enable;
     PTHREAD_MUTEX_UNLOCK(&_configMutex);
 }
 
@@ -1298,10 +1307,14 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
                 // DVS card/channel selection has changed
                 resetPlayer = false;
             }
-            else if (nextConfig.videoSplit != _config.videoSplit ||
-                nextConfig.applySplitFilter != _config.applySplitFilter)
+            else if (nextConfig.videoSplit != _config.videoSplit)
             {
                 // video split has changed
+                resetPlayer = false;
+            }
+            else if (nextConfig.applyScaleFilter != _config.applyScaleFilter)
+            {
+                // video scale filter has changed
                 resetPlayer = false;
             }
             else if (nextConfig.disableSDIOSD != _config.disableSDIOSD)
@@ -1329,6 +1342,11 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
             else if (nextConfig.enableAudioSwitch != _config.enableAudioSwitch)
             {
                 // audio switching support has changed
+                resetPlayer = false;
+            }
+            else if (nextConfig.useDisplayDimensions != _config.useDisplayDimensions)
+            {
+                // use display dimensions has changed
                 resetPlayer = false;
             }
 
@@ -1411,8 +1429,8 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
                 case X11_OUTPUT:
                     CHK_OTHROW(setOrCreateX11Window(&nextConfig.externalWindowInfo));
                     CHK_OTHROW_MSG(xsk_open(20, nextConfig.disableX11OSD, &nextConfig.pixelAspectRatio,
-                        &nextConfig.monitorAspectRatio, nextConfig.scale, swScale, &_windowInfo,
-                        &x11Sink), ("Failed to open X11 display sink\n"));
+                        &nextConfig.monitorAspectRatio, nextConfig.scale, swScale, nextConfig.applyScaleFilter,
+                        &_windowInfo, &x11Sink), ("Failed to open X11 display sink\n"));
                     xsk_register_window_listener(x11Sink, &_x11WindowListener);
                     xsk_register_keyboard_listener(x11Sink, &_x11KeyListener);
                     xsk_register_progress_bar_listener(x11Sink, &_x11ProgressBarListener);
@@ -1427,8 +1445,8 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
                 case X11_XV_OUTPUT:
                     CHK_OTHROW(setOrCreateX11Window(&nextConfig.externalWindowInfo));
                     CHK_OTHROW_MSG(xvsk_open(20, nextConfig.disableX11OSD, &nextConfig.pixelAspectRatio,
-                        &nextConfig.monitorAspectRatio, nextConfig.scale, swScale, &_windowInfo,
-                        &x11XVSink), ("Failed to open X11 XV display sink\n"));
+                        &nextConfig.monitorAspectRatio, nextConfig.scale, swScale, nextConfig.applyScaleFilter,
+                        &_windowInfo, &x11XVSink), ("Failed to open X11 XV display sink\n"));
                     xvsk_register_window_listener(x11XVSink, &_x11WindowListener);
                     xvsk_register_keyboard_listener(x11XVSink, &_x11KeyListener);
                     xvsk_register_progress_bar_listener(x11XVSink, &_x11ProgressBarListener);
@@ -1451,8 +1469,8 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
                     CHK_OTHROW(setOrCreateX11Window(&nextConfig.externalWindowInfo));
                     CHK_OTHROW_MSG(dusk_open(20, nextConfig.dvsCard, nextConfig.dvsChannel, VITC_AS_SDI_VITC, INVALID_SDI_VITC, 12, 0,
                         nextConfig.disableSDIOSD, nextConfig.disableX11OSD, &nextConfig.pixelAspectRatio,
-                        &nextConfig.monitorAspectRatio, nextConfig.scale, swScale, 1, &_windowInfo,
-                        &dualSink), ("Failed to open dual DVS and X11 display sink\n"));
+                        &nextConfig.monitorAspectRatio, nextConfig.scale, swScale, nextConfig.applyScaleFilter,1,
+                        &_windowInfo, &dualSink), ("Failed to open dual DVS and X11 display sink\n"));
                     dusk_register_window_listener(dualSink, &_x11WindowListener);
                     dusk_register_keyboard_listener(dualSink, &_x11KeyListener);
                     dusk_register_progress_bar_listener(dualSink, &_x11ProgressBarListener);
@@ -1465,8 +1483,8 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
                     CHK_OTHROW(setOrCreateX11Window(&nextConfig.externalWindowInfo));
                     CHK_OTHROW_MSG(dusk_open(20, nextConfig.dvsCard, nextConfig.dvsChannel, VITC_AS_SDI_VITC, INVALID_SDI_VITC, 12, 1,
                         nextConfig.disableSDIOSD, nextConfig.disableX11OSD, &nextConfig.pixelAspectRatio,
-                        &nextConfig.monitorAspectRatio, nextConfig.scale, swScale, 1, &_windowInfo,
-                        &dualSink), ("Failed to open dual DVS and X11 XV display sink\n"));
+                        &nextConfig.monitorAspectRatio, nextConfig.scale, swScale, nextConfig.applyScaleFilter, 1,
+                        &_windowInfo, &dualSink), ("Failed to open dual DVS and X11 XV display sink\n"));
                     dusk_register_window_listener(dualSink, &_x11WindowListener);
                     dusk_register_keyboard_listener(dualSink, &_x11KeyListener);
                     dusk_register_progress_bar_listener(dualSink, &_x11ProgressBarListener);
@@ -1505,11 +1523,67 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
 
             if (nextConfig.videoSplit == QUAD_SPLIT_VIDEO_SWITCH || nextConfig.videoSplit == NONA_SPLIT_VIDEO_SWITCH)
             {
-                VideoSwitchSink* videoSwitch;
+                VideoSwitchSink *videoSwitch;
+                VideoSwitchSink *slaveVideoSwitch = 0;
+
+                if (_actualOutputType == DUAL_DVS_X11_OUTPUT ||
+                    _actualOutputType == DUAL_DVS_X11_XV_OUTPUT)
+                {
+                    // slave switch will handle output to X11 for case where the SDI raster size does not match the input
+                    CHK_OTHROW(qvs_create_video_switch(newPlayState->mediaSink, nextConfig.videoSplit,
+                                                       0, 0, 0, -1, -1, -1,
+                                                       &slaveVideoSwitch));
+                    newPlayState->mediaSink = vsw_get_media_sink(slaveVideoSwitch);
+                }
+
                 CHK_OTHROW(qvs_create_video_switch(newPlayState->mediaSink, nextConfig.videoSplit,
-                    nextConfig.applySplitFilter, 0, 0, 0, -1, -1, -1, &videoSwitch));
+                                                   0, 0, 0, -1, -1, -1,
+                                                   &videoSwitch));
+                if (slaveVideoSwitch)
+                    qvs_set_slave_video_switch(videoSwitch, slaveVideoSwitch);
+
                 newPlayState->mediaSink = vsw_get_media_sink(videoSwitch);
             }
+
+
+            // create picture scale sink
+
+            PictureScaleSink *scale_sink;
+            CHK_OTHROW_MSG(pss_create_picture_scale(newPlayState->mediaSink, nextConfig.applyScaleFilter,
+                                                    nextConfig.useDisplayDimensions, &scale_sink),
+                           ("Failed to create picture scale sink\n"));
+
+            if (_actualOutputType == DVS_OUTPUT ||
+                _actualOutputType == DUAL_DVS_X11_OUTPUT ||
+                _actualOutputType == DUAL_DVS_X11_XV_OUTPUT)
+            {
+                PSSRaster pss_raster = PSS_SD_625_RASTER;
+                SDIRaster sdi_raster;
+                if (_actualOutputType == DVS_OUTPUT)
+                    sdi_raster = dvs_get_raster(dvsSink);
+                else
+                    sdi_raster = dvs_get_raster(dusk_get_dvs_sink(dualSink));
+
+                switch (sdi_raster)
+                {
+                    case SDI_SD_625_RASTER:
+                        pss_raster = PSS_SD_625_RASTER;
+                        break;
+                    case SDI_SD_525_RASTER:
+                        pss_raster = PSS_SD_525_RASTER;
+                        break;
+                    case SDI_HD_1080_RASTER:
+                        pss_raster = PSS_HD_1080_RASTER;
+                        break;
+                    case SDI_OTHER_RASTER:
+                        pss_raster = PSS_UNKNOWN_RASTER;
+                        break;
+                }
+                pss_set_target_raster(scale_sink, pss_raster);
+            }
+
+            newPlayState->mediaSink = pss_get_media_sink(scale_sink);
+
 
 
             // create audio level monitors

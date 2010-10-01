@@ -1,5 +1,5 @@
 /*
- * $Id: player.c,v 1.27 2010/08/27 17:41:32 john_f Exp $
+ * $Id: player.c,v 1.28 2010/10/01 15:56:21 john_f Exp $
  *
  *
  *
@@ -70,6 +70,7 @@
 #include "raw_dv_source.h"
 #include "ffmpeg_source.h"
 #include "vitc_reader_sink_source.h"
+#include "picture_scale_sink.h"
 #include "version.h"
 #include "utils.h"
 #include "logging.h"
@@ -810,7 +811,7 @@ static void usage(const char* cmd)
     fprintf(stderr, "  --audio-switch           Use in combination with the video-switch to switch audio groups\n");
     fprintf(stderr, "  --quad-split             Add a quad split view to the video switch (--video-switch is also set)\n");
     fprintf(stderr, "  --nona-split             Add a nona (9) split view to the video switch (--video-switch is also set)\n");
-    fprintf(stderr, "  --no-split-filter        Don't apply horizontal and vertical filtering to video switch splits\n");
+    fprintf(stderr, "  --no-scale-filter        Don't apply horizontal and vertical filtering to picture scaling\n");
     fprintf(stderr, "  --split-select           Always show the video split and highlight the current selected video stream\n");
     fprintf(stderr, "  --prescaled-split        Images are already scaled down for video split\n");
     fprintf(stderr, "  --vswitch-db <name>      Video switch database filename\n");
@@ -894,6 +895,7 @@ static void usage(const char* cmd)
     fprintf(stderr, "  [--disable-stream <num>]*    Disable stream <num>. Use --src-info to check which streams are available\n");
     fprintf(stderr, "  --disable-shuttle        Do not grab and use the jog-shuttle control\n");
     fprintf(stderr, "  --vitc-read <lines>      Read VITC from 625-line VBI, where <lines> is comma seperated list of lines to try (e.g. '19,21')\n");
+    fprintf(stderr, "  --display-dim            Output image at display dimensions rather than stored dimensions, eg. skip VBI\n");
     fprintf(stderr, "\n");
     fprintf(stderr, "Inputs:\n");
     fprintf(stderr, "  -m, --mxf  <file>        MXF file input\n");
@@ -943,9 +945,10 @@ int main(int argc, const char **argv)
     int addVideoSwitch = 0;
     int addAudioSwitch = 0;
     VideoSwitchSplit videoSwitchSplit = NO_SPLIT_VIDEO_SWITCH;
-    int applySplitFilter = 1;
+    int applyScaleFilter = 1;
     int splitSelect = 0;
     VideoSwitchSink* videoSwitch = NULL;
+    VideoSwitchSink* slaveVideoSwitch = NULL;
     AudioSwitchSink* audioSwitch = NULL;
     const char* videoSwitchDatabaseFilename = NULL;
     int vswitchTimecodeType = -1;
@@ -1049,6 +1052,7 @@ int main(int argc, const char **argv)
     unsigned int vitcLines[MAX_VITC_LINE_READ];
     int numVITCLines = 0;
     VITCReaderSinkSource *vitcReaderSonk = NULL;
+    int useDisplayDimensions = 0;
 
     memset(inputs, 0, sizeof(inputs));
     memset(&markConfigs, 0, sizeof(markConfigs));
@@ -1358,9 +1362,9 @@ int main(int argc, const char **argv)
             videoSwitchSplit = NONA_SPLIT_VIDEO_SWITCH;
             cmdlnIndex += 1;
         }
-        else if (strcmp(argv[cmdlnIndex], "--no-split-filter") == 0)
+        else if (strcmp(argv[cmdlnIndex], "--no-scale-filter") == 0)
         {
-            applySplitFilter = 0;
+            applyScaleFilter = 0;
             cmdlnIndex += 1;
         }
         else if (strcmp(argv[cmdlnIndex], "--split-select") == 0)
@@ -1934,6 +1938,11 @@ int main(int argc, const char **argv)
                 return 1;
             }
             cmdlnIndex += 2;
+        }
+        else if (strcmp(argv[cmdlnIndex], "--display-dim") == 0)
+        {
+            useDisplayDimensions = 1;
+            cmdlnIndex++;
         }
         else if (strcmp(argv[cmdlnIndex], "-m") == 0 ||
             strcmp(argv[cmdlnIndex], "--mxf") == 0)
@@ -2684,7 +2693,7 @@ int main(int argc, const char **argv)
             g_player.x11WindowListener.close_request = x11_window_close_request;
 
             if (!xvsk_open(reviewDuration, disableX11OSD, &pixelAspectRatio, &monitorAspectRatio,
-                scale, swScale, &windowInfo, &g_player.x11XVDisplaySink))
+                           scale, swScale, applyScaleFilter, &windowInfo, &g_player.x11XVDisplaySink))
             {
                 ml_log_error("Failed to open x11 xv display sink\n");
                 goto fail;
@@ -2706,7 +2715,7 @@ int main(int argc, const char **argv)
             g_player.x11WindowListener.close_request = x11_window_close_request;
 
             if (!xsk_open(reviewDuration, disableX11OSD, &pixelAspectRatio, &monitorAspectRatio,
-                scale, swScale, &windowInfo, &g_player.x11DisplaySink))
+                          scale, swScale, applyScaleFilter, &windowInfo, &g_player.x11DisplaySink))
             {
                 ml_log_error("Failed to open x11 display sink\n");
                 goto fail;
@@ -2725,7 +2734,7 @@ int main(int argc, const char **argv)
 
         case DVS_OUTPUT:
             if (!dvs_open(dvsCard, dvsChannel, sdiVITCSource, extraSDIVITCSource, dvsBufferSize,
-                disableSDIOSD, fitVideo, &g_player.dvsSink))
+                          disableSDIOSD, fitVideo, &g_player.dvsSink))
             {
                 ml_log_error("Failed to open DVS card sink\n");
                 goto fail;
@@ -2738,8 +2747,9 @@ int main(int argc, const char **argv)
             g_player.x11WindowListener.close_request = x11_window_close_request;
 
             if (!dusk_open(reviewDuration, dvsCard, dvsChannel, sdiVITCSource, extraSDIVITCSource, dvsBufferSize,
-                xOutputType == X11_XV_DISPLAY_OUTPUT, disableSDIOSD, disableX11OSD, &pixelAspectRatio, &monitorAspectRatio,
-                scale, swScale, fitVideo, &windowInfo, &g_player.dualSink))
+                           xOutputType == X11_XV_DISPLAY_OUTPUT, disableSDIOSD, disableX11OSD, &pixelAspectRatio,
+                           &monitorAspectRatio, scale, swScale, applyScaleFilter, fitVideo, &windowInfo,
+                           &g_player.dualSink))
             {
                 ml_log_error("Failed to open dual X11 and DVS sink\n");
                 goto fail;
@@ -2831,14 +2841,29 @@ int main(int argc, const char **argv)
                 goto fail;
             }
         }
-        if (!qvs_create_video_switch(g_player.mediaSink, videoSwitchSplit, applySplitFilter, splitSelect, prescaledSplit,
-            g_player.videoSwitchDatabase, vswitchTimecodeIndex, vswitchTimecodeType, vswitchTimecodeSubType,
-            &videoSwitch))
+
+        if (outputType == DUAL_OUTPUT) {
+            if (!qvs_create_video_switch(g_player.mediaSink, videoSwitchSplit, splitSelect,
+                                         prescaledSplit, NULL, 0, -1, -1, &slaveVideoSwitch))
+            {
+                ml_log_error("Failed to create slave video switch\n");
+                goto fail;
+            }
+            g_player.mediaSink = vsw_get_media_sink(slaveVideoSwitch);
+        }
+
+        if (!qvs_create_video_switch(g_player.mediaSink, videoSwitchSplit, splitSelect, prescaledSplit,
+                                     g_player.videoSwitchDatabase, vswitchTimecodeIndex, vswitchTimecodeType,
+                                     vswitchTimecodeSubType, &videoSwitch))
         {
             ml_log_error("Failed to create video switch\n");
             goto fail;
         }
+        if (outputType == DUAL_OUTPUT)
+            qvs_set_slave_video_switch(videoSwitch, slaveVideoSwitch);
+
         g_player.mediaSink = vsw_get_media_sink(videoSwitch);
+
     }
     else if (halfSplit)
     {
@@ -2857,6 +2882,46 @@ int main(int argc, const char **argv)
             goto fail;
         }
         g_player.mediaSink = fss_get_media_sink(frameSequenceSink);
+    }
+
+
+    /* create picture scale sink */
+
+    {
+        PictureScaleSink *scale_sink;
+        if (!pss_create_picture_scale(g_player.mediaSink, applyScaleFilter, useDisplayDimensions, &scale_sink)) {
+            ml_log_error("Failed to create picture scale sink\n");
+            goto fail;
+        }
+
+        if (outputType == DVS_OUTPUT || outputType == DUAL_OUTPUT) {
+            PSSRaster pss_raster = PSS_SD_625_RASTER;
+            SDIRaster sdi_raster;
+
+            if (outputType == DVS_OUTPUT)
+                sdi_raster = dvs_get_raster(g_player.dvsSink);
+            else
+                sdi_raster = dvs_get_raster(dusk_get_dvs_sink(g_player.dualSink));
+
+            switch (sdi_raster)
+            {
+                case SDI_SD_625_RASTER:
+                    pss_raster = PSS_SD_625_RASTER;
+                    break;
+                case SDI_SD_525_RASTER:
+                    pss_raster = PSS_SD_525_RASTER;
+                    break;
+                case SDI_HD_1080_RASTER:
+                    pss_raster = PSS_HD_1080_RASTER;
+                    break;
+                case SDI_OTHER_RASTER:
+                    pss_raster = PSS_UNKNOWN_RASTER;
+                    break;
+            }
+            pss_set_target_raster(scale_sink, pss_raster);
+        }
+
+        g_player.mediaSink = pss_get_media_sink(scale_sink);
     }
 
 

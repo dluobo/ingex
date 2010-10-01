@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sink.c,v 1.18 2010/07/29 17:21:44 philipn Exp $
+ * $Id: dvs_sink.c,v 1.19 2010/10/01 15:56:21 john_f Exp $
  *
  *
  *
@@ -55,6 +55,11 @@ MediaSink* dvs_get_media_sink(DVSSink* sink)
     return NULL;
 }
 
+SDIRaster dvs_get_raster(DVSSink* sink)
+{
+    return SDI_SD_625_RASTER;
+}
+
 void dvs_close_card(DVSSink* sink)
 {
 }
@@ -92,13 +97,11 @@ int dvs_card_is_available(int card, int channel)
 /* interval for polling the DVS card fifo for changes */
 #define DVS_POLL_INTERVAL           10
 
-/* 23:59:59:24 + 1 */
-#define MAX_TIMECODE_COUNT          2160000
-
-
 /* the minimum number of frames that must be present in the fifo before the previous frame is
 repeated to avoid the buffer running empty */
 #define MIN_REPEAT_FIFO_BUFFERS     5
+
+#define AUDIO_OVERFLOW_DATA_SIZE    (4 * 4 * 2)
 
 
 #define SV_CHK_ORET(x) \
@@ -137,9 +140,10 @@ typedef struct
 
     int streamId;
     StreamInfo streamInfo;
+    int audio_byte_align;
 
     int ownData; /* delete here if data is not a reference into the buffer */
-    unsigned int dataSize;
+    unsigned int dataSize[2];
     unsigned char* data[2];
     unsigned int allocatedDataSize[2];
 
@@ -152,6 +156,7 @@ typedef struct
 {
     unsigned char* buffer;
     unsigned int bufferSize;
+    unsigned int audio_data_size;
     int vitcCount;
     int ltcCount;
     Timecode vitcTimecode;
@@ -186,12 +191,16 @@ struct DVSSink
     int numTimecodes;
 
     int depth8Bit;
+    Rational frameRate;
+    unsigned int roundedTimecodeBase;
     unsigned int rasterWidth;
     unsigned int rasterHeight;
     unsigned int videoDataSize;
     unsigned int videoOffset;
-    unsigned int audioDataSize;
+    unsigned int maxAudioDataSize;
     unsigned int audioPairOffset[(MAX_DVS_AUDIO_STREAMS + 1) / 2];
+    unsigned int audio_overflow_size;
+    unsigned char audio_overflow_data[(MAX_DVS_AUDIO_STREAMS + 1) / 2][AUDIO_OVERFLOW_DATA_SIZE];
 
     /* data sent to DVS card: A/V buffer and timecodes */
     DVSFifoBuffer fifoBuffer[2];
@@ -245,13 +254,13 @@ static inline void write_bcd(unsigned char* target, int val)
     *target = ((val / 10) << 4) + (val % 10);
 }
 
-static int int_to_dvs_tc(int tc)
+static int int_to_dvs_tc(DVSSink *sink, int tc)
 {
     // e.g. turn 1020219 into hex 0x11200819
-    int fr = tc % 25;
-    int hr = (int)(tc / (60*60*25));
-    int mi = (int)((tc - (hr * 60*60*25)) / (60 * 25));
-    int se = (int)((tc - (hr * 60*60*25) - (mi * 60*25)) / 25);
+    int fr = tc % sink->roundedTimecodeBase;
+    int hr = (int)(tc / (60*60*sink->roundedTimecodeBase));
+    int mi = (int)((tc - (hr * 60*60*sink->roundedTimecodeBase)) / (60 * sink->roundedTimecodeBase));
+    int se = (int)((tc - (hr * 60*60*sink->roundedTimecodeBase) - (mi * 60*sink->roundedTimecodeBase)) / sink->roundedTimecodeBase);
 
     unsigned char raw_tc[4];
     write_bcd(raw_tc + 0, fr);
@@ -262,15 +271,15 @@ static int int_to_dvs_tc(int tc)
     return result;
 }
 
-static Timecode get_timecode_from_count(int64_t count)
+static Timecode get_timecode_from_count(DVSSink *sink, int64_t count)
 {
     Timecode tc;
 
     tc.isDropFrame = 0;
-    tc.hour = count / (60 * 60 * 25);
-    tc.min = (count % (60 * 60 * 25)) / (60 * 25);
-    tc.sec = ((count % (60 * 60 * 25)) % (60 * 25)) / 25;
-    tc.frame = ((count % (60 * 60 * 25)) % (60 * 25)) % 25;
+    tc.hour = count / (60 * 60 * sink->roundedTimecodeBase);
+    tc.min = (count % (60 * 60 * sink->roundedTimecodeBase)) / (60 * sink->roundedTimecodeBase);
+    tc.sec = ((count % (60 * 60 * sink->roundedTimecodeBase)) % (60 * sink->roundedTimecodeBase)) / sink->roundedTimecodeBase;
+    tc.frame = ((count % (60 * 60 * sink->roundedTimecodeBase)) % (60 * sink->roundedTimecodeBase)) % sink->roundedTimecodeBase;
 
     return tc;
 }
@@ -302,9 +311,9 @@ static int get_timecode_count(DVSSink* sink, TimecodeType type, TimecodeSubType 
             sink->timecodes[i].timecodeType == type &&
             sink->timecodes[i].timecodeSubType == subType)
         {
-            return sink->timecodes[i].timecode.hour * 60 * 60 * 25 +
-                sink->timecodes[i].timecode.min * 60 * 25 +
-                sink->timecodes[i].timecode.sec * 25 +
+            return sink->timecodes[i].timecode.hour * 60 * 60 * sink->roundedTimecodeBase +
+                sink->timecodes[i].timecode.min * 60 * sink->roundedTimecodeBase +
+                sink->timecodes[i].timecode.sec * sink->roundedTimecodeBase +
                 sink->timecodes[i].timecode.frame;
         }
     }
@@ -442,25 +451,70 @@ static int open_dvs_card(int dvsCard, int dvsChannel, int log, sv_handle** svRes
 /* TODO: should SV_CHECK exit or just return 0? */
 static int display_on_sv_fifo(DVSSink* sink, DVSFifoBuffer* fifoBuffer)
 {
-    sv_fifo_buffer      *pbuffer;
-    sv_handle           *sv = sink->sv;
+    sv_fifo_buffer *pbuffer;
+    sv_handle *sv = sink->sv;
     int i;
+    unsigned int offset;
+    unsigned int num_copy;
 
 
     PTHREAD_MUTEX_LOCK(&sink->dvsFifoMutex)
 
-    /* Get fifo buffer */
     SV_CHK_OFAIL(sv_fifo_getbuffer(sv, sink->svfifo, &pbuffer, NULL, SV_FIFO_FLAG_NODMAADDR));
 
-    /* set the video and audio data sizes */
+    /* set the video data size */
     pbuffer->video[0].size = sink->videoDataSize;
-    pbuffer->audio[0].size = sink->audioDataSize;
 
     /* set the video and audio data pointers */
     pbuffer->video[0].addr = (char*)fifoBuffer->buffer;
     for (i = 0; i < MAX_DVS_AUDIO_STREAMS; i += 2)
     {
         pbuffer->audio[0].addr[i / 2] = (char*)fifoBuffer->buffer + sink->audioPairOffset[i / 2];
+    }
+
+    /* determine offset required for input audio if size differs from requested by DVS */
+    offset = sink->audio_overflow_size;
+    if (fifoBuffer->audio_data_size == 0) {
+        offset = 0;
+    } else if (offset + fifoBuffer->audio_data_size < (unsigned int)pbuffer->audio[0].size) {
+        offset += pbuffer->audio[0].size - (offset + fifoBuffer->audio_data_size);
+        if (offset > AUDIO_OVERFLOW_DATA_SIZE)
+            offset = AUDIO_OVERFLOW_DATA_SIZE;
+    } else {
+}
+    /* offset audio and add overflow data */
+    if (offset > 0) {
+        for (i = 0; i < MAX_DVS_AUDIO_STREAMS; i += 2) {
+            memmove(pbuffer->audio[0].addr[i / 2] + offset,
+                    pbuffer->audio[0].addr[i / 2],
+                    fifoBuffer->audio_data_size);
+            memcpy(pbuffer->audio[0].addr[i / 2],
+                   sink->audio_overflow_data[i / 2] + AUDIO_OVERFLOW_DATA_SIZE - offset,
+                   offset);
+        }
+    }
+
+    /* update overflow size for the next frame */
+    if (fifoBuffer->audio_data_size == 0) {
+        sink->audio_overflow_size = 0;
+    } else if (offset + fifoBuffer->audio_data_size > (unsigned int)pbuffer->audio[0].size) {
+        sink->audio_overflow_size = (offset + fifoBuffer->audio_data_size) - pbuffer->audio[0].size;
+        if (sink->audio_overflow_size > AUDIO_OVERFLOW_DATA_SIZE)
+            sink->audio_overflow_size = AUDIO_OVERFLOW_DATA_SIZE;
+    } else {
+        sink->audio_overflow_size = 0;
+    }
+
+    /* copy data for next frame's overflow data */
+    num_copy = AUDIO_OVERFLOW_DATA_SIZE;
+    if (num_copy > fifoBuffer->audio_data_size)
+        num_copy = fifoBuffer->audio_data_size;
+    for (i = 0; i < MAX_DVS_AUDIO_STREAMS; i += 2)
+    {
+        memset(sink->audio_overflow_data[i / 2], 0, AUDIO_OVERFLOW_DATA_SIZE);
+        memcpy(sink->audio_overflow_data[i / 2] + AUDIO_OVERFLOW_DATA_SIZE - num_copy,
+               pbuffer->audio[0].addr[i / 2] + offset + fifoBuffer->audio_data_size - num_copy,
+               num_copy);
     }
 
 
@@ -517,7 +571,7 @@ static int display_on_sv_fifo(DVSSink* sink, DVSFifoBuffer* fifoBuffer)
 
 
     return 1;
-
+    
 fail:
     PTHREAD_MUTEX_UNLOCK(&sink->dvsFifoMutex)
     return 0;
@@ -640,7 +694,7 @@ static void* get_dvs_state_info_thread(void* arg)
                     /* mute the audio */
                     for (i = 0; i < sink->numAudioStreams; i += 2)
                     {
-                        memset(&sink->fifoBuffer[(sink->currentFifoBuffer + 1) % 2].buffer[sink->audioPairOffset[i / 2]], 0, sink->audioDataSize);
+                        memset(&sink->fifoBuffer[(sink->currentFifoBuffer + 1) % 2].buffer[sink->audioPairOffset[i / 2]], 0, sink->maxAudioDataSize);
                     }
 
                     int i;
@@ -702,27 +756,30 @@ static void reset_streams(DVSSink* sink)
     }
 }
 
-static void interleave_audio(unsigned char* audio1,
-    int inputByteAlign1,
-    unsigned char* audio2,
-    int inputByteAlign2,
-    int reversePlay,
-    unsigned char* outBuffer)
+static void interleave_audio(unsigned char* audio1, unsigned int numSamples1, int inputByteAlign1,
+                             unsigned char* audio2, unsigned int numSamples2, int inputByteAlign2,
+                             int reversePlay, unsigned char* outBuffer)
 {
     unsigned char* audio1Ptr;
     unsigned char* audio2Ptr;
     unsigned char* outAudioPtr = outBuffer;
-    int i;
+    unsigned int num_samples;
+    unsigned int i;
     int j;
 
     assert(audio1 == NULL || (inputByteAlign1 >= 1 && inputByteAlign1 <= 4));
     assert(audio2 == NULL || (inputByteAlign2 >= 1 && inputByteAlign2 <= 4));
+    assert(audio1 == NULL || audio2 == NULL || numSamples1 == numSamples2);
+
+    num_samples = numSamples1;
+    if (num_samples == 0)
+        num_samples = numSamples2;
 
     if (reversePlay)
     {
         /* position at end of data */
-        audio1Ptr = audio1 + (1920 - 1) * inputByteAlign1;
-        audio2Ptr = audio2 + (1920 - 1) * inputByteAlign2;
+        audio1Ptr = audio1 + (num_samples - 1) * inputByteAlign1;
+        audio2Ptr = audio2 + (num_samples - 1) * inputByteAlign2;
     }
     else
     {
@@ -730,7 +787,7 @@ static void interleave_audio(unsigned char* audio1,
         audio2Ptr = audio2;
     }
 
-    for (i = 0; i < 1920; i++)
+    for (i = 0; i < num_samples; i++)
     {
         /* samples are little endian and are filled from the least significant byte */
         /* DVS interleaved audio format has 4 bytes for audio1, 4 bytes audio2 and so on */
@@ -831,16 +888,17 @@ static int dvs_accept_stream(void* data, const StreamInfo* streamInfo)
 {
     DVSSink* sink = (DVSSink*)data;
 
-    /* video, 25 fps, UYVY/YUV422 */
+    /* video, 25/29.97 fps, UYVY/YUV422 */
     if (streamInfo->type == PICTURE_STREAM_TYPE &&
         (streamInfo->format == UYVY_FORMAT ||
             streamInfo->format == UYVY_10BIT_FORMAT ||
             streamInfo->format == YUV422_FORMAT) &&
-        memcmp(&streamInfo->frameRate, &g_palFrameRate, sizeof(Rational)) == 0)
+        memcmp(&streamInfo->frameRate, &sink->frameRate, sizeof(streamInfo->frameRate)) == 0)
     {
         if ((unsigned int)streamInfo->width == sink->rasterWidth &&
             ((unsigned int)streamInfo->height == sink->rasterHeight ||
-                (streamInfo->height == 576 && sink->rasterHeight == 592 /* PALFF mode */)))
+                (streamInfo->height == 576 && sink->rasterHeight == 592 /* PALFF mode */) ||
+                (streamInfo->height == 480 && sink->rasterHeight == 486)))
         {
             return 1;
         }
@@ -863,9 +921,9 @@ static int dvs_accept_stream(void* data, const StreamInfo* streamInfo)
     }
     /* audio, 48kHz, mono, PCM */
     else if (streamInfo->type == SOUND_STREAM_TYPE &&
-        memcmp(&streamInfo->samplingRate, &g_profAudioSamplingRate, sizeof(Rational)) == 0 &&
-        streamInfo->numChannels == 1 &&
-        streamInfo->format == PCM_FORMAT)
+             memcmp(&streamInfo->samplingRate, &g_profAudioSamplingRate, sizeof(Rational)) == 0 &&
+             streamInfo->numChannels == 1 &&
+             streamInfo->format == PCM_FORMAT)
     {
         return 1;
     }
@@ -933,12 +991,13 @@ static int dvs_register_stream(void* data, int streamId, const StreamInfo* strea
         dvsStream->streamInfo = *streamInfo;
         if (streamInfo->format == UYVY_FORMAT || streamInfo->format == YUV422_FORMAT)
         {
-            dvsStream->dataSize = streamInfo->width * streamInfo->height * 2;
+            dvsStream->dataSize[0] = streamInfo->width * streamInfo->height * 2;
         }
         else // UYVY_10BIT_FORMAT
         {
-            dvsStream->dataSize = (streamInfo->width + 5) / 6 * 16 * streamInfo->height;
+            dvsStream->dataSize[0] = (streamInfo->width + 5) / 6 * 16 * streamInfo->height;
         }
+        dvsStream->dataSize[1] = dvsStream->dataSize[0];
 
         sink->workBuffer1Size = (sink->rasterWidth + 5) / 6 * 16 * sink->rasterHeight;
         CALLOC_ORET(sink->workBuffer1, unsigned char, sink->workBuffer1Size);
@@ -949,7 +1008,8 @@ static int dvs_register_stream(void* data, int streamId, const StreamInfo* strea
                 (streamInfo->format == UYVY_10BIT_FORMAT && !sink->depth8Bit)) &&
             (unsigned int)streamInfo->width == sink->rasterWidth &&
             ((unsigned int)streamInfo->height == sink->rasterHeight ||
-                    (streamInfo->height == 576 && sink->rasterHeight == 592)))
+                    (streamInfo->height == 576 && sink->rasterHeight == 592) ||
+                    (streamInfo->height == 480 && sink->rasterHeight == 486)))
         {
             /* the video stream input buffer is set to the output buffer because no
             transformations are required */
@@ -967,6 +1027,20 @@ static int dvs_register_stream(void* data, int streamId, const StreamInfo* strea
                     dvsStream->data[1] = &sink->fifoBuffer[1].buffer[(sink->rasterWidth + 5) / 6 * 16 * 16];
                 }
             }
+            else if (sink->rasterHeight == 486 && streamInfo->height == 480)
+            {
+                /* skip 4 lines at the top */
+                if (sink->depth8Bit)
+                {
+                    dvsStream->data[0] = &sink->fifoBuffer[0].buffer[sink->rasterWidth * 4 * 2];
+                    dvsStream->data[1] = &sink->fifoBuffer[1].buffer[sink->rasterWidth * 4 * 2];
+                }
+                else
+                {
+                    dvsStream->data[0] = &sink->fifoBuffer[0].buffer[(sink->rasterWidth + 5) / 6 * 16 * 4];
+                    dvsStream->data[1] = &sink->fifoBuffer[1].buffer[(sink->rasterWidth + 5) / 6 * 16 * 4];
+                }
+            }
             else
             {
                 dvsStream->data[0] = &sink->fifoBuffer[0].buffer[0];
@@ -982,15 +1056,16 @@ static int dvs_register_stream(void* data, int streamId, const StreamInfo* strea
             /* create a video stream input buffer separate from the output buffer because
             transformations (image format or fitting) are required */
 
-            CALLOC_ORET(dvsStream->data[0], unsigned char, dvsStream->dataSize);
-            dvsStream->allocatedDataSize[0] = dvsStream->dataSize;
-            CALLOC_ORET(dvsStream->data[1], unsigned char, dvsStream->dataSize);
-            dvsStream->allocatedDataSize[1] = dvsStream->dataSize;
+            CALLOC_ORET(dvsStream->data[0], unsigned char, dvsStream->dataSize[0]);
+            dvsStream->allocatedDataSize[0] = dvsStream->dataSize[0];
+            CALLOC_ORET(dvsStream->data[1], unsigned char, dvsStream->dataSize[1]);
+            dvsStream->allocatedDataSize[1] = dvsStream->dataSize[1];
             dvsStream->ownData = 1;
 
             if ((unsigned int)streamInfo->width != sink->rasterWidth ||
                 ((unsigned int)streamInfo->height != sink->rasterHeight &&
-                    !(streamInfo->height == 576 && sink->rasterHeight == 592)))
+                    !(streamInfo->height == 576 && sink->rasterHeight == 592) &&
+                    !(streamInfo->height == 480 && sink->rasterHeight == 486)))
             {
                 dvsStream->requireFit = 1;
             }
@@ -1009,12 +1084,19 @@ static int dvs_register_stream(void* data, int streamId, const StreamInfo* strea
 
         dvsStream->streamId = streamId;
         dvsStream->streamInfo = *streamInfo;
+        dvsStream->audio_byte_align = (streamInfo->bitsPerSample + 7) / 8;
 
-        dvsStream->dataSize = 1920 * ((streamInfo->bitsPerSample + 7) / 8);
-        CALLOC_ORET(dvsStream->data[0], unsigned char, dvsStream->dataSize);
-        dvsStream->allocatedDataSize[0] = dvsStream->dataSize;
-        CALLOC_ORET(dvsStream->data[1], unsigned char, dvsStream->dataSize);
-        dvsStream->allocatedDataSize[1] = dvsStream->dataSize;
+        dvsStream->allocatedDataSize[0] = 1920 * dvsStream->audio_byte_align;
+        dvsStream->allocatedDataSize[1] = dvsStream->allocatedDataSize[0];
+        CALLOC_ORET(dvsStream->data[0], unsigned char, dvsStream->allocatedDataSize[0]);
+        CALLOC_ORET(dvsStream->data[1], unsigned char, dvsStream->allocatedDataSize[1]);
+        if (memcmp(&sink->frameRate, &g_ntscFrameRate, sizeof(sink->frameRate)) == 0) {
+            dvsStream->dataSize[0] = 0; /* variable */
+            dvsStream->dataSize[1] = 0; /* variable */
+        } else {
+            dvsStream->dataSize[0] = dvsStream->allocatedDataSize[0];
+            dvsStream->dataSize[1] = dvsStream->allocatedDataSize[1];
+        }
 
         dvsStream->ownData = 1;
 
@@ -1074,20 +1156,16 @@ static int dvs_get_stream_buffer(void* data, int streamId, unsigned int bufferSi
     {
         if (dvsStream->ownData)
         {
-            if (dvsStream->allocatedDataSize[sink->currentFifoBuffer] < bufferSize)
-            {
-                /* reallocate a larger work buffer */
-
-                SAFE_FREE(&dvsStream->data[sink->currentFifoBuffer]);
-                dvsStream->allocatedDataSize[sink->currentFifoBuffer] = 0;
-
-                CALLOC_ORET(dvsStream->data[sink->currentFifoBuffer], unsigned char, bufferSize);
+            if (dvsStream->allocatedDataSize[sink->currentFifoBuffer] < bufferSize) {
                 dvsStream->allocatedDataSize[sink->currentFifoBuffer] = bufferSize;
+                SAFE_FREE(&dvsStream->data[sink->currentFifoBuffer]);
+                CALLOC_ORET(dvsStream->data[sink->currentFifoBuffer], unsigned char,
+                            dvsStream->allocatedDataSize[sink->currentFifoBuffer]);
             }
         }
-        else if (dvsStream->dataSize != bufferSize)
+        else if (dvsStream->dataSize[sink->currentFifoBuffer] != bufferSize)
         {
-            fprintf(stderr, "Buffer size (%d) != data size (%d)\n", bufferSize, dvsStream->dataSize);
+            fprintf(stderr, "Buffer size (%d) != data size (%d)\n", bufferSize, dvsStream->dataSize[sink->currentFifoBuffer]);
             return 0;
         }
 
@@ -1125,9 +1203,14 @@ static int dvs_receive_stream_frame(void* data, int streamId, unsigned char* buf
             fprintf(stderr, "Frame buffer does not correspond to data\n");
             return 0;
         }
-        else if (bufferSize != dvsStream->dataSize)
+
+        if (dvsStream->streamInfo.type == SOUND_STREAM_TYPE)
         {
-            fprintf(stderr, "Buffer size (%d) != data size (%d)\n", bufferSize, dvsStream->dataSize);
+            dvsStream->dataSize[sink->currentFifoBuffer] = bufferSize;
+        }
+        else if (bufferSize != dvsStream->dataSize[sink->currentFifoBuffer])
+        {
+            fprintf(stderr, "Buffer size (%d) != data size (%d)\n", bufferSize, dvsStream->dataSize[sink->currentFifoBuffer]);
             return 0;
         }
 
@@ -1149,6 +1232,7 @@ static int dvs_complete_frame(void* data, const FrameInfo* frameInfo)
     int i;
     int vitcCount;
     int ltcCount;
+    int maxTCCount = 24 * 60 * 60 * sink->roundedTimecodeBase;
     Timecode defaultTC = {0,0,0,0,0};
     int h;
     int w;
@@ -1240,6 +1324,7 @@ static int dvs_complete_frame(void* data, const FrameInfo* frameInfo)
         unsigned char* outData;
         int imageYStart = 0;
         int imageXStart = 0;
+        int rasterYOffset = 0;
 
         inData = activeBuffer;
         if (sink->depth8Bit)
@@ -1260,6 +1345,10 @@ static int dvs_complete_frame(void* data, const FrameInfo* frameInfo)
             /* skip the extra VBI lines in the input */
             inData += (sink->height - sink->rasterHeight) * sink->width * 2;
         }
+        else if ((int)sink->rasterHeight == 486 && sink->height == 480)
+        {
+            rasterYOffset = 4;
+        }
         else
         {
             /* centre image */
@@ -1271,7 +1360,18 @@ static int dvs_complete_frame(void* data, const FrameInfo* frameInfo)
 
         for (h = 0; h < (int)sink->rasterHeight; h++)
         {
-            if (h >= imageYStart && h < imageYStart + sink->height)
+            if (h < rasterYOffset)
+            {
+                /* fill with black the area space not filled by input data */
+                for (w = 0; w < (int)sink->rasterWidth; w += 2)
+                {
+                    *outData++ = 0x80;
+                    *outData++ = 0x10;
+                    *outData++ = 0x80;
+                    *outData++ = 0x10;
+                }
+            }
+            else if ((h - rasterYOffset) >= imageYStart && (h - rasterYOffset) < imageYStart + sink->height)
             {
                 for (w = 0; w < (int)sink->rasterWidth; w += 2)
                 {
@@ -1313,50 +1413,79 @@ static int dvs_complete_frame(void* data, const FrameInfo* frameInfo)
         }
     }
 
+
+    fifoBuffer->audio_data_size = 0;
+
     if (frameInfo->isRepeat || frameInfo->muteAudio || sink->muteAudio)
     {
         /* mute the audio */
         for (i = 0; i < sink->numAudioStreams; i += 2)
-        {
-            memset(&fifoBuffer->buffer[sink->audioPairOffset[i / 2]], 0, sink->audioDataSize);
-        }
+            memset(&fifoBuffer->buffer[sink->audioPairOffset[i / 2]], 0, sink->maxAudioDataSize);
     }
     else
     {
-        /* set audio to zero if not present */
+        unsigned int num_audio_samples = 0;
+
+        /* set audio to zero if not present; set num audio samples for first stream that is present */
         for (i = 0; i < sink->numAudioStreams; i++)
         {
-            if (!sink->audioStream[i].isPresent)
-            {
-                memset(sink->audioStream[i].data[sink->currentFifoBuffer], 0, sink->audioStream[i].dataSize);
+            if (!sink->audioStream[i].isPresent) {
+                memset(sink->audioStream[i].data[sink->currentFifoBuffer], 0,
+                       sink->audioStream[i].allocatedDataSize[sink->currentFifoBuffer]);
+            } else {
+                num_audio_samples = sink->audioStream[i].dataSize[sink->currentFifoBuffer] / sink->audioStream[i].audio_byte_align;
             }
         }
 
+        fifoBuffer->audio_data_size = num_audio_samples * 4 * 2;
 
-        /* interleave (and reverse if reverse play) the audio and write to output buffer */
-        for (i = 0; i < sink->numAudioStreams; i += 2)
-        {
-            if (i + 1 < sink->numAudioStreams)
-            {
-                /* 2 tracks of audio */
-                interleave_audio(
-                    sink->audioStream[i].data[sink->currentFifoBuffer],
-                    (sink->audioStream[i].streamInfo.bitsPerSample + 7) / 8,
-                    sink->audioStream[i + 1].data[sink->currentFifoBuffer],
-                    (sink->audioStream[i + 1].streamInfo.bitsPerSample + 7) / 8,
-                    frameInfo->reversePlay,
-                    &fifoBuffer->buffer[sink->audioPairOffset[i / 2]]);
-            }
-            else
-            {
-                /* single audio */
-                interleave_audio(
-                    sink->audioStream[i].data[sink->currentFifoBuffer],
-                    (sink->audioStream[i].streamInfo.bitsPerSample + 7) / 8,
-                    NULL,
-                    0,
-                    frameInfo->reversePlay,
-                    &fifoBuffer->buffer[sink->audioPairOffset[i / 2]]);
+        if (num_audio_samples == 0) {
+            /* mute the audio */
+            for (i = 0; i < sink->numAudioStreams; i += 2)
+                memset(&fifoBuffer->buffer[sink->audioPairOffset[i / 2]], 0, sink->maxAudioDataSize);
+        } else {
+            /* interleave (and reverse if reverse play) the audio and write to output buffer */
+            for (i = 0; i < sink->numAudioStreams; i += 2) {
+                if (sink->audioStream[i].isPresent &&
+                    num_audio_samples != sink->audioStream[i].dataSize[sink->currentFifoBuffer] / sink->audioStream[i].audio_byte_align)
+                {
+                    /* different number of samples - don't use this stream and set the data to zero */
+                    memset(sink->audioStream[i].data[sink->currentFifoBuffer], 0,
+                           sink->audioStream[i].allocatedDataSize[sink->currentFifoBuffer]);
+                }
+
+                if (i + 1 < sink->numAudioStreams)
+                {
+                    if (sink->audioStream[i + 1].isPresent &&
+                        num_audio_samples != sink->audioStream[i + 1].dataSize[sink->currentFifoBuffer] / sink->audioStream[i + 1].audio_byte_align)
+                    {
+                        /* different number of samples - don't use this stream and set the data to zero */
+                        memset(sink->audioStream[i + 1].data[sink->currentFifoBuffer], 0,
+                               sink->audioStream[i + 1].allocatedDataSize[sink->currentFifoBuffer]);
+                    }
+
+                    /* 2 tracks of audio */
+                    interleave_audio(sink->audioStream[i].data[sink->currentFifoBuffer],
+                                     num_audio_samples,
+                                     sink->audioStream[i].audio_byte_align,
+                                     sink->audioStream[i + 1].data[sink->currentFifoBuffer],
+                                     num_audio_samples,
+                                     sink->audioStream[i + 1].audio_byte_align,
+                                     frameInfo->reversePlay,
+                                     &fifoBuffer->buffer[sink->audioPairOffset[i / 2]]);
+                }
+                else
+                {
+                    /* single audio */
+                    interleave_audio(sink->audioStream[i].data[sink->currentFifoBuffer],
+                                     num_audio_samples,
+                                     sink->audioStream[i].audio_byte_align,
+                                     NULL,
+                                     0,
+                                     0,
+                                     frameInfo->reversePlay,
+                                     &fifoBuffer->buffer[sink->audioPairOffset[i / 2]]);
+                }
             }
         }
     }
@@ -1374,12 +1503,12 @@ static int dvs_complete_frame(void* data, const FrameInfo* frameInfo)
     }
     else
     {
-        vitcCount = frameInfo->position % MAX_TIMECODE_COUNT;
-        fifoBuffer->vitcTimecode = get_timecode_from_count(frameInfo->position % MAX_TIMECODE_COUNT);
+        vitcCount = frameInfo->position % maxTCCount;
+        fifoBuffer->vitcTimecode = get_timecode_from_count(sink, frameInfo->position % maxTCCount);
     }
-    fifoBuffer->vitcCount = int_to_dvs_tc(vitcCount);
+    fifoBuffer->vitcCount = int_to_dvs_tc(sink, vitcCount);
     ltcCount = get_timecode_count(sink, SOURCE_TIMECODE_TYPE, LTC_SOURCE_TIMECODE_SUBTYPE, 0);
-    fifoBuffer->ltcCount = int_to_dvs_tc(ltcCount);
+    fifoBuffer->ltcCount = int_to_dvs_tc(sink, ltcCount);
 
 
     /* set the extra VITC timecodes associated with the frame buffer */
@@ -1393,12 +1522,12 @@ static int dvs_complete_frame(void* data, const FrameInfo* frameInfo)
     }
     else if (sink->extraSDIVITCSource == COUNT_AS_SDI_VITC)
     {
-        fifoBuffer->extraVITCTimecode = get_timecode_from_count(frameInfo->position % MAX_TIMECODE_COUNT);
+        fifoBuffer->extraVITCTimecode = get_timecode_from_count(sink, frameInfo->position % maxTCCount);
     }
 
 
     /* add OSD to frame */
-    if (sink->osd != NULL) /* only support OSD for 8-bit video */
+    if (sink->osd != NULL && sink->osdInitialised) /* only support OSD for 8-bit video */
     {
         if (!osd_add_to_image(sink->osd, frameInfo, activeBuffer + sink->videoOffset,
             sink->rasterWidth, sink->rasterHeight - sink->videoOffset))
@@ -1432,6 +1561,7 @@ static int dvs_complete_frame(void* data, const FrameInfo* frameInfo)
     sink->frameInfosCount++;
 
     PTHREAD_MUTEX_UNLOCK(&sink->frameInfosMutex);
+
 
 
     /* start the fifo if not already started */
@@ -1645,6 +1775,7 @@ int dvs_open(int dvsCard, int dvsChannel, SDIVITCSource sdiVITCSource, SDIVITCSo
     newSink->sdiVITCSource = sdiVITCSource;
     newSink->extraSDIVITCSource = extraSDIVITCSource;
     newSink->fitVideo = 1;
+    newSink->videoStream.streamId = -1;
 
     newSink->mediaSink.data = newSink;
     newSink->mediaSink.register_listener = dvs_register_listener;
@@ -1693,6 +1824,40 @@ int dvs_open(int dvsCard, int dvsChannel, SDIVITCSource sdiVITCSource, SDIVITCSo
     
     CHK_OFAIL(status_info.nbit == 8 || status_info.nbit == 10);
     newSink->depth8Bit = (status_info.nbit == 8);
+    
+    if ((status_info.config & SV_MODE_MASK) == SV_MODE_PAL ||
+        (status_info.config & SV_MODE_MASK) == SV_MODE_SMPTE274_25I ||
+        (status_info.config & SV_MODE_MASK) == SV_MODE_SMPTE274_25sF)
+    {
+        newSink->frameRate.num = 25;
+        newSink->frameRate.den = 1;
+        newSink->roundedTimecodeBase = 25;
+    }
+    else if ((status_info.config & SV_MODE_MASK) == SV_MODE_NTSC ||
+             (status_info.config & SV_MODE_MASK) == SV_MODE_SMPTE274_29I ||
+             (status_info.config & SV_MODE_MASK) == SV_MODE_SMPTE274_29sF)
+    {
+        newSink->frameRate.num = 30000;
+        newSink->frameRate.den = 1001;
+        newSink->roundedTimecodeBase = 30;
+    }
+    else if ((status_info.config & SV_MODE_MASK) == SV_MODE_SMPTE296_50P)
+    {
+        newSink->frameRate.num = 50;
+        newSink->frameRate.den = 1;
+        newSink->roundedTimecodeBase = 50;
+    }
+    else if ((status_info.config & SV_MODE_MASK) == SV_MODE_SMPTE296_59P)
+    {
+        newSink->frameRate.num = 60000;
+        newSink->frameRate.den = 1001;
+        newSink->roundedTimecodeBase = 60;
+    }
+    else
+    {
+        ml_log_error("DVS video mode not supported\n");
+        goto fail;
+    }
 
     newSink->rasterWidth = status_info.xsize;
     newSink->rasterHeight = status_info.ysize;
@@ -1705,7 +1870,7 @@ int dvs_open(int dvsCard, int dvsChannel, SDIVITCSource sdiVITCSource, SDIVITCSo
     {
         newSink->videoDataSize = (newSink->rasterWidth + 5) / 6 * 16 * newSink->rasterHeight;
     }
-    newSink->audioDataSize = 1920 * 2 * 4; /* 48k Hz for 25 fps, 2 channels, 32 bit */
+    newSink->maxAudioDataSize = 1920 * 2 * 4; /* 48k Hz for 25 fps, 2 channels, 32 bit; more than 29.97fps */
 
     newSink->audioPairOffset[0] = newSink->videoDataSize;
     for (i = 2; i < MAX_DVS_AUDIO_STREAMS; i += 2)
@@ -1792,6 +1957,18 @@ fail:
 MediaSink* dvs_get_media_sink(DVSSink* sink)
 {
     return &sink->mediaSink;
+}
+
+SDIRaster dvs_get_raster(DVSSink* sink)
+{
+    if (sink->rasterWidth == 720 && sink->rasterHeight == 576)
+        return SDI_SD_625_RASTER;
+    else if (sink->rasterWidth == 720 && sink->rasterHeight == 486)
+        return SDI_SD_525_RASTER;
+    else if (sink->rasterWidth == 1920 && sink->rasterHeight == 1080)
+        return SDI_HD_1080_RASTER;
+
+    return SDI_OTHER_RASTER;
 }
 
 void dvs_close_card(DVSSink* sink)

@@ -1,5 +1,5 @@
 /*
- * $Id: LocalIngexPlayer.h,v 1.17 2010/06/02 11:12:13 philipn Exp $
+ * $Id: LocalIngexPlayer.h,v 1.18 2010/10/01 15:56:21 john_f Exp $
  *
  * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
@@ -147,7 +147,7 @@ public:
     void setInitiallyLocked(bool locked); /* default: false */
     void setNumFFMPEGThreads(int num); /* default: 4 */
     void setUseWorkerThreads(bool enable); /* default: true */
-    void setApplySplitFilter(bool enable); /* default: true */
+    void setApplyScaleFilter(bool enable); /* default: true */
     void setSourceBufferSize(int size); /* default: 0 */
     void setEnableX11OSD(bool enable); /* default: true */
     void setSourceAspectRatio(Rational *aspect); /* default: 0 */
@@ -163,6 +163,7 @@ public:
     void setDVSTarget(int card, int channel); /* default: -1, -1 */
     void setVideoSplit(VideoSwitchSplit videoSplit); /* default: QUAD_SPLIT_VIDEO_SWITCH */
     void setSDIOSDEnable(bool enable); /* default: true */
+    void setUseDisplayDimensions(bool enable); /* default: false */
 
 
     /* will reset the player and display blank video on the output - returns false if a reset fails and
@@ -230,7 +231,7 @@ private:
         int numFFMPEGThreads;
         bool initiallyLocked;
         bool useWorkerThreads;
-        bool applySplitFilter;
+        bool applyScaleFilter;
         int srcBufferSize;
         bool disableSDIOSD;
         bool disableX11OSD;
@@ -243,6 +244,7 @@ private:
         int numAudioLevelMonitors;
         float audioLineupLevel;
         bool enableAudioSwitch;
+        bool useDisplayDimensions;
     } Configuration;
     
 private:

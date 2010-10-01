@@ -1,5 +1,5 @@
 /*
- * $Id: video_switch_sink.h,v 1.8 2010/06/02 11:12:14 philipn Exp $
+ * $Id: video_switch_sink.h,v 1.9 2010/10/01 15:56:21 john_f Exp $
  *
  *
  *
@@ -66,11 +66,11 @@ typedef enum
     NONA_SPLIT_VIDEO_SWITCH = 9
 } VideoSwitchSplit;
 
-int qvs_create_video_switch(MediaSink* sink, VideoSwitchSplit split, int applySplitFilter, int splitSelect, int prescaledSplit,
+int qvs_create_video_switch(MediaSink* sink, VideoSwitchSplit split, int splitSelect, int prescaledSplit,
     VideoSwitchDatabase* database, int masterTimecodeIndex, int masterTimecodeType, int masterTimecodeSubType,
     VideoSwitchSink** swtch);
 
-
+void qvs_set_slave_video_switch(VideoSwitchSink *swtch, VideoSwitchSink *slave_swtch);
 
 
 

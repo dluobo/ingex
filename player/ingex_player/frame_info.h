@@ -1,5 +1,5 @@
 /*
- * $Id: frame_info.h,v 1.15 2010/06/18 09:44:51 philipn Exp $
+ * $Id: frame_info.h,v 1.16 2010/10/01 15:56:21 john_f Exp $
  *
  *
  *
@@ -177,6 +177,11 @@ typedef struct
 
     /* clip info */
     char clipId[CLIP_ID_SIZE];
+
+    /* scaled picture */
+    int isScaledPicture;
+    int isSplitScaledPicture;
+    int scaledPictureSourceStreamId;
 } StreamInfo;
 
 typedef struct

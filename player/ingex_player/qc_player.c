@@ -1,5 +1,5 @@
 /*
- * $Id: qc_player.c,v 1.15 2010/06/18 09:44:51 philipn Exp $
+ * $Id: qc_player.c,v 1.16 2010/10/01 15:56:21 john_f Exp $
  *
  *
  *
@@ -465,7 +465,7 @@ static int create_sink(QCPlayer* player, Options* options, const char* x11Window
             if (player->mediaSink == NULL)
             {
                 if (!xvsk_open(options->reviewDuration, options->disableX11OSD, &options->pixelAspectRatio,
-                    &options->monitorAspectRatio, options->scale, 1, 0, &player->x11XVDisplaySink))
+                    &options->monitorAspectRatio, options->scale, 1, 0, 0, &player->x11XVDisplaySink))
                 {
                     ml_log_error("Failed to open x11 xv display sink\n");
                     fprintf(stderr, "Failed to open x11 xv display sink\n");
@@ -494,7 +494,7 @@ static int create_sink(QCPlayer* player, Options* options, const char* x11Window
             if (player->mediaSink == NULL)
             {
                 if (!xsk_open(options->reviewDuration, options->disableX11OSD, &options->pixelAspectRatio,
-                    &options->monitorAspectRatio, options->scale, 1, 0, &player->x11DisplaySink))
+                    &options->monitorAspectRatio, options->scale, 1, 0, 0, &player->x11DisplaySink))
                 {
                     ml_log_error("Failed to open x11 display sink\n");
                     fprintf(stderr, "Failed to open x11 display sink\n");
@@ -539,8 +539,9 @@ static int create_sink(QCPlayer* player, Options* options, const char* x11Window
             if (player->mediaSink == NULL)
             {
                 if (!dusk_open(options->reviewDuration, -1, -1, options->sdiVITCSource, options->extraSDIVITCSource,
-                    options->dvsBufferSize, options->xOutputType == XV_DISPLAY_OUTPUT, options->disableSDIOSD, options->disableX11OSD,
-                    &options->pixelAspectRatio, &options->monitorAspectRatio, options->scale, 1, 0, 0, &player->dualSink))
+                              options->dvsBufferSize, options->xOutputType == XV_DISPLAY_OUTPUT, options->disableSDIOSD,
+                              options->disableX11OSD, &options->pixelAspectRatio, &options->monitorAspectRatio,
+                              options->scale, 1, 0, 0, 0, &player->dualSink))
                 {
                     ml_log_error("Failed to open dual X11 and DVS sink\n");
                     fprintf(stderr, "Failed to open dual X11 and DVS sink\n");

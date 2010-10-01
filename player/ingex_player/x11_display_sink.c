@@ -1,5 +1,5 @@
 /*
- * $Id: x11_display_sink.c,v 1.12 2010/06/02 11:12:14 philipn Exp $
+ * $Id: x11_display_sink.c,v 1.13 2010/10/01 15:56:21 john_f Exp $
  *
  *
  *
@@ -123,6 +123,7 @@ struct X11DisplaySink
     int displayHeight;
     float scale;
     int swScale;
+    int applyScaleFilter;
     StreamFormat videoFormat;
     formats yuvFormat;
 
@@ -455,8 +456,8 @@ static int display_frame(X11DisplaySink* sink, X11DisplayFrame* frame, const Fra
                 sink->swScale,
                 sink->swScale,
                 1,
-                1,
-                1,
+                sink->applyScaleFilter,
+                sink->applyScaleFilter,
                 frame->scaleWorkspace);
 
             rgbInputBuffer = frame->scaleBuffer;
@@ -1164,7 +1165,8 @@ static void xsk_osd_screen_changed(void* data, OSDScreen screen)
 
 
 int xsk_open(int reviewDuration, int disableOSD, const Rational* pixelAspectRatio,
-    const Rational* monitorAspectRatio, float scale, int swScale, X11WindowInfo* windowInfo, X11DisplaySink** sink)
+             const Rational* monitorAspectRatio, float scale, int swScale, int applyScaleFilter,
+             X11WindowInfo* windowInfo, X11DisplaySink** sink)
 {
     X11DisplaySink* newSink;
 
@@ -1173,6 +1175,7 @@ int xsk_open(int reviewDuration, int disableOSD, const Rational* pixelAspectRati
     newSink->pixelAspectRatio = *pixelAspectRatio;
     newSink->monitorAspectRatio = *monitorAspectRatio;
     newSink->swScale = swScale;
+    newSink->applyScaleFilter = applyScaleFilter;
     if (scale > 0.0f)
     {
         newSink->scale = scale;

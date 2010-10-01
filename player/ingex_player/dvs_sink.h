@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sink.h,v 1.7 2010/06/02 11:12:14 philipn Exp $
+ * $Id: dvs_sink.h,v 1.8 2010/10/01 15:56:21 john_f Exp $
  *
  *
  *
@@ -43,6 +43,14 @@ typedef enum
     COUNT_AS_SDI_VITC
 } SDIVITCSource;
 
+typedef enum
+{
+    SDI_OTHER_RASTER = 0,
+    SDI_SD_625_RASTER,
+    SDI_SD_525_RASTER,
+    SDI_HD_1080_RASTER,
+} SDIRaster;
+
 
 typedef struct DVSSink DVSSink;
 
@@ -54,6 +62,8 @@ int dvs_open(int dvsCard, int dvsChannel, SDIVITCSource sdiVITCSource, SDIVITCSo
     int numBuffers, int disableOSD, int fitVideo, DVSSink** sink);
 
 MediaSink* dvs_get_media_sink(DVSSink* sink);
+
+SDIRaster dvs_get_raster(DVSSink* sink);
 
 /* only closes the DVS card - use when handling interrupt signals */
 void dvs_close_card(DVSSink* sink);

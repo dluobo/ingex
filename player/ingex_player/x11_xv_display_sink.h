@@ -1,5 +1,5 @@
 /*
- * $Id: x11_xv_display_sink.h,v 1.9 2010/06/02 11:12:14 philipn Exp $
+ * $Id: x11_xv_display_sink.h,v 1.10 2010/10/01 15:56:21 john_f Exp $
  *
  *
  *
@@ -40,7 +40,8 @@ typedef struct X11XVDisplaySink X11XVDisplaySink;
 int xvsk_check_is_available();
 
 int xvsk_open(int reviewDuration, int disableOSD, const Rational* pixelAspectRatio,
-    const Rational* monitorAspectRatio, float scale, int swScale, X11WindowInfo* windowInfo, X11XVDisplaySink** sink);
+              const Rational* monitorAspectRatio, float scale, int swScale, int applyScaleFilter,
+              X11WindowInfo* windowInfo, X11XVDisplaySink** sink);
 void xvsk_set_media_control(X11XVDisplaySink* sink, ConnectMapping mapping, VideoSwitchSink* videoSwitch, MediaControl* control);
 void xvsk_unset_media_control(X11XVDisplaySink* sink);
 MediaSink* xvsk_get_media_sink(X11XVDisplaySink* sink);

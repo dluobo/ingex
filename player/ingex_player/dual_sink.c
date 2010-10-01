@@ -1,5 +1,5 @@
 /*
- * $Id: dual_sink.c,v 1.12 2010/06/02 11:12:14 philipn Exp $
+ * $Id: dual_sink.c,v 1.13 2010/10/01 15:56:21 john_f Exp $
  *
  *
  *
@@ -37,15 +37,15 @@
 
 
 
-typedef struct _X11Info
+typedef struct TargetSinkInfo
 {
-    struct _X11Info* next;
+    struct TargetSinkInfo* next;
 
     int streamId;
     int acceptedFrame;
     unsigned char* buffer;
     unsigned int bufferSize;
-} X11Info;
+} TargetSinkInfo;
 
 struct DualSink
 {
@@ -74,7 +74,8 @@ struct DualSink
     MediaSink* dvsSink;
     DVSSink* dvsDVSSink;
 
-    X11Info x11Info;
+    TargetSinkInfo x11Info;
+    TargetSinkInfo dvsInfo;
 };
 
 
@@ -96,78 +97,85 @@ static int check_dvs_is_open(DualSink* dualSink)
     return 1;
 }
 
-static int add_x11_info(DualSink* dualSink, int streamId)
+static int add_target_sink_info(int streamId, TargetSinkInfo *info)
 {
-    X11Info* info = &dualSink->x11Info;
-    X11Info* prevInfo = NULL;
-    X11Info* newInfo = NULL;
-
-    /* if already exists then return */
-    while (info != NULL)
-    {
-        if (info->streamId == streamId)
-        {
-            return 1;
-        }
-
-        prevInfo = info;
-        info = info->next;
-    }
+    TargetSinkInfo *currInfo = info;
+    TargetSinkInfo *prevInfo = NULL;
+    TargetSinkInfo *newInfo = NULL;
 
     /* handle empty list */
-    if (prevInfo == NULL)
-    {
-        memset(info, 0, sizeof(X11Info));
+    if (info->streamId < 0) {
+        memset(info, 0, sizeof(TargetSinkInfo));
         info->streamId = streamId;
         return 1;
     }
 
+    /* if already exists then return */
+    while (currInfo) {
+        if (currInfo->streamId == streamId)
+            return 1;
+
+        prevInfo = currInfo;
+        currInfo = currInfo->next;
+    }
+
     /* new element in list */
-    CALLOC_ORET(newInfo, X11Info, 1);
+    CALLOC_ORET(newInfo, TargetSinkInfo, 1);
     newInfo->streamId = streamId;
     prevInfo->next = newInfo;
     return 1;
 }
 
-static void free_x11_info(DualSink* dualSink)
+static void free_target_sink_info(TargetSinkInfo *info)
 {
-    X11Info* info = dualSink->x11Info.next;
-    X11Info* nextInfo = NULL;
+    TargetSinkInfo *currInfo = info->next;
+    TargetSinkInfo *nextInfo;
 
-    while (info != NULL)
-    {
-        nextInfo = info->next;
-        SAFE_FREE(&info);
-        info = nextInfo;
+    while (currInfo) {
+        nextInfo = currInfo->next;
+        SAFE_FREE(&currInfo);
+        currInfo = nextInfo;
     }
 
-    dualSink->x11Info.streamId = -1;
-    dualSink->x11Info.next = NULL;
+    info->streamId = -1;
+    info->next = NULL;
 }
 
-static void reset_x11_info(DualSink* dualSink)
+static void reset_target_sink_info(TargetSinkInfo *info)
 {
-    X11Info* info = dualSink->x11Info.next;
+    TargetSinkInfo *currInfo = info;
 
-    while (info != NULL)
-    {
-        info->acceptedFrame = 0;
-        info->buffer = NULL;
-        info->bufferSize = 0;
+    while (currInfo) {
+        currInfo->acceptedFrame = 0;
+        currInfo->buffer = NULL;
+        currInfo->bufferSize = 0;
+
+        currInfo = currInfo->next;
+    }
+}
+
+static TargetSinkInfo* get_x11_info(DualSink* dualSink, int streamId)
+{
+    TargetSinkInfo* info = &dualSink->x11Info;
+
+    while (info) {
+        if (info->streamId == streamId)
+            return info;
+
         info = info->next;
     }
+
+    return NULL;
 }
 
-static X11Info* get_x11_info(DualSink* dualSink, int streamId)
+static TargetSinkInfo* get_dvs_info(DualSink* dualSink, int streamId)
 {
-    X11Info* info = &dualSink->x11Info;
+    TargetSinkInfo *info = &dualSink->dvsInfo;
 
-    while (info != NULL)
-    {
+    while (info) {
         if (info->streamId == streamId)
-        {
             return info;
-        }
+
         info = info->next;
     }
 
@@ -592,119 +600,130 @@ static int dusk_accept_stream(void* data, const StreamInfo* streamInfo)
 
     CHK_ORET(check_dvs_is_open(dualSink));
 
-    return msk_accept_stream(dualSink->dvsSink, streamInfo);
+    return msk_accept_stream(dualSink->dvsSink, streamInfo) ||
+           msk_accept_stream(dualSink->x11Sink, streamInfo);
 }
 
 static int dusk_register_stream(void* data, int streamId, const StreamInfo* streamInfo)
 {
     DualSink* dualSink = (DualSink*)data;
-    int result;
+    int dvs_result = 0, x11_result = 0;
 
     CHK_ORET(check_dvs_is_open(dualSink));
 
-    result = msk_register_stream(dualSink->dvsSink, streamId, streamInfo);
-    if (result)
+    if (msk_accept_stream(dualSink->dvsSink, streamInfo)) {
+        if (msk_register_stream(dualSink->dvsSink, streamId, streamInfo)) {
+            dvs_result = 1;
+            CHK_ORET(add_target_sink_info(streamId, &dualSink->dvsInfo));
+        }
+    }
+    
+    if ((streamInfo->type != PICTURE_STREAM_TYPE || !streamInfo->isScaledPicture) && /* only pass unscaled pictures */
+        msk_accept_stream(dualSink->x11Sink, streamInfo))
     {
-        if (msk_accept_stream(dualSink->x11Sink, streamInfo))
-        {
-            if (msk_register_stream(dualSink->x11Sink, streamId, streamInfo))
-            {
-                if (!add_x11_info(dualSink, streamId))
-                {
-                    ml_log_warn("Failed to add X11 info data struct\n");
-                }
-            }
+        if (msk_register_stream(dualSink->x11Sink, streamId, streamInfo)) {
+            x11_result = 1;
+            CHK_ORET(add_target_sink_info(streamId, &dualSink->x11Info));
         }
     }
 
-    return result;
+    return dvs_result || x11_result;
 }
 
 static int dusk_accept_stream_frame(void* data, int streamId, const FrameInfo* frameInfo)
 {
-    DualSink* dualSink = (DualSink*)data;
-    int result;
-    X11Info* x11Info = NULL;
+    DualSink *dualSink = (DualSink*)data;
+    TargetSinkInfo *x11Info;
+    TargetSinkInfo *dvsInfo;
 
     CHK_ORET(check_dvs_is_open(dualSink));
 
-    result = msk_accept_stream_frame(dualSink->dvsSink, streamId, frameInfo);
-    if (result)
-    {
-        x11Info = get_x11_info(dualSink, streamId);
-        if (x11Info != NULL)
-        {
-            x11Info->acceptedFrame = msk_accept_stream_frame(dualSink->x11Sink, streamId, frameInfo);
-        }
-    }
+    dvsInfo = get_dvs_info(dualSink, streamId);
+    if (dvsInfo)
+        dvsInfo->acceptedFrame = msk_accept_stream_frame(dualSink->dvsSink, streamId, frameInfo);
 
-    return result;
+    x11Info = get_x11_info(dualSink, streamId);
+    if (x11Info)
+        x11Info->acceptedFrame = msk_accept_stream_frame(dualSink->x11Sink, streamId, frameInfo);
+
+    return (dvsInfo && dvsInfo->acceptedFrame) || (x11Info && x11Info->acceptedFrame);
 }
 
 static int dusk_get_stream_buffer(void* data, int streamId, unsigned int bufferSize, unsigned char** buffer)
 {
-    DualSink* dualSink = (DualSink*)data;
-    int result;
-    X11Info* x11Info = NULL;
+    DualSink *dualSink = (DualSink*)data;
+    int dvs_result = 0, x11_result = 0;
+    TargetSinkInfo *x11Info;
+    TargetSinkInfo *dvsInfo;
 
     CHK_ORET(check_dvs_is_open(dualSink));
 
-    result = msk_get_stream_buffer(dualSink->dvsSink, streamId, bufferSize, buffer);
-    if (result)
-    {
-        x11Info = get_x11_info(dualSink, streamId);
-        if (x11Info != NULL && x11Info->acceptedFrame)
-        {
-            if (msk_get_stream_buffer(dualSink->x11Sink, streamId, bufferSize, &x11Info->buffer))
-            {
-                x11Info->bufferSize = bufferSize;
-            }
+    dvsInfo = get_dvs_info(dualSink, streamId);
+    if (dvsInfo && dvsInfo->acceptedFrame) {
+        if (msk_get_stream_buffer(dualSink->dvsSink, streamId, bufferSize, &dvsInfo->buffer)) {
+            dvs_result = 1;
+            dvsInfo->bufferSize = bufferSize;
         }
     }
 
-    return result;
+    x11Info = get_x11_info(dualSink, streamId);
+    if (x11Info && x11Info->acceptedFrame) {
+        if (msk_get_stream_buffer(dualSink->x11Sink, streamId, bufferSize, &x11Info->buffer)) {
+            x11_result = 1;
+            x11Info->bufferSize = bufferSize;
+        }
+    }
+
+    if (dvs_result)
+        *buffer = dvsInfo->buffer;
+    else if (x11_result)
+        *buffer = x11Info->buffer;
+
+    return dvs_result || x11_result;
 }
 
 static int dusk_receive_stream_frame(void* data, int streamId, unsigned char* buffer, unsigned int bufferSize)
 {
     DualSink* dualSink = (DualSink*)data;
-    int result;
-    X11Info* x11Info = NULL;
+    int dvs_result = 0, x11_result = 0;
+    TargetSinkInfo *x11Info;
+    TargetSinkInfo *dvsInfo;
 
     CHK_ORET(check_dvs_is_open(dualSink));
 
-    result = msk_receive_stream_frame(dualSink->dvsSink, streamId, buffer, bufferSize);
-    if (result)
-    {
-        x11Info = get_x11_info(dualSink, streamId);
-        if (x11Info != NULL && x11Info->buffer != NULL)
-        {
-            msk_receive_stream_frame_const(dualSink->x11Sink, streamId, buffer, bufferSize);
-        }
+    dvsInfo = get_dvs_info(dualSink, streamId);
+    if (dvsInfo && dvsInfo->buffer)
+        dvs_result = msk_receive_stream_frame(dualSink->dvsSink, streamId, dvsInfo->buffer, bufferSize);
+    
+    x11Info = get_x11_info(dualSink, streamId);
+    if (x11Info && x11Info->buffer) {
+        if (buffer != x11Info->buffer)
+            x11_result = msk_receive_stream_frame_const(dualSink->x11Sink, streamId, buffer, bufferSize);
+        else
+            x11_result = msk_receive_stream_frame(dualSink->x11Sink, streamId, x11Info->buffer, bufferSize);
     }
 
-    return result;
+    return dvs_result || x11_result;
 }
 
 static int dusk_receive_stream_frame_const(void* data, int streamId, const unsigned char* buffer, unsigned int bufferSize)
 {
     DualSink* dualSink = (DualSink*)data;
-    int result;
-    X11Info* x11Info = NULL;
+    int dvs_result = 0, x11_result = 0;
+    TargetSinkInfo *x11Info;
+    TargetSinkInfo *dvsInfo;
 
     CHK_ORET(check_dvs_is_open(dualSink));
 
-    result = msk_receive_stream_frame_const(dualSink->dvsSink, streamId, buffer, bufferSize);
-    if (result)
-    {
-        x11Info = get_x11_info(dualSink, streamId);
-        if (x11Info != NULL)
-        {
-            msk_receive_stream_frame_const(dualSink->x11Sink, streamId, buffer, bufferSize);
-        }
-    }
+    dvsInfo = get_dvs_info(dualSink, streamId);
+    if (dvsInfo)
+        dvs_result = msk_receive_stream_frame_const(dualSink->dvsSink, streamId, buffer, bufferSize);
 
-    return result;
+    x11Info = get_x11_info(dualSink, streamId);
+    if (x11Info)
+        x11_result = msk_receive_stream_frame_const(dualSink->x11Sink, streamId, buffer, bufferSize);
+
+    return dvs_result || x11_result;
 }
 
 static int dusk_complete_frame(void* data, const FrameInfo* frameInfo)
@@ -717,7 +736,8 @@ static int dusk_complete_frame(void* data, const FrameInfo* frameInfo)
     result = msk_complete_frame(dualSink->dvsSink, frameInfo);
     msk_complete_frame(dualSink->x11Sink, frameInfo);
 
-    reset_x11_info(dualSink);
+    reset_target_sink_info(&dualSink->dvsInfo);
+    reset_target_sink_info(&dualSink->x11Info);
 
     return result;
 }
@@ -731,7 +751,8 @@ static void dusk_cancel_frame(void* data)
     msk_cancel_frame(dualSink->dvsSink);
     msk_cancel_frame(dualSink->x11Sink);
 
-    reset_x11_info(dualSink);
+    reset_target_sink_info(&dualSink->dvsInfo);
+    reset_target_sink_info(&dualSink->x11Info);
 }
 
 static int dusk_get_buffer_state(void* data, int* numBuffers, int* numBuffersFilled)
@@ -775,7 +796,8 @@ static void dusk_close(void* data)
     msk_close(dualSink->x11Sink);
     msk_close(dualSink->dvsSink);
 
-    free_x11_info(dualSink);
+    free_target_sink_info(&dualSink->dvsInfo);
+    free_target_sink_info(&dualSink->x11Info);
 
     SAFE_FREE(&dualSink);
 }
@@ -814,9 +836,10 @@ fail:
 }
 
 
-int dusk_open(int reviewDuration, int dvsCard, int dvsChannel, SDIVITCSource sdiVITCSource, SDIVITCSource extraSDIVITCSource, int numBuffers,
-    int useXV, int disableSDIOSD, int disableX11OSD, const Rational* pixelAspectRatio,
-    const Rational* monitorAspectRatio, float scale, int swScale, int fitVideo, X11WindowInfo* windowInfo, DualSink** dualSink)
+int dusk_open(int reviewDuration, int dvsCard, int dvsChannel, SDIVITCSource sdiVITCSource,
+              SDIVITCSource extraSDIVITCSource, int numBuffers, int useXV, int disableSDIOSD, int disableX11OSD,
+              const Rational* pixelAspectRatio, const Rational* monitorAspectRatio, float scale, int swScale,
+              int applyScaleFilter, int fitVideo, X11WindowInfo* windowInfo, DualSink** dualSink)
 {
     DualSink* newDualSink = NULL;
 
@@ -836,14 +859,14 @@ int dusk_open(int reviewDuration, int dvsCard, int dvsChannel, SDIVITCSource sdi
     {
         /* open buffered X11 XV display sink */
         CHK_OFAIL(xvsk_open(reviewDuration, disableX11OSD, pixelAspectRatio, monitorAspectRatio,
-            scale, swScale, windowInfo, &newDualSink->x11XVDisplaySink));
+            scale, swScale, applyScaleFilter, windowInfo, &newDualSink->x11XVDisplaySink));
         newDualSink->x11Sink = xvsk_get_media_sink(newDualSink->x11XVDisplaySink);
     }
     else
     {
         /* open buffered X11 display sink */
         CHK_OFAIL(xsk_open(reviewDuration, disableX11OSD, pixelAspectRatio, monitorAspectRatio,
-            scale, swScale, windowInfo, &newDualSink->x11DisplaySink));
+            scale, swScale, applyScaleFilter, windowInfo, &newDualSink->x11DisplaySink));
         newDualSink->x11Sink = xsk_get_media_sink(newDualSink->x11DisplaySink);
     }
 
@@ -910,6 +933,7 @@ int dusk_open(int reviewDuration, int dvsCard, int dvsChannel, SDIVITCSource sdi
     newDualSink->dualOSD.set_active_progress_bar_marks = dusk_osd_set_active_progress_bar_marks;
     newDualSink->dualOSD.set_label = dusk_osd_set_label;
 
+    newDualSink->dvsInfo.streamId = -1;
     newDualSink->x11Info.streamId = -1;
 
     *dualSink = newDualSink;
@@ -947,6 +971,11 @@ void dusk_unset_media_control(DualSink* dualSink)
     {
         xsk_unset_media_control(dualSink->x11DisplaySink);
     }
+}
+
+DVSSink* dusk_get_dvs_sink(DualSink* dualSink)
+{
+    return dualSink->dvsDVSSink;
 }
 
 void dusk_set_x11_window_name(DualSink* dualSink, const char* name)

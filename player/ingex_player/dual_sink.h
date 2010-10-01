@@ -1,5 +1,5 @@
 /*
- * $Id: dual_sink.h,v 1.9 2010/06/02 11:12:14 philipn Exp $
+ * $Id: dual_sink.h,v 1.10 2010/10/01 15:56:21 john_f Exp $
  *
  *
  *
@@ -36,12 +36,15 @@ typedef struct DualSink DualSink;
 
 
 int dusk_open(int reviewDuration, int dvsCard, int dvsChannel, SDIVITCSource sdiVITCSource,
-    SDIVITCSource extraSDIVITCSource, int numBuffers, int useXV, int disableSDIOSD, int disableX11OSD,
-    const Rational* pixelAspectRatio, const Rational* monitorAspectRatio,
-    float scale, int swScale, int fitVideo, X11WindowInfo* windowInfo, DualSink** dualSink);
+              SDIVITCSource extraSDIVITCSource, int numBuffers, int useXV, int disableSDIOSD, int disableX11OSD,
+              const Rational* pixelAspectRatio, const Rational* monitorAspectRatio,
+              float scale, int swScale, int applyScaleFilter, int fitVideo, X11WindowInfo* windowInfo,
+              DualSink** dualSink);
 MediaSink* dusk_get_media_sink(DualSink* dualSink);
 void dusk_set_media_control(DualSink* dualSink, ConnectMapping mapping, VideoSwitchSink* videoSwitch, MediaControl* control);
 void dusk_unset_media_control(DualSink* dualSink);
+
+DVSSink* dusk_get_dvs_sink(DualSink* dualSink);
 
 void dusk_set_x11_window_name(DualSink* dualSink, const char* name);
 

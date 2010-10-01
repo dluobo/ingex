@@ -1,5 +1,5 @@
 /*
- * $Id: x11_xv_display_sink.c,v 1.15 2010/07/23 17:57:24 philipn Exp $
+ * $Id: x11_xv_display_sink.c,v 1.16 2010/10/01 15:56:21 john_f Exp $
  *
  *
  *
@@ -135,6 +135,7 @@ struct X11XVDisplaySink
     Rational monitorAspectRatio;
     float scale;
     int swScale;
+    int applyScaleFilter;
     int initialDisplayWidth;
     int initialDisplayHeight;
 
@@ -562,8 +563,8 @@ static int display_frame(X11XVDisplaySink* sink, X11DisplayFrame* frame, const F
                 sink->swScale,
                 sink->swScale,
                 1,
-                1,
-                1,
+                sink->applyScaleFilter,
+                sink->applyScaleFilter,
                 frame->scaleWorkspace);
         }
 
@@ -1275,7 +1276,8 @@ int xvsk_check_is_available()
 
 
 int xvsk_open(int reviewDuration, int disableOSD, const Rational* pixelAspectRatio,
-    const Rational* monitorAspectRatio, float scale, int swScale, X11WindowInfo* windowInfo, X11XVDisplaySink** sink)
+              const Rational* monitorAspectRatio, float scale, int swScale, int applyScaleFilter,
+              X11WindowInfo* windowInfo, X11XVDisplaySink** sink)
 {
     X11XVDisplaySink* newSink;
 
@@ -1285,6 +1287,7 @@ int xvsk_open(int reviewDuration, int disableOSD, const Rational* pixelAspectRat
     newSink->pixelAspectRatio = *pixelAspectRatio;
     newSink->monitorAspectRatio = *monitorAspectRatio;
     newSink->swScale = swScale;
+    newSink->applyScaleFilter = applyScaleFilter;
     if (scale > 0.0f)
     {
         newSink->scale = scale;
