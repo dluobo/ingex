@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: player.cpp,v 1.25 2010/10/05 10:49:02 john_f Exp $              *
+ *   $Id: player.cpp,v 1.26 2010/10/05 18:44:09 john_f Exp $              *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -643,7 +643,7 @@ bool Player::Start()
             default:
                 frameOffset = 0;
         }
-        SetVideoSplit();
+        SetVideoSplit(false); //don't call Start()
 #ifndef DISABLE_SHARED_MEM_SOURCE
         mOK = start(inputs, mOpened, SHM_INPUT != mInputType && LOAD_FIRST_CHUNK != mChunkLinking && (PlayerState::PAUSED == mState || PlayerState::STOPPED == mState), frameOffset > -1 ? frameOffset : 0); //play forwards or paused
 #else
@@ -1222,7 +1222,7 @@ void Player::SetWindowName(const wxString & name)
             for (size_t i = 0; i < mTrackNames.size(); i++) { //only go through video files
                 if (mOpened[i]) {
                     title += wxString(mTrackNames[i].c_str(), *wxConvCurrent) + wxT("; ");
-                    if (9 == ++nTracks) break; //split view displays up to the first nine successfully opened files
+                    if ((mSavedState && wxT("Yes") == mSavedState->GetStringValue(wxT("LimitSplitToQuad"), wxT("No")) ? 4 : 9) == ++nTracks) break; //split view displays up to the first four or nine successfully opened files
                 }
             }
             if (!title.IsEmpty()) { //trap for only audio files
@@ -1321,11 +1321,18 @@ bool Player::IsSplitLimitedToQuad()
 }
 
 /// Sets the video split type and the track selector tooltip depending on how many tracks are available and whether a nonasplit is allowed
-void Player::SetVideoSplit()
+/// @param restart Restart player if necessary - change does not take effect until player is restarted.
+void Player::SetVideoSplit(const bool restart)
 {
     bool limited = mSavedState && wxT("Yes") == mSavedState->GetStringValue(wxT("LimitSplitToQuad"), wxT("No"));
-    setVideoSplit((mNVideoTracks > 4 && !limited) ? NONA_SPLIT_VIDEO_SWITCH : QUAD_SPLIT_VIDEO_SWITCH);
+    setVideoSplit((mNVideoTracks > 4 && !limited) ? NONA_SPLIT_VIDEO_SWITCH : QUAD_SPLIT_VIDEO_SWITCH); //this doesn't take effect until the player is reloaded
     if (mTrackSelector) mTrackSelector->LimitSplitToQuad(limited);
+    if (
+     mOK
+     && restart //allowed to restart
+     && (mTrackSelector && 0 == mTrackSelector->GetSelectedSource()) //showing the split view
+     && mNVideoTracks > 4 //will display quad split whether limited or not if <= 4 video tracks, so only useful to restart if more than this
+    ) Start();
 }
 
 /// Sets audio to follow video or stick to the first audio files

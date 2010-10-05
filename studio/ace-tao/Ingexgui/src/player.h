@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: player.h,v 1.17 2010/10/05 10:49:02 john_f Exp $                *
+ *   $Id: player.h,v 1.18 2010/10/05 18:44:09 john_f Exp $                *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -195,7 +195,7 @@ class Player : public wxPanel, prodauto::LocalIngexPlayer
         bool HasChunkBefore();
         bool HasChunkAfter();
         void LoadRecording();
-        void SetVideoSplit();
+        void SetVideoSplit(const bool = true);
         Listener * mListener;
         prodauto::IngexPlayerListenerRegistry mListenerRegistry;
         DragButtonList* mTrackSelector;
