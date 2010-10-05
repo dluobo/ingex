@@ -1,5 +1,5 @@
 /*
- * $Id: recorder_functions.cpp,v 1.47 2010/09/29 09:44:29 john_f Exp $
+ * $Id: recorder_functions.cpp,v 1.48 2010/10/05 08:52:57 john_f Exp $
  *
  * Functions which execute in recording threads.
  *
@@ -930,6 +930,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     else
     {
         mixer.SetMix(AudioMixer::CH12);
+        //mixer.SetMix(AudioMixer::CH34);
         //mixer.SetMix(AudioMixer::COMMENTARY3);
         //mixer.SetMix(AudioMixer::COMMENTARY4);
         //mixer.SetMix(AudioMixer::ALL);

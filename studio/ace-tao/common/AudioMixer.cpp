@@ -1,5 +1,5 @@
 /*
- * $Id: AudioMixer.cpp,v 1.3 2010/06/25 14:22:21 philipn Exp $
+ * $Id: AudioMixer.cpp,v 1.4 2010/10/05 08:52:58 john_f Exp $
  *
  * Simple class for mixing 4 audio tracks into 2 tracks.
  *
@@ -76,6 +76,17 @@ void AudioMixer::SetMix(EnumeratedMatrix matrix)
         m22 = 1.0;
         m23 = 0.0;
         m24 = 0.0;
+        break;
+    case CH34:
+        // Simply copy channels 3 and 4 to output
+        m11 = 0.0;
+        m12 = 0.0;
+        m13 = 1.0;
+        m14 = 0.0;
+        m21 = 0.0;
+        m22 = 0.0;
+        m23 = 0.0;
+        m24 = 1.0;
         break;
     case CH12L3R:
         // Channel 1 & 2 mixed to left, channel 3 to right e.g. for speaking clock
