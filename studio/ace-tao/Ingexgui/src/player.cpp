@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: player.cpp,v 1.24 2010/08/25 17:51:06 john_f Exp $              *
+ *   $Id: player.cpp,v 1.25 2010/10/05 10:49:02 john_f Exp $              *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -29,6 +29,7 @@
 #include "dragbuttonlist.h"
 #include "eventlist.h"
 #include "ingexgui.h"
+#include "savedstate.h"
 
 DEFINE_EVENT_TYPE(EVT_PLAYER_MESSAGE)
 
@@ -61,15 +62,16 @@ END_EVENT_TABLE()
 /// @param outputType The output type - accelerated or unaccelerated; SDI or not.  If an SDI type and no SDI cards are available, defaults to accelerated with no SDI.
 /// @param displayType The on screen display type.
 Player::Player(wxWindow* parent, const wxWindowID id, const bool enabled, const PlayerOutputType outputType, const PlayerOSDtype OSDType) :
-wxPanel(parent, id), LocalIngexPlayer(&mListenerRegistry), mTrackSelector(0), //to check before accessing as it's not created automatically
+wxPanel(parent, id), LocalIngexPlayer(&mListenerRegistry),
+mTrackSelector(0), //to check before accessing as it's not created automatically
 mOSDType(OSDType), mEnabled(enabled), mOK(false), mState(PlayerState::STOPPED), mSpeed(0), mMuted(false), mOpeningSocket(false),
 mPrevTrafficControl(true), //so that it can be switched off
 mMode(RECORDINGS), mPreviousMode(RECORDINGS),
 mCurrentChunkInfo(0), //to check before accessing in case it hasn't been set
 mDivertKeyPresses(false),
 mOutputType(outputType),
-mAudioFollowsVideo(false),
-mRecording(false)
+mRecording(false),
+mSavedState(0) //must call SetSavedState to use this
 {
     //Controls
     wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
@@ -104,7 +106,15 @@ mRecording(false)
     TrafficControl(false); //in case it has just been restarted after crashing and leaving traffic control on
 }
 
-///Calls SetMode() if a button is being pressed (as opposed to released)
+/// Provides the saved state and loads from the saved state; player will not work properly until this is called
+void Player::SetSavedState(SavedState * savedState)
+{
+    mSavedState = savedState;
+    SetVideoSplit(); //uses value from the saved state
+    switchAudioGroup(wxT("Yes") != mSavedState->GetStringValue(wxT("AudioFollowsVideo"), wxT("No")));
+}
+
+/// Calls SetMode() if a button is being pressed (as opposed to released)
 void Player::OnModeButton(wxCommandEvent& event)
 {
     if (event.GetInt()) { //pressing in a button
@@ -181,6 +191,7 @@ DragButtonList* Player::GetTrackSelector(wxWindow * parent)
 {
     if (!mTrackSelector) {
         mTrackSelector = new DragButtonList(parent, this);
+        SetVideoSplit(); //updates track selector
         SetMode(mMode, true); //SetMode will now work
     }
     return mTrackSelector;
@@ -472,7 +483,7 @@ void Player::Open(const PlayerOpenType type)
     bool opened = false;
     switch (type) {
         case OPEN_MOV: {
-            wxFileDialog dlg(this, wxT("Choose a MOV file"), wxT(""), wxT(""), wxT("MOV files |*.mov;*.MOV|All files|*.*"), wxFD_FILE_MUST_EXIST | wxFD_CHANGE_DIR); //select single file only
+            wxFileDialog dlg(this, wxT("Choose a MOV file"), wxEmptyString, wxEmptyString, wxT("MOV files |*.mov;*.MOV|All files|*.*"), wxFD_FILE_MUST_EXIST | wxFD_CHANGE_DIR); //select single file only
             if ((opened = (wxID_OK == dlg.ShowModal()))) {
                 mFileModeMovFile = dlg.GetPath();
                 mFileModeMxfFiles.Clear();
@@ -480,7 +491,7 @@ void Player::Open(const PlayerOpenType type)
             break;
         }
         case OPEN_MXF: {
-            wxFileDialog dlg(this, wxT("Choose one or more MXF files"), wxT(""), wxT(""), wxT("MXF files|*.mxf;*.MXF|All files|*.*"), wxFD_FILE_MUST_EXIST | wxFD_CHANGE_DIR | wxFD_MULTIPLE); //select multiple files
+            wxFileDialog dlg(this, wxT("Choose one or more MXF files"), wxEmptyString, wxEmptyString, wxT("MXF files|*.mxf;*.MXF|All files|*.*"), wxFD_FILE_MUST_EXIST | wxFD_CHANGE_DIR | wxFD_MULTIPLE); //select multiple files
             if ((opened = (wxID_OK == dlg.ShowModal()))) { //at least one file has been chosen
                 dlg.GetPaths(mFileModeMxfFiles);
                 mFileModeMovFile.Clear();
@@ -632,7 +643,7 @@ bool Player::Start()
             default:
                 frameOffset = 0;
         }
-        setVideoSplit(mNVideoTracks > 4 ? NONA_SPLIT_VIDEO_SWITCH : QUAD_SPLIT_VIDEO_SWITCH);
+        SetVideoSplit();
 #ifndef DISABLE_SHARED_MEM_SOURCE
         mOK = start(inputs, mOpened, SHM_INPUT != mInputType && LOAD_FIRST_CHUNK != mChunkLinking && (PlayerState::PAUSED == mState || PlayerState::STOPPED == mState), frameOffset > -1 ? frameOffset : 0); //play forwards or paused
 #else
@@ -1194,20 +1205,6 @@ void Player::MuteAudio(const bool state)
     SetWindowName();
 }
 
-/// Sets audio to follow video or stick to the first audio files
-/// @param state true to follow video
-void Player::AudioFollowsVideo(const bool state)
-{
-    mAudioFollowsVideo = state;
-    switchAudioGroup(mAudioFollowsVideo ? 0 : 1);
-}
-
-/// Returns "audio follows video" state
-bool Player::AudioFollowsVideo()
-{
-    return mAudioFollowsVideo;
-}
-
 /// Sets the name of the window from the currently-selected track, split or supplied string, plus the mute and acceleration status.
 /// @param name If supplied, uses this string rather than the source names.
 void Player::SetWindowName(const wxString & name)
@@ -1301,6 +1298,55 @@ void Player::SelectLaterTrack()
 {
     if (mTrackSelector) mTrackSelector->LaterTrack(true);
 }
+
+/// Limits the split view to a quad split or a nona split.
+/// SetSavedState() must have been called for the value to be remembered and not to revert to the stored value when it is.
+/// @param limit True to limit to quad split.
+void Player::LimitSplitToQuad(const bool limit)
+{
+    //save the change
+    if (mSavedState) {
+        new wxXmlNode(mSavedState->GetTopLevelNode(wxT("LimitSplitToQuad"), true, true), wxXML_TEXT_NODE, wxEmptyString, limit ? wxT("Yes") : wxT("No")); //remove existing node if present
+        mSavedState->Save();
+    }
+    //reflect the change
+    SetVideoSplit();
+}
+
+/// Indicates if the split view is limited to a quad split.
+/// SetSavedState() must have been called.
+bool Player::IsSplitLimitedToQuad()
+{
+    return mSavedState && wxT("Yes") == mSavedState->GetStringValue(wxT("LimitSplitToQuad"), wxT("No"));
+}
+
+/// Sets the video split type and the track selector tooltip depending on how many tracks are available and whether a nonasplit is allowed
+void Player::SetVideoSplit()
+{
+    bool limited = mSavedState && wxT("Yes") == mSavedState->GetStringValue(wxT("LimitSplitToQuad"), wxT("No"));
+    setVideoSplit((mNVideoTracks > 4 && !limited) ? NONA_SPLIT_VIDEO_SWITCH : QUAD_SPLIT_VIDEO_SWITCH);
+    if (mTrackSelector) mTrackSelector->LimitSplitToQuad(limited);
+}
+
+/// Sets audio to follow video or stick to the first audio files
+/// @param follows true to follow video
+void Player::AudioFollowsVideo(const bool follows)
+{
+    //save the change
+    if (mSavedState) {
+        new wxXmlNode(mSavedState->GetTopLevelNode(wxT("AudioFollowsVideo"), true, true), wxXML_TEXT_NODE, wxEmptyString, follows ? wxT("Yes") : wxT("No")); //remove existing node if present
+        mSavedState->Save();
+    }
+    //reflect the change
+    switchAudioGroup(follows ? 0 : 1);
+}
+
+/// Returns "audio follows video" state
+bool Player::IsAudioFollowingVideo()
+{
+    return mSavedState && wxT("Yes") == mSavedState->GetStringValue(wxT("AudioFollowsVideo"), wxT("No"));
+}
+
 
 /***************************************************************************
  *   LISTENER                                                              *

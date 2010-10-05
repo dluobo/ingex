@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: dragbuttonlist.cpp,v 1.16 2010/08/19 12:47:57 john_f Exp $      *
+ *   $Id: dragbuttonlist.cpp,v 1.17 2010/10/05 10:49:02 john_f Exp $      *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -145,7 +145,7 @@ prodauto::PlayerInputType DragButtonList::SetMXFFiles(wxArrayString & paths, std
     trackNames.clear();
     nVideoTracks = 0;
     wxRadioButton * split = new wxRadioButton(this, wxID_HIGHEST + 1, wxT("Split view")); //the split is always the first video track (id = 0)
-    split->SetToolTip(wxT("Up to the first nine successfully opened files"));
+    split->SetToolTip(mSplitButtonToolTip);
     GetSizer()->Add(split, -1, wxEXPAND);
     mEnableStates.Add(false); //enable later if any files successfully loaded
     std::vector<std::string> audioFileNames;
@@ -368,6 +368,20 @@ void DragButtonList::Select(unsigned int source)
     mButtonEvtHandler->AddPendingEvent(event); //Don't want to go through this class's event handler as no point and it will change the ID
 }
 
+/// Sets the tooltip on the split view button to reflect the number of sources it displays
+/// @param limit True if intending to limit split to four sources
+void DragButtonList::LimitSplitToQuad(bool limit)
+{
+    if (limit) {
+        mSplitButtonToolTip = wxT("Up to the first four successfully opened files");
+    }
+    else {
+        mSplitButtonToolTip = wxT("Up to the first nine successfully opened files");
+    }
+    wxWindow * split = FindWindow(wxID_HIGHEST + 1);
+    if (split) split->SetToolTip(mSplitButtonToolTip);
+}
+
 //drag drop experiment
 
 /*  wxArrayString names;
@@ -379,7 +393,7 @@ void DragButtonList::Select(unsigned int source)
     for (unsigned int i = 0; i < names.GetCount(); i++) {
         wxBoxSizer * bs = new wxBoxSizer(wxHORIZONTAL);
         playbackPageSizer->Add(bs);
-        wxRadioButton * rb = new wxRadioButton(playbackPage, -1, wxT(""));
+        wxRadioButton * rb = new wxRadioButton(playbackPage, -1, wxEmptyString);
         bs->Add(rb);
         wxStaticText * tb = new wxStaticText(playbackPage, -1, names[i]);
         bs->Add(tb);

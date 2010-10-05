@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: ingexgui.cpp,v 1.34 2010/08/25 17:51:06 john_f Exp $           *
+ *   $Id: ingexgui.cpp,v 1.35 2010/10/05 10:49:02 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -24,15 +24,13 @@
 #include <wx/wx.h>
 #include "wx/tooltip.h" //for SetDelay()
 #include "wx/splitter.h"
-#include "wx/stdpaths.h"
 #include "wx/filename.h"
-#include "wx/xml/xml.h"
-#include "wx/file.h"
 #include "wx/cmdline.h"
 #include "help.h"
 #include "jogshuttle.h"
 #include "JogShuttle.h"
 #include "eventlist.h"
+#include "savedstate.h"
 
 #include "ingexgui.xpm"
 #include "stop.xpm"
@@ -111,6 +109,7 @@ BEGIN_EVENT_TABLE( IngexguiFrame, wxFrame )
     EVT_MENU( MENU_PlayerRelativeTimecode, IngexguiFrame::OnPlayerCommand )
     EVT_MENU( MENU_PlayerNoOSD, IngexguiFrame::OnPlayerCommand )
     EVT_MENU( MENU_PlayerAudioFollowsVideo, IngexguiFrame::OnPlayerCommand )
+    EVT_MENU( MENU_PlayerLimitSplitToQuad, IngexguiFrame::OnPlayerCommand )
     EVT_MENU( MENU_PlayerAccelOutput, IngexguiFrame::OnPlayerCommand )
 #ifdef HAVE_DVS
     EVT_MENU( MENU_PlayerEnableSDIOSD, IngexguiFrame::OnPlayerCommand )
@@ -247,11 +246,11 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
         }
         wxSize size = wxDefaultSize;
         size.SetHeight(80); //bodge to show at least three lines
-        mRecorderGroup = new RecorderGroupCtrl(this, wxID_ANY, wxDefaultPosition, size, argc, argv_, mSavedState); //do this here to allow the ORB to mangle argc and argv_; mustn't connect recorders until SetTree() has been called
+        mRecorderGroup = new RecorderGroupCtrl(this, wxID_ANY, wxDefaultPosition, size, argc, argv_); //do this here to allow the ORB to mangle argc and argv_; mustn't connect recorders until SetTree() and SetSavedState() have been called
         wxCmdLineParser parser(argc, argv_);
-        parser.AddSwitch(wxT("n"), wxT(""), wxT("Do not load recording list files"));
-        parser.AddSwitch(wxT("p"), wxT(""), wxT("Disable player"));
-        parser.AddOption(wxT(""), wxT("ORB..."), wxT("ORB options, such as \"-ORBDefaultInitRef corbaloc:iiop:192.168.1.123:8888\"")); //a dummy option simply to augment the usage message
+        parser.AddSwitch(wxT("n"), wxEmptyString, wxT("Do not load recording list files"));
+        parser.AddSwitch(wxT("p"), wxEmptyString, wxT("Disable player"));
+        parser.AddOption(wxEmptyString, wxT("ORB..."), wxT("ORB options, such as \"-ORBDefaultInitRef corbaloc:iiop:192.168.1.123:8888\"")); //a dummy option simply to augment the usage message
         if (parser.Parse()) {
                 Log(wxT("Application closed due to incorrect arguments.")); //this can segfault if done after Destroy()
                 Destroy();
@@ -308,6 +307,7 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
         menuPlayer->Append(MENU_PlayerOSD, wxT("Player On-Screen Display"), menuPlayerOSD);
     
         menuPlayer->AppendCheckItem(MENU_PlayerAudioFollowsVideo, wxT("Audio corresponds to video source displayed"));
+        menuPlayer->AppendCheckItem(MENU_PlayerLimitSplitToQuad, wxT("Limit split view to quad split"));
 #ifdef HAVE_DVS
         menuPlayer->AppendCheckItem(MENU_PlayerEnableSDIOSD, wxT("Enable external monitor On-screen Display"));
 #endif
@@ -429,14 +429,14 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
     recordPage->SetSizer(recordPageSizer);
     wxStaticBoxSizer * recProjectNameBox = new wxStaticBoxSizer(wxHORIZONTAL, recordPage, wxT("Project"));
     recordPageSizer->Add(recProjectNameBox, 0, wxEXPAND | wxALL, CONTROL_BORDER);
-    mRecProjectNameCtrl = new wxStaticText(recordPage, REC_PROJECT_NAME, wxT("")); //name added later
+    mRecProjectNameCtrl = new wxStaticText(recordPage, REC_PROJECT_NAME, wxEmptyString); //name added later
     recProjectNameBox->Add(mRecProjectNameCtrl, 1, wxEXPAND);
     wxStaticBoxSizer * descriptionBox = new wxStaticBoxSizer(wxHORIZONTAL, recordPage, wxT("Description"));
     recordPageSizer->Add(descriptionBox, 0, wxEXPAND | wxALL, CONTROL_BORDER);
-    mDescriptionCtrl = new MyTextCtrl(recordPage, TEXTCTRL_Description, wxT(""), wxDefaultPosition, wxDefaultSize, wxTE_PROCESS_ENTER);
+    mDescriptionCtrl = new MyTextCtrl(recordPage, TEXTCTRL_Description, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxTE_PROCESS_ENTER);
     descriptionBox->Add(mDescriptionCtrl, 1, wxEXPAND);
     descriptionBox->Add(new wxButton(recordPage, BUTTON_ClearDescription, wxT("Clear")), 0, wxLEFT, CONTROL_BORDER);
-    mTree = new TickTreeCtrl(recordPage, TREE, wxDefaultPosition, wxSize(100, 100), wxT("Recorders")); //the y value of the size is the significant one.  Makes it a bit taller than default
+    mTree = new TickTreeCtrl(recordPage, TREE, wxDefaultPosition, wxSize(100, 100), wxT("Recorders")); //the y value of the size is the significant one.  Makes it a bit taller than default.  Do not use until SetSavedState() has been called.
     mRecorderGroup->SetTree(mTree);
     recordPageSizer->Add(mTree, 1, wxEXPAND | wxALL, CONTROL_BORDER);
 
@@ -451,7 +451,7 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
         playbackPage->SetSizer(mPlaybackPageSizer);
         mPlayProjectNameBox = new wxStaticBoxSizer(wxHORIZONTAL, playbackPage); //updated when project name static text within is updated
         mPlaybackPageSizer->Add(mPlayProjectNameBox, 0, wxEXPAND | wxALL, CONTROL_BORDER);
-        mPlayProjectNameBox->Add(new wxStaticText(playbackPage, PLAY_PROJECT_NAME, wxT("")), 1, wxEXPAND);
+        mPlayProjectNameBox->Add(new wxStaticText(playbackPage, PLAY_PROJECT_NAME, wxEmptyString), 1, wxEXPAND);
         wxStaticBoxSizer * playbackTracksBox = new wxStaticBoxSizer(wxHORIZONTAL, playbackPage, wxT("Tracks"));
         mPlaybackPageSizer->Add(playbackTracksBox, 1, wxEXPAND | wxALL, CONTROL_BORDER);
         playbackTracksBox->Add((wxWindow*) mPlayer->GetTrackSelector(playbackPage), 1, wxEXPAND);
@@ -493,37 +493,24 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
     mJogShuttle->addListener(mJSListener);
     mJogShuttle->start();
 
-    //saved state - check this after all controls have been created because it may generate a dialogue which will lead to any events previously issued being processed, which may affect controls (here's looking at you, mRecorderGroup)
-    mSavedStateFilename = wxStandardPaths::Get().GetUserConfigDir() + wxFileName::GetPathSeparator() + SAVED_STATE_FILENAME;
-    if (!wxFile::Exists(mSavedStateFilename)) {
-        wxMessageDialog dlg(this, wxT("No saved preferences file found.  Default values will be used."), wxT("No saved preferences"));
-        dlg.ShowModal();
-        wxXmlNode * rootNode = new wxXmlNode(wxXML_ELEMENT_NODE, wxT("Ingexgui"));
-        mSavedState.SetRoot(rootNode);
-    }
-    else if (!mSavedState.Load(mSavedStateFilename)) { //already produces a warning message box
-        wxXmlNode * rootNode = new wxXmlNode(wxXML_ELEMENT_NODE, wxT("Ingexgui"));
-        mSavedState.SetRoot(rootNode);
-    }
-    else if (wxT("Ingexgui") != mSavedState.GetRoot()->GetName()) {
-        wxMessageDialog dlg(this, wxT("Saved preferences file \"") + mSavedStateFilename + wxT("\": has unrecognised data: recreating with default values."), wxT("Unrecognised saved preferences"), wxICON_EXCLAMATION | wxOK);
-        dlg.ShowModal();
-        wxXmlNode * rootNode = new wxXmlNode(wxXML_ELEMENT_NODE, wxT("Ingexgui"));
-        mSavedState.SetRoot(rootNode); //dialogue will detect this as updated
-    }
+    //saved state - do this after all controls have been created because it may generate a dialogue which will lead to any events previously issued being processed, which may affect controls (here's looking at you, mRecorderGroup)
+    mSavedState = new SavedState(this, SAVED_STATE_FILENAME);
+    mTree->SetSavedState(mSavedState);
+    mRecorderGroup->SetSavedState(mSavedState);
+    mPlayer->SetSavedState(mSavedState);
 
     //project name
     wxString currentProject = SetProjectDlg::GetCurrentProjectName(mSavedState);
     if (!currentProject.IsEmpty()) {
         mRecorderGroup->SetCurrentProjectName(currentProject);
     }
+    
     //Various persistent dialogues
     mHelpDlg = new HelpDlg(this); //persistent to allow it to be modeless in order to remain visible while using the app
     mCuePointsDlg = new CuePointsDlg(this, mSavedState); //persistent so that a file doesn't have to be read each time a cue point is marked
     mChunkingDlg = new ChunkingDlg(this, mTimepos, mSavedState); //persistent as it controls chunking while recording, as well as showing to set up the parameters
 
     mRecorderGroup->StartGettingRecorders(); //safe to let it generate events now that everything has been created (events will be processed if any dialogue is visible, such as the saved preferences warnings above)
-
     SetStatus(STOPPED);
     wxUpdateUIEvent::SetUpdateInterval(10); //update controls frequently but not as often as possible!
 }
@@ -581,7 +568,6 @@ void IngexguiFrame::SetProjectName()
     if (wxID_OK == dlg.ShowModal()) {
         mRecorderGroup->SetProjectNames(dlg.GetProjectNames());
         mRecorderGroup->SetCurrentProjectName(dlg.GetSelectedProject());
-        mSavedState.Save(mSavedStateFilename);
     }
 }
 
@@ -598,8 +584,6 @@ void IngexguiFrame::OnSetRolls( wxCommandEvent& WXUNUSED( event ) )
 {
     SetRollsDlg dlg(this, mRecorderGroup->GetPreroll(), mRecorderGroup->GetMaxPreroll(), mRecorderGroup->GetPostroll(), mRecorderGroup->GetMaxPostroll(), mSavedState);
     if (wxID_OK == dlg.ShowModal()) {
-        mSavedState.Save(mSavedStateFilename);
-        //Update current values
         mRecorderGroup->SetPreroll(dlg.GetPreroll());
         mRecorderGroup->SetPostroll(dlg.GetPostroll());
     }
@@ -609,9 +593,7 @@ void IngexguiFrame::OnSetRolls( wxCommandEvent& WXUNUSED( event ) )
 /// @param event The command event.
 void IngexguiFrame::OnSetCues( wxCommandEvent& WXUNUSED( event ) )
 {
-    if (wxID_OK == mCuePointsDlg->ShowModal()) {
-        mSavedState.Save(mSavedStateFilename);
-    }
+    mCuePointsDlg->ShowModal();
 }
 
 /// Responds to a Chunking menu request by showing the appropriate dialogue.
@@ -619,7 +601,6 @@ void IngexguiFrame::OnSetCues( wxCommandEvent& WXUNUSED( event ) )
 void IngexguiFrame::OnChunking( wxCommandEvent& WXUNUSED( event ) )
 {
     mChunkingDlg->ShowModal();
-    mSavedState.Save(mSavedStateFilename);
 }
 
 /// Responds to a Refresh Recorder List request by initiating the process of obtaining a list of recorders.
@@ -633,8 +614,7 @@ void IngexguiFrame::OnRecorderListRefresh( wxCommandEvent& WXUNUSED( event ) )
 void IngexguiFrame::OnUseTapeIds( wxCommandEvent& event )
 {
     SetTapeIdsDlg::EnableTapeIds(mSavedState, event.IsChecked());
-    mSavedState.Save(mSavedStateFilename);
-    mTree->UpdateTapeIds(mSavedState); //will issue an event to update the record and tape ID buttons
+    mTree->UpdateTapeIds(); //will issue an event to update the record and tape ID buttons
 }
 
 /// Responds to the tape IDs button being pressed by showing the appropriate dialogue and updating state if user makes changes.
@@ -646,8 +626,7 @@ void IngexguiFrame::OnSetTapeIds( wxCommandEvent& WXUNUSED( event ) )
     mTree->GetPackageNames(names, enabled);
     SetTapeIdsDlg dlg(this, mSavedState, names, enabled);
     if (dlg.IsUpdated()) {
-        mSavedState.Save(mSavedStateFilename);
-        mTree->UpdateTapeIds(mSavedState); //will issue an event to update the record and tape ID buttons
+        mTree->UpdateTapeIds(); //will issue an event to update the record and tape ID buttons
     }
 }
 
@@ -972,7 +951,6 @@ void IngexguiFrame::OnCue( wxCommandEvent& WXUNUSED( event ) )
                 if (mPlayer) mPlayer->DivertKeyPresses(); //so that key presses in the player window are sent to the dialogue
                 if (wxID_OK == mCuePointsDlg->ShowModal(Timepos::FormatTimecode(timecode))) {
                     if (mCuePointsDlg->ValidCuePointSelected()) mEventList->AddEvent(EventList::CUE, 0, mCuePointsDlg->GetDescription(), frameCount, mCuePointsDlg->GetColourIndex());
-                    mSavedState.Save(mSavedStateFilename);
                 }
                 if (mPlayer) mPlayer->DivertKeyPresses(false);
                 break;
@@ -1205,7 +1183,7 @@ void IngexguiFrame::OnRecorderGroupEvent(wxCommandEvent& event) {
                     }
                     //logging
                     CORBA::StringSeq_var fileList = ((RecorderData *) event.GetClientData())->GetFileList();
-                    wxString msg = wxString::Format(wxT("%d element%s returned%s"), fileList->length(), 1 == fileList->length() ? wxT("") : wxT("s"), fileList->length() ? wxT(":") : wxT("."));
+                    wxString msg = wxString::Format(wxT("%d element%s returned%s"), fileList->length(), 1 == fileList->length() ? wxEmptyString : wxT("s"), fileList->length() ? wxT(":") : wxT("."));
                     for (size_t i = 0; i < fileList->length(); i++) {
                         msg += wxT("\n\"") + wxString(fileList[i], *wxConvCurrent) + wxT("\"");
                     }
@@ -1435,6 +1413,9 @@ void IngexguiFrame::OnPlayerCommand(wxCommandEvent & event)
             case MENU_PlayerAudioFollowsVideo:
                 mPlayer->AudioFollowsVideo(event.IsChecked());
                 break;
+            case MENU_PlayerLimitSplitToQuad:
+                mPlayer->LimitSplitToQuad(event.IsChecked());
+                break;
         }
     }
 }
@@ -1615,7 +1596,7 @@ void IngexguiFrame::OnUpdateUI(wxUpdateUIEvent& event)
             event.Check(SetTapeIdsDlg::AreTapeIdsEnabled(mSavedState));
             break;
         case BUTTON_TapeId:
-            dynamic_cast<wxButton*>(event.GetEventObject())->SetBackgroundColour(mTree->SomeEnabled() && !mTree->TapeIdsOK(mSavedState) ? BUTTON_WARNING_COLOUR : wxNullColour);
+            dynamic_cast<wxButton*>(event.GetEventObject())->SetBackgroundColour(mTree->SomeEnabled() && !mTree->AreTapeIdsOK() ? BUTTON_WARNING_COLOUR : wxNullColour);
             break;
         case BITMAP_StatusCtrl:
             switch (mStatus) {
@@ -1704,7 +1685,7 @@ void IngexguiFrame::OnUpdateUI(wxUpdateUIEvent& event)
         case BITMAP_Alert:
             if (!mTree->HasRecorders()) {
                 dynamic_cast<wxStaticBitmap*>(event.GetEventObject())->SetBitmap(blank);
-                dynamic_cast<wxStaticBitmap*>(event.GetEventObject())->SetToolTip(wxT(""));
+                dynamic_cast<wxStaticBitmap*>(event.GetEventObject())->SetToolTip(wxEmptyString);
             }
             else if (mTree->HasProblem()) {
                 dynamic_cast<wxStaticBitmap*>(event.GetEventObject())->SetBitmap(exclamation);
@@ -1726,7 +1707,7 @@ void IngexguiFrame::OnUpdateUI(wxUpdateUIEvent& event)
         case BUTTON_MENU_Record: {
             wxString legend;
             if (mTree->HasRecorders()) {
-                legend = wxString::Format(wxT("Record (%d track%s)"), mTree->EnabledTracks(), mTree->EnabledTracks() == 1 ? wxT("") : wxT("s"));
+                legend = wxString::Format(wxT("Record (%d track%s)"), mTree->EnabledTracks(), mTree->EnabledTracks() == 1 ? wxEmptyString : wxT("s"));
             }
             else {
                 legend = wxT("Record");
@@ -1759,14 +1740,14 @@ void IngexguiFrame::OnUpdateUI(wxUpdateUIEvent& event)
                     dynamic_cast<wxButton*>(event.GetEventObject())->SetToolTip(wxT("Stop recording after postroll"));
                 }
                 else {
-                    dynamic_cast<wxButton*>(event.GetEventObject())->SetToolTip(wxT(""));
+                    dynamic_cast<wxButton*>(event.GetEventObject())->SetToolTip(wxEmptyString);
                 }
             }
             break;
         case BUTTON_Cue:
             switch (mStatus) {
                 case RUNNING_UP: case RUNNING_DOWN:
-                    dynamic_cast<wxButton*>(event.GetEventObject())->SetToolTip(wxT(""));
+                    dynamic_cast<wxButton*>(event.GetEventObject())->SetToolTip(wxEmptyString);
                     break;
                 case STOPPED:
                     if (mPlayer) {
@@ -1775,7 +1756,7 @@ void IngexguiFrame::OnUpdateUI(wxUpdateUIEvent& event)
                     }
                     else {
                         event.SetText(wxEmptyString);
-                        dynamic_cast<wxButton*>(event.GetEventObject())->SetToolTip(wxT(""));
+                        dynamic_cast<wxButton*>(event.GetEventObject())->SetToolTip(wxEmptyString);
                     }
                     break;
                 case RECORDING:
@@ -1835,7 +1816,10 @@ void IngexguiFrame::OnUpdateUI(wxUpdateUIEvent& event)
             event.Check(mPlayer && OSD_OFF == mPlayer->GetOSDType());
             break;
         case MENU_PlayerAudioFollowsVideo:
-            event.Check(mPlayer && mPlayer->AudioFollowsVideo());
+            event.Check(mPlayer && mPlayer->IsAudioFollowingVideo());
+            break;
+        case MENU_PlayerLimitSplitToQuad:
+            event.Check(mPlayer && mPlayer->IsSplitLimitedToQuad());
             break;
         default:
             break;
@@ -1957,9 +1941,9 @@ bool IngexguiFrame::OperationAllowed(const int operation, bool* found)
         case BUTTON_MENU_Record:
         case MENU_TestMode:
 #ifdef ALLOW_OVERLAPPED_RECORDINGS
-            enabled = mTree->SomeEnabled() && mTree->TapeIdsOK(mSavedState) && mRecorderGroup->IsEnabledForInput() && (RECORDING != mStatus && RUNNING_UP != mStatus);
+            enabled = mTree->SomeEnabled() && mTree->AreTapeIdsOK() && mRecorderGroup->IsEnabledForInput() && (RECORDING != mStatus && RUNNING_UP != mStatus);
 #else
-            enabled = mTree->SomeEnabled() && mTree->TapeIdsOK(mSavedState) && mRecorderGroup->IsEnabledForInput() && (RECORDING != mStatus && RUNNING_UP != mStatus && RUNNING_DOWN != mStatus);
+            enabled = mTree->SomeEnabled() && mTree->AreTapeIdsOK() && mRecorderGroup->IsEnabledForInput() && (RECORDING != mStatus && RUNNING_UP != mStatus && RUNNING_DOWN != mStatus);
 #endif
             break;
         case BUTTON_MENU_Stop:

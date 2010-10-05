@@ -49,6 +49,7 @@ class DragButtonList : public wxScrolledWindow
         bool LaterTrack(const bool);
         void ToggleSplitView(const unsigned int);
         const wxString GetProjectName();
+	void LimitSplitToQuad(bool);
 //      std::vector<std::string> * GetFiles();
     private:
         void OnUpdateUI(wxUpdateUIEvent&);
@@ -58,6 +59,7 @@ class DragButtonList : public wxScrolledWindow
         unsigned int mSelected;
         wxString mProjectName;
         wxEvtHandler* mButtonEvtHandler;
+        wxString mSplitButtonToolTip;
     DECLARE_EVENT_TABLE();
 };
 

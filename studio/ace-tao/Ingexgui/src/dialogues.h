@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: dialogues.h,v 1.15 2010/08/25 17:51:06 john_f Exp $             *
+ *   $Id: dialogues.h,v 1.16 2010/10/05 10:49:02 john_f Exp $             *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -35,7 +35,7 @@
 class SetRollsDlg : public wxDialog
 {
     public:
-        SetRollsDlg(wxWindow *, const ProdAuto::MxfDuration, const ProdAuto::MxfDuration, const ProdAuto::MxfDuration, const ProdAuto::MxfDuration, wxXmlDocument &);
+        SetRollsDlg(wxWindow *, const ProdAuto::MxfDuration, const ProdAuto::MxfDuration, const ProdAuto::MxfDuration, const ProdAuto::MxfDuration, SavedState *);
         int ShowModal();
         const ProdAuto::MxfDuration GetPreroll();
         const ProdAuto::MxfDuration GetPostroll();
@@ -48,7 +48,7 @@ class SetRollsDlg : public wxDialog
         wxStaticBoxSizer * mPostrollBox;
         ProdAuto::MxfDuration mMaxPreroll;
         ProdAuto::MxfDuration mMaxPostroll;
-        wxXmlDocument & mSavedState;
+        SavedState * mSavedState;
 
     enum
     {
@@ -61,16 +61,17 @@ class SetRollsDlg : public wxDialog
 
 class wxGrid;
 class wxGridEvent;
+class SavedState;
 
 /// Set project names.
 class SetProjectDlg : public wxDialog
 {
     public:
-        SetProjectDlg(wxWindow *, const wxSortedArrayString &, wxXmlDocument &);
+        SetProjectDlg(wxWindow *, const wxSortedArrayString &, SavedState *);
         int ShowModal();
         const wxString GetSelectedProject();
         const wxSortedArrayString & GetProjectNames();
-        static const wxString GetCurrentProjectName(const wxXmlDocument &);
+        static const wxString GetCurrentProjectName(SavedState *);
     private:
         enum {
             ADD = wxID_HIGHEST + 1,
@@ -90,7 +91,7 @@ class SetProjectDlg : public wxDialog
         wxButton * mOKButton;
         wxChoice * mProjectList;
         wxSortedArrayString mProjectNames; //needed because there is no sort style for a wxChoice
-        wxXmlDocument & mSavedState;
+        SavedState * mSavedState;
     DECLARE_EVENT_TABLE()
 };
 
@@ -105,15 +106,17 @@ event.Skip(); };
     DECLARE_EVENT_TABLE()
 };
 
+class wxXmlNode;
+
 /// Set tape IDs.
 class SetTapeIdsDlg : public wxDialog
 {
     public:
-        SetTapeIdsDlg(wxWindow *, wxXmlDocument &, wxArrayString &, std::vector<bool> &);
-        static wxXmlNode * GetTapeIdsNode(wxXmlDocument &);
+        SetTapeIdsDlg(wxWindow *, SavedState *, wxArrayString &, std::vector<bool> &);
+        static wxXmlNode * GetTapeIdsNode(SavedState *, bool);
         static const wxString GetTapeId(wxXmlNode *, const wxString &, wxArrayString * = 0);
-        static void EnableTapeIds(wxXmlDocument &, bool);
-        static bool AreTapeIdsEnabled(wxXmlDocument &);
+        static void EnableTapeIds(SavedState *, bool);
+        static bool AreTapeIdsEnabled(SavedState *);
         bool IsUpdated();
     private:
         enum {
@@ -264,8 +267,8 @@ class TestModeDlg : public wxDialog
 class CuePointsDlg : public wxDialog
 {
     public:
-        CuePointsDlg(wxWindow *, wxXmlDocument&);
-        int ShowModal(const wxString = wxT(""));
+        CuePointsDlg(wxWindow *, SavedState *);
+        int ShowModal(const wxString = wxEmptyString);
         void Shortcut(const int);
         void Scroll(const bool);
         const wxString GetDescription();
@@ -285,14 +288,13 @@ class CuePointsDlg : public wxDialog
         void OnSetGridRow(wxCommandEvent&);
         void OnLabelLeftClick(wxGridEvent&);
         void SetColour(const int, const int);
-        void Reset();
 
         wxGrid * mGrid;
         wxButton * mOkButton;
         wxStaticText * mTimecodeDisplay;
         wxStaticText * mMessage;
 
-        wxXmlNode * mCuePointsNode;
+        SavedState * mSavedState;
         wxColour mTextColour;
         wxColour mBackgroundColour;
         int mCurrentRow;
@@ -306,7 +308,7 @@ class CuePointsDlg : public wxDialog
 class ChunkingDlg : public wxDialog
 {
     public:
-        ChunkingDlg(wxWindow *, Timepos *, wxXmlDocument &);
+        ChunkingDlg(wxWindow *, Timepos *, SavedState *);
         int ShowModal();
         void RunFrom(const ProdAuto::MxfTimecode & = InvalidMxfTimecode, const ProdAuto::MxfDuration & = InvalidMxfDuration, const bool = true);
         void Realign();
@@ -328,7 +330,7 @@ class ChunkingDlg : public wxDialog
         wxButton * mChunkButton;
         wxTimer * mCountdownTimer;
         Timepos * mTimepos;
-        wxXmlDocument & mSavedState;
+        SavedState * mSavedState;
         unsigned int mCountdown;
         unsigned long mChunkLength;
         int mChunkAlignment;

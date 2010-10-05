@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: recordergroup.cpp,v 1.21 2010/08/27 17:44:05 john_f Exp $       *
+ *   $Id: recordergroup.cpp,v 1.22 2010/10/05 10:49:02 john_f Exp $       *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -27,7 +27,7 @@
 #include "timepos.h"
 #include "ticktree.h"
 #include "ingexgui.h" //for consts
-#include <wx/xml/xml.h>
+#include "savedstate.h"
 
 DEFINE_EVENT_TYPE(EVT_RECORDERGROUP_MESSAGE)
 
@@ -47,8 +47,7 @@ END_EVENT_TABLE()
 /// @param size The control's size.
 /// @param argc Argument count, for ORB initialisation.
 /// @param argv Argument vector, for ORB initialisation.
-/// @param doc The saved state.  Pointer merely saved; not used until controller events are received.
-RecorderGroupCtrl::RecorderGroupCtrl(wxWindow * parent, wxWindowID id, const wxPoint & pos, const wxSize & size, int& argc, char** argv, wxXmlDocument & doc) : wxListBox(parent, id, pos, size, 0, 0, wxLB_MULTIPLE), mEnabledForInput(true), mPreroll(InvalidMxfDuration), mDoc(doc), mMode(STOPPED)
+RecorderGroupCtrl::RecorderGroupCtrl(wxWindow * parent, wxWindowID id, const wxPoint & pos, const wxSize & size, int& argc, char** argv) : wxListBox(parent, id, pos, size, 0, 0, wxLB_MULTIPLE), mEnabledForInput(true), mPreroll(InvalidMxfDuration), mMode(STOPPED)
 {
     mComms = new Comms(this, argc, argv);
 }
@@ -273,7 +272,7 @@ void RecorderGroupCtrl::OnControllerEvent(ControllerThreadEvent & event)
                     //everything about the recorder is now checked
                     Select(pos);
                     //populate the source tree
-                    frameEvent.SetExtraLong(mTree->AddRecorder(event.GetName(), event.GetTrackList(), event.GetTrackStatusList(), GetController(pos)->IsRouterRecorder(), mDoc));
+                    frameEvent.SetExtraLong(mTree->AddRecorder(event.GetName(), event.GetTrackList(), event.GetTrackStatusList(), GetController(pos)->IsRouterRecorder()));
                     //tell the frame
                     frameEvent.SetString(event.GetName());
                     frameEvent.SetInt(pos); //to allow quick disconnection
@@ -282,29 +281,10 @@ void RecorderGroupCtrl::OnControllerEvent(ControllerThreadEvent & event)
                     if (!selectedItems.GetCount()) { //the only recorder
                         mMaxPreroll = GetController(pos)->GetMaxPreroll();
                         mPreroll = mMaxPreroll; //for the edit rate values
-                        wxXmlNode * node = mDoc.GetRoot()->GetChildren();
-                        while (node && node->GetName() != wxT("Preroll")) {
-                            node = node->GetNext();
-                        }
-                        unsigned long samples;
-                        if (node && node->GetChildren() && node->GetChildren()->GetContent().Len() && node->GetChildren()->GetContent().ToULong(&samples)) {
-                            mPreroll.samples = samples;
-                        }
-                        else {
-                            mPreroll.samples = DEFAULT_PREROLL;
-                        }
+                        mPreroll.samples = mSavedState->GetUnsignedLongValue(wxT("Preroll"), DEFAULT_PREROLL); //limited later
                         mMaxPostroll = GetController(pos)->GetMaxPostroll();
                         mPostroll = mMaxPostroll; //for the edit rate values
-                        node = mDoc.GetRoot()->GetChildren();
-                        while (node && node->GetName() != wxT("Postroll")) {
-                            node = node->GetNext();
-                        }
-                        if (node && node->GetChildren() && node->GetChildren()->GetContent().Len() && node->GetChildren()->GetContent().ToULong(&samples)) {
-                            mPostroll.samples = samples;
-                        }
-                        else {
-                            mPostroll.samples = DEFAULT_POSTROLL;
-                        }
+                        mPostroll.samples = mSavedState->GetUnsignedLongValue(wxT("Postroll"), DEFAULT_POSTROLL); //limited later
                     }
                     if (GetController(pos)->GetMaxPreroll().samples < mMaxPreroll.samples) {
                         //limit mMaxPreroll (and possibly mPreroll) to new maximum
@@ -341,7 +321,7 @@ void RecorderGroupCtrl::OnControllerEvent(ControllerThreadEvent & event)
                     }
                 }
                 else { //edit rate incompatibility
-                    wxMessageDialog dlg(this, wxT("Recorder \"") + event.GetName() + wxString::Format(wxT("\" has an edit rate incompatible with the existing recorder%s.  Deselecting "), selectedItems.GetCount() == 1 ? wxT("") : wxT("s")) + event.GetName() + wxString::Format(wxT(".\n\nEdit rate numerator: %d ("), GetController(pos)->GetMaxPreroll().edit_rate.numerator) + event.GetName() + wxString::Format(wxT("); %d (existing)\nEdit rate denominator: %d ("), mMaxPreroll.edit_rate.numerator, GetController(pos)->GetMaxPreroll().edit_rate.denominator) + event.GetName() + wxString::Format(wxT("); %d (existing)"), mMaxPreroll.edit_rate.denominator), wxT("Edit rate incompatibility"), wxICON_EXCLAMATION | wxOK);
+                    wxMessageDialog dlg(this, wxT("Recorder \"") + event.GetName() + wxString::Format(wxT("\" has an edit rate incompatible with the existing recorder%s.  Deselecting "), selectedItems.GetCount() == 1 ? wxEmptyString : wxT("s")) + event.GetName() + wxString::Format(wxT(".\n\nEdit rate numerator: %d ("), GetController(pos)->GetMaxPreroll().edit_rate.numerator) + event.GetName() + wxString::Format(wxT("); %d (existing)\nEdit rate denominator: %d ("), mMaxPreroll.edit_rate.numerator, GetController(pos)->GetMaxPreroll().edit_rate.denominator) + event.GetName() + wxString::Format(wxT("); %d (existing)"), mMaxPreroll.edit_rate.denominator), wxT("Edit rate incompatibility"), wxICON_EXCLAMATION | wxOK);
                     dlg.ShowModal();
                     Disconnect(pos);
                 }

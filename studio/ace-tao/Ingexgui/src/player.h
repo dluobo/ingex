@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: player.h,v 1.16 2010/08/25 17:51:06 john_f Exp $                *
+ *   $Id: player.h,v 1.17 2010/10/05 10:49:02 john_f Exp $                *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -116,12 +116,15 @@ class Listener : public prodauto::IngexPlayerListener
         Player * mPlayer; //never changed so doesn't need protecting by mutex
 };
 
+class SavedState;
+
 /// Class representing the X11/SDI video/audio player.
 class Player : public wxPanel, prodauto::LocalIngexPlayer
 {
     public:
         Player(wxWindow*, const wxWindowID, const bool, const prodauto::PlayerOutputType, const PlayerOSDtype = SOURCE_TIMECODE);
         ~Player();
+        void SetSavedState(SavedState * savedState);
         void OnPlaybackTrackSelect(wxCommandEvent&);
         void Record(const bool = true);
         void SetMode(const PlayerMode, const bool = false);
@@ -154,7 +157,9 @@ class Player : public wxPanel, prodauto::LocalIngexPlayer
         bool AtMaxReverseSpeed();
         void MuteAudio(const bool);
         void AudioFollowsVideo(const bool);
-        bool AudioFollowsVideo();
+        bool IsAudioFollowingVideo();
+        void LimitSplitToQuad(const bool);
+        bool IsSplitLimitedToQuad();
         unsigned long GetLatestFrameDisplayed() { return mPreviousFrameDisplayed; };
         std::string GetCurrentFileName();
         const wxString GetProjectName();
@@ -176,7 +181,7 @@ class Player : public wxPanel, prodauto::LocalIngexPlayer
         void OnUpdateUI(wxUpdateUIEvent&);
         void Load();
         bool Start();
-        void SetWindowName(const wxString & name = wxT(""));
+        void SetWindowName(const wxString & name = wxEmptyString);
         void OnFrameDisplayed(wxCommandEvent&);
         void OnFilePollTimer(wxTimerEvent&);
         void OnStateChange(wxCommandEvent&);
@@ -190,6 +195,7 @@ class Player : public wxPanel, prodauto::LocalIngexPlayer
         bool HasChunkBefore();
         bool HasChunkAfter();
         void LoadRecording();
+        void SetVideoSplit();
         Listener * mListener;
         prodauto::IngexPlayerListenerRegistry mListenerRegistry;
         DragButtonList* mTrackSelector;
@@ -228,9 +234,9 @@ class Player : public wxPanel, prodauto::LocalIngexPlayer
         prodauto::PlayerInputType mInputType;
         bool mDivertKeyPresses;
         prodauto::PlayerOutputType mOutputType;
-        bool mAudioFollowsVideo;
         unsigned int mNVideoTracks;
         bool mRecording;
+        SavedState * mSavedState;
     DECLARE_EVENT_TABLE()
 };
 

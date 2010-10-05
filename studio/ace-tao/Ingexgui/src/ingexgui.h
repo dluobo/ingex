@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: ingexgui.h,v 1.21 2010/08/25 17:51:06 john_f Exp $              *
+ *   $Id: ingexgui.h,v 1.22 2010/10/05 10:49:02 john_f Exp $              *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -23,12 +23,7 @@
 
 #ifndef _INGEXGUI_H_
 #define _INGEXGUI_H_
-#include "comms.h"
-#include "controller.h"
-#include <wx/listctrl.h> //for Win32
-#include <wx/datetime.h> //for Win32
-#include <wx/xml/xml.h>
-#include <wx/notebook.h> //for wx 2.7+
+#include "RecorderC.h"
 
 #define DEFAULT_PREROLL 10 //frames
 #define DEFAULT_POSTROLL 10 //frames
@@ -84,12 +79,13 @@ class SelectRecDlg;
 class EventList;
 class ChunkInfo;
 class PlayerControl;
+class SavedState;
 
 /// As the stock text ctrl but passes on focus set and kill events
 class MyTextCtrl : public wxTextCtrl
 {
     public:
-        MyTextCtrl(wxWindow * parent, wxWindowID id, const wxString & value = wxT(""), const wxPoint & pos = wxDefaultPosition, const wxSize & size = wxDefaultSize, long style = 0) : wxTextCtrl(parent, id, value, pos, size, style) {};
+        MyTextCtrl(wxWindow * parent, wxWindowID id, const wxString & value = wxEmptyString, const wxPoint & pos = wxDefaultPosition, const wxSize & size = wxDefaultSize, long style = 0) : wxTextCtrl(parent, id, value, pos, size, style) {};
     private:
         void OnFocus(wxFocusEvent & event) { event.Skip(); GetParent()->AddPendingEvent(event); };
 
@@ -148,6 +144,7 @@ class IngexguiFrame : public wxFrame
         MENU_PlayerNoOSD,
         MENU_Mute,
         MENU_PlayerAudioFollowsVideo,
+        MENU_PlayerLimitSplitToQuad,
         MENU_Chunking,
         MENU_TestMode,
         MENU_PlayRecordings,
@@ -253,8 +250,7 @@ class IngexguiFrame : public wxFrame
         Stat mStatus;
         long mEditRateNumerator, mEditRateDenominator;
         Timepos * mTimepos;
-        wxXmlDocument mSavedState;
-        wxString mSavedStateFilename;
+        SavedState * mSavedState;
         bool mDescriptionControlHasFocus;
         wxLogStream * mLogStream;
         ingex::JogShuttle * mJogShuttle;

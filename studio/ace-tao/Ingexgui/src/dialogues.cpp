@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: dialogues.cpp,v 1.23 2010/08/27 17:44:05 john_f Exp $           *
+ *   $Id: dialogues.cpp,v 1.24 2010/10/05 10:49:02 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -23,6 +23,7 @@
 
 #include "dialogues.h"
 #include "help.h" //for StyleAndWrite()
+#include "savedstate.h"
 #include <wx/spinctrl.h>
 #include <wx/tglbtn.h>
 #include <wx/colordlg.h>
@@ -44,7 +45,7 @@ END_EVENT_TABLE()
 /// @param maxPreroll The maximum allowed preroll.
 /// @param postroll The current postroll value.
 /// @param maxPostroll The maximum allowed postroll.
-SetRollsDlg::SetRollsDlg(wxWindow * parent, const ProdAuto::MxfDuration preroll, const ProdAuto::MxfDuration maxPreroll, const ProdAuto::MxfDuration postroll, const ProdAuto::MxfDuration maxPostroll, wxXmlDocument & savedState)
+SetRollsDlg::SetRollsDlg(wxWindow * parent, const ProdAuto::MxfDuration preroll, const ProdAuto::MxfDuration maxPreroll, const ProdAuto::MxfDuration postroll, const ProdAuto::MxfDuration maxPostroll, SavedState * savedState)
 : wxDialog(parent, wxID_ANY, (const wxString &) wxT("Pre-roll and Post-roll")), mMaxPreroll(maxPreroll), mMaxPostroll(maxPostroll), mSavedState(savedState)
 {
     wxBoxSizer * sizer = new wxBoxSizer(wxVERTICAL);
@@ -128,22 +129,15 @@ int SetRollsDlg::ShowModal()
 {
     int rc = wxDialog::ShowModal();
     if (wxID_OK == rc) {
-        //Remove old nodes
-        wxXmlNode * node = mSavedState.GetRoot()->GetChildren();
-        while (node) {
-            if (wxT("Preroll") == node->GetName() || wxT("Postroll") == node->GetName()) {
-                wxXmlNode * deadNode = node;
-                node = node->GetNext();
-                mSavedState.GetRoot()->RemoveChild(deadNode);
-                delete deadNode;
-            }
-            else {
-                node = node->GetNext();
-            }
-        }
-        //Create new nodes (element nodes containing text nodes)
-        new wxXmlNode(new wxXmlNode(mSavedState.GetRoot(), wxXML_ELEMENT_NODE, wxT("Preroll")), wxXML_TEXT_NODE, wxT(""), wxString::Format(wxT("%d"), GetPreroll().samples));
-        new wxXmlNode(new wxXmlNode(mSavedState.GetRoot(), wxXML_ELEMENT_NODE, wxT("Postroll")), wxXML_TEXT_NODE, wxT(""), wxString::Format(wxT("%d"), GetPostroll().samples));
+        //create new node
+        wxXmlNode * node = mSavedState->GetTopLevelNode(wxT("Preroll"), true, true); //replace existing node
+        //add text node containing value
+        new wxXmlNode(node, wxXML_TEXT_NODE, wxEmptyString, wxString::Format(wxT("%d"), GetPreroll().samples));
+        //create new node
+        node = mSavedState->GetTopLevelNode(wxT("Postroll"), true, true); //replace existing node
+        //add text node containing value
+        new wxXmlNode(node, wxXML_TEXT_NODE, wxEmptyString, wxString::Format(wxT("%d"), GetPostroll().samples));
+        mSavedState->Save();
     }
     return rc;
 }
@@ -163,7 +157,7 @@ END_EVENT_TABLE()
 /// @param projectNamees The current list of project names (can be empty)
 /// @param doc The XML document to read and modify.
 /// @param force When true, disables the cancel button etc to force the user to press OK.
-SetProjectDlg::SetProjectDlg(wxWindow * parent, const wxSortedArrayString & projectNames, wxXmlDocument & savedState) : wxDialog(parent, wxID_ANY, (const wxString &) wxT("Select a project name"), wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER), mProjectNames(projectNames), mSavedState(savedState)
+SetProjectDlg::SetProjectDlg(wxWindow * parent, const wxSortedArrayString & projectNames, SavedState * savedState) : wxDialog(parent, wxID_ANY, (const wxString &) wxT("Select a project name"), wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER), mProjectNames(projectNames), mSavedState(savedState)
 {
     wxBoxSizer * mainSizer = new wxBoxSizer(wxVERTICAL);
     SetSizer(mainSizer);
@@ -201,18 +195,9 @@ SetProjectDlg::SetProjectDlg(wxWindow * parent, const wxSortedArrayString & proj
 }
 
 /// Obtains the currently selected project name from the supplied XML document; returns an empty string if not found
-const wxString SetProjectDlg::GetCurrentProjectName(const wxXmlDocument & doc)
+const wxString SetProjectDlg::GetCurrentProjectName(SavedState * savedState)
 {
-    wxXmlNode * projectNode = doc.GetRoot()->GetChildren();
-    while (projectNode && projectNode->GetName() != wxT("CurrentProject")) {
-        projectNode = projectNode->GetNext();
-    }
-    if (projectNode) {
-        return projectNode->GetNodeContent();
-    }
-    else {
-        return wxT("");
-    }
+    return savedState->GetStringValue(wxT("CurrentProject"), wxEmptyString);
 }
 
 /// Overloads Show Modal to prompt the addition of one project name if there are none, and to update the XML document
@@ -224,22 +209,10 @@ int SetProjectDlg::ShowModal()
     if (mProjectList->GetCount()) { //names obtained from recorder(s), or selected name from rc file, or name has just been entered
         int rc = wxDialog::ShowModal();
         if (wxID_OK == rc) {
-            //Remove old node(s)
-            wxXmlNode * node = mSavedState.GetRoot()->GetChildren();
-            while (node) {
-                if (wxT("CurrentProject") == node->GetName()) {
-                    wxXmlNode * deadNode = node;
-                    node = node->GetNext();
-                    mSavedState.GetRoot()->RemoveChild(deadNode);
-                    delete deadNode;
-                }
-                else {
-                    node = node->GetNext();
-                }
-            }
-            //create a new element node "CurrentProject" containing a new text node with the section of the tape ID
-            new wxXmlNode(new wxXmlNode(mSavedState.GetRoot(), wxXML_ELEMENT_NODE, wxT("CurrentProject"), wxT("")), wxXML_TEXT_NODE, wxT(""), mProjectList->GetStringSelection());
-            //projectNode->SetContent(dlg.GetSelectedProject()); this doesn't seem to work - creates a new node with no content
+            //update saved state
+            wxXmlNode * node = mSavedState->GetTopLevelNode(wxT("CurrentProject"), true, true); //replace existing node
+            new wxXmlNode(node, wxXML_TEXT_NODE, wxEmptyString, mProjectList->GetStringSelection());
+            mSavedState->Save();
         }
         return rc;
     }
@@ -368,12 +341,12 @@ WX_DECLARE_STRING_HASH_MAP(wxString, StringHash);
 
 /// Reads tape IDs names from the XML document and displays a dialogue to manipulate them.
 /// Displays in package name order within three groups: enabled for recording and no tape ID; not enabled and no tape ID; the rest.
-/// Updates the document if user changes data.
+/// Updates the saved state if user changes data.
 /// @param parent The parent window.
-/// @param doc The XML document to read and modify.
-/// @param currentPackages Package names of connected recorders, in display order
-/// @param enabled Value corresponding to each package name, which is true if any sources within that package are enabled for recording
-SetTapeIdsDlg::SetTapeIdsDlg(wxWindow * parent, wxXmlDocument & doc, wxArrayString & currentPackages, std::vector<bool> & enabled) : wxDialog(parent, wxID_ANY, (const wxString &) wxT("Set tape IDs"), wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER), mEditing(false), mUpdated(false)
+/// @param savedState Persistent data to read and modify.
+/// @param currentPackages Package names of connected recorders, in display order.
+/// @param enabled Value corresponding to each package name, which is true if any sources within that package are enabled for recording.
+SetTapeIdsDlg::SetTapeIdsDlg(wxWindow * parent, SavedState * savedState, wxArrayString & currentPackages, std::vector<bool> & enabled) : wxDialog(parent, wxID_ANY, (const wxString &) wxT("Set tape IDs"), wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER), mEditing(false), mUpdated(false)
 {
     //controls
     wxBoxSizer * mainSizer = new wxBoxSizer(wxVERTICAL);
@@ -394,7 +367,7 @@ SetTapeIdsDlg::SetTapeIdsDlg(wxWindow * parent, wxXmlDocument & doc, wxArrayStri
     mGrid->SetGridCursor(0, 2); //first two columns can't be edited so don't leave the cursor in the top left hand corner
     wxBoxSizer * rightHandSizer = new wxBoxSizer(wxVERTICAL);
     upperSizer->Add(rightHandSizer, 0, wxALL, CONTROL_BORDER);
-    mDupWarning = new wxTextCtrl(this, wxID_ANY, wxT(""), wxDefaultPosition, wxDefaultSize, wxTE_MULTILINE | wxTE_READONLY | wxTE_RICH | wxTE_CENTRE | wxBORDER_NONE); //don't think you can set background colour of static text - it would be much easier...
+    mDupWarning = new wxTextCtrl(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxTE_MULTILINE | wxTE_READONLY | wxTE_RICH | wxTE_CENTRE | wxBORDER_NONE); //don't think you can set background colour of static text - it would be much easier...
     mDupWarning->SetDefaultStyle(wxTextAttr(*wxRED, wxColour(wxT("YELLOW"))));
     mDupWarning->AppendText(wxT("Duplicate tape IDs"));
     mDupWarning->SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_BACKGROUND));
@@ -425,14 +398,14 @@ SetTapeIdsDlg::SetTapeIdsDlg(wxWindow * parent, wxXmlDocument & doc, wxArrayStri
     buttonSizer->Add(mClearButton, 0, wxEXPAND);
 
     //find the tape IDs in the XML
-    wxXmlNode * tapeIdsNode = GetTapeIdsNode(doc);
+    wxXmlNode * tapeIdsNode = GetTapeIdsNode(savedState, false); //don't delete the data
 
     //populate the table
     for (size_t i = 0; i < currentPackages.GetCount(); i++) {
         mGrid->SetCellValue(i, 0, currentPackages[i]); //source name
         mGrid->SetReadOnly(i, 0);
         wxArrayString sections;
-        sections.Insert(wxT(""), 0, mGrid->GetNumberCols() - 2); //set the number of sections
+        sections.Insert(wxEmptyString, 0, mGrid->GetNumberCols() - 2); //set the number of sections
         mGrid->SetCellValue(i, 1, GetTapeId(tapeIdsNode, currentPackages[i], &sections));
         mGrid->SetReadOnly(i, 1);
         mGrid->SetCellBackgroundColour(i, 1, wxColour(wxT("GREY")));
@@ -453,7 +426,7 @@ SetTapeIdsDlg::SetTapeIdsDlg(wxWindow * parent, wxXmlDocument & doc, wxArrayStri
             //remove any existing node(s) for this source
             wxXmlNode * tapeIdNode = tapeIdsNode->GetChildren();
             while (tapeIdNode) {
-                if (mGrid->GetCellValue(i, 0) == tapeIdNode->GetPropVal(wxT("PackageName"), wxT(""))) {
+                if (mGrid->GetCellValue(i, 0) == tapeIdNode->GetPropVal(wxT("PackageName"), wxEmptyString)) {
                     wxXmlNode * deadNode = tapeIdNode;
                     tapeIdNode = tapeIdNode->GetNext();
                     tapeIdsNode->RemoveChild(deadNode);
@@ -465,68 +438,43 @@ SetTapeIdsDlg::SetTapeIdsDlg(wxWindow * parent, wxXmlDocument & doc, wxArrayStri
             }
             if (!mGrid->GetCellValue(i, 1).IsEmpty()) {
                 //a new element node "TapeId" with property "PackageName"
-                tapeIdNode = new wxXmlNode(tapeIdsNode, wxXML_ELEMENT_NODE, wxT("TapeId"), wxT(""), new wxXmlProperty(wxT("PackageName"), mGrid->GetCellValue(i, 0)));
+                tapeIdNode = new wxXmlNode(tapeIdsNode, wxXML_ELEMENT_NODE, wxT("TapeId"), wxEmptyString, new wxXmlProperty(wxT("PackageName"), mGrid->GetCellValue(i, 0)));
                 for (int sectionCol = 2; sectionCol < mGrid->GetNumberCols(); sectionCol++) {
                     //a new element node "Section" containing a new text node with the section of the tape ID
-                    new wxXmlNode(new wxXmlNode(tapeIdNode, wxXML_ELEMENT_NODE, wxT("Section"), wxT(""), new wxXmlProperty(wxT("Number"), wxString::Format(wxT("%d"), sectionCol - 1))), wxXML_TEXT_NODE, wxT(""), mGrid->GetCellValue(i, sectionCol));
+                    new wxXmlNode(new wxXmlNode(tapeIdNode, wxXML_ELEMENT_NODE, wxT("Section"), wxEmptyString, new wxXmlProperty(wxT("Number"), wxString::Format(wxT("%d"), sectionCol - 1))), wxXML_TEXT_NODE, wxEmptyString, mGrid->GetCellValue(i, sectionCol));
                 }
             }
         }
-        if (!tapeIdsNode->GetChildren()) {
-            doc.GetRoot()->RemoveChild(tapeIdsNode);
-            delete tapeIdsNode;
-        }
         mUpdated = true;
+        savedState->Save();
     }
 }
 
-/// Returns the enabled state of tape IDs
-/// @param doc The XML document.
-bool SetTapeIdsDlg::AreTapeIdsEnabled(wxXmlDocument & doc)
+/// Returns the enabled state of tape IDs.  Default true if state not stored.
+/// @param savedState The persistent data containing the setting.
+bool SetTapeIdsDlg::AreTapeIdsEnabled(SavedState * savedState)
 {
-    wxXmlNode * tapeIdsNode = GetTapeIdsNode(doc);
+    wxXmlNode * tapeIdsNode = GetTapeIdsNode(savedState, false); //don't clear the data
     return wxT("Yes") == tapeIdsNode->GetPropVal(wxT("Enabled"), wxT("Yes"));
 }
 
-/// Saves the enabled state of tape IDs
-/// @param doc The XML document.
-void SetTapeIdsDlg::EnableTapeIds(wxXmlDocument & doc, bool enabled)
+/// Saves the enabled state of tape IDs.
+/// @param savedState The persistent data to which to save the setting.
+void SetTapeIdsDlg::EnableTapeIds(SavedState * savedState, bool enabled)
 {
-    wxXmlNode * tapeIdsNode = GetTapeIdsNode(doc);
+    wxXmlNode * tapeIdsNode = GetTapeIdsNode(savedState, false); //don't clear the data
     tapeIdsNode->DeleteProperty(wxT("Enabled"));
     tapeIdsNode->SetProperties(new wxXmlProperty(wxT("Enabled"), enabled ? wxT("Yes") : wxT("No")));
+    savedState->Save();
 }
 
-
-/// Retrieves or creates the node in the given document containing tape IDs.
-/// Removes any child nodes not called "TapeId".
-/// @param doc The XML document.
+/// Retrieves or creates the node in the persistent state for tape IDs.
+/// @param savedState The persistent data.
+/// @param clear True to remove all stored tape ID information.
 /// @return The tape ID root node (always valid).
-wxXmlNode * SetTapeIdsDlg::GetTapeIdsNode(wxXmlDocument & doc)
+wxXmlNode * SetTapeIdsDlg::GetTapeIdsNode(SavedState * savedState, bool clear)
 {
-    wxXmlNode * tapeIdsNode = doc.GetRoot()->GetChildren();
-    while (tapeIdsNode && tapeIdsNode->GetName() != wxT("TapeIds")) {
-        tapeIdsNode = tapeIdsNode->GetNext();
-    }
-    if (!tapeIdsNode) {
-        tapeIdsNode = new wxXmlNode(doc.GetRoot(), wxXML_ELEMENT_NODE, wxT("TapeIds"));
-    }
-    else {
-        //clean up
-        wxXmlNode * childNode = tapeIdsNode->GetChildren();
-        while (childNode) {
-            if (wxT("TapeId") != childNode->GetName()) {
-                wxXmlNode * deadNode = childNode;
-                childNode = childNode->GetNext();
-                tapeIdsNode->RemoveChild(deadNode);
-                delete deadNode;
-            }
-            else {
-                childNode = childNode->GetNext();
-            }
-        }
-    }
-    return tapeIdsNode;
+    return savedState->GetTopLevelNode(wxT("TapeIds"), true, clear);
 }
 
 /// Gets the tape ID for the given package name from the children of the given node.
@@ -549,7 +497,7 @@ const wxString SetTapeIdsDlg::GetTapeId(wxXmlNode * tapeIdsNode, const wxString 
     }
     wxXmlNode * tapeIdNode = tapeIdsNode->GetChildren();
     while (tapeIdNode) { //assumes all nodes at this level are called "TapeId"
-        if (packageName == tapeIdNode->GetPropVal(wxT("PackageName"), wxT(""))) { //found it!
+        if (packageName == tapeIdNode->GetPropVal(wxT("PackageName"), wxEmptyString)) { //found it!
             wxXmlNode * sectionNode = tapeIdNode->GetChildren();
             while (sectionNode) {
                 long sectionNumber;
@@ -955,7 +903,7 @@ bool SetTapeIdsDlg::ManipulateCell(const int row, const int col, const bool inc,
     else if (!inc && !mGrid->GetCellValue(row, col).IsEmpty()) {
         changeable = true;
         if (commit) {
-            mGrid->SetCellValue(row, col, wxT(""));
+            mGrid->SetCellValue(row, col, wxEmptyString);
             UpdateRow(row);
         }
     }
@@ -969,7 +917,7 @@ void SetTapeIdsDlg::OnHelp(wxCommandEvent & WXUNUSED(event))
     wxDialog helpDlg(this, wxID_ANY, wxT("Set Tape IDs help"), wxDefaultPosition, wxDefaultSize, wxRESIZE_BORDER | wxDEFAULT_DIALOG_STYLE);
     wxBoxSizer * sizer = new wxBoxSizer(wxVERTICAL);
     helpDlg.SetSizer(sizer);
-    wxTextCtrl * text = new wxTextCtrl(&helpDlg, wxID_ANY, wxT(""), wxDefaultPosition, wxDefaultSize, wxTE_MULTILINE | wxTE_READONLY);
+    wxTextCtrl * text = new wxTextCtrl(&helpDlg, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxTE_MULTILINE | wxTE_READONLY);
     wxString message = wxT("The first column in the table shows the source names of the recorders you are using.  Any that have a red background are preventing you from recording because they are enabled to record but have no corresponding tape ID.  Any that have a yellow background are also missing a tape ID but are not preventing you from recording because they are not enabled to record.\n\n"
      "The second column shows the tape IDs, if any, corresponding to the sources.  You do not edit the cells in this column because each is created by concatenating the row of editable cells to its right.  Splitting the tape IDs into parts like this allows you to specify and increment them easily.  If there are any duplicate IDs, a warning is shown to the right of the table, but the situation is permitted.\n\n"
      "You can use as many as, and whichever of, the editable cells you like to create a tape ID, but you must separate the ID into parts which are incremented and parts which are not, and put these into different cells.\n\n"
@@ -1185,35 +1133,35 @@ mRecordId(recordId), mStopId(stopId)
     //record time row
     gridSizer->Add(new wxStaticText(this, wxID_ANY, wxT("Record time minimum"), wxDefaultPosition, wxDefaultSize, wxALIGN_RIGHT), 0, wxALIGN_CENTRE);
 #define DEFAULT_MAX_REC_TIME 1
-    mMinRecTime = new wxSpinCtrl(this, MIN_REC, wxT(""), wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 1, DEFAULT_MAX_REC_TIME, 1);
+    mMinRecTime = new wxSpinCtrl(this, MIN_REC, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 1, DEFAULT_MAX_REC_TIME, 1);
     gridSizer->Add(mMinRecTime, 1, wxALIGN_CENTRE);
     gridSizer->Add(new wxStaticText(this, wxID_ANY, wxT("min; maximum")), 0, wxALIGN_CENTRE);
-    mMaxRecTime = new wxSpinCtrl(this, MAX_REC, wxT(""), wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, mMinRecTime->GetValue(), TEST_MAX_REC, DEFAULT_MAX_REC_TIME);
+    mMaxRecTime = new wxSpinCtrl(this, MAX_REC, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, mMinRecTime->GetValue(), TEST_MAX_REC, DEFAULT_MAX_REC_TIME);
     gridSizer->Add(mMaxRecTime, 0, wxALIGN_CENTRE);
     gridSizer->Add(new wxStaticText(this, wxID_ANY, wxT("min."), wxDefaultPosition, wxDefaultSize, wxALIGN_LEFT), 0, wxALIGN_CENTRE);
     //gap time row
     gridSizer->Add(new wxStaticText(this, wxID_ANY, wxT("Gap time minimum"), wxDefaultPosition, wxDefaultSize, wxALIGN_RIGHT), 0, wxALIGN_CENTRE);
 #define DEFAULT_MAX_GAP_TIME 5
-    mMinGapTime = new wxSpinCtrl(this, MIN_GAP, wxT(""), wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 1, DEFAULT_MAX_GAP_TIME, 5);
+    mMinGapTime = new wxSpinCtrl(this, MIN_GAP, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 1, DEFAULT_MAX_GAP_TIME, 5);
     gridSizer->Add(mMinGapTime, 0, wxALIGN_CENTRE);
     gridSizer->Add(new wxStaticText(this, wxID_ANY, wxT("sec; maximum")), 0, wxALIGN_CENTRE);
-    mMaxGapTime = new wxSpinCtrl(this, MAX_GAP, wxT(""), wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, mMinGapTime->GetValue(), TEST_MAX_GAP, DEFAULT_MAX_GAP_TIME);
+    mMaxGapTime = new wxSpinCtrl(this, MAX_GAP, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, mMinGapTime->GetValue(), TEST_MAX_GAP, DEFAULT_MAX_GAP_TIME);
     gridSizer->Add(mMaxGapTime, 0, wxALIGN_CENTRE);
     gridSizer->Add(new wxStaticText(this, wxID_ANY, wxT("sec."), wxDefaultPosition, wxDefaultSize, wxALIGN_LEFT), 0, wxALIGN_CENTRE);
     //erase row
     mEraseEnable = new wxCheckBox(this, wxID_ANY, wxT("Keep disk below"));
     gridSizer->Add(mEraseEnable, 0, wxALIGN_RIGHT);
-    mEraseThreshold = new wxSpinCtrl(this, MAX_GAP, wxT(""), wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 1, 100, 50);
+    mEraseThreshold = new wxSpinCtrl(this, MAX_GAP, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 1, 100, 50);
     gridSizer->Add(mEraseThreshold, 0, wxALIGN_CENTRE);
     gridSizer->Add(new wxStaticText(this, wxID_ANY, wxT("% full")), 0, wxALIGN_LEFT);
-    gridSizer->Add(new wxStaticText(this, wxID_ANY, wxT("")));
-    gridSizer->Add(new wxStaticText(this, wxID_ANY, wxT("")));
+    gridSizer->Add(new wxStaticText(this, wxID_ANY, wxEmptyString));
+    gridSizer->Add(new wxStaticText(this, wxID_ANY, wxEmptyString));
     //button row
     mRunButton = new wxToggleButton(this, RUN, wxT("Run"));
     gridSizer->Add(mRunButton);
-    mRunStopMessage = new wxStaticText(this, wxID_ANY, wxT(""));
+    mRunStopMessage = new wxStaticText(this, wxID_ANY, wxEmptyString);
     gridSizer->Add(mRunStopMessage, 0, wxALIGN_CENTRE_VERTICAL);
-    mRunStopCountdown = new wxStaticText(this, wxID_ANY, wxT(""));
+    mRunStopCountdown = new wxStaticText(this, wxID_ANY, wxEmptyString);
     gridSizer->Add(mRunStopCountdown, 0, wxALIGN_CENTRE_VERTICAL);
     mCancelButton = new wxButton(this, wxID_CANCEL, wxT("Cancel"));
     gridSizer->Add(mCancelButton);
@@ -1501,8 +1449,8 @@ END_EVENT_TABLE()
 /// Sets up dialogue.
 /// TODO: prevent selection of ranges - have tried selecting a row (or generating an event to do so) in an EVT_GRID_RANGE_SELECT handler but it gets upset.  Really wxGrid should have a style to do this.
 /// @param parent The parent window.
-/// @param savedState The setup file
-CuePointsDlg::CuePointsDlg(wxWindow * parent, wxXmlDocument & savedState) : wxDialog(parent, wxID_ANY, wxT(""),  wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER), mCurrentRow(0)
+/// @param savedState Persistent state
+CuePointsDlg::CuePointsDlg(wxWindow * parent, SavedState * savedState) : wxDialog(parent, wxID_ANY, wxEmptyString,  wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER), mSavedState(savedState), mCurrentRow(0)
 {
     //accelerator table
     wxAcceleratorEntry entries[11]; //NB number used below and later IDs used for colour menu
@@ -1517,7 +1465,7 @@ CuePointsDlg::CuePointsDlg(wxWindow * parent, wxXmlDocument & savedState) : wxDi
     wxBoxSizer * mainSizer = new wxBoxSizer(wxVERTICAL);
     SetSizer(mainSizer);
 
-    mTimecodeDisplay = new wxStaticText(this, wxID_ANY, wxT(""));
+    mTimecodeDisplay = new wxStaticText(this, wxID_ANY, wxEmptyString);
     wxFont * font = wxFont::New(TIME_FONT_SIZE, wxFONTFAMILY_MODERN); //this way works under GTK
     mTimecodeDisplay->SetFont(*font);
     mainSizer->Add(mTimecodeDisplay, 0, wxALL | wxALIGN_CENTRE, CONTROL_BORDER);
@@ -1556,36 +1504,19 @@ CuePointsDlg::CuePointsDlg(wxWindow * parent, wxXmlDocument & savedState) : wxDi
     wxGridCellAttr * readOnly = new wxGridCellAttr;
     readOnly->SetReadOnly();
     mGrid->SetColAttr(1, readOnly); //prevent editing of this column, which is possible if you get to it by tabbing
-    mCuePointsNode = savedState.GetRoot()->GetChildren();
-    while (mCuePointsNode && mCuePointsNode->GetName() != wxT("CuePoints")) {
-        mCuePointsNode = mCuePointsNode->GetNext();
-    }
-    if (!mCuePointsNode) {
-        Reset();
-        mCuePointsNode = new wxXmlNode(savedState.GetRoot(), wxXML_ELEMENT_NODE, wxT("CuePoints"));
-    }
-    else {
-        //read in existing data
-        Load();
-    }
+    Load();
 }
 
-/// Loads the grid with default values
-void CuePointsDlg::Reset()
+/// Loads the grid contents from the saved state.
+void CuePointsDlg::Load()
 {
+    //load default values as may not be overwriting everything
     mGrid->ClearGrid();
     for (int i = 0; i < 10; i++) {
         SetColour(i, 0); //default
     }
-}
-
-/// Loads the grid contents from the XML document.
-void CuePointsDlg::Load()
-{
-    //remove current values as may not be overwriting everything
-    Reset();
-    //load new values
-    wxXmlNode * cuePointNode = mCuePointsNode->GetChildren();
+    //load saved values
+    wxXmlNode * cuePointNode = mSavedState->GetTopLevelNode(wxT("CuePoints"), true)->GetChildren(); //create if not existing
     while (cuePointNode) {
         wxString shortcut, colour;
         unsigned long shortcutVal, colourVal;
@@ -1610,13 +1541,7 @@ void CuePointsDlg::Load()
 void CuePointsDlg::Save()
 {
     //remove old state
-    wxXmlNode * cuePointNode = mCuePointsNode->GetChildren();
-    while (cuePointNode) {
-        wxXmlNode * deadNode = cuePointNode;
-        cuePointNode = cuePointNode->GetNext();
-        mCuePointsNode->RemoveChild(deadNode);
-        delete deadNode;
-    }
+    wxXmlNode * cuePointsNode = mSavedState->GetTopLevelNode(wxT("CuePoints"), true, true); //delete children
     //store new state
     for (int row = 0; row < 10; row++) {
         wxString description = mGrid->GetCellValue(row, 0).Trim(false).Trim(true);
@@ -1624,10 +1549,10 @@ void CuePointsDlg::Save()
             //create a new element node "CuePoint" containing a new text node with the description
             new wxXmlNode(
                 new wxXmlNode(
-                    mCuePointsNode,
+                    cuePointsNode,
                     wxXML_ELEMENT_NODE,
                     wxT("CuePoint"),
-                    wxT(""),
+                    wxEmptyString,
                     new wxXmlProperty(
                         wxT("Shortcut"),
                         wxString::Format(wxT("%d"), (row + 1) % 10),
@@ -1635,11 +1560,12 @@ void CuePointsDlg::Save()
                     )
                 ),
                 wxXML_TEXT_NODE,
-                wxT(""),
+                wxEmptyString,
                 description
             );
         }
     }
+    mSavedState->Save();
 }
 
 /// If dialogue not already visible, shows the dialogue and returns when the dialogue is dismissed, saving the grid if OK is pressed.
@@ -1900,7 +1826,7 @@ static const int Alignments[N_ALIGNMENTS] = {
 /// Sets up dialogue.
 /// @param parent Parent window.
 /// @param savedState The XML document for retrieving and saving settings.
-ChunkingDlg::ChunkingDlg(wxWindow * parent, Timepos * timepos, wxXmlDocument & savedState) : wxDialog(parent, wxID_ANY, wxT("Chunking")), mTimepos(timepos), mSavedState(savedState), mCanChunk(false), mPostroll(InvalidMxfDuration), mRealign(false)
+ChunkingDlg::ChunkingDlg(wxWindow * parent, Timepos * timepos, SavedState * savedState) : wxDialog(parent, wxID_ANY, wxT("Chunking")), mTimepos(timepos), mSavedState(savedState), mCanChunk(false), mPostroll(InvalidMxfDuration), mRealign(false)
 {
     const wxChar* alignmentLabels[N_ALIGNMENTS] = {
         wxT("None"),
@@ -1919,7 +1845,7 @@ ChunkingDlg::ChunkingDlg(wxWindow * parent, Timepos * timepos, wxXmlDocument & s
     SetSizer(mainSizer);
     wxStaticBoxSizer * sizeBox = new wxStaticBoxSizer(wxHORIZONTAL, this, wxT("Chunk Size"));
     mainSizer->Add(sizeBox, 0, wxEXPAND | wxALL, CONTROL_BORDER);
-    mChunkSizeCtrl = new wxSpinCtrl(this, wxID_ANY, wxT(""), wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 1, MAX_CHUNK_SIZE, 10);
+    mChunkSizeCtrl = new wxSpinCtrl(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 1, MAX_CHUNK_SIZE, 10);
     sizeBox->Add(mChunkSizeCtrl, 0, wxALIGN_CENTRE);
     sizeBox->Add(new wxStaticText(this, wxID_ANY, wxT(" min")), 0, wxALIGN_CENTRE);
     wxStaticBoxSizer * alignBox = new wxStaticBoxSizer(wxHORIZONTAL, this, wxT("Chunk Alignment"));
@@ -1933,23 +1859,11 @@ ChunkingDlg::ChunkingDlg(wxWindow * parent, Timepos * timepos, wxXmlDocument & s
     mCountdownTimer = new wxTimer(this);
 
     //saved state
-    wxXmlNode * chunkingNode = mSavedState.GetRoot()->GetChildren();
-    while (chunkingNode && chunkingNode->GetName() != wxT("Chunking")) {
-        chunkingNode = chunkingNode->GetNext();
-    }
-    if (chunkingNode) {
-        long value;
-        if (chunkingNode->GetNodeContent().ToLong(&value) && 0 < value && MAX_CHUNK_SIZE >= value) {
-            mChunkSizeCtrl->SetValue(value);
-        }
-        mEnableCheckBox->SetValue(wxT("Yes") == chunkingNode->GetPropVal(wxT("Enabled"), wxT("No")));
-        wxString str;
-        mChunkAlignCtrl->SetSelection(0);
-        if (chunkingNode->GetPropVal(wxT("Alignment"), &str) && str.ToLong(&value) && 0 < value && N_ALIGNMENTS > value) {
-            mChunkAlignCtrl->SetSelection(value);
-        }
-    }
-
+    unsigned long value = mSavedState->GetUnsignedLongValue(wxT("Chunking"), (unsigned long) 10);
+    if (value < MAX_CHUNK_SIZE) mChunkSizeCtrl->SetValue((int) value);
+    mEnableCheckBox->SetValue(wxT("Yes") == mSavedState->GetStringValue(wxT("Chunking"), wxT("No"), wxT("Enabled")));
+    value = mSavedState->GetUnsignedLongValue(wxT("Chunking"), 0, wxT("Alignment"));
+    if (value < N_ALIGNMENTS) mChunkAlignCtrl->SetSelection((int) value);
     SetNextHandler(parent);
     Reset();
 }
@@ -1958,23 +1872,14 @@ ChunkingDlg::ChunkingDlg(wxWindow * parent, Timepos * timepos, wxXmlDocument & s
 int ChunkingDlg::ShowModal()
 {
     wxDialog::ShowModal();
-    //Remove old nodes
-    wxXmlNode * node = mSavedState.GetRoot()->GetChildren();
-    while (node) {
-        if (wxT("Chunking") == node->GetName()) {
-            wxXmlNode * deadNode = node;
-            node = node->GetNext();
-            mSavedState.GetRoot()->RemoveChild(deadNode);
-            delete deadNode;
-        }
-        else {
-            node = node->GetNext();
-        }
-    }
-    //Create new node (element node with two attributes, containing text node)
-    node = new wxXmlNode(mSavedState.GetRoot(), wxXML_ELEMENT_NODE, wxT("Chunking"), wxT(""), new wxXmlProperty(wxT("Enabled"), mEnableCheckBox->IsChecked() ? wxT("Yes") : wxT("No")));
+    //create new node - whatever ShowModal returned as changes apply immediately with this dialogue
+    wxXmlNode * node = mSavedState->GetTopLevelNode(wxT("Chunking"), true, true); //replace existing node
+    //add properties for enabled and chunk alignment
+    node->AddProperty(new wxXmlProperty(wxT("Enabled"), mEnableCheckBox->IsChecked() ? wxT("Yes") : wxT("No")));
     node->AddProperty(new wxXmlProperty(wxT("Alignment"), wxString::Format(wxT("%d"), mChunkAlignCtrl->GetSelection())));
-    new wxXmlNode(node, wxXML_TEXT_NODE, wxT(""), wxString::Format(wxT("%d"), mChunkSizeCtrl->GetValue()));
+    //add text node containing chunk size
+    new wxXmlNode(node, wxXML_TEXT_NODE, wxEmptyString, wxString::Format(wxT("%d"), mChunkSizeCtrl->GetValue()));
+    mSavedState->Save();
     return wxID_OK;
 }
 

@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: recordergroup.h,v 1.14 2010/08/18 10:15:42 john_f Exp $         *
+ *   $Id: recordergroup.h,v 1.15 2010/10/05 10:49:02 john_f Exp $         *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -30,14 +30,16 @@ DECLARE_EVENT_TYPE(EVT_RECORDERGROUP_MESSAGE, -1)
 
 class Comms;
 class wxXmlDocument;
+class SavedState;
 
 /// A control derived from a list box containing a list of recorders, connected and disconnected.
 class RecorderGroupCtrl : public wxListBox
 {
     public:
-        RecorderGroupCtrl(wxWindow *, wxWindowID id, const wxPoint &, const wxSize &, int&, char**, wxXmlDocument &);
+        RecorderGroupCtrl(wxWindow *, wxWindowID id, const wxPoint &, const wxSize &, int&, char**);
         ~RecorderGroupCtrl();
         void SetTree(TickTreeCtrl * tree) {mTree = tree;};
+        void SetSavedState(SavedState * savedState) { mSavedState = savedState; };
         void StartGettingRecorders();
         void SetPreroll(const ProdAuto::MxfDuration);
         void SetPostroll(const ProdAuto::MxfDuration);
@@ -91,14 +93,14 @@ class RecorderGroupCtrl : public wxListBox
         void Connect(unsigned int);
         void Disconnect(unsigned int);
         Controller * GetController(unsigned int);
-        void SetTimecodeRecorder(wxString name = wxT(""));
+        void SetTimecodeRecorder(wxString name = wxEmptyString);
         Comms * mComms;
         bool mEnabledForInput;
         ProdAuto::MxfDuration mMaxPreroll, mMaxPostroll, mPreroll, mPostroll;
         wxString mTimecodeRecorder;
         bool mTimecodeRecorderStuck;
         ProdAuto::MxfTimecode mChunkStartTimecode;
-        wxXmlDocument & mDoc;
+        SavedState * mSavedState;
         wxSortedArrayString mProjectNames;
         wxString mCurrentProject;
         wxString mCurrentDescription;

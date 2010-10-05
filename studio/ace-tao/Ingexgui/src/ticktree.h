@@ -27,7 +27,7 @@
 
 DECLARE_EVENT_TYPE(EVT_TREE_MESSAGE, -1)
 
-class wxXmlDocument;
+class SavedState;
 class wxXmlNode;
 
 #define VIDEO_TRACK_COLOUR wxColour(wxT("#00A000"))
@@ -44,8 +44,9 @@ class wxXmlNode;
 class TickTreeCtrl : public wxTreeCtrl
 {
     public:
-        TickTreeCtrl(wxWindow *, wxWindowID, const wxPoint& = wxDefaultPosition, const wxSize& = wxDefaultSize, const wxString & = wxT(""));
-        bool AddRecorder(const wxString &, const ProdAuto::TrackList_var &, const ProdAuto::TrackStatusList_var &, bool, wxXmlDocument &);
+        TickTreeCtrl(wxWindow *, wxWindowID, const wxPoint& = wxDefaultPosition, const wxSize& = wxDefaultSize, const wxString & = wxEmptyString);
+        void SetSavedState(SavedState * savedState) { mSavedState = savedState; };
+        bool AddRecorder(const wxString &, const ProdAuto::TrackList_var &, const ProdAuto::TrackStatusList_var &, bool);
         void RemoveRecorder(const wxString &);
         void Clear();
         void EnableChanges(bool = true);
@@ -56,7 +57,7 @@ class TickTreeCtrl : public wxTreeCtrl
         bool AllRecording();
         bool AllStopped();
         bool UsingTapeIds();
-        bool TapeIdsOK(wxXmlDocument &);
+        bool AreTapeIdsOK();
         bool HasRecorders();
         bool IsUnknown();
         bool HasProblem();
@@ -67,7 +68,7 @@ class TickTreeCtrl : public wxTreeCtrl
         void SetRecorderStateOK(const wxString &);
         void GetPackageNames(wxArrayString &, std::vector<bool> &);
         void GetRecorderTapeIds(const wxString &, CORBA::StringSeq &, CORBA::StringSeq &);
-        void UpdateTapeIds(wxXmlDocument &);
+        void UpdateTapeIds();
         enum state { //must correspond to order images are loaded
             DISABLED,
             PARTIALLY_ENABLED,
@@ -87,13 +88,13 @@ class TickTreeCtrl : public wxTreeCtrl
         void AddMessage(const wxTreeItemId item, const wxString &);
         const wxString RetrieveMessage(const wxTreeItemId item);
         void RemoveMessage(const wxTreeItemId item);
-        void SetNodeState(const wxTreeItemId, const TickTreeCtrl::state, const bool = false, const wxString & = wxT(""));
+        void SetNodeState(const wxTreeItemId, const TickTreeCtrl::state, const bool = false, const wxString & = wxEmptyString);
         void SetSignalPresentStatus(const wxTreeItemId, const bool);
         bool mEnableChanges;
-        wxXmlNode * mTapeIdsNode;
         wxString mName;
         wxColour mDefaultBackgroundColour;
-            DECLARE_EVENT_TABLE()
+        SavedState * mSavedState;
+    DECLARE_EVENT_TABLE()
 };
 
 /// Information about each node in the tree.  mUnderlyingState indicates the state of the node ignoring unknown and problem conditions.  mLocked indicates that the node state shouldn't be changed.  mEnabledTracks indicates the number of offspring track nodes that are enabled for recording (not used for track nodes).  Other members are used as follows:

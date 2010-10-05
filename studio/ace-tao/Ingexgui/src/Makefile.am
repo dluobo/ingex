@@ -1,5 +1,5 @@
 # these are the headers for your project
-noinst_HEADERS = eventlist.h
+noinst_HEADERS = eventlist.h savedstate.h
 	comms.h connection_matrix.h controller.h \
 	dialogues.h dragbuttonlist.h frame_info.h help.h ingexgui.h media_control.h \
 	media_player.h media_sink.h media_sink_frame.h media_source.h player.h \
@@ -21,7 +21,7 @@ ingexgui_SOURCES = $(WORKSPACE)/player/jogshuttle/JogShuttle.cpp IngexPlayer.h \
 	frx4.xpm frx64.xpm frx8.xpm happy.xpm help.cpp ingexgui.cpp ingexgui.xpm \
 	jogshuttle.cpp keyboard_input.h keyboard_input_connect.h noactivity.xpm \
 	on_screen_display.h paused.xpm play.xpm play_backwards.xpm player.cpp question.xpm \
-	record.xpm recordbutton.cpp recordergroup.cpp small_disabled.xpm small_enabled.xpm \
-	small_exclamation.xpm small_partial_enabled.xpm small_partial_rec.xpm small_question.xpm \
-	small_rec.xpm stop.xpm ticktree.cpp timepos.cpp up.xpm x11_common.h
+	record.xpm recordbutton.cpp recordergroup.cpp savedstate.cpp small_disabled.xpm \
+	small_enabled.xpm small_exclamation.xpm small_partial_enabled.xpm small_partial_rec.xpm \
+	small_question.xpm small_rec.xpm stop.xpm ticktree.cpp timepos.cpp up.xpm x11_common.h
 ingexgui_LDFLAGS = $(WX_LIBS) 

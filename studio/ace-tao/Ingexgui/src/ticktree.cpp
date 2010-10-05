@@ -77,7 +77,7 @@ TickTreeCtrl::TickTreeCtrl(wxWindow * parent, wxWindowID id, const wxPoint& pos,
 /// @param isRouterRecorder True if this recorder is a router recorder - all tracks (should be only one anyway) will be regarded as router tracks and tape IDs will not be used.
 /// @param doc XML document object for tape ID information.
 /// @return true if any tracks are recording
-bool TickTreeCtrl::AddRecorder(const wxString & name, const ProdAuto::TrackList_var & trackList, const ProdAuto::TrackStatusList_var & trackStatusList, bool isRouterRecorder, wxXmlDocument & doc)
+bool TickTreeCtrl::AddRecorder(const wxString & name, const ProdAuto::TrackList_var & trackList, const ProdAuto::TrackStatusList_var & trackStatusList, bool isRouterRecorder)
 {
     Enable();
     //make recorder root node
@@ -93,7 +93,7 @@ bool TickTreeCtrl::AddRecorder(const wxString & name, const ProdAuto::TrackList_
         }
     }
     //make recorder package (branch) and track (terminal) nodes
-    wxXmlNode * tapeIdsNode = SetTapeIdsDlg::GetTapeIdsNode(doc);
+    wxXmlNode * tapeIdsNode = SetTapeIdsDlg::GetTapeIdsNode(mSavedState, false); //don't remove existing data
     TreeItemHash packageNameTreeNodes;
     for (unsigned int i = 0; i < trackList->length(); i++) {
         if (trackList[i].has_source) { //something's plugged into this input
@@ -105,7 +105,7 @@ bool TickTreeCtrl::AddRecorder(const wxString & name, const ProdAuto::TrackList_
                 //create a package node and remember its ID
                 packageNameTreeNodes[packageName] = AppendItem(recorderRoot, packageName, DISABLED); //state will be updated below, from track nodes
                 SetItemData(packageNameTreeNodes[packageName], new ItemData(DISABLED, packageName, isRouterRecorder, !tapeId.IsEmpty() || isRouterRecorder)); //remember package name for when messing about with tape IDs
-                if (!tapeId.IsEmpty() && !isRouterRecorder && SetTapeIdsDlg::AreTapeIdsEnabled(doc)) {
+                if (!tapeId.IsEmpty() && !isRouterRecorder && SetTapeIdsDlg::AreTapeIdsEnabled(mSavedState)) {
                     AddMessage(packageNameTreeNodes[packageName], tapeId);
                 }
             }
@@ -227,10 +227,9 @@ bool TickTreeCtrl::IsRecording()
 }
 
 /// Returns true if all enabled tracks' packages have tape IDs, or tape IDs are not being used.
-/// @param doc XML document object for tape ID information
-bool TickTreeCtrl::TapeIdsOK(wxXmlDocument & doc)
+bool TickTreeCtrl::AreTapeIdsOK()
 {
-    return dynamic_cast<ItemData *>(GetItemData(GetRootItem()))->GetBool() || !SetTapeIdsDlg::AreTapeIdsEnabled(doc);
+    return dynamic_cast<ItemData *>(GetItemData(GetRootItem()))->GetBool() || !SetTapeIdsDlg::AreTapeIdsEnabled(mSavedState);
 }
 
 /// Indicates whether overall state is unknown.
@@ -693,11 +692,10 @@ void TickTreeCtrl::GetPackageNames(wxArrayString & names, std::vector<bool> & en
 
 /// Sets all (non router-recorder) package names' corresponding tape IDs (which may not exist).
 /// Reports to the root, and generates a status update notification event and a recorder notification event for each recorder whose tape IDs have changed.
-/// @param doc XML document object for tape ID information
-void TickTreeCtrl::UpdateTapeIds(wxXmlDocument & doc)
+void TickTreeCtrl::UpdateTapeIds()
 {
-    wxXmlNode * tapeIdsNode = SetTapeIdsDlg::GetTapeIdsNode(doc);
-    ScanPackageNames(0, 0, tapeIdsNode, SetTapeIdsDlg::AreTapeIdsEnabled(doc));
+    wxXmlNode * tapeIdsNode = SetTapeIdsDlg::GetTapeIdsNode(mSavedState, false); //don't delete existing data
+    ScanPackageNames(0, 0, tapeIdsNode, SetTapeIdsDlg::AreTapeIdsEnabled(mSavedState));
 }
 
 /// Either returns all package names, with corresponding enabled status, or updates all tape IDs.
