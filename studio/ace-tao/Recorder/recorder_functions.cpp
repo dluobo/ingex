@@ -1,5 +1,5 @@
 /*
- * $Id: recorder_functions.cpp,v 1.48 2010/10/05 08:52:57 john_f Exp $
+ * $Id: recorder_functions.cpp,v 1.49 2010/10/05 17:00:38 john_f Exp $
  *
  * Functions which execute in recording threads.
  *
@@ -29,6 +29,7 @@
 #include "RecorderSettings.h"
 #include "Logfile.h"
 #include "Timecode.h"
+#include "DateTime.h"
 #include "AudioMixer.h"
 #include "audio_utils.h"
 #include "ffmpeg_encoder.h"
@@ -72,6 +73,7 @@ static ACE_Thread_Mutex avcodec_mutex;
 const bool THREADED_MJPEG = false;
 const bool MT_ENABLE = true;
 const bool DEBUG_NOWRITE = false;
+const bool DEBUG_SLEEP = false;
 
 #define USE_SOURCE   0 // Eventually will move to encoding a source, rather than a hardware input
 
@@ -1031,8 +1033,20 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         {
             while (!finished_record && IngexShm::Instance()->LastFrame(*it) == lastcoded[*it])
             {
-                //ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C sleeping %d ms for channel %d\n"), src_name.c_str(), sleep_ms, *it));
+                std::string sleep_start;
+                if (DEBUG_SLEEP)
+                {
+                    sleep_start = DateTime::Timecode();
+                }
+
                 ACE_OS::sleep(ACE_Time_Value(0, sleep_ms * 1000));
+
+                if (DEBUG_SLEEP)
+                {
+                    std::string sleep_end = DateTime::Timecode();
+                    ACE_DEBUG((LM_INFO, ACE_TEXT("%C thread %d slept %d ms from %C to %C\n"),
+                        src_name.c_str(),  p_opt->index, sleep_ms, sleep_start.c_str(), sleep_end.c_str()));
+                }
 
                 // Check heartbeat
                 struct timeval now;
