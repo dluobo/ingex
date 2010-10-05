@@ -1,0 +1,13 @@
+Alterntive method of building the DVS drivers
+---------------------------------------------
+
+Instead of using the driver_create script, here is a more portable aternative.
+
+Download the DVS SDK as normal.
+
+> cd $(DVSSDK)/linux-x86_64/driver  [or $(DVSSDK)/linux-x86/driver for 32-bit]
+
+Copy the accompanying Makefile to that directory.
+
+> make
+
