@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorderImpl.cpp,v 1.21 2010/08/12 16:36:42 john_f Exp $
+ * $Id: IngexRecorderImpl.cpp,v 1.22 2010/10/08 16:41:35 john_f Exp $
  *
  * Servant class for Recorder.
  *
@@ -677,6 +677,14 @@ void IngexRecorderImpl::NotifyCompletion(IngexRecorder * rec)
         ACE_DEBUG((LM_INFO, ACE_TEXT("Recording completed ok.\n")));
         mStatusDist.SendStatus("event", "recording completed ok");
     }
+    
+    // rec is about to get deleted so make sure mpIngexRecorder isn't
+    // still pointing to it.  (This can happen if the recording
+    // stops itself.)
+    if (rec == mpIngexRecorder)
+    {
+        mpIngexRecorder = 0;
+    }
 
     // Update status to "not recording".
     // But only if we haven't started another recording in the meantime
@@ -691,14 +699,6 @@ void IngexRecorderImpl::NotifyCompletion(IngexRecorder * rec)
     }
 
     this->StartCopying(rec->mIndex);
-    
-    // rec is about to get deleted so make sure mpIngexRecorder isn't
-    // still pointing to it.  (This can happen if the recording
-    // stops itself.)
-    if (rec == mpIngexRecorder)
-    {
-        mpIngexRecorder = 0;
-    }
 }
 
 void IngexRecorderImpl::InitCopying()
