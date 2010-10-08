@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: dialogues.cpp,v 1.24 2010/10/05 10:49:02 john_f Exp $           *
+ *   $Id: dialogues.cpp,v 1.25 2010/10/08 16:45:06 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -337,10 +337,12 @@ BEGIN_EVENT_TABLE(SetTapeIdsDlg, wxDialog)
     EVT_BUTTON(CLEAR, SetTapeIdsDlg::OnClear)
     EVT_INIT_DIALOG(SetTapeIdsDlg::OnInitDlg)
 END_EVENT_TABLE()
-WX_DECLARE_STRING_HASH_MAP(wxString, StringHash);
+
+WX_DECLARE_STRING_HASH_MAP(bool, BoolHash2);
 
 /// Reads tape IDs names from the XML document and displays a dialogue to manipulate them.
-/// Displays in package name order within three groups: enabled for recording and no tape ID; not enabled and no tape ID; the rest.
+/// Displays in package name order with background colours corresponding to enabled for recording and no tape ID; not enabled and no tape ID; the rest.
+/// Duplicated names are combined, with the background colour reflecting the most abnormal state.
 /// Updates the saved state if user changes data.
 /// @param parent The parent window.
 /// @param savedState Persistent data to read and modify.
@@ -400,26 +402,36 @@ SetTapeIdsDlg::SetTapeIdsDlg(wxWindow * parent, SavedState * savedState, wxArray
     //find the tape IDs in the XML
     wxXmlNode * tapeIdsNode = GetTapeIdsNode(savedState, false); //don't delete the data
 
-    //populate the table
+    //aggregate enable values for duplicated package names, and allow sorting
+    BoolHash2 enables;
     for (size_t i = 0; i < currentPackages.GetCount(); i++) {
-        mGrid->SetCellValue(i, 0, currentPackages[i]); //source name
-        mGrid->SetReadOnly(i, 0);
-        wxArrayString sections;
-        sections.Insert(wxEmptyString, 0, mGrid->GetNumberCols() - 2); //set the number of sections
-        mGrid->SetCellValue(i, 1, GetTapeId(tapeIdsNode, currentPackages[i], &sections));
-        mGrid->SetReadOnly(i, 1);
-        mGrid->SetCellBackgroundColour(i, 1, wxColour(wxT("GREY")));
-        for (size_t j = 0; j < sections.GetCount(); j++) {
-            mGrid->SetCellValue(i, j + 2, sections[j]);
+        enables[currentPackages[i]] = (enables.end() == enables.find(currentPackages[i]) ? enabled.at(i) : (enables[currentPackages[i]] || enabled.at(i))); //if package name already encountered, set value to true if any enables for this package name are true
+    }
+
+    //populate the table with package names in alphabetical order and not duplicated
+    currentPackages.Sort();
+    size_t row = 0;
+    for (size_t index = 0; index < currentPackages.GetCount(); index++) {
+        if (0 == index || currentPackages[index] != currentPackages[index - 1]) { //first instance of this name
+            mGrid->SetCellValue(row, 0, currentPackages[index]); //source name
+            mGrid->SetReadOnly(row, 0);
+            wxArrayString sections;
+            sections.Insert(wxEmptyString, 0, mGrid->GetNumberCols() - 2); //set the number of sections
+            mGrid->SetCellValue(row, 1, GetTapeId(tapeIdsNode, currentPackages[index], &sections));
+            mGrid->SetReadOnly(row, 1);
+            mGrid->SetCellBackgroundColour(row, 1, wxColour(wxT("GREY"))); //updated in a mo
+            for (size_t section = 0; section < sections.GetCount(); section++) {
+                mGrid->SetCellValue(row, section + 2, sections[section]);
+            }
+            mEnabled.push_back(enables[currentPackages[index]]);
+            SetBackgroundColour(row++);
         }
-        mEnabled.push_back(enabled.at(i));
-        SetBackgroundColour(i);
     }
 
     mGrid->AutoSizeColumns();
-
     Fit();
     SetMinSize(GetSize());
+
     //show dialogue and save results
     if (wxID_OK == ShowModal()) {
         for (int i = 0; i < mGrid->GetNumberRows(); i++) {
@@ -535,9 +547,10 @@ const wxString SetTapeIdsDlg::GetTapeId(wxXmlNode * tapeIdsNode, const wxString 
     return fullName;
 }
 
-/// Sets the background colour of the full tape ID cell of the given row, depending on presence/absence of content, and enabled status
+/// Sets the background colour of the full tape ID cell of the given row, depending on presence/absence of content, and enabled status.
 /// @param row The row to affect.
-void SetTapeIdsDlg::SetBackgroundColour(int row) {
+void SetTapeIdsDlg::SetBackgroundColour(int row)
+{
     if (mGrid->GetCellValue(row, 1).IsEmpty() && mEnabled.at(row)) { //no tape ID and enabled for recording, so preventing a recording
             mGrid->SetCellBackgroundColour(row, 0, wxColour(wxT("RED")));
     }
