@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder_av.cpp,v 1.11 2010/09/29 16:57:37 john_f Exp $
+ * $Id: ffmpeg_encoder_av.cpp,v 1.12 2010/10/08 16:49:54 john_f Exp $
  *
  * Encode AV and write to file.
  *
@@ -718,8 +718,6 @@ int write_video_frame(internal_ffmpeg_encoder_t * enc, uint8_t * p_video)
     AVFormatContext * oc = enc->oc;
     AVStream * st = enc->video_st;
     AVCodecContext * c = enc->video_st->codec;
-    int out_size;
-    int ret;
     
     if (enc->scale_image)
     {
@@ -789,13 +787,23 @@ int write_video_frame(internal_ffmpeg_encoder_t * enc, uint8_t * p_video)
     }
 
     /* encode the image */
-    out_size = avcodec_encode_video(c, enc->video_outbuf, enc->video_outbuf_size, enc->inputFrame);
+    int out_size = avcodec_encode_video(c, enc->video_outbuf, enc->video_outbuf_size, enc->inputFrame);
 
     /* debug */
     //fprintf(stderr, "avcodec_encode_video() returned %d\n", out_size);
 
-    if (out_size > 0)
+    if (out_size < 0)
     {
+        fprintf(stderr, "error compressing video!\n");
+        return -1;
+    }
+    else if (out_size == 0)
+    {
+        // out_size == 0 means the image was buffered
+    }
+    else
+    {
+        // out_size > 0
         AVPacket pkt;
         av_init_packet(&pkt);
             
@@ -817,27 +825,16 @@ int write_video_frame(internal_ffmpeg_encoder_t * enc, uint8_t * p_video)
         pkt.size = out_size;
         
         /* write the compressed frame to the media file */
-        ret = av_write_frame(oc, &pkt);
+        int ret = av_write_frame(oc, &pkt);
 
-        /* debug */
-        //fprintf(stderr, "av_write_frame (video) returned %d\n", ret);
-    }
-    else
-    {
-        // out_size == 0 means the image was buffered
-        ret = 0;
+        if (ret != 0)
+        {
+            fprintf(stderr, "Error while writing video frame\n");
+            return -1;
+        }
     }
 
-    if (ret != 0)
-    {
-        fprintf(stderr, "Error while writing video frame\n");
-        return -1;
-    }
-    else
-    {
-        //enc->frame_count++;
-        return 0;
-    }
+    return 0;
 }
 
 int write_audio_frame(internal_ffmpeg_encoder_t * enc, int stream_i, short * p_audio, int num_samples)
