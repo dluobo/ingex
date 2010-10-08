@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.cpp,v 1.14 2010/09/28 17:39:40 john_f Exp $
+ * $Id: dvs_sdi.cpp,v 1.15 2010/10/08 16:43:40 john_f Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -216,14 +216,32 @@ Ingex::Timecode timecode_from_dvs_bits(int bits, int fps_num, int fps_den)
     int sec01 = (bits & 0x00000f00) >> 8;
     int sec = 10 * sec10 + sec01;
     int fm10  = (bits & 0x00000030) >> 4;
-    int fm01  = bits & 0x0000000f;
+    int fm01  = (bits & 0x0000000f);
     int fm = 10 * fm10 + fm01;
 
-    bool drop = (bits & 0x00000040) != 0;
+    bool df = (bits & 0x00000040) != 0;
 
-    //fprintf(stderr, "%08x %02d:%02d:%02d:%02d %s\n", bits, hr, min, sec, fm, drop ? "DF" : "NDF");
+    Ingex::Timecode::FormatEnumType fmt = Ingex::Timecode::GetFormat(fps_num, fps_den, df);
 
-    return Ingex::Timecode(hr, min, sec, fm, fps_num, fps_den, drop);
+    // field bit position varies, depending on frame rate
+    int frame_of_pair;
+    switch (fmt)
+    {
+    case Ingex::Timecode::TC_50:
+        frame_of_pair = (bits & 0x80000000) ? 1 : 0;
+        break;
+    case Ingex::Timecode::TC_59DF:
+    case Ingex::Timecode::TC_59NDF:
+        frame_of_pair = (bits & 0x00008000) ? 1 : 0;
+        break;
+    default:
+        frame_of_pair = 0;
+        break;
+    }
+
+    //fprintf(stderr, "%08x %02d:%02d:%02d:%02d (%d) %s\n", bits, hr, min, sec, fm, frame_of_pair, df ? "DF" : "NDF");
+
+    return Ingex::Timecode(hr, min, sec, fm, frame_of_pair, fmt);
 }
 
 void show_scheduler()
@@ -1511,11 +1529,24 @@ int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_from_vi
     int dvitc1_bits = pbuffer->anctimecode.dvitc_tc[0];
     int dvitc2_bits = pbuffer->anctimecode.dvitc_tc[1];
 
+    if (0)
+    {
+        logTF("chan %d: lastframe=%6d vitc1=%08x vitc2=%08x ltc=%08x dvitc1=%08x dvitc2=%08x dltc=%08x\n",
+            chan, pc->lastframe,
+            vitc1_bits,
+            vitc2_bits,
+            ltc_bits,
+            dvitc1_bits,
+            dvitc2_bits,
+            dltc_bits);
+    }
 
+    int vitc_bits = vitc1_bits;
+    int dvitc_bits = dvitc1_bits;
+#if 0
     // Handle buggy field order (can happen with misconfigured camera)
     // Incorrect field order causes vitc_tc and vitc2 to be swapped.
     // If the high bit is set on vitc use vitc2 instead.
-    int vitc_bits;
     if ((unsigned)vitc1_bits >= 0x80000000 && (unsigned)vitc2_bits < 0x80000000)
     {
         vitc_bits = vitc2_bits;
@@ -1530,7 +1561,6 @@ int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_from_vi
     {
         vitc_bits = vitc1_bits;
     }
-    int dvitc_bits;
     if (Ingex::Interlace::NONE != interlace &&
         (unsigned)dvitc1_bits >= 0x80000000 && (unsigned)dvitc2_bits < 0x80000000)
     {
@@ -1569,6 +1599,7 @@ int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_from_vi
         }
         dltc_bits = (unsigned)dltc_bits & 0x7fffffff;
     }
+#endif
 
     Ingex::Timecode tc_ltc = timecode_from_dvs_bits(ltc_bits, frame_rate_numer, frame_rate_denom);
     Ingex::Timecode tc_vitc = timecode_from_dvs_bits(vitc_bits, frame_rate_numer, frame_rate_denom);
@@ -1838,8 +1869,8 @@ int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_from_vi
             vitc1_bits,
             vitc2_bits,
             ltc_bits,
-            vitc1_bits,
-            vitc2_bits,
+            dvitc1_bits,
+            dvitc2_bits,
             dltc_bits,
             vitc_diff,
             vitc_diff != 1 ? "!" : "",

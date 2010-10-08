@@ -1,5 +1,5 @@
 /*
- * $Id: Timecode.h,v 1.4 2010/06/02 10:52:38 philipn Exp $
+ * $Id: Timecode.h,v 1.5 2010/10/08 16:43:39 john_f Exp $
  *
  * Class to hold a Timecode
  *
@@ -59,30 +59,50 @@ private:
 class Timecode
 {
 public:
+// supported timecode formats
+    enum FormatEnumType
+    {
+        NONE,
+        TC_25,
+        TC_29DF,
+        TC_29NDF,
+        TC_50,
+        TC_59DF,
+        TC_59NDF
+    };
 // constructors
     Timecode();
     Timecode(int frames_since_midnight, int fps_num, int fps_den, bool df);
-    Timecode(int hr, int min, int sec, int frame, int fps_num, int fps_den, bool df);
+    Timecode(int frames_since_midnight, FormatEnumType format);
+    Timecode(int hr, int min, int sec, int frame, int frame_of_pair, int fps_num, int fps_den, bool df);
+    Timecode(int hr, int min, int sec, int frame, int frame_of_pair, FormatEnumType format);
     Timecode(const char * s, int fps_num, int fps_den, bool df);
+    Timecode(const char * s, FormatEnumType format);
 // copy constructor
     Timecode(const Timecode & tc);
 // assignment
     Timecode & operator=(const Timecode &);
-    //Timecode & operator=(int frames_since_midnight);
+
+// static method
+    static FormatEnumType GetFormat(int fps_num, int fps_den, bool df);
 
 // methods
     const char * Text() const { return mText; }
     const char * TextNoSeparators() const { return mTextNoSeparators; }
     int FramesSinceMidnight() const { return mFramesSinceMidnight; }
-    int FrameRateNumerator() const { return mFrameRateNumerator; }
-    int FrameRateDenominator() const { return mFrameRateDenominator; }
-    bool DropFrame() const { return mDropFrame; }
-    void DropFrame(bool df) { mDropFrame = df; UpdateHoursMinsEtc(); }
+    //int FrameRateNumerator() const { return mFrameRateNumerator; }
+    //int FrameRateDenominator() const { return mFrameRateDenominator; }
+    int FrameRateNumerator() const;
+    int FrameRateDenominator() const;
+    //bool DropFrame() const { return mDropFrame; }
+    //void DropFrame(bool df) { mDropFrame = df; UpdateHoursMinsEtc(); }
+    bool DropFrame() const;
     int Hours() const { return mHours; }
     int Minutes() const { return mMinutes; }
     int Seconds() const { return mSeconds; }
     int Frames() const { return mFrames; }
-    bool IsNull() const { return mIsNull; }
+    bool IsNull() const { return NONE == mFormat; }
+    int NominalFps();
 
 // operator overload
     friend Timecode operator+(const Timecode & lhs, const int & frames);
@@ -94,17 +114,19 @@ public:
 
 private:
 // fundamental data
+    FormatEnumType mFormat;
     int mFramesSinceMidnight;
-    int mFrameRateNumerator;
-    int mFrameRateDenominator;
-    bool mDropFrame;
-    bool mIsNull;
+    //int mFrameRateNumerator;
+    //int mFrameRateDenominator;
+    //bool mDropFrame;
+    //bool mIsNull;
 
 // derived data
     int mHours;
     int mMinutes;
     int mSeconds;
     int mFrames;
+    int mFrameOfPair;
     char mText[16];
     char mTextNoSeparators[16];
 
@@ -112,6 +134,7 @@ private:
     void UpdateFramesSinceMidnight();
     void UpdateHoursMinsEtc();
     void UpdateText();
+    void CheckFramesSinceMidnight();
 };
 
 } // namespace

@@ -76,7 +76,7 @@ int main(int argc, char *argv[])
 	uint8_t *frame10bit2 = (uint8_t*)malloc(frame_size_10bit);
 
 	// colourbars and timecode burning
-    Ingex::Timecode timecode(12, 34, 45, 00, 25, 1, false);
+    Ingex::Timecode timecode(12, 34, 45, 00, 0, 25, 1, false);
 
 	uyvy_color_bars(width, height, 1, frame);
 	burn_mask_uyvy(timecode, 90, 90, 720, 576, frame);
