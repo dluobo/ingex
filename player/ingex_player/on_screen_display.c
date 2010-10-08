@@ -1,5 +1,5 @@
 /*
- * $Id: on_screen_display.c,v 1.17 2010/08/27 17:41:32 john_f Exp $
+ * $Id: on_screen_display.c,v 1.18 2010/10/08 16:46:58 john_f Exp $
  *
  *
  *
@@ -3604,6 +3604,7 @@ int osds_create(OnScreenDisplayState** state)
     newState->minimumAudioLevel = -96;
     newState->nullAudioLevel = newState->minimumAudioLevel - 10;
     newState->audioLineupLevel = -18;
+    newState->screen = OSD_PLAY_STATE_SCREEN;
 
     /* only implement functions that are for changing the state - we don't expect the other funcs to be called */
     newState->osd.data = newState;
@@ -3730,7 +3731,7 @@ void osds_reset(OnScreenDisplayState* state)
 {
     int i;
 
-    state->screen = OSD_SOURCE_INFO_SCREEN;
+    state->screen = OSD_PLAY_STATE_SCREEN;
     /* TODO: if the player starts in a different state then these will be wrong if no
     state change event is sent */
     state->isPlaying = 1;
