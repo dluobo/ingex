@@ -1,5 +1,5 @@
 /*
- * $Id: File.cpp,v 1.6 2010/07/26 16:02:37 philipn Exp $
+ * $Id: File.cpp,v 1.7 2010/10/08 16:52:56 john_f Exp $
  *
  * 
  *
@@ -96,11 +96,9 @@ File::~File()
 {
     mxf_file_close(&_cFile);
 
-    vector<Partition*>::iterator iter;
-    for (iter = _partitions.begin(); iter != _partitions.end(); iter++)
-    {
-        delete *iter;
-    }
+    size_t i;
+    for (i = 0; i < _partitions.size(); i++)
+        delete _partitions[i];
 }
 
 void File::setMinLLen(uint8_t llen)
@@ -142,10 +140,69 @@ void File::updatePartitions()
     MXFPP_CHECK(mxf_update_partitions(_cFile, partitionList.getList()));
 }
 
-Partition& File::getPartition(int index)
+Partition& File::getPartition(size_t index)
 {
-    MXFPP_CHECK(index >= 0 && index < (int)_partitions.size());
-    return *_partitions.at(index);
+    MXFPP_ASSERT(index < _partitions.size());
+    return *_partitions[index];
+}
+
+void File::readPartitions(Partition *header_partition)
+{
+    mxfKey key;
+    uint8_t llen;
+    uint64_t len;
+    uint64_t this_partition;
+    MXFRIP rip;
+    MXFRIPEntry *rip_entry;
+    MXFListIterator iter;
+    Partition *partition;
+
+    size_t i;
+    for (i = 0; i < _partitions.size(); i++)
+        delete _partitions[i];
+
+    // use the RIP if there is one
+    if (mxf_read_rip(_cFile, &rip)) {
+        try
+        {
+            mxf_initialise_list_iter(&iter, &rip.entries);
+            while (mxf_next_list_iter_element(&iter)) {
+                rip_entry = (MXFRIPEntry*)mxf_get_iter_element(&iter);
+
+                seek(mxf_get_runin_len(_cFile) + rip_entry->thisPartition, SEEK_SET);
+                readKL(&key, &llen, &len);
+                _partitions.push_back(Partition::read(this, &key));
+            }
+            mxf_clear_rip(&rip);
+        }
+        catch (...)
+        {
+            mxf_clear_rip(&rip);
+            throw;
+        }
+    } else {
+        // start from footer partition and work back to the header partition
+
+        this_partition = header_partition->getFooterPartition();
+        if (this_partition <= header_partition->getThisPartition())
+            return;
+
+        do {
+            seek(mxf_get_runin_len(_cFile) + this_partition, SEEK_SET);
+            readKL(&key, &llen, &len);
+            _partitions.push_back(Partition::read(this, &key));
+
+            this_partition = _partitions.back()->getPreviousPartition();
+        }
+        while (this_partition < _partitions.back()->getThisPartition());
+
+        // reverse order to get header partition at the start and the footer partition at the end
+        for (i = 0; i < _partitions.size() / 2; i++) {
+            partition = _partitions[i];
+            _partitions[i] = _partitions[_partitions.size() - i - 1];
+            _partitions[_partitions.size() - i - 1] = partition;
+        }
+    }
 }
 
 void File::readK(mxfKey* key)

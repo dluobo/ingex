@@ -1,5 +1,5 @@
 /*
- * $Id: File.h,v 1.6 2010/07/26 16:02:38 philipn Exp $
+ * $Id: File.h,v 1.7 2010/10/08 16:52:56 john_f Exp $
  *
  * 
  *
@@ -49,8 +49,11 @@ public:
     
     void writeRIP();
     void updatePartitions();
+
+    Partition& getPartition(size_t index);
+    const std::vector<Partition*>& getPartitions() const { return _partitions; }
     
-    Partition& getPartition(int index);
+    void readPartitions(mxfpp::Partition *header_partition);
     
     void readK(mxfKey* key);
     void readL(uint8_t* llen, uint64_t* len);
