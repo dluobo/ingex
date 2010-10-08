@@ -1,5 +1,5 @@
 /*
- * $Id: YUV_scale_pic.c,v 1.1 2010/09/29 09:01:13 john_f Exp $
+ * $Id: YUV_scale_pic.c,v 1.2 2010/10/08 16:38:36 john_f Exp $
  *
  *
  *
@@ -77,7 +77,7 @@ static void h_sub_alias(const BYTE* srcLine, BYTE* dstLine,
     }
     for (i = 0; i < w; i++)
     {
-        if (err >= xup)
+        if (err > xup)
         {
             err -= xup;
             srcLine += inStride;
@@ -113,7 +113,7 @@ static void h_sub_scale_alias(const BYTE* srcLine, uint32_t* dstLine,
     }
     for (i = 0; i < w; i++)
     {
-        if (err >= xup)
+        if (err > xup)
         {
             err -= xup;
             srcLine += inStride;
@@ -287,7 +287,7 @@ static void v_sub_alias(const component* inFrame, component* outFrame,
     err += ((ydown - yup) * yoff) / 100;
     for (j = 0; j < outFrame->h; j++)
     {
-        while (err >= yup)
+        while (err > yup)
         {
             err -= yup;
             inBuff += inFrame->lineStride;
