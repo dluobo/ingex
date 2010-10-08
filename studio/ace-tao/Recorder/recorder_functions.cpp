@@ -1,5 +1,5 @@
 /*
- * $Id: recorder_functions.cpp,v 1.49 2010/10/05 17:00:38 john_f Exp $
+ * $Id: recorder_functions.cpp,v 1.50 2010/10/08 17:02:34 john_f Exp $
  *
  * Functions which execute in recording threads.
  *
@@ -267,7 +267,6 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         secondary_frame_rate_numerator, secondary_frame_rate_denominator, secondary_interlace);
     // Assume primary and secondary frame rates are the same
     const prodauto::Rational FRAME_RATE (primary_frame_rate_numerator, primary_frame_rate_denominator);
-    const bool is_pal = (prodauto::g_palEditRate == FRAME_RATE);
 
 
 
@@ -625,11 +624,11 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     switch (op)
     {
     case OperationalPattern::OP_1A:
-        package_creator = new prodauto::OP1APackageCreator(is_pal);
+        package_creator = new prodauto::OP1APackageCreator(FRAME_RATE);
         break;
     case OperationalPattern::OP_ATOM:
     default:
-        package_creator = new prodauto::OPAtomPackageCreator(is_pal);
+        package_creator = new prodauto::OPAtomPackageCreator(FRAME_RATE);
         break;
     }
     

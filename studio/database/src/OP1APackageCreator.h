@@ -1,5 +1,5 @@
 /*
- * $Id: OP1APackageCreator.h,v 1.1 2009/10/12 15:54:33 philipn Exp $
+ * $Id: OP1APackageCreator.h,v 1.2 2010/10/08 17:02:34 john_f Exp $
  *
  * OP-1A package group creator
  *
@@ -40,7 +40,7 @@ public:
     static std::string CreateFileLocation(std::string prefix, std::string suffix);
 
 public:
-    OP1APackageCreator(bool is_pal_project);
+    OP1APackageCreator(Rational edit_rate);
     virtual ~OP1APackageCreator();
 
 public:

@@ -1,5 +1,5 @@
 /*
- * $Id: PackageGroup.h,v 1.5 2010/07/21 16:29:34 john_f Exp $
+ * $Id: PackageGroup.h,v 1.6 2010/10/08 17:02:34 john_f Exp $
  *
  * Package group
  *
@@ -43,7 +43,7 @@ class PackageGroup : protected PackageXMLChildParser
 {
 public:
     PackageGroup();
-    PackageGroup(bool is_pal_project, int op);
+    PackageGroup(Rational edit_rate, int op);
     virtual ~PackageGroup();
 
     bool IsPALProject() { return mPALProject; }

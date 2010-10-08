@@ -1,5 +1,5 @@
 /*
- * $Id: test_mxfwriter.cpp,v 1.14 2010/07/21 16:29:34 john_f Exp $
+ * $Id: test_mxfwriter.cpp,v 1.15 2010/10/08 17:02:34 john_f Exp $
  *
  * Tests the MXF writer
  *
@@ -111,7 +111,7 @@ typedef struct
     int32_t inputIndex;
     vector<UserComment> userComments;
     ProjectName projectName;
-    bool isPALProject;
+    Rational editRate;
     string dv50Filename;
     string mjpeg21Filename;
     string imx50Filename;
@@ -271,7 +271,7 @@ static void* start_record_routine(void* data)
         {
             resolutionId = MaterialResolution::DV50_MXF_ATOM;
         }
-        videoFrame1Size = (record_data->isPALProject ? 288000 : 240000);
+        videoFrame1Size = (record_data->editRate == g_palEditRate ? 288000 : 240000);
         FILE* file;
         if ((file = fopen(record_data->dv50Filename.c_str(), "r")) == NULL)
         {
@@ -368,7 +368,7 @@ static void* start_record_routine(void* data)
         {
             resolutionId = MaterialResolution::IMX50_MXF_ATOM;
         }
-        videoFrame1Size = (record_data->isPALProject ? 250000 : 208541);
+        videoFrame1Size = (record_data->editRate == g_palEditRate ? 250000 : 208541);
         FILE* file;
         if ((file = fopen(record_data->imx50Filename.c_str(), "r")) == NULL)
         {
@@ -401,7 +401,7 @@ static void* start_record_routine(void* data)
         {
             resolutionId = MaterialResolution::UNC_MXF_ATOM;
         }
-        videoFrame1Size = (record_data->isPALProject ? 720 * 576 * 2 : 720 * 480 * 2);
+        videoFrame1Size = (record_data->editRate == g_palEditRate ? 720 * 576 * 2 : 720 * 480 * 2);
         memset(videoData1, 0, videoFrame1Size);
         videoFrame2Size = videoFrame1Size;
         memset(videoData2, 0, videoFrame2Size);
@@ -411,7 +411,7 @@ static void* start_record_routine(void* data)
     memset(pcmData, 1, 1920 * 2);
     uint32_t pcmFrameSizeSeq[5];
     int pcmFrameSizeSeqSize;
-    if (record_data->isPALProject)
+    if (record_data->editRate == g_palEditRate)
     {
         pcmFrameSizeSeqSize = 1;
         pcmFrameSizeSeq[0] = 1920;
@@ -438,9 +438,9 @@ static void* start_record_routine(void* data)
 
         auto_ptr<RecorderPackageCreator> package_group;
         if (record_data->isOP1A)
-            package_group.reset(new OP1APackageCreator(record_data->isPALProject));
+            package_group.reset(new OP1APackageCreator(record_data->editRate));
         else
-            package_group.reset(new OPAtomPackageCreator(record_data->isPALProject));
+            package_group.reset(new OPAtomPackageCreator(record_data->editRate));
         
         package_group->SetStartPosition(record_data->startPosition);
         package_group->SetUserComments(record_data->userComments);
@@ -613,7 +613,7 @@ int main(int argc, const char* argv[])
     int startPosMin = 0;
     int startPosSec = 0;
     int startPosFrame = 0;
-    bool isPALProject = true;
+    Rational editRate = g_palEditRate;
     bool isOP1A = false;
 
     
@@ -687,7 +687,7 @@ int main(int argc, const char* argv[])
         }
         else if (strcmp(argv[cmdlnIndex], "--ntsc") == 0)
         {
-            isPALProject = false;
+            editRate = g_ntscEditRate;
             cmdlnIndex++;
         }
         else if (strcmp(argv[cmdlnIndex], "--op1a") == 0)
@@ -751,7 +751,7 @@ int main(int argc, const char* argv[])
     filenamePrefix = argv[cmdlnIndex];    
 
     // calculate the start position now we know the frame rate
-    if (isPALProject)
+    if (g_palEditRate == editRate)
     {
         startPosition = startPosHour * 60 * 60 * 25 + startPosMin * 60 * 25 + startPosSec * 25 + startPosFrame;
     }
@@ -899,7 +899,7 @@ int main(int argc, const char* argv[])
                 record_data[i].userComments.push_back(UserComment(POSITIONED_COMMENT_NAME, 
                     "event at position 10000", 10000, 3));
                 record_data[i].projectName = projectName;
-                record_data[i].isPALProject = isPALProject;
+                record_data[i].editRate = editRate;
                 record_data[i].umidGenOffset = Database::getInstance()->getUMIDGenOffset();
                 
                 if (dv50Filename != NULL)

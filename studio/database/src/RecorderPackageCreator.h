@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderPackageCreator.h,v 1.3 2010/07/21 16:29:34 john_f Exp $
+ * $Id: RecorderPackageCreator.h,v 1.4 2010/10/08 17:02:34 john_f Exp $
  *
  * Recorder package group creator
  *
@@ -45,7 +45,7 @@ namespace prodauto
 class RecorderPackageCreator : public PackageGroup
 {
 public:
-    RecorderPackageCreator(bool is_pal_project, OperationalPattern::EnumType op);
+    RecorderPackageCreator(Rational edit_rate, OperationalPattern::EnumType op);
     virtual ~RecorderPackageCreator();
 
     // settings

@@ -1,5 +1,5 @@
 /*
- * $Id: PackageGroup.cpp,v 1.5 2010/07/21 16:29:34 john_f Exp $
+ * $Id: PackageGroup.cpp,v 1.6 2010/10/08 17:02:34 john_f Exp $
  *
  * Package group
  *
@@ -43,19 +43,19 @@ using namespace prodauto;
 
 PackageGroup::PackageGroup()
 {
+    mProjectEditRate = g_palEditRate;
     mPALProject = true;
     mOP = OperationalPattern::OP_ATOM;
-    mProjectEditRate = g_palEditRate;
     mMaterialPackage = 0;
     mTapeSourcePackage = 0;
     mOwnTapeSourcePackage = false;
 }
 
-PackageGroup::PackageGroup(bool is_pal_project, int op)
+PackageGroup::PackageGroup(Rational edit_rate, int op)
 {
-    mPALProject = is_pal_project;
+    mProjectEditRate = edit_rate;
+    mPALProject = (g_palEditRate == edit_rate);
     mOP = op;
-    mProjectEditRate = (is_pal_project ? g_palEditRate : g_ntscEditRate);
     mMaterialPackage = 0;
     mTapeSourcePackage = 0;
     mOwnTapeSourcePackage = false;
@@ -343,7 +343,7 @@ void PackageGroup::DeleteFile()
 
 PackageGroup* PackageGroup::Clone()
 {
-    PackageGroup *cloned_group = new PackageGroup(mPALProject, mOP);
+    PackageGroup *cloned_group = new PackageGroup(mProjectEditRate, mOP);
     
     if (mMaterialPackage)
         cloned_group->SetMaterialPackage(dynamic_cast<MaterialPackage*>(mMaterialPackage->clone()));

@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderPackageCreator.cpp,v 1.5 2010/09/06 15:09:50 john_f Exp $
+ * $Id: RecorderPackageCreator.cpp,v 1.6 2010/10/08 17:02:34 john_f Exp $
  *
  * Recorder package group creator
  *
@@ -36,8 +36,8 @@ using namespace prodauto;
 
 
 
-RecorderPackageCreator::RecorderPackageCreator(bool is_pal_project, OperationalPattern::EnumType op)
-: PackageGroup(is_pal_project, op)
+RecorderPackageCreator::RecorderPackageCreator(Rational edit_rate, OperationalPattern::EnumType op)
+: PackageGroup(edit_rate, op)
 {
     mFileFormat = FileFormat::MXF;
     mCreationDate = g_nullTimestamp;

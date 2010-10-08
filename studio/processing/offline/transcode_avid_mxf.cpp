@@ -1,5 +1,5 @@
 /*
- * $Id: transcode_avid_mxf.cpp,v 1.13 2010/06/02 12:59:07 john_f Exp $
+ * $Id: transcode_avid_mxf.cpp,v 1.14 2010/10/08 17:02:34 john_f Exp $
  *
  * Transcodes Avid MXF files
  *
@@ -213,8 +213,8 @@ public:
 class TranscodePackageGroup : public prodauto::PackageGroup
 {
 public:
-    TranscodePackageGroup(bool is_pal_project, int op)
-    : prodauto::PackageGroup(is_pal_project, op)
+    TranscodePackageGroup(prodauto::Rational edit_rate, int op)
+    : prodauto::PackageGroup(edit_rate, op)
     {
     }
     virtual ~TranscodePackageGroup()
@@ -697,7 +697,7 @@ int transcode_avid_mxf(Decoder* decoder,
 
     // get material, file and tape source packages
     
-    packageGroup = new TranscodePackageGroup(transcode.isPALProject, OperationalPattern::OP_ATOM);
+    packageGroup = new TranscodePackageGroup(transcode.isPALProject ? prodauto::g_palEditRate : prodauto::g_ntscEditRate, OperationalPattern::OP_ATOM);
     
     CHK_OFAIL(sourceMaterial.sourceMaterialPackage->getType() == prodauto::MATERIAL_PACKAGE);
     packageGroup->SetMaterialPackage(dynamic_cast<prodauto::MaterialPackage*>(sourceMaterial.sourceMaterialPackage));

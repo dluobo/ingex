@@ -1,5 +1,5 @@
 /*
- * $Id: OP1APackageCreator.cpp,v 1.3 2010/07/21 16:29:34 john_f Exp $
+ * $Id: OP1APackageCreator.cpp,v 1.4 2010/10/08 17:02:34 john_f Exp $
  *
  * OP-1A package group creator
  *
@@ -41,8 +41,8 @@ string OP1APackageCreator::CreateFileLocation(string prefix, string suffix)
 
 
 
-OP1APackageCreator::OP1APackageCreator(bool is_pal_project)
-: RecorderPackageCreator(is_pal_project, OperationalPattern::OP_1A)
+OP1APackageCreator::OP1APackageCreator(Rational edit_rate)
+: RecorderPackageCreator(edit_rate, OperationalPattern::OP_1A)
 {
 }
 

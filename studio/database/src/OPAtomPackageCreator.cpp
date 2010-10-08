@@ -1,5 +1,5 @@
 /*
- * $Id: OPAtomPackageCreator.cpp,v 1.4 2010/07/21 16:29:34 john_f Exp $
+ * $Id: OPAtomPackageCreator.cpp,v 1.5 2010/10/08 17:02:34 john_f Exp $
  *
  * OP-Atom package group creator
  *
@@ -49,8 +49,8 @@ string OPAtomPackageCreator::CreateFileLocation(string prefix, string suffix,
 
 
 
-OPAtomPackageCreator::OPAtomPackageCreator(bool is_pal_project)
-: RecorderPackageCreator(is_pal_project, OperationalPattern::OP_ATOM)
+OPAtomPackageCreator::OPAtomPackageCreator(Rational edit_rate)
+: RecorderPackageCreator(edit_rate, OperationalPattern::OP_ATOM)
 {
 }
 

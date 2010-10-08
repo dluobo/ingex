@@ -1,5 +1,5 @@
 /*
- * $Id: OPAtomPackageCreator.h,v 1.1 2009/10/12 15:54:33 philipn Exp $
+ * $Id: OPAtomPackageCreator.h,v 1.2 2010/10/08 17:02:34 john_f Exp $
  *
  * OP-Atom package group creator
  *
@@ -41,7 +41,7 @@ public:
                                           int data_def, uint32_t track_id, uint32_t track_number);
 
 public:
-    OPAtomPackageCreator(bool is_pal_project);
+    OPAtomPackageCreator(Rational edit_rate);
     virtual ~OPAtomPackageCreator();
 
 public:

@@ -1,5 +1,5 @@
 /*
- * $Id: IngexMXFInfo.cpp,v 1.5 2010/07/21 16:29:34 john_f Exp $
+ * $Id: IngexMXFInfo.cpp,v 1.6 2010/10/08 17:02:34 john_f Exp $
  *
  * Extract information from Ingex MXF files.
  *
@@ -390,15 +390,13 @@ IngexMXFInfo::IngexMXFInfo(string filename, mxfUL *essence_container_label, Head
             }
         }
         
-        bool is_pal_project;
-        if (project_edit_rate == prodauto::g_palEditRate)
-            is_pal_project = true;
-        else if (project_edit_rate == prodauto::g_ntscEditRate)
-            is_pal_project = false;
-        else
+        if (project_edit_rate != prodauto::g_palEditRate
+            && project_edit_rate == prodauto::g_ntscEditRate)
+        {
             throw UNKNOWN_PROJECT_EDIT_RATE;
+        }
         
-        _package_group = new prodauto::PackageGroup(is_pal_project, OperationalPattern::OP_ATOM);
+        _package_group = new prodauto::PackageGroup(project_edit_rate, OperationalPattern::OP_ATOM);
         
         
         // extract package info
