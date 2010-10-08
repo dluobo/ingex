@@ -1,5 +1,5 @@
 /*
- * $Id: MaterialResolution.cpp,v 1.6 2010/09/06 13:48:24 john_f Exp $
+ * $Id: MaterialResolution.cpp,v 1.7 2010/10/08 16:50:31 john_f Exp $
  *
  * Material resolution codes and details
  *
@@ -80,6 +80,7 @@ std::string MaterialResolution::Name(MaterialResolution::EnumType res)
     {
     case NONE:
         name = "None";
+        break;
 
     case UNC_RAW:
         name = "Uncompressed UYVY";
@@ -406,6 +407,8 @@ bool MaterialResolution::CheckVideoFormat(MaterialResolution::EnumType res,
         case Ingex::VideoRaster::SMPTE274_29I:
         case Ingex::VideoRaster::SMPTE274_29PSF:
         case Ingex::VideoRaster::SMPTE274_29P:
+        //case Ingex::VideoRaster::SMPTE296_50P:
+        //case Ingex::VideoRaster::SMPTE296_59P:
             if (Ingex::PixelFormat::YUV_PLANAR_422 == format)
             {
                 result = true;
