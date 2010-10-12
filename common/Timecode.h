@@ -1,5 +1,5 @@
 /*
- * $Id: Timecode.h,v 1.5 2010/10/08 16:43:39 john_f Exp $
+ * $Id: Timecode.h,v 1.6 2010/10/12 17:42:25 john_f Exp $
  *
  * Class to hold a Timecode
  *
@@ -103,6 +103,7 @@ public:
     int Frames() const { return mFrames; }
     bool IsNull() const { return NONE == mFormat; }
     int NominalFps();
+    const char * FormatName() const;
 
 // operator overload
     friend Timecode operator+(const Timecode & lhs, const int & frames);

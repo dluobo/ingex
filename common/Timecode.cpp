@@ -1,5 +1,5 @@
 /*
- * $Id: Timecode.cpp,v 1.10 2010/10/08 16:43:39 john_f Exp $
+ * $Id: Timecode.cpp,v 1.11 2010/10/12 17:42:25 john_f Exp $
  *
  * Class to hold a Timecode
  *
@@ -231,6 +231,36 @@ Timecode & Timecode::operator=(int frames_since_midnight)
 }
 */
 
+const char * Timecode::FormatName() const
+{
+    switch (mFormat)
+    {
+    case TC_25:
+        return "TC_25";
+        break;
+    case TC_50:
+        return "TC_50";
+        break;
+    case TC_29DF:
+        return "TC_29DF";
+        break;
+    case TC_29NDF:
+        return "TC_29NDF";
+        break;
+    case TC_59DF:
+        return "TC_59DF";
+        break;
+    case TC_59NDF:
+        return "TC_59NDF";
+        break;
+    case NONE:
+        return "";
+        break;
+    }
+
+    return "";
+}
+
 void Timecode::UpdateHoursMinsEtc()
 {
     int frames = mFramesSinceMidnight;
@@ -291,8 +321,8 @@ void Timecode::UpdateHoursMinsEtc()
 
         frames += 2;
 
-        mSeconds = frames / nominal_fps;
-        mFrames = frames % nominal_fps;
+        mSeconds = frames / 30;
+        mFrames = frames % 30;
         mFrameOfPair = 0;
         break;
     case TC_59DF:
@@ -328,8 +358,8 @@ void Timecode::UpdateHoursMinsEtc()
 
         frames += 2;
 
-        mSeconds = frames / nominal_fps;
-        mFrames = frames % nominal_fps;
+        mSeconds = frames / 30;
+        mFrames = frames % 30;
         break;
     case NONE:
         // do nothing
@@ -407,15 +437,33 @@ void Timecode::UpdateText()
     case TC_50:
     case TC_29NDF:
     case TC_59NDF:
-        // with colon
-        sprintf(mText,"%02d:%02d:%02d:%02d", mHours, mMinutes, mSeconds, mFrames);
-        sprintf(mTextNoSeparators,"%02d%02d%02d%02d", mHours, mMinutes, mSeconds, mFrames);
+        if (0 == mFrameOfPair)
+        {
+            // with colon
+            sprintf(mText,"%02d:%02d:%02d:%02d", mHours, mMinutes, mSeconds, mFrames);
+            sprintf(mTextNoSeparators,"%02d%02d%02d%02d", mHours, mMinutes, mSeconds, mFrames);
+        }
+        else
+        {
+            // with full-stop
+            sprintf(mText,"%02d:%02d:%02d.%02d", mHours, mMinutes, mSeconds, mFrames);
+            sprintf(mTextNoSeparators,"%02d%02d%02d%02d", mHours, mMinutes, mSeconds, mFrames);
+        }
         break;
     case TC_29DF:
     case TC_59DF:
-        // with semi-colon
-        sprintf(mText,"%02d:%02d:%02d;%02d", mHours, mMinutes, mSeconds, mFrames);
-        sprintf(mTextNoSeparators,"%02d%02d%02d%02d", mHours, mMinutes, mSeconds, mFrames);
+        if (0 == mFrameOfPair)
+        {
+            // with semi-colon
+            sprintf(mText,"%02d:%02d:%02d;%02d", mHours, mMinutes, mSeconds, mFrames);
+            sprintf(mTextNoSeparators,"%02d%02d%02d%02d", mHours, mMinutes, mSeconds, mFrames);
+        }
+        else
+        {
+            // with comma
+            sprintf(mText,"%02d:%02d:%02d,%02d", mHours, mMinutes, mSeconds, mFrames);
+            sprintf(mTextNoSeparators,"%02d%02d%02d%02d", mHours, mMinutes, mSeconds, mFrames);
+        }
         break;
     }
 }
