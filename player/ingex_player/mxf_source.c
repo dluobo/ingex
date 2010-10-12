@@ -1,5 +1,5 @@
 /*
- * $Id: mxf_source.c,v 1.19 2010/09/06 13:41:45 john_f Exp $
+ * $Id: mxf_source.c,v 1.20 2010/10/12 17:44:12 john_f Exp $
  *
  *
  *
@@ -1028,7 +1028,6 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
     OutputStreamData* outputStream;
     StreamInfo commonStreamInfo;
     int numTracks;
-    int isPAL;
     mxfRational mxfFrameRate;
 
     CHK_ORET(initialise_stream_info(&commonStreamInfo));
@@ -1160,7 +1159,6 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
     get_frame_rate(newSource->mxfReader, &mxfFrameRate);
     convert_frame_rate(&mxfFrameRate, &commonStreamInfo.frameRate);
     commonStreamInfo.isHardFrameRate = clip_has_video(newSource->mxfReader);
-    isPAL = is_pal_frame_rate(&commonStreamInfo.frameRate);
     set_stream_clip_id(&commonStreamInfo, clipUMIDStr);
 
     CHK_OFAIL(add_filename_source_info(&commonStreamInfo, SRC_INFO_FILE_NAME, filename));
@@ -1255,7 +1253,11 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
                 mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(HD_Unc_1080_50i_422_FrameWrapped)) ||
                 mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(HD_Unc_1080_50i_422_ClipWrapped)) ||
                 mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(HD_Unc_1080_5994i_422_FrameWrapped)) ||
-                mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(HD_Unc_1080_5994i_422_ClipWrapped)))
+                mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(HD_Unc_1080_5994i_422_ClipWrapped)) ||
+                mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(HD_Unc_720_50p_422_FrameWrapped)) ||
+                mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(HD_Unc_720_50p_422_ClipWrapped)) ||
+                mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(HD_Unc_720_5994p_422_FrameWrapped)) ||
+                mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(HD_Unc_720_5994p_422_ClipWrapped)))
             {
                 CHK_OFAIL(track->video.componentDepth == 8 || track->video.componentDepth == 10);
                 if (track->video.componentDepth == 8)

@@ -1,5 +1,5 @@
 /*
- * $Id: MXFOP1AWriter.cpp,v 1.3 2010/07/21 16:29:34 john_f Exp $
+ * $Id: MXFOP1AWriter.cpp,v 1.4 2010/10/12 17:44:12 john_f Exp $
  *
  * MXF OP-1A writer
  *
@@ -258,7 +258,7 @@ void MXFOP1AWriter::PrepareToWrite(PackageGroup *package_group, bool take_owners
     
     mD10Writer = new D10MXFOP1AWriter();
 
-    if (package_group->IsPALProject())
+    if (package_group->Is25FPSProject())
         mD10Writer->SetSampleRate(D10MXFOP1AWriter::D10_SAMPLE_RATE_625_50I);
     else
         mD10Writer->SetSampleRate(D10MXFOP1AWriter::D10_SAMPLE_RATE_525_60I);
@@ -269,19 +269,19 @@ void MXFOP1AWriter::PrepareToWrite(PackageGroup *package_group, bool take_owners
     switch (file_descriptor->videoResolutionID)
     {
         case MaterialResolution::IMX30_MXF_1A:
-            if (package_group->IsPALProject())
+            if (package_group->Is25FPSProject())
                 mD10Writer->SetBitRate(D10MXFOP1AWriter::D10_BIT_RATE_30, 150000);
             else
                 mD10Writer->SetBitRate(D10MXFOP1AWriter::D10_BIT_RATE_30, 125125);
             break;
         case MaterialResolution::IMX40_MXF_1A:
-            if (package_group->IsPALProject())
+            if (package_group->Is25FPSProject())
                 mD10Writer->SetBitRate(D10MXFOP1AWriter::D10_BIT_RATE_40, 200000);
             else
                 mD10Writer->SetBitRate(D10MXFOP1AWriter::D10_BIT_RATE_40, 166833);
             break;
         case MaterialResolution::IMX50_MXF_1A:
-            if (package_group->IsPALProject())
+            if (package_group->Is25FPSProject())
                 mD10Writer->SetBitRate(D10MXFOP1AWriter::D10_BIT_RATE_50, 250000);
             else
                 mD10Writer->SetBitRate(D10MXFOP1AWriter::D10_BIT_RATE_50, 208541);
@@ -300,19 +300,19 @@ void MXFOP1AWriter::PrepareToWrite(PackageGroup *package_group, bool take_owners
     switch (file_descriptor->videoResolutionID)
     {
         case MaterialResolution::IMX30_MXF_1A:
-            if (package_group->IsPALProject())
+            if (package_group->Is25FPSProject())
                 mContentPackage->mVideoSize = 150000;
             else
                 mContentPackage->mVideoSize = 125125;
             break;
         case MaterialResolution::IMX40_MXF_1A:
-            if (package_group->IsPALProject())
+            if (package_group->Is25FPSProject())
                 mContentPackage->mVideoSize = 200000;
             else
                 mContentPackage->mVideoSize = 166833;
             break;
         case MaterialResolution::IMX50_MXF_1A:
-            if (package_group->IsPALProject())
+            if (package_group->Is25FPSProject())
                 mContentPackage->mVideoSize = 250000;
             else
                 mContentPackage->mVideoSize = 208541;
@@ -324,7 +324,7 @@ void MXFOP1AWriter::PrepareToWrite(PackageGroup *package_group, bool take_owners
     
     if (mContentPackage->mNumAudioTracks > 0) {
         uint32_t bytes_per_sample = (file_descriptor->audioQuantizationBits + 7) / 8;
-        if (package_group->IsPALProject())
+        if (package_group->Is25FPSProject())
             mContentPackage->mAudioAllocatedSize = bytes_per_sample * 1920;
         else
             mContentPackage->mAudioAllocatedSize = bytes_per_sample * 1602;
@@ -351,8 +351,8 @@ void MXFOP1AWriter::WriteSamples(uint32_t mp_track_id, uint32_t num_samples, con
     } else {
         int audio_index = mContentPackage->GetAudioTrackIndex(mp_track_id);
         if (audio_index >= 0) {
-            PA_ASSERT((mPackageGroup->IsPALProject() && num_samples == 1920) ||
-                      (!mPackageGroup->IsPALProject() && (num_samples == 1602 || num_samples == 1601)));
+            PA_ASSERT((mPackageGroup->Is25FPSProject() && num_samples == 1920) ||
+                      (!mPackageGroup->Is25FPSProject() && (num_samples == 1602 || num_samples == 1601)));
             PA_ASSERT(data_size <= mContentPackage->mAudioAllocatedSize);
             PA_ASSERT(!mContentPackage->mAudioSet[audio_index]);
     
@@ -418,8 +418,8 @@ void MXFOP1AWriter::EndSampleData(uint32_t mp_track_id, uint32_t num_samples)
     } else {
         int audio_index = mContentPackage->GetAudioTrackIndex(mp_track_id);
         if (audio_index >= 0) {
-            PA_ASSERT((mPackageGroup->IsPALProject() && num_samples == 1920) ||
-                      (!mPackageGroup->IsPALProject() && (num_samples == 1602 || num_samples == 1601)));
+            PA_ASSERT((mPackageGroup->Is25FPSProject() && num_samples == 1920) ||
+                      (!mPackageGroup->Is25FPSProject() && (num_samples == 1602 || num_samples == 1601)));
             PA_ASSERT(!mContentPackage->mAudioSet[audio_index]);
             PA_ASSERT(mContentPackage->mGrowingAudioSize[audio_index] > 0);
     

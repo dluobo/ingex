@@ -1,5 +1,5 @@
 /*
- * $Id: PackageGroup.cpp,v 1.6 2010/10/08 17:02:34 john_f Exp $
+ * $Id: PackageGroup.cpp,v 1.7 2010/10/12 17:44:12 john_f Exp $
  *
  * Package group
  *
@@ -44,7 +44,6 @@ using namespace prodauto;
 PackageGroup::PackageGroup()
 {
     mProjectEditRate = g_palEditRate;
-    mPALProject = true;
     mOP = OperationalPattern::OP_ATOM;
     mMaterialPackage = 0;
     mTapeSourcePackage = 0;
@@ -54,7 +53,6 @@ PackageGroup::PackageGroup()
 PackageGroup::PackageGroup(Rational edit_rate, int op)
 {
     mProjectEditRate = edit_rate;
-    mPALProject = (g_palEditRate == edit_rate);
     mOP = op;
     mMaterialPackage = 0;
     mTapeSourcePackage = 0;
@@ -393,7 +391,6 @@ void PackageGroup::SaveToFile(string filename, DatabaseCache *db_cache)
     
     writer.WriteElementStart("PackageGroup");
     writer.DeclareDefaultNamespace();
-    writer.WriteBoolAttribute("isPALProject", mPALProject);
     writer.WriteOPAttribute("op", mOP);
     writer.WriteRationalAttribute("projectEditRate", mProjectEditRate);
     
@@ -423,7 +420,6 @@ void PackageGroup::RestoreFromFile(string filename, DatabaseCache *db_cache)
     if (root_name != "PackageGroup")
         throw ProdAutoException("Root element name %s is not 'PackageGroup'\n", root_name.c_str());
 
-    mPALProject = reader.ParseBoolAttr("isPALProject");
     mOP = reader.ParseOPAttr("op");
     mProjectEditRate = reader.ParseRationalAttr("projectEditRate");
 

@@ -1,5 +1,5 @@
 /*
- * $Id: MXFOPAtomWriter.cpp,v 1.5 2010/07/21 16:29:34 john_f Exp $
+ * $Id: MXFOPAtomWriter.cpp,v 1.6 2010/10/12 17:44:12 john_f Exp $
  *
  * MXF OP-Atom writer
  *
@@ -117,12 +117,15 @@ void MXFOPAtomWriter::PrepareToWrite(PackageGroup *package_group, bool take_owne
     
     ProjectFormat project_format;
     mxfRational project_edit_rate;
-    if (package_group->IsPALProject()) {
+    convert_rational(package_group->GetProjectEditRate(), project_edit_rate);
+    if (package_group->Is25FPSProject() ||
+        package_group->Is50FPSProject()) // TODO: writeavidmxf requires updating to get rid of PAL/not-PAL limitation
+    {
         project_format = PAL_25i;
-        project_edit_rate = (mxfRational){25, 1};
-    } else {
+    }
+    else
+    {
         project_format = NTSC_30i;
-        project_edit_rate = (mxfRational){30000, 1001};
     }
     
     bool drop_frame_flag = false;
@@ -284,10 +287,7 @@ void MXFOPAtomWriter::CreatePackageDefinitions()
         mPackageDefinitions = 0;
     }
 
-    if (mPackageGroup->IsPALProject())
-        convert_rational(g_palEditRate, edit_rate);
-    else
-        convert_rational(g_ntscEditRate, edit_rate);
+    convert_rational(mPackageGroup->GetProjectEditRate(), edit_rate);
 
     CHECK(create_package_definitions(&mPackageDefinitions, &edit_rate));
 
@@ -370,6 +370,8 @@ void MXFOPAtomWriter::CreatePackageDefinitions()
                 case MaterialResolution::UNC_MXF_ATOM:
                     if (descriptor->storedWidth == 720) {
                         essence_type = UncUYVY;
+                    } else if (descriptor->storedWidth == 1280) {
+                        essence_type = Unc720pUYVY;
                     } else {
                         PA_ASSERT(descriptor->storedWidth == 1920);
                         essence_type = Unc1080iUYVY;
@@ -409,15 +411,15 @@ void MXFOPAtomWriter::CreatePackageDefinitions()
                     essence_type = AvidMJPEG;
                     break;
                 case MaterialResolution::IMX30_MXF_ATOM:
-                    essence_info.imxFrameSize = mPackageGroup->IsPALProject() ? 150000 : 125125;
+                    essence_info.imxFrameSize = mPackageGroup->Is25FPSProject() ? 150000 : 125125;
                     essence_type = IMX30;
                     break;
                 case MaterialResolution::IMX40_MXF_ATOM:
-                    essence_info.imxFrameSize = mPackageGroup->IsPALProject() ? 200000 : 166833;
+                    essence_info.imxFrameSize = mPackageGroup->Is25FPSProject() ? 200000 : 166833;
                     essence_type = IMX40;
                     break;
                 case MaterialResolution::IMX50_MXF_ATOM:
-                    essence_info.imxFrameSize = mPackageGroup->IsPALProject() ? 250000 : 208541;
+                    essence_info.imxFrameSize = mPackageGroup->Is25FPSProject() ? 250000 : 208541;
                     essence_type = IMX50;
                     break;
                 case MaterialResolution::DNX36P_MXF_ATOM:
@@ -440,6 +442,10 @@ void MXFOPAtomWriter::CreatePackageDefinitions()
                     PA_LOGTHROW(MXFWriterException, ("Unsupported resolution %d", descriptor->videoResolutionID));
                     break;
             }
+
+            PA_CHECK((essence_type == Unc720pUYVY && (mPackageGroup->Is50FPSProject() || mPackageGroup->Is59FPSProject())) ||
+                     mPackageGroup->Is25FPSProject() ||
+                     mPackageGroup->Is29FPSProject());
         } else {
             essence_info.pcmBitsPerSample = descriptor->audioQuantizationBits;
             essence_info.locked = 1;

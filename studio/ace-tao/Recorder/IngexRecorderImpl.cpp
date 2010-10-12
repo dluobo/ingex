@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorderImpl.cpp,v 1.22 2010/10/08 16:41:35 john_f Exp $
+ * $Id: IngexRecorderImpl.cpp,v 1.23 2010/10/12 17:44:12 john_f Exp $
  *
  * Servant class for Recorder.
  *
@@ -308,7 +308,7 @@ char * IngexRecorderImpl::RecordingFormat (
     }
     else
     {
-        start_tc = Ingex::Timecode(start_timecode.samples, start_timecode.edit_rate.numerator, start_timecode.edit_rate.denominator, false);
+        start_tc = Ingex::Timecode(start_timecode.samples, start_timecode.edit_rate.numerator, start_timecode.edit_rate.denominator, start_timecode.drop_frame);
         ACE_DEBUG((LM_INFO, ACE_TEXT("IngexRecorderImpl::Start(), tc %C, pre-roll %d, time %C\n"),
             start_tc.Text(), pre, DateTime::Timecode().c_str()));
     }
@@ -553,7 +553,7 @@ char * IngexRecorderImpl::RecordingFormat (
     }
     else
     {
-        stop_tc = Ingex::Timecode(mxf_stop_timecode.samples, mxf_stop_timecode.edit_rate.numerator,  mxf_stop_timecode.edit_rate.denominator, false);
+        stop_tc = Ingex::Timecode(mxf_stop_timecode.samples, mxf_stop_timecode.edit_rate.numerator,  mxf_stop_timecode.edit_rate.denominator, mxf_stop_timecode.drop_frame);
         ACE_DEBUG((LM_INFO, ACE_TEXT("IngexRecorderImpl::Stop(), tc %C, post-roll %d, time %C\n"),
             stop_tc.Text(), post_roll, DateTime::Timecode().c_str()));
     }

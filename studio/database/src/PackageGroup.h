@@ -1,5 +1,5 @@
 /*
- * $Id: PackageGroup.h,v 1.6 2010/10/08 17:02:34 john_f Exp $
+ * $Id: PackageGroup.h,v 1.7 2010/10/12 17:44:12 john_f Exp $
  *
  * Package group
  *
@@ -46,9 +46,12 @@ public:
     PackageGroup(Rational edit_rate, int op);
     virtual ~PackageGroup();
 
-    bool IsPALProject() { return mPALProject; }
     int GetOP() { return mOP; }
     Rational GetProjectEditRate() { return mProjectEditRate; }
+    bool Is25FPSProject() { return mProjectEditRate.numerator == 25 && mProjectEditRate.denominator == 1; }
+    bool Is29FPSProject() { return mProjectEditRate.numerator == 30000 && mProjectEditRate.denominator == 1001; }
+    bool Is50FPSProject() { return mProjectEditRate.numerator == 50 && mProjectEditRate.denominator == 1; }
+    bool Is59FPSProject() { return mProjectEditRate.numerator == 60000 && mProjectEditRate.denominator == 1001; }
     
     void UpdateUserComments(std::vector<UserComment> &user_comments);
     void UpdateProjectName(ProjectName project_name);
@@ -108,7 +111,6 @@ protected:
     std::string CreatePrefixFileLocation(std::string prefix, std::string file_path);
 
 protected:
-    bool mPALProject;
     int mOP;
     Rational mProjectEditRate;
     

@@ -1,5 +1,5 @@
 /*
- * $Id: MaterialResolution.cpp,v 1.7 2010/10/08 16:50:31 john_f Exp $
+ * $Id: MaterialResolution.cpp,v 1.8 2010/10/12 17:44:12 john_f Exp $
  *
  * Material resolution codes and details
  *
@@ -567,6 +567,8 @@ bool MaterialResolution::CheckVideoFormat(MaterialResolution::EnumType res,
         case Ingex::VideoRaster::NTSC_16x9:
         case Ingex::VideoRaster::SMPTE274_25I:
         case Ingex::VideoRaster::SMPTE274_29I:
+        case Ingex::VideoRaster::SMPTE296_50P:
+        case Ingex::VideoRaster::SMPTE296_59P:
             if (Ingex::PixelFormat::UYVY_422 == format)
             {
                 result = true;
