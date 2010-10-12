@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: player.cpp,v 1.26 2010/10/05 18:44:09 john_f Exp $              *
+ *   $Id: player.cpp,v 1.27 2010/10/12 17:40:37 john_f Exp $              *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -71,6 +71,7 @@ mCurrentChunkInfo(0), //to check before accessing in case it hasn't been set
 mDivertKeyPresses(false),
 mOutputType(outputType),
 mRecording(false),
+mPrematureStart(false),
 mSavedState(0) //must call SetSavedState to use this
 {
     //Controls
@@ -92,7 +93,6 @@ mSavedState(0) //must call SetSavedState to use this
     if (!dvsCardIsAvailable() && outputType != prodauto::X11_OUTPUT) mOutputType = X11_AUTO_OUTPUT;
 #endif
     setOutputType(mOutputType);
-    setNumAudioLevelMonitors(4);
     Rational unity = {1, 1};
     setPixelAspectRatio(&unity);
 
@@ -106,12 +106,18 @@ mSavedState(0) //must call SetSavedState to use this
     TrafficControl(false); //in case it has just been restarted after crashing and leaving traffic control on
 }
 
-/// Provides the saved state and loads from the saved state; player will not work properly until this is called
+/// Provides the saved state and loads from the saved state; player will not work properly until this is called.
+/// If an attempt has been made to start the player already, this will have been delayed, and is completed now.
 void Player::SetSavedState(SavedState * savedState)
 {
     mSavedState = savedState;
     SetVideoSplit(); //uses value from the saved state
+    SetApplyScaleFilter(); //uses value from the saved state
     switchAudioGroup(wxT("Yes") != mSavedState->GetStringValue(wxT("AudioFollowsVideo"), wxT("No")));
+    unsigned int meters = (unsigned int) mSavedState->GetUnsignedLongValue(wxT("NumAudioLevelMeters"), 2);
+    if (meters > 16) meters = 16;
+    setNumAudioLevelMonitors(meters);
+    if (mPrematureStart) Start();
 }
 
 /// Calls SetMode() if a button is being pressed (as opposed to released)
@@ -608,7 +614,7 @@ void Player::Load()
     }
 }
 
-/// If player is enabled, tries to load.
+/// If player is enabled and saved state exists, tries to load.
 /// Tries to select the file position previously selected by the user.  If this wasn't opened, selects the only file open or a split view otherwise.
 /// This method is the same as Load() except that it does not manipulate the polling timer or change the playing state.
 /// @return True if all files were opened.
@@ -617,100 +623,105 @@ bool Player::Start()
 //std::cerr << "Player Start" << std::endl;
     bool allFilesOpen = false;
     if (mEnabled) {
-        mOpened.clear();
-        mAtChunkStart = false; //set when a frame is displayed
-        mAtChunkEnd = false; //set when a frame is displayed
-        std::vector<PlayerInput> inputs;
-        for (size_t i = 0; i < mFileNames.size(); i++) {
-            PlayerInput input;
-            input.name = mFileNames[i];
-            input.type = mInputType;
-            inputs.push_back(input);
-        }
-        int64_t frameOffset;
-        switch (mMode) {
-            case RECORDINGS:
-                if (LOAD_PREV_CHUNK == mChunkLinking) {
-                    frameOffset = -1; //end
-                }
-                else {
-                    frameOffset = mRecordingModeFrameOffset;
-                }
-                break;
-            case FILES:
-                frameOffset = mFileModeFrameOffset;
-                break;
-            default:
-                frameOffset = 0;
-        }
-        SetVideoSplit(false); //don't call Start()
-#ifndef DISABLE_SHARED_MEM_SOURCE
-        mOK = start(inputs, mOpened, SHM_INPUT != mInputType && LOAD_FIRST_CHUNK != mChunkLinking && (PlayerState::PAUSED == mState || PlayerState::STOPPED == mState), frameOffset > -1 ? frameOffset : 0); //play forwards or paused
-#else
-        mOK = start(inputs, mOpened, LOAD_FIRST_CHUNK != mChunkLinking && (PlayerState::PAUSED == mState || PlayerState::STOPPED == mState), frameOffset > -1 ? frameOffset : 0); //play forwards or paused
-#endif
-        if (-1 == frameOffset) seek(0, SEEK_END, FRAME_PLAY_UNIT);
-        int trackToSelect = (1 == mFileNames.size() ? 1 : 0); //display split view by default unless only one file
-        if (mOK) {
-            if (RECORDINGS == mMode && mCurrentChunkInfo) {
-                for (size_t i = 0; i < mCurrentChunkInfo->GetCuePointFrames().size(); i++) {
-                    markPosition(mCurrentChunkInfo->GetCuePointFrames()[i] - mCurrentChunkInfo->GetStartPosition(), 0); //so that the pointer changes colour at each cue point
-                }
-            }
-#ifndef DISABLE_SHARED_MEM_SOURCE
-            if (ETOE != mMode) {
-#endif
-                //(re)load stored cue points
-                if (STATE_CHANGE != mChunkLinking && mSpeed) { //latter a sanity check
-                    playSpeed(mSpeed);
-                }
-                else if (PlayerState::PLAYING_BACKWARDS == mState) {
-                    playSpeed(-1);
-                }
-                SetOSDType(mOSDType);
-#ifndef DISABLE_SHARED_MEM_SOURCE
-            }
-            else {
-                showProgressBar(false); //irrelevant
-//              setOSDTimecode(-1, SOURCE_TIMECODE_TYPE, LTC_SOURCE_TIMECODE_SUBTYPE); //timecode from shared memory
-                if (mSpeed) {
-                    mSpeed = 0;
-                    TrafficControl(false); //not reading from disk
-                }
-            }
-#endif
-            mChunkLinking = STATE_CHANGE; //next recording loaded is not linked to this one
-            // work out which track to select
-            unsigned int nFilesOpen = 0;
-            int aWorkingTrack = 0; //initialisation prevents compiler warning
-            for (size_t i = 0; i < mOpened.size(); i++) {
-                if (mOpened[i]) {
-                    nFilesOpen++;
-                    aWorkingTrack = i + 1; // +1 because track 0 is split view
-                }
-            }
-            if (mDesiredTrackName.size()) { //want something other than split view
-                size_t i;
-                for (i = 0; i < mTrackNames.size(); i++) {
-                    if (mTrackNames[i] == mDesiredTrackName && mOpened[i]) { //located the desired track and it's available
-                        trackToSelect = i + 1; // + 1 to offset for split view
-                        break;
-                    }
-                }
-                if (mTrackNames.size() == i && 1 == nFilesOpen) { //can't use the desired track and only one file open
-                    //display the only track, full screen
-                    trackToSelect = aWorkingTrack;
-                }
-            }
-            SelectTrack(trackToSelect, false);
-            allFilesOpen = mOpened.size() == nFilesOpen;
-            muteAudio(mMuted);
+        if (!mSavedState) { //have not yet set the player up with parameters from the saved state
+            mPrematureStart = true; //start once we get the saved state
         }
         else {
-            SetWindowName(wxT("Ingex Player - no files"));
+            mOpened.clear();
+            mAtChunkStart = false; //set when a frame is displayed
+            mAtChunkEnd = false; //set when a frame is displayed
+            std::vector<PlayerInput> inputs;
+            for (size_t i = 0; i < mFileNames.size(); i++) {
+                PlayerInput input;
+                input.name = mFileNames[i];
+                input.type = mInputType;
+                inputs.push_back(input);
+            }
+            int64_t frameOffset;
+            switch (mMode) {
+                case RECORDINGS:
+                    if (LOAD_PREV_CHUNK == mChunkLinking) {
+                        frameOffset = -1; //end
+                    }
+                    else {
+                        frameOffset = mRecordingModeFrameOffset;
+                    }
+                    break;
+                case FILES:
+                    frameOffset = mFileModeFrameOffset;
+                    break;
+                default:
+                    frameOffset = 0;
+            }
+            SetVideoSplit(false); //need to call this here as the video split type depends on the number of files
+#ifndef DISABLE_SHARED_MEM_SOURCE
+            mOK = start(inputs, mOpened, SHM_INPUT != mInputType && LOAD_FIRST_CHUNK != mChunkLinking && (PlayerState::PAUSED == mState || PlayerState::STOPPED == mState), frameOffset > -1 ? frameOffset : 0); //play forwards or paused
+#else
+            mOK = start(inputs, mOpened, LOAD_FIRST_CHUNK != mChunkLinking && (PlayerState::PAUSED == mState || PlayerState::STOPPED == mState), frameOffset > -1 ? frameOffset : 0); //play forwards or paused
+#endif
+            if (-1 == frameOffset) seek(0, SEEK_END, FRAME_PLAY_UNIT);
+            int trackToSelect = (1 == mFileNames.size() ? 1 : 0); //display split view by default unless only one file
+            if (mOK) {
+                if (RECORDINGS == mMode && mCurrentChunkInfo) {
+                    for (size_t i = 0; i < mCurrentChunkInfo->GetCuePointFrames().size(); i++) {
+                        markPosition(mCurrentChunkInfo->GetCuePointFrames()[i] - mCurrentChunkInfo->GetStartPosition(), 0); //so that the pointer changes colour at each cue point
+                    }
+                }
+#ifndef DISABLE_SHARED_MEM_SOURCE
+                if (ETOE != mMode) {
+#endif
+                    //(re)load stored cue points
+                    if (STATE_CHANGE != mChunkLinking && mSpeed) { //latter a sanity check
+                        playSpeed(mSpeed);
+                    }
+                    else if (PlayerState::PLAYING_BACKWARDS == mState) {
+                        playSpeed(-1);
+                    }
+                    SetOSDType(mOSDType);
+#ifndef DISABLE_SHARED_MEM_SOURCE
+                }
+                else {
+                    showProgressBar(false); //irrelevant
+//                  setOSDTimecode(-1, SOURCE_TIMECODE_TYPE, LTC_SOURCE_TIMECODE_SUBTYPE); //timecode from shared memory
+                    if (mSpeed) {
+                        mSpeed = 0;
+                        TrafficControl(false); //not reading from disk
+                    }
+                }
+#endif
+                mChunkLinking = STATE_CHANGE; //next recording loaded is not linked to this one
+                // work out which track to select
+                unsigned int nFilesOpen = 0;
+                int aWorkingTrack = 0; //initialisation prevents compiler warning
+                for (size_t i = 0; i < mOpened.size(); i++) {
+                    if (mOpened[i]) {
+                        nFilesOpen++;
+                        aWorkingTrack = i + 1; // +1 because track 0 is split view
+                    }
+                }
+                if (mDesiredTrackName.size()) { //want something other than split view
+                    size_t i;
+                    for (i = 0; i < mTrackNames.size(); i++) {
+                        if (mTrackNames[i] == mDesiredTrackName && mOpened[i]) { //located the desired track and it's available
+                            trackToSelect = i + 1; // + 1 to offset for split view
+                            break;
+                        }
+                    }
+                    if (mTrackNames.size() == i && 1 == nFilesOpen) { //can't use the desired track and only one file open
+                        //display the only track, full screen
+                        trackToSelect = aWorkingTrack;
+                    }
+                }
+                SelectTrack(trackToSelect, false);
+                allFilesOpen = mOpened.size() == nFilesOpen;
+                muteAudio(mMuted);
+            }
+            else {
+                SetWindowName(wxT("Ingex Player - no files"));
+            }
+            //tell the track selection list the situation
+            if (mTrackSelector) mTrackSelector->EnableAndSelectTracks(&mOpened, trackToSelect);
         }
-        //tell the track selection list the situation
-        if (mTrackSelector) mTrackSelector->EnableAndSelectTracks(&mOpened, trackToSelect);
     }
     return allFilesOpen;
 }
@@ -918,7 +929,6 @@ void Player::Reset()
 {
 //std::cerr << "Player Reset" << std::endl;
     mFilePollTimer->Stop();
-//  mFileNames.clear(); //to indicate that nothing's loaded if player is disabled
     mOK = reset();
     if (mOK) {
         SetWindowName(wxT("Ingex Player - no files"));
@@ -955,7 +965,7 @@ void Player::JumpToFrame(const int64_t frame)
 /// SOURCE_TIMECODE : timecode read from file
 void Player::SetOSDType(const PlayerOSDtype type)
 {
-//std::cerr << "Player SetOSD" << std::endl;
+//std::cerr << "Player SetOSD " << type << std::endl;
     mOSDType = type;
     switch (mOSDType) {
         case OSD_OFF:
@@ -987,10 +997,8 @@ void Player::SetOutputType(const PlayerOutputType outputType)
 //std::cerr << "Player SetOutputType" << std::endl;
     mOutputType = outputType;
     setOutputType(mOutputType);
-    if (mOK) {
-        //above call has stopped the player so start it again
-        Start();
-    }
+    //above call has stopped the player so start it again
+    if (mOK) Start();
 }
 
 #ifdef HAVE_DVS
@@ -1167,7 +1175,7 @@ void Player::OnFilePollTimer(wxTimerEvent& WXUNUSED(event))
             //all the files are there - even if the player is unhappy there's nothing else we can do
             mFilePollTimer->Stop();
         }
-    }   
+    }
 }
 
 /// Responds to successful socket connection.
@@ -1320,8 +1328,29 @@ bool Player::IsSplitLimitedToQuad()
     return mSavedState && wxT("Yes") == mSavedState->GetStringValue(wxT("LimitSplitToQuad"), wxT("No"));
 }
 
-/// Sets the video split type and the track selector tooltip depending on how many tracks are available and whether a nonasplit is allowed
-/// @param restart Restart player if necessary - change does not take effect until player is restarted.
+/// Disables horizontal and vertical filtering of scaled images in split views (to save processing power).
+/// SetSavedState() must have been called for the value to be remembered and not to revert to the stored value when it is.
+/// @param disable True to disable filtering.
+void Player::DisableScalingFiltering(const bool disable)
+{
+    //save the change
+    if (mSavedState) {
+        new wxXmlNode(mSavedState->GetTopLevelNode(wxT("DisableScalingFiltering"), true, true), wxXML_TEXT_NODE, wxEmptyString, disable ? wxT("Yes") : wxT("No")); //remove existing node if present
+        mSavedState->Save();
+    }
+    //reflect the change
+    SetApplyScaleFilter();
+}
+
+/// Indicates if scaling filtering is enabled.
+/// SetSavedState() must have been called.
+bool Player::IsScalingFilteringDisabled()
+{
+    return mSavedState && wxT("Yes") == mSavedState->GetStringValue(wxT("DisableScalingFiltering"), wxT("No"));
+}
+
+/// Sets the video split type and the track selector tooltip depending on how many tracks are available and whether a nonasplit is allowed.
+/// @param restart Restarts player if necessary - change does not take effect until player is restarted.
 void Player::SetVideoSplit(const bool restart)
 {
     bool limited = mSavedState && wxT("Yes") == mSavedState->GetStringValue(wxT("LimitSplitToQuad"), wxT("No"));
@@ -1330,9 +1359,17 @@ void Player::SetVideoSplit(const bool restart)
     if (
      mOK
      && restart //allowed to restart
-     && (mTrackSelector && 0 == mTrackSelector->GetSelectedSource()) //showing the split view
-     && mNVideoTracks > 4 //will display quad split whether limited or not if <= 4 video tracks, so only useful to restart if more than this
+     && mNVideoTracks > 4 //will display quad split whether limited or not if <= 4 video tracks, so only useful to restart if more than this.  (If split is not being shown, still need to restart or change won't take effect the next time split is shown)
     ) Start();
+}
+
+/// Switches on and off horizontal and vertical filtering of scaled images.
+/// Restarts player for change to take effect.
+void Player::SetApplyScaleFilter()
+{
+    bool disabled = mSavedState && wxT("Yes") == mSavedState->GetStringValue(wxT("DisableScalingFiltering"), wxT("No"));
+    setApplyScaleFilter(!disabled); //this doesn't take effect until the player is reloaded
+    if (mOK) Start();
 }
 
 /// Sets audio to follow video or stick to the first audio files
@@ -1352,6 +1389,29 @@ void Player::AudioFollowsVideo(const bool follows)
 bool Player::IsAudioFollowingVideo()
 {
     return mSavedState && wxT("Yes") == mSavedState->GetStringValue(wxT("AudioFollowsVideo"), wxT("No"));
+}
+
+/// Sets and saves the number of audio level meters displayed in the player window if OSD is on
+void Player::SetNumLevelMeters(const unsigned int number)
+{
+//std::cerr << "Player SetNumLevelMeters " << number << std::endl;
+    if (number <= 16) {
+        //save the change
+        if (mSavedState) new wxXmlNode(mSavedState->GetTopLevelNode(wxT("NumAudioLevelMeters"), true, true), wxXML_TEXT_NODE, wxEmptyString, wxString::Format(wxT("%d"), number)); //remove existing node if present
+        mSavedState->Save();
+        //reflect the change
+        setNumAudioLevelMonitors(number);
+        if (mOK) Start(); //doesn't take effect until player restarted
+    }
+}
+
+/// Returns the number of audio level meters displayed in the player window if OSD is on
+unsigned int Player::GetNumLevelMeters()
+{
+    unsigned int number = 2;
+    if (mSavedState) number = (unsigned int) mSavedState->GetUnsignedLongValue(wxT("NumAudioLevelMeters"), 2);
+    if (number > 16) number = 16;
+    return number;
 }
 
 

@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: ingexgui.cpp,v 1.35 2010/10/05 10:49:02 john_f Exp $           *
+ *   $Id: ingexgui.cpp,v 1.36 2010/10/12 17:40:37 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -108,8 +108,14 @@ BEGIN_EVENT_TABLE( IngexguiFrame, wxFrame )
     EVT_MENU( MENU_PlayerAbsoluteTimecode, IngexguiFrame::OnPlayerCommand )
     EVT_MENU( MENU_PlayerRelativeTimecode, IngexguiFrame::OnPlayerCommand )
     EVT_MENU( MENU_PlayerNoOSD, IngexguiFrame::OnPlayerCommand )
+    EVT_MENU( MENU_PlayerNoLevelMeters, IngexguiFrame::OnPlayerCommand )
+    EVT_MENU( MENU_PlayerTwoLevelMeters, IngexguiFrame::OnPlayerCommand )
+    EVT_MENU( MENU_PlayerFourLevelMeters, IngexguiFrame::OnPlayerCommand )
+    EVT_MENU( MENU_PlayerEightLevelMeters, IngexguiFrame::OnPlayerCommand )
+    EVT_MENU( MENU_PlayerSixteenLevelMeters, IngexguiFrame::OnPlayerCommand )
     EVT_MENU( MENU_PlayerAudioFollowsVideo, IngexguiFrame::OnPlayerCommand )
     EVT_MENU( MENU_PlayerLimitSplitToQuad, IngexguiFrame::OnPlayerCommand )
+    EVT_MENU( MENU_PlayerDisableScalingFiltering, IngexguiFrame::OnPlayerCommand )
     EVT_MENU( MENU_PlayerAccelOutput, IngexguiFrame::OnPlayerCommand )
 #ifdef HAVE_DVS
     EVT_MENU( MENU_PlayerEnableSDIOSD, IngexguiFrame::OnPlayerCommand )
@@ -281,13 +287,13 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
     if (!parser.Found(wxT("p"))) {
         wxMenu * menuPlayer = new wxMenu;
         menuPlayer->AppendCheckItem(MENU_PlayerDisable, wxT("Disable player"));
-    
+
         wxMenu * menuPlayerOpen = new wxMenu;
         menuPlayerOpen->Append(MENU_OpenRec, wxT("Open recording..."));
         menuPlayerOpen->Append(MENU_OpenMOV, wxT("Open MOV file..."));
         menuPlayerOpen->Append(MENU_OpenMXF, wxT("Open MXF file(s)..."));
         menuPlayer->Append(MENU_PlayerOpen, wxT("Open"), menuPlayerOpen);
-    
+
         wxMenu * menuPlayerType = new wxMenu;
 #ifdef HAVE_DVS
         menuPlayerType->AppendRadioItem(MENU_PlayerExtAccelOutput, wxT("External monitor and computer screen (accelerated if possible)"));
@@ -299,15 +305,24 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
 #endif
         menuPlayerType->AppendRadioItem(MENU_PlayerUnaccelOutput, wxT("Computer screen unaccelerated (use if accelerated fails)"));
         menuPlayer->Append(MENU_PlayerType, wxT("Player type"), menuPlayerType);
-    
+
         wxMenu * menuPlayerOSD = new wxMenu;
         menuPlayerOSD->AppendRadioItem(MENU_PlayerAbsoluteTimecode, wxT("&Absolute timecode"));
         menuPlayerOSD->AppendRadioItem(MENU_PlayerRelativeTimecode, wxT("&Relative timecode"));
         menuPlayerOSD->AppendRadioItem(MENU_PlayerNoOSD, wxT("&OSD Off"));
-        menuPlayer->Append(MENU_PlayerOSD, wxT("Player On-Screen Display"), menuPlayerOSD);
-    
+        menuPlayer->Append(wxID_ANY, wxT("Player On-Screen Display"), menuPlayerOSD);
+
+        wxMenu * menuPlayerNumLevelMeters = new wxMenu;
+        menuPlayerNumLevelMeters->AppendRadioItem(MENU_PlayerNoLevelMeters, wxT("&None"));
+        menuPlayerNumLevelMeters->AppendRadioItem(MENU_PlayerTwoLevelMeters, wxT("&Two"));
+        menuPlayerNumLevelMeters->AppendRadioItem(MENU_PlayerFourLevelMeters, wxT("&Four"));
+        menuPlayerNumLevelMeters->AppendRadioItem(MENU_PlayerEightLevelMeters, wxT("&Eight"));
+        menuPlayerNumLevelMeters->AppendRadioItem(MENU_PlayerSixteenLevelMeters, wxT("&Sixteen"));
+        menuPlayer->Append(wxID_ANY, wxT("Maximum number of audio level meters"), menuPlayerNumLevelMeters);
+
         menuPlayer->AppendCheckItem(MENU_PlayerAudioFollowsVideo, wxT("Audio corresponds to video source displayed"));
         menuPlayer->AppendCheckItem(MENU_PlayerLimitSplitToQuad, wxT("Limit split view to quad split"));
+        menuPlayer->AppendCheckItem(MENU_PlayerDisableScalingFiltering, wxT("Disable scaling filters in split view (saves processing power)"));
 #ifdef HAVE_DVS
         menuPlayer->AppendCheckItem(MENU_PlayerEnableSDIOSD, wxT("Enable external monitor On-screen Display"));
 #endif
@@ -497,7 +512,7 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
     mSavedState = new SavedState(this, SAVED_STATE_FILENAME);
     mTree->SetSavedState(mSavedState);
     mRecorderGroup->SetSavedState(mSavedState);
-    mPlayer->SetSavedState(mSavedState);
+    if (mPlayer) mPlayer->SetSavedState(mSavedState);
 
     //project name
     wxString currentProject = SetProjectDlg::GetCurrentProjectName(mSavedState);
@@ -1410,11 +1425,26 @@ void IngexguiFrame::OnPlayerCommand(wxCommandEvent & event)
             case MENU_PlayerNoOSD:
                 mPlayer->SetOSDType(OSD_OFF);
                 break;
+            case MENU_PlayerNoLevelMeters:
+                mPlayer->SetNumLevelMeters(0);
+                break;
+            case MENU_PlayerTwoLevelMeters:
+                mPlayer->SetNumLevelMeters(2);
+                break;
+            case MENU_PlayerFourLevelMeters:
+                mPlayer->SetNumLevelMeters(4);
+                break;
+            case MENU_PlayerEightLevelMeters:
+                mPlayer->SetNumLevelMeters(8);
+                break;
             case MENU_PlayerAudioFollowsVideo:
                 mPlayer->AudioFollowsVideo(event.IsChecked());
                 break;
             case MENU_PlayerLimitSplitToQuad:
                 mPlayer->LimitSplitToQuad(event.IsChecked());
+                break;
+            case MENU_PlayerDisableScalingFiltering:
+                mPlayer->DisableScalingFiltering(event.IsChecked());
                 break;
         }
     }
@@ -1815,11 +1845,29 @@ void IngexguiFrame::OnUpdateUI(wxUpdateUIEvent& event)
         case MENU_PlayerNoOSD:
             event.Check(mPlayer && OSD_OFF == mPlayer->GetOSDType());
             break;
+        case MENU_PlayerNoLevelMeters:
+            event.Check(mPlayer && 0 == mPlayer->GetNumLevelMeters());
+            break;
+        case MENU_PlayerTwoLevelMeters:
+            event.Check(mPlayer && 2 == mPlayer->GetNumLevelMeters());
+            break;
+        case MENU_PlayerFourLevelMeters:
+            event.Check(mPlayer && 4 == mPlayer->GetNumLevelMeters());
+            break;
+        case MENU_PlayerEightLevelMeters:
+            event.Check(mPlayer && 8 == mPlayer->GetNumLevelMeters());
+            break;
+        case MENU_PlayerSixteenLevelMeters:
+            event.Check(mPlayer && 16 == mPlayer->GetNumLevelMeters());
+            break;
         case MENU_PlayerAudioFollowsVideo:
             event.Check(mPlayer && mPlayer->IsAudioFollowingVideo());
             break;
         case MENU_PlayerLimitSplitToQuad:
             event.Check(mPlayer && mPlayer->IsSplitLimitedToQuad());
+            break;
+        case MENU_PlayerDisableScalingFiltering:
+            event.Check(mPlayer && mPlayer->IsScalingFilteringDisabled());
             break;
         default:
             break;

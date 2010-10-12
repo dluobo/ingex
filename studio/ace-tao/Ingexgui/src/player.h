@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: player.h,v 1.18 2010/10/05 18:44:09 john_f Exp $                *
+ *   $Id: player.h,v 1.19 2010/10/12 17:40:37 john_f Exp $                *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -156,10 +156,12 @@ class Player : public wxPanel, prodauto::LocalIngexPlayer
         bool AtMaxForwardSpeed();
         bool AtMaxReverseSpeed();
         void MuteAudio(const bool);
-        void AudioFollowsVideo(const bool);
+        void AudioFollowsVideo(const bool = true);
         bool IsAudioFollowingVideo();
-        void LimitSplitToQuad(const bool);
+        void LimitSplitToQuad(const bool = true);
         bool IsSplitLimitedToQuad();
+        void DisableScalingFiltering(const bool = true);
+        bool IsScalingFilteringDisabled();
         unsigned long GetLatestFrameDisplayed() { return mPreviousFrameDisplayed; };
         std::string GetCurrentFileName();
         const wxString GetProjectName();
@@ -176,6 +178,8 @@ class Player : public wxPanel, prodauto::LocalIngexPlayer
         bool IsMuted() { return mMuted; };
         prodauto::PlayerOutputType GetOutputType() { return mOutputType; }; //don't use getOutputType as doesn't give right answer when player not open
         bool IsShowingSplit();
+        void SetNumLevelMeters(const unsigned int);
+        unsigned int GetNumLevelMeters();
     private:
         void OnModeButton(wxCommandEvent&);
         void OnUpdateUI(wxUpdateUIEvent&);
@@ -196,6 +200,7 @@ class Player : public wxPanel, prodauto::LocalIngexPlayer
         bool HasChunkAfter();
         void LoadRecording();
         void SetVideoSplit(const bool = true);
+        void SetApplyScaleFilter();
         Listener * mListener;
         prodauto::IngexPlayerListenerRegistry mListenerRegistry;
         DragButtonList* mTrackSelector;
@@ -236,6 +241,7 @@ class Player : public wxPanel, prodauto::LocalIngexPlayer
         prodauto::PlayerOutputType mOutputType;
         unsigned int mNVideoTracks;
         bool mRecording;
+        bool mPrematureStart;
         SavedState * mSavedState;
     DECLARE_EVENT_TABLE()
 };

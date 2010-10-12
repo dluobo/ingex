@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: ingexgui.h,v 1.22 2010/10/05 10:49:02 john_f Exp $              *
+ *   $Id: ingexgui.h,v 1.23 2010/10/12 17:40:37 john_f Exp $              *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -138,13 +138,18 @@ class IngexguiFrame : public wxFrame
         MENU_PlayerExtUnaccelOutput,
 #endif
         MENU_PlayerUnaccelOutput,
-        MENU_PlayerOSD,
         MENU_PlayerAbsoluteTimecode,
         MENU_PlayerRelativeTimecode,
         MENU_PlayerNoOSD,
+        MENU_PlayerNoLevelMeters,
+        MENU_PlayerTwoLevelMeters,
+        MENU_PlayerFourLevelMeters,
+        MENU_PlayerEightLevelMeters,
+        MENU_PlayerSixteenLevelMeters,
         MENU_Mute,
         MENU_PlayerAudioFollowsVideo,
         MENU_PlayerLimitSplitToQuad,
+        MENU_PlayerDisableScalingFiltering,
         MENU_Chunking,
         MENU_TestMode,
         MENU_PlayRecordings,
