@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.cpp,v 1.15 2010/10/08 16:43:40 john_f Exp $
+ * $Id: dvs_sdi.cpp,v 1.16 2010/10/12 17:43:04 john_f Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -239,7 +239,14 @@ Ingex::Timecode timecode_from_dvs_bits(int bits, int fps_num, int fps_den)
         break;
     }
 
-    //fprintf(stderr, "%08x %02d:%02d:%02d:%02d (%d) %s\n", bits, hr, min, sec, fm, frame_of_pair, df ? "DF" : "NDF");
+    if (0)
+    {
+        Ingex::Timecode tc1(hr, min, sec, fm, frame_of_pair, fmt);
+        Ingex::Timecode tc2(tc1.FramesSinceMidnight(), fmt);
+        fprintf(stderr, "%08x %02d:%02d:%02d:%02d (%d) %s\n", bits, hr, min, sec, fm, frame_of_pair, df ? "DF" : "NDF");
+        fprintf(stderr, "%8s %s %d %s\n", "as tc1", tc1.Text(), tc1.FramesSinceMidnight(), tc1.FormatName());
+        fprintf(stderr, "%8s %s %d %s\n", "as tc2", tc2.Text(), tc2.FramesSinceMidnight(), tc2.FormatName());
+    }
 
     return Ingex::Timecode(hr, min, sec, fm, frame_of_pair, fmt);
 }
