@@ -1,5 +1,5 @@
 /*
- * $Id: mxf_source.c,v 1.20 2010/10/12 17:44:12 john_f Exp $
+ * $Id: mxf_source.c,v 1.21 2010/10/13 12:34:32 philipn Exp $
  *
  *
  *
@@ -1328,11 +1328,18 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
                 outputStream->streamInfo.singleField = 1;
             }
             else if (mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(DVBased_100_1080_50_I_ClipWrapped)) ||
-                mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(DVBased_100_720_50_P_ClipWrapped)) ||
-                mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(DVBased_100_1080_50_I_FrameWrapped)) ||
-                mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(DVBased_100_720_50_P_FrameWrapped)))
+                     mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(DVBased_100_1080_50_I_FrameWrapped)) ||
+                     mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(DVBased_100_1080_60_I_ClipWrapped)) ||
+                     mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(DVBased_100_1080_60_I_FrameWrapped)))
             {
-                outputStream->streamInfo.format = DV100_FORMAT;
+                outputStream->streamInfo.format = DV100_1080I_FORMAT;
+            }
+            else if (mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(DVBased_100_720_50_P_ClipWrapped)) ||
+                     mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(DVBased_100_720_50_P_FrameWrapped)) ||
+                     mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(DVBased_100_720_60_P_ClipWrapped)) ||
+                     mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(DVBased_100_720_60_P_FrameWrapped)))
+            {
+                outputStream->streamInfo.format = DV100_720P_FORMAT;
             }
             else if (mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(DNxHD1080i120ClipWrapped)) ||
                 mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(DNxHD1080i185ClipWrapped)) ||

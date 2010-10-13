@@ -1,5 +1,5 @@
 /*
- * $Id: dv_stream_connect.c,v 1.9 2010/07/21 16:29:34 john_f Exp $
+ * $Id: dv_stream_connect.c,v 1.10 2010/10/13 12:34:32 philipn Exp $
  *
  *
  *
@@ -344,7 +344,7 @@ static int decode_and_send_const(DVDecodeStreamConnect* connect, const unsigned 
                 connect->decoder->decFrame, connect->sinkBuffer);
         }
     }
-    else /* DV50_FORMAT or DV100_FORMAT */
+    else /* DV50_FORMAT/DV100_1080I_FORMAT/DV100_720P_FORMAT */
     {
         if (connect->decodedFormat == UYVY_FORMAT)
         {
@@ -731,7 +731,8 @@ int dv_connect_accept(MediaSink* sink, const StreamInfo* streamInfo)
         (streamInfo->format != DV25_YUV420_FORMAT &&
             streamInfo->format != DV25_YUV411_FORMAT &&
             streamInfo->format != DV50_FORMAT &&
-            streamInfo->format != DV100_FORMAT))
+            streamInfo->format != DV100_1080I_FORMAT &&
+            streamInfo->format != DV100_720P_FORMAT))
     {
         return 0;
     }
@@ -757,7 +758,7 @@ int dv_connect_accept(MediaSink* sink, const StreamInfo* streamInfo)
 
         result = msk_accept_stream(sink, &decodedStreamInfo);
     }
-    else /* DV100_FORMAT */
+    else /* DV100_1080I_FORMAT/DV100_720P_FORMAT */
     {
         decodedStreamInfo = *streamInfo;
         decodedStreamInfo.format = YUV422_FORMAT;
@@ -807,10 +808,11 @@ int create_dv_connect(MediaSink* sink, int sinkStreamId, int sourceStreamId,
 
         result = msk_accept_stream(sink, &decodedStreamInfo);
     }
-    else /* DV100_FORMAT */
+    else /* DV100_1080I_FORMAT/DV100_720P_FORMAT */
     {
         decodedStreamInfo = *streamInfo;
         decodedStreamInfo.format = YUV422_FORMAT;
+        /* set aspect ratio to 4/3 to reverse the scaling from 1920->1440 and 1280->960 */
         decodedStreamInfo.aspectRatio.num = 4;
         decodedStreamInfo.aspectRatio.den = 3;
 
@@ -853,9 +855,13 @@ int create_dv_connect(MediaSink* sink, int sinkStreamId, int sourceStreamId,
     {
         newConnect->dvDataSize = (stream_is_pal_frame_rate(streamInfo) ? 288000 : 240000);
     }
-    else /* streamInfo->format == DV100_FORMAT */
+    else if (streamInfo->format == DV100_1080I_FORMAT)
     {
-        newConnect->dvDataSize = 576000;
+        newConnect->dvDataSize = (stream_is_pal_frame_rate(streamInfo) ? 576000 : 480000);
+    }
+    else /* DV100_720P_FORMAT */
+    {
+        newConnect->dvDataSize = (streamInfo->frameRate.num == 50 ? 288000 : 240000);
     }
     if ((newConnect->dvData = (unsigned char*)calloc(
         newConnect->dvDataSize + FF_INPUT_BUFFER_PADDING_SIZE /* FFMPEG for some reason needs the extra space */,

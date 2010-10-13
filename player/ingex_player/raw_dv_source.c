@@ -1,5 +1,5 @@
 /*
- * $Id: raw_dv_source.c,v 1.5 2009/03/25 13:53:18 john_f Exp $
+ * $Id: raw_dv_source.c,v 1.6 2010/10/13 12:34:32 philipn Exp $
  *
  *
  *
@@ -45,10 +45,11 @@
 typedef struct
 {
     int channelSequenceLength;
-    int is625;
+    int is50Hz;
     int isIEC;
     int is4By3; /* else 16:9 */
-    int mbps; /* 25Mbps, 50Mbps */
+    int mbps; /* 25Mbps, 50Mbps, 100Mbps */
+    int is1080i; /* else 720p */
 } SequenceInfo;
 
 typedef struct
@@ -109,12 +110,12 @@ static int read_dv_sequence(FILE* dvFile, SequenceInfo* info)
     if (byte & 0x80)
     {
         info->channelSequenceLength = 12;
-        info->is625 = 1;
+        info->is50Hz = 1;
     }
     else
     {
         info->channelSequenceLength = 10;
-        info->is625 = 0;
+        info->is50Hz = 0;
     }
 
 
@@ -152,14 +153,15 @@ static int read_dv_sequence(FILE* dvFile, SequenceInfo* info)
     {
         info->mbps = 50;
     }
-    else if (byte == 0x14 || byte == 0x18)
+    else if (byte == 0x14)
     {
         info->mbps = 100;
+        info->is1080i = 1;
     }
-    else if (byte == 0x15)
+    else if (byte == 0x18)
     {
-        ml_log_error("DV 100 at 60Hz not yet supported\n");
-        return 5;
+        info->mbps = 100;
+        info->is1080i = 0;
     }
     else
     {
@@ -184,7 +186,7 @@ static int get_dv_stream_info(RawDVSource* source)
     source->streamInfo.type = PICTURE_STREAM_TYPE;
     source->streamInfo.singleField = 0;
 
-    if (info.is625)
+    if (info.is50Hz)
     {
         source->streamInfo.frameRate.num = 25;
         source->streamInfo.frameRate.den = 1;
@@ -214,23 +216,36 @@ static int get_dv_stream_info(RawDVSource* source)
 
     if (info.mbps == 25)
     {
-        source->streamInfo.format = (info.isIEC && info.is625) ? DV25_YUV420_FORMAT : DV25_YUV411_FORMAT;
-        source->frameSize = (info.is625 ? 144000 : 120000);
+        source->streamInfo.format = (info.isIEC && info.is50Hz) ? DV25_YUV420_FORMAT : DV25_YUV411_FORMAT;
+        source->frameSize = (info.is50Hz ? 144000 : 120000);
     }
     else if (info.mbps == 50)
     {
         source->streamInfo.format = DV50_FORMAT;
-        source->frameSize = (info.is625 ? 288000 : 240000);
+        source->frameSize = (info.is50Hz ? 288000 : 240000);
     }
     else if (info.mbps == 100)
     {
-        /* TODO - support 720p DV100 which would use 288000 frameSize and different WxH */
-        source->streamInfo.format = DV100_FORMAT;
-        source->streamInfo.width = 1440;
-        source->streamInfo.height = 1080;
-        source->streamInfo.aspectRatio.num = 16;
-        source->streamInfo.aspectRatio.den = 9;
-        source->frameSize = 576000;
+        if (info.is1080i)
+        {
+            source->streamInfo.format = DV100_1080I_FORMAT;
+            source->streamInfo.width = 1440;
+            source->streamInfo.height = 1080;
+            source->streamInfo.aspectRatio.num = 16;
+            source->streamInfo.aspectRatio.den = 9;
+            source->frameSize = (info.is50Hz ? 576000 : 480000);
+        }
+        else
+        {
+            source->streamInfo.format = DV100_720P_FORMAT;
+            source->streamInfo.frameRate.num = 50;
+            source->streamInfo.frameRate.den = 1;
+            source->streamInfo.width = 960;
+            source->streamInfo.height = 720;
+            source->streamInfo.aspectRatio.num = 16;
+            source->streamInfo.aspectRatio.den = 9;
+            source->frameSize = (info.is50Hz ? 288000 : 240000);
+        }
     }
 
 
@@ -570,8 +585,11 @@ int rds_open(const char* filename, MediaSource** source)
         case DV50_FORMAT:
             CHK_OFAIL(add_known_source_info(&newSource->streamInfo, SRC_INFO_FILE_TYPE, "DV 50"));
             break;
-        case DV100_FORMAT:
-            CHK_OFAIL(add_known_source_info(&newSource->streamInfo, SRC_INFO_FILE_TYPE, "DV 100"));
+        case DV100_1080I_FORMAT:
+            CHK_OFAIL(add_known_source_info(&newSource->streamInfo, SRC_INFO_FILE_TYPE, "DV 100 1080i"));
+            break;
+        case DV100_720P_FORMAT:
+            CHK_OFAIL(add_known_source_info(&newSource->streamInfo, SRC_INFO_FILE_TYPE, "DV 100 720p"));
             break;
         default:
             goto fail;
