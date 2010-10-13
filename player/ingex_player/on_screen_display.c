@@ -1,5 +1,5 @@
 /*
- * $Id: on_screen_display.c,v 1.18 2010/10/08 16:46:58 john_f Exp $
+ * $Id: on_screen_display.c,v 1.19 2010/10/13 12:35:21 philipn Exp $
  *
  *
  *
@@ -876,6 +876,13 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
         else if (hour > 23)
         {
             hour %= 24;
+        }
+        
+        if ((frameInfo->frameRate.num == 50 && frameInfo->frameRate.den == 1) ||
+            (frameInfo->frameRate.num == 60 && frameInfo->frameRate.den == 1) ||
+            (frameInfo->frameRate.num == 60000 && frameInfo->frameRate.den == 1001))
+        {
+            frame /= 2;
         }
 
         if (frameInfo->timecodes[osdd->state->timecodeIndex].timecodeType == CONTROL_TIMECODE_TYPE)
