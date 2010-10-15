@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.cpp,v 1.16 2010/10/12 17:43:04 john_f Exp $
+ * $Id: dvs_sdi.cpp,v 1.17 2010/10/15 17:08:16 john_f Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -142,6 +142,11 @@ int use_ffmpeg_hd_sd_scaling = 0;
 int use_yuvlib_filter = 0;
 uint8_t *hd2sd_workspace[MAX_CHANNELS];
 
+int last_ltc_bits[MAX_CHANNELS];
+int last_vitc_bits[MAX_CHANNELS];
+int last_dltc_bits[MAX_CHANNELS];
+int last_dvitc_bits[MAX_CHANNELS];
+
 // Use a function pointer to switch between two audio reformatting functions
 // depending on -audint option
 void dvsaudio32_to_mono_audio(uint8_t *src, uint8_t *dst32, uint8_t *dst16, int num_samples, int audio8);
@@ -204,7 +209,7 @@ void timestamp_decode(int64_t timestamp, int * year, int * month, int * day, int
     *microsec = timestamp % INT64_C(1000000);
 }
 
-Ingex::Timecode timecode_from_dvs_bits(int bits, int fps_num, int fps_den)
+Ingex::Timecode timecode_from_dvs_bits(int bits, int last_bits, int fps_num, int fps_den)
 {
     int hr10  = (bits & 0x30000000) >> 28;
     int hr01  = (bits & 0x0f000000) >> 24;
@@ -223,16 +228,20 @@ Ingex::Timecode timecode_from_dvs_bits(int bits, int fps_num, int fps_den)
 
     Ingex::Timecode::FormatEnumType fmt = Ingex::Timecode::GetFormat(fps_num, fps_den, df);
 
+    // We will compare current with previous to deduce frame of pair in LTC
+    bits &= 0x3f7f7f3f;
+    last_bits &= 0x3f7f7f3f;
+
     // field bit position varies, depending on frame rate
     int frame_of_pair;
     switch (fmt)
     {
     case Ingex::Timecode::TC_50:
-        frame_of_pair = (bits & 0x80000000) ? 1 : 0;
+        frame_of_pair = ((bits & 0x80000000) || bits == last_bits) ? 1 : 0;;
         break;
     case Ingex::Timecode::TC_59DF:
     case Ingex::Timecode::TC_59NDF:
-        frame_of_pair = (bits & 0x00008000) ? 1 : 0;
+        frame_of_pair = ((bits & 0x00008000) || bits == last_bits) ? 1 : 0;;
         break;
     default:
         frame_of_pair = 0;
@@ -1550,6 +1559,7 @@ int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_from_vi
 
     int vitc_bits = vitc1_bits;
     int dvitc_bits = dvitc1_bits;
+
 #if 0
     // Handle buggy field order (can happen with misconfigured camera)
     // Incorrect field order causes vitc_tc and vitc2 to be swapped.
@@ -1608,15 +1618,21 @@ int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_from_vi
     }
 #endif
 
-    Ingex::Timecode tc_ltc = timecode_from_dvs_bits(ltc_bits, frame_rate_numer, frame_rate_denom);
-    Ingex::Timecode tc_vitc = timecode_from_dvs_bits(vitc_bits, frame_rate_numer, frame_rate_denom);
-    Ingex::Timecode tc_dltc = timecode_from_dvs_bits(dltc_bits, frame_rate_numer, frame_rate_denom);
-    Ingex::Timecode tc_dvitc = timecode_from_dvs_bits(dvitc_bits, frame_rate_numer, frame_rate_denom);
+    Ingex::Timecode tc_ltc = timecode_from_dvs_bits(ltc_bits, last_ltc_bits[chan], frame_rate_numer, frame_rate_denom);
+    Ingex::Timecode tc_vitc = timecode_from_dvs_bits(vitc_bits, last_vitc_bits[chan], frame_rate_numer, frame_rate_denom);
+    Ingex::Timecode tc_dltc = timecode_from_dvs_bits(dltc_bits, last_dltc_bits[chan], frame_rate_numer, frame_rate_denom);
+    Ingex::Timecode tc_dvitc = timecode_from_dvs_bits(dvitc_bits, last_dvitc_bits[chan], frame_rate_numer, frame_rate_denom);
+
+    last_ltc_bits[chan] = ltc_bits;
+    last_vitc_bits[chan] = vitc_bits;
+    last_dltc_bits[chan] = dltc_bits;
+    last_dvitc_bits[chan] = dvitc_bits;
 
     // System timecode - start with microseconds since midnight (tod_rec is in microsecs since 1970)
     int64_t sys_time_microsec = (tod_rec - midnight_microseconds) % microseconds_per_day;
 
     // Compute system timecode as int number of frames since midnight
+    // NB. We could try to deduce actual capture time from dvs using sv_currenttime()
     int systc_as_int = (int)(sys_time_microsec * frame_rate_numer / (INT64_C(1000000) * frame_rate_denom));
     // Choose drop-frame mode for systc if rate not integral
     bool systc_drop = (frame_rate_numer % frame_rate_denom != 0);
@@ -2155,7 +2171,7 @@ void wait_for_good_signal(sv_handle *sv, int chan, int required_good_frames)
             switch (timecode_type)
             {
             case NexusTC_LTC:
-                master_tc = timecode_from_dvs_bits(timecodes.altc_tc, frame_rate_numer, frame_rate_denom);
+                master_tc = timecode_from_dvs_bits(timecodes.altc_tc, 0, frame_rate_numer, frame_rate_denom);
                 break;
             default:
                 break;
