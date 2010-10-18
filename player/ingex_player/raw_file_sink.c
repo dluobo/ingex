@@ -1,5 +1,5 @@
 /*
- * $Id: raw_file_sink.c,v 1.7 2010/06/02 11:12:14 philipn Exp $
+ * $Id: raw_file_sink.c,v 1.8 2010/10/18 17:56:14 john_f Exp $
  *
  *
  *
@@ -55,6 +55,10 @@ typedef struct
     /* filename template */
     char* filenameTemplate;
 
+    /* Type and format of stream to accept. */
+    StreamType acceptStreamType;
+    StreamFormat acceptStreamFormat;
+    
     /* listener */
     MediaSinkListener* listener;
 
@@ -113,25 +117,49 @@ static void rms_unregister_listener(void* data, MediaSinkListener* listener)
 
 static int rms_accept_stream(void* data, const StreamInfo* streamInfo)
 {
-    /* TODO: add option to set what the raw file sink should accept */
-
-    /* make sure that the picture is UYVY/UYVY-10bit/YUV422/YUV420/YUV411/YUV444 */
-    if (streamInfo->type == PICTURE_STREAM_TYPE &&
-        streamInfo->format != UYVY_FORMAT &&
-        streamInfo->format != UYVY_10BIT_FORMAT &&
-        streamInfo->format != YUV422_FORMAT &&
-        streamInfo->format != YUV420_FORMAT &&
-        streamInfo->format != YUV411_FORMAT &&
-        streamInfo->format != YUV444_FORMAT)
+    RawFileSink* sink = (RawFileSink*) data;
+    
+    /* reject streams intended for the video split */
+    if (streamInfo->isSplitScaledPicture)
     {
         return 0;
     }
     
-    /* make sure the sound is PCM */
-    if (streamInfo->type == SOUND_STREAM_TYPE &&
-        streamInfo->format != PCM_FORMAT)
+    /* make sure the stream type matches the accept type for the sink, if set */
+    if (sink->acceptStreamType != NULL && 
+        streamInfo->type != sink->acceptStreamType) 
     {
         return 0;
+    }
+    
+    /* make sure the stream format matches the accept for the sink, if set */
+    if (sink->acceptStreamFormat != NULL)
+    {
+        if (streamInfo->format != sink->acceptStreamFormat)
+        {
+            return 0;
+        }
+    } 
+    else
+    {
+        /* make sure the picture is UYVY/UYVY-10bit/YUV422/YUV420/YUV411/YUV444 */
+        if (streamInfo->type == PICTURE_STREAM_TYPE &&
+            streamInfo->format != UYVY_FORMAT &&
+            streamInfo->format != UYVY_10BIT_FORMAT &&
+            streamInfo->format != YUV422_FORMAT &&
+            streamInfo->format != YUV420_FORMAT &&
+            streamInfo->format != YUV411_FORMAT &&
+            streamInfo->format != YUV444_FORMAT)
+        {
+            return 0;
+        }
+        
+        /* make sure the sound is PCM */
+        if (streamInfo->type == SOUND_STREAM_TYPE &&
+            streamInfo->format != PCM_FORMAT)
+        {
+            return 0;
+        }   
     }
     
     return 1;
@@ -299,7 +327,8 @@ static void rms_close(void* data)
 }
 
 
-int rms_open(const char* filenameTemplate, MediaSink** sink)
+int rms_open(const char* filenameTemplate, StreamType rawType, 
+    StreamFormat rawFormat, MediaSink** sink)
 {
     RawFileSink* newSink;
 
@@ -316,6 +345,8 @@ int rms_open(const char* filenameTemplate, MediaSink** sink)
     strcpy(newSink->filenameTemplate, filenameTemplate);
 
 
+    newSink->acceptStreamType = rawType;
+    newSink->acceptStreamFormat = rawFormat;
     newSink->mediaSink.data = newSink;
     newSink->mediaSink.register_listener = rms_register_listener;
     newSink->mediaSink.unregister_listener = rms_unregister_listener;

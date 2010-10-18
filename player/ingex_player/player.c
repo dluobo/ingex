@@ -1,5 +1,5 @@
 /*
- * $Id: player.c,v 1.28 2010/10/01 15:56:21 john_f Exp $
+ * $Id: player.c,v 1.29 2010/10/18 17:56:14 john_f Exp $
  *
  *
  *
@@ -144,13 +144,13 @@ typedef struct
     QCSession* qcSession;
     HTTPAccess* httpAccess;
     FILE* bufferStateLogFile;
-
+#ifndef DISABLE_X11_SUPPORT
     X11DisplaySink* x11DisplaySink;
     X11XVDisplaySink* x11XVDisplaySink;
     DualSink* dualSink;
-    DVSSink* dvsSink;
     SDLSink* sdlSink;
-
+#endif
+    DVSSink* dvsSink;
     VideoSwitchDatabase* videoSwitchDatabase;
 
     X11WindowListener x11WindowListener;
@@ -162,11 +162,11 @@ typedef struct
     ShuttleInput* shuttle;
     ShuttleConnect* shuttleConnect;
     ConnectMapping connectMapping;
-	pthread_t shuttleThreadId;
+    pthread_t shuttleThreadId;
 
     TermKeyboardInput* termKeyboardInput;
     KeyboardConnect* termKeyboardConnect;
-	pthread_t termKeyboardThreadId;
+    pthread_t termKeyboardThreadId;
 
     int writeAllMarks;
 } Player;
@@ -302,7 +302,7 @@ static void cleanup_exit(int res)
 
     msc_close(g_player.mediaSource);
     g_player.mediaSource = NULL;
-
+#ifndef DISABLE_X11_SUPPORT
     if (g_player.x11XVDisplaySink != NULL)
     {
         xvsk_unset_media_control(g_player.x11XVDisplaySink);
@@ -318,7 +318,7 @@ static void cleanup_exit(int res)
         dusk_unset_media_control(g_player.dualSink);
         dusk_unregister_window_listener(g_player.dualSink, &g_player.x11WindowListener);
     }
-
+#endif
     terminate_control_threads(&g_player);
     if (g_player.shuttle != NULL)
     {
@@ -409,10 +409,12 @@ static void catch_sigint(int sig_number)
     exit(1);
 }
 
+#ifndef DISABLE_X11_SUPPORT
 static void x11_window_close_request(void* data)
 {
     mc_stop(ply_get_media_control(g_player.mediaPlayer));
 }
+#endif
 
 static void control_help()
 {
@@ -804,6 +806,7 @@ static void usage(const char* cmd)
 #endif
     fprintf(stderr, "  --disable-x11-osd        Disable the OSD on the X11 or X11 Xv output\n");
     fprintf(stderr, "  --raw-out <template>     Raw stream output files. Template must contain '%%d'\n");
+    fprintf(stderr, "  --raw-out-format <fmt>   Raw stream output format. One of uyvy, yuv420, yuv422, yuv444 or pcm\n");
     fprintf(stderr, "  --null-out               Accepts streams and does nothing\n");
     fprintf(stderr, "  --svitc <timecode>       Start at specified VITC timecode (hh:mm:ss:ff)\n");
     fprintf(stderr, "  --sltc <timecode>        Start at specified LTC timecode (hh:mm:ss:ff)\n");
@@ -940,6 +943,8 @@ int main(int argc, const char **argv)
     MediaSource* mediaSource = NULL;
     int i;
     const char* rawFilenameTemplate = NULL;
+    StreamType rawOutType = UNKNOWN_STREAM_TYPE;
+    StreamFormat rawOutFormat = UNKNOWN_FORMAT;
     Timecode startVITCTimecode = g_invalidTimecode;
     Timecode startLTCTimecode = g_invalidTimecode;
     int addVideoSwitch = 0;
@@ -959,7 +964,9 @@ int main(int argc, const char **argv)
     int lock = 0;
     int numFFMPEGThreads = 4;
     int qcControl = 0;
+#ifndef DISABLE_X11_SUPPORT
     BufferedMediaSink* bufSink = NULL;
+#endif
     int dvsBufferSize = 12;
     int useWorkerThreads = 0;
     int closeAtEnd = 0;
@@ -989,7 +996,9 @@ int main(int argc, const char **argv)
     Rational sourceAspectRatio = {0, 0};
     float scale = 0.0;
     int swScale = 1;
+#ifndef DISABLE_X11_SUPPORT
     X11WindowInfo windowInfo = {NULL, 0, 0, 0};
+#endif
     SDIVITCSource sdiVITCSource = VITC_AS_SDI_VITC;
     int loop = 0;
     SDIVITCSource extraSDIVITCSource = INVALID_SDI_VITC;
@@ -1263,6 +1272,7 @@ int main(int argc, const char **argv)
                 fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
                 return 1;
             }
+#ifndef DISABLE_X11_SUPPORT
             if (sscanf(argv[cmdlnIndex + 1], "0x%lx", &windowInfo.window) != 1)
             {
                 if (sscanf(argv[cmdlnIndex + 1], "%lu", &windowInfo.window) != 1)
@@ -1272,6 +1282,7 @@ int main(int argc, const char **argv)
                     return 1;
                 }
             }
+#endif
             cmdlnIndex += 2;
         }
         else if (strcmp(argv[cmdlnIndex], "--disable-x11-osd") == 0)
@@ -1289,6 +1300,53 @@ int main(int argc, const char **argv)
             }
             outputType = RAW_STREAM_OUTPUT;
             rawFilenameTemplate = argv[cmdlnIndex + 1];
+            cmdlnIndex += 2;
+        }
+        else if (strcmp(argv[cmdlnIndex], "--raw-out-format") == 0)
+        {
+            if (cmdlnIndex + 1 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            const char* rawOutFmt = argv[cmdlnIndex + 1];
+            if (strcmp(rawOutFmt, "uyvy") == 0)
+            {
+                rawOutType = PICTURE_STREAM_TYPE;
+                rawOutFormat = UYVY_FORMAT;
+                ml_log_info("Using UYVY for raw out format\n");
+            }
+            else if (strcmp(rawOutFmt, "yuv420") == 0)
+            {
+                rawOutType = PICTURE_STREAM_TYPE;
+                rawOutFormat = YUV420_FORMAT;
+                ml_log_info("Using YUV420 for raw out format\n");
+            }
+            else if (strcmp(rawOutFmt, "yuv422") == 0)
+            {
+                rawOutType = PICTURE_STREAM_TYPE;
+                rawOutFormat = YUV422_FORMAT;
+                ml_log_info("Using YUV422 for raw out format\n");
+            }
+            else if (strcmp(rawOutFmt, "yuv444") == 0)
+            {
+                rawOutType = PICTURE_STREAM_TYPE;
+                rawOutFormat = YUV444_FORMAT;
+                ml_log_info("Using YUV444 for raw out format\n");
+            }
+            else if (strcmp(rawOutFmt, "pcm") == 0)
+            {
+                rawOutType = SOUND_STREAM_TYPE;
+                rawOutFormat = PCM_FORMAT;
+                ml_log_info("Using PCM for raw out format\n");
+            }
+            else
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Invalid argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
             cmdlnIndex += 2;
         }
         else if (strcmp(argv[cmdlnIndex], "--null-out") == 0)
@@ -2483,7 +2541,7 @@ int main(int argc, const char **argv)
                 break;
 
             default:
-				ml_log_error("Unknown input type (%d) for input %d\n", inputs[i].type, i);
+                ml_log_error("Unknown input type (%d) for input %d\n", inputs[i].type, i);
                 assert(0);
         }
 
@@ -2639,7 +2697,7 @@ int main(int argc, const char **argv)
         g_player.mediaSource = cps_get_media_source(clipSource);
     }
 
-
+#ifndef DISABLE_X11_SUPPORT
     /* open the qc session */
 
     if (qcSessionFilename != NULL)
@@ -2682,12 +2740,13 @@ int main(int argc, const char **argv)
             xOutputType = X11_DISPLAY_OUTPUT;
         }
     }
-
+#endif
 
     /* open media sink */
 
     switch (outputType)
     {
+#ifndef DISABLE_X11_SUPPORT
         case X11_XV_DISPLAY_OUTPUT:
             g_player.x11WindowListener.data = &g_player;
             g_player.x11WindowListener.close_request = x11_window_close_request;
@@ -2731,7 +2790,7 @@ int main(int argc, const char **argv)
             }
             g_player.mediaSink = bms_get_sink(bufSink);
             break;
-
+#endif
         case DVS_OUTPUT:
             if (!dvs_open(dvsCard, dvsChannel, sdiVITCSource, extraSDIVITCSource, dvsBufferSize,
                           disableSDIOSD, fitVideo, &g_player.dvsSink))
@@ -2741,7 +2800,7 @@ int main(int argc, const char **argv)
             }
             g_player.mediaSink = dvs_get_media_sink(g_player.dvsSink);
             break;
-
+#ifndef DISABLE_X11_SUPPORT
         case DUAL_OUTPUT:
             g_player.x11WindowListener.data = &g_player;
             g_player.x11WindowListener.close_request = x11_window_close_request;
@@ -2771,9 +2830,9 @@ int main(int argc, const char **argv)
             sdls_register_window_listener(g_player.sdlSink, &g_player.x11WindowListener);
             g_player.mediaSink = sdls_get_media_sink(g_player.sdlSink);
             break;
-
+#endif
         case RAW_STREAM_OUTPUT:
-            if (!rms_open(rawFilenameTemplate, &g_player.mediaSink))
+            if (!rms_open(rawFilenameTemplate, rawOutType, rawOutFormat, &g_player.mediaSink))
             {
                 ml_log_error("Failed to open raw file sink\n");
                 goto fail;
@@ -2789,6 +2848,7 @@ int main(int argc, const char **argv)
             break;
 
         default:
+            ml_log_error("No output sink or unsupported sink type specified\n");
             assert(0);
     }
     
@@ -2894,14 +2954,22 @@ int main(int argc, const char **argv)
             goto fail;
         }
 
+#ifndef DISABLE_X11_SUPPORT
         if (outputType == DVS_OUTPUT || outputType == DUAL_OUTPUT) {
+#else
+        if (outputType == DVS_OUTPUT) {
+#endif
             PSSRaster pss_raster = PSS_SD_625_RASTER;
             SDIRaster sdi_raster;
 
+#ifndef DISABLE_X11_SUPPORT
             if (outputType == DVS_OUTPUT)
                 sdi_raster = dvs_get_raster(g_player.dvsSink);
             else
                 sdi_raster = dvs_get_raster(dusk_get_dvs_sink(g_player.dualSink));
+#else
+            sdi_raster = dvs_get_raster(g_player.dvsSink);
+#endif
 
             switch (sdi_raster)
             {
@@ -3031,7 +3099,7 @@ int main(int argc, const char **argv)
         }
     }
 
-
+#ifndef DISABLE_X11_SUPPORT
     /* connect the X11 display keyboard and mouse input */
 
     if (outputType == X11_XV_DISPLAY_OUTPUT)
@@ -3049,7 +3117,7 @@ int main(int argc, const char **argv)
         dusk_set_media_control(g_player.dualSink, g_player.connectMapping, msk_get_video_switch(g_player.mediaSink),
             ply_get_media_control(g_player.mediaPlayer));
     }
-
+#endif
 
     /* create the console monitor */
 
@@ -3090,7 +3158,7 @@ int main(int argc, const char **argv)
 
     if (!start_control_threads(&g_player, reviewDuration))
     {
-		ml_log_error("Failed to start control threads:\n");
+        ml_log_error("Failed to start control threads:\n");
         goto fail;
     }
 

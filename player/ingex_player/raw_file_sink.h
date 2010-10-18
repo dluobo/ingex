@@ -1,5 +1,5 @@
 /*
- * $Id: raw_file_sink.h,v 1.4 2010/06/02 11:12:14 philipn Exp $
+ * $Id: raw_file_sink.h,v 1.5 2010/10/18 17:56:14 john_f Exp $
  *
  *
  *
@@ -26,17 +26,14 @@
 
 
 
-
 #include "media_sink.h"
 
 
 /* stores all raw streams to files */
 
-int rms_open(const char* filenameTemplate, MediaSink** sink);
-
+int rms_open(const char* filenameTemplate, StreamType rawType, StreamFormat rawFormat, MediaSink** sink);
 
 
 
 #endif
-
 

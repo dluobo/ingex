@@ -1,5 +1,5 @@
 /*
- * $Id: qc_player.c,v 1.16 2010/10/01 15:56:21 john_f Exp $
+ * $Id: qc_player.c,v 1.17 2010/10/18 17:56:14 john_f Exp $
  *
  *
  *
@@ -88,13 +88,13 @@ typedef struct
     QCLTOExtract* qcLTOExtract;
     FILE* bufferStateLogFile;
     QCHTTPAccess* qcHTTPAccess;
-
+#ifndef DISABLE_X11_SUPPORT
     X11DisplaySink* x11DisplaySink;
     X11XVDisplaySink* x11XVDisplaySink;
+    X11WindowListener x11WindowListener;    
     DualSink* dualSink;
+#endif
     DVSSink* dvsSink;
-
-    X11WindowListener x11WindowListener;
 
     OutputType outputType;
 
@@ -334,10 +334,12 @@ static void disconnect_from_control_threads(QCPlayer* player)
     }
 }
 
+#ifndef DISABLE_X11_SUPPORT
 static void x11_window_close_request(void* data)
 {
     mc_stop(ply_get_media_control(g_player.mediaPlayer));
 }
+#endif
 
 static int parse_config_marks(const char* val, MarkConfigs* markConfigs)
 {
@@ -452,12 +454,15 @@ static int parse_config_marks(const char* val, MarkConfigs* markConfigs)
 
 static int create_sink(QCPlayer* player, Options* options, const char* x11WindowName)
 {
+#ifndef DISABLE_X11_SUPPORT
     BufferedMediaSink* bufferedSink = NULL;
+#endif
     AudioLevelSink* audioLevelSink = NULL;
     int haveNewSink = 0;
 
     switch (options->outputType)
     {
+#ifndef DISABLE_X11_SUPPORT
         case XV_DISPLAY_OUTPUT:
             player->x11WindowListener.data = player;
             player->x11WindowListener.close_request = x11_window_close_request;
@@ -515,7 +520,7 @@ static int create_sink(QCPlayer* player, Options* options, const char* x11Window
             xsk_set_window_name(player->x11DisplaySink, x11WindowName);
             xsk_register_window_listener(player->x11DisplaySink, &player->x11WindowListener);
             break;
-
+#endif
         case DVS_OUTPUT:
             if (player->mediaSink == NULL)
             {
@@ -531,7 +536,7 @@ static int create_sink(QCPlayer* player, Options* options, const char* x11Window
                 haveNewSink = 1;
             }
             break;
-
+#ifndef DISABLE_X11_SUPPORT
         case DUAL_OUTPUT:
             player->x11WindowListener.data = player;
             player->x11WindowListener.close_request = x11_window_close_request;
@@ -555,7 +560,7 @@ static int create_sink(QCPlayer* player, Options* options, const char* x11Window
             dusk_set_x11_window_name(player->dualSink, x11WindowName);
             dusk_register_window_listener(player->dualSink, &player->x11WindowListener);
             break;
-
+#endif
         default:
             ml_log_error("Unsupported output type\n");
             goto fail;
@@ -668,7 +673,7 @@ static int play_balls(QCPlayer* player, Options* options)
 
     ply_enable_clip_marks(player->mediaPlayer, options->clipMarkType);
     
-
+#ifndef DISABLE_X11_SUPPORT
     /* reconnect the X11 display keyboard and mouse input */
 
     switch (options->outputType)
@@ -689,7 +694,7 @@ static int play_balls(QCPlayer* player, Options* options)
             /* no X11 display */
             break;
     }
-
+#endif
 
     /* reconnect the QC LTO access menu handler */
 
@@ -908,7 +913,7 @@ static int play_archive_mxf_file(QCPlayer* player, int argc, const char** argv, 
     qla_remove_old_sessions(player->qcLTOAccess, directory, name);
 
 
-
+#ifndef DISABLE_X11_SUPPORT
     /* reconnect the X11 display keyboard and mouse input */
 
     switch (options->outputType)
@@ -929,7 +934,7 @@ static int play_archive_mxf_file(QCPlayer* player, int argc, const char** argv, 
             /* no X11 display */
             break;
     }
-
+#endif
 
     /* connect qc session to player */
 
@@ -1001,6 +1006,7 @@ static int reset_player(QCPlayer* player, Options* options)
     msc_close(player->mediaSource);
     player->mediaSource = NULL;
 
+#ifndef DISABLE_X11_SUPPORT
     switch (options->outputType)
     {
         case XV_DISPLAY_OUTPUT:
@@ -1022,6 +1028,7 @@ static int reset_player(QCPlayer* player, Options* options)
             /* no X11 display */
             break;
     }
+#endif
 
     disconnect_from_control_threads(player);
 
@@ -1073,9 +1080,11 @@ static int reset_player(QCPlayer* player, Options* options)
     {
         /* media sink could not be reset and was closed */
         player->mediaSink = NULL;
+#ifndef DISABLE_X11_SUPPORT
         player->x11DisplaySink = NULL;
         player->x11XVDisplaySink = NULL;
         player->dualSink = NULL;
+#endif        
         player->dvsSink = NULL;
     }
 
@@ -1213,6 +1222,7 @@ static void cleanup_exit(int res)
     msc_close(g_player.mediaSource);
     g_player.mediaSource = NULL;
 
+#ifndef DISABLE_X11_SUPPORT
     if (g_player.x11XVDisplaySink != NULL)
     {
         xvsk_unset_media_control(g_player.x11XVDisplaySink);
@@ -1228,6 +1238,7 @@ static void cleanup_exit(int res)
         dusk_unset_media_control(g_player.dualSink);
         dusk_unregister_window_listener(g_player.dualSink, &g_player.x11WindowListener);
     }
+#endif
 
     disconnect_from_control_threads(&g_player);
     terminate_control_threads(&g_player);
@@ -1245,9 +1256,11 @@ static void cleanup_exit(int res)
 
     msk_close(g_player.mediaSink);
     g_player.mediaSink = NULL;
+#ifndef DISABLE_X11_SUPPORT
     g_player.x11DisplaySink = NULL;
     g_player.x11XVDisplaySink = NULL;
     g_player.dualSink = NULL;
+#endif
     g_player.dvsSink = NULL;
 
     if (g_player.qcSession != NULL)

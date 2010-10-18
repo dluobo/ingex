@@ -5,6 +5,10 @@ PLAYER_INSTALL_PREFIX ?= /usr/local
 COMMON_DIR = ../../common
 YUVLIB_DIR = ../../YUVlib
 
+# Use this flag to disable X11 support on systems without X11 installed, e.g.
+# headless servers with locked down package management.
+#DISABLE_X11_SUPPORT = 1
+
 ifneq ($(MAKECMDGOALS),clean)
 	ifneq ($(MAKECMDGOALS),install)
 		CHECK_LIB_AVAILABILITIES=1
@@ -79,7 +83,7 @@ INCLUDES = -I. -I/usr/local/include -I/usr/include/freetype2 -I/usr/include/font
 
 LIBS = -L. -L/usr/X11R6/lib -L/usr/local/lib -L/usr/X11R6/lib64 -L/usr/local/lib64 \
 	$(ARCHIVEMXFINFO_LIB) $(MXFREADER_LIB) $(LIBMXF_LIB) \
-	-lX11 -lXv -lpthread -lfreetype -lfontconfig
+	-lpthread -lfreetype -lfontconfig
 
 ifdef DISABLE_QC_LTO_ACCESS
 	CFLAGS += -DDISABLE_QC_LTO_ACCESS
@@ -118,18 +122,30 @@ ifdef FFMPEG_INCLUDE_PATH
 		endif
 	endif
 
-	# Use the following alternative link line for ffmpeg rpm installed ffmpeg
-	FFMPEG_RPM := $(shell rpm -q ffmpeg-h264-aac > /dev/null && echo YES)
-	FFMPEG_DNXHD_RPM := $(shell rpm -q ffmpeg-DNxHD-h264-aac > /dev/null && echo YES)
-	ifeq "$(FFMPEG_RPM)" "YES"
-		LIBS += -lavformat -lavcodec -lavutil -lz -lbz2 -lmp3lame -lx264 -la52 -lfaac -lfaad -lm
-	else
-		ifeq "$(FFMPEG_DNXHD_RPM)" "YES"
-		LIBS += -lavformat -lavcodec -lavutil -lz -lbz2 -lmp3lame -lx264 -lfaac -lfaad -lm
+	LIBS += -lavformat -lavcodec -lavutil -lm -lz -lbz2
+
+	# Add additional library if we find support for mp3lame
+	FFMPEG_HAS_MP3LAME := $(shell ffmpeg 2>&1 | grep -q enable-libmp3lame && echo YES)
+	ifeq "$(FFMPEG_HAS_MP3LAME)" "YES"
+		LIBS += -lmp3lame
+	endif
+	
+	# Add additional library if we find support for h264 in ffmpeg
+	FFMPEG_HAS_H264 := $(shell ffmpeg 2>&1 | grep -q enable-libx264 && echo YES)
+	ifeq "$(FFMPEG_HAS_H264)" "YES"
+		LIBS += -lx264
+	endif
+	
+	# Add additional libraries if we find support for AAC in ffmpeg
+	FFMPEG_HAS_AAC := $(shell ffmpeg 2>&1 | grep -q enable-libfaac && echo YES)
+	ifeq "$(FFMPEG_HAS_AAC)" "YES"
+		LIBS += -lfaac -lfaad
+	endif
+	
+	# Add additional libraries and set flag if ffmpeg supports DNxHD
+	FFMPEG_HAS_DNXHD := $(shell test `ffmpeg -formats 2>/dev/null | grep DNxHD | wc -l` -gt 1 && echo YES)
+	ifeq "$(FFMPEG_HAS_DNXHD)" "YES"
 		CFLAGS += -DHAVE_DNXHD
-		else
-		LIBS += -lavformat -lavcodec -lavutil -lm
-		endif
 	endif
 else
 	CFLAGS += -Werror
@@ -169,26 +185,91 @@ ifdef HAVE_SDL
 	CFLAGS += -DHAVE_SDL
 endif
 
+ifdef DISABLE_X11_SUPPORT
+	CFLAGS += -DDISABLE_X11_SUPPORT
+else
+	LIBS += -lX11 -lXv
+endif
+
 
 CC = g++ -g $(CFLAGS) $(OPT)
 AR = ar cr
 
+SOURCES = audio_level_sink.c \
+	audio_sink.c \
+	audio_switch_sink.c \
+	blank_source.c \
+	bouncing_ball_source.c \
+	buffered_media_sink.c \
+	buffered_media_source.c \
+	clapper_source.c \
+	clapper_source_data.c \
+	clip_source.c \
+	connection_matrix.c \
+	console_monitor.c \
+	dnxhd_stream_connect.c \
+	dvs_sink.c \
+	dv_stream_connect.c \
+	ffmpeg_source.c \
+	frame_info.c \
+	frame_sequence_sink.c \
+	half_split_sink.c \
+	http_access.c \
+	http_access_resources.c \
+	keyboard_input.c \
+	keyboard_input_connect.c \
+	logging.c \
+	media_control.c \
+	media_player.c \
+	media_player_marks.c \
+	media_sink.c \
+	media_sink_frame.c \
+	media_source.c \
+	mjpeg_stream_connect.c \
+	mouse_input.c \
+	mouse_input_connect.c \
+	mov_helper.c \
+	mpegi_stream_connect.c \
+	multiple_sources.c \
+	mxf_source.c \
+	null_sink.c \
+	on_screen_display.c \
+	osd_symbols.c \
+	overlay.c \
+	picture_scale_sink.c \
+	progress_bar_input.c \
+	progress_bar_input_connect.c \
+	qc_http_access.c \
+	qc_lto_access.c \
+	qc_lto_extract.c \
+	qc_session.c \
+	raw_dv_source.c \
+	raw_file_sink.c \
+	raw_file_source.c \
+	sdl_sink.c \
+	shared_mem_source.c \
+	shuttle_input.c \
+	shuttle_input_connect.c \
+	source_event.c \
+	stream_connect.c \
+	system_timecode_source.c \
+	term_keyboard_input.c \
+	udp_source.c \
+	utils.c \
+	video_conversion.c \
+	video_switch_database.c \
+	video_switch_sink.c \
+	vitc_reader_sink_source.c
 
-SOURCES = multiple_sources.c dvs_sink.c connection_matrix.c stream_connect.c utils.c \
-	media_player.c term_keyboard_input.c mxf_source.c on_screen_display.c \
-	shuttle_input.c emulate_key.c media_control.c shuttle_input_connect.c media_source.c \
-	raw_file_source.c media_sink.c x11_xv_display_sink.c raw_file_sink.c console_monitor.c \
-	video_switch_sink.c qc_session.c dv_stream_connect.c logging.c buffered_media_sink.c media_sink_frame.c \
-	dual_sink.c null_sink.c frame_info.c buffered_media_source.c osd_symbols.c \
-	x11_display_sink.c keyboard_input.c keyboard_input_connect.c x11_common.c \
-	video_conversion.c system_timecode_source.c half_split_sink.c audio_level_sink.c \
-	http_access.c http_access_resources.c qc_lto_access.c bouncing_ball_source.c \
-	frame_sequence_sink.c qc_lto_extract.c mpegi_stream_connect.c mjpeg_stream_connect.c shared_mem_source.c \
-	udp_source.c audio_sink.c blank_source.c progress_bar_input.c progress_bar_input_connect.c \
-	clapper_source.c sdl_sink.c clip_source.c video_switch_database.c source_event.c \
-	dnxhd_stream_connect.c qc_http_access.c mouse_input.c mouse_input_connect.c raw_dv_source.c \
-	ffmpeg_source.c audio_switch_sink.c overlay.c clapper_source_data.c \
-	media_player_marks.c vitc_reader_sink_source.c mov_helper.c picture_scale_sink.c
+ifndef DISABLE_X11_SUPPORT
+	SOURCES += dual_sink.c \
+		emulate_key.c \
+		x11_common.c \
+		x11_display_sink.c \
+		x11_xv_display_sink.c
+endif
+
+
 OBJECTS = $(patsubst %.c,.objs/%.o,$(SOURCES))
 DEPENDENCIES = $(patsubst %.c,.deps/%.d,$(SOURCES))
 
@@ -288,7 +369,4 @@ ifneq ($(MAKECMDGOALS),clean)
 -include .deps/player.d
 -include .deps/qc_player.d
 endif
-
-
-
 
