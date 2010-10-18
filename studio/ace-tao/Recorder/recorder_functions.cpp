@@ -1,5 +1,5 @@
 /*
- * $Id: recorder_functions.cpp,v 1.50 2010/10/08 17:02:34 john_f Exp $
+ * $Id: recorder_functions.cpp,v 1.51 2010/10/18 17:48:30 john_f Exp $
  *
  * Functions which execute in recording threads.
  *
@@ -28,6 +28,7 @@
 #include "IngexRecorderImpl.h"
 #include "RecorderSettings.h"
 #include "Logfile.h"
+#include "ElapsedTimeReporter.h"
 #include "Timecode.h"
 #include "DateTime.h"
 #include "AudioMixer.h"
@@ -74,6 +75,7 @@ const bool THREADED_MJPEG = false;
 const bool MT_ENABLE = true;
 const bool DEBUG_NOWRITE = false;
 const bool DEBUG_SLEEP = false;
+const int DEBUG_ELAPSED_TIME_THRESHOLD = 40000;
 
 #define USE_SOURCE   0 // Eventually will move to encoding a source, rather than a hardware input
 
@@ -1524,10 +1526,13 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                         if (mxf && !DEBUG_NOWRITE)
                         {
                             /*
-                            ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C thread %d WriteSamples track %u, track id %u, num_samples %u, data %@, size %u\n"),
+                            ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C thread %d WriteSamples track %u, track id %u, data %@, size %u\n"),
                                 src_name.c_str(), p_opt->index,
-                                i, mp_trk->id, num_samples, eft.Data(), eft.Size()));
+                                i, mp_trk->id, eft.Data(), eft.Size()));
                             */
+                            //ElapsedTimeReporter etr(DEBUG_ELAPSED_TIME_THRESHOLD,
+                            //    "%s thread %d WriteSamples track %u", src_name.c_str(), p_opt->index, i);
+
                             try
                             {
                                 writer->WriteSamples(mp_trk->id, eft.Samples(), (uint8_t *)eft.Data(), eft.Size());
