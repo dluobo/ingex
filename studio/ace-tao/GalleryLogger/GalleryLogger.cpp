@@ -1,5 +1,5 @@
 /*
- * $Id: GalleryLogger.cpp,v 1.2 2008/08/07 16:41:48 john_f Exp $
+ * $Id: GalleryLogger.cpp,v 1.3 2010/10/26 18:34:55 john_f Exp $
  *
  * Defines the class behaviours for the Gallery Logger application.
  *
@@ -21,6 +21,8 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
  * 02110-1301, USA.
  */
+
+#define NOMINMAX  // needed for pqxx includes
 
 #include "stdafx.h"
 #include "GalleryLogger.h"

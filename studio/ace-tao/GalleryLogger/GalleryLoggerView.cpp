@@ -1,5 +1,5 @@
 /*
- * $Id: GalleryLoggerView.cpp,v 1.2 2008/08/07 16:41:48 john_f Exp $
+ * $Id: GalleryLoggerView.cpp,v 1.3 2010/10/26 18:34:55 john_f Exp $
  *
  * Implementation of the "view" class of document/view
  * in Gallery Logger application.
@@ -22,6 +22,8 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
  * 02110-1301, USA.
  */
+
+#define NOMINMAX  // needed for pqxx includes
 
 #include "stdafx.h"
 #include "GalleryLogger.h"
@@ -160,7 +162,7 @@ CGalleryLoggerView::CGalleryLoggerView()
 
     // Timecode source
     mUseExternalTc = true;
-    mTcReader.Init("com1");
+    mTcReader.Init("com1", Transport::SERIAL);
 
     // CORBA for remote recording and processing devices
     char * dummy_argv[] = { 
@@ -563,7 +565,7 @@ void CGalleryLoggerView::PrintPage(CDC * p_dc, int page_number)
             // first line
             unsigned int i = 0;
             char tmp[8];
-            Duration duration = take.Out() - take.In();
+            Ingex::Timecode duration = take.Out() - take.In();
             cs.Format(mFormat.c_str(),
                 p_doc->ItemScriptRefs(item_i).c_str(),
                 ACE_OS::itoa(take.Number(), tmp, 10),
@@ -759,7 +761,7 @@ void CGalleryLoggerView::OnUpdate(CView *pSender, LPARAM lHint, CObject *pHint)
         // Convert from database take to our own take class.
         ::Take take = p_doc->Take(i);
 
-        Duration dur = take.Out() - take.In();
+        Ingex::Timecode dur = take.Out() - take.In();
 
         // Get location as text
         std::string location_name;
@@ -996,8 +998,8 @@ void CGalleryLoggerView::TransferTakeToDocument()
 {
     UpdateData(TRUE); // to retrieve data from display
 
-    mCurrentTake.In(Timecode(mStartTime));
-    mCurrentTake.Out(Timecode(mStopTime));
+    mCurrentTake.In(Ingex::Timecode(mStartTime, Ingex::Timecode::TC_25));
+    mCurrentTake.Out(Ingex::Timecode(mStopTime, Ingex::Timecode::TC_25));
     mCurrentTake.Comment(mComment);
     //mCurrentTake.Date(mDate);
     mCurrentTake.IsGood(mIsGood);
@@ -1123,9 +1125,10 @@ void CGalleryLoggerView::OnTimer(UINT id)
         // update Out time and Duration
             mStopTime = mTimecode;
 
-            Duration duration;
-            Timecode tc_tmp((const char *)mStopTime);
-            duration = Timecode((const char *)mStopTime) - Timecode((const char *)mStartTime);
+            Ingex::Timecode duration;
+            Ingex::Timecode tc_tmp((const char *)mStopTime, Ingex::Timecode::TC_25);
+            duration = Ingex::Timecode((const char *)mStopTime, Ingex::Timecode::TC_25)
+                - Ingex::Timecode((const char *)mStartTime, Ingex::Timecode::TC_25);
             mDuration = duration.Text();
 
             mStopTimeCtrl.SetWindowText(mStopTime);
@@ -1390,11 +1393,11 @@ void CGalleryLoggerView::StartRecord(std::string tc)
         RecordingDevice::ReturnCode result;
         if(RecordingDevice::NO_DEVICE ==
             (result =
-            mRecorder.StartRecording(tc.c_str(), description))
+            mRecorder.StartRecording(Ingex::Timecode(tc.c_str(), Ingex::Timecode::TC_25), description))
             && RecordingDevice::OK == mRecorder.ResolveDevice())
         {
             result =
-            mRecorder.StartRecording(tc.c_str(), description);
+            mRecorder.StartRecording(Ingex::Timecode(tc.c_str(), Ingex::Timecode::TC_25), description);
         }
 
 
@@ -1428,8 +1431,8 @@ void CGalleryLoggerView::StopRecord(std::string tc)
     if (USE_RECORDER)
     {
     // generic recorder version
-        if(RecordingDevice::OK ==
-            mRecorder.StopRecording(tc.c_str()))
+        if (RecordingDevice::OK ==
+            mRecorder.StopRecording(Ingex::Timecode(tc.c_str(),Ingex::Timecode::TC_25)))
         {
             // store the out time
 
@@ -1450,7 +1453,7 @@ void CGalleryLoggerView::OnChangeComment()
 void CGalleryLoggerView::BeginTake(const char * tc)
 {
     mCurrentTake.Clear();
-    mCurrentTake.In(Timecode(tc));
+    mCurrentTake.In(Ingex::Timecode(tc, Ingex::Timecode::TC_25));
     //mCurrentTake.Date(ClockTime::Date());
     int year, month, day;
     DateTime::GetDate(year, month, day);
@@ -1465,7 +1468,7 @@ void CGalleryLoggerView::EndTake(const char * tc)
 {
     // Store Out time
     //mCurrentTake.Out(Timecode(CurrentTimecode()));
-    mCurrentTake.Out(Timecode(tc));
+    mCurrentTake.Out(Ingex::Timecode(tc, Ingex::Timecode::TC_25));
 
     // Store any comment entered while take was underway
     mCurrentTake.Comment(mComment);
@@ -1501,15 +1504,15 @@ void CGalleryLoggerView::EndTake(const char * tc)
                 file_recording.FileId(mRecorder.Filename(i));
                 file_recording.FileStartTimecode(mRecorder.InTime());
                 file_recording.FileEndTimecode(
-                    Timecode(mRecorder.InTime())
-                    + Timecode(mRecorder.Duration()));
+                    Ingex::Timecode(mRecorder.InTime())
+                    + Ingex::Timecode(mRecorder.Duration()));
 
                 Clip file_clip;
                 file_clip.Recording(file_recording);
                 file_clip.Start(mCurrentTake.In() - file_recording.FileStartTimecode());
                 file_clip.Duration(mCurrentTake.Duration());
 
-                if(mRecorder.HasRecorded())
+                if (mRecorder.HasRecorded())
                 {
                     rec_source.AddClip(file_clip);
                 }

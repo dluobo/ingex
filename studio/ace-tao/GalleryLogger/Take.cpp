@@ -1,5 +1,5 @@
 /*
- * $Id: Take.cpp,v 1.2 2008/08/07 16:41:48 john_f Exp $
+ * $Id: Take.cpp,v 1.3 2010/10/26 18:34:55 john_f Exp $
  *
  * Class to represent a "take".
  *
@@ -34,8 +34,8 @@ Take::Take()
 void Take::Clear()
 {
     mNumber = 0;
-    mInTime = Timecode(0);
-    mOutTime = Timecode(0);
+    mInTime = Ingex::Timecode();
+    mOutTime = Ingex::Timecode();
     mDate = "";
     mComment = "";
     mResult = Take::UNKNOWN;
@@ -75,9 +75,9 @@ const Take & Take::operator=(const prodauto::Take * pt)
         break;
     }
 
-    // Assuming 25 fps NDF
-    mInTime = Timecode(pt->startPosition);
-    mOutTime = Timecode(pt->startPosition + pt->length);
+    // Assuming 25
+    mInTime = Ingex::Timecode(pt->startPosition, Ingex::Timecode::TC_25);
+    mOutTime = Ingex::Timecode(pt->startPosition + pt->length, Ingex::Timecode::TC_25);
 
     mYear = pt->startDate.year;
     mMonth = pt->startDate.month;
@@ -106,8 +106,8 @@ Take::Take(const prodauto::Take * pt)
     }
 
     // Assuming 25 fps NDF
-    mInTime = Timecode(pt->startPosition);
-    mOutTime = Timecode(pt->startPosition + pt->length);
+    mInTime = Ingex::Timecode(pt->startPosition, Ingex::Timecode::TC_25);
+    mOutTime = Ingex::Timecode(pt->startPosition + pt->length, Ingex::Timecode::TC_25);
 
     mYear = pt->startDate.year;
     mMonth = pt->startDate.month;
@@ -132,8 +132,8 @@ void Take::CopyTo(prodauto::Take * pt) const
         pt->result = UNSPECIFIED_TAKE_RESULT;
         break;
     }
-    pt->editRate.numerator = mInTime.EditRateNumerator();
-    pt->editRate.denominator = mInTime.EditRateDenominator();
+    pt->editRate.numerator = mInTime.FrameRateNumerator();
+    pt->editRate.denominator = mInTime.FrameRateDenominator();
     pt->startPosition = mInTime.FramesSinceMidnight();
     pt->length = mOutTime.FramesSinceMidnight() - mInTime.FramesSinceMidnight();
 

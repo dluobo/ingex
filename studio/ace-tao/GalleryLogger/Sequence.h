@@ -1,5 +1,5 @@
 /*
- * $Id: Sequence.h,v 1.2 2008/08/07 16:41:48 john_f Exp $
+ * $Id: Sequence.h,v 1.3 2010/10/26 18:34:55 john_f Exp $
  *
  * Class to represent a sequence from a programme script.
  *
@@ -78,8 +78,8 @@ public:
     //int ProgrammeIndex() { return mProgrammeIndex; }
     //const char * ProgrammeIndexT();
 
-    void TargetDuration(const Duration & t) { mTargetDuration = t; }
-    const Duration & TargetDuration() { return mTargetDuration; }
+    void TargetDuration(const Ingex::Timecode & t) { mTargetDuration = t; }
+    const Ingex::Timecode & TargetDuration() { return mTargetDuration; }
 
     int TakeCount() { return mTakes.size(); }
     ::Take & Take(int i) { return mTakes[i]; }
@@ -100,7 +100,7 @@ private:
                             // e.g. "12" or "12-13" or "12, 18, 24" etc.
     //ScriptRef mScriptEnd;    // No longer used.
     std::string mUniqueId;  // Can be used in a filename, for example.
-    Duration mTargetDuration;  // Target duration.
+    Ingex::Timecode mTargetDuration;  // Target duration.
     //int mNumber;
     //char mNumberText[10];
     //int mProgrammeIndex;

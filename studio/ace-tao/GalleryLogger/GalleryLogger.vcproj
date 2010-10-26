@@ -24,7 +24,7 @@
 				Name="VCCLCompilerTool"
 				Optimization="2"
 				InlineFunctionExpansion="1"
-				AdditionalIncludeDirectories="../IDL/Generated;../common;../..;&quot;$(LIBODBCPP)/include&quot;;&quot;$(ACE_ROOT)&quot;;&quot;$(TAO_ROOT)&quot;;&quot;$(TAO_ROOT)/orbsvcs&quot;;&quot;$(XERCES_ROOT)/include&quot;"
+				AdditionalIncludeDirectories="../IDL/Generated;../common;../../database/src;../../../common;&quot;$(ACE_ROOT)&quot;;&quot;$(TAO_ROOT)&quot;;&quot;$(TAO_ROOT)/orbsvcs&quot;;&quot;$(XERCES_ROOT)/include&quot;;&quot;$(LIBPQXX)/include&quot;"
 				PreprocessorDefinitions="WIN32;NDEBUG;_WINDOWS;_WIN32_WINNT=0x0400"
 				StringPooling="TRUE"
 				RuntimeLibrary="2"
@@ -44,7 +44,7 @@
 				Name="VCCustomBuildTool"/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="odbc++.lib xerces-c_2.lib ace.lib TAO.lib TAO_PortableServer.lib TAO_CosNaming.lib TAO_Messaging.lib TAO_Valuetype.lib TAO_AnyTypeCode.lib"
+				AdditionalDependencies="xerces-c_2.lib ace.lib TAO.lib TAO_PortableServer.lib TAO_CosNaming.lib TAO_Messaging.lib TAO_Valuetype.lib TAO_AnyTypeCode.lib"
 				OutputFile=".\Release/GalleryLogger.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="TRUE"
@@ -505,28 +505,6 @@
 			</File>
 			<File
 				RelativePath="Take.cpp">
-				<FileConfiguration
-					Name="Release|Win32">
-					<Tool
-						Name="VCCLCompilerTool"
-						Optimization="2"
-						AdditionalIncludeDirectories=""
-						PreprocessorDefinitions=""
-						BrowseInformation="1"/>
-				</FileConfiguration>
-				<FileConfiguration
-					Name="Debug|Win32">
-					<Tool
-						Name="VCCLCompilerTool"
-						Optimization="0"
-						AdditionalIncludeDirectories=""
-						PreprocessorDefinitions=""
-						BasicRuntimeChecks="3"
-						BrowseInformation="1"/>
-				</FileConfiguration>
-			</File>
-			<File
-				RelativePath="XmlTools.cpp">
 				<FileConfiguration
 					Name="Release|Win32">
 					<Tool

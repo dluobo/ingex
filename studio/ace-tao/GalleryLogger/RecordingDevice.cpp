@@ -1,5 +1,5 @@
 /*
- * $Id: RecordingDevice.cpp,v 1.2 2008/08/07 16:41:48 john_f Exp $
+ * $Id: RecordingDevice.cpp,v 1.3 2010/10/26 18:34:55 john_f Exp $
  *
  * Class to manage communication with a recorder.
  *
@@ -116,7 +116,7 @@ RecordingDevice::ReturnCode RecordingDevice::SetDirectory(const char * subdir)
 Get remote device to start recording.
 For the moment, we enable all tracks.
 */
-RecordingDevice::ReturnCode RecordingDevice::StartRecording(const Timecode & tc,
+RecordingDevice::ReturnCode RecordingDevice::StartRecording(const Ingex::Timecode & tc,
                                                             const std::string & description)
 {
     bool ok_so_far = true;
@@ -165,9 +165,10 @@ RecordingDevice::ReturnCode RecordingDevice::StartRecording(const Timecode & tc,
                 start_tc_mxf,
                 pre_roll_mxf,
                 rec_enable,
+                "Project",
                 false
                 );
-            if(ProdAuto::Recorder::SUCCESS == result)
+            if (ProdAuto::Recorder::SUCCESS == result)
             {
                 return_code = RecordingDevice::OK;
             }
@@ -204,7 +205,7 @@ RecordingDevice::ReturnCode RecordingDevice::StartRecording(const Timecode & tc,
 }
 
 
-RecordingDevice::ReturnCode RecordingDevice::StopRecording(const Timecode & tc)
+RecordingDevice::ReturnCode RecordingDevice::StopRecording(const Ingex::Timecode & tc)
 {
     bool ok_so_far = true;
     ReturnCode return_code = OK;
@@ -234,7 +235,7 @@ RecordingDevice::ReturnCode RecordingDevice::StopRecording(const Timecode & tc)
         ::ProdAuto::LocatorSeq locators;
         try
         {
-            result = mRecorder->Stop(stop_tc_mxf, post_roll_mxf, "", "", locators, files.out());
+            result = mRecorder->Stop(stop_tc_mxf, post_roll_mxf, "", locators, files.out());
         }
         catch (const CORBA::Exception &)
         {
@@ -247,7 +248,7 @@ RecordingDevice::ReturnCode RecordingDevice::StopRecording(const Timecode & tc)
             //mOutTime = stop_tc.Text(); // store the stop timecode
 
             //::Duration dur_tc;
-            //dur_tc = Timecode(mOutTime.c_str()) - Timecode(mInTime.c_str());
+            //dur_tc = Ingex::Timecode(mOutTime.c_str()) - Ingex::Timecode(mInTime.c_str());
             //mDuration = dur_tc.Text(); // store the duration
 
             // need to store paths

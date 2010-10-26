@@ -1,5 +1,5 @@
 /*
- * $Id: GalleryLoggerDoc.cpp,v 1.3 2009/09/18 15:57:38 john_f Exp $
+ * $Id: GalleryLoggerDoc.cpp,v 1.4 2010/10/26 18:34:55 john_f Exp $
  *
  * Implementation of the "document" class of document/view
  * in Gallery Logger application.
@@ -35,8 +35,8 @@
 #include <fstream>
 #include <algorithm> // for sort
 
-#include <database/src/DBException.h>
-#include <database/src/DatabaseEnums.h>
+#include "DBException.h"
+#include "DatabaseEnums.h"
 
 #include "GalleryLoggerDoc.h"
 #include "SwdFile.h"
@@ -1679,19 +1679,11 @@ void CGalleryLoggerDoc::RecorderName(const char * name)
     }
     std::auto_ptr<prodauto::Recorder> recorder(rec); // so it gets deleted
 
-    // Get RecorderConfig
-    prodauto::RecorderConfig * rc = 0;
-    if (rec && rec->hasConfig())
-    {
-        rc = rec->getConfig();
-    }
-
     // Get RecorderInputConfigs
-    for(unsigned int i = 0; rc && i < rc->recorderInputConfigs.size(); ++i)
+    for (unsigned int i = 0; rec && i < rec->recorderInputConfigs.size(); ++i)
     {
-        prodauto::RecorderInputConfig * ric =
-            rc->getInputConfig(i + 1); // Index starts from 1
-        for(unsigned int j = 0; ric && j < ric->trackConfigs.size(); ++j)
+        prodauto::RecorderInputConfig * ric = rec->getInputConfig(i + 1); // Index starts from 1
+        for (unsigned int j = 0; ric && j < ric->trackConfigs.size(); ++j)
         {
             prodauto::RecorderInputTrackConfig * ritc = ric->trackConfigs[j];
             prodauto::SourceConfig * sc = ritc->sourceConfig;

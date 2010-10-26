@@ -1,5 +1,5 @@
 /*
- * $Id: RecordingDevice.h,v 1.2 2008/08/07 16:41:48 john_f Exp $
+ * $Id: RecordingDevice.h,v 1.3 2010/10/26 18:34:55 john_f Exp $
  *
  * Class to manage communication with a recorder.
  *
@@ -50,9 +50,9 @@ public:
     ReturnCode ResolveDevice();
     //ReturnCode SetDevice(const char * name);
     //ReturnCode SetDirectory(const char * subdir);
-    ReturnCode StartRecording(const Timecode & tc,
+    ReturnCode StartRecording(const Ingex::Timecode & tc,
                               const std::string & description);
-    ReturnCode StopRecording(const Timecode & tc);
+    ReturnCode StopRecording(const Ingex::Timecode & tc);
 
     bool IsRecording() { return mIsRecording; }
     bool HasRecorded() { return mHasRecorded; }

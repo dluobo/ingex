@@ -1,5 +1,5 @@
 /*
- * $Id: GalleryLoggerDoc.h,v 1.2 2008/08/07 16:41:48 john_f Exp $
+ * $Id: GalleryLoggerDoc.h,v 1.3 2010/10/26 18:34:55 john_f Exp $
  *
  * Implementation of the "document" class of document/view
  * in Gallery Logger application.
@@ -36,7 +36,7 @@
 //#include "Sequence.h"
 #include "Take.h"
 #include "Timecode.h"
-#include <database/src/Database.h>
+#include "Database.h"
 #include <xercesc/dom/DOMDocument.hpp>
 
 
@@ -183,7 +183,7 @@ private:
     std::string mPA;
     std::string mProducer;
 // calculated from programme
-    Timecode mRecordedDuration;
+    Ingex::Timecode mRecordedDuration;
 // view
     //int mCurrentSequenceIndex;
     //std::vector<Source> mSources;

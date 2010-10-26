@@ -1,5 +1,5 @@
 /*
- * $Id: Take.h,v 1.2 2008/08/07 16:41:48 john_f Exp $
+ * $Id: Take.h,v 1.3 2010/10/26 18:34:55 john_f Exp $
  *
  * Class to represent a "take".
  *
@@ -58,11 +58,11 @@ public:
     const char * Comment() const { return mComment.c_str(); }
     bool HasComment() const { return !mComment.empty(); }
 
-    void In(Timecode & tc) { mInTime = tc; }
-    Timecode In() const { return mInTime; }
+    void In(Ingex::Timecode & tc) { mInTime = tc; }
+    Ingex::Timecode In() const { return mInTime; }
 
-    void Out(Timecode & tc) { mOutTime = tc; }
-    Timecode Out() const { return mOutTime; }
+    void Out(Ingex::Timecode & tc) { mOutTime = tc; }
+    Ingex::Timecode Out() const { return mOutTime; }
 
     //Timecode Duration() const { return mOutTime - mInTime; }
 
@@ -94,8 +94,8 @@ private:
     int mNumber;
     std::string mComment;
     ResultEnum mResult;
-    Timecode mInTime;
-    Timecode mOutTime;
+    Ingex::Timecode mInTime;
+    Ingex::Timecode mOutTime;
     std::string mDate;
     int mYear;
     int mMonth;

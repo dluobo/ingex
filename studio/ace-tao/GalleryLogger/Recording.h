@@ -1,5 +1,5 @@
 /*
- * $Id: Recording.h,v 1.2 2008/08/07 16:41:48 john_f Exp $
+ * $Id: Recording.h,v 1.3 2010/10/26 18:34:55 john_f Exp $
  *
  * Class to represent a recording.
  *
@@ -52,11 +52,11 @@ public:
     void FileId(const char * s) { mFileId = s; }
     const char * FileId() const { return mFileId.c_str(); }
 
-    void FileStartTimecode(const Timecode & tc) { mFileStartTimecode = tc; }
-    const Timecode & FileStartTimecode() const { return mFileStartTimecode; }
+    void FileStartTimecode(const Ingex::Timecode & tc) { mFileStartTimecode = tc; }
+    const Ingex::Timecode & FileStartTimecode() const { return mFileStartTimecode; }
 
-    void FileEndTimecode(const Timecode & tc) { mFileEndTimecode = tc; }
-    const Timecode & FileEndTimecode() const { return mFileEndTimecode; }
+    void FileEndTimecode(const Ingex::Timecode & tc) { mFileEndTimecode = tc; }
+    const Ingex::Timecode & FileEndTimecode() const { return mFileEndTimecode; }
 
     //void FileDuration(const Duration & tc) { mFileDuration = tc; }
     //const Duration & FileDuration() const { return mFileDuration; }
@@ -65,12 +65,12 @@ private:
     //EnumeratedType mType;
     EnumeratedFormat mFormat;
 
-    Timecode mIn;
-    Timecode mOut;
+    Ingex::Timecode mIn;
+    Ingex::Timecode mOut;
     std::string mTapeId; ///< e.g. the tape number
     std::string mFileId; ///< e.g. a URL for the file
-    Timecode mFileStartTimecode; ///< system timecode of initial frame
-    Timecode mFileEndTimecode; ///< system timecode of frame after final frame
+    Ingex::Timecode mFileStartTimecode; ///< system timecode of initial frame
+    Ingex::Timecode mFileEndTimecode; ///< system timecode of frame after final frame
     //Duration mFileDuration;
 };
 
@@ -100,14 +100,14 @@ public:
     const char * Thumbnail() const { return mThumbnail.c_str(); }
     bool HasThumbnail() const { return !mThumbnail.empty(); }
 
-    void StartTimecode(const Timecode & tc) { mStartTimecode = tc; }
-    //const Timecode & StartTimecode() const { return mStartTimecode; }
-    Timecode & StartTimecode() { return mStartTimecode; }
+    void StartTimecode(const Ingex::Timecode & tc) { mStartTimecode = tc; }
+    //const Ingex::Timecode & StartTimecode() const { return mStartTimecode; }
+    Ingex::Timecode & StartTimecode() { return mStartTimecode; }
 
 private:
     std::string mFilename;
     std::string mThumbnail;
-    Timecode mStartTimecode;
+    Ingex::Timecode mStartTimecode;
 };
 #endif
 

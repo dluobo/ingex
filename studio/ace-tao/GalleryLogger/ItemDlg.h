@@ -1,5 +1,5 @@
 /*
- * $Id: ItemDlg.h,v 1.1 2007/09/11 14:08:20 stuart_hc Exp $
+ * $Id: ItemDlg.h,v 1.2 2010/10/26 18:34:55 john_f Exp $
  *
  * Dialog to edit an Item.
  *
@@ -25,7 +25,7 @@
 #ifndef ItemDlg_h
 #define ItemDlg_h
 
-#include <database/src/Item.h>
+#include "Item.h"
 
 // ItemDlg dialog
 
