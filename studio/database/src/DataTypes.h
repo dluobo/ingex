@@ -1,5 +1,5 @@
 /*
- * $Id: DataTypes.h,v 1.3 2009/02/26 19:39:29 john_f Exp $
+ * $Id: DataTypes.h,v 1.4 2010/10/26 18:39:54 john_f Exp $
  *
  * General data types
  *
@@ -42,6 +42,8 @@ typedef signed char int8_t;
 typedef short int16_t;
 typedef int int32_t;
 typedef __int64 int64_t;
+
+#define PRId64 "I64d"
 
 #endif
 

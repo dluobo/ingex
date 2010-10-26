@@ -1,5 +1,5 @@
 /*
- * $Id: ProdAutoException.h,v 1.3 2010/07/21 16:29:34 john_f Exp $
+ * $Id: ProdAutoException.h,v 1.4 2010/10/26 18:39:54 john_f Exp $
  *
  * General exception class
  *
@@ -27,11 +27,13 @@
 #include <cstdarg>
 #include <cassert>
 
+#include "Logging.h" // for PA_LOGTHROW
+
 #if defined(NDEBUG)
 #define PA_ASSERT(cond) \
     if (!(cond)) \
     {\
-        PA_LOGTHROW(ProdAutoException, ("'%s' assertion failed", #cond)); \
+        PA_LOGTHROW(prodauto::ProdAutoException, ("'%s' assertion failed", #cond)); \
     }
 #else
 #define PA_ASSERT(cond) \
@@ -41,7 +43,7 @@
 #define PA_CHECK(cond) \
     if (!(cond)) \
     {\
-        PA_LOGTHROW(ProdAutoException, ("'%s' check failed", #cond)); \
+        PA_LOGTHROW(prodauto::ProdAutoException, ("'%s' check failed", #cond)); \
     }
 
 
