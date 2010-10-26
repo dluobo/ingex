@@ -1,5 +1,5 @@
 /*
- * $Id: RouterRecorderImpl.cpp,v 1.4 2010/08/13 15:20:59 john_f Exp $
+ * $Id: RouterRecorderImpl.cpp,v 1.5 2010/10/26 18:41:52 john_f Exp $
  *
  * Servant class for RouterRecorder.
  *
@@ -22,6 +22,7 @@
  * 02110-1301, USA.
  */
 
+#define __STDC_FORMAT_MACROS
 #include "integer_types.h"
 
 #include <ace/Log_Msg.h>
