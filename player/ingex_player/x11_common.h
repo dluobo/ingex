@@ -1,5 +1,5 @@
 /*
- * $Id: x11_common.h,v 1.9 2010/06/02 11:12:14 philipn Exp $
+ * $Id: x11_common.h,v 1.10 2010/10/26 18:28:23 john_f Exp $
  *
  *
  *
@@ -60,6 +60,7 @@ typedef struct
 typedef struct
 {
     int reviewDuration;
+    int haveXV;
     OnScreenDisplay* osd;
 
     X11WindowInfo windowInfo;    /* e.g. required when run as a plugin */
@@ -102,7 +103,7 @@ typedef struct
 void x11wl_close_request(X11WindowListener* listener);
 
 
-int x11c_initialise(X11Common* x11Common, int reviewDuration, OnScreenDisplay* osd, X11WindowInfo *windowInfo);
+int x11c_initialise(X11Common* x11Common, int reviewDuration, int haveXV, OnScreenDisplay* osd, X11WindowInfo *windowInfo);
 void x11c_clear(X11Common* x11Common);
 int x11c_reset(X11Common* x11Common);
 
@@ -129,6 +130,7 @@ void x11c_unset_media_control(X11Common* x11Common);
 int x11c_process_events(X11Common* common);
 
 int x11c_set_window_name(X11Common* common, const char* name);
+int x11c_fit_window(X11Common* common);
 
 int x11c_shared_memory_available(X11Common* common);
 

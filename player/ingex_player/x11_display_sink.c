@@ -1,5 +1,5 @@
 /*
- * $Id: x11_display_sink.c,v 1.13 2010/10/01 15:56:21 john_f Exp $
+ * $Id: x11_display_sink.c,v 1.14 2010/10/26 18:28:23 john_f Exp $
  *
  *
  *
@@ -1213,7 +1213,7 @@ int xsk_open(int reviewDuration, int disableOSD, const Rational* pixelAspectRati
         osd_set_listener(newSink->osd, &newSink->osdListener);
     }
 
-    CHK_OFAIL(x11c_initialise(&newSink->x11Common, reviewDuration, newSink->osd, windowInfo));
+    CHK_OFAIL(x11c_initialise(&newSink->x11Common, reviewDuration, 0, newSink->osd, windowInfo));
 
 
     init_lookup_tables(newSink);
@@ -1247,6 +1247,11 @@ MediaSink* xsk_get_media_sink(X11DisplaySink* sink)
 void xsk_set_window_name(X11DisplaySink* sink, const char* name)
 {
     x11c_set_window_name(&sink->x11Common, name);
+}
+
+void xsk_fit_window(X11DisplaySink* sink)
+{
+    x11c_fit_window(&sink->x11Common);
 }
 
 void xsk_register_window_listener(X11DisplaySink* sink, X11WindowListener* listener)

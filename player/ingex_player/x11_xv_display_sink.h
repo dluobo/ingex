@@ -1,5 +1,5 @@
 /*
- * $Id: x11_xv_display_sink.h,v 1.10 2010/10/01 15:56:21 john_f Exp $
+ * $Id: x11_xv_display_sink.h,v 1.11 2010/10/26 18:28:23 john_f Exp $
  *
  *
  *
@@ -47,6 +47,7 @@ void xvsk_unset_media_control(X11XVDisplaySink* sink);
 MediaSink* xvsk_get_media_sink(X11XVDisplaySink* sink);
 
 void xvsk_set_window_name(X11XVDisplaySink* sink, const char* name);
+void xvsk_fit_window(X11XVDisplaySink* sink);
 
 void xvsk_register_window_listener(X11XVDisplaySink* sink, X11WindowListener* listener);
 void xvsk_unregister_window_listener(X11XVDisplaySink* sink, X11WindowListener* listener);

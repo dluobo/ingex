@@ -1,5 +1,5 @@
 /*
- * $Id: dual_sink.h,v 1.10 2010/10/01 15:56:21 john_f Exp $
+ * $Id: dual_sink.h,v 1.11 2010/10/26 18:28:23 john_f Exp $
  *
  *
  *
@@ -47,6 +47,7 @@ void dusk_unset_media_control(DualSink* dualSink);
 DVSSink* dusk_get_dvs_sink(DualSink* dualSink);
 
 void dusk_set_x11_window_name(DualSink* dualSink, const char* name);
+void dusk_fit_x11_window(DualSink* dualSink);
 
 void dusk_register_window_listener(DualSink* dualSink, X11WindowListener* listener);
 void dusk_unregister_window_listener(DualSink* dualSink, X11WindowListener* listener);

@@ -1,5 +1,5 @@
 /*
- * $Id: dual_sink.c,v 1.13 2010/10/01 15:56:21 john_f Exp $
+ * $Id: dual_sink.c,v 1.14 2010/10/26 18:28:23 john_f Exp $
  *
  *
  *
@@ -987,6 +987,18 @@ void dusk_set_x11_window_name(DualSink* dualSink, const char* name)
     else if (dualSink->x11XVDisplaySink != NULL)
     {
         xvsk_set_window_name(dualSink->x11XVDisplaySink, name);
+    }
+}
+
+void dusk_fit_x11_window(DualSink* dualSink)
+{
+    if (dualSink->x11DisplaySink != NULL)
+    {
+        xsk_fit_window(dualSink->x11DisplaySink);
+    }
+    else if (dualSink->x11XVDisplaySink != NULL)
+    {
+        xvsk_fit_window(dualSink->x11XVDisplaySink);
     }
 }
 

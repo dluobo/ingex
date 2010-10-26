@@ -1,5 +1,5 @@
 /*
- * $Id: LocalIngexPlayer.h,v 1.18 2010/10/01 15:56:21 john_f Exp $
+ * $Id: LocalIngexPlayer.h,v 1.19 2010/10/26 18:28:23 john_f Exp $
  *
  * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
@@ -187,6 +187,7 @@ public:
     
     /* functions inherited from IngexPlayer */
     virtual bool setX11WindowName(std::string name);
+    virtual bool fitX11Window();
     virtual bool stop();
     virtual bool toggleLock();
     virtual bool play();

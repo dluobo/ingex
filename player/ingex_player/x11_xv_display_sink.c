@@ -1,5 +1,5 @@
 /*
- * $Id: x11_xv_display_sink.c,v 1.16 2010/10/01 15:56:21 john_f Exp $
+ * $Id: x11_xv_display_sink.c,v 1.17 2010/10/26 18:28:23 john_f Exp $
  *
  *
  *
@@ -1324,7 +1324,7 @@ int xvsk_open(int reviewDuration, int disableOSD, const Rational* pixelAspectRat
         osd_set_listener(newSink->osd, &newSink->osdListener);
     }
 
-    CHK_OFAIL(x11c_initialise(&newSink->x11Common, reviewDuration, newSink->osd, windowInfo));
+    CHK_OFAIL(x11c_initialise(&newSink->x11Common, reviewDuration, 1, newSink->osd, windowInfo));
 
     gettimeofday(&newSink->lastFrameTime, NULL);
 
@@ -1355,6 +1355,11 @@ MediaSink* xvsk_get_media_sink(X11XVDisplaySink* sink)
 void xvsk_set_window_name(X11XVDisplaySink* sink, const char* name)
 {
     x11c_set_window_name(&sink->x11Common, name);
+}
+
+void xvsk_fit_window(X11XVDisplaySink* sink)
+{
+    x11c_fit_window(&sink->x11Common);
 }
 
 void xvsk_register_window_listener(X11XVDisplaySink* sink, X11WindowListener* listener)

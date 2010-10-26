@@ -1,5 +1,5 @@
 /*
- * $Id: x11_common.c,v 1.9 2009/09/18 16:16:25 philipn Exp $
+ * $Id: x11_common.c,v 1.10 2010/10/26 18:28:23 john_f Exp $
  *
  *
  *
@@ -161,11 +161,12 @@ void x11wl_close_request(X11WindowListener* listener)
 }
 
 
-int x11c_initialise(X11Common* x11Common, int reviewDuration, OnScreenDisplay* osd, X11WindowInfo* windowInfo)
+int x11c_initialise(X11Common* x11Common, int reviewDuration, int haveXV, OnScreenDisplay* osd, X11WindowInfo* windowInfo)
 {
     memset(x11Common, 0, sizeof(x11Common));
 
     x11Common->reviewDuration = reviewDuration;
+    x11Common->haveXV = haveXV;
     x11Common->osd = osd;
 
     x11Common->progressBarInput.data = x11Common;
@@ -365,7 +366,34 @@ int x11c_init_window(X11Common* x11Common, unsigned int displayWidth, unsigned i
     }
     else
     {
-        x11c_update_window(&x11Common->windowInfo, displayWidth, displayHeight, x11Common->windowName);
+        unsigned int new_display_width, new_display_height;
+
+        if (x11Common->haveXV)
+        {
+            /* keep the window height and update just the width */
+            unsigned int window_width, window_height;
+
+            XLockDisplay(x11Common->windowInfo.display);
+            XWindowAttributes attrs;
+            XGetWindowAttributes(x11Common->windowInfo.display, x11Common->windowInfo.window, &attrs);
+            window_width = attrs.width;
+            window_height = attrs.height;
+            XUnlockDisplay(x11Common->windowInfo.display);
+
+            new_display_height = window_height;
+            new_display_width = (unsigned int)(new_display_height * displayWidth / (double)displayHeight + 0.5);
+            if (new_display_width == 0) {
+                new_display_height = displayHeight;
+                new_display_width = displayWidth;
+            }
+        }
+        else
+        {
+            new_display_height = displayHeight;
+            new_display_width = displayWidth;
+        }
+
+        x11c_update_window(&x11Common->windowInfo, new_display_width, new_display_height, x11Common->windowName);
     }
 
     XLockDisplay(x11Common->windowInfo.display);
@@ -593,6 +621,23 @@ int x11c_set_window_name(X11Common* x11Common, const char* name)
     return 1;
 }
 
+int x11c_fit_window(X11Common* common)
+{
+    if (common == NULL)
+    {
+        return 0;
+    }
+
+    if (common->windowInfo.display != NULL && common->haveWindow)
+    {
+        XLockDisplay(common->windowInfo.display);
+        XResizeWindow(common->windowInfo.display, common->windowInfo.window, common->displayWidth, common->displayHeight);
+        XUnlockDisplay(common->windowInfo.display);
+    }
+
+    return 1;
+}
+
 int x11c_shared_memory_available(X11Common* common)
 {
     char* displayName;
@@ -742,7 +787,7 @@ void x11c_update_window(X11WindowInfo* windowInfo, int displayWidth, int display
 
     if (windowInfo->deleteAtom == 0)
     {
-        /* we want to known when the window is deleted */
+        /* we want to know when the window is deleted */
         windowInfo->deleteAtom = XInternAtom(windowInfo->display, "WM_DELETE_WINDOW", True);
         if (windowInfo->deleteAtom == 0 ||
             XSetWMProtocols(windowInfo->display, windowInfo->window, &windowInfo->deleteAtom, 1) == 0)
@@ -754,6 +799,8 @@ void x11c_update_window(X11WindowInfo* windowInfo, int displayWidth, int display
     XStoreName(windowInfo->display, windowInfo->window, windowName);
 
     XResizeWindow(windowInfo->display, windowInfo->window, displayWidth, displayHeight);
+
+    XClearWindow(windowInfo->display, windowInfo->window);
 }
 
 void x11c_close_window(X11WindowInfo* windowInfo)

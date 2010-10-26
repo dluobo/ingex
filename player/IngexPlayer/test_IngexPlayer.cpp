@@ -1,5 +1,5 @@
 /*
- * $Id: test_IngexPlayer.cpp,v 1.14 2010/06/02 11:12:13 philipn Exp $
+ * $Id: test_IngexPlayer.cpp,v 1.15 2010/10/26 18:28:23 john_f Exp $
  *
  * Copyright (C) 2008-2010 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
@@ -113,6 +113,11 @@ public:
         {
             printf("'q' for quit was pressed\n");
             exit(1);
+        }
+        else if (key == 'f')
+        {
+            printf("'f' for fit window was pressed\n");
+            _player->fitX11Window();
         }
     }
 

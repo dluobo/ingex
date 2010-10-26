@@ -1,5 +1,5 @@
 /*
- * $Id: LocalIngexPlayer.cpp,v 1.23 2010/10/01 15:56:21 john_f Exp $
+ * $Id: LocalIngexPlayer.cpp,v 1.24 2010/10/26 18:28:23 john_f Exp $
  *
  * Copyright (C) 2008-2010 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
@@ -1704,6 +1704,35 @@ bool LocalIngexPlayer::setX11WindowName(string name)
             else if (_playState->x11XVSink != 0)
             {
                 xvsk_set_window_name(_playState->x11XVSink, _x11WindowName.c_str());
+            }
+        }
+    }
+    catch (...)
+    {
+        return false;
+    }
+    return true;
+}
+
+bool LocalIngexPlayer::fitX11Window()
+{
+    try
+    {
+        ReadWriteLockGuard guard(&_playStateRWLock, false);
+
+        if (_playState != 0)
+        {
+            if (_playState->dualSink != 0)
+            {
+                dusk_fit_x11_window(_playState->dualSink);
+            }
+            else if (_playState->x11Sink != 0)
+            {
+                xsk_fit_window(_playState->x11Sink);
+            }
+            else if (_playState->x11XVSink != 0)
+            {
+                xvsk_fit_window(_playState->x11XVSink);
             }
         }
     }
