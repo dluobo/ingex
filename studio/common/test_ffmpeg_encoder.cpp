@@ -3,6 +3,8 @@
 #include <string.h>
 #include <sys/time.h>
 
+#define __STDC_FORMAT_MACROS
+
 #include "VideoRaster.h"
 #include "integer_types.h"
 #include "ffmpeg_encoder.h"
