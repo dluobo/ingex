@@ -1,5 +1,5 @@
 /*
- * $Id: ElapsedTimeReporter.cpp,v 1.1 2010/10/18 17:46:27 john_f Exp $
+ * $Id: ElapsedTimeReporter.cpp,v 1.2 2010/11/02 16:23:59 john_f Exp $
  *
  * Class to report elapsed time between construction and destruction
  *
@@ -51,7 +51,7 @@ ElapsedTimeReporter::~ElapsedTimeReporter()
 {
     int64_t elapsed_time = gettimeofday64() - mStart;
 
-    if (elapsed_time > mThreshold)
+    if (elapsed_time >= mThreshold)
     {
         fprintf(stderr, "%s Elapsed time %"PRId64" microseconds\n", mMessage.c_str(), elapsed_time);
     }
