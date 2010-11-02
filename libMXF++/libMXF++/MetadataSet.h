@@ -1,5 +1,5 @@
 /*
- * $Id: MetadataSet.h,v 1.7 2010/08/13 15:20:07 john_f Exp $
+ * $Id: MetadataSet.h,v 1.8 2010/11/02 13:19:20 philipn Exp $
  *
  * 
  *
@@ -252,6 +252,8 @@ public:
     // Avid extensions
     void attachAvidAttribute(std::string name, std::string value);
     void attachAvidUserComment(std::string name, std::string value);
+    void setAvidRGBColor(const mxfKey* itemKey, uint16_t red, uint16_t green, uint16_t blue);
+    void setAvidProductVersion(const mxfKey* itemKey, mxfProductVersion value);
     
     
     HeaderMetadata* getHeaderMetadata() const { return _headerMetadata; }

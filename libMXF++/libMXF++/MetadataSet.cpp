@@ -1,5 +1,5 @@
 /*
- * $Id: MetadataSet.cpp,v 1.5 2010/08/12 16:25:39 john_f Exp $
+ * $Id: MetadataSet.cpp,v 1.6 2010/11/02 13:19:20 philipn Exp $
  *
  * 
  *
@@ -1357,3 +1357,16 @@ void MetadataSet::attachAvidUserComment(string name, string value)
     }
 }
 
+void MetadataSet::setAvidRGBColor(const mxfKey* itemKey, uint16_t red, uint16_t green, uint16_t blue)
+{
+    RGBColor color;
+    color.red = red;
+    color.green = green;
+    color.blue = blue;
+    MXFPP_CHECK(mxf_avid_set_rgb_color_item(_cMetadataSet, itemKey, &color));
+}
+
+void MetadataSet::setAvidProductVersion(const mxfKey* itemKey, mxfProductVersion value)
+{
+    MXFPP_CHECK(mxf_avid_set_product_version_item(_cMetadataSet, itemKey, &value));
+}
