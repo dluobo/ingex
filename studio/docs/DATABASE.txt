@@ -23,7 +23,7 @@ the database, e.g.
 
   local   all         all                          trust
   host    all         all    127.0.0.1/32          trust
-  host    all         all    192.168.1.0/24        trust
+  host    all         all    172.29.144.0/20       trust
 
 Edit the file "postgresql.conf" and allow access from required hosts, e.g.
 
