@@ -1,5 +1,5 @@
 /*
- * $Id: MtEncoder.cpp,v 1.6 2010/09/06 13:48:24 john_f Exp $
+ * $Id: MtEncoder.cpp,v 1.7 2010/11/02 15:23:59 john_f Exp $
  *
  * Video encoder using multiple threads.
  *
@@ -22,6 +22,8 @@
  * 02110-1301, USA.
  */
 
+#include "ElapsedTimeReporter.h"
+#include "DateTime.h"
 #include "Block.h"
 #include "Package.h"
 #include "EncodeFrameBuffer.h"
@@ -109,7 +111,12 @@ int MtEncoder::svc()
 
             // Encode the frame.
             uint8_t * p_enc_video = 0;
-            size_t size_enc_video = ffmpeg_encoder_encode(enc, p_input_video, &p_enc_video);
+            size_t size_enc_video = 0;
+            {
+                //ElapsedTimeReporter er(200000, "%s Mt encode started,", DateTime::Timecode().c_str());
+
+                size_enc_video = ffmpeg_encoder_encode(enc, p_input_video, &p_enc_video);
+            }
 
             // Check the frame was still in memory
             bool valid = eft.Valid();
