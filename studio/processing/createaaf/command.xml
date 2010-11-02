@@ -9,7 +9,7 @@
                 EditPath        = "\\hello/world/"
                 DirCut          = "FALSE"
                 DirSource       = ""
-		DirDB		= "FALSE"
+                DirDB           = "FALSE"
                 AudioEdit       = "FALSE"
                 >
         </ApplicationSettings>
@@ -17,15 +17,15 @@
         <!-- Database Material Packages go here -->
         
         <ClipSettings PkgID     = "40"/>
-    	<ClipSettings PkgID     = "39"/>
-	<ClipSettings PkgID     = "44"/>
+        <ClipSettings PkgID     = "39"/>
+        <ClipSettings PkgID     = "44"/>
 
      
         <!-- Settings for CreateAAF- not changed by user- -->
         <RunSettings
                 GroupOnly       = "TRUE"
                 Group           = "TRUE"
-		MultiCam	= "TRUE"
+                MultiCam        = "TRUE"
                 NTSC            = "FALSE"
                 Verbose         = "TRUE"
                 DBHostName      = "localhost"
