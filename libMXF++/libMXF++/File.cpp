@@ -1,5 +1,5 @@
 /*
- * $Id: File.cpp,v 1.7 2010/10/08 16:52:56 john_f Exp $
+ * $Id: File.cpp,v 1.8 2010/11/02 13:18:32 philipn Exp $
  *
  * 
  *
@@ -104,6 +104,11 @@ File::~File()
 void File::setMinLLen(uint8_t llen)
 {
     mxf_file_set_min_llen(_cFile, llen);
+}
+
+uint8_t File::getMinLLen()
+{
+    return mxf_get_min_llen(_cFile);
 }
 
 Partition& File::createPartition()

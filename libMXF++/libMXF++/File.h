@@ -1,5 +1,5 @@
 /*
- * $Id: File.h,v 1.7 2010/10/08 16:52:56 john_f Exp $
+ * $Id: File.h,v 1.8 2010/11/02 13:18:32 philipn Exp $
  *
  * 
  *
@@ -45,6 +45,8 @@ public:
     ~File();
     
     void setMinLLen(uint8_t llen);
+    uint8_t getMinLLen();
+
     Partition& createPartition();
     
     void writeRIP();
