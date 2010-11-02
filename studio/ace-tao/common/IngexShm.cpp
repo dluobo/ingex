@@ -1,5 +1,5 @@
 /*
- * $Id: IngexShm.cpp,v 1.6 2010/06/25 14:22:21 philipn Exp $
+ * $Id: IngexShm.cpp,v 1.7 2010/11/02 16:45:19 john_f Exp $
  *
  * Interface for reading audio/video data from shared memory.
  *
@@ -95,6 +95,9 @@ IngexShm::~IngexShm()
         ACE_Thread::join(mThreadId, 0, 0);
         mThreadId = 0;
     }
+
+    // Detach from shared memory
+    this->Detach();
 }
 
 
@@ -104,35 +107,14 @@ Attach to shared memory.
 */
 void IngexShm::Attach()
 {
-// The kind of shared memory used by Ingex recorder daemon is not available on Windows
-// but with the settings below the code will still compile.
-#ifdef WIN32
-    const key_t control_shm_key = "control";
-    const key_t channel_shm_key[MAX_CHANNELS] = { "channel0", "channel1", "channel2", "channel3" };
-    const int shm_flags = 0;
-#else
-    const key_t control_shm_key = 9;
-    const key_t channel_shm_key[MAX_CHANNELS] = { 10, 11, 12, 13, 14, 15, 16, 17 };
-    const int shm_flags = SHM_RDONLY;
-#endif
+    // First detach, if we were previously attached
+    this->Detach();
 
     int control_id = ACE_OS::shmget(control_shm_key, sizeof(NexusControl), 0666);
-    /*
-    for (int attempt = 0; attempt < 5; ++attempt)
-    {
-        control_id = ACE_OS::shmget(control_shm_key, sizeof(NexusControl), 0666);
-        if (control_id != -1)
-        {
-            break;
-        }
-        ACE_DEBUG((LM_DEBUG, ACE_TEXT("Waiting for shared memory...\n")));
-        ACE_OS::sleep(ACE_Time_Value(0, 50 * 1000));
-    }
-    */
 
     if (control_id == -1)
     {
-        ACE_DEBUG((LM_ERROR, ACE_TEXT("Failed to connect to shared memory control buffer!\n")));
+        ACE_DEBUG((LM_ERROR, ACE_TEXT("Shared memory control buffer unavailable!\n")));
     }
     else
     {
@@ -153,18 +135,6 @@ void IngexShm::Attach()
         for (int i = 0; i < mpControl->channels; i++)
         {
             int shm_id = ACE_OS::shmget(channel_shm_key[i], mpControl->elementsize, 0444);
-            /*
-            for (int attempt = 0; attempt < 5; ++attempt)
-            {
-                shm_id = ACE_OS::shmget(channel_shm_key[i], mpControl->elementsize, 0444);
-                if (shm_id != -1)
-                {
-                    break;
-                }
-                ACE_DEBUG((LM_DEBUG, ACE_TEXT("Waiting for channel[%d] shared memory...\n"), i));
-                ACE_OS::sleep(ACE_Time_Value(0, 50 * 1000));
-            }
-            */
             if (shm_id == -1)
             {
                 ACE_DEBUG((LM_ERROR, ACE_TEXT("Failed to connect to shared memory channel[%d]!\n"), i));
@@ -184,6 +154,31 @@ void IngexShm::Attach()
     }
 }
 
+/**
+Detach from shared memory.
+*/
+void IngexShm::Detach()
+{
+    if (mpControl)
+    {
+        for (unsigned int i = 0; i < mChannels; ++i)
+        {
+            ACE_OS::shmdt((void *) mRing[i]);
+        }
+        ACE_OS::shmdt((void *) mpControl);
+        mpControl = 0;
+    }
+}
+
+int IngexShm::HwDrop(unsigned int channel)
+{
+    int hwdrop = 0;
+    if (channel < mChannels)
+    {
+        hwdrop = nexus_hwdrop(mpControl, channel);
+    }
+    return hwdrop;
+}
 
 Ingex::Timecode IngexShm::Timecode(unsigned int channel, unsigned int frame)
 {
@@ -203,11 +198,11 @@ Ingex::Timecode IngexShm::CurrentTimecode(unsigned int channel)
 }
 
 
-std::string IngexShm::SourceName(unsigned int channel_i)
+std::string IngexShm::SourceName(unsigned int channel)
 {
-    if (mpControl && channel_i < mChannels)
+    if (mpControl && channel < mChannels)
     {
-        return mpControl->channel[channel_i].source_name;
+        return mpControl->channel[channel].source_name;
     }
     else
     {
@@ -215,11 +210,11 @@ std::string IngexShm::SourceName(unsigned int channel_i)
     }
 }
 
-void IngexShm::SourceName(unsigned int channel_i, const std::string & name)
+void IngexShm::SourceName(unsigned int channel, const std::string & name)
 {
-    if (channel_i < mChannels)
+    if (channel < mChannels)
     {
-        nexus_set_source_name(mpControl, channel_i, name.c_str());
+        nexus_set_source_name(mpControl, channel, name.c_str());
     }
 }
 
@@ -287,6 +282,11 @@ void IngexShm::GetFrameRate(int & fps, bool & df)
             }
         }
     }
+}
+
+void IngexShm::RecorderName(const std::string & name)
+{
+    mRecorderName = name;
 }
 
 // Informational updates from Recorder to shared memory

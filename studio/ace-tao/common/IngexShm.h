@@ -1,5 +1,5 @@
 /*
- * $Id: IngexShm.h,v 1.6 2010/06/25 14:22:21 philipn Exp $
+ * $Id: IngexShm.h,v 1.7 2010/11/02 16:45:19 john_f Exp $
  *
  * Interface for reading audio/video data from shared memory.
  *
@@ -58,140 +58,50 @@ public:
     ~IngexShm();
 
     void Attach();
-    unsigned int Channels() { return mChannels; }
-    unsigned int AudioTracksPerChannel() { return mAudioTracksPerChannel; }
-    int RingLength() { if (mpControl) return mpControl->ringlen; else return 0; }
-    int LastFrame(unsigned int channel_i)
-    {
-        int frame = 0;
-        if (channel_i < mChannels)
-        {
-            frame = nexus_lastframe(mpControl, channel_i);
-        }
-        if (frame < 0)
-        {
-            frame = 0;
-        }
-        return frame;
-    }
 
-    std::string SourceName(unsigned int channel_i);
-    void SourceName(unsigned int channel_i, const std::string & name);
-
-    /*
-    enum TcEnum { LTC, VITC };
-    void TcMode(TcEnum mode) { mTcMode = mode; }
-    */
+    unsigned int Channels();
+    unsigned int AudioTracksPerChannel();
+    int RingLength();
+    int LastFrame(unsigned int channel);
 
     Ingex::VideoRaster::EnumType PrimaryVideoRaster();
     Ingex::VideoRaster::EnumType SecondaryVideoRaster();
     Ingex::PixelFormat::EnumType PrimaryPixelFormat();
     Ingex::PixelFormat::EnumType SecondaryPixelFormat();
 
-    int FrameRateNumerator() { if (mpControl) return mpControl->frame_rate_numer; else return 0; }
-    int FrameRateDenominator() { if (mpControl) return mpControl->frame_rate_denom; else return 0; }
+    unsigned int PrimaryWidth();
+    unsigned int PrimaryHeight();
+    unsigned int SecondaryWidth();
+    unsigned int SecondaryHeight();
+
+    int FrameRateNumerator();
+    int FrameRateDenominator();
     void GetFrameRate(int & numerator, int & denominator);
     void GetFrameRate(int & fps, bool & df);
 
     Ingex::Timecode Timecode(unsigned int channel, unsigned int frame);
     Ingex::Timecode CurrentTimecode(unsigned int channel);
 
-    bool SignalPresent(unsigned int channel)
-    {
-        return nexus_signal_ok(mpControl, mRing, channel, LastFrame(channel));
-    }
+    bool SignalPresent(unsigned int channel);
+    int HwDrop(unsigned int channel);
 
-    unsigned int Width() { return mpControl->width; }
-    unsigned int Height() { return mpControl->height; }
-    unsigned int PrimaryWidth() { return mpControl->width; }
-    unsigned int PrimaryHeight() { return mpControl->height; }
-    unsigned int SecondaryWidth() { return mpControl->sec_width; }
-    unsigned int SecondaryHeight() { return mpControl->sec_height; }
-    bool Interlace() { return true; } // not yet supported
+    std::string SourceName(unsigned int channel);
+    void SourceName(unsigned int channel, const std::string & name);
 
-    int FrameNumber(unsigned int channel, unsigned int frame)
-    {
-        return nexus_frame_number(mpControl, mRing, channel, frame);
-    }
+    int FrameNumber(unsigned int channel, unsigned int frame);
 
-    // int FrameNumberOffset() { return mpControl->frame_number_offset; }
-    int SecondaryVideoOffset() { return mpControl->sec_video_offset; }
+    uint8_t * pVideoPri(int channel, int frame);
+    uint8_t * pVideoSec(unsigned int channel, unsigned int frame);
+    int32_t * pPrimaryAudio(unsigned int channel, unsigned int frame, int track);
+    int16_t * pSecondaryAudio(unsigned int channel, unsigned int frame, int track);
+    NexusFrameData * pFrameData(unsigned int channel, unsigned int frame);
 
-    uint8_t * pVideoPri(int channel, int frame)
-    {
-        return (uint8_t *)nexus_primary_video(mpControl, mRing, channel, frame);
-    }
+    int NumAudioSamples(unsigned int channel, unsigned int frame);
 
-    uint8_t * pVideoSec(unsigned int channel, unsigned int frame)
-    {
-        return (uint8_t *)nexus_secondary_video(mpControl, mRing, channel, frame);
-    }
-
-    NexusFrameData * pFrameData(unsigned int channel, unsigned int frame)
-    {
-        return nexus_frame_data(mpControl, mRing, channel, frame);
-    }
-
-    int32_t * pPrimaryAudio(unsigned int channel, unsigned int frame, int track)
-    {
-        return (int32_t *)nexus_primary_audio(mpControl, mRing, channel, frame, track);
-    }
-
-    int16_t * pSecondaryAudio(unsigned int channel, unsigned int frame, int track)
-    {
-        return (int16_t *)nexus_secondary_audio(mpControl, mRing, channel, frame, track);
-    }
-
-    int NumAudioSamples(unsigned int channel, unsigned int frame)
-    {
-		int audio_samples_per_frame = nexus_num_aud_samp(mpControl, mRing, channel, frame);
-		// Guard against garbage data
-        if (audio_samples_per_frame < 0 || audio_samples_per_frame > 1920)
-        {
-            audio_samples_per_frame = 1920;
-        }
-        return audio_samples_per_frame;
-    }
-
-    CaptureFormat PrimaryCaptureFormat()
-    {
-        if (mpControl)
-        {
-            return mpControl->pri_video_format;
-        }
-        else
-        {
-            return FormatNone;
-        }
-    }
-
-    CaptureFormat SecondaryCaptureFormat()
-    {
-        if (mpControl)
-        {
-            return mpControl->sec_video_format;
-        }
-        else
-        {
-            return FormatNone;
-        }
-    }
-
-    void GetHeartbeat(struct timeval * tv)
-    {
-        if (mpControl)
-        {
-            *tv = mpControl->owner_heartbeat;
-        }
-        else
-        {
-            tv->tv_sec = 0;
-            tv->tv_usec = 0;
-        }
-    }
+    void GetHeartbeat(struct timeval * tv);
 
     // Store recorder name ready for informational update when connecting to shared memory
-    void RecorderName(const std::string & name) { mRecorderName = name; }
+    void RecorderName(const std::string & name);
 
     // Informational updates from Recorder to shared memory
     void InfoSetup();
@@ -214,12 +124,15 @@ protected:
     IngexShm & operator= (const IngexShm &);
 
 private:
+    // methods
+    void Detach();
+
+    // data
     std::string mRecorderName;
     unsigned int mChannels;
     unsigned int mAudioTracksPerChannel;
     uint8_t * mRing[MAX_CHANNELS];
     NexusControl * mpControl;
-    //TcEnum mTcMode;
     // static instance pointer
     static IngexShm * mInstance;
     // thread management
@@ -229,6 +142,115 @@ private:
 // friends
     friend ACE_THR_FUNC_RETURN monitor_shm(void * p);
 };
+
+// Inline method definitions
+
+inline uint8_t * IngexShm::pVideoPri(int channel, int frame)
+{
+    return (uint8_t *)nexus_primary_video(mpControl, mRing, channel, frame);
+}
+
+inline uint8_t * IngexShm::pVideoSec(unsigned int channel, unsigned int frame)
+{
+    return (uint8_t *)nexus_secondary_video(mpControl, mRing, channel, frame);
+}
+
+inline int32_t * IngexShm::pPrimaryAudio(unsigned int channel, unsigned int frame, int track)
+{
+    return (int32_t *)nexus_primary_audio(mpControl, mRing, channel, frame, track);
+}
+
+inline int16_t * IngexShm::pSecondaryAudio(unsigned int channel, unsigned int frame, int track)
+{
+    return (int16_t *)nexus_secondary_audio(mpControl, mRing, channel, frame, track);
+}
+
+inline NexusFrameData * IngexShm::pFrameData(unsigned int channel, unsigned int frame)
+{
+    return nexus_frame_data(mpControl, mRing, channel, frame);
+}
+
+inline int IngexShm::LastFrame(unsigned int channel)
+{
+    int frame = 0;
+    if (channel < mChannels)
+    {
+        frame = nexus_lastframe(mpControl, channel);
+    }
+    if (frame < 0)
+    {
+        frame = 0;
+    }
+    return frame;
+}
+
+inline bool IngexShm::SignalPresent(unsigned int channel)
+{
+    return nexus_signal_ok(mpControl, mRing, channel, LastFrame(channel));
+}
+
+inline int IngexShm::FrameNumber(unsigned int channel, unsigned int frame)
+{
+    return nexus_frame_number(mpControl, mRing, channel, frame);
+}
+
+inline int IngexShm::FrameRateNumerator()
+{
+    if (mpControl)
+    {
+        return mpControl->frame_rate_numer;
+    }
+    else
+    {
+        return 0;
+    }
+}
+
+inline int IngexShm::FrameRateDenominator()
+{
+    if (mpControl)
+    {
+        return mpControl->frame_rate_denom;
+    }
+    else
+    {
+        return 0;
+    }
+}
+
+inline unsigned int IngexShm::PrimaryWidth() { return mpControl->width; }
+inline unsigned int IngexShm::PrimaryHeight() { return mpControl->height; }
+inline unsigned int IngexShm::SecondaryWidth() { return mpControl->sec_width; }
+inline unsigned int IngexShm::SecondaryHeight() { return mpControl->sec_height; }
+
+inline unsigned int IngexShm::Channels() { return mChannels; }
+inline unsigned int IngexShm::AudioTracksPerChannel() { return mAudioTracksPerChannel; }
+inline int IngexShm::RingLength() { if (mpControl) return mpControl->ringlen; else return 0; }
+
+inline int IngexShm::NumAudioSamples(unsigned int channel, unsigned int frame)
+{
+    int audio_samples_per_frame = nexus_num_aud_samp(mpControl, mRing, channel, frame);
+    // Guard against garbage data
+    if (audio_samples_per_frame < 0 || audio_samples_per_frame > 1920)
+    {
+        audio_samples_per_frame = 1920;
+    }
+    return audio_samples_per_frame;
+}
+
+inline void IngexShm::GetHeartbeat(struct timeval * tv)
+{
+    if (mpControl)
+    {
+        *tv = mpControl->owner_heartbeat;
+    }
+    else
+    {
+        tv->tv_sec = 0;
+        tv->tv_usec = 0;
+    }
+}
+
 
 #endif //#ifndef IngexShm_h
 

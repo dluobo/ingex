@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_control.h,v 1.7 2010/06/25 13:51:28 philipn Exp $
+ * $Id: nexus_control.h,v 1.8 2010/11/02 16:45:19 john_f Exp $
  *
  * Shared memory interface between SDI capture threads and reader threads.
  *
@@ -25,6 +25,29 @@
 #ifndef NEXUS_CONTROL_H
 #define NEXUS_CONTROL_H
 
+#define MAX_CHANNELS 8              // number of separate video+audio inputs
+#define MAX_RECORDERS 2             // number of Recorders per machine
+#define MAX_ENCODES_PER_CHANNEL 3   // Recorder can make this number of encodes per channel
+
+// Mono audio data is arranged in blocks of MAX_AUDIO_SAMPLES_PER_FRAME for each audio track
+#define MAX_AUDIO_SAMPLES_PER_FRAME 1920
+
+// Shared memory keys
+#ifdef WIN32
+// The kind of shared memory used by Ingex recorder daemon is not available on Windows
+// but the settings below allow some code to compile.
+#include <ace/OS_NS_sys_shm.h>
+const key_t control_shm_key = "control";
+const key_t channel_shm_key[MAX_CHANNELS] = { "channel0", "channel1", "channel2", "channel3" };
+const int shm_flags = 0;
+#else
+#include <sys/shm.h>
+const key_t control_shm_key = 9;
+const key_t channel_shm_key[MAX_CHANNELS] = { 10, 11, 12, 13, 14, 15, 16, 17 };
+const int shm_flags = SHM_RDONLY;
+#endif
+
+
 #ifndef _MSC_VER
 #include <pthread.h>
 #include <stdio.h>
@@ -38,7 +61,7 @@
 #define PTHREAD_MUTEX_UNLOCK(x)
 #endif
 
-#include <inttypes.h>
+#include "integer_types.h"
 
 #include "VideoRaster.h"
 #include "Timecode.h"
@@ -105,13 +128,6 @@ typedef struct {
     // Following members are written to by Recorder
     char            source_name[64];    // identifies the source for this channel
 } NexusBufCtl;
-
-#define MAX_RECORDERS 2             // number of Recorders per machine
-#define MAX_ENCODES_PER_CHANNEL 3   // Recorder can make this number of encodes per channel
-#define MAX_CHANNELS 8              // number of separate video+audio inputs
-
-// Mono audio data is arranged in blocks of MAX_AUDIO_SAMPLES_PER_FRAME for each audio track
-#define MAX_AUDIO_SAMPLES_PER_FRAME 1920
 
 typedef struct {
     int     enabled;            // set to 1 if channel and encoding is enabled
@@ -208,6 +224,7 @@ extern const char *nexus_capture_format_name(CaptureFormat fmt);
 extern const char *nexus_timecode_type_name(NexusTimecode tc_type);
 
 extern int nexus_lastframe(NexusControl *pctl, int channel);
+extern int nexus_hwdrop(NexusControl *pctl, int channel);
 
 extern NexusFrameData* nexus_frame_data(const NexusControl *pctl, uint8_t *ring[], int channel, int frame);
 

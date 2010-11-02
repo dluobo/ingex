@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.cpp,v 1.17 2010/10/15 17:08:16 john_f Exp $
+ * $Id: dvs_sdi.cpp,v 1.18 2010/11/02 16:45:19 john_f Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -309,12 +309,24 @@ void cleanup_shared_mem(void)
     int             i, id;
     struct shmid_ds shm_desc;
 
-    for (i = 0; i < (1 + num_sdi_threads); i++)
+    // control
+    id = shmget(control_shm_key, sizeof(*p_control), 0444);
+    if (id == -1)
     {
-        id = shmget(9 + i, sizeof(*p_control), 0444);
+        fprintf(stderr, "No shmem id for control\n");
+    }
+    else if (shmctl(id, IPC_RMID, &shm_desc) == -1)
+    {
+        perror("shmctl(id, IPC_RMID):");
+    }
+
+    // channel buffers
+    for (i = 0; i < num_sdi_threads; i++)
+    {
+        id = shmget(channel_shm_key[i], sizeof(*p_control), 0444);
         if (id == -1)
         {
-            fprintf(stderr, "No shmem id for key %d\n", 9 + i);
+            fprintf(stderr, "No shmem id for channel %d\n", i);
             continue;
         }
         if (shmctl(id, IPC_RMID, &shm_desc) == -1)
@@ -737,22 +749,22 @@ int allocate_shared_buffers(int num_channels, long long max_memory)
     }
 
     // Allocate memory for control structure which is fixed size
-    if ((control_id = shmget(9, sizeof(*p_control), IPC_CREAT | IPC_EXCL | 0666)) == -1)
+    if ((control_id = shmget(control_shm_key, sizeof(*p_control), IPC_CREAT | IPC_EXCL | 0666)) == -1)
     {
         if (errno == EEXIST)
         {
-            fprintf(stderr, "shmget: shm segment exists, deleting all related segments\n");
+            fprintf(stderr, "shmget: shm control segment exists, deleting all related segments\n");
             cleanup_shared_mem();
-            if ((control_id = shmget(9, sizeof(*p_control), IPC_CREAT | IPC_EXCL | 0666)) == -1)
+            if ((control_id = shmget(control_shm_key, sizeof(*p_control), IPC_CREAT | IPC_EXCL | 0666)) == -1)
             {
-                perror("shmget control key 9");
+                perror("shmget control key");
                 fprintf(stderr, "Use\n\tipcs | grep '0x0000000[9abcd]'\nplus ipcrm -m <id> to cleanup\n");
                 return 0;
             }
         }
         else
         {
-            perror("shmget control key 9");
+            perror("shmget control key");
             fprintf(stderr, "Use\n\tipcs | grep '0x0000000[9abcd]'\nplus ipcrm -m <id> to cleanup\n");
             return 0;
         }
@@ -801,12 +813,11 @@ int allocate_shared_buffers(int num_channels, long long max_memory)
     // key for variable number of ring buffers can be 10, 11, 12, 13, 14, 15, 16, 17
     for (i = 0; i < num_channels; i++)
     {
-        int key = i + 10;
-        ring_id[i] = shmget(key, element_size * ring_len, IPC_CREAT | IPC_EXCL | 0666);
+        ring_id[i] = shmget(channel_shm_key[i], element_size * ring_len, IPC_CREAT | IPC_EXCL | 0666);
         if (ring_id[i] == -1)   /* shm error */
         {
             int save_errno = errno;
-            fprintf(stderr, "Attemp to shmget for key %d: ", key);
+            fprintf(stderr, "Attemp to shmget for channel %d: ", i);
             perror("shmget");
             if (save_errno == EEXIST)
                 fprintf(stderr, "Use\n\tipcs | grep '0x0000000[9abcd]'\nplus ipcrm -m <id> to cleanup\n");
@@ -1914,15 +1925,19 @@ int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_from_vi
         PTHREAD_MUTEX_UNLOCK( &m_log )
     }
 
-    if (verbose)
+    if (info.dropped != pc->hwdrop)
     {
         PTHREAD_MUTEX_LOCK( &m_log )        // guard logging with mutex to avoid intermixing
 
-        if (info.dropped != pc->hwdrop)
-        {
-            // dropped count has changed
-            logTF("chan %d: lf=%7d vitc=%8d ltc=%8d dropped=%d\n", chan, pc->lastframe+1, vitc_as_int, ltc_as_int, info.dropped);
-        }
+        // dropped count has changed
+        logTF("chan %d: lastframe=%6d tc=%s dropped=%d\n", chan, pc->lastframe+1, tc_tc.Text(), info.dropped);
+
+        PTHREAD_MUTEX_UNLOCK( &m_log )      // end logging guard
+    }
+
+    if (verbose)
+    {
+        PTHREAD_MUTEX_LOCK( &m_log )        // guard logging with mutex to avoid intermixing
 
         logTF("chan[%d]: tick=%d hc=%u,%u diff_to_mast=%12"PRIi64"  lf=%7d vitc=%8d ltc=%8d (orig v=%8d l=%8d] drop=%d\n", chan,
             pbuffer->control.tick,

@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_control.cpp,v 1.2 2010/08/18 10:18:43 john_f Exp $
+ * $Id: nexus_control.cpp,v 1.3 2010/11/02 16:45:19 john_f Exp $
  *
  * Module for creating and accessing nexus shared control memory
  *
@@ -101,6 +101,21 @@ extern int nexus_lastframe(NexusControl *pctl, int channel)
     }
     
     return lastframe;
+}
+
+extern int nexus_hwdrop(NexusControl *pctl, int channel)
+{
+    int hwdrop = 0;
+    
+    if (pctl)
+    {
+        // using lastframe mutex because that is what is used when dvs_sdi sets hwdrop
+        PTHREAD_MUTEX_LOCK(&pctl->channel[channel].m_lastframe)
+        hwdrop = pctl->channel[channel].hwdrop;
+        PTHREAD_MUTEX_UNLOCK(&pctl->channel[channel].m_lastframe)
+    }
+    
+    return hwdrop;
 }
 
 extern NexusFrameData* nexus_frame_data(const NexusControl *pctl, uint8_t *ring[], int channel, int frame)
@@ -275,7 +290,7 @@ extern int nexus_connect_to_shared_mem(int timeout_microsec, int read_only, int 
     int time_taken = 0;
     while (1)
     {
-        control_id = shmget(9, sizeof(NexusControl), 0444);
+        control_id = shmget(control_shm_key, sizeof(NexusControl), 0444);
         if (control_id != -1)
             break;
 
@@ -297,7 +312,7 @@ extern int nexus_connect_to_shared_mem(int timeout_microsec, int read_only, int 
     {
         while (1)
         {
-            shm_id = shmget(10 + i, p->pctl->elementsize, 0444);
+            shm_id = shmget(channel_shm_key[i], p->pctl->elementsize, 0444);
             if (shm_id != -1)
                 break;
             usleep(20 * 1000);
