@@ -3,14 +3,16 @@ project(commonLib) {
   sharedname = 
 
   // Just including selected source files for
-  // building some projects on Windows.
+  // building certain projects on Windows.
 
   Header_Files {
     Timecode.h
+    VideoRaster.h
   }
 
   Source_Files {
     Timecode.cpp
+    VideoRaster.cpp
   }
 
   specific(vc6,vc71,vc8,vc9) {
