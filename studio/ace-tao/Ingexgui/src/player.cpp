@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: player.cpp,v 1.27 2010/10/12 17:40:37 john_f Exp $              *
+ *   $Id: player.cpp,v 1.28 2010/11/02 15:22:22 john_f Exp $              *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -103,6 +103,7 @@ mSavedState(0) //must call SetSavedState to use this
     mSocket = new wxSocketClient();
     mSocket->SetEventHandler(*this);
     mSocket->SetNotify(wxSOCKET_CONNECTION_FLAG);
+    mSocket->Notify(true);
     TrafficControl(false); //in case it has just been restarted after crashing and leaving traffic control on
 }
 

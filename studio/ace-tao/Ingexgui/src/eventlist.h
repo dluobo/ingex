@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: eventlist.h,v 1.12 2010/08/13 15:21:43 john_f Exp $             *
+ *   $Id: eventlist.h,v 1.13 2010/11/02 15:22:22 john_f Exp $             *
  *                                                                         *
  *   Copyright (C) 2009-2010 British Broadcasting Corporation                   *
  *   - all rights reserved.                                                *
@@ -41,7 +41,15 @@ class ChunkInfo
         ChunkInfo(const unsigned long startIndex, const wxString & projectName, const ProdAuto::MxfTimecode & startTimecode, const int64_t startPosition, const bool hasChunkBefore) : mStartIndex(startIndex), mProjectName(projectName), mStartTimecode(startTimecode), mLastTimecode(InvalidMxfTimecode), mStartPosition(startPosition), mHasChunkBefore(hasChunkBefore), mHasChunkAfter(false) {};
         void SetHasChunkAfter() {mHasChunkAfter = true;};
         void AddRecorder(ProdAuto::TrackList_var trackList, CORBA::StringSeq_var fileList) {mFiles.Add(fileList); mTracks.Add(trackList);}; //adds a set of tracks provided by a recorder at the end of a recording
-        void AddCuePoint(const int64_t frame, size_t colourIndex) {mCuePointFrames.push_back(frame); mCueColourIndeces.push_back(colourIndex);}; //no text here because it's stored in the event list (which means it can be edited)
+        unsigned long AddCuePoint(const int64_t frame, size_t colourIndex) { //no text here because it's stored in the event list (which means it can be edited)
+            unsigned int i = mCuePointFrames.size();
+            while (i > 0 && mCuePointFrames[i - 1] > frame) i--; //cue point is not necessarily added to the end
+            std::vector<int64_t>::iterator it = mCuePointFrames.begin() + i;
+            mCuePointFrames.insert(it, frame);
+            std::vector<size_t>::iterator it2 = mCueColourIndeces.begin() + i;
+            mCueColourIndeces.insert(it2, colourIndex);
+            return mStartIndex + i + 1; //+1 for start event
+        };
         void SetLastTimecode(const ProdAuto::MxfTimecode & lastTimecode) {mLastTimecode = lastTimecode;};
         bool DeleteCuePoint(const unsigned long index) {
             if (mCuePointFrames.size() > index) {
@@ -67,12 +75,12 @@ class ChunkInfo
         const unsigned long mStartIndex; //the index in the event list for the start of this chunk
         ArrayOfStringSeq_var mFiles;
         const wxString mProjectName;
-        const ProdAuto::MxfTimecode mStartTimecode;
-        ProdAuto::MxfTimecode mLastTimecode;
-        const int64_t mStartPosition;
+        const ProdAuto::MxfTimecode mStartTimecode; //of this chunk
+        ProdAuto::MxfTimecode mLastTimecode; //of this chunk
+        const int64_t mStartPosition; //relative to start of recording
         ArrayOfTrackList_var mTracks; //deletes itself
-        std::vector<int64_t> mCuePointFrames;
-        std::vector<size_t> mCueColourIndeces;
+        std::vector<int64_t> mCuePointFrames; //relative to start of recording (i.e. not necessarily this chunk)
+        std::vector<size_t> mCueColourIndeces; //of the cue points
         const bool mHasChunkBefore;
         bool mHasChunkAfter;
 };
@@ -80,6 +88,9 @@ class ChunkInfo
 WX_DECLARE_OBJARRAY(ChunkInfo, ChunkInfoArray);
 
 class RecorderData;
+class wxSocketServer;
+class wxSocketEvent;
+class wxSocketBase;
 
 /// Class to display and store the list of recording events
 class EventList : public wxListView, wxThread //used wxListCtrl for a while because wxListView crashed when you added an item - seems ok with 2.8
@@ -124,6 +135,7 @@ class EventList : public wxListView, wxThread //used wxListCtrl for a while beca
         void OnEventEndEdit(wxListEvent&);
         void OnRestoreListLabel(wxCommandEvent&);
         void OnEventSelection(wxListEvent&);
+        void OnSocketEvent(wxSocketEvent&);
         void ClearSavedData();
         const wxString GetCdata(wxXmlNode *);
         void NewChunkInfo(ProdAuto::MxfTimecode *, int64_t, const wxString & = wxEmptyString);
@@ -146,6 +158,10 @@ class EventList : public wxListView, wxThread //used wxListCtrl for a while beca
         bool mLoadEventFiles;
         wxString mFilename;
         ProdAuto::MxfTimecode mEditRate;
+        ProdAuto::MxfTimecode mRecStartTimecode;
+        wxSocketServer * mCuePointSocket;
+        wxSocketBase * mConnectedSocket;
+        wxString mSocketData;
     DECLARE_EVENT_TABLE()
 };
 

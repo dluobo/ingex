@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: eventlist.cpp,v 1.16 2010/08/27 17:44:05 john_f Exp $           *
+ *   $Id: eventlist.cpp,v 1.17 2010/11/02 15:22:22 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2009-2010 British Broadcasting Corporation                   *
  *   - all rights reserved.                                                *
@@ -24,6 +24,7 @@
 #include <wx/wx.h>
 #include <wx/filename.h>
 #include <wx/file.h>
+#include <wx/socket.h>
 #include "eventlist.h"
 #include "ingexgui.h" //consts
 #include "timepos.h"
@@ -39,13 +40,14 @@ BEGIN_EVENT_TABLE( EventList, wxListView )
     EVT_LIST_BEGIN_LABEL_EDIT( wxID_ANY, EventList::OnEventBeginEdit )
     EVT_LIST_END_LABEL_EDIT( wxID_ANY, EventList::OnEventEndEdit )
     EVT_COMMAND( wxID_ANY, EVT_RESTORE_LIST_LABEL, EventList::OnRestoreListLabel )
+    EVT_SOCKET(wxID_ANY, EventList::OnSocketEvent)
 END_EVENT_TABLE()
 
 const wxString TypeLabels[] = {wxT(""), wxT("Start"), wxT("Cue"), wxT("Chunk Start"), wxT("Last Frame"), wxT("PROBLEM")}; //must match order of EventType enum
 
 EventList::EventList(wxWindow * parent, wxWindowID id, const wxPoint & pos, const wxSize & size, bool loadEventFiles) :
 wxListView(parent, id, pos, size, wxLC_REPORT|wxLC_SINGLE_SEL|wxSUNKEN_BORDER|wxLC_EDIT_LABELS/*|wxALWAYS_SHOW_SB*/), //ALWAYS_SHOW_SB results in a disabled scrollbar on GTK (wx 2.8))
-mCanEditAfter(0), mCurrentChunkInfo(-1), mBlockEventItem(-1), mRecordingNodeCount(0), mChunking(false), mRunThread(false), mSyncThread(false), mLoadEventFiles(loadEventFiles), mEditRate(InvalidMxfTimecode)
+mCanEditAfter(0), mCurrentChunkInfo(-1), mBlockEventItem(-1), mRecordingNodeCount(0), mChunking(false), mRunThread(false), mSyncThread(false), mLoadEventFiles(loadEventFiles), mEditRate(InvalidMxfTimecode), mRecStartTimecode(InvalidMxfTimecode), mConnectedSocket(0)
 {
     //set up the columns
     wxListItem itemCol;
@@ -76,6 +78,15 @@ mCanEditAfter(0), mCurrentChunkInfo(-1), mBlockEventItem(-1), mRecordingNodeCoun
     wxThread::Create();
     wxThread::Run();
 //    Load(); segfaults if called here, at GetFirstSelected() in GetCurrentChunkInfo()
+
+    //socket for accepting cue points from external processes
+    wxIPV4address addr;
+    addr.Service(2001); //port
+    mCuePointSocket = new wxSocketServer(addr);
+    if (!mCuePointSocket->IsOk()) std::cerr << "socket not ok \n";
+    mCuePointSocket->SetEventHandler(*this);
+    mCuePointSocket->SetNotify(wxSOCKET_CONNECTION_FLAG);
+    mCuePointSocket->Notify(true);
 }
 
 /// Responds to the selected item being changed, either by the user or programmatically.
@@ -376,6 +387,7 @@ bool EventList::AtBottom()
 /// Adds a stop/start/chunk/cue point event to the event list.
 /// Start and stop events are ignored if already started/stopped
 /// For start and chunk events, creates a new ChunkInfo object.
+/// Cue points can occur out of order and will be inserted in the correct position in the list.
 /// Updates the other controls and the player.
 /// @param type The event type: START, CUE, CHUNK, STOP or [PROBLEM]-not fully implemented.
 /// @param timecode Timecode of the event, for START and optionally STOP and CHUNK events (for STOP and CHUNK events, assumed to be frame-accurate, unlike frameCount).
@@ -401,6 +413,7 @@ void EventList::AddEvent(EventType type, ProdAuto::MxfTimecode * timecode, const
     else if (START != type) {
         return;
     }
+    item.SetId(GetItemCount()); //insert event at end unless a cue point, which can be out of order
     wxString dummy;
     int64_t position = frameCount;
     ProdAuto::MxfTimecode tc = InvalidMxfTimecode;
@@ -415,16 +428,16 @@ void EventList::AddEvent(EventType type, ProdAuto::MxfTimecode * timecode, const
             mCanEditAfter = GetItemCount(); //don't allow editing of the start event description
 //          font.SetWeight(wxFONTWEIGHT_BOLD); breaks auto col width
 //          font.SetStyle(wxFONTSTYLE_ITALIC); breaks auto col width
+            if (!timecode->undefined) mRecStartTimecode = *timecode;
             break;
         case CUE :
             item.SetText(TypeLabels[CUE]);
             item.SetTextColour(CuePointsDlg::GetLabelColour(colourIndex));
             item.SetBackgroundColour(CuePointsDlg::GetColour(colourIndex));
-            mChunkInfoArray.Item(mChunkInfoArray.GetCount() - 1).AddCuePoint(frameCount, colourIndex);
+            item.SetId(mChunkInfoArray.Item(mChunkInfoArray.GetCount() - 1).AddCuePoint(frameCount, colourIndex)); //put in the cue point and work out its position in the list
             tc = GetStartTimecode();
             tc.samples += frameCount; //wrap is done by FormatTimecode()
             timecode = &tc;
-
             break;
         case STOP :
         case CHUNK : {
@@ -498,6 +511,7 @@ void EventList::AddEvent(EventType type, ProdAuto::MxfTimecode * timecode, const
                 else if (!timecode->undefined) {
                     --(timecode->samples) %= 24LL * 3600 * timecode->edit_rate.numerator / timecode->edit_rate.denominator; //previous frame is the last recorded; wrap-around
                 }
+                if (STOP == type) mRecStartTimecode.undefined = true; //indicates recording has stopped
                 break;
             }
         default : //FIXME: putting these in will break the creation of the list of locators; "cue point" editing won't be prevented; probably other issues too!
@@ -507,7 +521,7 @@ void EventList::AddEvent(EventType type, ProdAuto::MxfTimecode * timecode, const
             break;
     }
     mMutex.Lock();
-    //Try to add edit rate - can't guarantee that the first start event will have a valid timecode
+    //Try to add edit rate to xml doc - can't guarantee that the first start event will have a valid timecode
     if (!mRootNode->GetPropVal(wxT("EditRateNumerator"), &dummy) && timecode && !timecode->undefined) {
         mRootNode->AddProperty(wxT("EditRateNumerator"), wxString::Format(wxT("%d"), timecode->edit_rate.numerator));
         mRootNode->AddProperty(wxT("EditRateDenominator"), wxString::Format(wxT("%d"), timecode->edit_rate.denominator));
@@ -519,9 +533,8 @@ void EventList::AddEvent(EventType type, ProdAuto::MxfTimecode * timecode, const
 
     //event name
     item.SetColumn(0);
-    item.SetId(GetItemCount()); //will insert at end
     item.SetData(mChunkInfoArray.GetCount() - 1); //the index of the chunk info for this chunk
-    InsertItem(item); //insert (at end)
+    InsertItem(item); //insert (normally at end)
     if (STOP == type && select) {
         SelectLastTake();
     }
@@ -588,7 +601,13 @@ void EventList::NewChunkInfo(ProdAuto::MxfTimecode * timecode, int64_t position,
     if (!timecode->undefined) mRecordingNode->AddProperty(wxT("StartTime"), wxString::Format(wxT("%d"), timecode->samples));
     mMutex.Unlock();
     if (mChunking && mChunkInfoArray.GetCount()) mChunkInfoArray.Item(mChunkInfoArray.GetCount() - 1).SetHasChunkAfter(); //latter check a sanity check
-    ChunkInfo * info = new ChunkInfo(GetItemCount(), projectName.IsEmpty() && mChunkInfoArray.GetCount() ? mChunkInfoArray.Item(mChunkInfoArray.GetCount() - 1).GetProjectName() : projectName, *timecode, position, mChunking); //this will be the index of the current event; deleted by mChunkInfoArray (object array)
+    ChunkInfo * info = new ChunkInfo(
+     GetItemCount(), //where the start of this chunk appears in the displayed list
+     projectName.IsEmpty() && mChunkInfoArray.GetCount() ? mChunkInfoArray.Item(mChunkInfoArray.GetCount() - 1).GetProjectName() : projectName, //project name: use previous (if any) if it's empty
+     *timecode, //start timecode
+     position, //start frame count relative to start of recording
+     mChunking //whether a chunk or an isolated recording
+    ); //deleted by mChunkInfoArray (object array)
     mChunkInfoArray.Add(info);
 }
 
@@ -987,3 +1006,56 @@ wxThread::ExitCode EventList::Entry()
     return 0;
 }
 
+/// Responds to events from the cue point server socket or sockets created by connections to it.
+/// If a connection is made, creates a socket to accept that connection.
+/// If a socket is lost, destroys the socket.
+/// If data has arrived on a socket, we are recording, and the data contains a valid timecode string, inserts a cue point with default colour, and description from the data.
+/// @param event The socket event.  Uses this to determine the type of event.
+void EventList::OnSocketEvent(wxSocketEvent& event)
+{
+    switch (event.GetSocketEvent()) {
+        case wxSOCKET_CONNECTION:
+            if (mConnectedSocket) mConnectedSocket->Destroy(); //no reason to allow more than one connection; prevents memory leaks
+            mConnectedSocket = mCuePointSocket->Accept();
+            mConnectedSocket->SetEventHandler(*this);
+            mConnectedSocket->SetNotify(wxSOCKET_INPUT_FLAG | wxSOCKET_LOST_FLAG);
+            mConnectedSocket->Notify(true);
+            break;
+        case wxSOCKET_INPUT: {
+            char buf[1000];
+            mConnectedSocket->Read(buf, sizeof buf);
+            wxString socketMessage = wxString(buf, *wxConvCurrent);
+            int64_t frameCount;
+            unsigned long value;
+            if (
+             socketMessage.Length() > 12 //at least space for a timecode
+             && !mRecStartTimecode.undefined //recording, and protects against divide by zero
+             && socketMessage.Mid(socketMessage.Length() - 11, 2).ToULong(&value) //hours value a number
+             && value < 24 //hours value OK
+            ) {
+                frameCount = value;
+                if (socketMessage.Mid(socketMessage.Length() - 8, 2).ToULong(&value) && value < 60) { //minutes value OK
+                    frameCount = frameCount * 60 + value;
+                    if (socketMessage.Mid(socketMessage.Length() - 5, 2).ToULong(&value) && value < 60) { //seconds value OK
+                        frameCount = frameCount * 60 + value;
+                        if (socketMessage.Right(2).ToULong(&value)) { //frames value a number
+                            frameCount = frameCount * mRecStartTimecode.edit_rate.numerator / mRecStartTimecode.edit_rate.denominator + value; //now have cue point timecode as number of frames since midnight
+                            frameCount -= mRecStartTimecode.samples; //number of frames since start of recording, mod 1 day FIXME: can't handle recordings more than a day long; doesn't check for stupid values
+//                            if (frameCount < 0) frameCount += 24 * 60 * 60 * mRecStartTimecode.edit_rate.numerator / mRecStartTimecode.edit_rate.denominator; //wrap over midnight
+                            if (frameCount > 0) AddEvent(CUE, 0, socketMessage.Left(socketMessage.Length() - 12), frameCount, 0); //ignore cue points from before the start of recording; use default cue point colour FIXME: doesn't work over midnight
+                        }
+                    }
+                }
+            }
+            break;
+        }
+        case wxSOCKET_LOST: //this will happen after a successful data transfer as well as under error conditions
+            if (mConnectedSocket) {
+                mConnectedSocket->Destroy(); //prevents memory leaks
+                mConnectedSocket = 0;
+            }
+            break;
+        default:
+            break;
+    }
+}
