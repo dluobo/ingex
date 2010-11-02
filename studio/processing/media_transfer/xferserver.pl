@@ -1,7 +1,7 @@
 #! /usr/bin/perl -w
 
 #/***************************************************************************
-# * $Id: xferserver.pl,v 1.19 2010/09/23 17:32:13 john_f Exp $             *
+# * $Id: xferserver.pl,v 1.20 2010/11/02 15:20:51 john_f Exp $             *
 # *                                                                         *
 # *   Copyright (C) 2008-2010 British Broadcasting Corporation              *
 # *   - all rights reserved.                                                *
@@ -47,7 +47,7 @@
 # For each priority, the files to copy are sorted by decreasing age as indicated by ctime, making sure that all files with the latest detected ctime have been accounted for.  Before copying a file, the amount of free space is checked to make sure it is likely to fit (unless in FTP mode), and further copying from this source directory is abandoned (until retry) if it doesn't: this avoids wasting time repeatedly copying large files that won't succeed.  When copying of the last file with a particular ctime in a particular source directory is completed, this ctime is written to the configuration file, and any files older than this are subsequently ignored.  This allows files to be removed from the destination without them being copied again if they remain on the source.  (ctime is used rather than mtime, because it indicates the time the source file was made visible by moving it into the source directory, therefore making it impossible for older files, which would never be copied, to appear subsequently.)
 # There must not be more than one destination path for any source path (or the most recent destination path will apply).  When a path pair is supplied, an existing pair with the same source at another priority will be removed.  There is no way to remove path pairs automatically - these must be removed from PATHS_FILE while the script is not running.
 
-# PATHS_FILE is normally automatically handled but for completeness its format is explained here.  It contains fields separated by newlines.  Each group of fields consists of a priority value (indicated by having a leading space), followed by one or more triplets of source directory, destination directory and ctime value.  Any files in the corresponding source directory with a ctime of this value or less will not be copied.  (The -c option causes these values to be set to zero when the file is first read, but updated values will be written to the file even if nothing is copied.)  The exception is the priority 1 section, which contains the extra directory name immediately after the priority value (may be blank) and an extra ctime value for this extra directory, after each normal ctime value.
+# PATHS_FILE is normally automatically handled but for completeness its format is explained here.  It contains fields separated by newlines, organised into groups by priority.  The start of a group is a field containing the priority value, identified by having a leading space.  For every priority except priority 1, this is followed by one or more triplets of fields containing source directory, destination directory and ctime value, respectively.  Any files in a source directory with a ctime less than or equal to that of the corresponding ctime field will not be copied.  (The -c option causes these values to be set to zero when the file is first read, and updated values will be written to the file even if nothing is copied.)  The priority 1 group is different in that it contains a (possibly empty) extra destination directory name field immediately after the priority value field, and an extra ctime value field for this extra directory after each normal ctime value field.
 
 # If option -e or -g is supplied, the path specified with it forms an additional destination for all files at priority '1'.  This is intended for use with a portable drive onto which to copy offline rushes (and operates in the same way whether using FTP mode or not).  With option -e, each source file will be copied to the extra destination first; with option -g, they are all copied to the extra destination first. 
 
@@ -62,7 +62,7 @@ use IO::Socket;
 use IO::Select;
 use IO::File;
 use Getopt::Std;
-our $VERSION = '$Revision: 1.19 $'; #used by Getopt in the case of --version or --help
+our $VERSION = '$Revision: 1.20 $'; #used by Getopt in the case of --version or --help
 $VERSION =~ s/\s*\$Revision:\s*//;
 $VERSION =~ s/\s*\$\s*$//;
 $Getopt::Std::STANDARD_HELP_VERSION = 1; #so it stops after version message
