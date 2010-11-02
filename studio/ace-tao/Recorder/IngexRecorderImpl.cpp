@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorderImpl.cpp,v 1.23 2010/10/12 17:44:12 john_f Exp $
+ * $Id: IngexRecorderImpl.cpp,v 1.24 2010/11/02 16:27:19 john_f Exp $
  *
  * Servant class for Recorder.
  *
@@ -301,17 +301,13 @@ char * IngexRecorderImpl::RecordingFormat (
 {
     framecount_t pre = (pre_roll.undefined ? 0 : pre_roll.samples);
     Ingex::Timecode start_tc; // initialises to null
-    if (start_timecode.undefined)
-    {
-        ACE_DEBUG((LM_INFO, ACE_TEXT("IngexRecorderImpl::Start(), immediate, pre-roll %d, time %C\n"),
-            pre, DateTime::Timecode().c_str()));
-    }
-    else
+    if (!start_timecode.undefined)
     {
         start_tc = Ingex::Timecode(start_timecode.samples, start_timecode.edit_rate.numerator, start_timecode.edit_rate.denominator, start_timecode.drop_frame);
-        ACE_DEBUG((LM_INFO, ACE_TEXT("IngexRecorderImpl::Start(), tc %C, pre-roll %d, time %C\n"),
-            start_tc.Text(), pre, DateTime::Timecode().c_str()));
     }
+
+    ACE_DEBUG((LM_INFO, ACE_TEXT("%C IngexRecorderImpl::Start(), tc %C, pre-roll %d\n"),
+        DateTime::Timecode().c_str(), start_tc.IsNull() ? "immediate" : start_tc.Text(), pre));
 
     bool ok = true;
 
@@ -546,17 +542,13 @@ char * IngexRecorderImpl::RecordingFormat (
 
     framecount_t post_roll = (mxf_post_roll.undefined ? 0 : mxf_post_roll.samples);
     Ingex::Timecode stop_tc; // initialised to null
-    if (mxf_stop_timecode.undefined)
-    {
-        ACE_DEBUG((LM_INFO, ACE_TEXT("IngexRecorderImpl::Stop(), immediate, post-roll %d, time %C\n"),
-            post_roll, DateTime::Timecode().c_str()));
-    }
-    else
+    if (!mxf_stop_timecode.undefined)
     {
         stop_tc = Ingex::Timecode(mxf_stop_timecode.samples, mxf_stop_timecode.edit_rate.numerator,  mxf_stop_timecode.edit_rate.denominator, mxf_stop_timecode.drop_frame);
-        ACE_DEBUG((LM_INFO, ACE_TEXT("IngexRecorderImpl::Stop(), tc %C, post-roll %d, time %C\n"),
-            stop_tc.Text(), post_roll, DateTime::Timecode().c_str()));
     }
+
+    ACE_DEBUG((LM_INFO, ACE_TEXT("%C IngexRecorderImpl::Stop(), tc %C, post-roll %d\n"),
+        DateTime::Timecode().c_str(), stop_tc.IsNull() ? "immediate" : stop_tc.Text(), post_roll));
 
     // Create out parameter
     files = new ::CORBA::StringSeq;

@@ -1,5 +1,5 @@
 /*
- * $Id: recorder_functions.cpp,v 1.51 2010/10/18 17:48:30 john_f Exp $
+ * $Id: recorder_functions.cpp,v 1.52 2010/11/02 16:27:19 john_f Exp $
  *
  * Functions which execute in recording threads.
  *
@@ -21,6 +21,8 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
  * 02110-1301, USA.
  */
+
+#define __STDC_CONSTANT_MACROS
 
 #include "integer_types.h"
 #include "IngexShm.h"
@@ -71,6 +73,7 @@
 /// Mutex to ensure only one thread at a time can call avcodec open/close
 static ACE_Thread_Mutex avcodec_mutex;
 
+const bool CHECK_BACKLOG_EVERY_FRAME = false;
 const bool THREADED_MJPEG = false;
 const bool MT_ENABLE = true;
 const bool DEBUG_NOWRITE = false;
@@ -310,8 +313,8 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
 
     bool bitc = p_opt->bitc;
 
-    ACE_DEBUG((LM_INFO,
-        ACE_TEXT("start_record_thread(%C thread %d, start_tc=%C %C%C)\n"),
+    ACE_DEBUG((LM_INFO, ACE_TEXT("%C start_record_thread(%C index %d, start_tc=%C %C%C)\n"),
+        DateTime::Timecode().c_str(),
         src_name.c_str(),  p_opt->index,
         start_timecode.Text(),
         resolution_name.c_str(),
@@ -328,7 +331,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     {
         location = p_impl->RecordingLocationMap(location_id);
     }
-    ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C thread %d recording location \"%C\"\n"),
+    ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C index %d recording location \"%C\"\n"),
         src_name.c_str(), p_opt->index, location.c_str()));
 
         
@@ -675,7 +678,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             prodauto::SourceTrackConfig * stc = sc->getTrackConfig(i + 1);
             long db_id = stc->getDatabaseID();
             /*
-            ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C thread %d i %d stc->db_id %d stc->name %C\n"),
+            ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C index %d i %d stc->db_id %d stc->name %C\n"),
                 src_name.c_str(), p_opt->index, i, db_id, stc->name.c_str()));
             */
             mp_stc_dbids.push_back(db_id);
@@ -691,7 +694,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     for (std::vector<HardwareTrack>::const_iterator
         it = mp_hw_trks.begin(); it != mp_hw_trks.end(); ++it)
     {
-        ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C thread %d mp_hw_trks: %u %u\n"),
+        ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C index %d mp_hw_trks: %u %u\n"),
             src_name.c_str(), p_opt->index, it->channel, it->track));
     }
 
@@ -906,7 +909,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             unsigned int track_index = p_impl->TrackIndexMap(mp_stc_dbids[i]);
             p_rec->mFileNames[track_index] = pathname;
 
-            ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C thread %d mp_track %d filename \"%C\" track_index %d\n"),
+            ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C index %d mp_track %d filename \"%C\" track_index %d\n"),
                 src_name.c_str(), p_opt->index, i, pathname.c_str(), track_index));
         }
     }
@@ -1002,6 +1005,20 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         ACE_DEBUG((LM_DEBUG, ACE_TEXT("Channel %d, start_frame=%d\n"), ch, start_frame[ch]));
     }
 
+    // Initialise hardware dropped frame count
+    int hwdrop[MAX_CHANNELS];
+    for (unsigned int i = 0; i < channels_in_use.size(); ++i)
+    {
+        unsigned int ch = channels_in_use[i];
+        hwdrop[ch] = IngexShm::Instance()->HwDrop(ch);
+    }
+
+    // Set warning and max levels for buffer backlogs
+    const int allowed_backlog = ring_length - 3;
+    const int ring_warn_backlog = allowed_backlog / 2;
+    const unsigned int encode_warn_backlog = allowed_backlog / 2;
+    //const unsigned int encode_warn_backlog = 20;
+
     // For the index that is stored in the EncodeFrame, we use the frame number
     // from the first channel.  This is what we keep track of in last_saved.
     int last_saved = lastcoded[channel_i];
@@ -1045,7 +1062,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                 if (DEBUG_SLEEP)
                 {
                     std::string sleep_end = DateTime::Timecode();
-                    ACE_DEBUG((LM_INFO, ACE_TEXT("%C thread %d slept %d ms from %C to %C\n"),
+                    ACE_DEBUG((LM_INFO, ACE_TEXT("%C index %d slept %d ms from %C to %C\n"),
                         src_name.c_str(),  p_opt->index, sleep_ms, sleep_start.c_str(), sleep_end.c_str()));
                 }
 
@@ -1058,7 +1075,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                 int64_t diff_secs = diff / 1000000;
                 if (diff_secs > 5)
                 {
-                    ACE_DEBUG((LM_ERROR, ACE_TEXT("%C thread %d Shared memory lost - stopping recording!\n"),
+                    ACE_DEBUG((LM_ERROR, ACE_TEXT("%C index %d Shared memory lost - stopping recording!\n"),
                         src_name.c_str(),  p_opt->index));
                     p_rec->NoteFailure();
                     for (unsigned int i = 0; i < package_creator->GetMaterialPackage()->tracks.size(); ++i)
@@ -1087,13 +1104,11 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         IngexShm::Instance()->InfoSetBacklog(channel_i, p_opt->index, quad_video, frames_to_code);
 
         // Now we have some frames to code, check the backlog.
-        int allowed_backlog = ring_length - 3;
-        unsigned int warn_backlog = allowed_backlog / 2;
-        if (frames_to_code > allowed_backlog / 2)
+        if (frames_to_code > ring_warn_backlog)
         {
             // Warn about backlog
-            ACE_DEBUG((LM_WARNING, ACE_TEXT("%C thread %d res=%d frames waiting = %d, max = %d\n"),
-                src_name.c_str(), p_opt->index, resolution, frames_to_code, allowed_backlog));
+            ACE_DEBUG((LM_WARNING, ACE_TEXT("%C %C index %d frames waiting in ring buffer %d, max %d\n"),
+                DateTime::Timecode().c_str(), src_name.c_str(), p_opt->index, frames_to_code, allowed_backlog));
         }
         if (frames_to_code > allowed_backlog)
         {
@@ -1118,13 +1133,17 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                 src_name.c_str(), drop));
         }
 
-#if 0
-        // Go round loop only once before re-checking backlog
-        frames_to_code = 1;
-#endif
+        if (CHECK_BACKLOG_EVERY_FRAME)
+        {
+            // Go round loop only once before re-checking backlog
+            frames_to_code = 1;
+        }
 
         for (int fi = 0; fi < frames_to_code && !finished_record; ++fi)
         {
+            ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C %C index %d Processing frame %d of %d\n"),
+                DateTime::Timecode().c_str(), src_name.c_str(), p_opt->index, fi, frames_to_code));
+
             int frame[MAX_CHANNELS];
             for (unsigned int i = 0; i < channels_in_use.size(); ++i)
             {
@@ -1185,7 +1204,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                 }
                 
                 /*
-                ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C thread %d Track %d data %@\n"), src_name.c_str(), p_opt->index, i, p));
+                ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C index %d Track %d data %@\n"), src_name.c_str(), p_opt->index, i, p));
                 */
                 ef.Track(i).Init(p, size, samples, copy, false, false, *p_frame_number, p_frame_number);
             }
@@ -1199,13 +1218,37 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             //if (tc_diff != 0)
             if (tc_diff > 1 || tc_diff < -1)
             {
-                ACE_DEBUG((LM_ERROR, ACE_TEXT("%C thread %d Timecode discontinuity: %d frames missing - current %C, last %C)\n"),
+                ACE_DEBUG((LM_ERROR, ACE_TEXT("%C index %d Timecode discontinuity: %d frames missing - current %C, last %C\n"),
                     src_name.c_str(),
                     p_opt->index,
                     tc_diff,
                     current_tc.Text(),
                     last_tc.Text()
                     ));
+            }
+
+            // Check for frames dropped during capture
+            for (unsigned int i = 0; i < channels_in_use.size(); ++i)
+            {
+                unsigned int ch = channels_in_use[i];
+                int current_hwdrop = IngexShm::Instance()->HwDrop(ch);
+                if (current_hwdrop > hwdrop[ch])
+                {
+                    ACE_DEBUG((LM_ERROR, ACE_TEXT("%C %C index %d tc %C Frames dropped during capture! (ch=%d)\n"),
+                        DateTime::Timecode().c_str(),
+                        src_name.c_str(),
+                        p_opt->index,
+                        current_tc.Text(),
+                        ch));
+                    hwdrop[ch] = current_hwdrop;
+
+                    // Flag the error
+                    for (unsigned int i = 0; i < package_creator->GetMaterialPackage()->tracks.size(); ++i)
+                    {
+                        p_impl->NoteRecError(mp_stc_dbids[i]);
+                    }
+                    p_rec->NoteFailure();
+                }
             }
 
             // Make quad split
@@ -1482,8 +1525,11 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                 {
                     finished_record = true;
                     // NB. need to check and report on out-frame timecode here.
-                    ACE_DEBUG((LM_INFO, ACE_TEXT("  %C index %d duration %d reached (total=%d written=%d dropped=%d)\n"),
-                        src_name.c_str(), p_opt->index, target, total, written, dropped));
+                    ACE_DEBUG((LM_INFO, ACE_TEXT("%C %C index %d duration %d reached (total=%d%s written=%d dropped=%d%s)\n"),
+                        DateTime::Timecode().c_str(),
+                        src_name.c_str(), p_opt->index, target,
+                        total, total == target ? "" : "!",
+                        written, dropped, dropped == 0 ? "" : "!"));
                 }
             }
 
@@ -1492,20 +1538,21 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             {
                 // Check buffer occupancy
                 size_t frames_in_buffer = encode_frame_buffer.QueueSize();
-                if (frames_in_buffer > warn_backlog)
+                if (frames_in_buffer > encode_warn_backlog)
                 {
-                    ACE_DEBUG((LM_WARNING, ACE_TEXT("%C thread %d EncodeFrameBuffer contains %u frames (%u coded)\n"),
-                        src_name.c_str(), p_opt->index, frames_in_buffer, encode_frame_buffer.CodedSize()));
+                    ACE_DEBUG((LM_WARNING, ACE_TEXT("%C %C index %d EncodeFrameBuffer contains %u frames (%u coded)\n"),
+                        DateTime::Timecode().c_str(), src_name.c_str(), p_opt->index, frames_in_buffer, encode_frame_buffer.CodedSize()));
                 }
                 else
                 {
-                    ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C thread %d EncodeFrameBuffer contains %u frames (%u coded)\n"),
-                        src_name.c_str(), p_opt->index, frames_in_buffer, encode_frame_buffer.CodedSize()));
+                    ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C %C index %d EncodeFrameBuffer contains %u frames (%u coded)\n"),
+                        DateTime::Timecode().c_str(), src_name.c_str(), p_opt->index, frames_in_buffer, encode_frame_buffer.CodedSize()));
                 }
 
-                ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C thread %d Looking for frames starting from %d\n"),
+                ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C index %d Looking for frames starting from %d\n"),
                     src_name.c_str(), p_opt->index, last_saved + 1));
 
+                unsigned int frames_written_this_loop = 0;
                 while (!finished_record && encode_frame_buffer.Frame(last_saved + 1).IsCoded())
                 {
                     ACE_DEBUG((LM_DEBUG, ACE_TEXT("Have coded frame %d\n"), last_saved + 1));
@@ -1518,7 +1565,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
 
                         if (eft.Error())
                         {
-                            ACE_DEBUG((LM_ERROR, ACE_TEXT("%C thread %d Coded frame %d track %d has error!\n"),
+                            ACE_DEBUG((LM_ERROR, ACE_TEXT("%C index %d Coded frame %d track %d has error!\n"),
                                 src_name.c_str(), p_opt->index, last_saved + 1, i));
                             p_rec->NoteFailure();
                         }
@@ -1526,12 +1573,12 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                         if (mxf && !DEBUG_NOWRITE)
                         {
                             /*
-                            ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C thread %d WriteSamples track %u, track id %u, data %@, size %u\n"),
+                            ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C index %d WriteSamples track %u, track id %u, data %@, size %u\n"),
                                 src_name.c_str(), p_opt->index,
                                 i, mp_trk->id, eft.Data(), eft.Size()));
                             */
                             //ElapsedTimeReporter etr(DEBUG_ELAPSED_TIME_THRESHOLD,
-                            //    "%s thread %d WriteSamples track %u", src_name.c_str(), p_opt->index, i);
+                            //    "%s index %d WriteSamples track %u", src_name.c_str(), p_opt->index, i);
 
                             try
                             {
@@ -1574,6 +1621,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                     }
 
                     ++last_saved;
+                    ++frames_written_this_loop;
                     encode_frame_buffer.EraseFrame(last_saved);
 
                     p_opt->IncFramesWritten();
@@ -1587,10 +1635,14 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                     {
                         finished_record = true;
                         // NB. need to check and report on out-frame timecode here.
-                        ACE_DEBUG((LM_INFO, ACE_TEXT("  %C index %d duration %d reached (total=%d written=%d dropped=%d)\n"),
-                            src_name.c_str(), p_opt->index, target, total, written, dropped));
+                        ACE_DEBUG((LM_INFO, ACE_TEXT("%C %C index %d duration %d reached (total=%d written=%d dropped=%d)\n"),
+                            DateTime::Timecode().c_str(), src_name.c_str(),
+                            p_opt->index, target, total, written, dropped));
                     }
-                }
+                } // while (!finished_record && encode_frame_buffer.Frame(last_saved + 1).IsCoded())
+
+                ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C %C index %d Frames written this loop: %d\n"),
+                    DateTime::Timecode().c_str(), src_name.c_str(), p_opt->index, frames_written_this_loop));
             }
 
 
@@ -1599,7 +1651,8 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
 
         } // Save all frames which have not been saved
 
-    }
+    } //while (!finished_record)
+
     // ************************
     // End of main record loop
     // ************************

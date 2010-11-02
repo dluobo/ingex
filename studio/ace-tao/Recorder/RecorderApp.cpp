@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderApp.cpp,v 1.8 2010/08/20 16:09:53 john_f Exp $
+ * $Id: RecorderApp.cpp,v 1.9 2010/11/02 16:27:19 john_f Exp $
  *
  * Encapsulation of the recorder application.
  *
@@ -173,9 +173,7 @@ bool RecorderApp::Init(int argc, char * argv[])
     Logfile::AddPathComponent("var");
     Logfile::AddPathComponent("tmp");
     Logfile::AddPathComponent("IngexLogs");
-    std::string dir = recorder_name;
-    dir += '_';
-    dir += DateTime::DateTimeNoSeparators();
+    std::string dir = DateTime::DateTimeNoSeparators() + "_" + recorder_name;
 
     Logfile::AddPathComponent(dir.c_str());
     Logfile::Open("Main", false);
