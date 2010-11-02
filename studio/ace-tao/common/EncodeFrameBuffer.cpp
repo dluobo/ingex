@@ -1,5 +1,5 @@
 /*
- * $Id: EncodeFrameBuffer.cpp,v 1.4 2010/09/06 13:48:24 john_f Exp $
+ * $Id: EncodeFrameBuffer.cpp,v 1.5 2010/11/02 15:27:21 john_f Exp $
  *
  * Buffer to handle video/audio data during encoding process.
  *
@@ -54,10 +54,26 @@ void EncodeFrameTrack::Init(void * data, size_t size, unsigned int samples, bool
     {
         if (copy)
         {
-            mData = malloc(size);
-            memcpy(mData, data, size);
-            mDel = true;
-            mpFrameIndex = 0; // no need to check for data disappearing
+            void * local_data = malloc(size);
+            if (local_data)
+            {
+                memcpy(local_data, data, size);
+                mData = local_data;
+                mDel = true;
+                mpFrameIndex = 0; // no need to check for data disappearing
+            }
+            else
+            {
+                // malloc failed!
+                ACE_DEBUG((LM_ERROR, ACE_TEXT("EncodeFrameTrack::Init() malloc failed!\n")));
+                mData = 0;
+                mSize = 0;
+                mSamples = 0;
+                mDel = false;
+                mCoded = false;
+                mFrameIndex = 0;
+                mpFrameIndex = 0;
+            }
         }
         else
         {
