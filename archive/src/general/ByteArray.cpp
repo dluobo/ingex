@@ -1,5 +1,5 @@
 /*
- * $Id: ByteArray.cpp,v 1.2 2010/09/01 16:05:22 philipn Exp $
+ * $Id: ByteArray.cpp,v 1.3 2010/11/02 15:10:48 john_f Exp $
  *
  * Manages a dynamic array of bytes
  *
@@ -73,7 +73,7 @@ void ByteArray::append(const unsigned char* bytes, uint32_t size)
         return;
     }
     
-    grow(_size + size - _allocatedSize);
+    grow(size);
 
     memcpy(_bytes + _size, bytes, size);
     _size += size;
