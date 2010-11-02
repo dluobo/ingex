@@ -1,5 +1,5 @@
 /*
- * $Id: IndexTable.h,v 1.2 2009/10/12 15:30:25 philipn Exp $
+ * $Id: IndexTable.h,v 1.3 2010/11/02 13:17:55 philipn Exp $
  *
  * 
  *
@@ -53,7 +53,9 @@ public:
     uint8_t getPosTableCount();
     // deltaEntryArray
     // indexEntryArray
-    
+    bool haveDeltaEntryAtDelta(uint32_t delta, uint8_t slice);
+    const MXFDeltaEntry* getDeltaEntryAtDelta(uint32_t delta, uint8_t slice);
+
     void setInstanceUID(mxfUUID value);
     void setIndexEditRate(mxfRational value);
     void setIndexStartPosition(int64_t value);

@@ -1,5 +1,5 @@
 /*
- * $Id: IndexTable.cpp,v 1.2 2009/10/12 15:30:25 philipn Exp $
+ * $Id: IndexTable.cpp,v 1.3 2010/11/02 13:17:55 philipn Exp $
  *
  * 
  *
@@ -100,6 +100,33 @@ uint8_t IndexTableSegment::getSliceCount()
 uint8_t IndexTableSegment::getPosTableCount()
 {
     return _cSegment->posTableCount;
+}
+
+bool IndexTableSegment::haveDeltaEntryAtDelta(uint32_t delta, uint8_t slice)
+{
+    MXFDeltaEntry *entry = _cSegment->deltaEntryArray;
+    while (entry &&
+            (entry->slice < slice ||
+                (entry->slice == slice && entry->elementData < delta)))
+    {
+        entry = entry->next;
+    }
+
+    return (entry && entry->slice == slice && entry->elementData == delta);
+}
+
+const MXFDeltaEntry* IndexTableSegment::getDeltaEntryAtDelta(uint32_t delta, uint8_t slice)
+{
+    MXFDeltaEntry *entry = _cSegment->deltaEntryArray;
+    while (entry &&
+            (entry->slice < slice ||
+                (entry->slice == slice && entry->elementData < delta)))
+    {
+        entry = entry->next;
+    }
+
+    MXFPP_ASSERT(entry && entry->slice == slice && entry->elementData == delta);
+    return entry;
 }
 
 
