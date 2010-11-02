@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.16 2010/09/29 09:01:14 john_f Exp $
+# $Id: Makefile,v 1.17 2010/11/02 15:18:28 john_f Exp $
 #
 # Makefile for building IngexPlayer library
 #
@@ -135,6 +135,11 @@ endif
 
 ifndef TEST_SHM_PATH
 	CFLAGS += -DDISABLE_SHARED_MEM_SOURCE
+endif
+
+# set if the graphics card and X-video extension supports large (eg. 1920x1080) pictures
+ifdef ENABLE_GC_LARGE_PICT
+	CFLAGS += -DENABLE_GC_LARGE_PICT
 endif
 
 CC = g++ -g $(CFLAGS) $(OPT)

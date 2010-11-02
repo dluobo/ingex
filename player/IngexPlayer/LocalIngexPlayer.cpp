@@ -1,5 +1,5 @@
 /*
- * $Id: LocalIngexPlayer.cpp,v 1.24 2010/10/26 18:28:23 john_f Exp $
+ * $Id: LocalIngexPlayer.cpp,v 1.25 2010/11/02 15:18:28 john_f Exp $
  *
  * Copyright (C) 2008-2010 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
@@ -924,7 +924,9 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
     DualSink* dualSink = 0;
     bool haveReset = false;
     LocalIngexPlayerState* currentPlayState = 0;
-    int swScale = 1;
+    int largePictureScale = 1;
+    int swScale;
+    int scale;
     vector<bool> inputsPresent;
     MediaSource* mainMediaSource = 0;
     bool forceUYVYFormat;
@@ -1149,7 +1151,7 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
             // set software scaling to 2 if the material dimensions exceeds 1024
             // also, get the index of the first video stream
             // also, check if the video format has changed
-            if (swScale == 1)
+            if (largePictureScale == 1)
             {
                 const StreamInfo* streamInfo;
                 int i;
@@ -1176,11 +1178,11 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
                             _videoStreamInfo = *streamInfo;
                         }
 
-                        if (swScale == 1 &&
+                        if (largePictureScale == 1 &&
                             streamInfo->type == PICTURE_STREAM_TYPE &&
                             (streamInfo->width > 1024 || streamInfo->height > 1024))
                         {
-                            swScale = 2;
+                            largePictureScale = 2;
                         }
                     }
                 }
@@ -1424,12 +1426,23 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
             }
 
 
+            scale = nextConfig.scale;
+            swScale = largePictureScale;
+#if defined(ENABLE_GC_LARGE_PICT)
+            // get the graphics card to scale the large picture and avoid expensive software scaling
+            if (swScale != 1 && (_actualOutputType == X11_XV_OUTPUT || _actualOutputType == DUAL_DVS_X11_XV_OUTPUT))
+            {
+                scale /= swScale;
+                swScale = 1;
+            }
+#endif
+
             switch (_actualOutputType)
             {
                 case X11_OUTPUT:
                     CHK_OTHROW(setOrCreateX11Window(&nextConfig.externalWindowInfo));
                     CHK_OTHROW_MSG(xsk_open(20, nextConfig.disableX11OSD, &nextConfig.pixelAspectRatio,
-                        &nextConfig.monitorAspectRatio, nextConfig.scale, swScale, nextConfig.applyScaleFilter,
+                        &nextConfig.monitorAspectRatio, scale, swScale, nextConfig.applyScaleFilter,
                         &_windowInfo, &x11Sink), ("Failed to open X11 display sink\n"));
                     xsk_register_window_listener(x11Sink, &_x11WindowListener);
                     xsk_register_keyboard_listener(x11Sink, &_x11KeyListener);
@@ -1445,7 +1458,7 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
                 case X11_XV_OUTPUT:
                     CHK_OTHROW(setOrCreateX11Window(&nextConfig.externalWindowInfo));
                     CHK_OTHROW_MSG(xvsk_open(20, nextConfig.disableX11OSD, &nextConfig.pixelAspectRatio,
-                        &nextConfig.monitorAspectRatio, nextConfig.scale, swScale, nextConfig.applyScaleFilter,
+                        &nextConfig.monitorAspectRatio, scale, swScale, nextConfig.applyScaleFilter,
                         &_windowInfo, &x11XVSink), ("Failed to open X11 XV display sink\n"));
                     xvsk_register_window_listener(x11XVSink, &_x11WindowListener);
                     xvsk_register_keyboard_listener(x11XVSink, &_x11KeyListener);
@@ -1469,7 +1482,7 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
                     CHK_OTHROW(setOrCreateX11Window(&nextConfig.externalWindowInfo));
                     CHK_OTHROW_MSG(dusk_open(20, nextConfig.dvsCard, nextConfig.dvsChannel, VITC_AS_SDI_VITC, INVALID_SDI_VITC, 12, 0,
                         nextConfig.disableSDIOSD, nextConfig.disableX11OSD, &nextConfig.pixelAspectRatio,
-                        &nextConfig.monitorAspectRatio, nextConfig.scale, swScale, nextConfig.applyScaleFilter,1,
+                        &nextConfig.monitorAspectRatio, scale, swScale, nextConfig.applyScaleFilter,1,
                         &_windowInfo, &dualSink), ("Failed to open dual DVS and X11 display sink\n"));
                     dusk_register_window_listener(dualSink, &_x11WindowListener);
                     dusk_register_keyboard_listener(dualSink, &_x11KeyListener);
@@ -1483,7 +1496,7 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
                     CHK_OTHROW(setOrCreateX11Window(&nextConfig.externalWindowInfo));
                     CHK_OTHROW_MSG(dusk_open(20, nextConfig.dvsCard, nextConfig.dvsChannel, VITC_AS_SDI_VITC, INVALID_SDI_VITC, 12, 1,
                         nextConfig.disableSDIOSD, nextConfig.disableX11OSD, &nextConfig.pixelAspectRatio,
-                        &nextConfig.monitorAspectRatio, nextConfig.scale, swScale, nextConfig.applyScaleFilter, 1,
+                        &nextConfig.monitorAspectRatio, scale, swScale, nextConfig.applyScaleFilter, 1,
                         &_windowInfo, &dualSink), ("Failed to open dual DVS and X11 XV display sink\n"));
                     dusk_register_window_listener(dualSink, &_x11WindowListener);
                     dusk_register_keyboard_listener(dualSink, &_x11KeyListener);
