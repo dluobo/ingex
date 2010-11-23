@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.cpp,v 1.18 2010/11/02 16:45:19 john_f Exp $
+ * $Id: dvs_sdi.cpp,v 1.19 2010/11/23 16:19:51 john_f Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -140,6 +140,7 @@ int aes_audio = 0;
 int aes_routing = 0;
 int use_ffmpeg_hd_sd_scaling = 0;
 int use_yuvlib_filter = 0;
+uint8_t *hd2sd_interm[MAX_CHANNELS];
 uint8_t *hd2sd_workspace[MAX_CHANNELS];
 
 int last_ltc_bits[MAX_CHANNELS];
@@ -1382,47 +1383,44 @@ int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_from_vi
     // Convert primary video into secondary video buffer
     if (Ingex::PixelFormat::NONE != secondary_pixel_format)
     {
+        unsigned char *reformat_input_buffer = dma_dest;
+
         if (width > 720)
         {
+            // downscale HD primary to SD secondary
+
+            // use intermediate buffer if a pixel reformat is required
+            unsigned char *scale_output_buffer;
+            if (Ingex::PixelFormat::UYVY_422 != secondary_pixel_format)
+            {
+                scale_output_buffer = hd2sd_interm[chan];
+            }
+            else
+            {
+                scale_output_buffer = vid_dest + secondary_video_offset;
+            }
+
             if (use_ffmpeg_hd_sd_scaling)
             {
-                // HD primary video, scale and convert format to SD secondary
-                ::PixelFormat in_pixfmt;
-                if (Ingex::PixelFormat::UYVY_422 == primary_pixel_format)
-                {
-                    in_pixfmt = PIX_FMT_UYVY422;
-                }
-                else
-                {
-                    in_pixfmt = PIX_FMT_YUV422P;
-                }
-                ::PixelFormat out_pixfmt;
-                if (Ingex::PixelFormat::YUV_PLANAR_422 == secondary_pixel_format)
-                {
-                    out_pixfmt = PIX_FMT_YUV422P;
-                }
-                else
-                {
-                    out_pixfmt = PIX_FMT_YUV420P;
-                }
-    
+                // FFmpeg scaling. Doesn't properly handle interlaced pictures
                 td[chan].scale_context = sws_getCachedContext(td[chan].scale_context,
                         width, height,
-                        in_pixfmt,
+                        PIX_FMT_UYVY422,
                         sec_width, sec_height,
-                        out_pixfmt,
+                        PIX_FMT_UYVY422,
                         SWS_FAST_BILINEAR,
                         NULL, NULL, NULL);
                         // other flags include: SWS_FAST_BILINEAR, SWS_BILINEAR, SWS_BICUBIC, SWS_POINT
                         // SWS_AREA, SWS_BICUBLIN, SWS_GAUSS, ... SWS_PRINT_INFO (debug)
                 avpicture_fill( (AVPicture*)td[chan].inFrame,
-                                vid_dest,                                   // input primary video
-                                in_pixfmt,
+                                dma_dest,                                   // input dma video
+                                PIX_FMT_UYVY422,
                                 width, height);
                 avpicture_fill( (AVPicture*)td[chan].outFrame,
-                                vid_dest + secondary_video_offset,          // output to secondary video
-                                out_pixfmt,
+                                scale_output_buffer,                        // output to secondary video
+                                PIX_FMT_UYVY422,
                                 sec_width, sec_height);
+
                 sws_scale(td[chan].scale_context,
                                 td[chan].inFrame->data, td[chan].inFrame->linesize,
                                 0, height,
@@ -1430,118 +1428,54 @@ int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_from_vi
             }
             else
             {
-                // HD primary video, scale to SD secondary
+                // YUVlib scaling. Slower than FFmpeg if use_yuvlib_filter equals true, but handles interlaced pictures
                 YUV_frame yuv_hd_frame, yuv_sd_frame;
-                formats yuv_format; 
-                if (Ingex::PixelFormat::UYVY_422 == primary_pixel_format)
-                {
-                    yuv_format = UYVY;
-                }
-                else
-                {
-                    yuv_format = YV16;
-                }
-                unsigned char *scale_output_buffer;
-                if (primary_pixel_format != secondary_pixel_format)
-                {
-                    // use video work buffer as intermediate because a pixel format conversion will be required
-                    scale_output_buffer = video_work_area[chan];
-                }
-                else
-                {
-                    scale_output_buffer = vid_dest + secondary_video_offset;
-                }
-    
-                YUV_frame_from_buffer(&yuv_hd_frame, vid_dest, width, height, yuv_format);
-                YUV_frame_from_buffer(&yuv_sd_frame, scale_output_buffer, sec_width, sec_height, yuv_format);
-                
+                YUV_frame_from_buffer(&yuv_hd_frame, dma_dest, width, height, UYVY);
+                YUV_frame_from_buffer(&yuv_sd_frame, scale_output_buffer, sec_width, sec_height, UYVY);
+
                 scale_pic(&yuv_hd_frame, &yuv_sd_frame,
                           0, 0, sec_width, sec_height,
                           interlace,
                           use_yuvlib_filter, use_yuvlib_filter,
                           hd2sd_workspace[chan]);
+            }
 
-                // convert pixel format if required
-                if (primary_pixel_format != secondary_pixel_format)
-                {
-                    ::PixelFormat in_pixfmt;
-                    if (Ingex::PixelFormat::UYVY_422 == primary_pixel_format)
-                    {
-                        in_pixfmt = PIX_FMT_UYVY422;
-                    }
-                    else
-                    {
-                        in_pixfmt = PIX_FMT_YUV422P;
-                    }
-                    ::PixelFormat out_pixfmt;
-                    if (Ingex::PixelFormat::YUV_PLANAR_422 == secondary_pixel_format)
-                    {
-                        out_pixfmt = PIX_FMT_YUV422P;
-                    }
-                    else
-                    {
-                        out_pixfmt = PIX_FMT_YUV420P;
-                    }
-        
-                    td[chan].scale_context = sws_getCachedContext(td[chan].scale_context,
-                            sec_width, sec_height,
-                            in_pixfmt,
-                            sec_width, sec_height,
-                            out_pixfmt,
-                            SWS_FAST_BILINEAR,
-                            NULL, NULL, NULL);
-                            // other flags include: SWS_FAST_BILINEAR, SWS_BILINEAR, SWS_BICUBIC, SWS_POINT
-                            // SWS_AREA, SWS_BICUBLIN, SWS_GAUSS, ... SWS_PRINT_INFO (debug)
-                    avpicture_fill( (AVPicture*)td[chan].inFrame,
-                                    video_work_area[chan],                      // scaled video
-                                    in_pixfmt,
-                                    sec_width, sec_height);
-                    avpicture_fill( (AVPicture*)td[chan].outFrame,
-                                    vid_dest + secondary_video_offset,          // output to secondary video
-                                    out_pixfmt,
-                                    sec_width, sec_height);
-                    sws_scale(td[chan].scale_context,
-                                    td[chan].inFrame->data, td[chan].inFrame->linesize,
-                                    0, height,
-                                    td[chan].outFrame->data, td[chan].outFrame->linesize);
-                }
-            }
+
+            reformat_input_buffer = scale_output_buffer;
         }
-        else
+
+        // reformat for SD secondary
+        if (Ingex::PixelFormat::YUV_PLANAR_422 == secondary_pixel_format)
         {
-            // SD primary video, reformat for SD secondary
-            if (Ingex::PixelFormat::YUV_PLANAR_422 == secondary_pixel_format)
-            {
-                // Repack to planar YUV 4:2:2
-                uyvy_to_yuv422( width, height,
-                                secondary_line_shift,
-                                dma_dest,                                   // input
-                                vid_dest + secondary_video_offset);         // output
-            }
-            else if (Ingex::PixelFormat::YUV_PLANAR_420_DV == secondary_pixel_format)
-            {
-                // Downsample and repack to planar YUV 4:2:0 for PAL DV
-                uyvy_to_yuv420_DV_sampling( width, height,
-                            secondary_line_shift,                       // should be true
-                            dma_dest,                                   // input
+            // Repack to planar YUV 4:2:2
+            uyvy_to_yuv422( sec_width, sec_height,
+                            secondary_line_shift,
+                            reformat_input_buffer,                      // input
                             vid_dest + secondary_video_offset);         // output
-            }
-            else if (Ingex::PixelFormat::YUV_PLANAR_411 == secondary_pixel_format)
-            {
-                // Downsample and repack to planar YUV 4:1:1 for NTSC DV
-                uyvy_to_yuv411( width, height,
-                            secondary_line_shift,                       // should be false
-                            dma_dest,                                   // input
-                            vid_dest + secondary_video_offset);         // output
-            }
-            else if (Ingex::PixelFormat::YUV_PLANAR_420_MPEG == secondary_pixel_format)
-            {
-                // Downsample and repack to planar YUV 4:2:0 for MPEG
-                uyvy_to_yuv420( width, height,
-                            0,                                          // no DV25 line shift
-                            dma_dest,                                   // input
-                            vid_dest + secondary_video_offset);         // output
-            }
+        }
+        else if (Ingex::PixelFormat::YUV_PLANAR_420_DV == secondary_pixel_format)
+        {
+            // Downsample and repack to planar YUV 4:2:0 for PAL DV
+            uyvy_to_yuv420_DV_sampling( sec_width, sec_height,
+                        secondary_line_shift,                       // should be true
+                        reformat_input_buffer,                      // input
+                        vid_dest + secondary_video_offset);         // output
+        }
+        else if (Ingex::PixelFormat::YUV_PLANAR_411 == secondary_pixel_format)
+        {
+            // Downsample and repack to planar YUV 4:1:1 for NTSC DV
+            uyvy_to_yuv411( sec_width, sec_height,
+                        secondary_line_shift,                       // should be false
+                        reformat_input_buffer,                      // input
+                        vid_dest + secondary_video_offset);         // output
+        }
+        else if (Ingex::PixelFormat::YUV_PLANAR_420_MPEG == secondary_pixel_format)
+        {
+            // Downsample and repack to planar YUV 4:2:0 for MPEG
+            uyvy_to_yuv420( sec_width, sec_height,
+                        0,                                          // no DV25 line shift
+                        reformat_input_buffer,                      // input
+                        vid_dest + secondary_video_offset);         // output
         }
     }
 
@@ -3445,6 +3379,13 @@ int main (int argc, char ** argv)
                 return 1;
             }
 
+            hd2sd_interm[chan] = (uint8_t *)malloc(width*height*2);
+            if (!hd2sd_interm[chan])
+            {
+                fprintf(stderr, "Failed to allocate HD-to-SD intermediate buffer.\n");
+                return 1;
+            }
+
             hd2sd_workspace[chan] = (uint8_t *)malloc(2*width*4);
             if (!hd2sd_workspace[chan])
             {
@@ -3455,6 +3396,7 @@ int main (int argc, char ** argv)
         else
         {
             video_work_area[chan] = NULL;
+            hd2sd_interm[chan] = NULL;
             hd2sd_workspace[chan] = NULL;
         }
     }
@@ -3496,6 +3438,10 @@ int main (int argc, char ** argv)
         if (video_work_area[chan])
         {
             free(video_work_area[chan]);
+        }
+        if (hd2sd_interm[chan])
+        {
+            free(hd2sd_interm[chan]);
         }
         if (hd2sd_workspace[chan])
         {
