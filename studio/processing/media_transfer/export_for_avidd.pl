@@ -1,6 +1,6 @@
 #! /usr/bin/perl -w
 
-#  $Id: export_for_avidd.pl,v 1.3 2010/06/02 12:59:07 john_f Exp $
+#  $Id: export_for_avidd.pl,v 1.4 2010/11/23 16:50:14 john_f Exp $
 #
 # Copyright (C) 2009-10  British Broadcasting Corporation.
 # All Rights Reserved.
@@ -62,7 +62,8 @@ my $DEFAULT_HOST = 'INGEX';
 my $SMB_CONF = '/etc/samba/smb.conf';
 my $TEMP_SMB_CONF = '/tmp/smb-ingex.txt';
 
-use constant WATCH_MASK => IN_CREATE | IN_MOVED_TO | IN_DELETE;
+use constant WATCH_CREATE_MASK => IN_CREATE | IN_MOVED_TO;
+use constant WATCH_DELETE_MASK => IN_DELETE | IN_MOVED_FROM; #copes with "trash cans"
 use constant CREATE => 1;
 use constant ALREADY_EXISTS => 2;
 
@@ -93,7 +94,7 @@ our %shareNames;
 #subroutine called when a change happens in a video root directory (containing project directories)
 my $projectChange = sub {
  my %links;
- if ($_[0]->IN_DELETE) { #an item has been removed which may be a project directory - delete it anyway
+ if ($_[0]->mask & WATCH_DELETE_MASK) { #an item has been removed which may be a project directory - delete it anyway
     my $path = "$SHARES_ROOT/$SHARES_DIR/" . ShareName($_[0]->fullname);
     RmTree($path) or Warn("Couldn't remove $path/: $!"); #remove the corresponding shared path (including links) if present
     delete $shareNames{ShareName($_[0]->fullname)}; #remove the corresponding export if present
@@ -109,7 +110,7 @@ my $projectChange = sub {
 
 #subroutine called when a change happens in a project directory (containing date directories)
 our $dateChange = sub {
- if ($_[0]->IN_DELETE) { #an item has been removed which may be a date directory
+ if ($_[0]->mask & WATCH_DELETE_MASK) { #an item has been removed which may be a date directory
     if ($_[0]->fullname =~ m|
      (.*)/ #root/project directory
      (\d{8})$ #date directory
@@ -134,7 +135,7 @@ foreach my $videoDir (keys %VIDEO_DIRS) {
    my $videoPath = "$MATERIAL_ROOT/$videoDir";
    if (-d $videoPath) {
       Report("Watching $videoPath/ for changes");
-      my $watch = $notifier->watch($videoPath, WATCH_MASK, $projectChange) or Warn("Couldn't watch: $!"); #do this before scanning or we could miss a project directory being created in the intervening period
+      my $watch = $notifier->watch($videoPath, WATCH_CREATE_MASK | WATCH_DELETE_MASK, $projectChange) or Warn("Couldn't watch: $!"); #do this before scanning or we could miss a project directory being created in the intervening period
       unless (opendir VIDEO, $videoPath) {
          Warn("Couldn't open $videoPath/: $!");
          $watch->cancel;
@@ -230,7 +231,7 @@ sub ScanProjDir {
  return 0 if $projDir =~ /^\./;
  return 0 unless -d $path;
  Report("Watching $path/ for changes");
- my $watch = $notifier->watch($path, WATCH_MASK, $dateChange) or Warn("Couldn't watch: $!\n"); #do this before scanning or we could miss a date directory being created in the intervening period
+ my $watch = $notifier->watch($path, WATCH_CREATE_MASK | WATCH_DELETE_MASK, $dateChange) or Warn("Couldn't watch: $!\n"); #do this before scanning or we could miss a date directory being created in the intervening period
  unless (opendir PROJ, $path) {
     Warn("Couldn't open $path/: $!");
     $watch->cancel;
