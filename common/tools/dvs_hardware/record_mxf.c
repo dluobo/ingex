@@ -1,5 +1,5 @@
 /*
- * $Id: record_mxf.c,v 1.6 2010/07/14 13:06:35 john_f Exp $
+ * $Id: record_mxf.c,v 1.7 2010/12/03 14:32:14 john_f Exp $
  *
  * Record uncompressed SDI video and audio to disk.
  *
@@ -43,16 +43,6 @@
 
 #include <mxf/mxf.h>
 #include <write_archive_mxf.h>
-
-#if defined(__x86_64__)
-#define PFi64 "ld"
-#define PFu64 "lu"
-#define PFoff "ld"
-#else
-#define PFi64 "lld"
-#define PFu64 "llu"
-#define PFoff "lld"
-#endif
 
 
 #define SV_CHECK(x) {int res = x; if (res != SV_OK) { fprintf(stderr, "sv call failed=%d  %s line %d\n", res, __FILE__, __LINE__); sv_errorprint(sv,res); cleanup_exit(1, sv); } }
