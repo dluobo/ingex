@@ -1,5 +1,5 @@
 /*
- * $Id: frame_info.c,v 1.10 2010/10/13 12:34:32 philipn Exp $
+ * $Id: frame_info.c,v 1.11 2010/12/03 14:27:35 john_f Exp $
  *
  *
  *
@@ -20,6 +20,8 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
+
+#define __STDC_FORMAT_MACROS    1
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -242,7 +244,7 @@ int add_timecode_source_info(StreamInfo* streamInfo, SourceInfoName name, int64_
     }
     else
     {
-        sprintf(timecodeStr, "%02"PFi64":%02"PFi64":%02"PFi64":%02"PFi64,
+        sprintf(timecodeStr, "%02"PRId64":%02"PRId64":%02"PRId64":%02"PRId64,
             timecode / (60 * 60 * timecodeBase),
             (timecode % (60 * 60 * timecodeBase)) / (60 * timecodeBase),
             ((timecode % (60 * 60 * timecodeBase)) % (60 * timecodeBase)) / timecodeBase,

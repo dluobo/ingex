@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_source.c,v 1.8 2010/07/21 16:29:34 john_f Exp $
+ * $Id: ffmpeg_source.c,v 1.9 2010/12/03 14:27:35 john_f Exp $
  *
  *
  *
@@ -1030,7 +1030,7 @@ static int process_video_packets(FFMPEGSource* source, VideoStream* videoStream)
     pts *= av_q2d(stream->time_base);
     packetPosition = (int64_t)(pts * source->frameRate.num / (double)source->frameRate.den + 0.5);
 
-    DEBUG("Video pts=%"PFi64", audio pts=%"PFi64", packet pos=%"PFi64", source pos=%"PFi64", file pos=%"PFi64" (%"PFi64")\n",
+    DEBUG("Video pts=%"PRId64", audio pts=%"PRId64", packet pos=%"PRId64", source pos=%"PRId64", file pos=%"PRId64" (%"PRId64")\n",
         packetPosition, (int64_t)(pts * 48000 + 0.5), packetPosition, source->position, packet.pos, url_ftell(source->formatContext->pb));
     DEBUG("Video search index = %d\n", av_index_search_timestamp(stream, pts, AVSEEK_FLAG_BACKWARD));
 
@@ -1109,7 +1109,7 @@ static int transfer_audio_samples(FFMPEGSource* source, AudioStream* audioStream
     int numTransferSamples;
     int j;
 
-    DEBUG("Transfer: target=%"PFi64"+%d-%d, decode=%"PFi64"+%d, initial=%"PFi64", ",
+    DEBUG("Transfer: target=%"PRId64"+%d-%d, decode=%"PRId64"+%d, initial=%"PRId64", ",
         targetFirstSample, targetNumSamplesMin, targetNumSamplesMax, firstDecodeSample, numDecodeSamples, audioStream->initialDecodeSample);
 
     /* check whether the samples are within the target range for the output streams */
@@ -1174,7 +1174,7 @@ static int transfer_audio_samples(FFMPEGSource* source, AudioStream* audioStream
         }
     }
 
-    DEBUG("output=%"PFi64"+%d\n", audioStream->firstOutputSample, audioStream->numOutputSamples);
+    DEBUG("output=%"PRId64"+%d\n", audioStream->firstOutputSample, audioStream->numOutputSamples);
 
 
     return PROCESS_PACKETS_SUCCESS;
@@ -1723,7 +1723,7 @@ static int fms_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceLis
             if (adjustReadStartCount > MAX_ADJUST_READ_START_COUNT)
             {
                 ml_log_error("Exceeded maximum seek back frames (%d) to find target frame\n", MAX_ADJUST_READ_START_COUNT);
-                ml_log_warn("Failed to read frame at position %"PFi64" - sending blank frame\n", source->position);
+                ml_log_warn("Failed to read frame at position %"PRId64" - sending blank frame\n", source->position);
                 sendBlankFrame = 1;
                 break;
             }
@@ -1739,12 +1739,12 @@ static int fms_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceLis
                 /* fms_seek changed the position - changed it back to the target position */
                 source->position = position;
 
-                ml_log_warn("Failed to read frame at position %"PFi64" - sending blank frame\n", source->position);
+                ml_log_warn("Failed to read frame at position %"PRId64" - sending blank frame\n", source->position);
                 sendBlankFrame = 1;
                 break;
             }
 
-            DEBUG("---- Adjusting start to position %"PFi64"\n", source->position - adjustReadStartCount);
+            DEBUG("---- Adjusting start to position %"PRId64"\n", source->position - adjustReadStartCount);
             position = source->position;
             if (fms_seek(source->mediaSource.data, source->position - adjustReadStartCount) != 0)
             {
@@ -1757,7 +1757,7 @@ static int fms_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceLis
         {
             /* read the next frame */
 
-            DEBUG("File position before av_read_frame=%"PFi64"\n", url_ftell(source->formatContext->pb));
+            DEBUG("File position before av_read_frame=%"PRId64"\n", url_ftell(source->formatContext->pb));
 
             result = av_read_frame(source->formatContext, &packet);
             if (result < 0)
@@ -1780,7 +1780,7 @@ static int fms_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceLis
                 }
             }
 
-            DEBUG("File position after av_read_frame=%"PFi64"\n", url_ftell(source->formatContext->pb));
+            DEBUG("File position after av_read_frame=%"PRId64"\n", url_ftell(source->formatContext->pb));
 
 
             /* push packet onto queue */
@@ -2173,7 +2173,7 @@ int fms_open(const char* filename, int threadCount, int forceUYVYFormat, MediaSo
 
     newSource->length = (int64_t)(newSource->formatContext->duration / ((double)AV_TIME_BASE) *
         newSource->frameRate.num / (double)(newSource->frameRate.den) + 0.5);
-    DEBUG("Duration = %"PFi64"\n", newSource->length);
+    DEBUG("Duration = %"PRId64"\n", newSource->length);
     /* TODO: found that FFMPEG sometimes rounds the length up rather than down */
 
     DEBUG("Default stream index for seeking is %d\n", av_find_default_stream_index(newSource->formatContext));

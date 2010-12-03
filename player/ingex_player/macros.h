@@ -1,5 +1,5 @@
 /*
- * $Id: macros.h,v 1.4 2010/06/02 11:12:14 philipn Exp $
+ * $Id: macros.h,v 1.5 2010/12/03 14:27:35 john_f Exp $
  *
  *
  *
@@ -121,20 +121,6 @@ e.g. ml_log_error("Some error %d" LOG_LOC_FORMAT, x, LOG_LOC_PARAMS); */
     { \
         ml_log_error("pthread_cond_signal failed" LOG_LOC_FORMAT, LOG_LOC_PARAMS); \
     }
-
-
-
-/* 64-bit printf formatting */
-
-#if defined(__x86_64__)
-#define PFi64 "ld"
-#define PFu64 "lu"
-#define PFoff "ld"
-#else
-#define PFi64 "lld"
-#define PFu64 "llu"
-#define PFoff "lld"
-#endif
 
 
 

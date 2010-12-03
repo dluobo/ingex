@@ -1,5 +1,5 @@
 /*
- * $Id: mxf_source.c,v 1.21 2010/10/13 12:34:32 philipn Exp $
+ * $Id: mxf_source.c,v 1.22 2010/12/03 14:27:35 john_f Exp $
  *
  *
  *
@@ -20,6 +20,8 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
+
+#define __STDC_FORMAT_MACROS    1
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -122,7 +124,7 @@ static char* convert_prog_duration(int64_t duration, char* str)
     }
     else
     {
-        sprintf(str, "%02"PFi64":%02"PFi64":%02"PFi64":00",
+        sprintf(str, "%02"PRId64":%02"PRId64":%02"PRId64":00",
             duration / (60 * 60),
             (duration % (60 * 60)) / 60,
             (duration % (60 * 60)) % 60);
