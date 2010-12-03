@@ -1,5 +1,5 @@
 /*
- * $Id: YUV_scale_pic.h,v 1.1 2010/09/29 09:01:13 john_f Exp $
+ * $Id: YUV_scale_pic.h,v 1.2 2010/12/03 14:29:53 john_f Exp $
  *
  *
  *
@@ -41,6 +41,9 @@ extern "C" {
  * (2 * (in_frame->w * yup / ydown) * 4) bytes.
  * Return value is 0 for success, <0 for failure.
  */
+int resize_component(const component* in_frame, component* out_frame,
+                     int x, int y, int xup, int xdown, int yup, int ydown,
+                     int intlc, int hfil, int vfil, void* workSpace);
 int resize_pic(const YUV_frame* in_frame, YUV_frame* out_frame,
                int x, int y, int xup, int xdown, int yup, int ydown,
                int intlc, int hfil, int vfil, void* workSpace);
@@ -56,6 +59,9 @@ int resize_pic(const YUV_frame* in_frame, YUV_frame* out_frame,
  * 2 lines of output as uint32_t, i.e. (2 * w * 4) bytes.
  * Return value is 0 for success, <0 for failure.
  */
+int scale_component(const component* in_frame, component* out_frame,
+                    int x, int y, int w, int h,
+                    int intlc, int hfil, int vfil, void* workSpace);
 int scale_pic(const YUV_frame* in_frame, YUV_frame* out_frame,
               int x, int y, int w, int h,
               int intlc, int hfil, int vfil, void* workSpace);

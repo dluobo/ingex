@@ -1,5 +1,5 @@
 /*
- * $Id: YUV_scale_pic.c,v 1.2 2010/10/08 16:38:36 john_f Exp $
+ * $Id: YUV_scale_pic.c,v 1.3 2010/12/03 14:29:53 john_f Exp $
  *
  *
  *
@@ -480,6 +480,46 @@ static void scale_comp(const component* inFrame, component* outFrame,
                   yup, ydown, yoff, work);
 }
 
+int resize_component(const component* in_frame, component* out_frame,
+               int x, int y, int xup, int xdown, int yup, int ydown,
+               int intlc, int hfil, int vfil, void* workSpace)
+{
+    component   sub_frame;
+    uint32_t*   work[3];
+
+    // adjust position, if required
+    if (intlc)
+        y -= y % 2;
+    // create a sub frame representing the portion of out_frame to be written
+    sub_frame = *out_frame;
+    sub_frame.buff += (y * sub_frame.lineStride) +
+                      (x * sub_frame.pixelStride);
+    sub_frame.w = min(in_frame->w * xup / xdown, out_frame->w - x);
+    sub_frame.h = min(in_frame->h * yup / ydown, out_frame->h - y);
+    work[0] = workSpace;
+    work[1] = work[0] + sub_frame.w;
+    work[2] = work[1] + sub_frame.w;
+    if (intlc)
+    {
+        component   in_field;
+        component   out_field;
+        int     f;
+        for (f = 0; f < 2; f++)
+        {
+            extract_field(in_frame, &in_field, f);
+            extract_field(&sub_frame, &out_field, f);
+            scale_comp(&in_field, &out_field, hfil, vfil,
+                       xup, xdown, yup, ydown, f * 50, work);
+        }
+    }
+    else // not interlaced
+    {
+        scale_comp(in_frame, &sub_frame, hfil, vfil,
+                   xup, xdown, yup, ydown, 0, work);
+    }
+    return YUV_OK;
+}
+
 int resize_pic(const YUV_frame* in_frame, YUV_frame* out_frame,
                int x, int y, int xup, int xdown, int yup, int ydown,
                int intlc, int hfil, int vfil, void* workSpace)
@@ -562,6 +602,15 @@ int resize_pic(const YUV_frame* in_frame, YUV_frame* out_frame,
                    ssy_in * yup, ydown * ssy_out, 0, work);
     }
     return YUV_OK;
+}
+
+int scale_component(const component* in_frame, component* out_frame,
+              int x, int y, int w, int h,
+              int intlc, int hfil, int vfil, void* workSpace)
+{
+    return resize_component(in_frame, out_frame, x, y,
+                            w, in_frame->w, h, in_frame->h,
+                            intlc, hfil, vfil, workSpace);
 }
 
 int scale_pic(const YUV_frame* in_frame, YUV_frame* out_frame,
