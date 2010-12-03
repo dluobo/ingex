@@ -1,5 +1,5 @@
 /*
- * $Id: Package.cpp,v 1.4 2010/01/12 16:57:27 john_f Exp $
+ * $Id: Package.cpp,v 1.5 2010/12/03 14:31:13 john_f Exp $
  *
  * Container for arbitrary data.
  *
@@ -71,8 +71,8 @@ const ProdAuto::StatusItem & StatusPackage::status(void) const
 // FramePackage
 
 // constuctor makes package containing frame data
-FramePackage::FramePackage(EncodeFrameTrack & eft)
-: Package(), mrVideoData(eft)
+FramePackage::FramePackage(EncodeFrameTrack * eft)
+: Package(), mVideoData(eft)
 {
 }
 

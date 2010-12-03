@@ -1,5 +1,5 @@
 /*
- * $Id: recorder_functions.cpp,v 1.52 2010/11/02 16:27:19 john_f Exp $
+ * $Id: recorder_functions.cpp,v 1.53 2010/12/03 14:31:13 john_f Exp $
  *
  * Functions which execute in recording threads.
  *
@@ -69,6 +69,7 @@
 #include <cerrno>
 #include <iostream>
 #include <sstream>
+#include <queue>
 
 /// Mutex to ensure only one thread at a time can call avcodec open/close
 static ACE_Thread_Mutex avcodec_mutex;
@@ -774,7 +775,6 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     // Initialise ffmpeg encoder
     ffmpeg_encoder_t * ffmpeg_encoder = 0;
     MtEncoder * mt_encoder = 0;
-    //bool mt_encode = MT_ENABLE && mt_possible;
     if (ENCODER_FFMPEG == encoder)
     {
         if (MT_ENABLE && mt_possible)
@@ -1021,7 +1021,8 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
 
     // For the index that is stored in the EncodeFrame, we use the frame number
     // from the first channel.  This is what we keep track of in last_saved.
-    int last_saved = lastcoded[channel_i];
+    //int last_saved = lastcoded[channel_i];
+    std::queue<int> frames_to_save;
 
     // Initialise last_tc which will be used to check for timecode discontinuities.
     // Timecode value from first track (usually video).
@@ -1107,7 +1108,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         if (frames_to_code > ring_warn_backlog)
         {
             // Warn about backlog
-            ACE_DEBUG((LM_WARNING, ACE_TEXT("%C %C index %d frames waiting in ring buffer %d, max %d\n"),
+            ACE_DEBUG((LM_WARNING, ACE_TEXT("%C %C index %d Frames waiting in ring buffer %d, max %d\n"),
                 DateTime::Timecode().c_str(), src_name.c_str(), p_opt->index, frames_to_code, allowed_backlog));
         }
         if (frames_to_code > allowed_backlog)
@@ -1119,7 +1120,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             {
                 unsigned int ch = channels_in_use[i];
                 lastcoded[ch] += drop;
-                last_saved += drop; // not exactly right but better than not incrememting it
+                //last_saved += drop; // not exactly right but better than not incrememting it
             }
             p_opt->IncFramesDropped(drop);
             p_rec->NoteDroppedFrames();
@@ -1154,10 +1155,18 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
 
             int audio_samples_per_frame = IngexShm::Instance()->NumAudioSamples(channel_i, frame[channel_i]);
 
-            // Set up all the input pointers as tracks of an EncodeFrame
+            // Create an EncodeFrame to hold pointers to input data
             int frame_index = frame[channel_i];
-            EncodeFrame & ef = encode_frame_buffer.Frame(frame_index);
-            //std::vector<void *> p_input;
+            //EncodeFrame & ef = encode_frame_buffer.Frame(frame_index);
+            EncodeFrame * ef = new EncodeFrame();
+            encode_frame_buffer.Frame(frame_index) = ef;
+
+            // Add this frame index to the queue for writing out.
+            // NB. Maybe this functionality could be included in EncodeFrameBuffer
+            frames_to_save.push(frame_index);
+            //ACE_DEBUG((LM_INFO, ACE_TEXT("Queued frame %d\n"), frames_to_save.back()));
+
+            // Set up pointers for input data in each track
             void * p_inp_video = 0;
             int * p_frame_number = 0;
             //ACE_DEBUG((LM_DEBUG, ACE_TEXT("package_creator->GetMaterialPackage()->tracks.size() = %u\n"), package_creator->GetMaterialPackage()->tracks.size()));
@@ -1206,7 +1215,8 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                 /*
                 ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C index %d Track %d data %@\n"), src_name.c_str(), p_opt->index, i, p));
                 */
-                ef.Track(i).Init(p, size, samples, copy, false, false, *p_frame_number, p_frame_number);
+                ef->Track(i) = new EncodeFrameTrack();
+                ef->Track(i)->Init(p, size, samples, copy, false, false, *p_frame_number, p_frame_number);
             }
 
             // Timecode value from first track (usually video)
@@ -1326,7 +1336,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
 
                 // Source for encoding is now the quad buffer
                 p_inp_video = quad_frame.Y.buff;
-                ef.Track(0).Init(p_inp_video, VIDEO_SIZE, 1, false, false, false, 0, 0);
+                ef->Track(0)->Init(p_inp_video, VIDEO_SIZE, 1, false, false, false, ef->Track(0)->FrameIndex(), 0);
             }
 
             // Add timecode overlay
@@ -1365,7 +1375,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
 
                 // Source for encoding is now the timecode overlay buffer
                 p_inp_video = tc_overlay_buffer;
-                ef.Track(0).Init(p_inp_video, VIDEO_SIZE, 1, false, false, false, 0, 0);
+                ef->Track(0)->Init(p_inp_video, VIDEO_SIZE, 1, false, false, false, ef->Track(0)->FrameIndex(), 0);
             }
  
             // Mix audio for browse version
@@ -1401,11 +1411,11 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                         prodauto::Track * mp_trk = package_creator->GetMaterialPackage()->tracks[i];
                         if (PICTURE_DATA_DEFINITION == mp_trk->dataDef)
                         {
-                            result |= ffmpeg_encoder_av_encode_video(enc_av, (uint8_t *) ef.Track(i).Data());
+                            result |= ffmpeg_encoder_av_encode_video(enc_av, (uint8_t *) ef->Track(i)->Data());
                         }
                         else if (SOUND_DATA_DEFINITION == mp_trk->dataDef && astream_i < ff_av_num_audio_streams)
                         {
-                            result |= ffmpeg_encoder_av_encode_audio(enc_av, astream_i++, ef.Track(i).Samples(), (short *) ef.Track(i).Data());
+                            result |= ffmpeg_encoder_av_encode_audio(enc_av, astream_i++, ef->Track(i)->Samples(), (short *) ef->Track(i)->Data());
                         }
                     }
                 }
@@ -1431,12 +1441,12 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             {
                 if (mt_encoder)
                 {
-                    mt_encoder->Encode(ef.Track(0));
+                    mt_encoder->Encode(ef->Track(0));
                 }
                 else
                 {
-                    size_enc_video = ffmpeg_encoder_encode(ffmpeg_encoder, (uint8_t *)ef.Track(0).Data(), &p_enc_video);
-                    ef.Track(0).Init(p_enc_video, size_enc_video, 1, false, false, true, 0, 0);
+                    size_enc_video = ffmpeg_encoder_encode(ffmpeg_encoder, (uint8_t *)ef->Track(0)->Data(), &p_enc_video);
+                    ef->Track(0)->Init(p_enc_video, size_enc_video, 1, false, false, true, ef->Track(0)->FrameIndex(), 0);
                 }
             }
 
@@ -1454,7 +1464,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                 {
                     size_enc_video = mjpeg_compress_frame_yuv(mj_encoder, y, u, v, WIDTH, WIDTH/2, WIDTH/2, &p_enc_video);
                 }
-                ef.Track(0).Init(p_enc_video, size_enc_video, 1, false, false, true, 0, 0);
+                ef->Track(0)->Init(p_enc_video, size_enc_video, 1, false, false, true, ef->Track(0)->FrameIndex(), 0);
             }
 
             // "Encode" uncompressed video and PCM audio, i.e. mark it as coded.
@@ -1467,7 +1477,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                     if ((PICTURE_DATA_DEFINITION == mp_trk->dataDef && ENCODER_UNC == encoder)
                         || (SOUND_DATA_DEFINITION == mp_trk->dataDef))
                     {
-                        ef.Track(i).Coded(true);
+                        ef->Track(i)->Coded(true);
                     }
                 }
             }
@@ -1511,8 +1521,9 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             // If we used the av encoder, the frames have already been written.
             if (ENCODER_FFMPEG_AV == encoder)
             {
-                ++last_saved;
-                encode_frame_buffer.EraseFrame(last_saved);
+                //++last_saved;
+                encode_frame_buffer.EraseFrame(frames_to_save.front());
+                frames_to_save.pop();
 
                 p_opt->IncFramesWritten();
 
@@ -1547,82 +1558,97 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                 {
                     ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C %C index %d EncodeFrameBuffer contains %u frames (%u coded)\n"),
                         DateTime::Timecode().c_str(), src_name.c_str(), p_opt->index, frames_in_buffer, encode_frame_buffer.CodedSize()));
+                    //encode_frame_buffer.List();
                 }
 
-                ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C index %d Looking for frames starting from %d\n"),
-                    src_name.c_str(), p_opt->index, last_saved + 1));
+                // We are looking for frame at front of queue of those to save,
+                // i.e. frames_to_save.front()
+                if (!frames_to_save.empty())
+                {
+                    ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C index %d Looking for frames starting from %d\n"),
+                        src_name.c_str(), p_opt->index, frames_to_save.front()));
+                }
 
                 unsigned int frames_written_this_loop = 0;
-                while (!finished_record && encode_frame_buffer.Frame(last_saved + 1).IsCoded())
+                while (!finished_record && !frames_to_save.empty() && encode_frame_buffer.Frame(frames_to_save.front())->IsCoded())
                 {
-                    ACE_DEBUG((LM_DEBUG, ACE_TEXT("Have coded frame %d\n"), last_saved + 1));
-                    EncodeFrame & ef = encode_frame_buffer.Frame(last_saved + 1);
+                    ACE_DEBUG((LM_DEBUG, ACE_TEXT("Have coded frame %d\n"), frames_to_save.front()));
+                    EncodeFrame * ef = encode_frame_buffer.Frame(frames_to_save.front());
 
-                    for (unsigned int i = 0; i < package_creator->GetMaterialPackage()->tracks.size(); ++i)
+                    if (ef->Error())
                     {
-                        prodauto::Track * mp_trk = package_creator->GetMaterialPackage()->tracks[i];
-                        EncodeFrameTrack & eft = ef.Track(i);
-
-                        if (eft.Error())
+                        ACE_DEBUG((LM_ERROR, ACE_TEXT("%C index %d Coded frame %d has error!\n"),
+                            src_name.c_str(), p_opt->index, frames_to_save.front()));
+                        for (unsigned int i = 0; i < package_creator->GetMaterialPackage()->tracks.size(); ++i)
                         {
-                            ACE_DEBUG((LM_ERROR, ACE_TEXT("%C index %d Coded frame %d track %d has error!\n"),
-                                src_name.c_str(), p_opt->index, last_saved + 1, i));
-                            p_rec->NoteFailure();
+                            p_impl->NoteRecError(mp_stc_dbids[i]);
                         }
-
-                        if (mxf && !DEBUG_NOWRITE)
+                        p_rec->NoteFailure();
+                    }
+                    else
+                    {
+                        for (unsigned int i = 0; i < package_creator->GetMaterialPackage()->tracks.size(); ++i)
                         {
-                            /*
-                            ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C index %d WriteSamples track %u, track id %u, data %@, size %u\n"),
-                                src_name.c_str(), p_opt->index,
-                                i, mp_trk->id, eft.Data(), eft.Size()));
-                            */
-                            //ElapsedTimeReporter etr(DEBUG_ELAPSED_TIME_THRESHOLD,
-                            //    "%s index %d WriteSamples track %u", src_name.c_str(), p_opt->index, i);
+                            prodauto::Track * mp_trk = package_creator->GetMaterialPackage()->tracks[i];
+                            EncodeFrameTrack * eft = ef->Track(i);
 
-                            try
+                            if (mxf && !DEBUG_NOWRITE)
                             {
-                                writer->WriteSamples(mp_trk->id, eft.Samples(), (uint8_t *)eft.Data(), eft.Size());
-                            }
-                            catch (const prodauto::MXFWriterException & e)
-                            {
-                                LOG_RECORD_ERROR("MXFWriterException: %C\n", e.getMessage().c_str());
-                                p_rec->NoteFailure();
-                                p_impl->NoteRecError(mp_stc_dbids[i]);
-                            }
-                        }
+                                /*
+                                ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C index %d WriteSamples track %u, track id %u, data %@, size %u\n"),
+                                    src_name.c_str(), p_opt->index,
+                                    i, mp_trk->id, eft->Data(), eft->Size()));
+                                */
+                                //ElapsedTimeReporter etr(DEBUG_ELAPSED_TIME_THRESHOLD,
+                                //    "%s index %d WriteSamples track %u", src_name.c_str(), p_opt->index, i);
 
-                        if (raw && !DEBUG_NOWRITE)
-                        {
-                            if (fp_raw.size() > i && fp_raw[i] != NULL)
-                            {
-                                FILE * & fp = fp_raw[i];
-                                if (PICTURE_DATA_DEFINITION == mp_trk->dataDef)
+                                try
                                 {
-                                    // Video
-                                    if (eft.Size())
+                                    writer->WriteSamples(mp_trk->id, eft->Samples(), (uint8_t *)eft->Data(), eft->Size());
+                                }
+                                catch (const prodauto::MXFWriterException & e)
+                                {
+                                    LOG_RECORD_ERROR("MXFWriterException: %C\n", e.getMessage().c_str());
+                                    p_rec->NoteFailure();
+                                    p_impl->NoteRecError(mp_stc_dbids[i]);
+                                    //ACE_DEBUG((LM_ERROR, ACE_TEXT("%C index %d WriteSamples track %u, track id %u, data %@, size %u, samples %u\n"),
+                                    //    src_name.c_str(), p_opt->index,
+                                    //    i, mp_trk->id, eft->Data(), eft->Size(), eft->Samples()));
+                                }
+                            }
+
+                            if (raw && !DEBUG_NOWRITE)
+                            {
+                                if (fp_raw.size() > i && fp_raw[i] != NULL)
+                                {
+                                    FILE * & fp = fp_raw[i];
+                                    if (PICTURE_DATA_DEFINITION == mp_trk->dataDef)
                                     {
-                                        size_t n = fwrite(eft.Data(), eft.Size(), 1, fp);
-                                        if (n == 0)
+                                        // Video
+                                        if (eft->Size())
                                         {
-                                            ACE_DEBUG((LM_ERROR, ACE_TEXT("Raw video file write error!\n")));
-                                            fclose(fp);
-                                            fp = NULL;
+                                            size_t n = fwrite(eft->Data(), eft->Size(), 1, fp);
+                                            if (n == 0)
+                                            {
+                                                ACE_DEBUG((LM_ERROR, ACE_TEXT("Raw video file write error!\n")));
+                                                fclose(fp);
+                                                fp = NULL;
+                                            }
                                         }
                                     }
-                                }
-                                else if (mp_trk->dataDef == SOUND_DATA_DEFINITION)
-                                {
-                                    // Audio
-                                    write_audio(fp, (uint8_t *)eft.Data(), eft.Samples(), 16, raw_audio_bits);
+                                    else if (mp_trk->dataDef == SOUND_DATA_DEFINITION)
+                                    {
+                                        // Audio
+                                        write_audio(fp, (uint8_t *)eft->Data(), eft->Samples(), 16, raw_audio_bits);
+                                    }
                                 }
                             }
                         }
                     }
 
-                    ++last_saved;
                     ++frames_written_this_loop;
-                    encode_frame_buffer.EraseFrame(last_saved);
+                    encode_frame_buffer.EraseFrame(frames_to_save.front());
+                    frames_to_save.pop();
 
                     p_opt->IncFramesWritten();
 
@@ -1639,7 +1665,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                             DateTime::Timecode().c_str(), src_name.c_str(),
                             p_opt->index, target, total, written, dropped));
                     }
-                } // while (!finished_record && encode_frame_buffer.Frame(last_saved + 1).IsCoded())
+                } // while (!finished_record && encode_frame_buffer.Frame(frames_to_save.front()).IsCoded())
 
                 ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C %C index %d Frames written this loop: %d\n"),
                     DateTime::Timecode().c_str(), src_name.c_str(), p_opt->index, frames_written_this_loop));

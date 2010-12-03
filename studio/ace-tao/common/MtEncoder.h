@@ -1,5 +1,5 @@
 /*
- * $Id: MtEncoder.h,v 1.4 2010/06/02 13:09:53 john_f Exp $
+ * $Id: MtEncoder.h,v 1.5 2010/12/03 14:31:13 john_f Exp $
  *
  * Video encoder using multiple threads.
  *
@@ -39,7 +39,7 @@ public:
     virtual ~MtEncoder();
 
     void Init(MaterialResolution::EnumType res, Ingex::VideoRaster::EnumType raster, int num_threads);
-    void Encode(EncodeFrameTrack & eft);
+    void Encode(EncodeFrameTrack * eft);
     void Close();
     virtual int svc();
 

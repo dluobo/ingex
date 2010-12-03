@@ -1,5 +1,5 @@
 /*
- * $Id: EncodeFrameBuffer.h,v 1.3 2010/09/06 13:48:24 john_f Exp $
+ * $Id: EncodeFrameBuffer.h,v 1.4 2010/12/03 14:31:13 john_f Exp $
  *
  * Buffer to handle video/audio data during encoding process.
  *
@@ -36,15 +36,15 @@ public:
     ~EncodeFrameTrack();
     void Init(void * data, size_t size, unsigned int samples, bool copy, bool del, bool coded,
                 int frame_index, int * p_frame_index);
-    void * Data() { return mData; }
-    size_t Size() { return mSize; }
-    unsigned int Samples() { return mSamples; }
+    void * Data() const { return mData; }
+    size_t Size() const { return mSize; }
+    unsigned int Samples() const { return mSamples; }
     void Coded(bool b) { mCoded = b; }
     bool Coded() const { return mCoded; }
-    int FrameIndex() { return mFrameIndex; }
+    int FrameIndex() const { return mFrameIndex; }
     bool Valid();
     void Error(bool err) { mError = err; }
-    bool Error() { return mError; }
+    bool Error() const { return mError; }
 private:
     void * mData;
     size_t mSize;
@@ -59,14 +59,15 @@ private:
 class EncodeFrame
 {
 public:
-    //EncodeFrame();
-    //~EncodeFrame();
-    EncodeFrameTrack & Track(unsigned int track_index) { return mTracks[track_index]; }
+    EncodeFrame();
+    ~EncodeFrame();
+    EncodeFrameTrack * & Track(unsigned int track_index);
     bool IsCoded() const;
+    bool Error() const;
     //void * TrackData(unsigned int trk);
     //size_t TrackSize(unsigned int trk);
 private:
-    std::map<unsigned int, EncodeFrameTrack> mTracks; // key is index of track
+    std::map<unsigned int, EncodeFrameTrack *> mTracks; // key is index of track
 };
 
 /**
@@ -75,12 +76,15 @@ A buffer of EncodeFrames, implemented as a map.
 class EncodeFrameBuffer
 {
 public:
-    EncodeFrame & Frame(unsigned int frame_index);
+    EncodeFrameBuffer();
+    ~EncodeFrameBuffer();
+    EncodeFrame * & Frame(unsigned int frame_index);
     void EraseFrame(unsigned int index);
     size_t QueueSize();
     size_t CodedSize();
+    void List();
 private:
-    std::map<unsigned int, EncodeFrame> mFrameBuffer;
+    std::map<unsigned int, EncodeFrame *> mFrameBuffer;
     ACE_Thread_Mutex mFrameBufferMutex; // mutex protects the map
 };
 

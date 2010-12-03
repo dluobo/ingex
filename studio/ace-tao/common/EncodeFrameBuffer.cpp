@@ -1,5 +1,5 @@
 /*
- * $Id: EncodeFrameBuffer.cpp,v 1.5 2010/11/02 15:27:21 john_f Exp $
+ * $Id: EncodeFrameBuffer.cpp,v 1.6 2010/12/03 14:31:13 john_f Exp $
  *
  * Buffer to handle video/audio data during encoding process.
  *
@@ -46,6 +46,12 @@ to allow checking that volatile input data is still valid.
 void EncodeFrameTrack::Init(void * data, size_t size, unsigned int samples, bool copy, bool del, bool coded,
                                 int frame_index, int * p_frame_index)
 {
+    //ACE_DEBUG((LM_INFO, ACE_TEXT("EncodeFrameTrack::Init(frame_index=%d, coded=%s)\n"), frame_index, coded ? "true" : "false"));
+
+    mSize = size;
+    mSamples = samples;
+    mFrameIndex = frame_index;
+
     if (mData && mDel)
     {
         free(mData);
@@ -54,13 +60,13 @@ void EncodeFrameTrack::Init(void * data, size_t size, unsigned int samples, bool
     {
         if (copy)
         {
+            mpFrameIndex = 0; // no need to check for data disappearing
             void * local_data = malloc(size);
             if (local_data)
             {
                 memcpy(local_data, data, size);
                 mData = local_data;
                 mDel = true;
-                mpFrameIndex = 0; // no need to check for data disappearing
             }
             else
             {
@@ -70,9 +76,6 @@ void EncodeFrameTrack::Init(void * data, size_t size, unsigned int samples, bool
                 mSize = 0;
                 mSamples = 0;
                 mDel = false;
-                mCoded = false;
-                mFrameIndex = 0;
-                mpFrameIndex = 0;
             }
         }
         else
@@ -81,10 +84,6 @@ void EncodeFrameTrack::Init(void * data, size_t size, unsigned int samples, bool
             mDel = del;
             mpFrameIndex = p_frame_index;
         }
-        mSize = size;
-        mSamples = samples;
-        mCoded = coded;
-        mFrameIndex = frame_index;
     }
     else
     {
@@ -92,10 +91,9 @@ void EncodeFrameTrack::Init(void * data, size_t size, unsigned int samples, bool
         mSize = 0;
         mSamples = 0;
         mDel = false;
-        mCoded = false;
-        mFrameIndex = 0;
         mpFrameIndex = 0;
     }
+    mCoded = coded; // important to do this last - even better use a mutex
 }
 
 bool EncodeFrameTrack::Valid()
@@ -105,6 +103,8 @@ bool EncodeFrameTrack::Valid()
 
 EncodeFrameTrack::~EncodeFrameTrack()
 {
+    //ACE_DEBUG((LM_INFO, ACE_TEXT("EncodeFrameTrack destructor for track of frame_index %d\n"), mFrameIndex));
+
     if (mDel)
     {
         free (mData);
@@ -113,22 +113,50 @@ EncodeFrameTrack::~EncodeFrameTrack()
 
 // EncodeFrame class
 
+EncodeFrame::EncodeFrame()
+{ }
+
+EncodeFrame::~EncodeFrame()
+{
+    for (std::map<unsigned int, EncodeFrameTrack *>::iterator
+        it = mTracks.begin(); it != mTracks.end(); ++it)
+    {
+        delete it->second;
+    }
+}
+
+EncodeFrameTrack * & EncodeFrame::Track(unsigned int track_index)
+{
+    return mTracks[track_index];
+}
+
+/** Return true if all tracks coded. */
 bool EncodeFrame::IsCoded() const
 {
     bool result = true;
-    for (std::map<unsigned int, EncodeFrameTrack>::const_iterator
+    for (std::map<unsigned int, EncodeFrameTrack *>::const_iterator
         it = mTracks.begin(); it != mTracks.end(); ++it)
     {
-        result = result && it->second.Coded();
+        result = result && it->second->Coded();
     }
     return mTracks.size() && result;
 }
 
-/*
-EncodeFrame::EncodeFrame()
-: mError(false)
-{ }
+/** Return true if any track in error. */
+bool EncodeFrame::Error() const
+{
+    bool result = false;
+    for (std::map<unsigned int, EncodeFrameTrack *>::const_iterator
+        it = mTracks.begin(); it != mTracks.end(); ++it)
+    {
+        result = result || it->second->Error();
+    }
+    return result;
+}
 
+
+
+/*
 
 void EncodeFrame::Track(unsigned int trk, void * data, size_t size, bool copy, bool del, bool coded, int * p_index)
 {
@@ -158,7 +186,19 @@ size_t EncodeFrame::TrackSize(unsigned int trk)
 
 //  EncodeFrameBuffer class
 
-EncodeFrame & EncodeFrameBuffer::Frame(unsigned int frame_index)
+EncodeFrameBuffer::EncodeFrameBuffer()
+{ }
+
+EncodeFrameBuffer::~EncodeFrameBuffer()
+{
+    for (std::map<unsigned int, EncodeFrame *>::iterator
+        it = mFrameBuffer.begin(); it != mFrameBuffer.end(); ++it)
+    {
+        delete it->second;
+    }
+}
+
+EncodeFrame * & EncodeFrameBuffer::Frame(unsigned int frame_index)
 {
     ACE_Guard<ACE_Thread_Mutex> guard(mFrameBufferMutex);
 
@@ -168,16 +208,14 @@ EncodeFrame & EncodeFrameBuffer::Frame(unsigned int frame_index)
 void EncodeFrameBuffer::EraseFrame(unsigned int index)
 {
     ACE_Guard<ACE_Thread_Mutex> guard(mFrameBufferMutex);
+    //ACE_DEBUG((LM_INFO, ACE_TEXT("EncodeFrameBuffer::EraseFrame(index %d)\n"), index));
 
-#if 1
-    mFrameBuffer.erase(index);
-#else
-    std::map<unsigned int, EncodeFrame>::iterator it;
+    std::map<unsigned int, EncodeFrame *>::iterator it;
     if (mFrameBuffer.end() != (it = mFrameBuffer.find(index)))
     {
+        delete it->second;
         mFrameBuffer.erase(it);
     }
-#endif
 }
 
 
@@ -193,14 +231,26 @@ size_t EncodeFrameBuffer::CodedSize()
     ACE_Guard<ACE_Thread_Mutex> guard(mFrameBufferMutex);
 
     size_t coded_size = 0;
-    for (std::map<unsigned int, EncodeFrame>::const_iterator
+    for (std::map<unsigned int, EncodeFrame *>::const_iterator
         it = mFrameBuffer.begin(); it != mFrameBuffer.end(); ++it)
     {
-        if (it->second.IsCoded())
+        if (it->second->IsCoded())
         {
             ++coded_size;
         }
     }
     return coded_size;
+}
+
+void EncodeFrameBuffer::List()
+{
+    ACE_Guard<ACE_Thread_Mutex> guard(mFrameBufferMutex);
+
+    for (std::map<unsigned int, EncodeFrame *>::iterator
+        it = mFrameBuffer.begin(); it != mFrameBuffer.end(); ++it)
+    {
+        ACE_DEBUG((LM_INFO, ACE_TEXT("Buffer index %d, FrameTrack(0) index %d\n"),
+            it->first, it->second->Track(0)->FrameIndex()));
+    }
 }
 
