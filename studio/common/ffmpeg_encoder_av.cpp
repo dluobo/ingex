@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder_av.cpp,v 1.12 2010/10/08 16:49:54 john_f Exp $
+ * $Id: ffmpeg_encoder_av.cpp,v 1.13 2010/12/22 14:12:27 john_f Exp $
  *
  * Encode AV and write to file.
  *
@@ -1123,6 +1123,7 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename,
         {
             audio_encoder_t * aenc = enc->audio_encoder[i];
             aenc->audio_st->codec->flags |= CODEC_FLAG_GLOBAL_HEADER;
+            //aenc->audio_st->codec->sample_format = SAMPLE_FMT_S16; // possibly needed for ffmpeg 0.6
         }
     }
 
