@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: savedstate.h,v 1.1 2010/10/05 10:49:02 john_f Exp $             *
+ *   $Id: savedstate.h,v 1.2 2011/01/04 11:37:19 john_f Exp $             *
  *                                                                         *
  *   Copyright (C) 2010 British Broadcasting Corporation                   *
  *   - all rights reserved.                                                *
@@ -35,6 +35,8 @@ class SavedState : public wxXmlDocument
         void Save();
         unsigned long GetUnsignedLongValue(const wxString &, unsigned long, const wxString & = wxEmptyString);
         wxString GetStringValue(const wxString &, const wxString &, const wxString & = wxEmptyString);
+        void SetBoolValue(const wxString &, const bool, const wxString & = wxEmptyString);
+        bool GetBoolValue(const wxString &, const bool, const wxString & = wxEmptyString);
         wxXmlNode * GetTopLevelNode(const wxString &, bool = false, bool = false);
 
     private:

@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: player.cpp,v 1.28 2010/11/02 15:22:22 john_f Exp $              *
+ *   $Id: player.cpp,v 1.29 2011/01/04 11:37:18 john_f Exp $              *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -114,7 +114,7 @@ void Player::SetSavedState(SavedState * savedState)
     mSavedState = savedState;
     SetVideoSplit(); //uses value from the saved state
     SetApplyScaleFilter(); //uses value from the saved state
-    switchAudioGroup(wxT("Yes") != mSavedState->GetStringValue(wxT("AudioFollowsVideo"), wxT("No")));
+    switchAudioGroup(mSavedState->GetBoolValue(wxT("AudioFollowsVideo"), false));
     unsigned int meters = (unsigned int) mSavedState->GetUnsignedLongValue(wxT("NumAudioLevelMeters"), 2);
     if (meters > 16) meters = 16;
     setNumAudioLevelMonitors(meters);
@@ -204,7 +204,7 @@ DragButtonList* Player::GetTrackSelector(wxWindow * parent)
     return mTrackSelector;
 }
 
-/// Responds to a keypress in the player window by passing it through, executing a player command, generating a frame menu event or ignoring it.
+/// Responds to a keypress in the player window by acting on known commands or passing it on.
 /// @param event The command event containing the keypress and modifier.
 void Player::OnKeyPress(wxCommandEvent& event)
 {
@@ -214,92 +214,64 @@ void Player::OnKeyPress(wxCommandEvent& event)
         event.Skip(); //let the parent deal with it
     }
     else {
-        int frameCommand = wxID_ANY;
-        switch (event.GetInt()) {
-            case 65470: //F1
-                frameCommand = IngexguiFrame::BUTTON_MENU_Record;
-                break;
-            case 65471: //F2
-                frameCommand = IngexguiFrame::MENU_MarkCue;
-                break;
-            case 65474: //F5 (NB shift is detected below)
-                frameCommand = IngexguiFrame::BUTTON_MENU_Stop;
-                break;
-            case 65362 : //Up
-                //Prev Event
-                frameCommand = IngexguiFrame::MENU_Up;
-                break;
-            case 65364 : //Down
-                //Next Event
-                frameCommand = IngexguiFrame::MENU_Down;
-                break;
-            case 65365 : //PgUp
-                frameCommand = IngexguiFrame::BUTTON_MENU_PrevTake;
-                break;
-            case 65366 : //PgDn
-                frameCommand = IngexguiFrame::BUTTON_MENU_NextTake;
-                break;
-            case 65360 : //Home
-                //First Take
-                frameCommand = IngexguiFrame::MENU_FirstTake;
-                break;
-            case 65367 : //End
-                //Last Take
-                frameCommand = IngexguiFrame::MENU_LastTake;
-                break;
-            case 116 : //t
-                frameCommand = IngexguiFrame::MENU_JumpToTimecode;
-                break;
-            case 32 : //space
-                if (mSpeed) {
-                    Pause();
-                }
-                else {
-                    Play();
-                }
-                break;
-            case 51 : case 65361 : //3 and left
-                Step(false);
-                break;
-            case 52 : case 65363 : //4 and right
-                Step(true);
-                break;
-            case 109 : //m
-                MuteAudio(!mMuted);
-                break;
-            case 65476 : //F7
-                EarlierTrack(true);
-                break;
-            case 65477 : //F8
-                LaterTrack(true);
-                break;
-            case 65479 : //F10
-                SetMode(RECORDINGS);
-                break;
+        bool found = false;
+        if (0 == event.GetExtraLong()) { //no modifier
+            found = true; //for the moment
+            switch (event.GetInt()) {
+                case 32: //space
+                    if (mSpeed) {
+                        Pause();
+                    }
+                    else {
+                        Play();
+                    }
+                    break;
+                case 51: case 65361: //3 and left
+                    Step(false);
+                    break;
+                case 52: case 65363: //4 and right
+                    Step(true);
+                    break;
+                case 109: //m
+                    MuteAudio(!mMuted);
+                    break;
+                case 65476: //F7
+                    EarlierTrack(true);
+                    break;
+                case 65477: //F8
+                    LaterTrack(true);
+                    break;
+                case 65479: //F10
+                    SetMode(RECORDINGS);
+                    break;
 #ifndef DISABLE_SHARED_MEM_SOURCE
-            case 65480 : //F11
-                SetMode(ETOE);
-                break;
+                case 65480: //F11
+                    SetMode(ETOE);
+                    break;
 #endif
-            case 65481 : //F12
-                SetMode(FILES);
-                break;
-            case 106 : //j
-                Play(true, true);
-                break;
-            case 107 : //k
-                Pause();
-                break;
-            case 108 : //l
-                Play(true, false);
-                break;
-            case 111: //o
-                if (2 == event.GetExtraLong()) Open(OPEN_RECORDINGS); //ctrl
-                break;
+                case 65481: //F12
+                    SetMode(FILES);
+                    break;
+                case 106: //j
+                    Play(true, true);
+                    break;
+                case 107: //k
+                    Pause();
+                    break;
+                case 108: //l
+                    Play(true, false);
+                    break;
+                default:
+                    found = false;
+                    break;
+            }
         }
-        if (wxID_ANY != frameCommand && ((IngexguiFrame::BUTTON_MENU_Stop == frameCommand && event.GetExtraLong() == 1) || (IngexguiFrame::BUTTON_MENU_Stop != frameCommand && !event.GetExtraLong()))) { //stop has been pressed with shift, or any other keypress doesn't have a modifier
-            wxCommandEvent menuEvent(wxEVT_COMMAND_MENU_SELECTED, frameCommand);
-            GetParent()->AddPendingEvent(menuEvent);
+        if (111 == event.GetInt() && 2 == event.GetExtraLong()) { //ctrl-O
+            Open(OPEN_RECORDINGS);
+            found = true;
+        }
+        if (!found) {
+            event.Skip(); //let the parent have a go
         }
     }
 }
@@ -381,7 +353,7 @@ const wxString Player::GetProjectType()
     return type;
 }
 
-/// Updates the details for recordings mode. If player is enabled and in recordings mode, responds to the changes.
+/// Updates the details for recordings mode. If player is enabled, responds to the changes, switching to recording mode if possible.
 /// @param chunkInfo Recording details - can be zero which will cause player to be reset if in recordings mode.  Player reloads if this has changed.
 /// @param cuePoint A cue point to jump to (0 is the start of the recording; > number of cue points is the end), if this value has changed.
 /// @param forceReload Reload the recording even if the chunk info hasn't changed
@@ -405,12 +377,17 @@ std::vector<std::string>* Player::SelectRecording(ChunkInfo * chunkInfo, const i
             mRecordingModeFrameOffset = 0;
         }
     }
-    if (mEnabled && RECORDINGS == mMode) { //showing recordings
-        if (reload) {
-            LoadRecording();
+    if (mEnabled) {
+        if (RECORDINGS == mMode) {
+            if (reload) {
+                LoadRecording();
+            }
+            else {
+                JumpToFrame(mRecordingModeFrameOffset);
+            }
         }
         else {
-            JumpToFrame(mRecordingModeFrameOffset);
+            SetMode(RECORDINGS);
         }
     }
     std::vector<std::string>* fileNames = 0;
@@ -1231,7 +1208,7 @@ void Player::SetWindowName(const wxString & name)
             for (size_t i = 0; i < mTrackNames.size(); i++) { //only go through video files
                 if (mOpened[i]) {
                     title += wxString(mTrackNames[i].c_str(), *wxConvCurrent) + wxT("; ");
-                    if ((mSavedState && wxT("Yes") == mSavedState->GetStringValue(wxT("LimitSplitToQuad"), wxT("No")) ? 4 : 9) == ++nTracks) break; //split view displays up to the first four or nine successfully opened files
+                    if ((mSavedState && mSavedState->GetBoolValue(wxT("LimitSplitToQuad"), false) ? 4 : 9) == ++nTracks) break; //split view displays up to the first four or nine successfully opened files
                 }
             }
             if (!title.IsEmpty()) { //trap for only audio files
@@ -1314,10 +1291,7 @@ void Player::SelectLaterTrack()
 void Player::LimitSplitToQuad(const bool limit)
 {
     //save the change
-    if (mSavedState) {
-        new wxXmlNode(mSavedState->GetTopLevelNode(wxT("LimitSplitToQuad"), true, true), wxXML_TEXT_NODE, wxEmptyString, limit ? wxT("Yes") : wxT("No")); //remove existing node if present
-        mSavedState->Save();
-    }
+    if (mSavedState) mSavedState->SetBoolValue(wxT("LimitSplitToQuad"), limit);
     //reflect the change
     SetVideoSplit();
 }
@@ -1326,7 +1300,7 @@ void Player::LimitSplitToQuad(const bool limit)
 /// SetSavedState() must have been called.
 bool Player::IsSplitLimitedToQuad()
 {
-    return mSavedState && wxT("Yes") == mSavedState->GetStringValue(wxT("LimitSplitToQuad"), wxT("No"));
+    return mSavedState && mSavedState->GetBoolValue(wxT("LimitSplitToQuad"), false);
 }
 
 /// Disables horizontal and vertical filtering of scaled images in split views (to save processing power).
@@ -1335,10 +1309,7 @@ bool Player::IsSplitLimitedToQuad()
 void Player::DisableScalingFiltering(const bool disable)
 {
     //save the change
-    if (mSavedState) {
-        new wxXmlNode(mSavedState->GetTopLevelNode(wxT("DisableScalingFiltering"), true, true), wxXML_TEXT_NODE, wxEmptyString, disable ? wxT("Yes") : wxT("No")); //remove existing node if present
-        mSavedState->Save();
-    }
+    if (mSavedState) mSavedState->SetBoolValue(wxT("DisableScalingFiltering"), disable);
     //reflect the change
     SetApplyScaleFilter();
 }
@@ -1347,14 +1318,14 @@ void Player::DisableScalingFiltering(const bool disable)
 /// SetSavedState() must have been called.
 bool Player::IsScalingFilteringDisabled()
 {
-    return mSavedState && wxT("Yes") == mSavedState->GetStringValue(wxT("DisableScalingFiltering"), wxT("No"));
+    return mSavedState && mSavedState->GetBoolValue(wxT("DisableScalingFiltering"), false);
 }
 
 /// Sets the video split type and the track selector tooltip depending on how many tracks are available and whether a nonasplit is allowed.
 /// @param restart Restarts player if necessary - change does not take effect until player is restarted.
 void Player::SetVideoSplit(const bool restart)
 {
-    bool limited = mSavedState && wxT("Yes") == mSavedState->GetStringValue(wxT("LimitSplitToQuad"), wxT("No"));
+    bool limited = mSavedState && mSavedState->GetBoolValue(wxT("LimitSplitToQuad"), false);
     setVideoSplit((mNVideoTracks > 4 && !limited) ? NONA_SPLIT_VIDEO_SWITCH : QUAD_SPLIT_VIDEO_SWITCH); //this doesn't take effect until the player is reloaded
     if (mTrackSelector) mTrackSelector->LimitSplitToQuad(limited);
     if (
@@ -1368,7 +1339,7 @@ void Player::SetVideoSplit(const bool restart)
 /// Restarts player for change to take effect.
 void Player::SetApplyScaleFilter()
 {
-    bool disabled = mSavedState && wxT("Yes") == mSavedState->GetStringValue(wxT("DisableScalingFiltering"), wxT("No"));
+    bool disabled = mSavedState && mSavedState->GetBoolValue(wxT("DisableScalingFiltering"), false);
     setApplyScaleFilter(!disabled); //this doesn't take effect until the player is reloaded
     if (mOK) Start();
 }
@@ -1378,10 +1349,7 @@ void Player::SetApplyScaleFilter()
 void Player::AudioFollowsVideo(const bool follows)
 {
     //save the change
-    if (mSavedState) {
-        new wxXmlNode(mSavedState->GetTopLevelNode(wxT("AudioFollowsVideo"), true, true), wxXML_TEXT_NODE, wxEmptyString, follows ? wxT("Yes") : wxT("No")); //remove existing node if present
-        mSavedState->Save();
-    }
+    if (mSavedState) mSavedState->SetBoolValue(wxT("AudioFollowsVideo"), follows);
     //reflect the change
     switchAudioGroup(follows ? 0 : 1);
 }
@@ -1389,7 +1357,7 @@ void Player::AudioFollowsVideo(const bool follows)
 /// Returns "audio follows video" state
 bool Player::IsAudioFollowingVideo()
 {
-    return mSavedState && wxT("Yes") == mSavedState->GetStringValue(wxT("AudioFollowsVideo"), wxT("No"));
+    return mSavedState && mSavedState->GetBoolValue(wxT("AudioFollowsVideo"), false);
 }
 
 /// Sets and saves the number of audio level meters displayed in the player window if OSD is on

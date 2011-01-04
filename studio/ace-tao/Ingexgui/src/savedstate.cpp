@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: savedstate.cpp,v 1.1 2010/10/05 10:49:02 john_f Exp $           *
+ *   $Id: savedstate.cpp,v 1.2 2011/01/04 11:37:19 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2010 British Broadcasting Corporation                   *
  *   - all rights reserved.                                                *
@@ -59,7 +59,7 @@ void SavedState::Save()
     wxXmlDocument::Save(mFilename);
 }
 
-/// Gets the content or an attribute content of a node just below root level, where the value of that node is expected to be resolvable to an unsigned long.
+/// Gets the content or an attribute content of a node just below root level, where the value of that node/attribute is expected to be resolvable to an unsigned long.
 /// @param nodeName The node name to search for.
 /// @param deflt A default value to return in case the node wasn't found or its value is invalid.
 /// @param attrName The optional attribute name to search for.
@@ -96,6 +96,34 @@ wxString SavedState::GetStringValue(const wxString & nodeName, const wxString & 
         value = deflt;
     }
     return value;
+}
+
+/// Gets the content or an attribute of a node just below root level, expected to be "Yes" or "No", as a boolean.
+/// @param nodeName The node name to search for.
+/// @param deflt A default value to return if the node or attribute wasn't found.
+/// @param attrName The optional attribute name to search for.
+/// @return true if the attribute/content was "Yes"
+bool SavedState::GetBoolValue(const wxString & nodeName, const bool deflt, const wxString & attrName)
+{
+    return wxT("Yes") == GetStringValue(nodeName, deflt ? wxT("Yes") : wxT("No"), attrName);
+}
+
+/// Sets the content or an attribute of a node just below root level to be "Yes" or "No".
+/// @param nodeName The node name.  Will be created if it doesn't already exist.
+/// @param value The value to set (true becomes "Yes").
+/// @param attrName The optional attribute name to use, instead of using the node content.
+void SavedState::SetBoolValue(const wxString & nodeName, const bool value, const wxString & attrName)
+{
+    if (wxEmptyString == attrName) {
+        wxXmlNode * node = GetTopLevelNode(nodeName, true, true); //remove existing node if present
+        new wxXmlNode(node, wxXML_TEXT_NODE, wxEmptyString, value ? wxT("Yes") : wxT("No"));
+    }
+    else {
+        wxXmlNode * node = GetTopLevelNode(nodeName, true); //create if not present
+        node->DeleteProperty(attrName); //should really be a loop but docn doesn't confirm that the return value from DeleteProperty indicates that a property has been deleted
+        node->AddProperty(new wxXmlProperty(attrName, value ? wxT("Yes") : wxT("No")));
+    }
+    Save();
 }
 
 /// Gets a node just below the root with the given name.

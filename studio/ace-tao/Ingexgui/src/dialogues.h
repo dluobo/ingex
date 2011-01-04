@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: dialogues.h,v 1.16 2010/10/05 10:49:02 john_f Exp $             *
+ *   $Id: dialogues.h,v 1.17 2011/01/04 11:37:18 john_f Exp $             *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -95,7 +95,7 @@ class SetProjectDlg : public wxDialog
     DECLARE_EVENT_TABLE()
 };
 
-/// A wxGrid which passes on character events - currently these aren't being used because they don't seem to be passed on
+/// A wxGrid which passes on character events - currently these aren't being used because they don't seem to be passed on.
 class MyGrid : public wxGrid
 {
     public:
@@ -109,12 +109,14 @@ event.Skip(); };
 class wxXmlNode;
 
 /// Set tape IDs.
+
+#define TAPE_IDS_NODE_NAME wxT("TapeIds")
+
 class SetTapeIdsDlg : public wxDialog
 {
     public:
         SetTapeIdsDlg(wxWindow *, SavedState *, wxArrayString &, std::vector<bool> &);
-        static wxXmlNode * GetTapeIdsNode(SavedState *, bool);
-        static const wxString GetTapeId(wxXmlNode *, const wxString &, wxArrayString * = 0);
+        static const wxString GetTapeId(SavedState *, const wxString &, wxArrayString * = 0);
         static void EnableTapeIds(SavedState *, bool);
         static bool AreTapeIdsEnabled(SavedState *);
         bool IsUpdated();
@@ -169,12 +171,17 @@ class SetTapeIdsDlg : public wxDialog
 };
 
 /// Set a timecode to jump to
+
+DECLARE_EVENT_TYPE(EVT_JUMP_TO_TIMECODE, -1)
+
 class JumpToTimecodeDlg : public wxDialog
 {
     public:
-        JumpToTimecodeDlg(wxWindow *, ProdAuto::MxfTimecode);
-        int ShowModal();
+        JumpToTimecodeDlg(wxWindow *);
+        void Show(ProdAuto::MxfTimecode);
         const ProdAuto::MxfTimecode GetTimecode();
+        void Hide();
+        void NotFoundMessage();
     private:
         enum //these must be in order
         {
@@ -185,8 +192,11 @@ class JumpToTimecodeDlg : public wxDialog
         };
         void OnTextChange(wxCommandEvent &);
         void OnFocus(wxFocusEvent &);
+        void OnButton(wxCommandEvent &);
         bool CheckValue(const wxString &, const wxString &);
         MyTextCtrl * mHours, * mMins, * mSecs, * mFrames;
+        wxButton * mApplyButton;
+        wxStaticText * mNotFoundMessage;
         ProdAuto::MxfTimecode mTimecode;
     DECLARE_EVENT_TABLE()
 };
@@ -277,6 +287,7 @@ class CuePointsDlg : public wxDialog
         bool ValidCuePointSelected();
         static const wxColour GetColour(const size_t);
         static const wxColour GetLabelColour(const size_t);
+        bool DefaultCueMode();
     private:
         void OnEditorShown(wxGridEvent&);
         void OnEditorHidden(wxGridEvent&);
@@ -287,8 +298,11 @@ class CuePointsDlg : public wxDialog
         void OnCellLeftClick(wxGridEvent&);
         void OnSetGridRow(wxCommandEvent&);
         void OnLabelLeftClick(wxGridEvent&);
+        void OnRadioButton(wxCommandEvent&);
         void SetColour(const int, const int);
 
+        wxRadioButton * mSingleTypeRadioButton;
+        wxRadioButton * mMultipleTypeRadioButton;
         wxGrid * mGrid;
         wxButton * mOkButton;
         wxStaticText * mTimecodeDisplay;

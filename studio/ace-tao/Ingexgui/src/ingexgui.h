@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: ingexgui.h,v 1.23 2010/10/12 17:40:37 john_f Exp $              *
+ *   $Id: ingexgui.h,v 1.24 2011/01/04 11:37:18 john_f Exp $              *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -76,6 +76,7 @@ class CuePointsDlg;
 class TestModeDlg;
 class ChunkingDlg;
 class SelectRecDlg;
+class JumpToTimecodeDlg;
 class EventList;
 class ChunkInfo;
 class PlayerControl;
@@ -214,6 +215,7 @@ class IngexguiFrame : public wxFrame
         void OnRefreshTimer(wxTimerEvent&);
         void OnDeleteCue(wxCommandEvent&);
         void OnJumpToTimecode(wxCommandEvent&);
+        void OnJumpToTimecodeEvent(wxCommandEvent&);
         void OnTakeSnapshot(wxCommandEvent&);
         void OnPlayerEvent(wxCommandEvent&);
         void OnRecorderGroupEvent(wxCommandEvent&);
@@ -252,6 +254,7 @@ class IngexguiFrame : public wxFrame
         CuePointsDlg * mCuePointsDlg;
         TestModeDlg * mTestModeDlg;
         ChunkingDlg * mChunkingDlg;
+        JumpToTimecodeDlg * mJumpToTimecodeDlg;
         Stat mStatus;
         long mEditRateNumerator, mEditRateDenominator;
         Timepos * mTimepos;

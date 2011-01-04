@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: eventlist.cpp,v 1.17 2010/11/02 15:22:22 john_f Exp $           *
+ *   $Id: eventlist.cpp,v 1.18 2011/01/04 11:37:18 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2009-2010 British Broadcasting Corporation                   *
  *   - all rights reserved.                                                *
@@ -1042,7 +1042,8 @@ void EventList::OnSocketEvent(wxSocketEvent& event)
                             frameCount = frameCount * mRecStartTimecode.edit_rate.numerator / mRecStartTimecode.edit_rate.denominator + value; //now have cue point timecode as number of frames since midnight
                             frameCount -= mRecStartTimecode.samples; //number of frames since start of recording, mod 1 day FIXME: can't handle recordings more than a day long; doesn't check for stupid values
 //                            if (frameCount < 0) frameCount += 24 * 60 * 60 * mRecStartTimecode.edit_rate.numerator / mRecStartTimecode.edit_rate.denominator; //wrap over midnight
-                            if (frameCount > 0) AddEvent(CUE, 0, socketMessage.Left(socketMessage.Length() - 12), frameCount, 0); //ignore cue points from before the start of recording; use default cue point colour FIXME: doesn't work over midnight
+                            if (frameCount < 0) frameCount = 0; //convert cue points with times before the start of the recording to the recording start
+                            AddEvent(CUE, 0, socketMessage.Left(socketMessage.Length() - 12), frameCount, 0); //use default cue point colour FIXME: doesn't work over midnight
                         }
                     }
                 }

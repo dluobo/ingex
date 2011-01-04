@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: dialogues.cpp,v 1.25 2010/10/08 16:45:06 john_f Exp $           *
+ *   $Id: dialogues.cpp,v 1.26 2011/01/04 11:37:18 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -399,9 +399,6 @@ SetTapeIdsDlg::SetTapeIdsDlg(wxWindow * parent, SavedState * savedState, wxArray
     mClearButton->Disable();
     buttonSizer->Add(mClearButton, 0, wxEXPAND);
 
-    //find the tape IDs in the XML
-    wxXmlNode * tapeIdsNode = GetTapeIdsNode(savedState, false); //don't delete the data
-
     //aggregate enable values for duplicated package names, and allow sorting
     BoolHash2 enables;
     for (size_t i = 0; i < currentPackages.GetCount(); i++) {
@@ -417,7 +414,7 @@ SetTapeIdsDlg::SetTapeIdsDlg(wxWindow * parent, SavedState * savedState, wxArray
             mGrid->SetReadOnly(row, 0);
             wxArrayString sections;
             sections.Insert(wxEmptyString, 0, mGrid->GetNumberCols() - 2); //set the number of sections
-            mGrid->SetCellValue(row, 1, GetTapeId(tapeIdsNode, currentPackages[index], &sections));
+            mGrid->SetCellValue(row, 1, GetTapeId(savedState, currentPackages[index], &sections));
             mGrid->SetReadOnly(row, 1);
             mGrid->SetCellBackgroundColour(row, 1, wxColour(wxT("GREY"))); //updated in a mo
             for (size_t section = 0; section < sections.GetCount(); section++) {
@@ -436,6 +433,7 @@ SetTapeIdsDlg::SetTapeIdsDlg(wxWindow * parent, SavedState * savedState, wxArray
     if (wxID_OK == ShowModal()) {
         for (int i = 0; i < mGrid->GetNumberRows(); i++) {
             //remove any existing node(s) for this source
+            wxXmlNode * tapeIdsNode = savedState->GetTopLevelNode(TAPE_IDS_NODE_NAME, true);
             wxXmlNode * tapeIdNode = tapeIdsNode->GetChildren();
             while (tapeIdNode) {
                 if (mGrid->GetCellValue(i, 0) == tapeIdNode->GetPropVal(wxT("PackageName"), wxEmptyString)) {
@@ -463,38 +461,25 @@ SetTapeIdsDlg::SetTapeIdsDlg(wxWindow * parent, SavedState * savedState, wxArray
 }
 
 /// Returns the enabled state of tape IDs.  Default true if state not stored.
-/// @param savedState The persistent data containing the setting.
+/// @param savedState The persistent data containing the setting.  Not checked for existence.
 bool SetTapeIdsDlg::AreTapeIdsEnabled(SavedState * savedState)
 {
-    wxXmlNode * tapeIdsNode = GetTapeIdsNode(savedState, false); //don't clear the data
-    return wxT("Yes") == tapeIdsNode->GetPropVal(wxT("Enabled"), wxT("Yes"));
+    return savedState->GetBoolValue(TAPE_IDS_NODE_NAME, true, wxT("Enabled"));
 }
 
 /// Saves the enabled state of tape IDs.
 /// @param savedState The persistent data to which to save the setting.
 void SetTapeIdsDlg::EnableTapeIds(SavedState * savedState, bool enabled)
 {
-    wxXmlNode * tapeIdsNode = GetTapeIdsNode(savedState, false); //don't clear the data
-    tapeIdsNode->DeleteProperty(wxT("Enabled"));
-    tapeIdsNode->SetProperties(new wxXmlProperty(wxT("Enabled"), enabled ? wxT("Yes") : wxT("No")));
-    savedState->Save();
-}
-
-/// Retrieves or creates the node in the persistent state for tape IDs.
-/// @param savedState The persistent data.
-/// @param clear True to remove all stored tape ID information.
-/// @return The tape ID root node (always valid).
-wxXmlNode * SetTapeIdsDlg::GetTapeIdsNode(SavedState * savedState, bool clear)
-{
-    return savedState->GetTopLevelNode(wxT("TapeIds"), true, clear);
+    savedState->SetBoolValue(TAPE_IDS_NODE_NAME, enabled, wxT("Enabled"));
 }
 
 /// Gets the tape ID for the given package name from the children of the given node.
-/// @param tapeIdsNode The node to search from.  Until it finds the valid data, removes any child nodes with the same package ID which contain invalid data.
+/// @param savedState The persistent data containing the setting.  Not checked for existence.
 /// @param packageName The package name to search for.
 /// @param sections Array to be populated with the sections of the tape ID.  If there are more sections than the size of the array, the extras will be placed in the last element.
 /// @return The complete tape ID (empty string if not found).
-const wxString SetTapeIdsDlg::GetTapeId(wxXmlNode * tapeIdsNode, const wxString & packageName, wxArrayString * sections)
+const wxString SetTapeIdsDlg::GetTapeId(SavedState * savedState, const wxString & packageName, wxArrayString * sections)
 {
     wxString fullName;
     wxArrayString internal;
@@ -507,6 +492,7 @@ const wxString SetTapeIdsDlg::GetTapeId(wxXmlNode * tapeIdsNode, const wxString 
         sections = &internal;
         nSections = 0; //indicates unlimited
     }
+    wxXmlNode * tapeIdsNode = savedState->GetTopLevelNode(TAPE_IDS_NODE_NAME, true);
     wxXmlNode * tapeIdNode = tapeIdsNode->GetChildren();
     while (tapeIdNode) { //assumes all nodes at this level are called "TapeId"
         if (packageName == tapeIdNode->GetPropVal(wxT("PackageName"), wxEmptyString)) { //found it!
@@ -961,14 +947,19 @@ BEGIN_EVENT_TABLE(JumpToTimecodeDlg, wxDialog)
     EVT_TEXT(wxID_ANY, JumpToTimecodeDlg::OnTextChange)
     EVT_SET_FOCUS(JumpToTimecodeDlg::OnFocus)
     EVT_KILL_FOCUS(JumpToTimecodeDlg::OnFocus)
+    EVT_BUTTON(wxID_ANY, JumpToTimecodeDlg::OnButton)
 END_EVENT_TABLE()
 
-JumpToTimecodeDlg::JumpToTimecodeDlg(wxWindow * parent, ProdAuto::MxfTimecode tc) : wxDialog(parent, wxID_ANY, (const wxString &) wxT("Jump to Timecode")), mTimecode(tc)
+DEFINE_EVENT_TYPE(EVT_JUMP_TO_TIMECODE)
+
+/// @param tc A timecode for the edit rate.
+JumpToTimecodeDlg::JumpToTimecodeDlg(wxWindow * parent) : wxDialog(parent, wxID_ANY, (const wxString &) wxT("Jump to Timecode"))
 {
     wxBoxSizer * mainSizer = new wxBoxSizer(wxVERTICAL);
     SetSizer(mainSizer);
     wxBoxSizer * timecodeSizer = new wxBoxSizer(wxHORIZONTAL);
-    mainSizer->Add(timecodeSizer, 0, wxALL, CONTROL_BORDER);
+    mainSizer->Add(timecodeSizer, 0, wxALL | wxEXPAND, CONTROL_BORDER);
+    timecodeSizer->AddStretchSpacer();
     wxFont * font = wxFont::New(TIME_FONT_SIZE, wxFONTFAMILY_MODERN); //this way works under GTK
     mHours = new MyTextCtrl(this, HRS, wxT("00"));
     mHours->SetFont(*font);
@@ -1003,9 +994,15 @@ JumpToTimecodeDlg::JumpToTimecodeDlg(wxWindow * parent, ProdAuto::MxfTimecode tc
     mFrames->SetClientSize(size);
     mFrames->SetMaxLength(2);
     timecodeSizer->Add(mFrames, 0, wxFIXED_MINSIZE);
-    mainSizer->Add(CreateButtonSizer(wxOK | wxCANCEL), 0, wxALL, CONTROL_BORDER);
-    Fit();
-//  wxButton * jumpButton = new wxButton(this, wxID_OK, wxT("Jump!"));
+    timecodeSizer->AddStretchSpacer();
+    mNotFoundMessage = new wxStaticText(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxALIGN_CENTRE | wxST_NO_AUTORESIZE); //should centre text but doesn't
+    mainSizer->Add(mNotFoundMessage, 0, wxALL | wxEXPAND, CONTROL_BORDER);
+    wxBoxSizer * buttonSizer = new wxBoxSizer(wxHORIZONTAL);
+    mainSizer->Add(buttonSizer, 0, wxALL, CONTROL_BORDER);
+    mApplyButton = new wxButton(this, wxID_ANY, wxT("Apply"));
+    buttonSizer->Add(mApplyButton, 0, wxALL, CONTROL_BORDER);
+    buttonSizer->Add(new wxButton(this, wxID_OK), 0, wxALL, CONTROL_BORDER);
+    buttonSizer->Add(new wxButton(this, wxID_CANCEL), 0, wxALL, CONTROL_BORDER);
 //  timecodeSizer->Add(jumpButton, 0, wxALL, CONTROL_BORDER);
 //  hours->SetClientSize(size);
 //  hours->Layout();
@@ -1014,23 +1011,24 @@ JumpToTimecodeDlg::JumpToTimecodeDlg(wxWindow * parent, ProdAuto::MxfTimecode tc
 //  hours->SetInitialSize(size);
 //  hours->SetClientSize(size);
 //  hours->SetSize(size);
-
+    Fit();
 }
 
 /// Checks a defined timecode value (for edit rate) has been supplied before allowing dialogue to be shown
-int JumpToTimecodeDlg::ShowModal()
+void JumpToTimecodeDlg::Show(ProdAuto::MxfTimecode tc)
 {
+    mTimecode = tc;
     if (!mTimecode.undefined) {
-        return wxDialog::ShowModal();
-    }
-    else {
-        return wxID_CANCEL; //sanity check - avoids divide by zero if timecode not defined
+        mNotFoundMessage->SetLabel(wxEmptyString);
+        wxDialog::Show(); //sanity check - avoids divide by zero if timecode not defined
+        FindWindow(HRS)->SetFocus();
     }
 }
 
 /// Responds to character entry in text entry field by checking, changing focus or deleting character just entered as appropriate
 void JumpToTimecodeDlg::OnTextChange(wxCommandEvent & event)
 {
+    mNotFoundMessage->SetLabel(wxEmptyString);
     MyTextCtrl * ctrl = (MyTextCtrl *) event.GetEventObject();
     wxString value = ctrl->GetValue();
     bool ok;
@@ -1053,7 +1051,7 @@ void JumpToTimecodeDlg::OnTextChange(wxCommandEvent & event)
         //move to the next field
 //      ctrl->Navigate();
         if (FRAMES == event.GetId()) {
-            FindWindow(HRS)->SetFocus();
+            mApplyButton->SetFocus();
         }
         else {
             FindWindow(event.GetId() + 1)->SetFocus();
@@ -1101,6 +1099,20 @@ void JumpToTimecodeDlg::OnFocus(wxFocusEvent & event)
     event.Skip();
 }
 
+/// Sends an event to the frame if OK or Apply have been pressed.  Indirectly closes the window if OK or Cancel have been pressed.
+void JumpToTimecodeDlg::OnButton(wxCommandEvent & event)
+{
+    if (wxID_CANCEL != event.GetId()) { //must the OK or the apply button
+        //tell the frame there's a timecode to jump to
+        wxCommandEvent guiEvent(EVT_JUMP_TO_TIMECODE, wxID_ANY);
+        GetParent()->AddPendingEvent(guiEvent);
+        FindWindow(HRS)->SetFocus(); //ready for next tc
+    }
+    if (wxID_OK == event.GetId() || wxID_CANCEL == event.GetId()) {
+        event.Skip();
+    }
+}
+
 /// Returns the timecode corresponding to the values in the boxes
 const ProdAuto::MxfTimecode JumpToTimecodeDlg::GetTimecode()
 {
@@ -1115,6 +1127,21 @@ const ProdAuto::MxfTimecode JumpToTimecodeDlg::GetTimecode()
     (dynamic_cast<MyTextCtrl *>(FindWindow(FRAMES)))->GetValue().ToLong(&field);
     mTimecode.samples += field;
     return mTimecode;
+}
+
+/// Displays a message indicating the timecode has not been found.
+void JumpToTimecodeDlg::NotFoundMessage()
+{
+    if (wxEmptyString == mNotFoundMessage->GetLabel()) { //not already showing message, preventing an endless loop
+        mNotFoundMessage->SetLabel(wxT("Timecode not found"));
+        wxDialog::Show(); //in case OK had been pressed
+    }
+}
+
+/// Hides the dialogue
+void JumpToTimecodeDlg::Hide()
+{
+    wxDialog::Show(false);
 }
 
 
@@ -1453,6 +1480,7 @@ BEGIN_EVENT_TABLE(CuePointsDlg, wxDialog)
     EVT_GRID_EDITOR_HIDDEN(CuePointsDlg::OnEditorHidden)
     EVT_MENU(wxID_ANY, CuePointsDlg::OnMenu)
     EVT_BUTTON(wxID_OK, CuePointsDlg::OnOK)
+    EVT_RADIOBUTTON(wxID_ANY, CuePointsDlg::OnRadioButton)
     EVT_GRID_CELL_LEFT_CLICK(CuePointsDlg::OnCellLeftClick)
     EVT_GRID_LABEL_LEFT_CLICK(CuePointsDlg::OnLabelLeftClick)
     EVT_COMMAND(wxID_ANY, EVT_SET_GRID_ROW, CuePointsDlg::OnSetGridRow)
@@ -1482,6 +1510,11 @@ CuePointsDlg::CuePointsDlg(wxWindow * parent, SavedState * savedState) : wxDialo
     wxFont * font = wxFont::New(TIME_FONT_SIZE, wxFONTFAMILY_MODERN); //this way works under GTK
     mTimecodeDisplay->SetFont(*font);
     mainSizer->Add(mTimecodeDisplay, 0, wxALL | wxALIGN_CENTRE, CONTROL_BORDER);
+
+    mSingleTypeRadioButton = new wxRadioButton(this, wxID_ANY, wxT("Use a single cue point type"), wxDefaultPosition, wxDefaultSize, wxRB_GROUP);
+    mainSizer->Add(mSingleTypeRadioButton, 0, wxALL, CONTROL_BORDER);
+    mMultipleTypeRadioButton = new wxRadioButton(this, wxID_ANY, wxT("Use multiple cue point types"));
+    mainSizer->Add(mMultipleTypeRadioButton, 0, wxALL, CONTROL_BORDER);
 
     mGrid = new MyGrid(this, wxID_ANY);
     mainSizer->Add(mGrid, 0 , wxEXPAND | wxALL, CONTROL_BORDER);
@@ -1520,7 +1553,7 @@ CuePointsDlg::CuePointsDlg(wxWindow * parent, SavedState * savedState) : wxDialo
     Load();
 }
 
-/// Loads the grid contents from the saved state.
+/// Loads the grid contents and mode from the saved state.
 void CuePointsDlg::Load()
 {
     //load default values as may not be overwriting everything
@@ -1548,9 +1581,10 @@ void CuePointsDlg::Load()
     }
     mGrid->AutoSizeColumns();
     Fit();
+    mSavedState->GetBoolValue(wxT("CuePoints"), false, wxT("SingleType")) ? mSingleTypeRadioButton->SetValue(true) : mMultipleTypeRadioButton->SetValue(true);
 }
 
-/// Saves the grid contents in the XML document.
+/// Saves the grid contents and mode in the XML document.
 void CuePointsDlg::Save()
 {
     //remove old state
@@ -1578,10 +1612,10 @@ void CuePointsDlg::Save()
             );
         }
     }
-    mSavedState->Save();
+    mSavedState->SetBoolValue(wxT("CuePoints"), mSingleTypeRadioButton->GetValue(), wxT("SingleType")); //also saves the document
 }
 
-/// If dialogue not already visible, shows the dialogue and returns when the dialogue is dismissed, saving the grid if OK is pressed.
+/// If dialogue not already visible, shows the dialogue and returns when the dialogue is dismissed, saving the grid and mode if OK is pressed.
 /// If dialogue already visible, this will be a Mark Cue keystroke from an external device, so act as if the default event had been selected
 /// @param timecode If present, displays this at the top of the window and goes into add cue mode - shortcut keys enabled.
 int CuePointsDlg::ShowModal(const wxString timecode)
@@ -1592,29 +1626,35 @@ int CuePointsDlg::ShowModal(const wxString timecode)
         EndModal(wxID_OK);
     }
     else {
-        Raise(); //Attempt to raise window to the top, which might be useful when opened by the Shuttle Pro, but window manager policy might prevent it happening
-        mTimecodeDisplay->SetLabel(timecode);
-        mTimecodeDisplay->Show(!timecode.IsEmpty());
-        mMessage->Show(!timecode.IsEmpty());
-        Fit();
+        if (!timecode.IsEmpty() && mSingleTypeRadioButton->GetValue()) { //entering a cue point and there is only one type
+            //No need to show the dialogue
+            rc = wxID_OK;
+        }
+        else {
+            Raise(); //Attempt to raise window to the top, which might be useful when opened by the Shuttle Pro, but window manager policy might prevent it happening
+            mTimecodeDisplay->SetLabel(timecode);
+            mTimecodeDisplay->Show(!timecode.IsEmpty());
+            mMessage->Show(!timecode.IsEmpty());
+            Fit();
 
-        if (timecode.IsEmpty()) {
-            SetTitle(wxT("Edit Cue Point Descriptions"));
-            mGrid->SetFocus(); //typing will immediately start editing
-            mGrid->ClearSelection(); //in case there's one hanging around from entering cue points, which looks silly
-        }
-        else {
-            SetTitle(wxT("Choose/edit Cue Point"));
-            mOkButton->SetFocus(); //stops shortcut keys disappearing into the grid
-            mMessage->SetForegroundColour(mTextColour); //as it's shown we need to see it...
-            mGrid->SelectRow(mCurrentRow); //always highlight one row
-        }
-        if (wxID_OK == (rc = wxDialog::ShowModal())) {
-            Save();
-        }
-        else {
-            //reload old state
-            Load();
+            if (timecode.IsEmpty()) {
+                SetTitle(wxT("Edit Cue Point Descriptions"));
+                mGrid->SetFocus(); //typing will immediately start editing
+                mGrid->ClearSelection(); //in case there's one hanging around from entering cue points, which looks silly
+            }
+            else {
+                SetTitle(wxT("Choose/edit Cue Point"));
+                mOkButton->SetFocus(); //stops shortcut keys disappearing into the grid
+                mMessage->SetForegroundColour(mTextColour); //as it's shown we need to see it...
+                mGrid->SelectRow(mCurrentRow); //always highlight one row
+            }
+            if (wxID_OK == (rc = wxDialog::ShowModal())) {
+                Save();
+            }
+            else {
+                //reload old state
+                Load();
+            }
         }
     }
     return rc;
@@ -1680,7 +1720,7 @@ void CuePointsDlg::OnMenu(wxCommandEvent & event)
 /// @param shortcut The cue point number (0-9) or -1 to cancel the dialogue
 void CuePointsDlg::Shortcut(const int shortcut)
 {
-    if (mTextColour == mMessage->GetForegroundColour() && mTimecodeDisplay->IsShown()) { //shortcuts enabled
+    if (mTextColour == mMessage->GetForegroundColour() && mTimecodeDisplay->IsShown() && !mSingleTypeRadioButton->GetValue()) { //shortcuts enabled and this action isn't pointless
         if (-1 == shortcut) { //cancel
             Load(); //reload old state (to make it consistent with pressing ESC in the dialogue)
             EndModal(wxID_CANCEL);
@@ -1720,12 +1760,19 @@ void CuePointsDlg::OnOK(wxCommandEvent & event)
     event.Skip();
 }
 
+/// Shows/hides the instruction message if the mode is changed during entry of cue points
+void CuePointsDlg::OnRadioButton(wxCommandEvent & WXUNUSED(event))
+{
+    if (mTimecodeDisplay->IsShown()) mMessage->Show(!mSingleTypeRadioButton->GetValue());
+}
+
+
 /// Produces a pop-up colour menu if the correct column has been clicked.
 /// @param event Indicates the column of the grid which was clicked.
 void CuePointsDlg::OnCellLeftClick(wxGridEvent & event)
 {
     mCurrentRow = event.GetRow(); //Note the row for ENTER being pressed in add cue mode, or if a colour is going to be set
-    if (mTimecodeDisplay->IsShown()) {
+    if (mTimecodeDisplay->IsShown()) { //Entering a cue point
         wxCommandEvent rowEvent(EVT_SET_GRID_ROW, mCurrentRow); //undo the "jump to the edited cell" from OnEditorHidden()
         AddPendingEvent(rowEvent);
         mOkButton->SetFocus(); //makes sure ENTER can still be pressed after clicking on a different event
@@ -1743,7 +1790,7 @@ void CuePointsDlg::OnCellLeftClick(wxGridEvent & event)
 /// Sets the selected event and closes the dialogue if in cue point setting mode
 void CuePointsDlg::OnLabelLeftClick(wxGridEvent & event)
 {
-    if (mTimecodeDisplay->IsShown() && mTextColour == mMessage->GetForegroundColour() && event.GetRow() > -1) { //make sure it isn't a click in a column heading
+    if (mTimecodeDisplay->IsShown() && mTextColour == mMessage->GetForegroundColour() && !mSingleTypeRadioButton->GetValue() && event.GetRow() > -1) { //make sure it isn't a click in a column heading
         mCurrentRow = event.GetRow();
         Save();
         EndModal(wxID_OK);
@@ -1767,16 +1814,22 @@ bool CuePointsDlg::ValidCuePointSelected()
     return mCurrentRow < 10;
 }
 
+/// returns true if all cue points are the same, end entered with a single keystroke
+bool CuePointsDlg::DefaultCueMode()
+{
+    return mSavedState->GetBoolValue(wxT("CuePoints"), false, wxT("SingleType"));
+}
+
 /// Returns the currently selected locator's description
 const wxString CuePointsDlg::GetDescription()
 {
-    return mGrid->GetCellValue(mCurrentRow, 0).Trim(false).Trim(true);
+    return mSingleTypeRadioButton->GetValue() ? wxT("") : mGrid->GetCellValue(mCurrentRow, 0).Trim(false).Trim(true);
 }
 
 /// Returns colour index of the currently selected locator
 size_t CuePointsDlg::GetColourIndex()
 {
-    return mDescrColours[mCurrentRow];
+    return mSingleTypeRadioButton->GetValue() ? 0 : mDescrColours[mCurrentRow];
 }
 
 /// Returns the locator colour code corresponding to an index
@@ -1874,7 +1927,7 @@ ChunkingDlg::ChunkingDlg(wxWindow * parent, Timepos * timepos, SavedState * save
     //saved state
     unsigned long value = mSavedState->GetUnsignedLongValue(wxT("Chunking"), (unsigned long) 10);
     if (value < MAX_CHUNK_SIZE) mChunkSizeCtrl->SetValue((int) value);
-    mEnableCheckBox->SetValue(wxT("Yes") == mSavedState->GetStringValue(wxT("Chunking"), wxT("No"), wxT("Enabled")));
+    mEnableCheckBox->SetValue(mSavedState->GetBoolValue(wxT("Chunking"), false, wxT("Enabled")));
     value = mSavedState->GetUnsignedLongValue(wxT("Chunking"), 0, wxT("Alignment"));
     if (value < N_ALIGNMENTS) mChunkAlignCtrl->SetSelection((int) value);
     SetNextHandler(parent);
@@ -1888,8 +1941,8 @@ int ChunkingDlg::ShowModal()
     //create new node - whatever ShowModal returned as changes apply immediately with this dialogue
     wxXmlNode * node = mSavedState->GetTopLevelNode(wxT("Chunking"), true, true); //replace existing node
     //add properties for enabled and chunk alignment
-    node->AddProperty(new wxXmlProperty(wxT("Enabled"), mEnableCheckBox->IsChecked() ? wxT("Yes") : wxT("No")));
     node->AddProperty(new wxXmlProperty(wxT("Alignment"), wxString::Format(wxT("%d"), mChunkAlignCtrl->GetSelection())));
+    mSavedState->SetBoolValue(wxT("Chunking"), mEnableCheckBox->IsChecked(), wxT("Enabled"));
     //add text node containing chunk size
     new wxXmlNode(node, wxXML_TEXT_NODE, wxEmptyString, wxString::Format(wxT("%d"), mChunkSizeCtrl->GetValue()));
     mSavedState->Save();

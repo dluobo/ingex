@@ -28,6 +28,7 @@
 #include <wx/imaglist.h>
 #include "wx/xml/xml.h"
 #include "dialogues.h" //for the XML tape ID functions
+#include "savedstate.h"
 
 WX_DECLARE_STRING_HASH_MAP(wxTreeItemId, TreeItemHash);
 
@@ -75,7 +76,6 @@ TickTreeCtrl::TickTreeCtrl(wxWindow * parent, wxWindowID id, const wxPoint& pos,
 /// @param trackList Information about the tracks, sources and package names.
 /// @param trackStatusList Whether each track is recording or not.
 /// @param isRouterRecorder True if this recorder is a router recorder - all tracks (should be only one anyway) will be regarded as router tracks and tape IDs will not be used.
-/// @param doc XML document object for tape ID information.
 /// @return true if any tracks are recording
 bool TickTreeCtrl::AddRecorder(const wxString & name, const ProdAuto::TrackList_var & trackList, const ProdAuto::TrackStatusList_var & trackStatusList, bool isRouterRecorder)
 {
@@ -93,7 +93,6 @@ bool TickTreeCtrl::AddRecorder(const wxString & name, const ProdAuto::TrackList_
         }
     }
     //make recorder package (branch) and track (terminal) nodes
-    wxXmlNode * tapeIdsNode = SetTapeIdsDlg::GetTapeIdsNode(mSavedState, false); //don't remove existing data
     TreeItemHash packageNameTreeNodes;
     for (unsigned int i = 0; i < trackList->length(); i++) {
         if (trackList[i].has_source) { //something's plugged into this input
@@ -101,7 +100,7 @@ bool TickTreeCtrl::AddRecorder(const wxString & name, const ProdAuto::TrackList_
             wxString packageName = wxString(trackList[i].src.package_name, *wxConvCurrent);
             if (packageNameTreeNodes.end() == packageNameTreeNodes.find(packageName)) {
                 //haven't come across this package name: does it have a tape ID?
-                wxString tapeId = SetTapeIdsDlg::GetTapeId(tapeIdsNode, packageName);
+                wxString tapeId = SetTapeIdsDlg::GetTapeId(mSavedState, packageName);
                 //create a package node and remember its ID
                 packageNameTreeNodes[packageName] = AppendItem(recorderRoot, packageName, DISABLED); //state will be updated below, from track nodes
                 SetItemData(packageNameTreeNodes[packageName], new ItemData(DISABLED, packageName, isRouterRecorder, !tapeId.IsEmpty() || isRouterRecorder)); //remember package name for when messing about with tape IDs
@@ -694,8 +693,7 @@ void TickTreeCtrl::GetPackageNames(wxArrayString & names, std::vector<bool> & en
 /// Reports to the root, and generates a status update notification event and a recorder notification event for each recorder whose tape IDs have changed.
 void TickTreeCtrl::UpdateTapeIds()
 {
-    wxXmlNode * tapeIdsNode = SetTapeIdsDlg::GetTapeIdsNode(mSavedState, false); //don't delete existing data
-    ScanPackageNames(0, 0, tapeIdsNode, SetTapeIdsDlg::AreTapeIdsEnabled(mSavedState));
+    ScanPackageNames(0, 0, SetTapeIdsDlg::AreTapeIdsEnabled(mSavedState));
 }
 
 /// Either returns all package names, with corresponding enabled status, or updates all tape IDs.
@@ -703,9 +701,8 @@ void TickTreeCtrl::UpdateTapeIds()
 /// If updating tape IDs, reports to the root, and generates a status update notification event and a recorder notification event for each recorder whose tape IDs have changed (taking account of the effect of the tapeIdsAreEnabled parameter).
 /// @param names If 0, updates; if not, returns package names.
 /// @param enabled If returning package names, returns true for each corresponding package in names that's enabled or partially enabled; false otherwise.  Ignored if not returning package names.
-/// @param tapeIdsNode If updating, this XML node is searched for tape IDs.
 /// @param tapeIdsAreEnabled If updating, tape IDs are all set to empty strings if this is false.
-void TickTreeCtrl::ScanPackageNames(wxArrayString * names, std::vector<bool> * enabled, wxXmlNode * tapeIdsNode, bool tapeIdsAreEnabled)
+void TickTreeCtrl::ScanPackageNames(wxArrayString * names, std::vector<bool> * enabled, bool tapeIdsAreEnabled)
 {
     wxString packageName;
     wxTreeItemIdValue recordersCookie;
@@ -725,7 +722,7 @@ void TickTreeCtrl::ScanPackageNames(wxArrayString * names, std::vector<bool> * e
             }
             else { //updating
                 if (tapeIdsAreEnabled) {
-                    wxString tapeId = SetTapeIdsDlg::GetTapeId(tapeIdsNode, packageName);
+                    wxString tapeId = SetTapeIdsDlg::GetTapeId(mSavedState, packageName);
                     if (RetrieveMessage(package) != tapeId) {
                         tapeIdChanges = true;
                         if (tapeId.IsEmpty()) { //no tape ID

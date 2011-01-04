@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: ingexgui.cpp,v 1.36 2010/10/12 17:40:37 john_f Exp $           *
+ *   $Id: ingexgui.cpp,v 1.37 2011/01/04 11:37:18 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -155,6 +155,7 @@ BEGIN_EVENT_TABLE( IngexguiFrame, wxFrame )
     EVT_COMMAND( wxID_ANY, EVT_RECORDERGROUP_MESSAGE, IngexguiFrame::OnRecorderGroupEvent )
     EVT_COMMAND( wxID_ANY, EVT_JOGSHUTTLE_MESSAGE, IngexguiFrame::OnJogShuttleEvent )
     EVT_COMMAND( wxID_ANY, EVT_TIMEPOS_EVENT, IngexguiFrame::OnTimeposEvent )
+    EVT_COMMAND( wxID_ANY, EVT_JUMP_TO_TIMECODE, IngexguiFrame::OnJumpToTimecodeEvent )
     EVT_MENU( MENU_PlayRecordings, IngexguiFrame::OnPlayerCommand )
 #ifndef DISABLE_SHARED_MEM_SOURCE
     EVT_MENU( MENU_EtoE, IngexguiFrame::OnPlayerCommand )
@@ -273,7 +274,7 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
     wxMenu * menuMisc = new wxMenu;
     menuMisc->Append(MENU_SetProjectName, wxT("Set project name..."));
     menuMisc->Append(MENU_SetRolls, wxT("Set pre- and post-roll..."));
-    menuMisc->Append(MENU_SetCues, wxT("Edit cue point descriptions..."));
+    menuMisc->Append(MENU_SetCues, wxT("Cue points..."));
     menuMisc->Append(MENU_Chunking, wxT("Chunking..."));
     wxMenuItem * clearLogItem = menuMisc->Append(MENU_ClearLog, wxT("Clear recording log"));
     clearLogItem->Enable(false);
@@ -524,6 +525,7 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
     mHelpDlg = new HelpDlg(this); //persistent to allow it to be modeless in order to remain visible while using the app
     mCuePointsDlg = new CuePointsDlg(this, mSavedState); //persistent so that a file doesn't have to be read each time a cue point is marked
     mChunkingDlg = new ChunkingDlg(this, mTimepos, mSavedState); //persistent as it controls chunking while recording, as well as showing to set up the parameters
+    mJumpToTimecodeDlg = new JumpToTimecodeDlg(this); //persistent so that multiple timecodes can be entered without bringing it up afresh each time
 
     mRecorderGroup->StartGettingRecorders(); //safe to let it generate events now that everything has been created (events will be processed if any dialogue is visible, such as the saved preferences warnings above)
     SetStatus(STOPPED);
@@ -824,14 +826,73 @@ void IngexguiFrame::OnPlayerEvent(wxCommandEvent& event) {
             }
 #endif
             break;
-        case KEYPRESS:
-            if (mCuePointsDlg->IsModal() && event.GetInt() > 47 && event.GetInt() < 58) { //"add cue" shortcut
-                mCuePointsDlg->Shortcut(event.GetInt() - 48);
+        case KEYPRESS: {
+            int id = wxID_ANY;
+            switch (event.GetInt()) {
+                case 48: //0...
+                case 49:
+                case 50:
+                case 51:
+                case 52:
+                case 53:
+                case 54:
+                case 55:
+                case 56:
+                case 57: //...9
+                    if (mCuePointsDlg->IsModal()) mCuePointsDlg->Shortcut(event.GetInt() - 48);//digit to select a cue type
+                    break;
+                case 65307: //Esc
+                    if (mCuePointsDlg->IsModal()) mCuePointsDlg->Shortcut(-1);//abandon selecting cue type
+                    break;
+                case 65470: //F1
+                    id = BUTTON_MENU_Record;
+                    break;
+                case 65471: //F2
+                    id = MENU_MarkCue;
+                    break;
+                case 65474: //F5 (NB shift is detected below)
+                    id = BUTTON_MENU_Stop;
+                    break;
+                case 65362: //Up
+                    //Prev Event
+                    id = MENU_Up;
+                    break;
+                case 65364: //Down
+                    //Next Event
+                    id = MENU_Down;
+                    break;
+                case 65365: //PgUp
+                    id = BUTTON_MENU_PrevTake;
+                    break;
+                case 65366: //PgDn
+                    id = BUTTON_MENU_NextTake;
+                    break;
+                case 65360: //Home
+                    //First Take
+                    id = MENU_FirstTake;
+                    break;
+                case 65367: //End
+                    //Last Take
+                    id = MENU_LastTake;
+                    break;
+                case 116: //t
+                    id = MENU_JumpToTimecode;
+                    break;
+                default:
+                    break;
             }
-            else if (mCuePointsDlg->IsModal() && event.GetInt() == 65307) { //escape: "dismiss dialogue" shortcut
-                mCuePointsDlg->Shortcut(-1);
+            if (
+             wxID_ANY != id //recognised the key
+             && (
+              (BUTTON_MENU_Stop == id && event.GetExtraLong() == 1) //stop has been pressed with shift,
+              || (BUTTON_MENU_Stop != id && event.GetExtraLong() == 0) //any other keypress doesn't have a modifier
+             )) {
+                mMenuShortcuts->UpdateUI(); //otherwise doesn't update enable states, and hence act upon any changes to system state, until the menu is displayed
+                wxCommandEvent menuEvent(wxEVT_COMMAND_MENU_SELECTED, id);
+                AddPendingEvent(menuEvent);
             }
             break;
+        }
         case EDIT_RATE:
             mTimepos->SetDefaultEditRate(*((ProdAuto::MxfTimecode*) event.GetClientData()));
             delete (ProdAuto::MxfTimecode*) event.GetClientData();
@@ -1487,22 +1548,22 @@ void IngexguiFrame::Log(const wxString & message)
     wxLogMessage(message);
 }
 
-/// Responds to the Jump to Timecode button being pressed by showing a dialogue and trying to jump to the given timecode
+/// Responds to the Jump to Timecode button being pressed by bringing up the Jump to Timecode dialogue.
 void IngexguiFrame::OnJumpToTimecode(wxCommandEvent & WXUNUSED(event))
 {
-    if (mPlayer) {
-        JumpToTimecodeDlg dlg(this, mTimepos->GetDefaultEditRate());
-        if (wxID_OK == dlg.ShowModal()) {
-            int64_t offset;
-            if (mEventList->JumpToTimecode(dlg.GetTimecode(), offset)) { //timecode found, chunk selected and offset set
-                mPlayer->SelectRecording(mEventList->GetCurrentChunkInfo());
-                mPlayer->JumpToFrame(offset);
-            }
-            else {
-                wxMessageDialog msg(this, wxT("Timecode ") + Timepos::FormatTimecode(dlg.GetTimecode()) + wxT(" not found."), wxT("Timecode Not Found"));
-                msg.ShowModal();
-            }
-        }
+    if (mPlayer) mJumpToTimecodeDlg->Show(mTimepos->GetDefaultEditRate());
+}
+
+/// Responds to a Jump to Timecode event by trying to jump to a timecode
+void IngexguiFrame::OnJumpToTimecodeEvent(wxCommandEvent & WXUNUSED(event))
+{
+    int64_t offset;
+    if (mEventList->JumpToTimecode(mJumpToTimecodeDlg->GetTimecode(), offset)) { //timecode found, chunk selected and offset set
+        mPlayer->SelectRecording(mEventList->GetCurrentChunkInfo());
+        mPlayer->JumpToFrame(offset);
+    }
+    else {
+        mJumpToTimecodeDlg->NotFoundMessage();
     }
 }
 
@@ -1790,7 +1851,7 @@ void IngexguiFrame::OnUpdateUI(wxUpdateUIEvent& event)
                     }
                     break;
                 case RECORDING:
-                    event.SetText(wxT("Mark cue"));
+                    event.SetText(mCuePointsDlg->DefaultCueMode() ? wxT("Mark cue") : wxT("Mark cue..."));
                     dynamic_cast<wxButton*>(event.GetEventObject())->SetToolTip(wxT("Store a cue point for subsequent review"));
                     break;
                 case PLAYING: case PLAYING_BACKWARDS:
@@ -1876,11 +1937,14 @@ void IngexguiFrame::OnUpdateUI(wxUpdateUIEvent& event)
     bool found;
     bool enabled = OperationAllowed(event.GetId(), &found);
     if (found) event.Enable(enabled);
+    //hide Jump to Timecode dialogue if it shouldn't be visible
+    if (event.GetId() == BUTTON_JumpToTimecode //use the button event rather than the menu event because the menu event is affected by text field focus, which is irrelevant here
+     && !enabled) mJumpToTimecodeDlg->Hide();
 }
 
 /// Indicates if the given operation is allowed.
 /// @param operation The ID of the operation.
-/// @param found If non-zero, dereferenced value is set to true if the shortcut is known about, or false if it is not.
+/// @param found If non-zero, dereferenced value is set to true if the shortcut is known about, or false if it is not.  Presence of this parameter also affects return value - see below.
 /// @return True if shortcut is allowed; if a shortcut is associated with a text key and parameter "found" is non-zero, false is always returned if a text field has focus (to stop shortcuts preventing certain characters from being typed).
 bool IngexguiFrame::OperationAllowed(const int operation, bool* found)
 {
@@ -1974,17 +2038,15 @@ bool IngexguiFrame::OperationAllowed(const int operation, bool* found)
         case MENU_ClearLog:
             enabled = mEventList->GetCurrentChunkInfo();
             break;
+        case BUTTON_JumpToTimecode:
         case MENU_JumpToTimecode:
-            enabled = mPlayer && (!found || !mTextFieldHasFocus) && RECORDINGS == mPlayer->GetMode() && !IsRecording() && mEventList->GetCurrentChunkInfo();
+            enabled = mPlayer && (BUTTON_JumpToTimecode == operation || !found || !mTextFieldHasFocus) && RECORDINGS == mPlayer->GetMode() && !IsRecording() && mEventList->GetCurrentChunkInfo();
             break;
         case BUTTON_RecorderListRefresh:
             enabled = mRecorderGroup->IsEnabledForInput();
             break;
         case BUTTON_TapeId:
             enabled = SetTapeIdsDlg::AreTapeIdsEnabled(mSavedState) && mTree->UsingTapeIds();
-            break;
-        case BUTTON_JumpToTimecode:
-            enabled = mPlayer && RECORDINGS == mPlayer->GetMode() && !IsRecording() && mEventList->GetCurrentChunkInfo();
             break;
         case BUTTON_MENU_Record:
         case MENU_TestMode:
