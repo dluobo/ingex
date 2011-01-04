@@ -84,7 +84,7 @@ class TickTreeCtrl : public wxTreeCtrl
         int SelectRecursively(wxTreeItemId, unsigned int * = 0, bool = true, bool = false, bool = false);
         void SetRecorderState(const wxString &, bool, const wxString &);
         void ReportState(wxTreeItemId, bool = true);
-        void ScanPackageNames(wxArrayString *, std::vector<bool> *, wxXmlNode * = 0, const bool = false);
+        void ScanPackageNames(wxArrayString *, std::vector<bool> *, const bool = false);
         void AddMessage(const wxTreeItemId item, const wxString &);
         const wxString RetrieveMessage(const wxTreeItemId item);
         void RemoveMessage(const wxTreeItemId item);
