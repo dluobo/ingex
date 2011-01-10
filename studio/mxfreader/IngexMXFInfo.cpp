@@ -1,5 +1,5 @@
 /*
- * $Id: IngexMXFInfo.cpp,v 1.6 2010/10/08 17:02:34 john_f Exp $
+ * $Id: IngexMXFInfo.cpp,v 1.7 2011/01/10 16:59:19 john_f Exp $
  *
  * Extract information from Ingex MXF files.
  *
@@ -134,8 +134,8 @@ static const ECLabelToIngexResolutionMap EC_LABEL_RESOLUTION_ATOM_MAP[] =
     {MXF_EC_L(DVBased_50_625_50_ClipWrapped),       MaterialResolution::DV50_MXF_ATOM},
     {MXF_EC_L(DVBased_50_625_50_FrameWrapped),      MaterialResolution::DV50_MXF_ATOM},
 
-    {MXF_EC_L(DV720p50ClipWrapped),                 MaterialResolution::DV100_MXF_ATOM},
-    {MXF_EC_L(DV1080i50ClipWrapped),                MaterialResolution::DV100_MXF_ATOM},
+    {MXF_EC_L(DVBased_100_720_50_P_ClipWrapped),    MaterialResolution::DV100_MXF_ATOM},
+    {MXF_EC_L(DVBased_100_1080_50_I_ClipWrapped),   MaterialResolution::DV100_MXF_ATOM},
     
     {MXF_EC_L(HD_Unc_1080_50i_422_ClipWrapped),     MaterialResolution::UNC_MXF_ATOM},
     {MXF_EC_L(SD_Unc_625_50i_422_135_ClipWrapped),  MaterialResolution::UNC_MXF_ATOM},
