@@ -1,5 +1,5 @@
 /*
- * $Id: avid_mxf_to_p2.c,v 1.6 2010/06/02 10:59:20 philipn Exp $
+ * $Id: avid_mxf_to_p2.c,v 1.7 2011/01/10 17:05:15 john_f Exp $
  *
  * Transfers Avid MXF files to P2
  *
@@ -730,7 +730,7 @@ static int transfer_to_p2(AvidMXFToP2Transfer* transfer, int inputFileIndex, int
     CHK_ORET(mxf_create_set(output->headerMetadata, &MXF_SET_K(Preface), &output->prefaceSet));
     CHK_ORET(mxf_set_timestamp_item(output->prefaceSet, &MXF_ITEM_K(Preface, LastModifiedDate), &transfer->now));
     CHK_ORET(mxf_set_version_type_item(output->prefaceSet, &MXF_ITEM_K(Preface, Version), 0x0102));
-    CHK_ORET(mxf_set_ul_item(output->prefaceSet, &MXF_ITEM_K(Preface, OperationalPattern), &MXF_OP_L(atom, complexity02)));
+    CHK_ORET(mxf_set_ul_item(output->prefaceSet, &MXF_ITEM_K(Preface, OperationalPattern), &MXF_OP_L(atom, NTracks_1SourceClip)));
     CHK_ORET(mxf_alloc_array_item_elements(output->prefaceSet, &MXF_ITEM_K(Preface, EssenceContainers), mxfUL_extlen, 1, &arrayElement));
     mxf_set_ul(&output->essenceContainerLabel, arrayElement);
     CHK_ORET(mxf_set_empty_array_item(output->prefaceSet, &MXF_ITEM_K(Preface, DMSchemes), mxfUL_extlen));
@@ -907,7 +907,7 @@ static int transfer_to_p2(AvidMXFToP2Transfer* transfer, int inputFileIndex, int
     headerPartition->minorVersion = 2;
     headerPartition->kagSize = 0x01;
     headerPartition->indexSID = g_p2_indexSID;
-    headerPartition->operationalPattern = MXF_OP_L(atom, complexity02);
+    headerPartition->operationalPattern = MXF_OP_L(atom, NTracks_1SourceClip);
     CHK_ORET(mxf_append_partition_esscont_label(headerPartition, &output->essenceContainerLabel));
     
     CHK_ORET(mxf_write_partition(output->mxfFile, headerPartition));

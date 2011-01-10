@@ -1,5 +1,5 @@
 /*
- * $Id: VariableSizeEssenceParser.cpp,v 1.2 2009/10/23 09:05:21 philipn Exp $
+ * $Id: VariableSizeEssenceParser.cpp,v 1.3 2011/01/10 17:05:15 john_f Exp $
  *
  * Parse raw essence data with variable frame size
  *
@@ -98,25 +98,25 @@ VariableSizeEssenceParser::VariableSizeEssenceParser(File *file, int64_t essence
         switch (mMJPEGParseState.resolution_id)
         {
             case g_AvidMJPEG21_ResolutionID:
-                mFrameSizeEstimate = unc_frame_size / (2 * 0.8);
+                mFrameSizeEstimate = (uint32_t)(unc_frame_size / (2 * 0.8));
                 break;
             case g_AvidMJPEG31_ResolutionID:
-                mFrameSizeEstimate = unc_frame_size / (3 * 0.8);
+                mFrameSizeEstimate = (uint32_t)(unc_frame_size / (3 * 0.8));
                 break;
             case g_AvidMJPEG101_ResolutionID:
-                mFrameSizeEstimate = unc_frame_size / (10 * 0.8);
+                mFrameSizeEstimate = (uint32_t)(unc_frame_size / (10 * 0.8));
                 break;
             case g_AvidMJPEG41m_ResolutionID:
-                mFrameSizeEstimate = unc_frame_size / (4 * 0.8);
+                mFrameSizeEstimate = (uint32_t)(unc_frame_size / (4 * 0.8));
                 break;
             case g_AvidMJPEG101m_ResolutionID:
-                mFrameSizeEstimate = unc_frame_size / (10 * 0.8);
+                mFrameSizeEstimate = (uint32_t)(unc_frame_size / (10 * 0.8));
                 break;
             case g_AvidMJPEG151s_ResolutionID:
-                mFrameSizeEstimate = unc_frame_size / (15 * 0.8);
+                mFrameSizeEstimate = (uint32_t)(unc_frame_size / (15 * 0.8));
                 break;
             case g_AvidMJPEG201_ResolutionID:
-                mFrameSizeEstimate = unc_frame_size / (20 * 0.8);
+                mFrameSizeEstimate = (uint32_t)(unc_frame_size / (20 * 0.8));
                 break;
             default:
                 mxf_log_warn("Unknown ResolutionID 0x%02x\n", mMJPEGParseState.resolution_id);

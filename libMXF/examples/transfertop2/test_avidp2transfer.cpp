@@ -1,5 +1,5 @@
 /*
- * $Id: test_avidp2transfer.cpp,v 1.3 2008/10/29 17:54:26 john_f Exp $
+ * $Id: test_avidp2transfer.cpp,v 1.4 2011/01/10 17:05:15 john_f Exp $
  *
  * Tests transfer of MXF files referenced in an Avid AAF composition to P2
  *
@@ -20,7 +20,9 @@
  * License along with this library; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
- 
+
+#define __STDC_FORMAT_MACROS    1
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

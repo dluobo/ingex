@@ -1,5 +1,5 @@
 /*
- * $Id: main.c,v 1.23 2010/10/13 12:32:41 philipn Exp $
+ * $Id: main.c,v 1.24 2011/01/10 17:05:15 john_f Exp $
  *
  * Test writing video and audio to MXF files supported by Avid editing software
  *
@@ -116,11 +116,12 @@ typedef struct
     uint32_t materialTrackID;
     EssenceInfo essenceInfo;
     const char* filename;
-    FILE* file;  
+    FILE* file;
     unsigned long frameSize;
-    unsigned long frameSizeSeq[5]; /* PCM for NTSC */
+    unsigned long frameSizeSeq[10];
     unsigned long minFrameSize;
     unsigned long availFrameSize;
+    int frameSeqLen;
     int seqIndex;
     unsigned char* buffer;
     int bufferOffset;
@@ -2118,48 +2119,68 @@ int main(int argc, const char* argv[])
             inputs[i].frameSize = 1280 * 720 * 2;
             CHK_MALLOC_ARRAY_OFAIL(inputs[i].buffer, unsigned char, inputs[i].frameSize);
         }
-        else if (inputs[i].essenceType == PCM && !inputs[i].isWAVFile)
+        else if (inputs[i].essenceType == PCM)
         {
             if (isPAL)
             {
-                inputs[i].frameSize = 1920 * inputs[i].bytesPerSample;
-             }
-            else
-            {
-                /* frame size is 1601.6 samples on average and a maximum of 1602 + MAX_AUDIO_VARIATION */
-                inputs[i].frameSize = (1602 + MAX_AUDIO_VARIATION) * inputs[i].bytesPerSample;
-                inputs[i].minFrameSize = (1602 - MAX_AUDIO_VARIATION) * inputs[i].bytesPerSample;
-                inputs[i].frameSizeSeq[0] = 1602 * inputs[i].bytesPerSample;
-                inputs[i].frameSizeSeq[1] = 1601 * inputs[i].bytesPerSample;
-                inputs[i].frameSizeSeq[2] = 1602 * inputs[i].bytesPerSample;
-                inputs[i].frameSizeSeq[3] = 1601 * inputs[i].bytesPerSample;
-                inputs[i].frameSizeSeq[4] = 1602 * inputs[i].bytesPerSample;
-            }
-            CHK_MALLOC_ARRAY_OFAIL(inputs[i].buffer, unsigned char, inputs[i].frameSize);
-        }
-        else if (inputs[i].essenceType == PCM && inputs[i].isWAVFile)
-        {
-            if (isPAL)
-            {
-                inputs[i].frameSize = 1920 * inputs[i].bytesPerSample;
+                if (haveProgressive2Video)
+                {
+                    inputs[i].frameSize = 960 * inputs[i].bytesPerSample;
+                }
+                else
+                {
+                    inputs[i].frameSize = 1920 * inputs[i].bytesPerSample;
+                }
+                inputs[i].minFrameSize = inputs[i].frameSize;
+                inputs[i].frameSizeSeq[0] = inputs[i].frameSize;
+                inputs[i].frameSeqLen = 1;
             }
             else
             {
-                /* frame size is 1601.6 samples on average and a maximum of 1602 + MAX_AUDIO_VARIATION */
-                inputs[i].frameSize = (1602 + MAX_AUDIO_VARIATION) * inputs[i].bytesPerSample;
-                inputs[i].minFrameSize = (1602 - MAX_AUDIO_VARIATION) * inputs[i].bytesPerSample;
-                inputs[i].frameSizeSeq[0] = 1602 * inputs[i].bytesPerSample;
-                inputs[i].frameSizeSeq[1] = 1601 * inputs[i].bytesPerSample;
-                inputs[i].frameSizeSeq[2] = 1602 * inputs[i].bytesPerSample;
-                inputs[i].frameSizeSeq[3] = 1601 * inputs[i].bytesPerSample;
-                inputs[i].frameSizeSeq[4] = 1602 * inputs[i].bytesPerSample;
+                if (haveProgressive2Video)
+                {
+                    /* frame size is 1601.6/2 samples on average and a maximum of 1602/2 + MAX_AUDIO_VARIATION */
+                    inputs[i].frameSize = (801 + MAX_AUDIO_VARIATION) * inputs[i].bytesPerSample;
+                    inputs[i].minFrameSize = (801 - MAX_AUDIO_VARIATION) * inputs[i].bytesPerSample;
+                    inputs[i].frameSizeSeq[0] = 801 * inputs[i].bytesPerSample;
+                    inputs[i].frameSizeSeq[1] = 800 * inputs[i].bytesPerSample;
+                    inputs[i].frameSizeSeq[2] = 801 * inputs[i].bytesPerSample;
+                    inputs[i].frameSizeSeq[3] = 801 * inputs[i].bytesPerSample;
+                    inputs[i].frameSizeSeq[4] = 801 * inputs[i].bytesPerSample;
+                    inputs[i].frameSizeSeq[5] = 801 * inputs[i].bytesPerSample;
+                    inputs[i].frameSizeSeq[6] = 800 * inputs[i].bytesPerSample;
+                    inputs[i].frameSizeSeq[7] = 801 * inputs[i].bytesPerSample;
+                    inputs[i].frameSizeSeq[8] = 801 * inputs[i].bytesPerSample;
+                    inputs[i].frameSizeSeq[9] = 801 * inputs[i].bytesPerSample;
+                    inputs[i].frameSeqLen = 10;
+                }
+                else
+                {
+                    /* frame size is 1601.6 samples on average and a maximum of 1602 + MAX_AUDIO_VARIATION */
+                    inputs[i].frameSize = (1602 + MAX_AUDIO_VARIATION) * inputs[i].bytesPerSample;
+                    inputs[i].minFrameSize = (1602 - MAX_AUDIO_VARIATION) * inputs[i].bytesPerSample;
+                    inputs[i].frameSizeSeq[0] = 1602 * inputs[i].bytesPerSample;
+                    inputs[i].frameSizeSeq[1] = 1601 * inputs[i].bytesPerSample;
+                    inputs[i].frameSizeSeq[2] = 1602 * inputs[i].bytesPerSample;
+                    inputs[i].frameSizeSeq[3] = 1601 * inputs[i].bytesPerSample;
+                    inputs[i].frameSizeSeq[4] = 1602 * inputs[i].bytesPerSample;
+                    inputs[i].frameSeqLen = 5;
+                }
             }
-            if (inputs[i].channelIndex == 0)
+
+            if (inputs[i].isWAVFile)
             {
-                /* allocate buffer for multi-channel audio data */
-                CHK_MALLOC_ARRAY_OFAIL(inputs[i].buffer, unsigned char, inputs[i].wavInput.numAudioChannels * inputs[i].frameSize);
+                if (inputs[i].channelIndex == 0)
+                {
+                    /* allocate buffer for multi-channel audio data */
+                    CHK_MALLOC_ARRAY_OFAIL(inputs[i].buffer, unsigned char, inputs[i].wavInput.numAudioChannels * inputs[i].frameSize);
+                }
+                CHK_MALLOC_ARRAY_OFAIL(inputs[i].channelBuffer, unsigned char, inputs[i].frameSize);
             }
-            CHK_MALLOC_ARRAY_OFAIL(inputs[i].channelBuffer, unsigned char, inputs[i].frameSize);
+            else
+            {
+                CHK_MALLOC_ARRAY_OFAIL(inputs[i].buffer, unsigned char, inputs[i].frameSize);
+            }
         }
         else
         {
@@ -2455,174 +2476,115 @@ int main(int argc, const char* argv[])
             }
             else if (inputs[i].essenceType == PCM && !inputs[i].isWAVFile)
             {
-                if (isPAL)
+                /* read frame sizes corresponding to the sequence set in inputs[i].frameSizeSeq. The last frame can
+                   be MAX_AUDIO_VARIATION samples more or less than the average. */
+                
+                unsigned long availFrameSize;
+                uint32_t numSamples;
+                
+                /* read to get upto the maximum frame size in buffer */
+                numRead = fread(inputs[i].buffer + inputs[i].bufferOffset, 1, inputs[i].frameSize - inputs[i].bufferOffset, inputs[i].file);
+                if (inputs[i].bufferOffset + numRead < inputs[i].frameSize)
                 {
-                    uint32_t numSamples = inputs[i].frameSize / inputs[i].bytesPerSample;
-                    if (fread(inputs[i].buffer, 1, inputs[i].frameSize, inputs[i].file) != inputs[i].frameSize)
+                    /* last or incomplete frame */
+                    done = 1;
+                    
+                    /* frame is incomplete if it is less than the minimum allowed */ 
+                    if (inputs[i].bufferOffset + numRead < inputs[i].minFrameSize)
                     {
-                        done = 1;
                         break;
                     }
-                    if (!write_samples(clipWriter, inputs[i].materialTrackID, numSamples, inputs[i].buffer, inputs[i].frameSize))
-                    {
-                        fprintf(stderr, "Failed to write PCM frame\n");
-                        goto fail;
-                    }
+                    
+                    /* frame size is the remaining samples */
+                    availFrameSize = ((inputs[i].bufferOffset + (uint32_t)numRead) / inputs[i].bytesPerSample) * inputs[i].bytesPerSample;
                 }
                 else
                 {
-                    /* For NTSC we read frame sizes corresponding to the sequence set in
-                    inputs[i].frameSizeSeq. The last frame can be MAX_AUDIO_VARIATION samples
-                    more or less than the average. */ 
+                    availFrameSize = inputs[i].frameSizeSeq[inputs[i].seqIndex];
+                }
+
+                numSamples = availFrameSize / inputs[i].bytesPerSample;
+                if (!write_samples(clipWriter, inputs[i].materialTrackID, numSamples, inputs[i].buffer, availFrameSize))
+                {
+                    fprintf(stderr, "Failed to write PCM frame\n");
+                    goto fail;
+                }
+                
+                /* copy the remaining samples for the next frame */
+                inputs[i].bufferOffset = inputs[i].frameSize - availFrameSize;
+                memcpy(inputs[i].buffer, inputs[i].buffer + availFrameSize, inputs[i].bufferOffset);
+                
+                /* set the next frame size sequence index */
+                inputs[i].seqIndex = (inputs[i].seqIndex + 1) % inputs[i].frameSeqLen;
+            }
+            else if (inputs[i].essenceType == PCM && inputs[i].isWAVFile)
+            {
+                /* read frame sizes corresponding to the sequence set in
+                   inputs[i].frameSizeSeq. The last frame can be MAX_AUDIO_VARIATION samples
+                   more or less than the average. */
+                
+                uint32_t numSamples;
+                int channelZeroInput = i - inputs[i].channelIndex;
+                
+                if (inputs[i].channelIndex == 0)
+                {
+                    /* read a frame of multi-channel audio data */
+                    if (!get_wave_data(&inputs[i].wavInput, inputs[i].buffer + inputs[i].bufferOffset, 
+                        inputs[i].frameSize * inputs[i].wavInput.numAudioChannels - inputs[i].bufferOffset, &numRead))
+                    {
+                        fprintf(stderr, "Failed to read Wave PCM frame\n");
+                        goto fail;
+                    }
                     
-                    unsigned long availFrameSize;
-                    uint32_t numSamples;
-                    
-                    /* read to get upto the maximum frame size in buffer */
-                    numRead = fread(inputs[i].buffer + inputs[i].bufferOffset, 1, inputs[i].frameSize - inputs[i].bufferOffset, inputs[i].file);
-                    if (inputs[i].bufferOffset + numRead < inputs[i].frameSize)
+                    if (inputs[i].bufferOffset + numRead < inputs[i].frameSize * inputs[i].wavInput.numAudioChannels)
                     {
                         /* last or incomplete frame */
                         done = 1;
                         
                         /* frame is incomplete if it is less than the minimum allowed */ 
-                        if (inputs[i].bufferOffset + numRead < inputs[i].minFrameSize)
+                        if (inputs[i].bufferOffset + numRead < inputs[i].minFrameSize * inputs[i].wavInput.numAudioChannels)
                         {
                             break;
                         }
-                        
+
                         /* frame size is the remaining samples */
-                        availFrameSize = ((inputs[i].bufferOffset + (uint32_t)numRead) / inputs[i].bytesPerSample) * inputs[i].bytesPerSample;
+                        inputs[i].availFrameSize = ((inputs[i].bufferOffset + (uint32_t)numRead) / 
+                            (inputs[i].wavInput.numAudioChannels * inputs[i].bytesPerSample)) * 
+                            inputs[i].bytesPerSample;
                     }
                     else
                     {
-                        availFrameSize = inputs[i].frameSizeSeq[inputs[i].seqIndex];
-                    }
-
-                    numSamples = availFrameSize / inputs[i].bytesPerSample;
-                    if (!write_samples(clipWriter, inputs[i].materialTrackID, numSamples, inputs[i].buffer, availFrameSize))
-                    {
-                        fprintf(stderr, "Failed to write PCM frame\n");
-                        goto fail;
-                    }
-                    
-                    /* copy the remaining samples for the next frame */
-                    inputs[i].bufferOffset = inputs[i].frameSize - availFrameSize;
-                    memcpy(inputs[i].buffer, inputs[i].buffer + availFrameSize, inputs[i].bufferOffset);
-                    
-                    /* set the next frame size sequence index */
-                    inputs[i].seqIndex = (inputs[i].seqIndex + 1) % 5;
-                }
-                
-            }
-            else if (inputs[i].essenceType == PCM && inputs[i].isWAVFile)
-            {
-                if (isPAL)
-                {
-                    uint32_t numSamples;
-                    int channelZeroInput = i - inputs[i].channelIndex;
-                    
-                    if (inputs[i].channelIndex == 0)
-                    {
-                        /* read a frame of multi-channel audio data */
-                        if (!get_wave_data(&inputs[i].wavInput, inputs[i].buffer, 
-                            inputs[i].frameSize * inputs[i].wavInput.numAudioChannels, &numRead))
-                        {
-                            fprintf(stderr, "Failed to read PCM frame\n");
-                            goto fail;
-                        }
-                        if (numRead != inputs[i].frameSize * inputs[i].wavInput.numAudioChannels)
-                        {
-                            done = 1;
-                            break;
-                        }
-                    }
-                    else
-                    {
-                        numRead = inputs[i].frameSize * inputs[i].wavInput.numAudioChannels;
-                    }
-
-                    numSamples = (uint32_t)numRead / (inputs[i].wavInput.numAudioChannels * inputs[i].bytesPerSample);
-                        
-                    /* extract a single channel audio data and write */
-                    get_wave_channel(&inputs[i].wavInput, numRead, inputs[channelZeroInput].buffer, 
-                        inputs[i].channelIndex, inputs[i].channelBuffer);
-                    if (!write_samples(clipWriter, inputs[i].materialTrackID, numSamples, 
-                        inputs[i].channelBuffer, inputs[i].frameSize))
-                    {
-                        fprintf(stderr, "Failed to write PCM frame\n");
-                        goto fail;
+                        inputs[i].availFrameSize = inputs[i].frameSizeSeq[inputs[i].seqIndex];
                     }
                 }
                 else
                 {
-                    /* For NTSC we read frame sizes corresponding to the sequence set in
-                    inputs[i].frameSizeSeq. The last frame can be MAX_AUDIO_VARIATION samples
-                    more or less than the average. */ 
+                    inputs[i].availFrameSize = inputs[channelZeroInput].availFrameSize;
+                }
+
+                numSamples = inputs[i].availFrameSize / inputs[i].bytesPerSample;
                     
-                    uint32_t numSamples;
-                    int channelZeroInput = i - inputs[i].channelIndex;
+                /* extract a single channel audio data and write */
+                get_wave_channel(&inputs[i].wavInput, inputs[i].availFrameSize * inputs[i].wavInput.numAudioChannels, 
+                    inputs[channelZeroInput].buffer, inputs[i].channelIndex, inputs[i].channelBuffer);
+                if (!write_samples(clipWriter, inputs[i].materialTrackID, numSamples, inputs[i].channelBuffer, 
+                    inputs[i].availFrameSize))
+                {
+                    fprintf(stderr, "Failed to write Wave PCM frame\n");
+                    goto fail;
+                }
+
+                /* prepare for the next frame if this is the last channel */
+                if (inputs[i].channelIndex + 1 >= inputs[i].wavInput.numAudioChannels)
+                {
+                    /* copy the remaining samples for the next frame */
+                    inputs[channelZeroInput].bufferOffset = (inputs[channelZeroInput].frameSize - inputs[channelZeroInput].availFrameSize) * 
+                        inputs[channelZeroInput].wavInput.numAudioChannels;
+                    memcpy(inputs[channelZeroInput].buffer, inputs[channelZeroInput].buffer + inputs[channelZeroInput].availFrameSize * inputs[channelZeroInput].wavInput.numAudioChannels, 
+                        inputs[channelZeroInput].bufferOffset);
                     
-                    if (inputs[i].channelIndex == 0)
-                    {
-                        /* read a frame of multi-channel audio data */
-                        if (!get_wave_data(&inputs[i].wavInput, inputs[i].buffer + inputs[i].bufferOffset, 
-                            inputs[i].frameSize * inputs[i].wavInput.numAudioChannels - inputs[i].bufferOffset, &numRead))
-                        {
-                            fprintf(stderr, "Failed to read Wave PCM frame\n");
-                            goto fail;
-                        }
-                        
-                        if (inputs[i].bufferOffset + numRead < inputs[i].frameSize * inputs[i].wavInput.numAudioChannels)
-                        {
-                            /* last or incomplete frame */
-                            done = 1;
-                            
-                            /* frame is incomplete if it is less than the minimum allowed */ 
-                            if (inputs[i].bufferOffset + numRead < inputs[i].minFrameSize * inputs[i].wavInput.numAudioChannels)
-                            {
-                                break;
-                            }
-
-                            /* frame size is the remaining samples */
-                            inputs[i].availFrameSize = ((inputs[i].bufferOffset + (uint32_t)numRead) / 
-                                (inputs[i].wavInput.numAudioChannels * inputs[i].bytesPerSample)) * 
-                                inputs[i].bytesPerSample;
-                        }
-                        else
-                        {
-                            inputs[i].availFrameSize = inputs[i].frameSizeSeq[inputs[i].seqIndex];
-                        }
-                    }
-                    else
-                    {
-                        inputs[i].availFrameSize = inputs[channelZeroInput].availFrameSize;
-                    }
-
-                    numSamples = inputs[i].availFrameSize / inputs[i].bytesPerSample;
-                        
-                    /* extract a single channel audio data and write */
-                    get_wave_channel(&inputs[i].wavInput, inputs[i].availFrameSize * inputs[i].wavInput.numAudioChannels, 
-                        inputs[channelZeroInput].buffer, inputs[i].channelIndex, inputs[i].channelBuffer);
-                    if (!write_samples(clipWriter, inputs[i].materialTrackID, numSamples, inputs[i].channelBuffer, 
-                        inputs[i].availFrameSize))
-                    {
-                        fprintf(stderr, "Failed to write Wave PCM frame\n");
-                        goto fail;
-                    }
-
-                    /* prepare for the next frame if this is the last channel */
-                    if (inputs[i].channelIndex + 1 >= inputs[i].wavInput.numAudioChannels)
-                    {
-                        /* copy the remaining samples for the next frame */
-                        inputs[channelZeroInput].bufferOffset = (inputs[channelZeroInput].frameSize - inputs[channelZeroInput].availFrameSize) * 
-                            inputs[channelZeroInput].wavInput.numAudioChannels;
-                        memcpy(inputs[channelZeroInput].buffer, inputs[channelZeroInput].buffer + inputs[channelZeroInput].availFrameSize * inputs[channelZeroInput].wavInput.numAudioChannels, 
-                            inputs[channelZeroInput].bufferOffset);
-                        
-                        /* set the next frame size sequence index */
-                        inputs[channelZeroInput].seqIndex = (inputs[channelZeroInput].seqIndex + 1) % 5;
-                    }
+                    /* set the next frame size sequence index */
+                    inputs[channelZeroInput].seqIndex = (inputs[channelZeroInput].seqIndex + 1) % inputs[i].frameSeqLen;
                 }
             }
             else

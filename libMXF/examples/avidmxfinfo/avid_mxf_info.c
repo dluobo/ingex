@@ -1,5 +1,5 @@
 /*
- * $Id: avid_mxf_info.c,v 1.13 2010/07/21 16:29:33 john_f Exp $
+ * $Id: avid_mxf_info.c,v 1.14 2011/01/10 17:05:15 john_f Exp $
  *
  * Parse metadata from an Avid MXF file
  *
@@ -1029,8 +1029,8 @@ int ami_read_info(const char* filename, AvidMXFInfo* info, int printDebugError)
     {
         info->essenceType = DV_50_ESSENCE_TYPE;
     }
-    else if (mxf_equals_ul(&info->essenceContainerLabel, &MXF_EC_L(DV720p50ClipWrapped)) ||
-        mxf_equals_ul(&info->essenceContainerLabel, &MXF_EC_L(DV1080i50ClipWrapped)))
+    else if (mxf_equals_ul(&info->essenceContainerLabel, &MXF_EC_L(DVBased_100_720_50_P_ClipWrapped)) ||
+        mxf_equals_ul(&info->essenceContainerLabel, &MXF_EC_L(DVBased_100_1080_50_I_ClipWrapped)))
     {
         info->essenceType = DV_100_ESSENCE_TYPE;
     }

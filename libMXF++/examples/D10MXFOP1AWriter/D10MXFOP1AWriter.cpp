@@ -1,5 +1,5 @@
 /*
- * $Id: D10MXFOP1AWriter.cpp,v 1.8 2010/07/27 16:16:18 philipn Exp $
+ * $Id: D10MXFOP1AWriter.cpp,v 1.9 2011/01/10 17:05:15 john_f Exp $
  *
  * D10 MXF OP-1A writer
  *
@@ -348,7 +348,7 @@ HeaderMetadata* D10MXFOP1AWriter::CreateHeaderMetadata()
     Preface *preface = new Preface(mHeaderMetadata);
     preface->setLastModifiedDate(now);
     preface->setVersion(258);
-    preface->setOperationalPattern(MXF_OP_L(1a, qq09));
+    preface->setOperationalPattern(MXF_OP_L(1a, MultiTrack_Stream_Internal));
     preface->appendEssenceContainers(mEssenceContainerUL);
     preface->setDMSchemes(vector<mxfUL>());
     
@@ -835,7 +835,7 @@ void D10MXFOP1AWriter::CreateFile()
     mHeaderPartition->setIndexSID(INDEX_SID);
     mHeaderPartition->setBodySID(BODY_SID);
     mHeaderPartition->setKagSize(KAG_SIZE);
-    mHeaderPartition->setOperationalPattern(&MXF_OP_L(1a, qq09));
+    mHeaderPartition->setOperationalPattern(&MXF_OP_L(1a, MultiTrack_Stream_Internal));
     mHeaderPartition->addEssenceContainer(&mEssenceContainerUL);
     mHeaderPartition->write(mMXFFile);
     mHeaderPartition->fillToKag(mMXFFile);

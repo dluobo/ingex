@@ -1,5 +1,5 @@
 /*
- * $Id: mxf_utils.h,v 1.3 2010/10/18 17:54:08 john_f Exp $
+ * $Id: mxf_utils.h,v 1.4 2011/01/10 17:05:15 john_f Exp $
  *
  * General purpose utilities
  *
@@ -62,6 +62,12 @@ void mxf_default_generate_uuid(mxfUUID* uuid);
 void mxf_default_get_timestamp_now(mxfTimestamp* now);
 void mxf_default_generate_umid(mxfUMID* umid);
 void mxf_default_generate_key(mxfKey* key);
+
+void mxf_set_regtest_funcs();
+void mxf_regtest_generate_uuid(mxfUUID* uuid);
+void mxf_regtest_get_timestamp_now(mxfTimestamp* now);
+void mxf_regtest_generate_umid(mxfUMID* umid);
+void mxf_regtest_generate_key(mxfKey* key);
 
 
 #ifdef __cplusplus

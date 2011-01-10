@@ -1,5 +1,5 @@
 /*
- * $Id: write_archive_mxf.c,v 1.12 2010/06/18 09:29:34 philipn Exp $
+ * $Id: write_archive_mxf.c,v 1.13 2011/01/10 17:05:15 john_f Exp $
  *
  * 
  *
@@ -694,7 +694,7 @@ int prepare_archive_mxf_file_2(MXFFile** mxfFile, const char* filename, int comp
     newOutput->headerPartition->key = MXF_PP_K(OpenIncomplete, Header);
     newOutput->headerPartition->bodySID = g_bodySID;
     newOutput->headerPartition->indexSID = g_indexSID;
-    newOutput->headerPartition->operationalPattern = MXF_OP_L(1a, qq09);            
+    newOutput->headerPartition->operationalPattern = MXF_OP_L(1a, MultiTrack_Stream_Internal);            
     CHK_OFAIL(mxf_append_partition_esscont_label(newOutput->headerPartition, 
         &MXF_EC_L(MultipleWrappings)));
     CHK_OFAIL(mxf_append_partition_esscont_label(newOutput->headerPartition, 
@@ -768,7 +768,7 @@ int prepare_archive_mxf_file_2(MXFFile** mxfFile, const char* filename, int comp
     CHK_OFAIL(mxf_create_set(newOutput->headerMetadata, &MXF_SET_K(Preface), &newOutput->prefaceSet));
     CHK_OFAIL(mxf_set_timestamp_item(newOutput->prefaceSet, &MXF_ITEM_K(Preface, LastModifiedDate), &newOutput->now));
     CHK_OFAIL(mxf_set_version_type_item(newOutput->prefaceSet, &MXF_ITEM_K(Preface, Version), 0x0102));
-    CHK_OFAIL(mxf_set_ul_item(newOutput->prefaceSet, &MXF_ITEM_K(Preface, OperationalPattern), &MXF_OP_L(1a, qq09)));
+    CHK_OFAIL(mxf_set_ul_item(newOutput->prefaceSet, &MXF_ITEM_K(Preface, OperationalPattern), &MXF_OP_L(1a, MultiTrack_Stream_Internal)));
     if (newOutput->numAudioTracks > 0)
     {
         CHK_OFAIL(mxf_alloc_array_item_elements(newOutput->prefaceSet, &MXF_ITEM_K(Preface, EssenceContainers), mxfUL_extlen, 3, &arrayElement));

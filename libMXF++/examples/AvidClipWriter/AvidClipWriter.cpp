@@ -1,5 +1,5 @@
 /*
- * $Id: AvidClipWriter.cpp,v 1.6 2010/07/23 17:57:24 philipn Exp $
+ * $Id: AvidClipWriter.cpp,v 1.7 2011/01/10 17:05:15 john_f Exp $
  *
  * 
  *
@@ -125,7 +125,7 @@ public:
     {
         _component->setDuration(calc_position(duration, editRate, _editRate));
     }
-    virtual void updateEssenceDataLength(int64_t length) {}
+    virtual void updateEssenceDataLength(int64_t length) { (void)length; }
     
 private:
     StructuralComponent* _component;
@@ -401,13 +401,13 @@ void AvidClipWriter::registerEssenceElement(int trackId, int trackNumber, AvidEs
             trackData->editUnitByteCount = 576000;
             if (type == AVID_DV1080I50_ESSENCE)
             {
-                trackData->essenceContainerLabel = MXF_EC_L(DV1080i50ClipWrapped);
-                trackData->essenceElementKey = MXF_EE_K(DV1080i50);
+                trackData->essenceContainerLabel = MXF_EC_L(DVBased_100_1080_50_I_ClipWrapped);
+                trackData->essenceElementKey = MXF_EE_K(DVClipWrapped);
             }
             else // AVID_DV720P50_ESSENCE
             {
-                trackData->essenceContainerLabel = MXF_EC_L(DV720p50ClipWrapped);
-                trackData->essenceElementKey = MXF_EE_K(DV720p50);
+                trackData->essenceContainerLabel = MXF_EC_L(DVBased_100_720_50_P_ClipWrapped);
+                trackData->essenceElementKey = MXF_EE_K(DVClipWrapped);
             }
             break;
             
@@ -614,7 +614,7 @@ void AvidClipWriter::prepareToWrite()
          
         Partition& headerPartition = trackData->mxfFile->createPartition();
         headerPartition.setKey(&MXF_PP_K(ClosedIncomplete, Header));
-        headerPartition.setOperationalPattern((_tracks.size() <= 1) ? &MXF_OP_L(atom, complexity00) : &MXF_OP_L(atom, complexity02));
+        headerPartition.setOperationalPattern((_tracks.size() <= 1) ? &MXF_OP_L(atom, 1Track_1SourceClip) : &MXF_OP_L(atom, NTracks_1SourceClip));
         headerPartition.addEssenceContainer(&trackData->essenceContainerLabel);
         
         headerPartition.write(trackData->mxfFile);
@@ -637,7 +637,7 @@ void AvidClipWriter::prepareToWrite()
         preface->setUInt32Item(&MXF_ITEM_K(Preface, ObjectModelVersion), 0x00000001);
         preface->setVersion(0x0101); // AAF SDK version
         preface->setLastModifiedDate(now);
-        preface->setOperationalPattern((_tracks.size() <= 1) ? MXF_OP_L(atom, complexity00) : MXF_OP_L(atom, complexity02));
+        preface->setOperationalPattern((_tracks.size() <= 1) ? MXF_OP_L(atom, 1Track_1SourceClip) : MXF_OP_L(atom, NTracks_1SourceClip));
         preface->appendEssenceContainers(trackData->essenceContainerLabel);
         if (_projectName.size() > 0)
         {
@@ -1216,11 +1216,11 @@ void AvidClipWriter::prepareToWrite()
                 cdciDescriptor->setInt32Item(&MXF_ITEM_K(GenericPictureEssenceDescriptor, ImageSize), 0);
                 if (trackData->type == AVID_DV1080I50_ESSENCE)
                 {
-                    cdciDescriptor->setPictureEssenceCoding(MXF_CMDEF_L(DV1080i50));
+                    cdciDescriptor->setPictureEssenceCoding(MXF_CMDEF_L(DVBased_100_1080_50_I));
                 }
                 else // AVID_DV720P50_ESSENCE
                 {
-                    cdciDescriptor->setPictureEssenceCoding(MXF_CMDEF_L(DV720p50));
+                    cdciDescriptor->setPictureEssenceCoding(MXF_CMDEF_L(DVBased_100_720_50_P));
                 }
                 break;
                 

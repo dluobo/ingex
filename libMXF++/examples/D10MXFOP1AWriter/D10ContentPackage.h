@@ -1,5 +1,5 @@
 /*
- * $Id: D10ContentPackage.h,v 1.2 2010/02/17 16:04:24 philipn Exp $
+ * $Id: D10ContentPackage.h,v 1.3 2011/01/10 17:05:15 john_f Exp $
  *
  * D10 MXF OP-1A content package
  *
@@ -37,6 +37,8 @@
 class D10ContentPackage
 {
 public:
+    virtual ~D10ContentPackage() {}
+
     virtual Timecode GetUserTimecode() const = 0;
 
     virtual const unsigned char* GetVideo() const = 0;

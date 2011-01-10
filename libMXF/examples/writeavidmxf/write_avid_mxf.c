@@ -1,5 +1,5 @@
 /*
- * $Id: write_avid_mxf.c,v 1.25 2010/10/12 17:44:12 john_f Exp $
+ * $Id: write_avid_mxf.c,v 1.26 2011/01/10 17:05:15 john_f Exp $
  *
  * Write video and audio to MXF files supported by Avid editing software
  *
@@ -221,13 +221,6 @@ static uint32_t g_dmTrackID = 1000;
 static uint32_t g_dmTrackNumber = 1;
 
     
-/* 15 = GC Picture, 01 = element count=1, 01 = Avid JFIF, 01 = element number=1 */
-static const uint32_t g_AvidMJPEGTrackNumber = 0x15010101;
-
-/* 15 = GC Picture, 01 = element count=1, 06 = DNxHD, 01 = element number=1 */
-static const uint32_t g_DNxHDTrackNumber = 0x15010601;
-
-
 static const uint32_t g_uncImageAlignmentOffset = 8192;
 
 /* 852480 = 720*592*2 */
@@ -495,7 +488,7 @@ static int create_header_metadata(AvidClipWriter* clipWriter, PackageDefinitions
     CHK_ORET(mxf_set_uint32_item(writer->prefaceSet, &MXF_ITEM_K(Preface, ObjectModelVersion), 0x00000001));
     CHK_ORET(mxf_set_version_type_item(writer->prefaceSet, &MXF_ITEM_K(Preface, Version), 0x0101)); /* AAF SDK version */
     CHK_ORET(mxf_set_timestamp_item(writer->prefaceSet, &MXF_ITEM_K(Preface, LastModifiedDate), &clipWriter->now));
-    CHK_ORET(mxf_set_ul_item(writer->prefaceSet, &MXF_ITEM_K(Preface, OperationalPattern), &MXF_OP_L(atom, complexity03)));
+    CHK_ORET(mxf_set_ul_item(writer->prefaceSet, &MXF_ITEM_K(Preface, OperationalPattern), &MXF_OP_L(atom, NTracks_NSourceClips)));
     CHK_ORET(mxf_alloc_array_item_elements(writer->prefaceSet, &MXF_ITEM_K(Preface, EssenceContainers), mxfUL_extlen, 1, &arrayElement));
     mxf_set_ul(&writer->essenceContainerLabel, arrayElement);
     if (clipWriter->wProjectName != NULL)
@@ -1477,7 +1470,7 @@ static int create_track_writer(AvidClipWriter* clipWriter, PackageDefinitions* p
             newTrackWriter->horizSubsampling = 2;        /* All JPEG formats are 4:2:2 */
             newTrackWriter->vertSubsampling = 1;
             newTrackWriter->essenceElementKey = MXF_EE_K(AvidMJPEGClipWrapped);
-            newTrackWriter->sourceTrackNumber = g_AvidMJPEGTrackNumber;
+            newTrackWriter->sourceTrackNumber = MXF_AVID_MJPEG_PICT_TRACK_NUM;
             newTrackWriter->essenceElementLLen = 9;
             CHK_ORET(memcmp(&track->editRate, &clipWriter->projectEditRate, sizeof(mxfRational)) == 0); /* why would it be different? */
             newTrackWriter->sampleRate = track->editRate;
@@ -1693,9 +1686,9 @@ static int create_track_writer(AvidClipWriter* clipWriter, PackageDefinitions* p
                     newTrackWriter->sampledWidth = 1920;
                     newTrackWriter->frameSize = 576000;
                     newTrackWriter->frameLayout = 1; /* SeparateFields */
-                    newTrackWriter->essenceElementKey = MXF_EE_K(DV1080i50);
-                    newTrackWriter->essenceContainerLabel = MXF_EC_L(DV1080i50ClipWrapped);
-                    newTrackWriter->pictureEssenceCoding = MXF_CMDEF_L(DV1080i50);
+                    newTrackWriter->essenceElementKey = MXF_EE_K(DVClipWrapped);
+                    newTrackWriter->essenceContainerLabel = MXF_EC_L(DVBased_100_1080_50_I_ClipWrapped);
+                    newTrackWriter->pictureEssenceCoding = MXF_CMDEF_L(DVBased_100_1080_50_I);
                     break;
                 case DV720p50:        /* Standardised in later version of SMPTE 370M */
                     newTrackWriter->videoLineMapLen = 1;
@@ -1708,9 +1701,9 @@ static int create_track_writer(AvidClipWriter* clipWriter, PackageDefinitions* p
                     newTrackWriter->sampledWidth = 1280;
                     newTrackWriter->frameSize = 288000;
                     newTrackWriter->frameLayout = 0; /* FullFrame */
-                    newTrackWriter->essenceElementKey = MXF_EE_K(DV720p50);
-                    newTrackWriter->essenceContainerLabel = MXF_EC_L(DV720p50ClipWrapped);
-                    newTrackWriter->pictureEssenceCoding = MXF_CMDEF_L(DV720p50);
+                    newTrackWriter->essenceElementKey = MXF_EE_K(DVClipWrapped);
+                    newTrackWriter->essenceContainerLabel = MXF_EC_L(DVBased_100_720_50_P_ClipWrapped);
+                    newTrackWriter->pictureEssenceCoding = MXF_CMDEF_L(DVBased_100_720_50_P);
                     break;
                 default:
                     assert(0);
@@ -1949,7 +1942,7 @@ static int create_track_writer(AvidClipWriter* clipWriter, PackageDefinitions* p
                     return 0;
             }
             newTrackWriter->imageAspectRatio = filePackage->essenceInfo.imageAspectRatio;
-            newTrackWriter->sourceTrackNumber = g_DNxHDTrackNumber;
+            newTrackWriter->sourceTrackNumber = MXF_DNXHD_PICT_TRACK_NUM;
             newTrackWriter->essenceElementLLen = 9;
             CHK_ORET(memcmp(&track->editRate, &clipWriter->projectEditRate, sizeof(mxfRational)) == 0); /* why would it be different? */
             newTrackWriter->sampleRate = track->editRate;
@@ -2174,7 +2167,7 @@ static int create_track_writer(AvidClipWriter* clipWriter, PackageDefinitions* p
     CHK_OFAIL(mxf_append_new_partition(newTrackWriter->partitions, &newTrackWriter->headerPartition));
     newTrackWriter->headerPartition->key = MXF_PP_K(ClosedIncomplete, Header);
     newTrackWriter->headerPartition->kagSize = 0x100;
-    newTrackWriter->headerPartition->operationalPattern = MXF_OP_L(atom, complexity03);
+    newTrackWriter->headerPartition->operationalPattern = MXF_OP_L(atom, NTracks_NSourceClips);
     CHK_OFAIL(mxf_append_partition_esscont_label(newTrackWriter->headerPartition, 
         &newTrackWriter->essenceContainerLabel));
 

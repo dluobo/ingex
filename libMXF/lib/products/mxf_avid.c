@@ -1,5 +1,5 @@
 /*
- * $Id: mxf_avid.c,v 1.12 2010/11/02 13:10:04 philipn Exp $
+ * $Id: mxf_avid.c,v 1.13 2011/01/10 17:05:15 john_f Exp $
  *
  * Avid data model extensions and utilities
  *
@@ -686,6 +686,37 @@ void mxf_default_generate_old_aafsdk_umid(mxfUMID* umid)
 
 }
 
+void mxf_avid_set_regtest_funcs()
+{
+    mxf_generate_aafsdk_umid = mxf_regtest_generate_aafsdk_umid;
+    mxf_generate_old_aafsdk_umid = mxf_regtest_generate_old_aafsdk_umid;
+}
+
+void mxf_regtest_generate_aafsdk_umid(mxfUMID* umid)
+{
+    static uint32_t count = 1;
+
+    memset(umid, 0, sizeof(*umid));
+    umid->octet28 = (count >> 24) & 0xff;
+    umid->octet29 = (count >> 16) & 0xff;
+    umid->octet30 = (count >> 8) & 0xff;
+    umid->octet31 = count & 0xff;
+
+    count++;
+}
+
+void mxf_regtest_generate_old_aafsdk_umid(mxfUMID* umid)
+{
+    static uint32_t count = 1;
+
+    memset(umid, 0, sizeof(*umid));
+    umid->octet28 = (count >> 24) & 0xff;
+    umid->octet29 = (count >> 16) & 0xff;
+    umid->octet30 = (count >> 8) & 0xff;
+    umid->octet31 = count & 0xff;
+
+    count++;
+}
 
 int mxf_avid_set_indirect_string_item(MXFMetadataSet* set, const mxfKey* itemKey, const mxfUTF16Char* value)
 {
@@ -1065,11 +1096,17 @@ int mxf_avid_is_mpeg_essence_element(const mxfKey* key)
     return mxf_equals_key_prefix(key, &MXF_EE_K(AvidMPEGClipWrapped), 13) && key->octet14 == 0x03;
 }
 
+int mxf_avid_is_unc10bit_essence_element(const mxfKey* key)
+{
+    return mxf_equals_key_prefix(key, &MXF_EE_K(AvidUnc10BitClipWrapped), 13) && key->octet14 == 0x07;
+}
+
 int mxf_avid_is_essence_element(const mxfKey* key)
 {
     return mxf_avid_is_mjpeg_essence_element(key) ||
            mxf_avid_is_dnxhd_essence_element(key) ||
-           mxf_avid_is_mpeg_essence_element(key);
+           mxf_avid_is_mpeg_essence_element(key) ||
+           mxf_avid_is_unc10bit_essence_element(key);
 }
 
 

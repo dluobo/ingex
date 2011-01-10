@@ -1,5 +1,5 @@
 /*
- * $Id: ArchiveMXFWriter.cpp,v 1.3 2009/11/24 15:18:57 john_f Exp $
+ * $Id: ArchiveMXFWriter.cpp,v 1.4 2011/01/10 17:05:15 john_f Exp $
  *
  * 
  *
@@ -259,7 +259,7 @@ _isComplete(false), _writeState(0)
     headerPartition.setKey(&MXF_PP_K(ClosedComplete, Header));
     headerPartition.setBodySID(g_bodySID);
     headerPartition.setIndexSID(g_indexSID);
-    headerPartition.setOperationalPattern(&MXF_OP_L(1a, qq09));
+    headerPartition.setOperationalPattern(&MXF_OP_L(1a, MultiTrack_Stream_Internal));
     headerPartition.addEssenceContainer(&MXF_EC_L(MultipleWrappings));
     headerPartition.addEssenceContainer(&MXF_EC_L(SD_Unc_625_50i_422_135_FrameWrapped));
     headerPartition.addEssenceContainer(&MXF_EC_L(BWFFrameWrapped));
@@ -278,7 +278,7 @@ _isComplete(false), _writeState(0)
     Preface* preface = new Preface(_headerMetadata);
     preface->setLastModifiedDate(now);
     preface->setVersion(258);
-    preface->setOperationalPattern(MXF_OP_L(1a, qq09));
+    preface->setOperationalPattern(MXF_OP_L(1a, MultiTrack_Stream_Internal));
     if (numAudioTracks > 0)
     {
         preface->appendEssenceContainers(MXF_EC_L(MultipleWrappings));

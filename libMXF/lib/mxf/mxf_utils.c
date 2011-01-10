@@ -1,5 +1,5 @@
 /*
- * $Id: mxf_utils.c,v 1.6 2010/10/18 17:54:08 john_f Exp $
+ * $Id: mxf_utils.c,v 1.7 2011/01/10 17:05:15 john_f Exp $
  *
  * General purpose utilities
  *
@@ -230,5 +230,57 @@ void mxf_default_generate_key(mxfKey* key)
     /* half-swap */
     memcpy(key, &uuid.octet8, 8);
     memcpy(&key->octet8, &uuid.octet0, 8);
+}
+
+void mxf_set_regtest_funcs()
+{
+    mxf_generate_uuid = mxf_regtest_generate_uuid;
+    mxf_get_timestamp_now = mxf_regtest_get_timestamp_now;
+    mxf_generate_umid = mxf_regtest_generate_umid;
+    mxf_generate_key = mxf_regtest_generate_key;
+}
+
+void mxf_regtest_generate_uuid(mxfUUID* uuid)
+{
+    static uint32_t count = 1;
+
+    memset(uuid, 0, sizeof(*uuid));
+    uuid->octet12 = (count >> 24) & 0xff;
+    uuid->octet13 = (count >> 16) & 0xff;
+    uuid->octet14 = (count >> 8) & 0xff;
+    uuid->octet15 = count & 0xff;
+
+    count++;
+}
+
+void mxf_regtest_get_timestamp_now(mxfTimestamp* now)
+{
+    memset(now, 0, sizeof(*now));
+}
+
+void mxf_regtest_generate_umid(mxfUMID* umid)
+{
+    static uint32_t count = 1;
+
+    memset(umid, 0, sizeof(*umid));
+    umid->octet28 = (count >> 24) & 0xff;
+    umid->octet29 = (count >> 16) & 0xff;
+    umid->octet30 = (count >> 8) & 0xff;
+    umid->octet31 = count & 0xff;
+
+    count++;
+}
+
+void mxf_regtest_generate_key(mxfKey* key)
+{
+    static uint32_t count = 1;
+
+    memset(key, 0, sizeof(*key));
+    key->octet12 = (count >> 24) & 0xff;
+    key->octet13 = (count >> 16) & 0xff;
+    key->octet14 = (count >> 8) & 0xff;
+    key->octet15 = count & 0xff;
+
+    count++;
 }
 

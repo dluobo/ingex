@@ -1,5 +1,5 @@
 /*
- * $Id: writeaviddv50.c,v 1.5 2009/09/18 14:39:15 philipn Exp $
+ * $Id: writeaviddv50.c,v 1.6 2011/01/10 17:05:15 john_f Exp $
  *
  * Example showing how to create Avid supported MXF OP-Atom files containing DV-50 
  *
@@ -133,7 +133,7 @@ int write_dv50(FILE* dv50File, MXFFile* mxfFile, int test)
     headerPartition->majorVersion = 1;
     headerPartition->minorVersion = 2;
     headerPartition->kagSize = 0x100;
-    headerPartition->operationalPattern = MXF_OP_L(atom, complexity02);
+    headerPartition->operationalPattern = MXF_OP_L(atom, NTracks_1SourceClip);
     CHK_ORET(mxf_append_partition_esscont_label(headerPartition, &MXF_EC_L(DVBased_50_625_50_ClipWrapped)));
     
     CHK_ORET(mxf_write_partition(mxfFile, headerPartition));
@@ -155,7 +155,7 @@ int write_dv50(FILE* dv50File, MXFFile* mxfFile, int test)
     CHK_ORET(mxf_create_set(headerMetadata, &MXF_SET_K(Preface), &prefaceSet));
     CHK_ORET(mxf_set_timestamp_item(prefaceSet, &MXF_ITEM_K(Preface, LastModifiedDate), &now));
     CHK_ORET(mxf_set_version_type_item(prefaceSet, &MXF_ITEM_K(Preface, Version), 0x0102));
-    CHK_ORET(mxf_set_ul_item(prefaceSet, &MXF_ITEM_K(Preface, OperationalPattern), &MXF_OP_L(atom, complexity02)));
+    CHK_ORET(mxf_set_ul_item(prefaceSet, &MXF_ITEM_K(Preface, OperationalPattern), &MXF_OP_L(atom, NTracks_1SourceClip)));
     CHK_ORET(mxf_alloc_array_item_elements(prefaceSet, &MXF_ITEM_K(Preface, EssenceContainers), mxfUL_extlen, 1, &arrayElement));
     mxf_set_ul(&MXF_EC_L(DVBased_50_625_50_ClipWrapped), arrayElement);
 

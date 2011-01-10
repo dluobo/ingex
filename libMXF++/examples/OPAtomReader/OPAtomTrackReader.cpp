@@ -1,5 +1,5 @@
 /*
- * $Id: OPAtomTrackReader.cpp,v 1.3 2009/12/17 16:35:48 john_f Exp $
+ * $Id: OPAtomTrackReader.cpp,v 1.4 2011/01/10 17:05:15 john_f Exp $
  *
  * Read a single OP-Atom file representing a clip track
  *
@@ -158,7 +158,7 @@ OPAtomTrackReader::OPAtomTrackReader(string filename, File *file, Partition *hea
         vector<GenericPackage*> packages = content->getPackages();
 
         // get the file source package and descriptor
-        SourcePackage *fsp;
+        SourcePackage *fsp = 0;
         size_t i;
         for (i = 0; i < packages.size(); i++) {
             fsp = dynamic_cast<SourcePackage*>(packages[i]);

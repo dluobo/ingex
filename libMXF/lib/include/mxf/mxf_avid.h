@@ -1,5 +1,5 @@
 /*
- * $Id: mxf_avid.h,v 1.10 2010/11/02 13:10:04 philipn Exp $
+ * $Id: mxf_avid.h,v 1.11 2011/01/10 17:05:15 john_f Exp $
  *
  * Avid data model extensions and utilities
  *
@@ -75,6 +75,10 @@ extern mxf_generate_old_aafsdk_umid_func mxf_generate_old_aafsdk_umid;
 void mxf_default_generate_aafsdk_umid(mxfUMID* umid);
 void mxf_default_generate_old_aafsdk_umid(mxfUMID* umid);
 
+void mxf_avid_set_regtest_funcs();
+void mxf_regtest_generate_aafsdk_umid(mxfUMID* umid);
+void mxf_regtest_generate_old_aafsdk_umid(mxfUMID* umid);
+
 
 int mxf_avid_set_indirect_string_item(MXFMetadataSet* set, const mxfKey* itemKey, const mxfUTF16Char* value);
 
@@ -110,6 +114,7 @@ int mxf_avid_read_index_table_segment_2(MXFFile* mxfFile, uint64_t segmentLen,
 int mxf_avid_is_mjpeg_essence_element(const mxfKey* key);
 int mxf_avid_is_dnxhd_essence_element(const mxfKey* key);
 int mxf_avid_is_mpeg_essence_element(const mxfKey* key);
+int mxf_avid_is_unc10bit_essence_element(const mxfKey* key);
 int mxf_avid_is_essence_element(const mxfKey* key);
 
 

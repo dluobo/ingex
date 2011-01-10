@@ -1,5 +1,5 @@
 /*
- * $Id: test.cpp,v 1.3 2009/11/24 15:20:20 john_f Exp $
+ * $Id: test.cpp,v 1.4 2011/01/10 17:05:15 john_f Exp $
  *
  * Test libMXF++
  *
@@ -41,7 +41,7 @@ static void testWrite()
     headerPartition.setKey(&MXF_PP_K(ClosedComplete, Header));
     headerPartition.setVersion(1, 2);
     headerPartition.setKagSize(0x100);
-    headerPartition.setOperationalPattern(&MXF_OP_L(atom, complexity02));
+    headerPartition.setOperationalPattern(&MXF_OP_L(atom, NTracks_1SourceClip));
     headerPartition.addEssenceContainer(&MXF_EC_L(DVBased_50_625_50_ClipWrapped));
     
     headerPartition.write(file.get());

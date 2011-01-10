@@ -1,5 +1,5 @@
 /*
- * $Id: mxf_macros.h,v 1.5 2008/11/07 14:12:59 philipn Exp $
+ * $Id: mxf_macros.h,v 1.6 2011/01/10 17:05:15 john_f Exp $
  *
  * General purpose macros
  *
@@ -90,15 +90,9 @@ extern "C"
 #if defined(_MSC_VER)
 #define PFi64 "I64d"
 #define PFu64 "I64u"
-#define PFoff "I64d"
-#elif defined(__x86_64__)
-#define PFi64 "ld"
-#define PFu64 "lu"
-#define PFoff "ld"
 #else
-#define PFi64 "lld"
-#define PFu64 "llu"
-#define PFoff "lld"
+#define PFi64 PRId64
+#define PFu64 PRIu64
 #endif
 
 /*
