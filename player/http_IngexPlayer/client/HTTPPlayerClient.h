@@ -1,7 +1,7 @@
 /*
- * $Id: HTTPPlayerClient.h,v 1.2 2010/01/12 17:11:36 john_f Exp $
+ * $Id: HTTPPlayerClient.h,v 1.3 2011/01/10 17:09:30 john_f Exp $
  *
- * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Copyright (C) 2008-2010 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
  * Modifications: Matthew Marks
  *
@@ -37,46 +37,6 @@
 
 namespace ingex
 {
-
-
-typedef enum
-{
-    UNKNOWN_OUTPUT = 0,
-    /* playout to SDI via DVS card */
-    DVS_OUTPUT,
-    /* auto-detect whether X11 X video extension is available, if not use plain X11 */
-    X11_AUTO_OUTPUT,
-    /* playout to X11 window using X video extension*/
-    X11_XV_OUTPUT,
-    /* playout to X11 window */
-    X11_OUTPUT,
-    /* playout to both SDI and X11 window (auto-detect availability of Xv) */
-    DUAL_DVS_AUTO_OUTPUT,
-    /* playout to both SDI and X11 window */
-    DUAL_DVS_X11_OUTPUT,
-    /* playout to both SDI and X11 X video extension window */
-    DUAL_DVS_X11_XV_OUTPUT
-} PlayerOutputType;
-
-typedef enum
-{
-    MXF_INPUT = 1,
-    RAW_INPUT,
-    DV_INPUT,
-    FFMPEG_INPUT,
-    SHM_INPUT,
-    UDP_INPUT,
-    BALLS_INPUT,
-    BLANK_INPUT,
-    CLAPPER_INPUT
-} PlayerInputType;
-
-typedef struct
-{
-    PlayerInputType type;
-    std::string name;
-    std::map<std::string, std::string> options;
-} PlayerInput;
 
 /* options for each PlayerInputType are as follows:
 
@@ -157,20 +117,25 @@ public:
 
 
     /* setting the output type will cause the the player to be stop()ped and restarted when start() is called again */
-    void setOutputType(PlayerOutputType outputType, float scale);
+    void setOutputType(prodauto::PlayerOutputType outputType, float scale);
     void setDVSTarget(int card, int channel);
 
     /* returns the output type used */
-    PlayerOutputType getOutputType();
+    prodauto::PlayerOutputType getOutputType();
     /* same as getOutputType(), except it returns the actual output type if an auto type is used */
     /* eg. if X11_AUTO_OUTPUT is set then returns either X11_XV_OUTPUT or X11_OUTPUT */
-    PlayerOutputType getActualOutputType();
+    prodauto::PlayerOutputType getActualOutputType();
 
     /* sets the video split type (see ingex_player/video_switch_sink.h for enum values) when start() is called again */
     void setVideoSplit(VideoSwitchSplit videoSplit);
 
     /* disables/enables the on screen display in the SDI output */
     void setSDIOSDEnable(bool enable);
+
+    void setPixelAspectRatio(Rational *aspect); /* default: 1/1 */
+    void setNumAudioLevelMonitors(int num); /* default: 2 */
+    void setApplyScaleFilter(bool enable); /* default: true */
+    void showProgressBar(bool show);
 
 
     HTTPPlayerState getState();
@@ -185,7 +150,7 @@ public:
 
 
     /* opens the files/sources and start playing */
-    bool start(std::vector<PlayerInput> inputs, bool startPaused, int64_t startPosition);
+    bool start(std::vector<prodauto::PlayerInput> inputs, std::vector<bool>& opened, bool startPaused, int64_t startPosition);
 
     /* functions inherited from IngexPlayerListenerRegistry */
     bool registerListener(HTTPPlayerClientListener* listener);
@@ -232,8 +197,9 @@ private:
     bool isConnected();
     bool sendSimpleCommand(std::string command);
     bool sendSimpleCommand(std::string command, std::map<std::string, std::string> args);
-    bool sendJSONCommand(std::string command, std::string jsonString);
-    bool sendJSONInfoCommand(std::string command, std::string* jsonString);
+    bool JSONPost(std::string command, std::string jsonString);
+    bool JSONGet(std::string command, std::string* jsonString);
+    bool JSONPostReceive(std::string command, std::string jsonSend, std::string* jsonResult);
 
     pthread_mutex_t _connectionMutex;
     CURL* _curl;

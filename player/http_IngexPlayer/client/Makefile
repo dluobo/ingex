@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.2 2009/10/12 16:06:27 philipn Exp $
+# $Id: Makefile,v 1.3 2011/01/10 17:09:30 john_f Exp $
 #
 # Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
 # Author: Philip de Nier
@@ -40,7 +40,8 @@ SOURCES = HTTPPlayerClient.cpp
 OBJECTS = $(patsubst %.cpp,.objs/%.o,$(SOURCES))
 DEPENDENCIES = $(patsubst %.cpp,.deps/%.d,$(SOURCES))
 
-SERVER_OBJECTS = $(SERVER_DIR)/.objs/JSONObject.o $(SERVER_DIR)/.objs/Utilities.o $(SERVER_DIR)/.objs/HTTPPlayerState.o
+SERVER_OBJECTS = $(SERVER_DIR)/.objs/JSONObject.o $(SERVER_DIR)/.objs/Utilities.o $(SERVER_DIR)/.objs/HTTPPlayerState.o \
+	$(SERVER_DIR)/.objs/IngexException.o 
 
 LIBDIRS += -L$(JOGSHUTTLE_DIR)
 LIBS += -ljogshuttle

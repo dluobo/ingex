@@ -1,7 +1,7 @@
 /*
- * $Id: HTTPPlayerClient.cpp,v 1.1 2009/02/24 08:21:17 stuart_hc Exp $
+ * $Id: HTTPPlayerClient.cpp,v 1.2 2011/01/10 17:09:30 john_f Exp $
  *
- * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Copyright (C) 2008-2010 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
@@ -161,10 +161,6 @@ static size_t receive_json_data(void* ptr, size_t size, size_t nmemb, void* stre
     return size * nmemb;
 }
 
-
-
-
-
 HTTPPlayerClient::HTTPPlayerClient()
 : _curl(0), _port(0), _statePollInterval(g_defaultStatePollInterval), _pollThreadId(0), _stopPollThread(true)
 {
@@ -288,7 +284,7 @@ bool HTTPPlayerClient::dvsCardIsAvailable(int card, int channel)
     return false;
 }
 
-void HTTPPlayerClient::setOutputType(PlayerOutputType outputType, float scale)
+void HTTPPlayerClient::setOutputType(prodauto::PlayerOutputType outputType, float scale)
 {
     LOCK_SECTION(&_connectionMutex);
 
@@ -324,30 +320,30 @@ void HTTPPlayerClient::setDVSTarget(int card, int channel)
     sendSimpleCommand(cmd, args);
 }
 
-PlayerOutputType HTTPPlayerClient::getOutputType()
+prodauto::PlayerOutputType HTTPPlayerClient::getOutputType()
 {
     LOCK_SECTION(&_connectionMutex);
 
     if (!isConnected())
     {
         fprintf(stderr, "Command failed: not connected\n");
-        return UNKNOWN_OUTPUT;
+        return prodauto::UNKNOWN_OUTPUT;
     }
 
-    return UNKNOWN_OUTPUT;
+    return prodauto::UNKNOWN_OUTPUT;
 }
 
-PlayerOutputType HTTPPlayerClient::getActualOutputType()
+prodauto::PlayerOutputType HTTPPlayerClient::getActualOutputType()
 {
     LOCK_SECTION(&_connectionMutex);
 
     if (!isConnected())
     {
         fprintf(stderr, "Command failed: not connected\n");
-        return UNKNOWN_OUTPUT;
+        return prodauto::UNKNOWN_OUTPUT;
     }
 
-    return UNKNOWN_OUTPUT;
+    return prodauto::UNKNOWN_OUTPUT;
 }
 
 void HTTPPlayerClient::setVideoSplit(VideoSwitchSplit videoSplit)
@@ -383,6 +379,76 @@ void HTTPPlayerClient::setSDIOSDEnable(bool enable)
 
     sendSimpleCommand(cmd, args);
 }
+
+void HTTPPlayerClient::setPixelAspectRatio(Rational *aspect)
+{
+    LOCK_SECTION(&_connectionMutex);
+
+    if (!isConnected())
+    {
+        fprintf(stderr, "Command failed: not connected\n");
+        return;
+    }
+
+    string cmd = "settings/setpixelaspectratio";
+    map<string, string> args;
+    args.insert(pair<string, string>("num", int_to_string(aspect->num)));
+    args.insert(pair<string, string>("den", int_to_string(aspect->den)));
+
+    sendSimpleCommand(cmd, args);
+}
+
+void HTTPPlayerClient::setNumAudioLevelMonitors(int num)
+{
+    LOCK_SECTION(&_connectionMutex);
+
+    if (!isConnected())
+    {
+        fprintf(stderr, "Command failed: not connected\n");
+        return;
+    }
+
+    string cmd = "settings/setnumaudiolevelmonitors";
+    map<string, string> args;
+    args.insert(pair<string, string>("number", int_to_string(num)));
+
+    sendSimpleCommand(cmd, args);
+}
+
+void HTTPPlayerClient::setApplyScaleFilter(bool enable)
+{
+    LOCK_SECTION(&_connectionMutex);
+
+    if (!isConnected())
+    {
+        fprintf(stderr, "Command failed: not connected\n");
+        return;
+    }
+
+    string cmd = "settings/setapplyscalefilter";
+    map<string, string> args;
+    args.insert(pair<string, string>("enable", bool_to_string(enable)));
+
+    sendSimpleCommand(cmd, args);
+}
+
+void HTTPPlayerClient::showProgressBar(bool show)
+{
+    LOCK_SECTION(&_connectionMutex);
+
+    if (!isConnected())
+    {
+        fprintf(stderr, "Command failed: not connected\n");
+        return;
+    }
+
+    string cmd = "settings/showprogressbar";
+    map<string, string> args;
+    args.insert(pair<string, string>("show", bool_to_string(show)));
+
+    sendSimpleCommand(cmd, args);
+}
+
 
 HTTPPlayerState HTTPPlayerClient::getState()
 {
@@ -427,7 +493,7 @@ bool HTTPPlayerClient::close()
     return true;
 }
 
-bool HTTPPlayerClient::start(vector<PlayerInput> inputs, bool startPaused, int64_t startPosition)
+bool HTTPPlayerClient::start(std::vector<prodauto::PlayerInput> inputs, std::vector<bool>& opened, bool startPaused, int64_t startPosition)
 {
     LOCK_SECTION(&_connectionMutex);
 
@@ -442,10 +508,10 @@ bool HTTPPlayerClient::start(vector<PlayerInput> inputs, bool startPaused, int64
     json.setNumber("startPosition", startPosition);
 
     JSONArray* inputsArray = json.setArray("inputs");
-    vector<PlayerInput>::const_iterator inputsIter;
+    vector<prodauto::PlayerInput>::const_iterator inputsIter;
     for (inputsIter = inputs.begin(); inputsIter != inputs.end(); inputsIter++)
     {
-        const PlayerInput& input = *inputsIter;
+        const prodauto::PlayerInput& input = *inputsIter;
 
         JSONObject* inputObject = inputsArray->appendObject();
         inputObject->setNumber("type", input.type);
@@ -465,9 +531,36 @@ bool HTTPPlayerClient::start(vector<PlayerInput> inputs, bool startPaused, int64
         }
     }
 
-    if (!sendJSONCommand("start", json.toString()))
+    std::string result;
+    if (!JSONPostReceive("start", json.toString(), &result))
     {
         return false;
+    }
+    int parseIndex = 0;
+    JSONObject* jsonResult = JSONObject::parse(result.c_str(), &parseIndex);
+    if (jsonResult == 0)
+    {
+        fprintf(stderr, "Failed to parse string to JSON object\n");
+        return false;
+    }
+    JSONArray* openedArray = jsonResult->getArrayValue("opened");
+    if (openedArray == 0)
+    {
+        fprintf(stderr, "Failed to find opened array in JSON object\n");
+        return false;
+    }
+    opened.clear();
+    vector<JSONValue*>::const_iterator iter;
+    JSONBool* jsonBool;
+    for (iter = openedArray->getValue().begin(); iter != openedArray->getValue().end(); iter++)
+    {
+        jsonBool = dynamic_cast<JSONBool*>(*iter);
+        if (jsonBool == 0)
+        {
+            fprintf(stderr, "Failed to find JSONBool in JSON array\n");
+            return false;
+        }
+        opened.push_back(jsonBool->getValue());
     }
 
     return true;
@@ -1204,7 +1297,7 @@ void HTTPPlayerClient::pollThread()
             LOCK_SECTION(&_connectionMutex);
 
             jsonString.clear();
-            if (sendJSONInfoCommand("info/state.json", &jsonString))
+            if (JSONGet("info/state.json", &jsonString))
             {
                 parseIndex = 0;
                 jsonObject = JSONObject::parse(jsonString.c_str(), &parseIndex);
@@ -1353,7 +1446,7 @@ bool HTTPPlayerClient::sendSimpleCommand(string command, map<string, string> arg
     return true;
 }
 
-bool HTTPPlayerClient::sendJSONCommand(string command, string jsonString)
+bool HTTPPlayerClient::JSONPost(std::string command, std::string jsonString)
 {
     curl_easy_reset(_curl);
 
@@ -1383,7 +1476,7 @@ bool HTTPPlayerClient::sendJSONCommand(string command, string jsonString)
     return true;
 }
 
-bool HTTPPlayerClient::sendJSONInfoCommand(std::string command, std::string* jsonString)
+bool HTTPPlayerClient::JSONGet(std::string command, std::string* jsonString)
 {
     curl_easy_reset(_curl);
 
@@ -1409,5 +1502,41 @@ bool HTTPPlayerClient::sendJSONInfoCommand(std::string command, std::string* jso
     }
 
     *jsonString = stringResult;
+    return true;
+}
+
+bool HTTPPlayerClient::JSONPostReceive(std::string command, std::string jsonSend, std::string* jsonResult)
+{
+    curl_easy_reset(_curl);
+
+    snprintf(_urlBuffer, sizeof(_urlBuffer), "http://%s:%d/%s", _hostName.c_str(), _port, command.c_str());
+
+    struct curl_slist* slist = NULL;
+    slist = curl_slist_append(slist, "Content-Type: application/json");
+
+    string stringResult;
+    stringResult.reserve(512);
+
+    char errorBuffer[CURL_ERROR_SIZE];
+    curl_easy_setopt(_curl, CURLOPT_ERRORBUFFER, errorBuffer);
+    curl_easy_setopt(_curl, CURLOPT_NOPROGRESS, 1);
+    curl_easy_setopt(_curl, CURLOPT_URL, _urlBuffer);
+    curl_easy_setopt(_curl, CURLOPT_POST, 1);
+    curl_easy_setopt(_curl, CURLOPT_HTTPHEADER, slist);
+    curl_easy_setopt(_curl, CURLOPT_POSTFIELDS, jsonSend.c_str());
+    curl_easy_setopt(_curl, CURLOPT_WRITEFUNCTION, receive_json_data);
+    curl_easy_setopt(_curl, CURLOPT_WRITEDATA, (void*)&stringResult);
+
+
+    CURLcode result = curl_easy_perform(_curl);
+    curl_slist_free_all(slist);
+
+    if (result != 0)
+    {
+        fprintf(stderr, "Failed to send json command '%s': %s\n", _urlBuffer, errorBuffer);
+        return false;
+    }
+
+    *jsonResult = stringResult;
     return true;
 }

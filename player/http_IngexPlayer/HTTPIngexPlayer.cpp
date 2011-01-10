@@ -1,7 +1,7 @@
 /*
- * $Id: HTTPIngexPlayer.cpp,v 1.4 2010/07/14 13:06:36 john_f Exp $
+ * $Id: HTTPIngexPlayer.cpp,v 1.5 2011/01/10 17:09:30 john_f Exp $
  *
- * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Copyright (C) 2008-2010 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
  * Modifications: Matthew Marks
  *
@@ -42,6 +42,10 @@ static const char* g_settingsDVSTargetURL = "/settings/dvstarget";
 static const char* g_settingsVideoSplitURL = "/settings/videosplit";
 static const char* g_settingsSDIOSDEnableURL = "/settings/sdiosdenable";
 static const char* g_settingsX11WindowNameURL = "/settings/x11windowname";
+static const char* g_settingsSetPixelAspectRatio = "settings/setpixelaspectratio";
+static const char* g_settingsSetNumAudioLevelMonitors = "settings/setnumaudiolevelmonitors";
+static const char* g_settingsSetApplyScaleFilter = "settings/setapplyscalefilter";
+static const char* g_settingsShowProgressBar = "settings/showprogressbar";
 
 static const char* g_infoStateURL = "/info/state.json";
 static const char* g_infoStatePushURL = "/info/statepush.json";
@@ -133,7 +137,22 @@ HTTPIngexPlayer::HTTPIngexPlayer(HTTPServer* server, LocalIngexPlayer* player, p
     service->setDescription("Set the name of the X11 window");
     service->addArgument("name", "string", true, "The X11 window name");
 
+    service = server->registerService(new HTTPServiceDescription(g_settingsSetPixelAspectRatio), this);
+    service->setDescription("Set the pixel aspect ratio");
+    service->addArgument("name", "int", true, "The aspect ratio numerator");
+    service->addArgument("name", "int", true, "The aspect ratio denominator");
 
+    service = server->registerService(new HTTPServiceDescription(g_settingsSetNumAudioLevelMonitors), this);
+    service->setDescription("Set the number of audio level monitors");
+    service->addArgument("number", "int", true, "The number of monitors");
+
+    service = server->registerService(new HTTPServiceDescription(g_settingsSetApplyScaleFilter), this);
+    service->setDescription("Enable/Disable scaling filtering");
+    service->addArgument("enable", "bool", true, "Enable/Disable scaling filtering");
+
+    service = server->registerService(new HTTPServiceDescription(g_settingsShowProgressBar), this);
+    service->setDescription("Show/Hide progress bar");
+    service->addArgument("show", "bool", true, "Show progress bar");
 
     service = server->registerService(new HTTPServiceDescription(g_infoStateURL), this);
     service->setDescription("Returns the player's state");
@@ -155,7 +174,7 @@ HTTPIngexPlayer::HTTPIngexPlayer(HTTPServer* server, LocalIngexPlayer* player, p
 
 
     service = server->registerService(new HTTPServiceDescription(g_startURL), this);
-    service->setDescription("Start the player");
+    service->setDescription("Start the player and return array of file opened flags");
     service->addArgument("inputs", "json", true, "Start options and list of inputs");
 
     service = server->registerService(new HTTPServiceDescription(g_closeURL), this);
@@ -388,6 +407,22 @@ bool HTTPIngexPlayer::processRequest(HTTPServiceDescription* serviceDescription,
     else if (serviceDescription->getURL().compare(g_settingsX11WindowNameURL) == 0)
     {
         setX11WindowName(connection);
+    }
+    else if (serviceDescription->getURL().compare(g_settingsSetPixelAspectRatio) == 0)
+    {
+        setPixelAspectRatio(connection);
+    }
+    else if (serviceDescription->getURL().compare(g_settingsSetNumAudioLevelMonitors) == 0)
+    {
+        setNumAudioLevelMonitors(connection);
+    }
+    else if (serviceDescription->getURL().compare(g_settingsSetApplyScaleFilter) == 0)
+    {
+        setApplyScaleFilter(connection);
+    }
+    else if (serviceDescription->getURL().compare(g_settingsShowProgressBar) == 0)
+    {
+        showProgressBar(connection);
     }
     else if (serviceDescription->getURL().compare(g_infoStateURL) == 0)
     {
@@ -657,6 +692,100 @@ void HTTPIngexPlayer::setX11WindowName(HTTPConnection* connection)
     connection->sendOk();
 }
 
+void HTTPIngexPlayer::setPixelAspectRatio(HTTPConnection* connection)
+{
+    string numArg = connection->getQueryValue("num");
+    if (numArg.size() == 0)
+    {
+        reportMissingQueryArgument(connection, "num");
+        return;
+    }
+    string denArg = connection->getQueryValue("den");
+    if (denArg.size() == 0)
+    {
+        reportMissingQueryArgument(connection, "num");
+        return;
+    }
+    Rational aspect;
+    if (!parse_int(numArg, &aspect.num))
+    {
+        reportInvalidQueryArgument(connection, "num", "integer");
+        return;
+    }
+    if (!parse_int(denArg, &aspect.den))
+    {
+        reportInvalidQueryArgument(connection, "den", "integer");
+        return;
+    }
+
+    _player->setPixelAspectRatio(&aspect);
+
+    connection->sendOk();
+}
+
+void HTTPIngexPlayer::setNumAudioLevelMonitors(HTTPConnection* connection)
+{
+    string numberArg = connection->getQueryValue("number");
+    if (numberArg.size() == 0)
+    {
+        reportMissingQueryArgument(connection, "number");
+        return;
+    }
+    int number;
+    if (!parse_int(numberArg, &number))
+    {
+        reportInvalidQueryArgument(connection, "number", "integer");
+        return;
+    }
+
+    _player->setNumAudioLevelMonitors(number);
+
+    connection->sendOk();
+}
+
+void HTTPIngexPlayer::setApplyScaleFilter(HTTPConnection* connection)
+{
+    bool enable;
+
+    string enableArg = connection->getQueryValue("enable");
+    if (enableArg.size() == 0)
+    {
+        reportMissingQueryArgument(connection, "enable");
+        return;
+    }
+    if (!parse_bool(enableArg, &enable))
+    {
+        reportInvalidQueryArgument(connection, "enable", "boolean");
+        return;
+    }
+
+    _player->setApplyScaleFilter(enable);
+
+    connection->sendOk();
+}
+
+void HTTPIngexPlayer::showProgressBar(HTTPConnection* connection)
+{
+    bool show;
+
+    string showArg = connection->getQueryValue("show");
+    if (showArg.size() == 0)
+    {
+        reportMissingQueryArgument(connection, "show");
+        return;
+    }
+    if (!parse_bool(showArg, &show))
+    {
+        reportInvalidQueryArgument(connection, "show", "boolean");
+        return;
+    }
+
+    _player->showProgressBar(show);
+
+    connection->sendOk();
+}
+
+
 void HTTPIngexPlayer::getState(HTTPConnection* connection)
 {
     HTTPPlayerState state;
@@ -683,7 +812,7 @@ void HTTPIngexPlayer::getState(HTTPConnection* connection)
 
 // TODO: this function isn't scalable when multiple clients are connected because the shttpd library is
 // calling http_service in HTTPServer without pausing. This required the usleep call below to prevent CPU
-// usage nearing it's maximum. If multiple clients  are connected to get the state then each will result
+// usage nearing its maximum. If multiple clients  are connected to get the state then each will result
 // in an an additional usleep and this will make the server less responsive. See shttpd/examples/scalable.c
 // for an example of how to spawn a thread  for each connection
 bool HTTPIngexPlayer::getStatePush(HTTPConnection* connection)
@@ -915,9 +1044,11 @@ void HTTPIngexPlayer::start(HTTPConnection* connection)
     }
 
 
-    // start the player
+    // start the player and return vector of opened states
 
     vector<bool> opened;
+    JSONObject jsonReturn;
+    JSONArray* openedArray = jsonReturn.setArray("opened");
     if (!_player->start(inputs, opened, startPaused, startPosition))
     {
         Logging::warning("Failed to start player\n");
@@ -931,18 +1062,19 @@ void HTTPIngexPlayer::start(HTTPConnection* connection)
             iterInput != inputs.end() && iterOpen != opened.end();
             iterInput++, iterOpen++)
         {
+            openedArray->append(new JSONBool(*iterOpen));
             if (*iterOpen)
             {
                 Logging::info("Opened '%s' (type=%d)\n", (*iterInput).name.c_str(), (*iterInput).type);
             }
-            else if (*iterOpen)
+            else
             {
                 Logging::info("Failed to open '%s' (type=%d)\n", (*iterInput).name.c_str(), (*iterInput).type);
             }
         }
     }
 
-    connection->sendOk();
+    connection->sendJSON(&jsonReturn);
 }
 
 void HTTPIngexPlayer::close(HTTPConnection* connection)

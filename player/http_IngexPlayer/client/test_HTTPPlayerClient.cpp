@@ -1,7 +1,7 @@
 /*
- * $Id: test_HTTPPlayerClient.cpp,v 1.1 2009/02/24 08:21:17 stuart_hc Exp $
+ * $Id: test_HTTPPlayerClient.cpp,v 1.2 2011/01/10 17:09:30 john_f Exp $
  *
- * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Copyright (C) 2008-2010 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
@@ -235,8 +235,8 @@ static void usage(const char* cmd)
 int main (int argc, const char** argv)
 {
     int cmdlnIndex = 1;
-    vector<PlayerInput> inputs;
-    PlayerInput input;
+    vector<prodauto::PlayerInput> inputs;
+    prodauto::PlayerInput input;
     string serverName = g_defaultServerHostName;
     int serverPort = g_defaultServerPort;
     bool dvsOutput = false;
@@ -312,7 +312,7 @@ int main (int argc, const char** argv)
                 fprintf(stderr, "Missing argument for '%s'\n", argv[cmdlnIndex]);
                 return 1;
             }
-            input.type = MXF_INPUT;
+            input.type = prodauto::MXF_INPUT;
             input.name = argv[cmdlnIndex + 1];
             inputs.push_back(input);
             input.options.clear();
@@ -326,7 +326,7 @@ int main (int argc, const char** argv)
                 fprintf(stderr, "Missing argument for '%s'\n", argv[cmdlnIndex]);
                 return 1;
             }
-            input.type = RAW_INPUT;
+            input.type = prodauto::RAW_INPUT;
             input.name = argv[cmdlnIndex + 1];
             inputs.push_back(input);
             input.options.clear();
@@ -340,7 +340,7 @@ int main (int argc, const char** argv)
                 fprintf(stderr, "Missing argument for '%s'\n", argv[cmdlnIndex]);
                 return 1;
             }
-            input.type = DV_INPUT;
+            input.type = prodauto::DV_INPUT;
             input.name = argv[cmdlnIndex + 1];
             inputs.push_back(input);
             input.options.clear();
@@ -354,7 +354,7 @@ int main (int argc, const char** argv)
                 fprintf(stderr, "Missing argument for '%s'\n", argv[cmdlnIndex]);
                 return 1;
             }
-            input.type = FFMPEG_INPUT;
+            input.type = prodauto::FFMPEG_INPUT;
             input.name = argv[cmdlnIndex + 1];
             inputs.push_back(input);
             input.options.clear();
@@ -368,7 +368,7 @@ int main (int argc, const char** argv)
                 fprintf(stderr, "Missing argument for '%s'\n", argv[cmdlnIndex]);
                 return 1;
             }
-            input.type = SHM_INPUT;
+            input.type = prodauto::SHM_INPUT;
             input.name = argv[cmdlnIndex + 1];
             inputs.push_back(input);
             input.options.clear();
@@ -382,7 +382,7 @@ int main (int argc, const char** argv)
                 fprintf(stderr, "Missing argument for '%s'\n", argv[cmdlnIndex]);
                 return 1;
             }
-            input.type = UDP_INPUT;
+            input.type = prodauto::UDP_INPUT;
             input.name = argv[cmdlnIndex + 1];
             inputs.push_back(input);
             input.options.clear();
@@ -390,7 +390,7 @@ int main (int argc, const char** argv)
         }
         else if (strcmp(argv[cmdlnIndex], "--balls") == 0)
         {
-            input.type = BALLS_INPUT;
+            input.type = prodauto::BALLS_INPUT;
             input.name = "";
             inputs.push_back(input);
             input.options.clear();
@@ -398,7 +398,7 @@ int main (int argc, const char** argv)
         }
         else if (strcmp(argv[cmdlnIndex], "--blank") == 0)
         {
-            input.type = BLANK_INPUT;
+            input.type = prodauto::BLANK_INPUT;
             input.name = "";
             inputs.push_back(input);
             input.options.clear();
@@ -406,7 +406,7 @@ int main (int argc, const char** argv)
         }
         else if (strcmp(argv[cmdlnIndex], "--clapper") == 0)
         {
-            input.type = CLAPPER_INPUT;
+            input.type = prodauto::CLAPPER_INPUT;
             input.name = "";
             inputs.push_back(input);
             input.options.clear();
@@ -473,21 +473,22 @@ int main (int argc, const char** argv)
     }
     if (dualOutput)
     {
-        player->setOutputType(DUAL_DVS_AUTO_OUTPUT, 1.0);
+        player->setOutputType(prodauto::DUAL_DVS_AUTO_OUTPUT, 1.0);
         printf("Set output to DUAL\n");
     }
     else if (dvsOutput)
     {
-        player->setOutputType(DVS_OUTPUT, 1.0);
+        player->setOutputType(prodauto::DVS_OUTPUT, 1.0);
         printf("Set output to DVS\n");
     }
     else
     {
-        player->setOutputType(X11_AUTO_OUTPUT, 1.0);
+        player->setOutputType(prodauto::X11_AUTO_OUTPUT, 1.0);
         printf("Set output to X11\n");
     }
 
-    CHECK(player->start(inputs, false, 0));
+    std::vector<bool> opened;
+    CHECK(player->start(inputs, opened, false, 0));
     printf("Started\n");
 
 

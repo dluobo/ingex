@@ -1,7 +1,7 @@
 /*
- * $Id: HTTPIngexPlayer.h,v 1.2 2010/07/14 13:06:36 john_f Exp $
+ * $Id: HTTPIngexPlayer.h,v 1.3 2011/01/10 17:09:30 john_f Exp $
  *
- * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Copyright (C) 2008-2010 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
  * Modifications: Matthew Marks
  *
@@ -65,6 +65,11 @@ public:
     void setVideoSplit(HTTPConnection* connection);
     void setSDIOSDEnable(HTTPConnection* connection);
     void setX11WindowName(HTTPConnection* connection);
+    void setPixelAspectRatio(HTTPConnection* connection);
+    void setNumAudioLevelMonitors(HTTPConnection* connection);
+    void setApplyScaleFilter(HTTPConnection* connection);
+    void showProgressBar(HTTPConnection* connection);
+
 
     void getState(HTTPConnection* connection);
     bool getStatePush(HTTPConnection* connection);

@@ -1,7 +1,7 @@
 /*
- * $Id: IngexPlayer.h,v 1.5 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: IngexPlayer.h,v 1.6 2011/01/10 17:09:30 john_f Exp $
  *
- * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Copyright (C) 2008-2010 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
  * Modifications: Matthew Marks
  *
@@ -36,6 +36,46 @@
 namespace prodauto
 {
 
+typedef enum
+{
+    UNKNOWN_OUTPUT = 0,
+    /* playout to SDI via DVS card */
+    DVS_OUTPUT,
+    /* auto-detect whether X11 X video extension is available, if not use plain X11 */
+    X11_AUTO_OUTPUT,
+    /* playout to X11 window using X video extension*/
+    X11_XV_OUTPUT,
+    /* playout to X11 window */
+    X11_OUTPUT,
+    /* playout to both SDI and X11 window (auto-detect availability of Xv) */
+    DUAL_DVS_AUTO_OUTPUT,
+    /* playout to both SDI and X11 window */
+    DUAL_DVS_X11_OUTPUT,
+    /* playout to both SDI and X11 X video extension window */
+    DUAL_DVS_X11_XV_OUTPUT
+} PlayerOutputType;
+
+typedef enum
+{
+    MXF_INPUT = 1,
+    RAW_INPUT,
+    DV_INPUT,
+    FFMPEG_INPUT,
+#ifndef DISABLE_SHARED_MEM_SOURCE
+    SHM_INPUT,
+#endif
+    UDP_INPUT,
+    BALLS_INPUT,
+    BLANK_INPUT,
+    CLAPPER_INPUT
+} PlayerInputType;
+
+typedef struct
+{
+    prodauto::PlayerInputType type;
+    std::string name;
+    std::map<std::string, std::string> options;
+} PlayerInput;
 
 class IngexPlayer
 {

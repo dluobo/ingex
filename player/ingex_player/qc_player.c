@@ -1,5 +1,5 @@
 /*
- * $Id: qc_player.c,v 1.17 2010/10/18 17:56:14 john_f Exp $
+ * $Id: qc_player.c,v 1.18 2011/01/10 17:09:30 john_f Exp $
  *
  *
  *
@@ -149,6 +149,7 @@ typedef struct
     char hostName[256];
     int vtrErrorLevel;
     int showVTRErrorLevel;
+    float srcRateLimit;
 } Options;
 
 static const Options g_defaultOptions =
@@ -189,7 +190,8 @@ static const Options g_defaultOptions =
     {0},
     {0},
     VTR_ALMOST_GOOD_LEVEL,
-    0
+    0,
+    -1.0
 };
 
 
@@ -821,7 +823,7 @@ static int play_archive_mxf_file(QCPlayer* player, int argc, const char** argv, 
 
     if (options->srcBufferSize > 0)
     {
-        if (!bmsrc_create(player->mediaSource, options->srcBufferSize, 1, -1.0, &bufferedSource))
+        if (!bmsrc_create(player->mediaSource, options->srcBufferSize, 1, options->srcRateLimit, &bufferedSource))
         {
             ml_log_error("Failed to create buffered media source\n");
             goto fail;
@@ -1401,6 +1403,10 @@ static void usage(const char* cmd)
 #endif
     fprintf(stderr, "  --user <name>            User (operator) name set in the QC session (default '%s')\n", get_user_name(nameBuffer, sizeof(nameBuffer)));
     fprintf(stderr, "  --host <name>            Hostname set in the QC session (default '%s')\n", get_host_name(nameBuffer, sizeof(nameBuffer)));
+    fprintf(stderr, "  --src-rate-limit <value> Limit the byte rate from the bufferred source. <value> unit is bytes/sec\n");
+    fprintf(stderr, "                           Only works when --src-buf is used\n");
+    fprintf(stderr, "                           Note: only takes bytes passed to the sink into account and this can\n");
+    fprintf(stderr, "                               be less than the number of bytes read from disk\n");
     fprintf(stderr, "\n");
 }
 
@@ -1919,6 +1925,22 @@ int main(int argc, const char **argv)
                 return 1;
             }
             strncpy(options.hostName, argv[cmdlnIndex + 1], sizeof(options.hostName) - 1);
+            cmdlnIndex += 2;
+        }
+        else if (strcmp(argv[cmdlnIndex], "--src-rate-limit") == 0)
+        {
+            if (cmdlnIndex + 1 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            if (sscanf(argv[cmdlnIndex + 1], "%f", &options.srcRateLimit) != 1 || options.srcRateLimit <= 0.0)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Invalid argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
             cmdlnIndex += 2;
         }
         else
