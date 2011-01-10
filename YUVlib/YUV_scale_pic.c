@@ -1,5 +1,5 @@
 /*
- * $Id: YUV_scale_pic.c,v 1.3 2010/12/03 14:29:53 john_f Exp $
+ * $Id: YUV_scale_pic.c,v 1.4 2011/01/10 16:57:36 john_f Exp $
  *
  *
  *
@@ -229,12 +229,11 @@ static void h_sub_scale_ave(const BYTE* srcLine, uint32_t* dstLine,
         // divide next sample between acumulated input and next output and save
         // this output
         whole = *srcLine;
-        part = whole * err;
         srcLine += inStride;
-        err -= xup;
+        part = whole * err;
         *dstLine++ = ((acc + part) * 256) / xdown;
         acc = (whole * xup) - part; // residue of input sample
-        err += xdown;
+        err += xdown - xup;
     }
 }
 
