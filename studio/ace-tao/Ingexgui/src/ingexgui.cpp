@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: ingexgui.cpp,v 1.37 2011/01/04 11:37:18 john_f Exp $           *
+ *   $Id: ingexgui.cpp,v 1.38 2011/01/14 10:03:40 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -297,14 +297,14 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
 
         wxMenu * menuPlayerType = new wxMenu;
 #ifdef HAVE_DVS
-        menuPlayerType->AppendRadioItem(MENU_PlayerExtAccelOutput, wxT("External monitor and computer screen (accelerated if possible)"));
+        menuPlayerType->AppendRadioItem(MENU_PlayerExtAccelOutput, wxEmptyString);
 #endif
-        menuPlayerType->AppendRadioItem(MENU_PlayerAccelOutput, wxT("Computer screen (accelerated if possible)"));
+        menuPlayerType->AppendRadioItem(MENU_PlayerAccelOutput, wxEmptyString);
 #ifdef HAVE_DVS
-        menuPlayerType->AppendRadioItem(MENU_PlayerExtOutput, wxT("External monitor"));
-        menuPlayerType->AppendRadioItem(MENU_PlayerExtUnaccelOutput, wxT("External monitor and computer screen unaccelerated (use if accelerated fails)"));
+        menuPlayerType->AppendRadioItem(MENU_PlayerExtOutput, wxEmptyString);
+        menuPlayerType->AppendRadioItem(MENU_PlayerExtUnaccelOutput, wxEmptyString);
 #endif
-        menuPlayerType->AppendRadioItem(MENU_PlayerUnaccelOutput, wxT("Computer screen unaccelerated (use if accelerated fails)"));
+        menuPlayerType->AppendRadioItem(MENU_PlayerUnaccelOutput, wxEmptyString);
         menuPlayer->Append(MENU_PlayerType, wxT("Player type"), menuPlayerType);
 
         wxMenu * menuPlayerOSD = new wxMenu;
@@ -323,7 +323,7 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
 
         menuPlayer->AppendCheckItem(MENU_PlayerAudioFollowsVideo, wxT("Audio corresponds to video source displayed"));
         menuPlayer->AppendCheckItem(MENU_PlayerLimitSplitToQuad, wxT("Limit split view to quad split"));
-        menuPlayer->AppendCheckItem(MENU_PlayerDisableScalingFiltering, wxT("Disable scaling filters in split view (saves processing power)"));
+        menuPlayer->AppendCheckItem(MENU_PlayerDisableScalingFiltering, wxT("Disable scaling filters (saves processing power)"));
 #ifdef HAVE_DVS
         menuPlayer->AppendCheckItem(MENU_PlayerEnableSDIOSD, wxT("Enable external monitor On-screen Display"));
 #endif
@@ -405,9 +405,9 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
 
     if (!parser.Found(wxT("p"))) {
 #ifdef HAVE_DVS
-        mPlayer = new Player(this, wxID_ANY, true, prodauto::DUAL_DVS_AUTO_OUTPUT); //will fall back to X11_AUTO_OUTPUT if no DVS cards
+        mPlayer = new Player(this, wxID_ANY, true);
 #else
-        mPlayer = new Player(this, wxID_ANY, true, prodauto::X11_AUTO_OUTPUT);
+        mPlayer = new Player(this, wxID_ANY, true);
 #endif
 #ifdef HAVE_DVS
         mPlayer->EnableSDIOSD(GetMenuBar()->FindItem(MENU_PlayerEnableSDIOSD)->IsChecked());
@@ -816,7 +816,7 @@ void IngexguiFrame::OnPlayerEvent(wxCommandEvent& event) {
 #ifdef HAVE_DVS
             if (prodauto::DUAL_DVS_AUTO_OUTPUT == mPlayer->GetOutputType() || prodauto::DUAL_DVS_X11_OUTPUT == mPlayer->GetOutputType()) { //external output is active
                 //don't close the player, just switch to external only
-                mPlayer->SetOutputType(prodauto::DVS_OUTPUT);
+                mPlayer->ChangeOutputType(prodauto::DVS_OUTPUT);
             }
             else {
 #endif
@@ -1460,22 +1460,22 @@ void IngexguiFrame::OnPlayerCommand(wxCommandEvent & event)
                 mPlayer->EnableSDIOSD(event.IsChecked());
                 break;
             case MENU_PlayerExtAccelOutput:
-                mPlayer->SetOutputType(prodauto::DUAL_DVS_AUTO_OUTPUT);
+                mPlayer->ChangeOutputType(prodauto::DUAL_DVS_AUTO_OUTPUT);
                 break;
 #endif
             case MENU_PlayerAccelOutput:
-                mPlayer->SetOutputType(prodauto::X11_AUTO_OUTPUT);
+                mPlayer->ChangeOutputType(prodauto::X11_AUTO_OUTPUT);
                 break;
 #ifdef HAVE_DVS
             case MENU_PlayerExtOutput:
-                mPlayer->SetOutputType(prodauto::DVS_OUTPUT);
+                mPlayer->ChangeOutputType(prodauto::DVS_OUTPUT);
                 break;
             case MENU_PlayerExtUnaccelOutput:
-                mPlayer->SetOutputType(prodauto::DUAL_DVS_X11_OUTPUT);
+                mPlayer->ChangeOutputType(prodauto::DUAL_DVS_X11_OUTPUT);
                 break;
 #endif
             case MENU_PlayerUnaccelOutput:
-                mPlayer->SetOutputType(prodauto::X11_OUTPUT);
+                mPlayer->ChangeOutputType(prodauto::X11_OUTPUT);
                 break;
             case MENU_PlayerAbsoluteTimecode:
                 mPlayer->SetOSDType(SOURCE_TIMECODE);
@@ -1880,23 +1880,36 @@ void IngexguiFrame::OnUpdateUI(wxUpdateUIEvent& event)
             break;
 #ifdef HAVE_DVS
         case MENU_PlayerExtAccelOutput:
-            event.Check(mPlayer && prodauto::DUAL_DVS_AUTO_OUTPUT == mPlayer->GetOutputType());
+            event.Check(mPlayer && prodauto::DUAL_DVS_AUTO_OUTPUT == mPlayer->GetOutputType(false)); //the desired output type - label will describe any fallback
+            if (mPlayer) event.SetText(mPlayer->GetOutputTypeLabel(prodauto::DUAL_DVS_AUTO_OUTPUT));
             break;
 #endif
         case MENU_PlayerAccelOutput:
-            event.Check(mPlayer && prodauto::X11_AUTO_OUTPUT == mPlayer->GetOutputType());
+#ifdef HAVE_DVS
+            event.Check(mPlayer && prodauto::X11_AUTO_OUTPUT == mPlayer->GetOutputType(false)); //the desired output type - label will describe any fallback
+#else
+            event.Check(mPlayer && prodauto::X11_AUTO_OUTPUT == mPlayer->GetOutputType()); //the actual output type - hide fallback from DVS
+#endif
+            if (mPlayer) event.SetText(mPlayer->GetOutputTypeLabel(prodauto::X11_AUTO_OUTPUT));
             break;
 #ifdef HAVE_DVS
         case MENU_PlayerExtOutput:
-            event.Check(mPlayer && prodauto::DVS_OUTPUT == mPlayer->GetOutputType());
+            event.Check(mPlayer && prodauto::DVS_OUTPUT == mPlayer->GetOutputType(false)); //the desired output type - label will describe any fallback
+            if (mPlayer) event.SetText(mPlayer->GetOutputTypeLabel(prodauto::DVS_OUTPUT));
             break;
         case MENU_PlayerExtUnaccelOutput:
-            event.Check(mPlayer && prodauto::DUAL_DVS_X11_OUTPUT == mPlayer->GetOutputType());
-            break;
-        case MENU_PlayerUnaccelOutput:
-            event.Check(mPlayer && prodauto::X11_OUTPUT == mPlayer->GetOutputType());
+            event.Check(mPlayer && prodauto::DUAL_DVS_X11_OUTPUT == mPlayer->GetOutputType(false)); //the desired output type - label will describe any fallback
+            if (mPlayer) event.SetText(mPlayer->GetOutputTypeLabel(prodauto::DUAL_DVS_X11_OUTPUT));
             break;
 #endif
+        case MENU_PlayerUnaccelOutput:
+#ifdef HAVE_DVS
+            event.Check(mPlayer && prodauto::X11_OUTPUT == mPlayer->GetOutputType(false)); //the desired output type - label will describe any fallback
+#else
+            event.Check(mPlayer && prodauto::X11_OUTPUT == mPlayer->GetOutputType()); //the actual output type - hide fallback from DVS
+#endif
+            if (mPlayer) event.SetText(mPlayer->GetOutputTypeLabel(prodauto::X11_OUTPUT));
+            break;
         case MENU_PlayerAbsoluteTimecode:
             event.Check(mPlayer && SOURCE_TIMECODE == mPlayer->GetOSDType());
             break;

@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: player.cpp,v 1.29 2011/01/04 11:37:18 john_f Exp $              *
+ *   $Id: player.cpp,v 1.30 2011/01/14 10:03:40 john_f Exp $              *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -59,9 +59,8 @@ END_EVENT_TABLE()
 /// Player must be deleted explicitly or a traffic control notification will be missed.
 /// @param parent Parent object.
 /// @param enabled True to enable player.
-/// @param outputType The output type - accelerated or unaccelerated; SDI or not.  If an SDI type and no SDI cards are available, defaults to accelerated with no SDI.
 /// @param displayType The on screen display type.
-Player::Player(wxWindow* parent, const wxWindowID id, const bool enabled, const PlayerOutputType outputType, const PlayerOSDtype OSDType) :
+Player::Player(wxWindow* parent, const wxWindowID id, const bool enabled, const PlayerOSDtype OSDType) :
 wxPanel(parent, id), LocalIngexPlayer(&mListenerRegistry),
 mTrackSelector(0), //to check before accessing as it's not created automatically
 mOSDType(OSDType), mEnabled(enabled), mOK(false), mState(PlayerState::STOPPED), mSpeed(0), mMuted(false), mOpeningSocket(false),
@@ -69,9 +68,11 @@ mPrevTrafficControl(true), //so that it can be switched off
 mMode(RECORDINGS), mPreviousMode(RECORDINGS),
 mCurrentChunkInfo(0), //to check before accessing in case it hasn't been set
 mDivertKeyPresses(false),
-mOutputType(outputType),
 mRecording(false),
 mPrematureStart(false),
+#ifdef HAVE_DVS
+mUsingDVSCard(false),
+#endif
 mSavedState(0) //must call SetSavedState to use this
 {
     //Controls
@@ -89,10 +90,6 @@ mSavedState(0) //must call SetSavedState to use this
     Layout(); //or buttons are superimposed!
 
     //set up LocalIngexPlayer
-#ifdef HAVE_DVS
-    if (!dvsCardIsAvailable() && outputType != prodauto::X11_OUTPUT) mOutputType = X11_AUTO_OUTPUT;
-#endif
-    setOutputType(mOutputType);
     Rational unity = {1, 1};
     setPixelAspectRatio(&unity);
 
@@ -112,6 +109,7 @@ mSavedState(0) //must call SetSavedState to use this
 void Player::SetSavedState(SavedState * savedState)
 {
     mSavedState = savedState;
+    SetOutputType(); //uses value from the saved state
     SetVideoSplit(); //uses value from the saved state
     SetApplyScaleFilter(); //uses value from the saved state
     switchAudioGroup(mSavedState->GetBoolValue(wxT("AudioFollowsVideo"), false));
@@ -522,6 +520,7 @@ bool Player::Enable(bool state)
         if (mEnabled) {
             if (mFileNames.size()) {
                 //a clip was already registered: reload
+                SetOutputType(); //in case the available output types have changed
                 Load();
             }
         }
@@ -537,6 +536,9 @@ bool Player::Enable(bool state)
             guiFrameEvent.SetInt(false); //invalid position
             AddPendingEvent(guiFrameEvent);
             mOK = false;
+#ifdef HAVE_DVS
+            mUsingDVSCard = false;
+#endif
         }
     }
     return mEnabled;
@@ -632,6 +634,9 @@ bool Player::Start()
                     frameOffset = 0;
             }
             SetVideoSplit(false); //need to call this here as the video split type depends on the number of files
+#ifdef HAVE_DVS
+            prodauto::PlayerOutputType OutputType = GetOutputType();
+#endif
 #ifndef DISABLE_SHARED_MEM_SOURCE
             mOK = start(inputs, mOpened, SHM_INPUT != mInputType && LOAD_FIRST_CHUNK != mChunkLinking && (PlayerState::PAUSED == mState || PlayerState::STOPPED == mState), frameOffset > -1 ? frameOffset : 0); //play forwards or paused
 #else
@@ -639,7 +644,10 @@ bool Player::Start()
 #endif
             if (-1 == frameOffset) seek(0, SEEK_END, FRAME_PLAY_UNIT);
             int trackToSelect = (1 == mFileNames.size() ? 1 : 0); //display split view by default unless only one file
-            if (mOK) {
+            if (mOK) { //at least one source opened
+#ifdef HAVE_DVS
+                mUsingDVSCard = (DVS_OUTPUT == OutputType) || (DUAL_DVS_AUTO_OUTPUT == OutputType) || (DUAL_DVS_X11_OUTPUT == OutputType) || (DUAL_DVS_X11_XV_OUTPUT == OutputType);
+#endif
                 if (RECORDINGS == mMode && mCurrentChunkInfo) {
                     for (size_t i = 0; i < mCurrentChunkInfo->GetCuePointFrames().size(); i++) {
                         markPosition(mCurrentChunkInfo->GetCuePointFrames()[i] - mCurrentChunkInfo->GetStartPosition(), 0); //so that the pointer changes colour at each cue point
@@ -695,6 +703,9 @@ bool Player::Start()
                 muteAudio(mMuted);
             }
             else {
+#ifdef HAVE_DVS
+                mUsingDVSCard = false;
+#endif
                 SetWindowName(wxT("Ingex Player - no files"));
             }
             //tell the track selection list the situation
@@ -968,23 +979,12 @@ void Player::EnableSDIOSD(bool enabled)
     Load(); //takes effect on reload
 }
 
-/// Sets how the player appears.
-/// @param outputType Whether external, on-screen or both, and whether on-screen is accelerated.
-void Player::SetOutputType(const PlayerOutputType outputType)
-{
-//std::cerr << "Player SetOutputType" << std::endl;
-    mOutputType = outputType;
-    setOutputType(mOutputType);
-    //above call has stopped the player so start it again
-    if (mOK) Start();
-}
-
 #ifdef HAVE_DVS
 /// Returns true if there is an external output available or if it's already being used by the player
 bool Player::ExtOutputIsAvailable()
 {
     //if player is already using the card, dvsCardIsAvailable() will return false if there isn't another card available
-    return dvsCardIsAvailable() || (GetOutputType() == prodauto::DVS_OUTPUT || GetOutputType() == prodauto::DUAL_DVS_X11_OUTPUT || GetOutputType() == prodauto::DUAL_DVS_AUTO_OUTPUT);
+    return dvsCardIsAvailable() || mUsingDVSCard;
 }
 #endif
 
@@ -1303,6 +1303,116 @@ bool Player::IsSplitLimitedToQuad()
     return mSavedState && mSavedState->GetBoolValue(wxT("LimitSplitToQuad"), false);
 }
 
+/// Sets the player output type and remembers this in the saved state, if SetSavedState() has been called.
+/// @param outputType Whether external, on-screen or both, and whether on-screen is accelerated.
+void Player::ChangeOutputType(const PlayerOutputType outputType)
+{
+//std::cerr << "Player ChangeOutputType: " << outputType << std::endl;
+    PlayerOutputType oldOutputType = GetOutputType();
+    if (mSavedState) mSavedState->SetUnsignedLongValue(wxT("PlayerOutputType"), (unsigned long) outputType); //note that this is the intended type, which may not be possible
+    if (outputType != oldOutputType) SetOutputType(); //avoid unnecessary reload (when changing from a type that has fallen back to the new type)
+}
+
+/// Sets how the player appears, from the saved value (falling back if necessary) if SetSavedState() has been called; otherwise, to a default value.
+void Player::SetOutputType()
+{
+//std::cerr << "Player SetOutputType" << std::endl;
+    setOutputType(GetOutputType());
+    //above call has stopped the player so start it again
+    if (mOK) Start();
+}
+
+/// Returns the output type of the player.  SetSavedState() must have been called, to give a meaningful result.
+/// @param fallback True to show actual output type, which may have fallen back from the stored type.
+prodauto::PlayerOutputType Player::GetOutputType(const bool fallback)
+{
+    //don't use getOutputType() inherited function as doesn't give right answer when player not open
+    prodauto::PlayerOutputType outputType = prodauto::X11_AUTO_OUTPUT; //doesn't really matter what this is but must not be a DVS type
+    if (mSavedState) {
+#ifdef HAVE_DVS
+        outputType = (prodauto::PlayerOutputType) mSavedState->GetUnsignedLongValue(wxT("PlayerOutputType"), (unsigned long) prodauto::DUAL_DVS_AUTO_OUTPUT);
+#else
+        outputType = (prodauto::PlayerOutputType) mSavedState->GetUnsignedLongValue(wxT("PlayerOutputType"), (unsigned long) prodauto::X11_AUTO_OUTPUT);
+#endif //NOT HAVE_DVS
+    }
+    if (fallback) {
+        outputType = Fallback(outputType);
+    }
+    return outputType;
+}
+
+/// Returns a description of the given output type, and its fallback if applicable.
+/// Assumed it won't be called with a DVS type if DVS is not supported (or it would return a label with a DVS description)
+const wxString Player::GetOutputTypeLabel(const prodauto::PlayerOutputType outputType)
+{
+    wxString label = GetOutputTypeDescription(outputType);
+    prodauto::PlayerOutputType fallbackType = Fallback(outputType);
+    if (outputType != fallbackType) {
+        label += wxT(" - falling back to ") + GetOutputTypeDescription(fallbackType);
+    }
+    return label;
+}
+
+/// Returns a description of the given output type.
+const wxString Player::GetOutputTypeDescription(const prodauto::PlayerOutputType outputType)
+{
+    wxString label;
+    switch (outputType) {
+            case UNKNOWN_OUTPUT:
+                label = wxT("Unknown");
+                break;
+            case DVS_OUTPUT:
+                label = wxT("External monitor");
+                break;
+            case X11_AUTO_OUTPUT:
+                label = wxT("Computer screen (accelerated if possible)");
+                break;
+            case X11_XV_OUTPUT:
+                label = wxT("Computer screen (accelerated)");
+                break;
+            case X11_OUTPUT:
+                label = wxT("Computer screen unaccelerated (use if accelerated fails)");
+                break;
+            case DUAL_DVS_AUTO_OUTPUT:
+                label = wxT("External monitor and computer screen (accelerated if possible)");
+                break;
+            case DUAL_DVS_X11_OUTPUT:
+                label = wxT("External monitor and computer screen unaccelerated (use if accelerated fails)");
+                break;
+            case DUAL_DVS_X11_XV_OUTPUT:
+                label = wxT("External monitor and computer screen (accelerated)");
+                break;
+    }
+    return label;
+}
+
+/// Returns the nearest possible output type to the requested output type
+prodauto::PlayerOutputType Player::Fallback(const prodauto::PlayerOutputType desiredType)
+{
+    prodauto::PlayerOutputType actualType = desiredType;
+#ifdef HAVE_DVS
+    if (!dvsCardIsAvailable() && !mUsingDVSCard) {
+#endif //HAVE_DVS
+        switch (desiredType) {
+            case DVS_OUTPUT:
+            case DUAL_DVS_AUTO_OUTPUT:
+                actualType = X11_AUTO_OUTPUT;
+                break;
+            case DUAL_DVS_X11_OUTPUT:
+                actualType = X11_OUTPUT;
+                break;
+            case DUAL_DVS_X11_XV_OUTPUT:
+                actualType = X11_XV_OUTPUT;
+                break;
+            default:
+                break;
+        }
+#ifdef HAVE_DVS
+    }
+#endif
+    return actualType;
+}
+
 /// Disables horizontal and vertical filtering of scaled images in split views (to save processing power).
 /// SetSavedState() must have been called for the value to be remembered and not to revert to the stored value when it is.
 /// @param disable True to disable filtering.
@@ -1321,6 +1431,15 @@ bool Player::IsScalingFilteringDisabled()
     return mSavedState && mSavedState->GetBoolValue(wxT("DisableScalingFiltering"), false);
 }
 
+/// Switches on and off horizontal and vertical filtering of scaled images.
+/// Restarts player for change to take effect.
+void Player::SetApplyScaleFilter()
+{
+    bool disabled = mSavedState && mSavedState->GetBoolValue(wxT("DisableScalingFiltering"), false);
+    setApplyScaleFilter(!disabled); //this doesn't take effect until the player is reloaded
+    if (mOK) Start();
+}
+
 /// Sets the video split type and the track selector tooltip depending on how many tracks are available and whether a nonasplit is allowed.
 /// @param restart Restarts player if necessary - change does not take effect until player is restarted.
 void Player::SetVideoSplit(const bool restart)
@@ -1333,15 +1452,6 @@ void Player::SetVideoSplit(const bool restart)
      && restart //allowed to restart
      && mNVideoTracks > 4 //will display quad split whether limited or not if <= 4 video tracks, so only useful to restart if more than this.  (If split is not being shown, still need to restart or change won't take effect the next time split is shown)
     ) Start();
-}
-
-/// Switches on and off horizontal and vertical filtering of scaled images.
-/// Restarts player for change to take effect.
-void Player::SetApplyScaleFilter()
-{
-    bool disabled = mSavedState && mSavedState->GetBoolValue(wxT("DisableScalingFiltering"), false);
-    setApplyScaleFilter(!disabled); //this doesn't take effect until the player is reloaded
-    if (mOK) Start();
 }
 
 /// Sets audio to follow video or stick to the first audio files

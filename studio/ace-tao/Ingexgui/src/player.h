@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: player.h,v 1.19 2010/10/12 17:40:37 john_f Exp $                *
+ *   $Id: player.h,v 1.20 2011/01/14 10:03:40 john_f Exp $                *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -122,7 +122,7 @@ class SavedState;
 class Player : public wxPanel, prodauto::LocalIngexPlayer
 {
     public:
-        Player(wxWindow*, const wxWindowID, const bool, const prodauto::PlayerOutputType, const PlayerOSDtype = SOURCE_TIMECODE);
+        Player(wxWindow*, const wxWindowID, const bool, const PlayerOSDtype = SOURCE_TIMECODE);
         ~Player();
         void SetSavedState(SavedState * savedState);
         void OnPlaybackTrackSelect(wxCommandEvent&);
@@ -139,7 +139,7 @@ class Player : public wxPanel, prodauto::LocalIngexPlayer
         void SetOSDType(const PlayerOSDtype);
         PlayerOSDtype GetOSDType() { return mOSDType; };
         void EnableSDIOSD(bool = true);
-        void SetOutputType(const prodauto::PlayerOutputType);
+        void SetOutputType();
         void Play(const bool = false, const bool = false);
         void PlayAbsolute(const int);
         void Pause();
@@ -176,10 +176,12 @@ class Player : public wxPanel, prodauto::LocalIngexPlayer
         int GetSpeed() { return mSpeed; };
         bool ModeAllowed(PlayerMode mode) {return mModesAllowed[mode]; };
         bool IsMuted() { return mMuted; };
-        prodauto::PlayerOutputType GetOutputType() { return mOutputType; }; //don't use getOutputType as doesn't give right answer when player not open
+        void ChangeOutputType(const prodauto::PlayerOutputType);
+        prodauto::PlayerOutputType GetOutputType(const bool = true);
         bool IsShowingSplit();
         void SetNumLevelMeters(const unsigned int);
         unsigned int GetNumLevelMeters();
+        const wxString GetOutputTypeLabel(const prodauto::PlayerOutputType outputType);
     private:
         void OnModeButton(wxCommandEvent&);
         void OnUpdateUI(wxUpdateUIEvent&);
@@ -201,6 +203,8 @@ class Player : public wxPanel, prodauto::LocalIngexPlayer
         void LoadRecording();
         void SetVideoSplit(const bool = true);
         void SetApplyScaleFilter();
+        prodauto::PlayerOutputType Fallback(const prodauto::PlayerOutputType);
+        const wxString GetOutputTypeDescription(const prodauto::PlayerOutputType);
         Listener * mListener;
         prodauto::IngexPlayerListenerRegistry mListenerRegistry;
         DragButtonList* mTrackSelector;
@@ -238,10 +242,12 @@ class Player : public wxPanel, prodauto::LocalIngexPlayer
         ChunkInfo* mCurrentChunkInfo;
         prodauto::PlayerInputType mInputType;
         bool mDivertKeyPresses;
-        prodauto::PlayerOutputType mOutputType;
         unsigned int mNVideoTracks;
         bool mRecording;
         bool mPrematureStart;
+#ifdef HAVE_DVS
+        bool mUsingDVSCard;
+#endif
         SavedState * mSavedState;
     DECLARE_EVENT_TABLE()
 };
