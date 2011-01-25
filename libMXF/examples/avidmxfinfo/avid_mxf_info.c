@@ -1,5 +1,5 @@
 /*
- * $Id: avid_mxf_info.c,v 1.14 2011/01/10 17:05:15 john_f Exp $
+ * $Id: avid_mxf_info.c,v 1.15 2011/01/25 17:39:49 philipn Exp $
  *
  * Parse metadata from an Avid MXF file
  *
@@ -131,6 +131,30 @@ fail:
     return 0;
 }
 
+static void free_avid_tagged_values(AvidTaggedValue* value, int numValues)
+{
+    int i, j;
+
+    if (value == NULL)
+    {
+        return;
+    }
+
+    for (i = 0; i < numValues; i++)
+    {
+        SAFE_FREE(&value[i].name);
+        SAFE_FREE(&value[i].value);
+        for (j = 0; j < value[i].numAttributes; j++)
+        {
+            SAFE_FREE(&value[i].attributes[j].name);
+            SAFE_FREE(&value[i].attributes[j].value);
+        }
+        SAFE_FREE(&value[i].attributes);
+    }
+
+    free(value);
+}
+
 static int get_string_value(MXFMetadataSet* set, const mxfKey* itemKey, char** str, int printDebugError)
 {
     uint16_t utf16Size;
@@ -147,6 +171,79 @@ static int get_string_value(MXFMetadataSet* set, const mxfKey* itemKey, char** s
     
 fail:
     SAFE_FREE(&utf16Str);
+    return 0;
+}
+
+static int get_package_tagged_values(MXFMetadataSet* packageSet, const mxfKey* itemKey, int* numValues, AvidTaggedValue **values, int printDebugError)
+{
+    MXFMetadataSet* taggedValueSet;
+    uint32_t count;
+    uint32_t i;
+    uint8_t* element;
+    mxfUTF16Char* taggedValueName = NULL;
+    mxfUTF16Char* taggedValueValue = NULL;
+    AvidTaggedValue* newValues = NULL;
+    int index;
+    MXFListIterator namesIter;
+    MXFListIterator valuesIter;
+    MXFList* taggedValueNames = NULL;
+    MXFList* taggedValueValues = NULL;
+
+    FCHECK(mxf_have_item(packageSet, itemKey));
+
+    CHK_OFAIL(mxf_get_array_item_count(packageSet, itemKey, &count));
+
+    FCHECK((newValues = (AvidTaggedValue*)malloc(count * sizeof(AvidTaggedValue))) != NULL);
+    memset(newValues, 0, count * sizeof(AvidTaggedValue));
+
+    for (i = 0; i < count; i++)
+    {
+        CHK_OFAIL(mxf_get_array_item_element(packageSet, itemKey, i, &element));
+        CHK_OFAIL(mxf_get_strongref(packageSet->headerMetadata, element, &taggedValueSet));
+
+        CHK_OFAIL(mxf_avid_read_string_tagged_value(taggedValueSet, &taggedValueName, &taggedValueValue));
+
+        FCHECK(convert_string(taggedValueName, &newValues[i].name, printDebugError));
+        FCHECK(convert_string(taggedValueValue, &newValues[i].value, printDebugError));
+        SAFE_FREE(&taggedValueName);
+        SAFE_FREE(&taggedValueValue);
+
+        /* Check for any attributes */
+        if (mxf_have_item(taggedValueSet, &MXF_ITEM_K(TaggedValue, TaggedValueAttributeList)))
+        {
+           CHK_OFAIL(mxf_avid_read_string_tagged_values(taggedValueSet, &MXF_ITEM_K(TaggedValue, TaggedValueAttributeList), &taggedValueNames, &taggedValueValues));
+           newValues[i].numAttributes = (int)mxf_get_list_length(taggedValueNames);
+
+           FCHECK((newValues[i].attributes = (AvidNameValuePair*)malloc(newValues[i].numAttributes * sizeof(AvidNameValuePair))) != NULL);
+           memset(newValues[i].attributes, 0, newValues[i].numAttributes * sizeof(AvidNameValuePair));
+
+           index = 0;
+           mxf_initialise_list_iter(&namesIter, taggedValueNames);
+           mxf_initialise_list_iter(&valuesIter, taggedValueValues);
+           while (mxf_next_list_iter_element(&namesIter) && mxf_next_list_iter_element(&valuesIter))
+           {
+               FCHECK(convert_string(mxf_get_iter_element(&namesIter), &newValues[i].attributes[index].name, printDebugError));
+               FCHECK(convert_string(mxf_get_iter_element(&valuesIter), &newValues[i].attributes[index].value, printDebugError));
+
+               index++;
+           }
+
+           mxf_free_list(&taggedValueNames);
+           mxf_free_list(&taggedValueValues);
+        }
+    }
+
+    *values = newValues;
+    *numValues = count;
+
+    return 1;
+
+fail:
+    free_avid_tagged_values(newValues, count);
+    SAFE_FREE(&taggedValueName);
+    SAFE_FREE(&taggedValueValue);
+    mxf_free_list(&taggedValueNames);
+    mxf_free_list(&taggedValueValues);
     return 0;
 }
 
@@ -367,8 +464,6 @@ int ami_read_info(const char* filename, AvidMXFInfo* info, int printDebugError)
     uint8_t* arrayElement;
     MXFList* list = NULL;
     MXFListIterator listIter;
-    MXFListIterator namesIter;
-    MXFListIterator valuesIter;
     MXFArrayItemIterator arrayIter;
     MXFFile* mxfFile = NULL;
     MXFPartition* headerPartition = NULL;
@@ -391,7 +486,6 @@ int ami_read_info(const char* filename, AvidMXFInfo* info, int printDebugError)
     MXFList* taggedValueNames = NULL;
     MXFList* taggedValueValues = NULL;
     const mxfUTF16Char* taggedValue;
-    int index;
     mxfUL dataDef;
     mxfUMID sourcePackageID;
     MXFArrayItemIterator iter3;
@@ -496,60 +590,16 @@ int ami_read_info(const char* filename, AvidMXFInfo* info, int printDebugError)
     
     
     /* get the material package user comments */
-    
     if (mxf_have_item(materialPackageSet, &MXF_ITEM_K(GenericPackage, UserComments)))
     {
-        DCHECK(mxf_avid_read_string_user_comments(materialPackageSet, &taggedValueNames, &taggedValueValues));
-        info->numUserComments = (int)mxf_get_list_length(taggedValueNames);
-        
-        DCHECK((info->userComments = (AvidNameValuePair*)malloc(info->numUserComments * sizeof(AvidNameValuePair))) != NULL);
-        memset(info->userComments, 0, info->numUserComments * sizeof(AvidNameValuePair));
-        
-        index = 0;
-        mxf_initialise_list_iter(&namesIter, taggedValueNames);
-        mxf_initialise_list_iter(&valuesIter, taggedValueValues);
-        while (mxf_next_list_iter_element(&namesIter) && mxf_next_list_iter_element(&valuesIter))
-        {
-            DCHECK(convert_string((const mxfUTF16Char*)mxf_get_iter_element(&namesIter), 
-                &info->userComments[index].name, printDebugError));
-            DCHECK(convert_string((const mxfUTF16Char*)mxf_get_iter_element(&valuesIter), 
-                &info->userComments[index].value, printDebugError));
-            
-            index++;
-        }
-        
+        DCHECK(get_package_tagged_values(materialPackageSet, &MXF_ITEM_K(GenericPackage, UserComments), &info->numUserComments, &info->userComments, printDebugError));
     }
-    mxf_free_list(&taggedValueNames);
-    mxf_free_list(&taggedValueValues);
-    
     
     /* get the material package attributes */
-    
     if (mxf_have_item(materialPackageSet, &MXF_ITEM_K(GenericPackage, MobAttributeList)))
     {
-        DCHECK(mxf_avid_read_string_mob_attributes(materialPackageSet, &taggedValueNames, &taggedValueValues));
-        info->numMaterialPackageAttributes = (int)mxf_get_list_length(taggedValueNames);
-        
-        DCHECK((info->materialPackageAttributes = (AvidNameValuePair*)malloc(info->numMaterialPackageAttributes * sizeof(AvidNameValuePair))) != NULL);
-        memset(info->materialPackageAttributes, 0, info->numMaterialPackageAttributes * sizeof(AvidNameValuePair));
-        
-        index = 0;
-        mxf_initialise_list_iter(&namesIter, taggedValueNames);
-        mxf_initialise_list_iter(&valuesIter, taggedValueValues);
-        while (mxf_next_list_iter_element(&namesIter) && mxf_next_list_iter_element(&valuesIter))
-        {
-            DCHECK(convert_string((const mxfUTF16Char*)mxf_get_iter_element(&namesIter), 
-                &info->materialPackageAttributes[index].name, printDebugError));
-            DCHECK(convert_string((const mxfUTF16Char*)mxf_get_iter_element(&valuesIter), 
-                &info->materialPackageAttributes[index].value, printDebugError));
-            
-            index++;
-        }
-        
+        DCHECK(get_package_tagged_values(materialPackageSet, &MXF_ITEM_K(GenericPackage, MobAttributeList), &info->numMaterialPackageAttributes, &info->materialPackageAttributes, printDebugError));
     }
-    mxf_free_list(&taggedValueNames);
-    mxf_free_list(&taggedValueValues);
-    
     
     /* get the top level file source package and info */
     
@@ -1255,8 +1305,6 @@ fail:
 
 void ami_free_info(AvidMXFInfo* info)
 {
-    int i;
-    
     SAFE_FREE(&info->clipName);
     SAFE_FREE(&info->projectName);
     SAFE_FREE(&info->physicalPackageName);
@@ -1264,28 +1312,18 @@ void ami_free_info(AvidMXFInfo* info)
     
     if (info->userComments != NULL)
     {
-        for (i = 0; i < info->numUserComments; i++)
-        {
-            SAFE_FREE(&info->userComments[i].name);
-            SAFE_FREE(&info->userComments[i].value);
-        }
-        SAFE_FREE(&info->userComments);
+        free_avid_tagged_values(info->userComments, info->numUserComments);
     }
 
     if (info->materialPackageAttributes != NULL)
     {
-        for (i = 0; i < info->numMaterialPackageAttributes; i++)
-        {
-            SAFE_FREE(&info->materialPackageAttributes[i].name);
-            SAFE_FREE(&info->materialPackageAttributes[i].value);
-        }
-        SAFE_FREE(&info->materialPackageAttributes);
+        free_avid_tagged_values(info->materialPackageAttributes, info->numMaterialPackageAttributes);
     }
 }
 
 void ami_print_info(AvidMXFInfo* info)
 {
-    int i;
+    int i, j;
     
     printf("Project name = %s\n", (info->projectName == NULL) ? "": info->projectName);
     printf("Project edit rate = %d/%d\n", info->projectEditRate.numerator, info->projectEditRate.denominator);
@@ -1337,6 +1375,10 @@ void ami_print_info(AvidMXFInfo* info)
         for (i = 0; i < info->numUserComments; i++)
         {
             printf("  %s = %s\n", info->userComments[i].name, info->userComments[i].value);
+            for (j = 0; j < info->userComments[i].numAttributes; j++)
+            {
+                printf("    %s = %s\n", info->userComments[i].attributes[j].name, info->userComments[i].attributes[j].value);
+            }
         }
     }
     if (info->materialPackageAttributes != NULL)
@@ -1345,6 +1387,10 @@ void ami_print_info(AvidMXFInfo* info)
         for (i = 0; i < info->numMaterialPackageAttributes; i++)
         {
             printf("  %s = %s\n", info->materialPackageAttributes[i].name, info->materialPackageAttributes[i].value);
+            for (j = 0; j < info->materialPackageAttributes[i].numAttributes; j++)
+            {
+                printf("    %s = %s\n", info->materialPackageAttributes[i].attributes[j].name, info->materialPackageAttributes[i].attributes[j].value);
+            }
         }
     }
     printf("Material package UID = ");

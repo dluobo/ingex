@@ -1,5 +1,5 @@
 /*
- * $Id: mxf_avid.c,v 1.13 2011/01/10 17:05:15 john_f Exp $
+ * $Id: mxf_avid.c,v 1.14 2011/01/25 17:39:50 philipn Exp $
  *
  * Avid data model extensions and utilities
  *
@@ -403,54 +403,76 @@ fail:
     return 0;    
 }
 
-static int read_package_string_tagged_values(MXFMetadataSet* packageSet, const mxfKey* itemKey, MXFList** names, MXFList** values)
+
+static int get_indirect_int32(MXFMetadataSet* set, const mxfKey* itemKey, mxfUTF16Char** value)
 {
-    MXFMetadataSet* taggedValueSet;
-    uint32_t count;
-    uint32_t i;
-    uint8_t* element;
-    mxfUTF16Char* taggedValueName = NULL;
-    uint16_t taggedValueNameSize;
-    mxfUTF16Char* taggedValueValue = NULL;
-    MXFList* newNames = NULL;
-    MXFList* newValues = NULL;
-    
-    if (!mxf_have_item(packageSet, itemKey))
+    /* prefix is 0x42 ('B') for big endian or 0x4c ('L') for little endian, followed by half-swapped key for Int32 type */
+    const uint8_t prefix_BE[17] =
+        {0x42, 0x01, 0x01, 0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x06, 0x0e, 0x2b, 0x34, 0x01, 0x04, 0x01, 0x01};
+    const uint8_t prefix_LE[17] =
+        {0x4C, 0x00, 0x07, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x06, 0x0e, 0x2b, 0x34, 0x01, 0x04, 0x01, 0x01};
+
+    int isBigEndian;
+    MXFMetadataItem* item;
+    mxfUTF16Char* newValue = NULL;
+    uint16_t i;
+    uint16_t strSize;
+    int32_t intValue;
+    char* strValue = NULL;
+
+    CHK_OFAIL(mxf_get_item(set, itemKey, &item));
+
+    /* initial check */
+    if (item->length <= sizeof(prefix_BE) ||
+        (item->value[0] != 0x42 && item->value[0] != 0x4C))
+    {
+        return 0;
+    }
+    isBigEndian = item->value[0] == 0x42;
+
+    /* check int32 type label */
+    if ((isBigEndian && memcmp(&item->value[1], &prefix_BE[1], sizeof(prefix_BE) - 1) != 0) ||
+        (!isBigEndian && memcmp(&item->value[1], &prefix_LE[1], sizeof(prefix_LE) - 1) != 0))
     {
         return 0;
     }
 
-    CHK_OFAIL(mxf_create_list(&newNames, free));
-    CHK_OFAIL(mxf_create_list(&newValues, free));
-    
-    CHK_OFAIL(mxf_get_array_item_count(packageSet, itemKey, &count));
-    for (i = 0; i < count; i++)
+    if (isBigEndian)
     {
-        CHK_OFAIL(mxf_get_array_item_element(packageSet, itemKey, i, &element));
-        CHK_OFAIL(mxf_get_strongref(packageSet->headerMetadata, element, &taggedValueSet));
-
-        if (get_indirect_string(taggedValueSet, &MXF_ITEM_K(TaggedValue, Value), &taggedValueValue))
-        {
-            CHK_OFAIL(mxf_append_list_element(newValues, taggedValueValue));
-            taggedValueValue = NULL;
-
-            CHK_OFAIL(mxf_get_utf16string_item_size(taggedValueSet, &MXF_ITEM_K(TaggedValue, Name), &taggedValueNameSize));
-            CHK_MALLOC_ARRAY_OFAIL(taggedValueName, mxfUTF16Char, taggedValueNameSize);
-            CHK_OFAIL(mxf_get_utf16string_item(taggedValueSet, &MXF_ITEM_K(TaggedValue, Name), taggedValueName));
-            CHK_OFAIL(mxf_append_list_element(newNames, taggedValueName));
-            taggedValueName = NULL;
-        }
+        intValue = ((uint32_t)item->value[17] << 24) |
+                   ((uint32_t)item->value[18] << 16) |
+                   ((uint32_t)item->value[19] << 8) |
+                    (uint32_t)item->value[20];
+    }
+    else
+    {
+        intValue = (uint32_t)item->value[17] |
+                  ((uint32_t)item->value[18] << 8) |
+                  ((uint32_t)item->value[19] << 16) |
+                  ((uint32_t)item->value[20] << 24);
     }
 
-    *names = newNames;
-    *values = newValues;
+    /* Max int is 10 chars long + null terminator */
+    strSize = 10 + 1;
+
+    CHK_MALLOC_ARRAY_OFAIL(strValue, char, strSize);
+    memset(strValue, 0, strSize);
+    snprintf(strValue, strSize, "%d", intValue);
+
+    CHK_MALLOC_ARRAY_OFAIL(newValue, mxfUTF16Char, strSize);
+    memset(newValue, 0, sizeof(mxfUTF16Char) * strSize);
+    for (i = 0; i < strSize; i++)
+    {
+        newValue[i] = strValue[i];
+    }
+    SAFE_FREE(&strValue);
+
+    *value = newValue;
     return 1;
-    
+
 fail:
-    mxf_free_list(&newNames);
-    mxf_free_list(&newValues);
-    SAFE_FREE(&taggedValueName);
-    SAFE_FREE(&taggedValueValue);
+    SAFE_FREE(&newValue);
+    SAFE_FREE(&strValue);
     return 0;
 }
 
@@ -849,12 +871,92 @@ int mxf_avid_attach_user_comment(MXFHeaderMetadata* headerMetadata, MXFMetadataS
 
 int mxf_avid_read_string_mob_attributes(MXFMetadataSet* packageSet, MXFList** names, MXFList** values)
 {
-    return read_package_string_tagged_values(packageSet, &MXF_ITEM_K(GenericPackage, MobAttributeList), names, values);
+    return mxf_avid_read_string_tagged_values(packageSet, &MXF_ITEM_K(GenericPackage, MobAttributeList), names, values);
 }
 
 int mxf_avid_read_string_user_comments(MXFMetadataSet* packageSet, MXFList** names, MXFList** values)
 {
-    return read_package_string_tagged_values(packageSet, &MXF_ITEM_K(GenericPackage, UserComments), names, values);
+    return mxf_avid_read_string_tagged_values(packageSet, &MXF_ITEM_K(GenericPackage, UserComments), names, values);
+}
+
+int mxf_avid_read_string_tagged_values(MXFMetadataSet* set, const mxfKey* itemKey, MXFList** names, MXFList** values)
+{
+    MXFMetadataSet* taggedValueSet;
+    uint32_t count;
+    uint32_t i;
+    uint8_t* element;
+    mxfUTF16Char* taggedValueName = NULL;
+    mxfUTF16Char* taggedValueValue = NULL;
+    MXFList* newNames = NULL;
+    MXFList* newValues = NULL;
+
+    if (!mxf_have_item(set, itemKey))
+    {
+        return 0;
+    }
+
+    CHK_OFAIL(mxf_create_list(&newNames, free));
+    CHK_OFAIL(mxf_create_list(&newValues, free));
+
+    CHK_OFAIL(mxf_get_array_item_count(set, itemKey, &count));
+    for (i = 0; i < count; i++)
+    {
+        CHK_OFAIL(mxf_get_array_item_element(set, itemKey, i, &element));
+        CHK_OFAIL(mxf_get_strongref(set->headerMetadata, element, &taggedValueSet));
+
+        if (mxf_avid_read_string_tagged_value(taggedValueSet, &taggedValueName, &taggedValueValue))
+        {
+            CHK_OFAIL(mxf_append_list_element(newNames, taggedValueName));
+            taggedValueName = NULL;
+            CHK_OFAIL(mxf_append_list_element(newValues, taggedValueValue));
+            taggedValueValue = NULL;
+        }
+    }
+
+    *names = newNames;
+    *values = newValues;
+    return 1;
+
+fail:
+    mxf_free_list(&newNames);
+    mxf_free_list(&newValues);
+    SAFE_FREE(&taggedValueName);
+    SAFE_FREE(&taggedValueValue);
+    return 0;
+}
+
+int mxf_avid_read_string_tagged_value(MXFMetadataSet* taggedValueSet, mxfUTF16Char** name, mxfUTF16Char** value)
+{
+    mxfUTF16Char* newName = NULL;
+    mxfUTF16Char* newValue = NULL;
+    uint16_t taggedValueNameSize;
+
+    if (get_indirect_string(taggedValueSet, &MXF_ITEM_K(TaggedValue, Value), &newValue))
+    {
+        CHK_OFAIL(mxf_get_utf16string_item_size(taggedValueSet, &MXF_ITEM_K(TaggedValue, Name), &taggedValueNameSize));
+        CHK_MALLOC_ARRAY_OFAIL(newName, mxfUTF16Char, taggedValueNameSize);
+        CHK_OFAIL(mxf_get_utf16string_item(taggedValueSet, &MXF_ITEM_K(TaggedValue, Name), newName));
+    }
+    else if (get_indirect_int32(taggedValueSet, &MXF_ITEM_K(TaggedValue, Value), &newValue))
+    {
+        CHK_OFAIL(mxf_get_utf16string_item_size(taggedValueSet, &MXF_ITEM_K(TaggedValue, Name), &taggedValueNameSize));
+        CHK_MALLOC_ARRAY_OFAIL(newName, mxfUTF16Char, taggedValueNameSize);
+        CHK_OFAIL(mxf_get_utf16string_item(taggedValueSet, &MXF_ITEM_K(TaggedValue, Name), newName));
+    }
+
+    if (newValue == NULL)
+    {
+        return 0;
+    }
+
+    *name = newName;
+    *value = newValue;
+    return 1;
+
+fail:
+    SAFE_FREE(&newName);
+    SAFE_FREE(&newValue);
+    return 0;
 }
 
 int mxf_avid_get_mob_attribute(const mxfUTF16Char* name, const MXFList* names, const MXFList* values, const mxfUTF16Char** value)

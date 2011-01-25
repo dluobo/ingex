@@ -1,5 +1,5 @@
 /*
- * $Id: mxf_avid_extensions_data_model.h,v 1.11 2010/10/01 15:51:10 john_f Exp $
+ * $Id: mxf_avid_extensions_data_model.h,v 1.12 2011/01/25 17:39:50 philipn Exp $
  *
  * Avid data model extension definitions
  *
@@ -814,6 +814,14 @@ MXF_ITEM_DEFINITION(DMSegment, CommentMarkerColor,
     MXF_LABEL(0xa0, 0x69, 0x00, 0x60, 0x94, 0xeb, 0x75, 0xcb, 0xe9, 0x6e, 0x6d, 0x44, 0xc3, 0x83, 0x11, 0xd3),
     0x0000,
     MXF_RGB_COLOR_TYPE,
+    0
+);
+
+
+MXF_ITEM_DEFINITION(TaggedValue, TaggedValueAttributeList,
+    MXF_LABEL(0xa0, 0x1c, 0x00, 0x04, 0xac, 0x96, 0x9f, 0x50, 0x60, 0x95, 0x81, 0x85, 0x47, 0xb1, 0x11, 0xd4),
+    0x0000,
+    MXF_STRONGREFARRAY_TYPE,
     0
 );
 

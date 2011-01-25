@@ -1,5 +1,5 @@
 /*
- * $Id: avid_mxf_info.h,v 1.5 2010/03/29 15:15:57 philipn Exp $
+ * $Id: avid_mxf_info.h,v 1.6 2011/01/25 17:39:49 philipn Exp $
  *
  * Parse metadata from an Avid MXF file
  *
@@ -95,6 +95,14 @@ typedef struct
 
 typedef struct
 {
+    char* name;
+    char* value;
+    AvidNameValuePair *attributes;
+    int numAttributes;
+} AvidTaggedValue;
+
+typedef struct
+{
     /* clip info */
     char* clipName;
     char* projectName;
@@ -102,9 +110,9 @@ typedef struct
     mxfRational projectEditRate;
     int64_t clipDuration;
     mxfUMID materialPackageUID;
-    AvidNameValuePair* userComments;
+    AvidTaggedValue* userComments;
     int numUserComments;
-    AvidNameValuePair* materialPackageAttributes;
+    AvidTaggedValue* materialPackageAttributes;
     int numMaterialPackageAttributes;
     /* TODO: handle complexity of __AttributeList in attributes */
     int numVideoTracks;

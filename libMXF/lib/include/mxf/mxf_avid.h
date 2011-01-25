@@ -1,5 +1,5 @@
 /*
- * $Id: mxf_avid.h,v 1.11 2011/01/10 17:05:15 john_f Exp $
+ * $Id: mxf_avid.h,v 1.12 2011/01/25 17:39:50 philipn Exp $
  *
  * Avid data model extensions and utilities
  *
@@ -97,6 +97,9 @@ int mxf_avid_attach_user_comment(MXFHeaderMetadata* headerMetadata, MXFMetadataS
     
 int mxf_avid_read_string_mob_attributes(MXFMetadataSet* packageSet, MXFList** names, MXFList** values);
 int mxf_avid_read_string_user_comments(MXFMetadataSet* packageSet, MXFList** names, MXFList** values);
+
+int mxf_avid_read_string_tagged_values(MXFMetadataSet* set, const mxfKey* itemKey, MXFList** names, MXFList** values);
+int mxf_avid_read_string_tagged_value(MXFMetadataSet* taggedValueSet, mxfUTF16Char** name, mxfUTF16Char** value);
 
 int mxf_avid_get_mob_attribute(const mxfUTF16Char* name, const MXFList* names, const MXFList* values, const mxfUTF16Char** value);
 int mxf_avid_get_user_comment(const mxfUTF16Char* name, const MXFList* names, const MXFList* values, const mxfUTF16Char** value);
