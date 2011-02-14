@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: ingexgui.cpp,v 1.38 2011/01/14 10:03:40 john_f Exp $           *
+ *   $Id: ingexgui.cpp,v 1.39 2011/02/14 13:32:55 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -252,7 +252,7 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
                 argv_[i] = arg;
         }
         wxSize size = wxDefaultSize;
-        size.SetHeight(80); //bodge to show at least three lines
+        size.SetHeight(100); //bodge to show at least four lines
         mRecorderGroup = new RecorderGroupCtrl(this, wxID_ANY, wxDefaultPosition, size, argc, argv_); //do this here to allow the ORB to mangle argc and argv_; mustn't connect recorders until SetTree() and SetSavedState() have been called
         wxCmdLineParser parser(argc, argv_);
         parser.AddSwitch(wxT("n"), wxEmptyString, wxT("Do not load recording list files"));
