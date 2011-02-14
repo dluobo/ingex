@@ -1,5 +1,5 @@
 /*
- * $Id: avid_mxf_info.h,v 1.6 2011/01/25 17:39:49 philipn Exp $
+ * $Id: avid_mxf_info.h,v 1.7 2011/02/14 11:21:18 philipn Exp $
  *
  * Parse metadata from an Avid MXF file
  *
@@ -150,6 +150,7 @@ typedef struct
     char* physicalPackageName;
     mxfUMID physicalSourcePackageUID;
     AvidPhysicalPackageType physicalPackageType;
+    char* physicalPackageLocator;
 
 } AvidMXFInfo;
 

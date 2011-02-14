@@ -1,5 +1,5 @@
 /*
- * $Id: avid_mxf_info.c,v 1.15 2011/01/25 17:39:49 philipn Exp $
+ * $Id: avid_mxf_info.c,v 1.16 2011/02/14 11:21:18 philipn Exp $
  *
  * Parse metadata from an Avid MXF file
  *
@@ -474,6 +474,7 @@ int ami_read_info(const char* filename, AvidMXFInfo* info, int printDebugError)
     MXFMetadataSet* fileSourcePackageSet = NULL;
     MXFMetadataSet* materialPackageSet = NULL;
     MXFMetadataSet* descriptorSet = NULL;
+    MXFMetadataSet* locatorSet = NULL;
     MXFMetadataSet* physicalSourcePackageSet = NULL;
     MXFMetadataSet* materialPackageTrackSet = NULL;
     MXFMetadataSet* trackSet = NULL;
@@ -513,6 +514,7 @@ int ami_read_info(const char* filename, AvidMXFInfo* info, int printDebugError)
     size_t remSize;
     char* tracksStringPtr;
     size_t strLen;
+    uint32_t arrayElementLen;
     
     memset(info, 0, sizeof(AvidMXFInfo));
     info->frameLayout = 0xff; /* unknown (0 is known) */
@@ -889,35 +891,52 @@ int ami_read_info(const char* filename, AvidMXFInfo* info, int printDebugError)
         /* the physical source package is the source package that references a physical descriptor */
         if (mxf_have_item(set, &MXF_ITEM_K(SourcePackage, Descriptor)))
         {
-            /* NOTE/TODO: some descriptors could be dark and so we don't assume we can dereference */
-            if (mxf_get_strongref_item(set, &MXF_ITEM_K(SourcePackage, Descriptor), &descriptorSet) &&
-                mxf_is_subclass_of(dataModel, &descriptorSet->key, &MXF_SET_K(PhysicalDescriptor)))
+            if (mxf_get_strongref_item(set, &MXF_ITEM_K(SourcePackage, Descriptor), &descriptorSet))
             {
-                if (mxf_is_subclass_of(dataModel, &descriptorSet->key, &MXF_SET_K(TapeDescriptor)))
+                /* Get first physical package network locator */
+                if (mxf_have_item(descriptorSet, &MXF_ITEM_K(GenericDescriptor, Locators)))
                 {
-                    info->physicalPackageType = TAPE_PHYS_TYPE;
-                }
-                else if (mxf_is_subclass_of(dataModel, &descriptorSet->key, &MXF_SET_K(ImportDescriptor)))
-                {
-                    info->physicalPackageType = IMPORT_PHYS_TYPE;
-                }
-                else if (mxf_is_subclass_of(dataModel, &descriptorSet->key, &MXF_SET_K(RecordingDescriptor)))
-                {
-                    info->physicalPackageType = RECORDING_PHYS_TYPE;
-                }
-                else
-                {
-                    info->physicalPackageType = UNKNOWN_PHYS_TYPE;
-                }
-                physicalSourcePackageSet = set;
-                
-                DCHECK(mxf_get_umid_item(physicalSourcePackageSet, &MXF_ITEM_K(GenericPackage, PackageUID), &info->physicalSourcePackageUID));
-                if (mxf_have_item(physicalSourcePackageSet, &MXF_ITEM_K(GenericPackage, Name)))
-                {
-                    DCHECK(get_string_value(physicalSourcePackageSet, &MXF_ITEM_K(GenericPackage, Name), &info->physicalPackageName, printDebugError));
+                    DCHECK(mxf_initialise_array_item_iterator(descriptorSet, &MXF_ITEM_K(GenericDescriptor, Locators), &arrayIter));
+                    while (mxf_next_array_item_element(&arrayIter, &arrayElement, &arrayElementLen))
+                    {
+                        DCHECK(mxf_get_strongref(headerMetadata, arrayElement, &locatorSet));
+                        if (mxf_is_subclass_of(headerMetadata->dataModel, &locatorSet->key, &MXF_SET_K(NetworkLocator)))
+                        {
+                            DCHECK(get_string_value(locatorSet, &MXF_ITEM_K(NetworkLocator, URLString), &info->physicalPackageLocator, printDebugError));
+                            break;
+                        }
+                    }
                 }
                 
-                break;
+                /* NOTE/TODO: some descriptors could be dark and so we don't assume we can dereference */
+                if (mxf_is_subclass_of(dataModel, &descriptorSet->key, &MXF_SET_K(PhysicalDescriptor)))
+                {
+                    if (mxf_is_subclass_of(dataModel, &descriptorSet->key, &MXF_SET_K(TapeDescriptor)))
+                    {
+                        info->physicalPackageType = TAPE_PHYS_TYPE;
+                    }
+                    else if (mxf_is_subclass_of(dataModel, &descriptorSet->key, &MXF_SET_K(ImportDescriptor)))
+                    {
+                        info->physicalPackageType = IMPORT_PHYS_TYPE;
+                    }
+                    else if (mxf_is_subclass_of(dataModel, &descriptorSet->key, &MXF_SET_K(RecordingDescriptor)))
+                    {
+                        info->physicalPackageType = RECORDING_PHYS_TYPE;
+                    }
+                    else
+                    {
+                        info->physicalPackageType = UNKNOWN_PHYS_TYPE;
+                    }
+                    physicalSourcePackageSet = set;
+
+                    DCHECK(mxf_get_umid_item(physicalSourcePackageSet, &MXF_ITEM_K(GenericPackage, PackageUID), &info->physicalSourcePackageUID));
+                    if (mxf_have_item(physicalSourcePackageSet, &MXF_ITEM_K(GenericPackage, Name)))
+                    {
+                        DCHECK(get_string_value(physicalSourcePackageSet, &MXF_ITEM_K(GenericPackage, Name), &info->physicalPackageName, printDebugError));
+                    }
+
+                    break;
+                }
             }
         }
     }
@@ -1309,6 +1328,7 @@ void ami_free_info(AvidMXFInfo* info)
     SAFE_FREE(&info->projectName);
     SAFE_FREE(&info->physicalPackageName);
     SAFE_FREE(&info->tracksString);
+    SAFE_FREE(&info->physicalPackageLocator);
     
     if (info->userComments != NULL)
     {
@@ -1420,6 +1440,7 @@ void ami_print_info(AvidMXFInfo* info)
     }
     printf("\n");
     printf("Physical package name = %s\n", (info->physicalPackageName == NULL) ? "": info->physicalPackageName);
+    printf("Physical package locator = %s\n", (info->physicalPackageLocator == NULL) ? "": info->physicalPackageLocator);
 }
 
 
