@@ -11,7 +11,7 @@ Summary: FFmpeg library with DNxHD(VC-3) DVCPRO-HD H.264 AAC MP3 A52(AC-3) codec
 Name: ffmpeg-DNxHD-h264-aac
 %endif
 Version: 0.5
-Release: 7
+Release: 9
 License: GPL
 Group: System Environment/Daemons
 Source: ffmpeg-%{version}.tar.bz2
@@ -27,6 +27,8 @@ Patch8: ffmpeg-0.5-dnxhd-avid-nitris.patch
 Patch9: ffmpeg-0.5-dnxhd-sst.patch
 Patch10: ffmpeg-0.5-quicktime-aspect-ratio.patch
 Patch11: ffmpeg-0.5-imx-frame-too-large-error.patch
+Patch12: ffmpeg-0.5-mpeg2-closed-gop-b-frames.patch
+Patch13: ffmpeg-0.5-x264-require-check.patch
 Url: http://www.ffmpeg.org/download.html
 BuildRoot: %{_tmppath}/%{name}-root
 BuildRequires: autoconf nasm
@@ -70,6 +72,8 @@ rm -rf $RPM_BUILD_ROOT
 %patch9
 %patch10
 %patch11
+%patch12
+%patch13
 
 %build
 %if %{build_swpat_restricted}
@@ -114,6 +118,16 @@ rm -rf $RPM_BUILD_ROOT
 /usr/share/
 
 %changelog
+* Mon Jan 10 2011 Philip de Nier 0.5-9
+- Add ffmpeg patch from 2009-09-02 to check for x264_encoder_encode instead of
+  x264_encoder_open because a version suffix has been added to the
+  x264_encoder_open function
+
+* Thu Dec 30 2010 Philip de Nier 0.5-8
+- Add patch to fix decode issue with MPEG-2 GOPs starting with B-frames.
+  This issue was fixed in the FFmpeg mainline on 2009-05-15
+  https://roundup.ffmpeg.org/issue891
+
 * Wed Sep 12 2010 Stuart Cunningham 0.5-7
 - Add build-time switch to build swpat restricted version of ffmpeg
   named ffmpeg-swpat-restricted
