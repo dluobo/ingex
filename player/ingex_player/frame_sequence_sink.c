@@ -1,5 +1,5 @@
 /*
- * $Id: frame_sequence_sink.c,v 1.7 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: frame_sequence_sink.c,v 1.8 2011/02/18 16:28:52 john_f Exp $
  *
  *
  *
@@ -29,8 +29,8 @@
 
 #include "frame_sequence_sink.h"
 #include "video_conversion.h"
-#include "YUV_frame.h"
-#include "YUV_small_pic.h"
+#include "yuvlib/YUV_frame.h"
+#include "yuvlib/YUV_small_pic.h"
 #include "utils.h"
 #include "logging.h"
 #include "macros.h"

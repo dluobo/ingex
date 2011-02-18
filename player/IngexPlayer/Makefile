@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.17 2010/11/02 15:18:28 john_f Exp $
+# $Id: Makefile,v 1.18 2011/02/18 16:28:51 john_f Exp $
 #
 # Makefile for building IngexPlayer library
 #
@@ -27,7 +27,6 @@ include ../../common/libmxf.mk
 
 C_INGEX_PLAYER_DIR = ../ingex_player
 COMMON_DIR = ../../common
-YUVLIB_DIR = ../../YUVlib
 
 ifneq ($(MAKECMDGOALS),clean)
 	ifneq ($(MAKECMDGOALS),install)
@@ -81,7 +80,7 @@ INCLUDES = -I. -I/usr/local/include -I/usr/include/freetype2 -I/usr/include/font
 LIBS = -L. -L/usr/X11R6/lib -L/usr/local/lib -L/usr/X11R6/lib64 -L/usr/local/lib64 \
 	$(ARCHIVEMXFINFO_LIB) $(MXFREADER_LIB) $(LIBMXF_LIB) \
 	-L$(COMMON_DIR) -lcommon \
-	-L$(YUVLIB_DIR) -lYUVlib \
+	-lYUVlib \
 	-lX11 -lXv -lpthread -lfreetype -lfontconfig
 
 

@@ -3,7 +3,6 @@ include ../../common/libmxf.mk
 PLAYER_INSTALL_PREFIX ?= /usr/local
 
 COMMON_DIR = ../../common
-YUVLIB_DIR = ../../YUVlib
 
 # Use this flag to disable X11 support on systems without X11 installed, e.g.
 # headless servers with locked down package management.
@@ -170,8 +169,8 @@ endif
 ifndef TEST_UDP_PATH
 	CFLAGS += -DDISABLE_UDP_SOURCE
 else
-	INCLUDES += -I$(COMMON_DIR) -I$(YUVLIB_DIR)
-	LIBS += -L$(COMMON_DIR) -L$(YUVLIB_DIR) -lcommon -lYUVlib
+	INCLUDES += -I$(COMMON_DIR)
+	LIBS += -L$(COMMON_DIR) -lcommon -lYUVlib
 endif
 
 ifdef HAVE_PORTAUDIO

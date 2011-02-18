@@ -1,5 +1,5 @@
 /*
- * $Id: bouncing_ball_source.c,v 1.7 2009/09/18 16:16:23 philipn Exp $
+ * $Id: bouncing_ball_source.c,v 1.8 2011/02/18 16:28:51 john_f Exp $
  *
  *
  *
@@ -27,8 +27,8 @@
 #include <math.h>
 
 #include "bouncing_ball_source.h"
-#include "YUV_frame.h"
-#include "YUV_text_overlay.h"
+#include "yuvlib/YUV_frame.h"
+#include "yuvlib/YUV_text_overlay.h"
 #include "video_conversion.h"
 #include "utils.h"
 #include "types.h"

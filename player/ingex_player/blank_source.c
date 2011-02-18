@@ -1,5 +1,5 @@
 /*
- * $Id: blank_source.c,v 1.5 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: blank_source.c,v 1.6 2011/02/18 16:28:51 john_f Exp $
  *
  *
  *
@@ -27,8 +27,8 @@
 #include <math.h>
 
 #include "blank_source.h"
-#include "YUV_frame.h"
-#include "YUV_text_overlay.h"
+#include "yuvlib/YUV_frame.h"
+#include "yuvlib/YUV_text_overlay.h"
 #include "video_conversion.h"
 #include "utils.h"
 #include "types.h"

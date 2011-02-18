@@ -1,4 +1,4 @@
-# $Id: Makefile,v 1.3 2010/01/12 16:50:23 john_f Exp $
+# $Id: Makefile,v 1.4 2011/02/18 16:28:51 john_f Exp $
 #
 
 # dvs_sdk_paths.mk searches for sdk and sets DVS_HARDWARE_INCLUDE and DVS_HARDWARE_LIB
@@ -10,7 +10,7 @@ CC=gcc
 # MOZ_X11 turns on X11 specifics in npapi.h
 # XP_UNIX turns on unix specifics in npapi.h
 CFLAGS=-I. -Iinclude -I.. -I../../ingex_player -D_GNU_SOURCE -g -O2 -DXP_UNIX -DMOZ_X11 -Wall
-LIBS=../libIngexPlayer.a ../../../common/libcommon.a ../../../common/YUVlib/libYUVlib.a -lpthread \
+LIBS=../libIngexPlayer.a ../../../common/libcommon.a /usr/local/lib/libYUVlib.a -lpthread \
 	-L/usr/lib -lresolv -lnsl -lrt /usr/lib/libX11.so -Wl,-soname -Wl,ingex_plugin.so \
 	-lX11 -lXv -lfreetype -lfontconfig -luuid \
 	-lavformat -lavcodec -lavutil -lm -lportaudio \

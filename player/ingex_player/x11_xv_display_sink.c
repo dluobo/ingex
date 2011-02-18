@@ -1,5 +1,5 @@
 /*
- * $Id: x11_xv_display_sink.c,v 1.17 2010/10/26 18:28:23 john_f Exp $
+ * $Id: x11_xv_display_sink.c,v 1.18 2011/02/18 16:28:52 john_f Exp $
  *
  *
  *
@@ -47,8 +47,8 @@
 #include "x11_common.h"
 #include "keyboard_input_connect.h"
 #include "on_screen_display.h"
-#include "YUV_frame.h"
-#include "YUV_small_pic.h"
+#include "yuvlib/YUV_frame.h"
+#include "yuvlib/YUV_small_pic.h"
 #include "video_conversion.h"
 #include "video_conversion_10bits.h"
 #include "utils.h"

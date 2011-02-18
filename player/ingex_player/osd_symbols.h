@@ -1,5 +1,5 @@
 /*
- * $Id: osd_symbols.h,v 1.4 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: osd_symbols.h,v 1.5 2011/02/18 16:28:52 john_f Exp $
  *
  *
  *
@@ -24,8 +24,8 @@
 #ifndef __OSD_SYMBOLS_H__
 #define __OSD_SYMBOLS_H__
 
-#include "YUV_frame.h"
-#include "YUV_text_overlay.h"
+#include "yuvlib/YUV_frame.h"
+#include "yuvlib/YUV_text_overlay.h"
 
 
 extern overlay g_osdPlaySymbol;

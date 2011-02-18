@@ -1,5 +1,5 @@
 /*
- * $Id: HTTPPlayerClient.cpp,v 1.2 2011/01/10 17:09:30 john_f Exp $
+ * $Id: HTTPPlayerClient.cpp,v 1.3 2011/02/18 16:28:51 john_f Exp $
  *
  * Copyright (C) 2008-2010 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
@@ -277,7 +277,7 @@ bool HTTPPlayerClient::dvsCardIsAvailable(int card, int channel)
 
     if (!isConnected())
     {
-        fprintf(stderr, "Command failed: not connected\n");
+        fprintf(stderr, "dvsCardIsAvailable command failed: not connected\n");
         return false;
     }
 
@@ -290,7 +290,7 @@ void HTTPPlayerClient::setOutputType(prodauto::PlayerOutputType outputType, floa
 
     if (!isConnected())
     {
-        fprintf(stderr, "Command failed: not connected\n");
+        fprintf(stderr, "setOutputType command failed: not connected\n");
         return;
     }
 
@@ -308,7 +308,7 @@ void HTTPPlayerClient::setDVSTarget(int card, int channel)
 
     if (!isConnected())
     {
-        fprintf(stderr, "Command failed: not connected\n");
+        fprintf(stderr, "setDVSTarget command failed: not connected\n");
         return;
     }
 
@@ -326,7 +326,7 @@ prodauto::PlayerOutputType HTTPPlayerClient::getOutputType()
 
     if (!isConnected())
     {
-        fprintf(stderr, "Command failed: not connected\n");
+        fprintf(stderr, "getOutputType command failed: not connected\n");
         return prodauto::UNKNOWN_OUTPUT;
     }
 
@@ -339,7 +339,7 @@ prodauto::PlayerOutputType HTTPPlayerClient::getActualOutputType()
 
     if (!isConnected())
     {
-        fprintf(stderr, "Command failed: not connected\n");
+        fprintf(stderr, "getActualOutputType command failed: not connected\n");
         return prodauto::UNKNOWN_OUTPUT;
     }
 
@@ -352,7 +352,7 @@ void HTTPPlayerClient::setVideoSplit(VideoSwitchSplit videoSplit)
 
     if (!isConnected())
     {
-        fprintf(stderr, "Command failed: not connected\n");
+        fprintf(stderr, "setVideoSplit command failed: not connected\n");
         return;
     }
 
@@ -369,7 +369,7 @@ void HTTPPlayerClient::setSDIOSDEnable(bool enable)
 
     if (!isConnected())
     {
-        fprintf(stderr, "Command failed: not connected\n");
+        fprintf(stderr, "setSDIOSDEnable command failed: not connected\n");
         return;
     }
 
@@ -386,7 +386,7 @@ void HTTPPlayerClient::setPixelAspectRatio(Rational *aspect)
 
     if (!isConnected())
     {
-        fprintf(stderr, "Command failed: not connected\n");
+        fprintf(stderr, "setPixelAspectRatio command failed: not connected\n");
         return;
     }
 
@@ -404,7 +404,7 @@ void HTTPPlayerClient::setNumAudioLevelMonitors(int num)
 
     if (!isConnected())
     {
-        fprintf(stderr, "Command failed: not connected\n");
+        fprintf(stderr, "setNumAudioLevelMonitors command failed: not connected\n");
         return;
     }
 
@@ -421,7 +421,7 @@ void HTTPPlayerClient::setApplyScaleFilter(bool enable)
 
     if (!isConnected())
     {
-        fprintf(stderr, "Command failed: not connected\n");
+        fprintf(stderr, "setApplyScaleFilter command failed: not connected\n");
         return;
     }
 
@@ -438,7 +438,7 @@ void HTTPPlayerClient::showProgressBar(bool show)
 
     if (!isConnected())
     {
-        fprintf(stderr, "Command failed: not connected\n");
+        fprintf(stderr, "showProgressBar command failed: not connected\n");
         return;
     }
 
@@ -463,7 +463,7 @@ bool HTTPPlayerClient::reset()
 
     if (!isConnected())
     {
-        fprintf(stderr, "Command failed: not connected\n");
+        fprintf(stderr, "reset command failed: not connected\n");
         return false;
     }
 
@@ -481,7 +481,7 @@ bool HTTPPlayerClient::close()
 
     if (!isConnected())
     {
-        fprintf(stderr, "Command failed: not connected\n");
+        fprintf(stderr, "close command failed: not connected\n");
         return false;
     }
 
@@ -499,7 +499,7 @@ bool HTTPPlayerClient::start(std::vector<prodauto::PlayerInput> inputs, std::vec
 
     if (!isConnected())
     {
-        fprintf(stderr, "Command failed: not connected\n");
+        fprintf(stderr, "start command failed: not connected\n");
         return false;
     }
 
@@ -637,7 +637,7 @@ bool HTTPPlayerClient::setX11WindowName(string name)
 
     if (!isConnected())
     {
-        fprintf(stderr, "Command failed: not connected\n");
+        fprintf(stderr, "setX11WindowName command failed: not connected\n");
         return false;
     }
 
@@ -659,7 +659,7 @@ bool HTTPPlayerClient::stop()
 
     if (!isConnected())
     {
-        fprintf(stderr, "Command failed: not connected\n");
+        fprintf(stderr, "stop command failed: not connected\n");
         return false;
     }
 
@@ -672,7 +672,7 @@ bool HTTPPlayerClient::toggleLock()
 
     if (!isConnected())
     {
-        fprintf(stderr, "Command failed: not connected\n");
+        fprintf(stderr, "toggleLock command failed: not connected\n");
         return false;
     }
 
@@ -690,7 +690,7 @@ bool HTTPPlayerClient::play()
 
     if (!isConnected())
     {
-        fprintf(stderr, "Command failed: not connected\n");
+        fprintf(stderr, "play command failed: not connected\n");
         return false;
     }
 
@@ -708,7 +708,7 @@ bool HTTPPlayerClient::pause()
 
     if (!isConnected())
     {
-        fprintf(stderr, "Command failed: not connected\n");
+        fprintf(stderr, "pause command failed: not connected\n");
         return false;
     }
 
@@ -726,7 +726,7 @@ bool HTTPPlayerClient::togglePlayPause()
 
     if (!isConnected())
     {
-        fprintf(stderr, "Command failed: not connected\n");
+        fprintf(stderr, "togglePlayPause command failed: not connected\n");
         return false;
     }
 
@@ -744,7 +744,7 @@ bool HTTPPlayerClient::seek(int64_t offset, int whence, PlayUnit unit)
 
     if (!isConnected())
     {
-        fprintf(stderr, "Command failed: not connected\n");
+        fprintf(stderr, "seek command failed: not connected\n");
         return false;
     }
 
@@ -763,7 +763,7 @@ bool HTTPPlayerClient::seek(int64_t offset, int whence, PlayUnit unit)
             args.insert(pair<string, string>("whence", "SEEK_END"));
             break;
         default:
-            throw "Invalid argument 'whence'";
+            throw "Invalid argument to seek command 'whence'";
     }
     switch (unit)
     {
@@ -789,7 +789,7 @@ bool HTTPPlayerClient::playSpeed(int speed)
 
     if (!isConnected())
     {
-        fprintf(stderr, "Command failed: not connected\n");
+        fprintf(stderr, "playSpeed command failed: not connected\n");
         return false;
     }
 
@@ -811,7 +811,7 @@ bool HTTPPlayerClient::step(bool forward)
 
     if (!isConnected())
     {
-        fprintf(stderr, "Command failed: not connected\n");
+        fprintf(stderr, "stop command failed: not connected\n");
         return false;
     }
 
@@ -833,7 +833,7 @@ bool HTTPPlayerClient::muteAudio(int mute)
 
     if (!isConnected())
     {
-        fprintf(stderr, "Command failed: not connected\n");
+        fprintf(stderr, "muteAudio command failed: not connected\n");
         return false;
     }
 
@@ -855,7 +855,7 @@ bool HTTPPlayerClient::mark(int type)
 
     if (!isConnected())
     {
-        fprintf(stderr, "Command failed: not connected\n");
+        fprintf(stderr, "mark command failed: not connected\n");
         return false;
     }
 
@@ -877,7 +877,7 @@ bool HTTPPlayerClient::markPosition(int64_t position, int type)
 
     if (!isConnected())
     {
-        fprintf(stderr, "Command failed: not connected\n");
+        fprintf(stderr, "markPosition command failed: not connected\n");
         return false;
     }
 
@@ -900,7 +900,7 @@ bool HTTPPlayerClient::clearMark()
 
     if (!isConnected())
     {
-        fprintf(stderr, "Command failed: not connected\n");
+        fprintf(stderr, "clearMark command failed: not connected\n");
         return false;
     }
 
@@ -918,7 +918,7 @@ bool HTTPPlayerClient::clearAllMarks()
 
     if (!isConnected())
     {
-        fprintf(stderr, "Command failed: not connected\n");
+        fprintf(stderr, "clearAllMarks command failed: not connected\n");
         return false;
     }
 
@@ -936,7 +936,7 @@ bool HTTPPlayerClient::seekNextMark()
 
     if (!isConnected())
     {
-        fprintf(stderr, "Command failed: not connected\n");
+        fprintf(stderr, "seekNextMark command failed: not connected\n");
         return false;
     }
 
@@ -954,7 +954,7 @@ bool HTTPPlayerClient::seekPrevMark()
 
     if (!isConnected())
     {
-        fprintf(stderr, "Command failed: not connected\n");
+        fprintf(stderr, "seekPrevMark command failed: not connected\n");
         return false;
     }
 
@@ -972,7 +972,7 @@ bool HTTPPlayerClient::setOSDScreen(OSDScreen screen)
 
     if (!isConnected())
     {
-        fprintf(stderr, "Command failed: not connected\n");
+        fprintf(stderr, "setOSDScreen command failed: not connected\n");
         return false;
     }
 
@@ -1008,7 +1008,7 @@ bool HTTPPlayerClient::nextOSDScreen()
 
     if (!isConnected())
     {
-        fprintf(stderr, "Command failed: not connected\n");
+        fprintf(stderr, "nextOSDScreen command failed: not connected\n");
         return false;
     }
 
@@ -1026,7 +1026,7 @@ bool HTTPPlayerClient::setOSDTimecode(int index, int type, int subType)
 
     if (!isConnected())
     {
-        fprintf(stderr, "Command failed: not connected\n");
+        fprintf(stderr, "setOSDTimecode command failed: not connected\n");
         return false;
     }
 
@@ -1050,7 +1050,7 @@ bool HTTPPlayerClient::nextOSDTimecode()
 
     if (!isConnected())
     {
-        fprintf(stderr, "Command failed: not connected\n");
+        fprintf(stderr, "nextOSDTimecode command failed: not connected\n");
         return false;
     }
 
@@ -1068,7 +1068,7 @@ bool HTTPPlayerClient::switchNextVideo()
 
     if (!isConnected())
     {
-        fprintf(stderr, "Command failed: not connected\n");
+        fprintf(stderr, "switchNextVideo command failed: not connected\n");
         return false;
     }
 
@@ -1086,7 +1086,7 @@ bool HTTPPlayerClient::switchPrevVideo()
 
     if (!isConnected())
     {
-        fprintf(stderr, "Command failed: not connected\n");
+        fprintf(stderr, "switchPrevVideo command failed: not connected\n");
         return false;
     }
 
@@ -1104,7 +1104,7 @@ bool HTTPPlayerClient::switchVideo(int index)
 
     if (!isConnected())
     {
-        fprintf(stderr, "Command failed: not connected\n");
+        fprintf(stderr, "switchVideo command failed: not connected\n");
         return false;
     }
 
@@ -1126,7 +1126,7 @@ bool HTTPPlayerClient::switchNextAudioGroup()
 
     if (!isConnected())
     {
-        fprintf(stderr, "Command failed: not connected\n");
+        fprintf(stderr, "switchNextAudioGroup command failed: not connected\n");
         return false;
     }
 
@@ -1144,7 +1144,7 @@ bool HTTPPlayerClient::switchPrevAudioGroup()
 
     if (!isConnected())
     {
-        fprintf(stderr, "Command failed: not connected\n");
+        fprintf(stderr, "switchPrevAudioGroup command failed: not connected\n");
         return false;
     }
 
@@ -1162,7 +1162,7 @@ bool HTTPPlayerClient::switchAudioGroup(int index)
 
     if (!isConnected())
     {
-        fprintf(stderr, "Command failed: not connected\n");
+        fprintf(stderr, "switchAudioGroup command failed: not connected\n");
         return false;
     }
 
@@ -1184,7 +1184,7 @@ bool HTTPPlayerClient::snapAudioToVideo()
 
     if (!isConnected())
     {
-        fprintf(stderr, "Command failed: not connected\n");
+        fprintf(stderr, "snapAudioToVideo command failed: not connected\n");
         return false;
     }
 
@@ -1202,7 +1202,7 @@ bool HTTPPlayerClient::reviewStart(int64_t duration)
 
     if (!isConnected())
     {
-        fprintf(stderr, "Command failed: not connected\n");
+        fprintf(stderr, "reviewStart command failed: not connected\n");
         return false;
     }
 
@@ -1224,7 +1224,7 @@ bool HTTPPlayerClient::reviewEnd(int64_t duration)
 
     if (!isConnected())
     {
-        fprintf(stderr, "Command failed: not connected\n");
+        fprintf(stderr, "reviewEnd command failed: not connected\n");
         return false;
     }
 
@@ -1246,7 +1246,7 @@ bool HTTPPlayerClient::review(int64_t duration)
 
     if (!isConnected())
     {
-        fprintf(stderr, "Command failed: not connected\n");
+        fprintf(stderr, "review command failed: not connected\n");
         return false;
     }
 

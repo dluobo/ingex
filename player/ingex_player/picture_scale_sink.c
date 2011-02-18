@@ -1,5 +1,5 @@
 /*
- * $Id: picture_scale_sink.c,v 1.1 2010/10/01 15:56:21 john_f Exp $
+ * $Id: picture_scale_sink.c,v 1.2 2011/02/18 16:28:52 john_f Exp $
  *
  * Copyright (C) 2010 British Broadcasting Corporation, All Rights Reserved
  *
@@ -26,9 +26,9 @@
 #include <string.h>
 #include <assert.h>
 
-#include <YUV_frame.h>
-#include <YUV_scale_pic.h>
-#include <YUV_small_pic.h>
+#include <yuvlib/YUV_frame.h>
+#include <yuvlib/YUV_scale_pic.h>
+#include <yuvlib/YUV_small_pic.h>
 
 #include "picture_scale_sink.h"
 #include "logging.h"

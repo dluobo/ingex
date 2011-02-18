@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sink.c,v 1.19 2010/10/01 15:56:21 john_f Exp $
+ * $Id: dvs_sink.c,v 1.20 2011/02/18 16:28:52 john_f Exp $
  *
  *
  *
@@ -35,7 +35,7 @@
 #include "on_screen_display.h"
 #include "video_conversion.h"
 #include "video_conversion_10bits.h"
-#include "YUV_frame.h"
+#include "yuvlib/YUV_frame.h"
 #include "video_VITC.h"
 #include "utils.h"
 #include "logging.h"
@@ -1262,14 +1262,14 @@ static int dvs_complete_frame(void* data, const FrameInfo* frameInfo)
     else if (sink->videoStream.streamInfo.format == YUV422_FORMAT)
     {
          /* convert yuv422 to uyvy */
-        if (!sink->videoStream.requireFit)
+        if (!sink->videoStream.requireFit && sink->depth8Bit)
         {
             /* no more conversion required after this conversion */
             activeBuffer = fifoBuffer->buffer;
         }
         else
         {
-            /* need to fit picture */
+            /* need to fit picture or convert to 10-bit */
             activeBuffer = sink->workBuffer1;
         }
         yuv422_to_uyvy_2(sink->width, sink->height, 0, sink->videoStream.data[sink->currentFifoBuffer], activeBuffer);

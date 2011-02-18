@@ -1,5 +1,5 @@
 /*
- * $Id: overlay.h,v 1.2 2010/08/27 17:41:32 john_f Exp $
+ * $Id: overlay.h,v 1.3 2011/02/18 16:28:52 john_f Exp $
  *
  * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
@@ -22,8 +22,8 @@
 #ifndef __OVERLAY_H__
 #define __OVERLAY_H__
 
-#include <YUV_frame.h>
-#include <YUV_text_overlay.h>
+#include <yuvlib/YUV_frame.h>
+#include <yuvlib/YUV_text_overlay.h>
 
 #include "frame_info.h"
 

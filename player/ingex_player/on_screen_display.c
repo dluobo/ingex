@@ -1,5 +1,5 @@
 /*
- * $Id: on_screen_display.c,v 1.19 2010/10/13 12:35:21 philipn Exp $
+ * $Id: on_screen_display.c,v 1.20 2011/02/18 16:28:52 john_f Exp $
  *
  *
  *
@@ -32,8 +32,8 @@
 #include "on_screen_display.h"
 #include "frame_info.h"
 #include "osd_symbols.h"
-#include "YUV_frame.h"
-#include "YUV_text_overlay.h"
+#include "yuvlib/YUV_frame.h"
+#include "yuvlib/YUV_text_overlay.h"
 #include "overlay.h"
 #include "utils.h"
 #include "logging.h"

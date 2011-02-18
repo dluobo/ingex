@@ -1,5 +1,5 @@
 /*
- * $Id: video_switch_sink.c,v 1.11 2010/10/01 15:56:21 john_f Exp $
+ * $Id: video_switch_sink.c,v 1.12 2011/02/18 16:28:52 john_f Exp $
  *
  *
  *
@@ -28,7 +28,7 @@
 #include <assert.h>
 
 #include "video_switch_sink.h"
-#include "YUV_frame.h"
+#include "yuvlib/YUV_frame.h"
 #include "media_source.h"
 #include "source_event.h"
 #include "video_conversion.h"

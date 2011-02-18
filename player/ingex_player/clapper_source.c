@@ -1,5 +1,5 @@
 /*
- * $Id: clapper_source.c,v 1.8 2010/06/02 11:12:14 philipn Exp $
+ * $Id: clapper_source.c,v 1.9 2011/02/18 16:28:51 john_f Exp $
  *
  *
  *
@@ -28,8 +28,8 @@
 
 #include "clapper_source.h"
 #include "clapper_source_data.h"
-#include "YUV_frame.h"
-#include "YUV_text_overlay.h"
+#include "yuvlib/YUV_frame.h"
+#include "yuvlib/YUV_text_overlay.h"
 #include "video_conversion.h"
 #include "utils.h"
 #include "types.h"

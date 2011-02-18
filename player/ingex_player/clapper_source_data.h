@@ -1,5 +1,5 @@
 /*
- * $Id: clapper_source_data.h,v 1.1 2010/06/02 11:12:14 philipn Exp $
+ * $Id: clapper_source_data.h,v 1.2 2011/02/18 16:28:52 john_f Exp $
  *
  * Data for clapperboard
  *
@@ -23,7 +23,7 @@
 
 #include <inttypes.h>
 
-#include "YUV_text_overlay.h"
+#include "yuvlib/YUV_text_overlay.h"
 
 extern int16_t g_audioSec[];
 extern overlay g_bbcLogo;

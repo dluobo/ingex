@@ -1,5 +1,5 @@
 /*
- * $Id: x11_display_sink.c,v 1.14 2010/10/26 18:28:23 john_f Exp $
+ * $Id: x11_display_sink.c,v 1.15 2011/02/18 16:28:52 john_f Exp $
  *
  *
  *
@@ -45,8 +45,8 @@
 #include "on_screen_display.h"
 #include "video_conversion.h"
 #include "video_conversion_10bits.h"
-#include "YUV_frame.h"
-#include "YUV_small_pic.h"
+#include "yuvlib/YUV_frame.h"
+#include "yuvlib/YUV_small_pic.h"
 #include "utils.h"
 #include "logging.h"
 #include "macros.h"
