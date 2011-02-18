@@ -1,4 +1,4 @@
-# $Id: Makefile,v 1.14 2010/09/29 09:01:14 john_f Exp $
+# $Id: Makefile,v 1.15 2011/02/18 16:43:24 john_f Exp $
 #
 
 include ../../../common/libmxf.mk
@@ -7,12 +7,11 @@ DATABASELIB_DIR = ../../database/src
 MXFWRITER_DIR = ../../mxfwriter
 STUDIOCOMMON_DIR = ../../common
 COMMON_DIR = ../../../common
-YUVLIB_DIR = ../../../YUVlib
 
 
 CC = gcc
 CFLAGS = -g -Wall -Wundef -W -Wno-unused-parameter -O3 -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS
-INCLUDES = -I. -I$(COMMON_DIR) -I$(STUDIOCOMMON_DIR) -I$(YUVLIB_DIR) -I/usr/local/include \
+INCLUDES = -I. -I$(COMMON_DIR) -I$(STUDIOCOMMON_DIR) -I/usr/local/include \
 	$(LIBMXF_INCLUDE) $(WRITEAVIDMXF_INCLUDE) $(MXFREADER_INCLUDE) \
 	-I$(DATABASELIB_DIR) -I$(MXFWRITER_DIR) -I/usr/local/include/ffmpeg/
 
@@ -35,7 +34,7 @@ DEPENDENCIES = $(subst .cpp,.d,$(SOURCES))
 
 FFMPEG_LIBS = -lavformat -lavcodec -lavutil -lz -lbz2 -lmp3lame -lx264 -lfaac -lfaad -lm
 
-TRANSCODE_LIBS = -ljpeg $(FFMPEG_LIBS) -L$(STUDIOCOMMON_DIR) -lstudiocommon -L$(YUVLIB_DIR) -lYUVlib \
+TRANSCODE_LIBS = -ljpeg $(FFMPEG_LIBS) -L$(STUDIOCOMMON_DIR) -lstudiocommon -lYUVlib \
 	-L$(DATABASELIB_DIR) -lprodautodb -lpqxx -lxerces-c -L$(COMMON_DIR) -lcommon -L$(STUDIOCOMMON_DIR) -lstudiocommon \
 	-L$(MXFWRITER_DIR) -lmxfwriter $(WRITEAVIDMXF_LIB) \
 	$(MXFREADER_LIB) $(LIBMXF_LIB) -lpthread
