@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.6 2010/09/29 09:01:13 john_f Exp $
+# $Id: Makefile,v 1.7 2011/02/18 16:24:13 john_f Exp $
 #
 # Makefile for building the Ingex suite of applications
 #
@@ -21,31 +21,17 @@
 # 02110-1301, USA.
 #
 
-ifndef USE_INSTALLED_LIBMXF
-# Uncomment for the ingex-studio file release
-#$(error You need to set the environment variable USE_INSTALLED_LIBMXF)
-endif
-
 .PHONY: all
 all: studio
 
 .PHONY: studio
 studio:
-ifndef USE_INSTALLED_LIBMXF
-	$(MAKE) -C libMXF
-	$(MAKE) -C libMXF++
-endif
-	$(MAKE) -C YUVlib
 	$(MAKE) -C common
 	$(MAKE) -C player
 	$(MAKE) -C studio
 
 .PHONY: archive
 archive:
-ifndef USE_INSTALLED_LIBMXF
-	$(MAKE) -C libMXF
-	$(MAKE) -C libMXF++
-endif
 	$(MAKE) -C common
 	$(MAKE) -C player
 	$(MAKE) -C archive/src
@@ -53,11 +39,6 @@ endif
 # do 'realclean' for studio/ace-tao to delete files generated from IDL
 .PHONY: clean
 clean:
-ifndef USE_INSTALLED_LIBMXF
-	$(MAKE) -C libMXF $@
-	$(MAKE) -C libMXF++ $@
-endif
-	$(MAKE) -C YUVlib $@
 	$(MAKE) -C common $@
 	$(MAKE) -C player $@
 	$(MAKE) -C studio realclean
@@ -66,15 +47,9 @@ endif
 # So far, only libMXF and common have make check targets
 .PHONY: check
 check: all
-ifndef USE_INSTALLED_LIBMXF
-	$(MAKE) -C libMXF $@
-endif
 	$(MAKE) -C common $@
 
 .PHONY: valgrind-check
 valgrind-check: all
-ifndef USE_INSTALLED_LIBMXF
-	$(MAKE) -C libMXF $@
-endif
 	$(MAKE) -C common $@
 
