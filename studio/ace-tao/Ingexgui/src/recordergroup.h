@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: recordergroup.h,v 1.16 2011/02/18 16:31:15 john_f Exp $         *
+ *   $Id: recordergroup.h,v 1.17 2011/02/18 17:25:06 john_f Exp $         *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -26,11 +26,6 @@
 #include <wx/wx.h>
 #include "controller.h"
 #include "ingexgui.h"
-
-#define DESELECTED_BACKGROUND_COLOUR wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW)
-#define DESELECTED_TEXT_COLOUR wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT)
-#define SELECTED_BACKGROUND_COLOUR wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHT)
-#define SELECTED_TEXT_COLOUR wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHTTEXT)
 
 DECLARE_EVENT_TYPE(EVT_RECORDERGROUP_MESSAGE, -1)
 

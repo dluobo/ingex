@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: recordergroup.cpp,v 1.23 2011/02/18 16:31:15 john_f Exp $       *
+ *   $Id: recordergroup.cpp,v 1.24 2011/02/18 17:25:06 john_f Exp $       *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -67,8 +67,8 @@ void RecorderGroupCtrl::StartGettingRecorders()
         if (0 == GetItemCount()) {
             //show that something's happening
             InsertItem(0, wxT("Getting list...")); //this will be removed when the list has been obtained
-            SetItemBackgroundColour(0, DESELECTED_BACKGROUND_COLOUR); //just in case GetNumberRecordersConnected() is called
-            SetItemTextColour(0, DESELECTED_TEXT_COLOUR);
+            SetItemBackgroundColour(0, wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW)); //just in case GetNumberRecordersConnected() is called
+            SetItemTextColour(0, wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT));
             SetColumnWidth(0, wxLIST_AUTOSIZE);
             SetItemPtrData(0, (wxUIntPtr) 0); //no controller
         }
@@ -104,8 +104,8 @@ void RecorderGroupCtrl::OnListRefreshed(wxCommandEvent & WXUNUSED(event))
                     if (k == GetItemCount() || GetItemText(k).Cmp(names[j]) > 0) { //Item text should always contain the recorder name in this situation; if reached end of list, or gone past this recorder, so recorder not listed
                         //add to list
                         InsertItem(k, names[j]);
-                        SetItemTextColour(k, DESELECTED_TEXT_COLOUR);
-                        SetItemBackgroundColour(k, DESELECTED_BACKGROUND_COLOUR); //just in case GetNumberRecordersConnected() is called
+                        SetItemTextColour(k, wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT));
+                        SetItemBackgroundColour(k, wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW)); //just in case GetNumberRecordersConnected() is called
                         SetColumnWidth(0, wxLIST_AUTOSIZE);
                         break;
                     }
@@ -147,20 +147,29 @@ unsigned int RecorderGroupCtrl::GetNumberRecordersConnected()
 {
     unsigned int nConnected = 0;
     for (int i = 0; i < GetItemCount(); i++) {
-        if (GetItemBackgroundColour(i) != DESELECTED_BACKGROUND_COLOUR) nConnected++;
+        if (GetItemBackgroundColour(i) != wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW)) nConnected++;
     }
     return nConnected;
 }
 
 /// Sets the label for the time available for recording.
 /// @param index The position in the list of the recorder.
-/// @param mins The number of minutes available; if -1, clears the message.
+/// @param mins The number of minutes available; if negative, clears the message.
 void RecorderGroupCtrl::SetRecTimeAvailable(const int index, const long mins)
 {
     wxListItem item;
     item.SetId(index);
     item.SetColumn(1);
-    item.SetText(-1 == mins ? wxT("") : wxString::Format(wxT("%d min"), mins));
+    if (mins < 0) {
+        item.SetText(wxEmptyString);
+    }
+    else if (mins < 60) {
+        SetItemBackgroundColour(index, BUTTON_WARNING_COLOUR);
+        item.SetText(wxString::Format(wxT("%d min"), mins));
+    }
+    else {
+        item.SetText(wxString::Format(wxT("%d hr %d min"), mins/60, mins %60));
+    }
     SetItem(item);
     SetColumnWidth(1, wxLIST_AUTOSIZE);
 }
@@ -172,8 +181,8 @@ void RecorderGroupCtrl::SetRecTimeAvailable(const int index, const long mins)
 /// @param index The position in the list of the recorder to disconnect from.
 void RecorderGroupCtrl::Deselect(const int index)
 {
-    SetItemBackgroundColour(index, DESELECTED_BACKGROUND_COLOUR);
-    SetItemTextColour(index, DESELECTED_TEXT_COLOUR);
+    SetItemBackgroundColour(index, wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW));
+    SetItemTextColour(index, wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT));
     SetRecTimeAvailable(index, -1);
     Disconnect(index);
     //depopulate the source tree
@@ -289,8 +298,8 @@ void RecorderGroupCtrl::OnControllerEvent(ControllerThreadEvent & event)
                 //check edit rate compatibility
                 if (0 == GetNumberRecordersConnected() || (controller->GetMaxPreroll().edit_rate.numerator == mMaxPreroll.edit_rate.numerator && controller->GetMaxPreroll().edit_rate.denominator == mMaxPreroll.edit_rate.denominator)) { //the only connected recorder, or compatible edit rate (assume MaxPostroll has same edit rate as MaxPreroll)
                     //connect
-                    SetItemBackgroundColour(pos, SELECTED_BACKGROUND_COLOUR); //indicates connected to user and program - can't use select capability of list, as the colour can't be changed
-                    SetItemTextColour(pos, SELECTED_TEXT_COLOUR);
+                    SetItemBackgroundColour(pos, wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHT)); //indicates connected to user and program - can't use select capability of list, as the colour can't be changed
+                    SetItemTextColour(pos, wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHTTEXT));
                     wxCommandEvent frameEvent(EVT_RECORDERGROUP_MESSAGE, NEW_RECORDER);
                     SetRecTimeAvailable(pos, event.GetRecordTimeAvailable());
                     //populate the source tree
@@ -357,7 +366,7 @@ void RecorderGroupCtrl::OnControllerEvent(ControllerThreadEvent & event)
             SetColumnWidth(0, wxLIST_AUTOSIZE);
         }
     }
-    if (GetItemBackgroundColour(pos) != DESELECTED_BACKGROUND_COLOUR) { //not been disconnected earlier in this function due to a reconnect failure, or has been destroyed (which can still result in an event being sent); guarantees there's a controller
+    if (GetItemBackgroundColour(pos) != wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW)) { //not been disconnected earlier in this function due to a reconnect failure, or has been destroyed (which can still result in an event being sent); guarantees there's a controller
         if (Controller::COMM_FAILURE == event.GetResult()) {
             wxCommandEvent frameEvent(EVT_RECORDERGROUP_MESSAGE, COMM_FAILURE);
             frameEvent.SetString(event.GetName());

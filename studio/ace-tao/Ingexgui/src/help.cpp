@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: help.cpp,v 1.23 2011/01/04 11:37:18 john_f Exp $                *
+ *   $Id: help.cpp,v 1.24 2011/02/18 17:25:06 john_f Exp $                *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -51,7 +51,7 @@ HelpDlg::HelpDlg(wxWindow * parent)
     notebook->AddPage(cuePoints, wxT("Cue Points (Locators)"));
 
     wxTextCtrl * recorder = new wxTextCtrl(notebook, -1, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxTE_READONLY | wxTE_MULTILINE);
-    message = wxT("In order to locate recorders, the controller must be given a reference to a CORBA name server as command line arguments.  If you started the controller from a desktop icon, it should already be set up correctly with these.  (The warning given when these arguments are omitted shows the required format.)\n\nAvailable recorders are listed in the #Recorder Selection# box.  #Refresh list# will update this, and can be used to try again should a transient network problem occur, or the collection of available recorders has changed since the last time the list was updated.\n\nSelecting a recorder from the list will attempt to connect to it.  If any tracks are currently recording, the controller will go into the record state, displaying an unknown recording duration.  Otherwise, it will go into the stopped state.  All channels are enabled for recording by default.\n\nAny number of recorders can be selected.  Click on them again to disconnect (whereupon you will be asked to confirm; right-clicking avoids this step).  You cannot do this while recording.");
+    message = wxT("In order to locate recorders, the controller must be given a reference to a CORBA name server as command line arguments.  If you started the controller from a desktop icon, it should already be set up correctly with these.  (The warning given when these arguments are omitted shows the required format.)\n\nAvailable recorders are listed in the #Recorder Selection# box.  #Refresh list# will update this, and can be used to try again should a transient network problem occur, or the collection of available recorders has changed since the last time the list was updated.\n\nSelecting a recorder from the list will attempt to connect to it.  If any tracks are currently recording, the controller will go into the record state, displaying an unknown recording duration.  Otherwise, it will go into the stopped state.  All channels are enabled for recording by default.  The selected recorder will display approximately how much time it can record for, given the free disk space.  If this is less than an hour, the recorder will be highlighted in orange.  Note that the display doesn't take account of how many channels are enabled, instead basing its calculation on the worst-case of everything recording.  It is also only updated at the end of a recording, on reconnection or when #Refesh list# is pressed.\n\nAny number of recorders can be selected.  Click on them again to disconnect (whereupon you will be asked to confirm; right-clicking avoids this step).  You cannot do this while recording.");
     StyleAndWrite(recorder, message);
     notebook->AddPage(recorder, wxT("Recorder selection"));
 
@@ -178,6 +178,6 @@ AboutDlg::AboutDlg(wxWindow * parent)
 #ifdef DISABLE_SHARED_MEM_SOURCE
     message += wxT("not ");
 #endif
-    message += wxT("included.  Please send feedback to matthewmarks@users.sourceforge.net.\n\nVersion $Id: help.cpp,v 1.23 2011/01/04 11:37:18 john_f Exp $\n\nCopyright (C) British Broadcasting Corporation 2006-2009 - All rights reserved.\n\n$Date: 2011/01/04 11:37:18 $.");
+    message += wxT("included.  Please send feedback to matthewmarks@users.sourceforge.net.\n\nVersion $Id: help.cpp,v 1.24 2011/02/18 17:25:06 john_f Exp $\n\nCopyright (C) British Broadcasting Corporation 2006-2009 - All rights reserved.\n\n$Date: 2011/02/18 17:25:06 $.");
     textBox->SetValue(message);
 };
