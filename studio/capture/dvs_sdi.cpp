@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.cpp,v 1.19 2010/11/23 16:19:51 john_f Exp $
+ * $Id: dvs_sdi.cpp,v 1.20 2011/02/18 16:32:26 john_f Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -34,7 +34,7 @@
 #include "video_test_signals.h"
 #include "avsync_analysis.h"
 #include "time_utils.h"
-#include "YUV_scale_pic.h"
+#include "yuvlib/YUV_scale_pic.h"
 #include "Rational.h"
 
 #include <stdio.h>
@@ -2017,15 +2017,13 @@ int write_dummy_frames(sv_handle *sv, int chan, int current_frame_tick, int tick
                 ntsc_audio_seq %= 5;
                 break;
             }
-            if (audio8ch)
-            {
-                memset(ring[chan] + element_size * ((pc->lastframe+1) % ring_len) + audio_offset, 0, n_audio_samples * 4 * 8);
-            }
-            else
-            {
-                memset(ring[chan] + element_size * ((pc->lastframe+1) % ring_len) + audio_offset, 0, n_audio_samples * 4 * 4);
-            }
+            int naudioch = audio8ch ? 8 : 4;
+            // primary audio
+            memset(ring[chan] + element_size * ((pc->lastframe+1) % ring_len) + audio_offset, 0, n_audio_samples * 4 * naudioch);
+            // secondary audio
+            memset(ring[chan] + element_size * ((pc->lastframe+1) % ring_len) + secondary_audio_offset, 0, n_audio_samples * 4 * naudioch);
 
+            // Write timecodes etc.
             NexusFrameData * last_nfd = (NexusFrameData *)(ring[chan] + element_size * ((pc->lastframe) % ring_len) + frame_data_offset);
             // Increment timecode by 1 for dummy frames after the first
             if (i > 0)
