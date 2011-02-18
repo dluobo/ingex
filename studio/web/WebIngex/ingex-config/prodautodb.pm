@@ -860,7 +860,7 @@ sub save_take
             VALUES
                 (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ");
-        $sth->execute($nextId, $x->{"TAKENO"}, $x->{"LOCATION"}, $x->{"DATE"}, $x->{"START"}, $x->{"LENGTH"}, $x->{"RESULT"}, $x->{"COMMENT"},$x->{"ITEM"}, $x->{"EDITRATE"},);
+        $sth->execute($nextId, $x->{"TAKENO"}, $x->{"LOCATION"}, $x->{"DATE"}, $x->{"START"}, $x->{"LENGTH"}, $x->{"RESULT"}, $x->{"COMMENT"},$x->{"ITEM"}, $x->{"EDITRATE"});
         
         $dbh->commit;
     };
@@ -896,7 +896,7 @@ sub update_take
             WHERE
 				tke_identifier = ?
             ");
-        $sth->execute($x->{"TAKENO"}, $x->{"LOCATIONID"}, $x->{"DATE"}, $x->{"START"}, $x->{"LENGTH"}, $x->{"RESULTID"}, $x->{"COMMENT"}, $x->{"ITEM"}, $x->{"ID"}, $x->{"EDITRATE"},);
+        $sth->execute($x->{"TAKENO"}, $x->{"LOCATIONID"}, $x->{"DATE"}, $x->{"START"}, $x->{"LENGTH"}, $x->{"RESULT"}, $x->{"COMMENT"}, $x->{"ITEM"}, $x->{"EDITRATE"},$x->{"ID"});
         
         $dbh->commit;
     };

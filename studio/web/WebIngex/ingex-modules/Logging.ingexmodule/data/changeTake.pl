@@ -2,7 +2,7 @@
 
 # Copyright (C) 2008  British Broadcasting Corporation
 # Author: Rowan de Pomerai <rdepom@users.sourceforge.net>
-#
+# Modified 2011
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
 # as published by the Free Software Foundation; either version 2
@@ -28,7 +28,7 @@ use lib "../../../ingex-config";
 use ingexconfig;
 use ingexhtmlutil;
 use prodautodb;
-use IngexJSON;
+use JSON::XS;
 use ILutil;
 
 print header;
@@ -45,72 +45,49 @@ my $errorMessage;
 if (($errorMessage = validate_params()) eq "ok")
 {
 	my $ok = "yes";
-
-	my $take = prodautodb::load_take($dbh, param('id')) or $ok = "no";
 	
-	my $dataindex = uc(trim(param('dataindex')));
-	my $unaltered_dataindex = $dataindex;
+	    
+    my $idMsg = param('id');
+    	
+    #get the take that will be updated
+	my $take = prodautodb::load_take($dbh, $idMsg) or $ok = "no";
 	
-	my $value = trim(param('value'));
 	
-	if($dataindex eq "RESULT" && ($value eq "Good" || $value eq "good" || $value eq "GOOD" || $value eq "G" || $value eq "g")) {
-		$value = 2;
-		$dataindex = "RESULTID";
-	} elsif ($dataindex eq "RESULT") {
-		$value = 3;
-		$dataindex = "RESULTID";
-	}
+	my $jsonStr = param('jsonIn');
+    my $decodedJson = decode_json($jsonStr);
+    
+    #update local copy of take
+    $take->{COMMENT} = $decodedJson->{COMMENT};
+    $take->{RESULT} = $decodedJson->{RESULT};
 	
-	my $reclocerr = "";
-	
-	if($dataindex eq "LOCATION") {
-		$dataindex = "LOCATIONID";
-		my $recLocs = prodautodb::load_recording_locations($dbh) 
-		    or $ok = "-1";
-		
-			my $recLocId;
-            foreach my $recLoc (@{$recLocs})
-            {
-                if ($recLoc->{"NAME"} eq $value)
-                {
-                    $value = $recLoc->{"ID"};
-					$recLocId = "done";
-                    last;
-                }
-            }
-            if (!defined $recLocId)
-            {
-               $ok = "-1";
-				$reclocerr = "Could not match recording location to one in database.";
-            }
-	}
-	
-	if($ok ne "-1") {
-		$take->{$dataindex} = $value; 
-
-		my $takeid = prodautodb::update_take($dbh, $take) or $ok = "no";
-		
-		my $x = prodautodb::load_take($dbh, $takeid) or $ok = "no";
-
-		if($ok eq "yes") {
-			print '{"success":true,"error":"","value":"'.$x->{$unaltered_dataindex}.'"}';
-		} else {
+	#send local copy to database        
+    my $takeid = prodautodb::update_take($dbh, $take) or $ok = "no";
+       
+    #check take can be loaded from database
+    my $loadedTake = prodautodb::load_take($dbh, $takeid) or $ok = "no";
+     	
+	if($ok eq "yes") 
+	{
+		print '{"success":true,"error":"", "id":"'.$idMsg.'"}';
+	} 
+	else 
+	{
 			my $err = $prodautodb::errstr;
 			$err =~ s/"/\\"/g;
-			print '{"success":false,"error":"'.$err.'"}';
-		}
-	} else {
-		print '{"success":false,"error":"Problem resolving recording location. '.$reclocerr.'"}';
+			print '{"success":false,"error":"'.$err.'", "id":"'.$idMsg.'"}';
 	}
-} else {
+}
+else
+{
 	print '{"success":false,"error":"'.$errorMessage.'"}';
 }
+prodautodb::disconnect($dbh) if ($dbh);
 exit (0);
 
 sub validate_params
 {
-	return "No data index defined" if (!defined param('dataindex') || param('dataindex') =~ /^\s*$/);
 	return "No id defined" if (!defined param('id') || param('id') =~ /^\s*$/);
-
+    return "No input data defined" if (!defined param('jsonIn') || param('jsonIn') =~ /^\s*$/);
+    
     return "ok";
 }

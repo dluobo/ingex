@@ -2,7 +2,7 @@
 
 # Copyright (C) 2008  British Broadcasting Corporation
 # Author: Rowan de Pomerai <rdepom@users.sourceforge.net>
-#
+# Modified 2011
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
 # as published by the Free Software Foundation; either version 2
@@ -28,9 +28,8 @@ use lib "../../../ingex-config";
 use ingexconfig;
 use ingexhtmlutil;
 use prodautodb;
-use IngexJSON;
+use JSON::XS;
 use ILutil;
-
 
 print header;
 
@@ -47,33 +46,13 @@ if (($errorMessage = validate_params()) eq "ok")
 {
 	my $ok = "yes";
 
-	my $comment = "";
-	if (defined param('comment')) { $comment = trim(param('comment')); }
-		
-	my $resultID = 1;
-	if(param('result') eq "No Good") {
-		$resultID = 3;
-	} elsif (param('result') eq "Good") {
-		$resultID = 2;
-	}
-	
-	my $take = {
-		TAKENO => param('takeno'),
-		LOCATION => param('location'),
-		DATE => param('date'),
-		START => param('start'),
-		LENGTH => param('clipLength'),
-		RESULT => $resultID,
-		COMMENT => $comment,
-		ITEM => param('item'),
-		EDITRATE => param('editrate'),
-	};
+    my $jsonStr = param('jsonIn');
+    my $decodedJson = decode_json($jsonStr);
 
 	my $takeid;
-	$takeid = prodautodb::save_take($dbh, $take) or $ok = "no";
-
+	$takeid = prodautodb::save_take($dbh, $decodedJson) or $ok = "no";
 	my $loadedTake = prodautodb::load_take($dbh, $takeid) or $ok = "no";
-
+    
 	if($ok eq "yes") {
 		print '{"success":true,"error":"","id":'.$takeid.'}';
 	} else {
@@ -84,21 +63,12 @@ if (($errorMessage = validate_params()) eq "ok")
 } else {
 	print '{"success":false,"error":"'.$errorMessage.'","id":-1}';
 }
-
-
+prodautodb::disconnect($dbh) if ($dbh);
 exit (0);
 
 sub validate_params
 {
-    
-	
-	return "No take number defined" if (!defined param('takeno') || param('takeno') =~ /^\s*$/);
-	return "No item defined" if (!defined param('item') || param('item') =~ /^\s*$/);
-	return "No location defined" if (!defined param('location') || param('location') =~ /^\s*$/);
-	return "No date defined" if (!defined param('date') || param('date') =~ /^\s*$/);
-	return "No start timecode defined" if (!defined param('start') || param('start') =~ /^\s*$/);
-	return "No duration defined" if (!defined param('clipLength') || param('clipLength') =~ /^\s*$/);
-	return "No result (good/no good) defined" if (!defined param('result') || param('result') =~ /^\s*$/);
+	return "No input data defined" if (!defined param('jsonIn') || param('jsonIn') =~ /^\s*$/);
 
     return "ok";
 }

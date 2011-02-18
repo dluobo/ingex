@@ -70,6 +70,7 @@ th {
 
 .itemHeaderLine {
 	background-color: #f3f3ff;
+	text-align: left;
 }
 
 .itemHeaderLine td {

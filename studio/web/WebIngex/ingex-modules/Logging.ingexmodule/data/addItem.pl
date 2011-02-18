@@ -2,7 +2,7 @@
 
 # Copyright (C) 2008  British Broadcasting Corporation
 # Author: Rowan de Pomerai <rdepom@users.sourceforge.net>
-#
+# Modified 2011
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
 # as published by the Free Software Foundation; either version 2
@@ -28,7 +28,7 @@ use lib "../../../ingex-config";
 use ingexconfig;
 use ingexhtmlutil;
 use prodautodb;
-use IngexJSON;
+use JSON::XS;
 use ILutil;
 
 print header;
@@ -45,37 +45,31 @@ my $errorMessage;
 if (($errorMessage = validate_params()) eq "ok")
 {
 	my $ok = "yes";
-
-	my $item = {
-		ORDERINDEX => param('id'),
-		ITEMNAME => trim(param('name')),
-		SEQUENCE => trim(param('sequence')),
-		PROGRAMME => param('programme')
-	};
-
-	my $itemid;
-	$itemid = prodautodb::save_item($dbh, $item) or $ok = "no";
+     
+    # get parameters from json and store in a perl data structure
+    my $jsonStr = param('jsonIn');
+    my $decodedJson = decode_json($jsonStr);    
+ 	
+    my $itemid;
+	$itemid = prodautodb::save_item($dbh, $decodedJson) or $ok = "no";
 
 	my $loadedItem = prodautodb::load_item($dbh, $itemid) or $ok = "no";
-
-	if($ok eq "yes") {
-		print '{"success":true,"error":"","id":'.$itemid.'}';
+    
+    if($ok eq "yes") {
+    	  print '{"success":true,"error":"","id":'.$itemid.'}';
 	} else {
-		my $err = $prodautodb::errstr;
-		$err =~ s/"/\\"/g;
-		print '{"success":false,"error":"'.$err.'"}';
+		  my $err = $prodautodb::errstr;
+		  $err =~ s/"/\\"/g;
+		  print '{"success":false,"error":"'.$err.'"}';
 	}
 } else {
 	print '{"success":false,"error":"'.$errorMessage.'","id":-1}';
 }
+prodautodb::disconnect($dbh) if ($dbh);
 exit (0);
 
 sub validate_params
 {
-	return "No interface id (database orderindex) defined" if (!defined param('id') || param('id') =~ /^\s*$/);
-	return "No item name defined" if (!defined param('name') || param('name') =~ /^\s*$/);
-	return "No programme id defined" if (!defined param('programme') || param('programme') =~ /^\s*$/);
-	return "No sequence (script reference) defined" if(!defined param('sequence') || param('sequence') =~ /^\{\s*\}/);
-
+    return "No parameters passed defined" if(!defined param('jsonIn') || param('jsonIn') =~ /^\{\s*\}/);
     return "ok";
 }

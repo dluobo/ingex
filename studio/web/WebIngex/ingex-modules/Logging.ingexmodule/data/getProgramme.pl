@@ -28,23 +28,27 @@ use lib "../../../ingex-config";
 use ingexconfig;
 use ingexhtmlutil;
 use prodautodb;
-use IngexJSON;
+use JSON::XS;
 use ILutil;
 
 my $dbh = prodautodb::connect(
         $ingexConfig{"db_host"},
         $ingexConfig{"db_name"},
         $ingexConfig{"db_user"},
-        $ingexConfig{"db_password"}) 
+        $ingexConfig{"db_password"})
     or die();
 
 my $allItems;
 if(defined param('progid')) {
 	$allItems = getItems(param('progid'));
 }
-print header;
-print arrayToJSON(@$allItems);
 
+#convert the database to JSON object
+my $encodedJson = encode_json($allItems);
+
+print header;
+print $encodedJson;
+prodautodb::disconnect($dbh) if ($dbh);
 exit(0);
 
 sub getItems
