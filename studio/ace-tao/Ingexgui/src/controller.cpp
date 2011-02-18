@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: controller.cpp,v 1.14 2011/02/18 16:31:15 john_f Exp $          *
+ *   $Id: controller.cpp,v 1.15 2011/02/18 17:22:51 john_f Exp $          *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -372,7 +372,7 @@ wxThread::ExitCode Controller::Entry()
                     ProdAuto::MxfDuration maxPostroll = InvalidMxfDuration; //initialisation prevents compiler warning
                     ProdAuto::TrackList_var trackList;
                     bool routerRecorder = false; //initialisation prevents compiler warning
-                    unsigned long recordTimeAvailable;
+                    unsigned long recordTimeAvailable = -1;
                     event.SetTimecodeStateChanged(); //always trigger action
                     mLastTimecodeReceived.undefined = true; //guarantee that a valid timecode will be assumed to be running timecode
                     mMutex.Lock();
@@ -523,11 +523,8 @@ wxThread::ExitCode Controller::Entry()
                 }
                 case REC_TIME_AVAILABLE: {
 //std::cerr << "thread REC_TIME_AVAILABLE" << std::endl;
-                    long recordTimeAvailable;
-                    if (mRouterRecorder) {
-                        recordTimeAvailable = -1;
-                    }
-                    else {
+                    long recordTimeAvailable = -1;
+                    if (!mRouterRecorder) {
                         try {
                             recordTimeAvailable = mRecorder->RecordTimeAvailable();
                         }
