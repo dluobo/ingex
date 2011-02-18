@@ -1,5 +1,5 @@
 /*
- * $Id: MaterialResolution.h,v 1.5 2010/08/12 16:29:46 john_f Exp $
+ * $Id: MaterialResolution.h,v 1.6 2011/02/18 16:42:49 john_f Exp $
  *
  * Material resolution codes and details
  *
@@ -116,7 +116,8 @@ public:
             FileFormat::EnumType & format, OperationalPattern::EnumType & op);
 
     static bool CheckVideoFormat(MaterialResolution::EnumType res,
-            Ingex::VideoRaster::EnumType raster, Ingex::PixelFormat::EnumType format);
+            Ingex::VideoRaster::EnumType raster, Ingex::PixelFormat::EnumType format,
+            uint32_t & kbyte_per_minute);
 };
 
 #endif //ifndef Database_MaterialResolution_h

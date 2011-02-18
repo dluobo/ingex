@@ -1,5 +1,5 @@
 /*
- * $Id: MaterialResolution.cpp,v 1.8 2010/10/12 17:44:12 john_f Exp $
+ * $Id: MaterialResolution.cpp,v 1.9 2011/02/18 16:42:49 john_f Exp $
  *
  * Material resolution codes and details
  *
@@ -343,12 +343,15 @@ void MaterialResolution::GetInfo(MaterialResolution::EnumType res, FileFormat::E
 }
 
 /**
-Check whether raster and pixel format are suitable for encoding to specified resolution.
+Check whether raster and pixel format are suitable for encoding to specified resolution
+and also return approximate bytes per minute.
 */
 bool MaterialResolution::CheckVideoFormat(MaterialResolution::EnumType res,
-            Ingex::VideoRaster::EnumType raster, Ingex::PixelFormat::EnumType format)
+            Ingex::VideoRaster::EnumType raster, Ingex::PixelFormat::EnumType format,
+            uint32_t & kbyte_per_minute)
 {
     bool result = false;
+    kbyte_per_minute = 0;
     switch (res)
     {
     case MaterialResolution::DV25_RAW:
@@ -362,6 +365,7 @@ bool MaterialResolution::CheckVideoFormat(MaterialResolution::EnumType res,
             if (Ingex::PixelFormat::YUV_PLANAR_420_DV == format)
             {
                 result = true;
+                kbyte_per_minute = 187500;
             }
             break;
         case Ingex::VideoRaster::NTSC:
@@ -370,6 +374,7 @@ bool MaterialResolution::CheckVideoFormat(MaterialResolution::EnumType res,
             if (Ingex::PixelFormat::YUV_PLANAR_411 == format)
             {
                 result = true;
+                kbyte_per_minute = 187500;
             }
             break;
         default:
@@ -390,6 +395,7 @@ bool MaterialResolution::CheckVideoFormat(MaterialResolution::EnumType res,
             if (Ingex::PixelFormat::YUV_PLANAR_422 == format)
             {
                 result = true;
+                kbyte_per_minute = 375000;
             }
             break;
         default:
@@ -412,6 +418,7 @@ bool MaterialResolution::CheckVideoFormat(MaterialResolution::EnumType res,
             if (Ingex::PixelFormat::YUV_PLANAR_422 == format)
             {
                 result = true;
+                kbyte_per_minute = 750000;
             }
             break;
         default:
@@ -437,6 +444,7 @@ bool MaterialResolution::CheckVideoFormat(MaterialResolution::EnumType res,
             if (Ingex::PixelFormat::YUV_PLANAR_422 == format)
             {
                 result = true;
+                kbyte_per_minute = 375000; // 50 Mbit/s
             }
             break;
         default:
@@ -444,8 +452,62 @@ bool MaterialResolution::CheckVideoFormat(MaterialResolution::EnumType res,
         }
         break;
     case MaterialResolution::MJPEG21_MXF_ATOM:
+        switch (raster)
+        {
+        case Ingex::VideoRaster::PAL:
+        case Ingex::VideoRaster::PAL_4x3:
+        case Ingex::VideoRaster::PAL_16x9:
+        case Ingex::VideoRaster::NTSC:
+        case Ingex::VideoRaster::NTSC_4x3:
+        case Ingex::VideoRaster::NTSC_16x9:
+            if (Ingex::PixelFormat::YUV_PLANAR_422 == format)
+            {
+                result = true;
+                kbyte_per_minute = 500000; // approx for 2:1
+            }
+            break;
+        default:
+            break;
+        }
+        break;
     case MaterialResolution::MJPEG31_MXF_ATOM:
+        switch (raster)
+        {
+        case Ingex::VideoRaster::PAL:
+        case Ingex::VideoRaster::PAL_4x3:
+        case Ingex::VideoRaster::PAL_16x9:
+        case Ingex::VideoRaster::NTSC:
+        case Ingex::VideoRaster::NTSC_4x3:
+        case Ingex::VideoRaster::NTSC_16x9:
+            if (Ingex::PixelFormat::YUV_PLANAR_422 == format)
+            {
+                result = true;
+                kbyte_per_minute = 340000; // approx for 3:1
+            }
+            break;
+        default:
+            break;
+        }
+        break;
     case MaterialResolution::MJPEG101_MXF_ATOM:
+        switch (raster)
+        {
+        case Ingex::VideoRaster::PAL:
+        case Ingex::VideoRaster::PAL_4x3:
+        case Ingex::VideoRaster::PAL_16x9:
+        case Ingex::VideoRaster::NTSC:
+        case Ingex::VideoRaster::NTSC_4x3:
+        case Ingex::VideoRaster::NTSC_16x9:
+            if (Ingex::PixelFormat::YUV_PLANAR_422 == format)
+            {
+                result = true;
+                kbyte_per_minute = 140000; // approx for 10:1
+            }
+            break;
+        default:
+            break;
+        }
+        break;
     case MaterialResolution::MJPEG101M_MXF_ATOM:
     case MaterialResolution::MJPEG151S_MXF_ATOM:
     case MaterialResolution::MJPEG201_MXF_ATOM:
@@ -460,24 +522,7 @@ bool MaterialResolution::CheckVideoFormat(MaterialResolution::EnumType res,
             if (Ingex::PixelFormat::YUV_PLANAR_422 == format)
             {
                 result = true;
-            }
-            break;
-        default:
-            break;
-        }
-        break;
-    case MaterialResolution::DNX36P_MXF_ATOM:
-        switch (raster)
-        {
-        case Ingex::VideoRaster::SMPTE274_25I:
-        case Ingex::VideoRaster::SMPTE274_25PSF:
-        case Ingex::VideoRaster::SMPTE274_25P:
-        case Ingex::VideoRaster::SMPTE274_29I:
-        case Ingex::VideoRaster::SMPTE274_29PSF:
-        case Ingex::VideoRaster::SMPTE274_29P:
-            if (Ingex::PixelFormat::YUV_PLANAR_422 == format)
-            {
-                result = true;
+                kbyte_per_minute = 90000; // approx for 20:1
             }
             break;
         default:
@@ -493,6 +538,24 @@ bool MaterialResolution::CheckVideoFormat(MaterialResolution::EnumType res,
             if (Ingex::PixelFormat::YUV_PLANAR_422 == format)
             {
                 result = true;
+                kbyte_per_minute = 1387500; // 185
+            }
+            break;
+        default:
+            break;
+        }
+        break;
+    case MaterialResolution::DNX36P_MXF_ATOM:
+        switch (raster)
+        {
+        case Ingex::VideoRaster::SMPTE274_25PSF:
+        case Ingex::VideoRaster::SMPTE274_25P:
+        case Ingex::VideoRaster::SMPTE274_29PSF:
+        case Ingex::VideoRaster::SMPTE274_29P:
+            if (Ingex::PixelFormat::YUV_PLANAR_422 == format)
+            {
+                result = true;
+                kbyte_per_minute = 270000;
             }
             break;
         default:
@@ -510,6 +573,7 @@ bool MaterialResolution::CheckVideoFormat(MaterialResolution::EnumType res,
             if (Ingex::PixelFormat::YUV_PLANAR_422 == format)
             {
                 result = true;
+                kbyte_per_minute = 1387500; // 185
             }
             break;
         default:
@@ -530,6 +594,7 @@ bool MaterialResolution::CheckVideoFormat(MaterialResolution::EnumType res,
             if (Ingex::PixelFormat::YUV_PLANAR_422 == format)
             {
                 result = true;
+                kbyte_per_minute = 375000; // 50 Mbit/s
             }
             break;
         default:
@@ -549,6 +614,7 @@ bool MaterialResolution::CheckVideoFormat(MaterialResolution::EnumType res,
             if (Ingex::PixelFormat::YUV_PLANAR_420_MPEG == format)
             {
                 result = true;
+                kbyte_per_minute = 37500; // 5 Mbit/s
             }
             break;
         default:
@@ -565,6 +631,12 @@ bool MaterialResolution::CheckVideoFormat(MaterialResolution::EnumType res,
         case Ingex::VideoRaster::NTSC:
         case Ingex::VideoRaster::NTSC_4x3:
         case Ingex::VideoRaster::NTSC_16x9:
+            if (Ingex::PixelFormat::UYVY_422 == format)
+            {
+                result = true;
+                kbyte_per_minute = 1244160;
+            }
+            break;
         case Ingex::VideoRaster::SMPTE274_25I:
         case Ingex::VideoRaster::SMPTE274_29I:
         case Ingex::VideoRaster::SMPTE296_50P:
@@ -572,6 +644,7 @@ bool MaterialResolution::CheckVideoFormat(MaterialResolution::EnumType res,
             if (Ingex::PixelFormat::UYVY_422 == format)
             {
                 result = true;
+                kbyte_per_minute = 6220800; // 25I
             }
             break;
         default:
@@ -580,6 +653,7 @@ bool MaterialResolution::CheckVideoFormat(MaterialResolution::EnumType res,
         break;
     case MaterialResolution::MP3:
         result = true;
+        kbyte_per_minute = 960; // 128 kbit/s
         break;
     default:
         break;

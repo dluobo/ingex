@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.8 2010/09/29 09:01:14 john_f Exp $
+# $Id: Makefile,v 1.9 2011/02/18 16:42:49 john_f Exp $
 #
 # Makefile for building studio common functions
 #
@@ -24,7 +24,7 @@
 
 CC = gcc
 OPT = -DNDEBUG -O3 -mmmx -msse2
-INCLUDES = -I../../YUVlib -I../../common -I../database/src
+INCLUDES = -I../../common -I../database/src
 CFLAGS = -Wall -W -Wno-unused-parameter -g -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE $(OPT) $(INCLUDES)
 CPPFLAGS = -Wall -W -Wno-unused-parameter -g -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE $(OPT) $(INCLUDES)
 
@@ -57,7 +57,7 @@ LIBOBJECTS = $(LIBCSOURCES:%.c=%.o) $(LIBCPPSOURCES:%.cpp=%.o)
 
 LIBCOMMON = -L../../common -lcommon
 LIBSTUDIOCOMMON = libstudiocommon.a
-YUVLIB=-L../../YUVlib -lYUVlib
+YUVLIB=-lYUVlib
 
 .PHONY: all
 all: $(LIBSTUDIOCOMMON) test_ffmpeg_encoder test_ffmpeg_encoder_av yuv422_to_mjpeg yuv422_to_mjpeg_threaded
