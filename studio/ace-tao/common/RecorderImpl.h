@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderImpl.h,v 1.16 2010/08/12 16:36:42 john_f Exp $
+ * $Id: RecorderImpl.h,v 1.17 2011/02/18 16:31:15 john_f Exp $
  *
  * Base class for Recorder servant.
  *
@@ -66,6 +66,9 @@ public:
     throw (
       ::CORBA::SystemException
     );
+  
+  virtual
+  ::CORBA::ULong RecordTimeAvailable (void);
   
   virtual
   ::ProdAuto::TrackList * Tracks (

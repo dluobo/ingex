@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: dragbuttonlist.cpp,v 1.17 2010/10/05 10:49:02 john_f Exp $      *
+ *   $Id: dragbuttonlist.cpp,v 1.18 2011/02/18 16:31:15 john_f Exp $      *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -343,7 +343,7 @@ bool DragButtonList::LaterTrack(const bool select)
 /// @param source The source (1-9).
 void DragButtonList::ToggleSplitView(const unsigned int source)
 {
-    if (0 == mSelected && source && source < mEnableStates.GetCount()) { //showing split view; sanity check
+    if (0 == mSelected && source && source < mEnableStates.GetCount() && mEnableStates[source]) { //showing split view; sanity check; can select this source
         //show individual source
         Select(source);
     }

@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderApp.cpp,v 1.9 2010/11/02 16:27:19 john_f Exp $
+ * $Id: RecorderApp.cpp,v 1.10 2011/02/18 16:31:15 john_f Exp $
  *
  * Encapsulation of the recorder application.
  *
@@ -34,6 +34,7 @@
 #include "DatabaseManager.h"
 #include "DBException.h"
 #include "ffmpeg_encoder.h" // for THREADS_USE_BUILTIN_TUNING
+#include "FileUtils.h"
 
 #include "RecorderApp.h"
 
@@ -173,9 +174,11 @@ bool RecorderApp::Init(int argc, char * argv[])
     Logfile::AddPathComponent("var");
     Logfile::AddPathComponent("tmp");
     Logfile::AddPathComponent("IngexLogs");
-    std::string dir = DateTime::DateTimeNoSeparators() + "_" + recorder_name;
-
+    std::string rn = recorder_name;
+    FileUtils::CleanFilename(rn); // check for unsuitable characters in recorder name
+    std::string dir = DateTime::DateTimeNoSeparators() + "_" + rn;
     Logfile::AddPathComponent(dir.c_str());
+
     Logfile::Open("Main", false);
     ACE_DEBUG(( LM_NOTICE, ACE_TEXT("Main thread\n\n") ));
 

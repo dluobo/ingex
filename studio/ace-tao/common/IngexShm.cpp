@@ -1,5 +1,5 @@
 /*
- * $Id: IngexShm.cpp,v 1.7 2010/11/02 16:45:19 john_f Exp $
+ * $Id: IngexShm.cpp,v 1.8 2011/02/18 16:31:15 john_f Exp $
  *
  * Interface for reading audio/video data from shared memory.
  *
@@ -188,7 +188,7 @@ Ingex::Timecode IngexShm::Timecode(unsigned int channel, unsigned int frame)
     }
     else
     {
-        return Ingex::Timecode(0, 1, 1, false);  // should perhaps have a null/undefined timecode
+        return Ingex::Timecode();  // null/undefined timecode
     }
 }
 

@@ -1,5 +1,5 @@
 /*
- * $Id: FileUtils.cpp,v 1.2 2009/10/12 14:46:14 john_f Exp $
+ * $Id: FileUtils.cpp,v 1.3 2011/02/18 16:31:15 john_f Exp $
  *
  * File utilities.
  *
@@ -41,6 +41,18 @@ const char * const delim = "/";
 
 const mode_t mask = 002; // mask only o:w
 const mode_t dir_mode = 02775; // srwxrwxr-x
+
+void FileUtils::CleanFilename(std::string & filename)
+{
+    const std::string allowed_chars = "0123456789abcdefghijklmnopqrstuvwxyz_-ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const char replacement_char = '_';
+
+    size_t pos;
+    while (std::string::npos != (pos = filename.find_first_not_of(allowed_chars)))
+    {
+        filename.replace(pos, 1, 1, replacement_char);
+    }
+}
 
 /**
 This function checks that the directory exists and, if it does not, the

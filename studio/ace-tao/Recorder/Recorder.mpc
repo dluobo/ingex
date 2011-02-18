@@ -10,7 +10,6 @@ project(Recorder): taoserver, naming, messaging, valuetype {
   includes += ../common
   includes += ../../common
   includes += ../../../common
-  includes += ../../../YUVlib
   includes += ../../capture
   includes += ../../database/src
   includes += ../../mxfwriter
@@ -38,7 +37,6 @@ project(Recorder): taoserver, naming, messaging, valuetype {
   libpaths += ../common
   libpaths += ../../common
   libpaths += ../../../common
-  libpaths += ../../../YUVlib
   libpaths += ../../processing/offline
   libpaths += ../../mxfwriter
   libpaths += ../../database/src

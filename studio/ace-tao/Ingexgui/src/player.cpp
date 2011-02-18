@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: player.cpp,v 1.30 2011/01/14 10:03:40 john_f Exp $              *
+ *   $Id: player.cpp,v 1.31 2011/02/18 16:31:15 john_f Exp $              *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -59,11 +59,10 @@ END_EVENT_TABLE()
 /// Player must be deleted explicitly or a traffic control notification will be missed.
 /// @param parent Parent object.
 /// @param enabled True to enable player.
-/// @param displayType The on screen display type.
-Player::Player(wxWindow* parent, const wxWindowID id, const bool enabled, const PlayerOSDtype OSDType) :
+Player::Player(wxWindow* parent, const wxWindowID id, const bool enabled) :
 wxPanel(parent, id), LocalIngexPlayer(&mListenerRegistry),
 mTrackSelector(0), //to check before accessing as it's not created automatically
-mOSDType(OSDType), mEnabled(enabled), mOK(false), mState(PlayerState::STOPPED), mSpeed(0), mMuted(false), mOpeningSocket(false),
+mEnabled(enabled), mOK(false), mState(PlayerState::STOPPED), mSpeed(0), mMuted(false), mOpeningSocket(false),
 mPrevTrafficControl(true), //so that it can be switched off
 mMode(RECORDINGS), mPreviousMode(RECORDINGS),
 mCurrentChunkInfo(0), //to check before accessing in case it hasn't been set
@@ -109,13 +108,16 @@ mSavedState(0) //must call SetSavedState to use this
 void Player::SetSavedState(SavedState * savedState)
 {
     mSavedState = savedState;
-    SetOutputType(); //uses value from the saved state
-    SetVideoSplit(); //uses value from the saved state
-    SetApplyScaleFilter(); //uses value from the saved state
-    switchAudioGroup(mSavedState->GetBoolValue(wxT("AudioFollowsVideo"), false));
-    unsigned int meters = (unsigned int) mSavedState->GetUnsignedLongValue(wxT("NumAudioLevelMeters"), 2);
-    if (meters > 16) meters = 16;
-    setNumAudioLevelMonitors(meters);
+    //Apply settings from saved state
+    SetOutputType();
+    SetOSDType();
+    SetVideoSplit();
+#ifdef HAVE_DVS
+    SetSDIOSDEnable();
+#endif
+    SetApplyScaleFilter();
+    SetNumLevelMeters();
+    SetAudioFollowsVideo();
     if (mPrematureStart) Start();
 }
 
@@ -184,7 +186,8 @@ bool Player::LaterTrack(const bool state)
 void Player::OnImageClick(wxCommandEvent& event)
 {
     if (mTrackSelector) {
-        unsigned int divisions = mNVideoTracks > 4 ? 3 : 2;
+        bool limited = mSavedState && mSavedState->GetBoolValue(wxT("LimitSplitToQuad"), false);
+        unsigned int divisions = (mNVideoTracks > 4 && !limited) ? 3 : 2;
         mTrackSelector->ToggleSplitView(event.GetInt() * divisions / 1000 + event.GetExtraLong() * divisions / 1000 * divisions + 1);
     }
 }
@@ -663,7 +666,7 @@ bool Player::Start()
                     else if (PlayerState::PLAYING_BACKWARDS == mState) {
                         playSpeed(-1);
                     }
-                    SetOSDType(mOSDType);
+                    SetOSDType();
 #ifndef DISABLE_SHARED_MEM_SOURCE
                 }
                 else {
@@ -947,16 +950,30 @@ void Player::JumpToFrame(const int64_t frame)
     }
 }
 
-/// Sets the type of on screen display.
+/// Returns the type of on screen display.
+PlayerOSDtype Player::GetOSDType()
+{
+    PlayerOSDtype type = SOURCE_TIMECODE;
+    if (mSavedState) type = (PlayerOSDtype) mSavedState->GetUnsignedLongValue(wxT("PlayerOSDType"), (unsigned long) SOURCE_TIMECODE);
+    return type;
+}
+
+/// Sets the type of on screen display and remembers this in the saved state, if SetSavedState() has been called.
 /// @param OSDtype :
 /// OSD_OFF : none
 /// CONTROL_TIMECODE : timecode based on file position
 /// SOURCE_TIMECODE : timecode read from file
-void Player::SetOSDType(const PlayerOSDtype type)
+void Player::ChangeOSDType(const PlayerOSDtype type)
 {
-//std::cerr << "Player SetOSD " << type << std::endl;
-    mOSDType = type;
-    switch (mOSDType) {
+//std::cerr << "Player ChangeOSDType " << type << std::endl;
+    if (mSavedState) mSavedState->SetUnsignedLongValue(wxT("PlayerOSDType"), (unsigned long) type);
+    SetOSDType();
+}
+
+/// Sets the player OSD type, from the saved value if SetSavedState() has been called; otherwise, to a default value.
+void Player::SetOSDType()
+{
+    switch (GetOSDType()) {
         case OSD_OFF:
             setOSDScreen(OSD_EMPTY_SCREEN);
             break;
@@ -969,14 +986,6 @@ void Player::SetOSDType(const PlayerOSDtype type)
             setOSDScreen(OSD_PLAY_STATE_SCREEN);
             break;
     }
-}
-
-/// Enable/disable OSD on the SDI output
-/// @param enabled True to enable.
-void Player::EnableSDIOSD(bool enabled)
-{
-    setSDIOSDEnable(enabled);
-    Load(); //takes effect on reload
 }
 
 #ifdef HAVE_DVS
@@ -1413,7 +1422,7 @@ prodauto::PlayerOutputType Player::Fallback(const prodauto::PlayerOutputType des
     return actualType;
 }
 
-/// Disables horizontal and vertical filtering of scaled images in split views (to save processing power).
+/// Disables horizontal and vertical filtering of scaled images (to save processing power).
 /// SetSavedState() must have been called for the value to be remembered and not to revert to the stored value when it is.
 /// @param disable True to disable filtering.
 void Player::DisableScalingFiltering(const bool disable)
@@ -1435,9 +1444,62 @@ bool Player::IsScalingFilteringDisabled()
 /// Restarts player for change to take effect.
 void Player::SetApplyScaleFilter()
 {
-    bool disabled = mSavedState && mSavedState->GetBoolValue(wxT("DisableScalingFiltering"), false);
-    setApplyScaleFilter(!disabled); //this doesn't take effect until the player is reloaded
+    setApplyScaleFilter(!mSavedState || !mSavedState->GetBoolValue(wxT("DisableScalingFiltering"), false));
+    //this doesn't take effect until the player is reloaded
     if (mOK) Start();
+}
+
+#ifdef HAVE_DVS
+
+/// Enable/disable OSD on the SDI output, and save if SetSavedState() has been called.
+/// @param enable True to enable.
+void Player::EnableSDIOSD(const bool enable)
+{
+    //save the change
+    if (mSavedState) mSavedState->SetBoolValue(wxT("EnableSDIOSD"), enable);
+    //reflect the change
+    SetSDIOSDEnable();
+}
+
+/// Indicates if SDI OSD is enabled.
+/// SetSavedState() must have been called.
+bool Player::IsSDIOSDEnabled()
+{
+    return mSavedState && mSavedState->GetBoolValue(wxT("EnableSDIOSD"), true);
+}
+
+/// Switches on and off horizontal and vertical filtering of scaled images.
+/// Restarts player for change to take effect.
+void Player::SetSDIOSDEnable()
+{
+    setSDIOSDEnable(IsSDIOSDEnabled());
+    //this doesn't take effect until the player is reloaded
+    if (mOK) Start();
+}
+
+#endif //HAVE_DVS
+
+/// Sets audio to follow video or stick to the first audio files; save setting if SetSavedState() has been called.
+/// @param follows true to follow video
+void Player::EnableAudioFollowsVideo(const bool follows)
+{
+    //save the change
+    if (mSavedState) mSavedState->SetBoolValue(wxT("AudioFollowsVideo"), follows);
+    //reflect the change
+    SetAudioFollowsVideo();
+}
+
+/// Returns "audio follows video" state
+/// SetSavedState() must have been called.
+bool Player::IsAudioFollowingVideo()
+{
+    return mSavedState && mSavedState->GetBoolValue(wxT("AudioFollowsVideo"), false);
+}
+
+/// Switches on and off audio output following selected video.
+void Player::SetAudioFollowsVideo()
+{
+    switchAudioGroup(IsAudioFollowingVideo() ? 0 : 1);
 }
 
 /// Sets the video split type and the track selector tooltip depending on how many tracks are available and whether a nonasplit is allowed.
@@ -1454,45 +1516,33 @@ void Player::SetVideoSplit(const bool restart)
     ) Start();
 }
 
-/// Sets audio to follow video or stick to the first audio files
-/// @param follows true to follow video
-void Player::AudioFollowsVideo(const bool follows)
-{
-    //save the change
-    if (mSavedState) mSavedState->SetBoolValue(wxT("AudioFollowsVideo"), follows);
-    //reflect the change
-    switchAudioGroup(follows ? 0 : 1);
-}
-
-/// Returns "audio follows video" state
-bool Player::IsAudioFollowingVideo()
-{
-    return mSavedState && mSavedState->GetBoolValue(wxT("AudioFollowsVideo"), false);
-}
-
 /// Sets and saves the number of audio level meters displayed in the player window if OSD is on
-void Player::SetNumLevelMeters(const unsigned int number)
+void Player::ChangeNumLevelMeters(const unsigned int number)
 {
-//std::cerr << "Player SetNumLevelMeters " << number << std::endl;
+//std::cerr << "Player ChangeNumLevelMeters " << number << std::endl;
     if (number <= 16) {
-        //save the change
-        if (mSavedState) new wxXmlNode(mSavedState->GetTopLevelNode(wxT("NumAudioLevelMeters"), true, true), wxXML_TEXT_NODE, wxEmptyString, wxString::Format(wxT("%d"), number)); //remove existing node if present
-        mSavedState->Save();
-        //reflect the change
-        setNumAudioLevelMonitors(number);
-        if (mOK) Start(); //doesn't take effect until player restarted
+        if (mSavedState) mSavedState->SetUnsignedLongValue(wxT("NumAudioLevelMeters"), (unsigned long) number);
+        SetNumLevelMeters();
     }
+}
+
+void Player::SetNumLevelMeters()
+{
+//std::cerr << "Player SetNumLevelMeters" << std::endl;
+    setNumAudioLevelMonitors(GetNumLevelMeters());
+    if (mOK) Start(); //doesn't take effect until player restarted
 }
 
 /// Returns the number of audio level meters displayed in the player window if OSD is on
 unsigned int Player::GetNumLevelMeters()
 {
     unsigned int number = 2;
-    if (mSavedState) number = (unsigned int) mSavedState->GetUnsignedLongValue(wxT("NumAudioLevelMeters"), 2);
-    if (number > 16) number = 16;
+    if (mSavedState) {
+        number = (unsigned int) mSavedState->GetUnsignedLongValue(wxT("NumAudioLevelMeters"), 2);
+        if (number > 16) number = 16;
+    }
     return number;
 }
-
 
 /***************************************************************************
  *   LISTENER                                                              *

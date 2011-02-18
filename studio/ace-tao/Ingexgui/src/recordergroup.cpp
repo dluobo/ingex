@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: recordergroup.cpp,v 1.22 2010/10/05 10:49:02 john_f Exp $       *
+ *   $Id: recordergroup.cpp,v 1.23 2011/02/18 16:31:15 john_f Exp $       *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -31,7 +31,7 @@
 
 DEFINE_EVENT_TYPE(EVT_RECORDERGROUP_MESSAGE)
 
-BEGIN_EVENT_TABLE( RecorderGroupCtrl, wxListBox )
+BEGIN_EVENT_TABLE(RecorderGroupCtrl, wxListView)
     EVT_LEFT_DOWN(RecorderGroupCtrl::OnLMouseDown)
     EVT_MIDDLE_DOWN(RecorderGroupCtrl::OnUnwantedMouseDown)
     EVT_RIGHT_DOWN(RecorderGroupCtrl::OnRightMouseDown)
@@ -47,8 +47,10 @@ END_EVENT_TABLE()
 /// @param size The control's size.
 /// @param argc Argument count, for ORB initialisation.
 /// @param argv Argument vector, for ORB initialisation.
-RecorderGroupCtrl::RecorderGroupCtrl(wxWindow * parent, wxWindowID id, const wxPoint & pos, const wxSize & size, int& argc, char** argv) : wxListBox(parent, id, pos, size, 0, 0, wxLB_MULTIPLE), mEnabledForInput(true), mPreroll(InvalidMxfDuration), mMode(STOPPED)
+RecorderGroupCtrl::RecorderGroupCtrl(wxWindow * parent, wxWindowID id, const wxPoint & pos, const wxSize & size, int& argc, char** argv) : wxListView(parent, id, pos, size, wxLC_REPORT | wxLC_NO_HEADER), mEnabledForInput(true),  mMaxPreroll(InvalidMxfDuration), mMaxPostroll(InvalidMxfDuration), mPreroll(InvalidMxfDuration), mMode(STOPPED)
 {
+    InsertColumn(0, wxEmptyString);
+    InsertColumn(1, wxEmptyString);
     mComms = new Comms(this, argc, argv);
 }
 
@@ -62,9 +64,13 @@ RecorderGroupCtrl::~RecorderGroupCtrl()
 void RecorderGroupCtrl::StartGettingRecorders()
 {
     if (mComms->GetStatus()) { //started properly
-        if (IsEmpty()) {
+        if (0 == GetItemCount()) {
             //show that something's happening
-            Insert(wxT("Getting list..."), 0); //this will be removed when the list has been obtained
+            InsertItem(0, wxT("Getting list...")); //this will be removed when the list has been obtained
+            SetItemBackgroundColour(0, DESELECTED_BACKGROUND_COLOUR); //just in case GetNumberRecordersConnected() is called
+            SetItemTextColour(0, DESELECTED_TEXT_COLOUR);
+            SetColumnWidth(0, wxLIST_AUTOSIZE);
+            SetItemPtrData(0, (wxUIntPtr) 0); //no controller
         }
         mComms->StartGettingRecorders(EVT_RECORDERGROUP_MESSAGE, ENABLE_REFRESH); //threaded, so won't hang app; sends the given event when it's finished
     }
@@ -72,29 +78,35 @@ void RecorderGroupCtrl::StartGettingRecorders()
 }
 
 /// Responds to Comms finishing obtaining a list of recorders.
-/// Updates the list, removing recorders which weren't found and which aren't connected, and adding new recorders.
+/// Updates the list, removing recorders which weren't found and which aren't connected, adding new recorders, and requesting an update of available recording time from recorders that are connected.
 /// @param event The command event.
 void RecorderGroupCtrl::OnListRefreshed(wxCommandEvent & WXUNUSED(event))
 {
-    //Remove all the recorders which aren't connected/connecting (and the holding message plus maybe initial padding entry if present)
-    for (unsigned int i = 0; i < GetCount(); i++) {
-        if (!GetController(i)) {
-            Delete(i--);
+    //Remove non-connected recorders and request available recording time from connected non-router recorders
+    for (int i = 0; i < GetItemCount(); i++) {
+        if (0 == GetItemData(i)) {
+            DeleteItem(i--);
+        }
+        else {
+            ((Controller *) GetItemData(i))->RequestRecordTimeAvailable(); //should be connected
         }
     }
+    //Put in any recorders not listed, in alphabetical order
     wxString errMsg;
     if (mComms->GetStatus(&errMsg)) { //Comms is alive
         mEnabledForInput = true;
         if (errMsg.IsEmpty()) {
             wxArrayString names;
             mComms->GetRecorderList(names);
-            //Put in any recorders not listed, in alphabetical order
             for (size_t j = 0; j < names.GetCount(); j++) {
-                unsigned int k = 0;
+                int k = 0;
                 do {
-                    if (k == GetCount() || GetName(k).Cmp(names[j]) > 0) { //reached end of list, or gone past this recorder, so recorder not listed
+                    if (k == GetItemCount() || GetItemText(k).Cmp(names[j]) > 0) { //Item text should always contain the recorder name in this situation; if reached end of list, or gone past this recorder, so recorder not listed
                         //add to list
-                        Insert(names[j], k);
+                        InsertItem(k, names[j]);
+                        SetItemTextColour(k, DESELECTED_TEXT_COLOUR);
+                        SetItemBackgroundColour(k, DESELECTED_BACKGROUND_COLOUR); //just in case GetNumberRecordersConnected() is called
+                        SetColumnWidth(0, wxLIST_AUTOSIZE);
                         break;
                     }
                     if (GetName(k) == names[j]) { //recorder already listed
@@ -111,30 +123,46 @@ void RecorderGroupCtrl::OnListRefreshed(wxCommandEvent & WXUNUSED(event))
     }
 }
 
-/// Inserts an item in the list.
-/// Creates a corresponding ControllerContainer (but not a controller).
-/// @param name The recorder name.
-/// @param pos The position to insert the recorder.
-void RecorderGroupCtrl::Insert(const wxString & name, unsigned int pos)
-{
-    //At least one item must have client data or GetClientData will fail, so give the item client data even if there is no controller (disconnected)
-    ControllerContainer * container = new ControllerContainer(name); //deleted when list item deleted
-    wxListBox::Insert(name, pos, container);
-}
-
 /// Gets the name of the recorder at the given position.
 /// @param index The position of the recorder name to return.
-/// @return The recorder name.
-const wxString RecorderGroupCtrl::GetName(unsigned int index)
+/// @return The recorder name; empty if no recorder at given position
+const wxString RecorderGroupCtrl::GetName(int index)
 {
-    return dynamic_cast<ControllerContainer*>(GetClientObject(index))->GetName();
+    wxString name;
+    if (GetItemData(index)) name = ((Controller *) GetItemData(index))->GetName();
+    return name;
 }
 
 /// Starts the process of connecting to a recorder, in another thread, creating a controller.
 /// @param index The position in the list of the recorder to connect to.
-void RecorderGroupCtrl::Connect(unsigned int index)
+void RecorderGroupCtrl::BeginConnecting(const int index)
 {
-    dynamic_cast<ControllerContainer*>(GetClientObject(index))->Start(mComms, this);
+    SetItemPtrData(index, (wxUIntPtr) new Controller(GetItemText(index), mComms, this));
+    SetItemText(index, wxT("Connecting..."));
+    SetColumnWidth(0, wxLIST_AUTOSIZE);
+}
+
+/// Returns the number of connected recorders
+unsigned int RecorderGroupCtrl::GetNumberRecordersConnected()
+{
+    unsigned int nConnected = 0;
+    for (int i = 0; i < GetItemCount(); i++) {
+        if (GetItemBackgroundColour(i) != DESELECTED_BACKGROUND_COLOUR) nConnected++;
+    }
+    return nConnected;
+}
+
+/// Sets the label for the time available for recording.
+/// @param index The position in the list of the recorder.
+/// @param mins The number of minutes available; if -1, clears the message.
+void RecorderGroupCtrl::SetRecTimeAvailable(const int index, const long mins)
+{
+    wxListItem item;
+    item.SetId(index);
+    item.SetColumn(1);
+    item.SetText(-1 == mins ? wxT("") : wxString::Format(wxT("%d min"), mins));
+    SetItem(item);
+    SetColumnWidth(1, wxLIST_AUTOSIZE);
 }
 
 /// Deselects the given recorder and disconnects from it.
@@ -142,54 +170,48 @@ void RecorderGroupCtrl::Connect(unsigned int index)
 /// Re-calculates preroll and postroll limits.
 /// Looks for another recorder to get timecode from if this was the one being used.
 /// @param index The position in the list of the recorder to disconnect from.
-void RecorderGroupCtrl::Deselect(unsigned int index)
+void RecorderGroupCtrl::Deselect(const int index)
 {
-    wxListBox::Deselect(index);
+    SetItemBackgroundColour(index, DESELECTED_BACKGROUND_COLOUR);
+    SetItemTextColour(index, DESELECTED_TEXT_COLOUR);
+    SetRecTimeAvailable(index, -1);
     Disconnect(index);
     //depopulate the source tree
-    mTree->RemoveRecorder(GetString(index));
+    mTree->RemoveRecorder(GetName(index));
     wxCommandEvent event(EVT_RECORDERGROUP_MESSAGE, REMOVE_RECORDER);
-    event.SetString(GetString(index));
+    event.SetString(GetItemText(index));
     AddPendingEvent(event);
     //preroll and postroll limits might have been relaxed
-    unsigned int i;
-    for (i = 0; i < GetCount(); i++) {
-        if (i != index && GetController(i) && GetController(i)->IsOK()) {
-            mMaxPreroll = GetController(i)->GetMaxPreroll();
-            mMaxPostroll = GetController(i)->GetMaxPostroll();
+    int i;
+    mMaxPreroll.undefined = true;
+    mMaxPostroll.undefined = true;
+    //find a recorder
+    for (i = 0; i < GetItemCount(); i++) {
+        if (i != index && GetItemData(i) && ((Controller *) GetItemData(i))->IsOK()) {
+            mMaxPreroll = ((Controller *) GetItemData(i))->GetMaxPreroll();
+            mMaxPostroll = ((Controller *) GetItemData(i))->GetMaxPostroll();
             break;
         }
     }
-    for (; i < GetCount(); i++) {
-        if (i != index && GetController(i) && GetController(i)->IsOK()) {
-            mMaxPreroll.samples = GetController(i)->GetMaxPreroll().samples < mMaxPreroll.samples ? GetController(i)->GetMaxPreroll().samples : mMaxPreroll.samples;
-            mMaxPostroll.samples = GetController(i)->GetMaxPostroll().samples < mMaxPostroll.samples ? GetController(i)->GetMaxPostroll().samples : mMaxPostroll.samples;
+    //update with the rest of the recorders
+    for (; i < GetItemCount(); i++) {
+        if (i != index && GetItemData(i) && ((Controller *) GetItemData(i))->IsOK()) {
+            mMaxPreroll.samples = ((Controller *) GetItemData(i))->GetMaxPreroll().samples < mMaxPreroll.samples ? ((Controller *) GetItemData(i))->GetMaxPreroll().samples : mMaxPreroll.samples;
+            mMaxPostroll.samples = ((Controller *) GetItemData(i))->GetMaxPostroll().samples < mMaxPostroll.samples ? ((Controller *) GetItemData(i))->GetMaxPostroll().samples : mMaxPostroll.samples;
         }
     }
 }
 
-/// Disconnects from a recorder, by deleting its controller object.
+/// Disconnects from a recorder, by telling its controller object to get ready for deletion.
 /// Looks for another recorder to get timecode from if this was the one being used.
 /// @param index The position in the list of the recorder to disconnect from.
-void RecorderGroupCtrl::Disconnect(unsigned int index)
+void RecorderGroupCtrl::Disconnect(int index)
 {
-    if (GetString(index) == mTimecodeRecorder) { //removing the recorder we're using to display timecode
+    if (GetName(index) == mTimecodeRecorder) { //removing the recorder we're using to display timecode
         //start looking for a new one
         SetTimecodeRecorder();
     }
-    dynamic_cast<ControllerContainer *>(GetClientObject(index))->Stop();
-}
-
-/// Gets the controller of the given recorder - 0 if it doesn't exist.
-/// @param index The position in the list of the wanted recorder.
-Controller * RecorderGroupCtrl::GetController(unsigned int index)
-{
-    if (GetClientObject(index)) {
-        return dynamic_cast<ControllerContainer *>(GetClientObject(index))->GetController();
-    }
-    else {
-        return (Controller *) 0;
-    }
+    if (GetItemData(index)) ((Controller *) GetItemData(index))->Destroy();
 }
 
 /// Responds to a left mouse click on the control to select or deselect a recorder.
@@ -200,16 +222,16 @@ Controller * RecorderGroupCtrl::GetController(unsigned int index)
 void RecorderGroupCtrl::OnLMouseDown(wxMouseEvent & event)
 {
     int clickedItem;
-    if (mEnabledForInput && wxNOT_FOUND != (clickedItem = HitTest(event.GetPosition()))) {
-        if (IsSelected(clickedItem)) { //disconnect from a recorder
-            wxMessageDialog dlg(this, wxT("Are you sure you want to disconnect from ") + GetString(clickedItem) + wxT("?"), wxT("Confirmation of Disconnect"), wxYES_NO | wxICON_QUESTION);
+    int flags = wxLIST_HITTEST_ONITEM;
+    if (mEnabledForInput && wxNOT_FOUND != (clickedItem = HitTest(event.GetPosition(), flags, 0))) {
+        if (GetItemData(clickedItem)) { //disconnect from a recorder
+            wxMessageDialog dlg(this, wxT("Are you sure you want to disconnect from ") + GetName(clickedItem) + wxT("?"), wxT("Confirmation of Disconnect"), wxYES_NO | wxICON_QUESTION);
             if (wxID_YES == dlg.ShowModal()) {
                 Deselect(clickedItem);
             }
         }
-        else if (!GetController(clickedItem)) { //connect to a recorder
-            SetString(clickedItem, wxT("Connecting..."));
-            Connect(clickedItem);
+        else if (!GetItemData(clickedItem)) { //connect to a recorder
+            BeginConnecting(clickedItem);
         }
     }
 }
@@ -225,7 +247,8 @@ void RecorderGroupCtrl::OnUnwantedMouseDown(wxMouseEvent & WXUNUSED(event))
 void RecorderGroupCtrl::OnRightMouseDown(wxMouseEvent & event)
 {
     int clickedItem;
-    if (mEnabledForInput && wxNOT_FOUND != (clickedItem = HitTest(event.GetPosition())) && IsSelected(clickedItem)) {
+    int flags = wxLIST_HITTEST_ONITEM;
+    if (mEnabledForInput && wxNOT_FOUND != (clickedItem = HitTest(event.GetPosition(), flags, 0)) && GetItemData(clickedItem)) {
         Deselect(clickedItem);
     }
 }
@@ -240,61 +263,60 @@ void RecorderGroupCtrl::OnRightMouseDown(wxMouseEvent & event)
 /// @param event The controller thread event.
 void RecorderGroupCtrl::OnControllerEvent(ControllerThreadEvent & event)
 {
-    if (Controller::DIE == event.GetCommand()) {
-        //find the entry in the list
-        unsigned int pos;
-        for (pos = 0; pos < GetCount(); pos++) {
-            if (event.GetName() == GetName(pos)) {
-                break;
-            }
+    //find the entry in the list, and the corresponding controller
+    int pos;
+    for (pos = 0; pos < GetItemCount(); pos++) {
+        if (event.GetName() == GetName(pos)) {
+            break;
         }
-        if (pos < GetCount() && GetController(pos)) { //sanity checks
-            dynamic_cast<ControllerContainer *>(GetClientObject(pos))->Del();
-            SetString(pos, event.GetName());
+    }
+    Controller * controller = 0;
+    if (pos < GetItemCount()) controller = (Controller *) GetItemData(pos); //controller must be present if name found in list, as names are guaranteed to be unique and not blank
+    //deal with connection and disconnection
+    if (Controller::DIE == event.GetCommand()) {
+        if (controller) { //sanity check 
+            delete controller;
+            SetItemData(pos, 0);
+            SetItemText(pos, event.GetName()); //could be displaying connecting message
+            SetColumnWidth(0, wxLIST_AUTOSIZE);
         }
     }
     else if (Controller::CONNECT == event.GetCommand()) {
         //complete connection process if successful, or reset and report failure
-
-        //find the entry in the list
-        unsigned int pos;
-        for (pos = 0; pos < GetCount(); pos++) {
-            if (event.GetName() == GetName(pos)) {
-                break;
-            }
-        }
-        if (pos < GetCount() && GetController(pos)) { //sanity checks
+        if (controller) { //sanity check
             if (Controller::SUCCESS == event.GetResult()) {
+                Controller * controller = (Controller *) GetItemData(pos);
                 //check edit rate compatibility
-                wxArrayInt selectedItems;
-                if (!GetSelections(selectedItems) || (GetController(pos)->GetMaxPreroll().edit_rate.numerator == mMaxPreroll.edit_rate.numerator && GetController(pos)->GetMaxPreroll().edit_rate.denominator == mMaxPreroll.edit_rate.denominator)) { //the only recorder, or compatible edit rate (assume MaxPostroll has same edit rate)
+                if (0 == GetNumberRecordersConnected() || (controller->GetMaxPreroll().edit_rate.numerator == mMaxPreroll.edit_rate.numerator && controller->GetMaxPreroll().edit_rate.denominator == mMaxPreroll.edit_rate.denominator)) { //the only connected recorder, or compatible edit rate (assume MaxPostroll has same edit rate as MaxPreroll)
+                    //connect
+                    SetItemBackgroundColour(pos, SELECTED_BACKGROUND_COLOUR); //indicates connected to user and program - can't use select capability of list, as the colour can't be changed
+                    SetItemTextColour(pos, SELECTED_TEXT_COLOUR);
                     wxCommandEvent frameEvent(EVT_RECORDERGROUP_MESSAGE, NEW_RECORDER);
-                    //everything about the recorder is now checked
-                    Select(pos);
+                    SetRecTimeAvailable(pos, event.GetRecordTimeAvailable());
                     //populate the source tree
-                    frameEvent.SetExtraLong(mTree->AddRecorder(event.GetName(), event.GetTrackList(), event.GetTrackStatusList(), GetController(pos)->IsRouterRecorder()));
+                    frameEvent.SetExtraLong(mTree->AddRecorder(event.GetName(), event.GetTrackList(), event.GetTrackStatusList(), controller->IsRouterRecorder()));
                     //tell the frame
                     frameEvent.SetString(event.GetName());
                     frameEvent.SetInt(pos); //to allow quick disconnection
                     AddPendingEvent(frameEvent);
                     //preroll and postroll
-                    if (!selectedItems.GetCount()) { //the only recorder
-                        mMaxPreroll = GetController(pos)->GetMaxPreroll();
+                    if (1 == GetNumberRecordersConnected()) { //the only connected recorder
+                        mMaxPreroll = controller->GetMaxPreroll();
                         mPreroll = mMaxPreroll; //for the edit rate values
                         mPreroll.samples = mSavedState->GetUnsignedLongValue(wxT("Preroll"), DEFAULT_PREROLL); //limited later
-                        mMaxPostroll = GetController(pos)->GetMaxPostroll();
+                        mMaxPostroll = controller->GetMaxPostroll();
                         mPostroll = mMaxPostroll; //for the edit rate values
                         mPostroll.samples = mSavedState->GetUnsignedLongValue(wxT("Postroll"), DEFAULT_POSTROLL); //limited later
                     }
-                    if (GetController(pos)->GetMaxPreroll().samples < mMaxPreroll.samples) {
+                    if (controller->GetMaxPreroll().samples < mMaxPreroll.samples) {
                         //limit mMaxPreroll (and possibly mPreroll) to new maximum
-                        mMaxPreroll.samples = GetController(pos)->GetMaxPreroll().samples;
-                        mPreroll.samples = mPreroll.samples > GetController(pos)->GetMaxPreroll().samples ? GetController(pos)->GetMaxPreroll().samples : mPreroll.samples;
+                        mMaxPreroll.samples = controller->GetMaxPreroll().samples;
+                        mPreroll.samples = mPreroll.samples > controller->GetMaxPreroll().samples ? controller->GetMaxPreroll().samples : mPreroll.samples;
                     }
-                    if (GetController(pos)->GetMaxPostroll().samples < mMaxPostroll.samples) {
+                    if (controller->GetMaxPostroll().samples < mMaxPostroll.samples) {
                         //limit mMaxPostroll (and possibly mPostroll) to new maximum
-                        mMaxPostroll.samples = GetController(pos)->GetMaxPostroll().samples;
-                        mPostroll.samples = mPostroll.samples > GetController(pos)->GetMaxPostroll().samples ? GetController(pos)->GetMaxPostroll().samples : mPostroll.samples;
+                        mMaxPostroll.samples = controller->GetMaxPostroll().samples;
+                        mPostroll.samples = mPostroll.samples > controller->GetMaxPostroll().samples ? controller->GetMaxPostroll().samples : mPostroll.samples;
                     }
                     //synchronise project names
                     CORBA::StringSeq_var strings = event.GetStrings();
@@ -317,11 +339,11 @@ void RecorderGroupCtrl::OnControllerEvent(ControllerThreadEvent & event)
                         for (size_t i = 0; i < namesToSend.GetCount(); i++) {
                             CorbaNames[i] = (const char *) namesToSend[i].mb_str(wxConvISO8859_1);
                         }
-                        GetController(pos)->AddProjectNames(CorbaNames);
+                        controller->AddProjectNames(CorbaNames);
                     }
                 }
                 else { //edit rate incompatibility
-                    wxMessageDialog dlg(this, wxT("Recorder \"") + event.GetName() + wxString::Format(wxT("\" has an edit rate incompatible with the existing recorder%s.  Deselecting "), selectedItems.GetCount() == 1 ? wxEmptyString : wxT("s")) + event.GetName() + wxString::Format(wxT(".\n\nEdit rate numerator: %d ("), GetController(pos)->GetMaxPreroll().edit_rate.numerator) + event.GetName() + wxString::Format(wxT("); %d (existing)\nEdit rate denominator: %d ("), mMaxPreroll.edit_rate.numerator, GetController(pos)->GetMaxPreroll().edit_rate.denominator) + event.GetName() + wxString::Format(wxT("); %d (existing)"), mMaxPreroll.edit_rate.denominator), wxT("Edit rate incompatibility"), wxICON_EXCLAMATION | wxOK);
+                    wxMessageDialog dlg(this, wxT("Recorder \"") + event.GetName() + wxString::Format(wxT("\" has an edit rate incompatible with the existing recorder%s.  Deselecting "), GetNumberRecordersConnected() == 2 ? wxEmptyString : wxT("s")) + event.GetName() + wxString::Format(wxT(".\n\nEdit rate numerator: %d ("), controller->GetMaxPreroll().edit_rate.numerator) + event.GetName() + wxString::Format(wxT("); %d (existing)\nEdit rate denominator: %d ("), mMaxPreroll.edit_rate.numerator, controller->GetMaxPreroll().edit_rate.denominator) + event.GetName() + wxString::Format(wxT("); %d (existing)"), mMaxPreroll.edit_rate.denominator), wxT("Edit rate incompatibility"), wxICON_EXCLAMATION | wxOK);
                     dlg.ShowModal();
                     Disconnect(pos);
                 }
@@ -331,10 +353,11 @@ void RecorderGroupCtrl::OnControllerEvent(ControllerThreadEvent & event)
                 wxMessageDialog dlg(this, wxT("Couldn't connect to recorder \"") + event.GetName() + wxT("\": ") + event.GetMessage(), wxT("Initialisation failure"), wxICON_EXCLAMATION | wxOK);
                 dlg.ShowModal();
             }
-            SetString(pos, event.GetName());
+            SetItemText(pos, event.GetName());
+            SetColumnWidth(0, wxLIST_AUTOSIZE);
         }
     }
-    if (GetController(FindString(event.GetName(), true))) { //not been disconnected earlier in this function due to a reconnect failure, or has been destroyed (which can still result in an event being sent)
+    if (GetItemBackgroundColour(pos) != DESELECTED_BACKGROUND_COLOUR) { //not been disconnected earlier in this function due to a reconnect failure, or has been destroyed (which can still result in an event being sent); guarantees there's a controller
         if (Controller::COMM_FAILURE == event.GetResult()) {
             wxCommandEvent frameEvent(EVT_RECORDERGROUP_MESSAGE, COMM_FAILURE);
             frameEvent.SetString(event.GetName());
@@ -344,10 +367,11 @@ void RecorderGroupCtrl::OnControllerEvent(ControllerThreadEvent & event)
             switch (event.GetCommand()) {
                 case Controller::RECONNECT :
                     if (Controller::FAILURE == event.GetResult()) {
-                        Deselect(FindString(event.GetName(), true)); //informs frame
+                        Deselect(pos); //informs frame
                         wxMessageDialog dlg(this, wxT("Cannot reconnect automatically to ") + event.GetName() + wxT(" because ") + event.GetMessage() + wxT(".  Other aspects of this recorder may have changed also.  You must connect to it again manually and be aware that it has changed."), wxT("Cannot reconnect"), wxICON_ERROR | wxOK);
                         dlg.ShowModal();
                     }
+                    else SetRecTimeAvailable(pos, event.GetRecordTimeAvailable()); //stats might have changed
                     break;
                 case Controller::RECORD : {
                     //state change event
@@ -386,7 +410,7 @@ void RecorderGroupCtrl::OnControllerEvent(ControllerThreadEvent & event)
                      Controller::SUCCESS == event.GetResult()
                      && (
                       !mHaveNonRouterRecorders //use any recorder if we only have router recorders
-                      || !GetController(FindString(event.GetName(), true))->IsRouterRecorder() //prefer the timecode returned from a non-router recorder
+                      || !controller->IsRouterRecorder() //prefer the timecode returned from a non-router recorder
                      )) {
                         if (STOP_WAIT == mMode) {
                             mMode = STOPPED;
@@ -417,6 +441,7 @@ void RecorderGroupCtrl::OnControllerEvent(ControllerThreadEvent & event)
                             frameEvent.SetClientData(triggerTimecode);
                             AddPendingEvent(frameEvent);
                         }
+                        if (STOPPED == mMode) controller->RequestRecordTimeAvailable(); //should be connected
                     }
                     //update tree
                     if (Controller::SUCCESS == event.GetResult()) {
@@ -429,11 +454,14 @@ void RecorderGroupCtrl::OnControllerEvent(ControllerThreadEvent & event)
                     wxCommandEvent frameEvent(EVT_RECORDERGROUP_MESSAGE, RECORDER_STOPPED);
                     frameEvent.SetString(event.GetName());
                     frameEvent.SetInt(Controller::SUCCESS == event.GetResult());
-                    frameEvent.SetExtraLong(GetController(FindString(event.GetName(), true))->IsRouterRecorder());
+                    frameEvent.SetExtraLong(controller->IsRouterRecorder());
                     if (!event.GetExtraLong()) frameEvent.SetClientData(new RecorderData(event.GetTrackList(), event.GetStrings(), event.GetTimecode())); //must be deleted by event handler
                     AddPendingEvent(frameEvent);
                     break;
                 }
+                case Controller::REC_TIME_AVAILABLE :
+                    SetRecTimeAvailable(pos, event.GetRecordTimeAvailable());
+                    break;
                 case Controller::NONE : //never appears
                 case Controller::CONNECT : //handled above
                 case Controller::STATUS : //handled below
@@ -465,11 +493,13 @@ void RecorderGroupCtrl::OnControllerEvent(ControllerThreadEvent & event)
                 AddPendingEvent(frameEvent);
             }
             //timecode display
+            Controller * mTimecodeController;
             if (Controller::ABSENT != event.GetTimecodeState() //we have some timecode
              &&
               (mTimecodeRecorder.IsEmpty() //not getting timecode from anywhere at the moment
-               || !GetController(FindString(mTimecodeRecorder, true)) //sanity check, and recorder we're getting timecode from doesn't exist
-               || (GetController(FindString(mTimecodeRecorder, true))->IsRouterRecorder() && !GetController(FindString(event.GetName(), true))->IsRouterRecorder()))) { //getting timecode from a router recorder at the moment, and this recorder is not a router recorder
+               || -1 == FindItem(0, mTimecodeRecorder) //timecode recorder unknown
+               || 0 == (mTimecodeController = (Controller *) GetItemData(FindItem(0, mTimecodeRecorder))) //timecode recorder not connected/sanity check
+               || (mTimecodeController->IsRouterRecorder() && !controller->IsRouterRecorder()))) { //getting timecode from a router recorder at the moment, and this recorder is not a router recorder
                 //set the display to this recorder
                 SetTimecodeRecorder(event.GetName());
                 //set the timecode value, running or stuck
@@ -563,9 +593,8 @@ const ProdAuto::MxfDuration RecorderGroupCtrl::GetMaxPostroll()
 /// @param tapeIds Tape IDs corresponding to packageNames.
 void RecorderGroupCtrl::SetTapeIds(const wxString & recorderName, const CORBA::StringSeq & packageNames, const CORBA::StringSeq & tapeIds)
 {
-    if (GetController(FindString(recorderName, true))) { //sanity check
-        GetController(FindString(recorderName, true))->SetTapeIds(packageNames, tapeIds);
-    }
+    int index = FindItem(0, recorderName);
+    if (-1 != index && GetItemData(index)) ((Controller *) GetItemData(index))->SetTapeIds(packageNames, tapeIds);
 }
 
 /// Starts a new chunk after a previous one has finished.
@@ -587,10 +616,11 @@ void RecorderGroupCtrl::Record(const ProdAuto::MxfTimecode startTimecode)
     if (CHUNK_RECORD_WAIT != mMode) mMode = RECORD_WAIT; //so we know what to do when Enables() is called
     mEnabledForInput = false; //don't want recorders being removed/added while recording
     //tell all relevant recorders to record
-    for (unsigned int i = 0; i < GetCount(); i++) {
+    for (int i = 0; i < GetItemCount(); i++) {
         CORBA::BooleanSeq enableList;
+        Controller * controller;
         if (
-         GetController(i) && GetController(i)->IsOK()
+         (controller = (Controller *) GetItemData(i)) && controller->IsOK()
 #ifdef ALLOW_OVERLAPPED_RECORDINGS
          && mTree->GetRecordEnables(GetName(i), enableList, true)) { //something's enabled for recording
 #else
@@ -598,7 +628,7 @@ void RecorderGroupCtrl::Record(const ProdAuto::MxfTimecode startTimecode)
 #endif
                ProdAuto::MxfDuration preroll = mPreroll;
                if (CHUNK_RECORD_WAIT == mMode) preroll.samples = 0; //want to record exactly at the previously given timecode, and we should be later than this so can do it
-               GetController(i)->Record(startTimecode, preroll, mCurrentProject, enableList);
+               controller->Record(startTimecode, preroll, mCurrentProject, enableList);
                mTree->SetRecorderStateUnknown(GetName(i), wxT("Awaiting response..."));
         }
     }
@@ -616,14 +646,15 @@ void RecorderGroupCtrl::Stop(const bool chunk, const ProdAuto::MxfTimecode & sto
     mCurrentDescription = description;
     mHaveNonRouterRecorders = false; //will be set if we find any
     //tell all relevant recorders to stop
-    for (unsigned int i = 0; i < GetCount(); i++) {
+    for (int i = 0; i < GetItemCount(); i++) {
         CORBA::BooleanSeq enableList; //dummy
+        Controller * controller;
         if (
-         GetController(i) && GetController(i)->IsOK()
+         (controller = (Controller *) GetItemData(i)) && controller->IsOK()
          && mTree->GetRecordEnables(GetName(i), enableList, true)) { //ignore current recording state
-            GetController(i)->Stop(stopTimecode, chunk ? GetChunkingPostroll() : mPostroll, mCurrentDescription, locators); //stop with predefined preroll if chunking
+            controller->Stop(stopTimecode, chunk ? GetChunkingPostroll() : mPostroll, mCurrentDescription, locators); //stop with predefined preroll if chunking
             mTree->SetRecorderStateUnknown(GetName(i), wxT("Awaiting response..."));
-            mHaveNonRouterRecorders |= !GetController(i)->IsRouterRecorder();
+            mHaveNonRouterRecorders |= !controller->IsRouterRecorder();
         }
     }
 }
@@ -664,9 +695,10 @@ void RecorderGroupCtrl::SetProjectNames(const wxSortedArrayString & names)
     }
 
     //tell all the recorders we're connected to
-    for (unsigned int i = 0; i < GetCount(); i++) { //the recorders in the list
-        if (GetController(i) && GetController(i)->IsOK()) { //connected to this one
-            GetController(i)->AddProjectNames(CorbaNames);
+    for (int i = 0; i < GetItemCount(); i++) { //the recorders in the list
+        Controller * controller;
+        if ((controller = (Controller *) GetItemData(i)) && controller->IsOK()) {
+            controller->AddProjectNames(CorbaNames);
         }
     }
 

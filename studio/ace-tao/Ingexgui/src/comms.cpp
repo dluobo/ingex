@@ -179,6 +179,7 @@ bool Comms::GetStatus(wxString* errMsg)
 }
 
 /// Provides the list of recorder names from the last time the name server was interrogated.
+/// Blanks and duplicates will not be present.
 /// @param list Returns the recorder names.
 void Comms::GetRecorderList(wxArrayString& list)
 {
@@ -417,7 +418,8 @@ wxThread::ExitCode Comms::Entry()
             for (i=0; i<bl->length(); i++)
             {
                 mMutex.Lock();
-                mRecorderList.Add(wxString(bl[i].binding_name[0].id.in(), *wxConvCurrent));
+                wxString name = wxString(bl[i].binding_name[0].id.in(), *wxConvCurrent);
+                if (wxEmptyString != name && wxNOT_FOUND == mRecorderList.Index(name)) mRecorderList.Add(name); //tainted data checks
                 mMutex.Unlock();
             }
         }
@@ -433,7 +435,8 @@ wxThread::ExitCode Comms::Entry()
                     for (i=0; i<bl->length(); i++)
                     {
                         mMutex.Lock();
-                        mRecorderList.Add(wxString(bl[i].binding_name[0].id.in(), *wxConvCurrent));
+                        wxString name = wxString(bl[i].binding_name[0].id.in(), *wxConvCurrent);
+                        if (wxEmptyString != name && wxNOT_FOUND == mRecorderList.Index(name)) mRecorderList.Add(name); //tainted data checks
                         mMutex.Unlock();
                     }
                 }

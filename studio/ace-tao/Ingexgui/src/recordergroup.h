@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: recordergroup.h,v 1.15 2010/10/05 10:49:02 john_f Exp $         *
+ *   $Id: recordergroup.h,v 1.16 2011/02/18 16:31:15 john_f Exp $         *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -26,6 +26,12 @@
 #include <wx/wx.h>
 #include "controller.h"
 #include "ingexgui.h"
+
+#define DESELECTED_BACKGROUND_COLOUR wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW)
+#define DESELECTED_TEXT_COLOUR wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT)
+#define SELECTED_BACKGROUND_COLOUR wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHT)
+#define SELECTED_TEXT_COLOUR wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHTTEXT)
+
 DECLARE_EVENT_TYPE(EVT_RECORDERGROUP_MESSAGE, -1)
 
 class Comms;
@@ -33,7 +39,7 @@ class wxXmlDocument;
 class SavedState;
 
 /// A control derived from a list box containing a list of recorders, connected and disconnected.
-class RecorderGroupCtrl : public wxListBox
+class RecorderGroupCtrl : public wxListView
 {
     public:
         RecorderGroupCtrl(wxWindow *, wxWindowID id, const wxPoint &, const wxSize &, int&, char**);
@@ -59,7 +65,7 @@ class RecorderGroupCtrl : public wxListBox
         void SetCurrentProjectName(const wxString &);
         const wxString & GetCurrentProjectName();
         const wxString & GetCurrentDescription();
-        void Deselect(unsigned int);
+        void Deselect(const int);
         const wxString& GetTimecodeRecorder() { return mTimecodeRecorder; };
         enum RecorderGroupCtrlEventType {
             ENABLE_REFRESH,
@@ -88,12 +94,12 @@ class RecorderGroupCtrl : public wxListBox
         void OnUnwantedMouseDown(wxMouseEvent &);
         void OnControllerEvent(ControllerThreadEvent &);
         void OnTimeposEvent(wxCommandEvent &);
-        void Insert(const wxString &, unsigned int);
-        const wxString GetName(unsigned int);
-        void Connect(unsigned int);
-        void Disconnect(unsigned int);
-        Controller * GetController(unsigned int);
+        const wxString GetName(const int);
+        void BeginConnecting(const int);
+        unsigned int GetNumberRecordersConnected();
+        void Disconnect(const int);
         void SetTimecodeRecorder(wxString name = wxEmptyString);
+        void SetRecTimeAvailable(const int, const long);
         Comms * mComms;
         bool mEnabledForInput;
         ProdAuto::MxfDuration mMaxPreroll, mMaxPostroll, mPreroll, mPostroll;
@@ -138,24 +144,6 @@ class RecorderData
         ProdAuto::TrackList_var mTrackList;
         CORBA::StringSeq_var mFileList;
         ProdAuto::MxfTimecode mTimecode;
-};
-
-/// Class storing a recorder name and a controller object, to be attached to each entry in the list control.
-/// This class is used to allow names in the list to be remembered while messages such as "Connecting..." are displayed.
-/// Recorder name must be present; controller object is created and destroyed with the Start(), Stop() and Del() methods.
-class ControllerContainer : public wxClientData
-{
-    public:
-        ControllerContainer(const wxString & name) : mName(name), mController(0) {};
-        ~ControllerContainer() { if (mController) { delete mController; } };
-        void Start(Comms * comms, wxEvtHandler * handler) { mController = new Controller(mName, comms, handler); }; //the controller's Destroy() method will send a message when ready to delete itself
-        void Stop() { if (mController) { mController->Destroy(); } };
-        void Del() { if (mController) { delete mController; mController = 0; } };
-        const wxString GetName() { return mName; };
-        Controller * GetController() { return mController; };
-    private:
-        const wxString mName;
-        Controller * mController;
 };
 
 #endif

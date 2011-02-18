@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderImpl.cpp,v 1.18 2010/08/25 17:51:48 john_f Exp $
+ * $Id: RecorderImpl.cpp,v 1.19 2011/02/18 16:31:15 john_f Exp $
  *
  * Base class for Recorder servant.
  *
@@ -75,6 +75,12 @@ char * RecorderImpl::RecordingFormat (
 {
   // Add your implementation here
     return CORBA::string_dup(mFormat.c_str());
+}
+
+::CORBA::ULong RecorderImpl::RecordTimeAvailable (void)
+{
+    // Override in dervived implementation
+    return 0;
 }
 
 ::ProdAuto::TrackList * RecorderImpl::Tracks (

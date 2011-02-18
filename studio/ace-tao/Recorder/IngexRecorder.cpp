@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorder.cpp,v 1.21 2010/08/19 12:45:44 john_f Exp $
+ * $Id: IngexRecorder.cpp,v 1.22 2011/02/18 16:31:15 john_f Exp $
  *
  * Class to manage an individual recording.
  *
@@ -49,18 +49,6 @@
 #define min(a,b) (((a)<(b))?(a):(b))
 
 const bool USE_PROJECT_SUBDIR = true;
-
-static void clean_filename(std::string & filename)
-{
-    const std::string allowed_chars = "0123456789abcdefghijklmnopqrstuvwxyz_-ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-    const char replacement_char = '_';
-
-    size_t pos;
-    while (std::string::npos != (pos = filename.find_first_not_of(allowed_chars)))
-    {
-        filename.replace(pos, 1, 1, replacement_char);
-    }
-}
 
 
 /**
@@ -379,7 +367,7 @@ void IngexRecorder::Setup(Ingex::Timecode start_timecode)
     if (USE_PROJECT_SUBDIR)
     {
         project_subdir = mProjectName.name;
-        clean_filename(project_subdir);
+        FileUtils::CleanFilename(project_subdir);
         settings->project_subdir = project_subdir;
     }
 
@@ -502,7 +490,7 @@ void IngexRecorder::Setup(Ingex::Timecode start_timecode)
             << "_" << it->p_opt->index;
 
         std::string ident = ss.str();
-        clean_filename(ident);
+        FileUtils::CleanFilename(ident);
 
         it->p_opt->file_ident = ident;
     }

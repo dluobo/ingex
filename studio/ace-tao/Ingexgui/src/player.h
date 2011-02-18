@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: player.h,v 1.20 2011/01/14 10:03:40 john_f Exp $                *
+ *   $Id: player.h,v 1.21 2011/02/18 16:31:15 john_f Exp $                *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -122,7 +122,7 @@ class SavedState;
 class Player : public wxPanel, prodauto::LocalIngexPlayer
 {
     public:
-        Player(wxWindow*, const wxWindowID, const bool, const PlayerOSDtype = SOURCE_TIMECODE);
+        Player(wxWindow*, const wxWindowID, const bool);
         ~Player();
         void SetSavedState(SavedState * savedState);
         void OnPlaybackTrackSelect(wxCommandEvent&);
@@ -136,10 +136,8 @@ class Player : public wxPanel, prodauto::LocalIngexPlayer
         bool EarlierTrack(const bool);
         bool LaterTrack(const bool);
         void SelectTrack(const int, const bool);
-        void SetOSDType(const PlayerOSDtype);
-        PlayerOSDtype GetOSDType() { return mOSDType; };
-        void EnableSDIOSD(bool = true);
-        void SetOutputType();
+        void ChangeOSDType(const PlayerOSDtype);
+        PlayerOSDtype GetOSDType();
         void Play(const bool = false, const bool = false);
         void PlayAbsolute(const int);
         void Pause();
@@ -156,12 +154,16 @@ class Player : public wxPanel, prodauto::LocalIngexPlayer
         bool AtMaxForwardSpeed();
         bool AtMaxReverseSpeed();
         void MuteAudio(const bool);
-        void AudioFollowsVideo(const bool = true);
+        void EnableAudioFollowsVideo(const bool = true);
         bool IsAudioFollowingVideo();
         void LimitSplitToQuad(const bool = true);
         bool IsSplitLimitedToQuad();
         void DisableScalingFiltering(const bool = true);
         bool IsScalingFilteringDisabled();
+#ifdef HAVE_DVS
+        void EnableSDIOSD(const bool = true);
+        bool IsSDIOSDEnabled();
+#endif
         unsigned long GetLatestFrameDisplayed() { return mPreviousFrameDisplayed; };
         std::string GetCurrentFileName();
         const wxString GetProjectName();
@@ -179,7 +181,7 @@ class Player : public wxPanel, prodauto::LocalIngexPlayer
         void ChangeOutputType(const prodauto::PlayerOutputType);
         prodauto::PlayerOutputType GetOutputType(const bool = true);
         bool IsShowingSplit();
-        void SetNumLevelMeters(const unsigned int);
+        void ChangeNumLevelMeters(const unsigned int);
         unsigned int GetNumLevelMeters();
         const wxString GetOutputTypeLabel(const prodauto::PlayerOutputType outputType);
     private:
@@ -203,13 +205,19 @@ class Player : public wxPanel, prodauto::LocalIngexPlayer
         void LoadRecording();
         void SetVideoSplit(const bool = true);
         void SetApplyScaleFilter();
+#ifdef HAVE_DVS
+        void SetSDIOSDEnable();
+#endif
+        void SetOutputType();
+        void SetOSDType();
+        void SetNumLevelMeters();
+        void SetAudioFollowsVideo();
         prodauto::PlayerOutputType Fallback(const prodauto::PlayerOutputType);
         const wxString GetOutputTypeDescription(const prodauto::PlayerOutputType);
         Listener * mListener;
         prodauto::IngexPlayerListenerRegistry mListenerRegistry;
         DragButtonList* mTrackSelector;
         wxWindow* mParent;
-        PlayerOSDtype mOSDType;
         bool mEnabled;
         bool mOK;
         PlayerState::PlayerState mState;

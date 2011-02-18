@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: eventlist.cpp,v 1.18 2011/01/04 11:37:18 john_f Exp $           *
+ *   $Id: eventlist.cpp,v 1.19 2011/02/18 16:31:15 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2009-2010 British Broadcasting Corporation                   *
  *   - all rights reserved.                                                *
@@ -481,7 +481,7 @@ void EventList::AddEvent(EventType type, ProdAuto::MxfTimecode * timecode, const
                         }
                     }
                     tc.samples += frameCount;
-                    tc.samples %= 24LL * 3600 * tc.edit_rate.numerator / tc.edit_rate.denominator;
+                    if (!tc.undefined) tc.samples %= 24LL * 3600 * tc.edit_rate.numerator / tc.edit_rate.denominator;
                     timecode = &tc;
                     position = frameCount;
                 }

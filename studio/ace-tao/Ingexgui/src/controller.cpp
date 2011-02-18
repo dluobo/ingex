@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: controller.cpp,v 1.13 2010/08/03 09:27:07 john_f Exp $          *
+ *   $Id: controller.cpp,v 1.14 2011/02/18 16:31:15 john_f Exp $          *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -84,6 +84,13 @@ bool Controller::IsOK()
     return IsAlive();
 }
 
+/// @return The recorder name.
+const wxString Controller::GetName()
+{
+    wxMutexLocker lock(mMutex); //prevent concurrent access to mName
+    return mName;
+}
+
 /// @return The maximum preroll the recorder allows.
 const ProdAuto::MxfDuration Controller::GetMaxPreroll()
 {
@@ -125,6 +132,21 @@ void Controller::AddProjectNames(const CORBA::StringSeq & projectNames)
     if (!mReconnecting) { //can send a command now
         Signal(ADD_PROJECT_NAMES);
         mPendingCommandSent = true;
+    }
+}
+
+/// Signals to the thread to ask the recorder to return how much record time is available, or stores the command for later execution.
+/// Does nothing if this is a router recorder.
+void Controller::RequestRecordTimeAvailable()
+{
+    if (!mRouterRecorder) {
+        if (NONE == mPendingCommand) { //nothing more important is happening - requesting record time is not a vital thing to do
+            mPendingCommand = REC_TIME_AVAILABLE; //act on it later or detect if it is superceded while retrying
+        }
+        if (!mReconnecting) { //can send a command now
+            Signal(REC_TIME_AVAILABLE);
+            mPendingCommandSent = true;
+        }
     }
 }
 
@@ -328,7 +350,7 @@ wxThread::ExitCode Controller::Entry()
         ControllerThreadEvent event(EVT_CONTROLLER_THREAD);
         event.SetName(mName);
         event.SetCommand(mCommand);
-        mCommand = NONE; //can now detect if another command is issued while busy(more frequently during abnormal situations) 
+        mCommand = NONE; //can now detect if another command is issued while busy (more frequently during abnormal situations) 
         mMutex.Unlock();
         if (DIE == event.GetCommand()) {
             AddPendingEvent(event);
@@ -350,6 +372,7 @@ wxThread::ExitCode Controller::Entry()
                     ProdAuto::MxfDuration maxPostroll = InvalidMxfDuration; //initialisation prevents compiler warning
                     ProdAuto::TrackList_var trackList;
                     bool routerRecorder = false; //initialisation prevents compiler warning
+                    unsigned long recordTimeAvailable;
                     event.SetTimecodeStateChanged(); //always trigger action
                     mLastTimecodeReceived.undefined = true; //guarantee that a valid timecode will be assumed to be running timecode
                     mMutex.Lock();
@@ -364,6 +387,7 @@ wxThread::ExitCode Controller::Entry()
                             event.SetTrackStatusList(mRecorder->TracksStatus());
                             routerRecorder = wxString(mRecorder->RecordingFormat(), *wxConvCurrent).MakeUpper().Matches(wxT("*ROUTER*"));
                             strings = mRecorder->ProjectNames();
+                            recordTimeAvailable = mRecorder->RecordTimeAvailable();
                         }
                         catch (const CORBA::Exception & e) {
 //std::cerr << "connect/reconnect exception: " << e._name() << std::endl;
@@ -457,6 +481,7 @@ wxThread::ExitCode Controller::Entry()
                     }
                     if (msg.IsEmpty()) {
                         rc = ProdAuto::Recorder::SUCCESS;
+                        event.SetRecordTimeAvailable(mRouterRecorder ? -1 : recordTimeAvailable);
                     }
                     else {
                         rc = ProdAuto::Recorder::FAILURE;
@@ -482,6 +507,7 @@ wxThread::ExitCode Controller::Entry()
                     break;
                 }
                 case ADD_PROJECT_NAMES: {
+//std::cerr << "thread ADD_PROJECT_NAMES" << std::endl;
                     mMutex.Lock();
                     CORBA::StringSeq projectNames = mProjectNames;
                     mMutex.Unlock();
@@ -493,6 +519,25 @@ wxThread::ExitCode Controller::Entry()
                         event.SetResult(COMM_FAILURE);
                     }
                     rc = ProdAuto::Recorder::SUCCESS; //no return code suppled by AddProject()
+                    break;
+                }
+                case REC_TIME_AVAILABLE: {
+//std::cerr << "thread REC_TIME_AVAILABLE" << std::endl;
+                    long recordTimeAvailable;
+                    if (mRouterRecorder) {
+                        recordTimeAvailable = -1;
+                    }
+                    else {
+                        try {
+                            recordTimeAvailable = mRecorder->RecordTimeAvailable();
+                        }
+                        catch (const CORBA::Exception & e) {
+//std::cerr << "RecordTimeAvailable exception: " << e._name() << std::endl;
+                            event.SetResult(COMM_FAILURE);
+                        }
+                    }
+                    event.SetRecordTimeAvailable(recordTimeAvailable);
+                    rc = ProdAuto::Recorder::SUCCESS; //no return code available
                     break;
                 }
                 case RECORD: {

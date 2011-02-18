@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorderImpl.cpp,v 1.24 2010/11/02 16:27:19 john_f Exp $
+ * $Id: IngexRecorderImpl.cpp,v 1.25 2011/02/18 16:31:15 john_f Exp $
  *
  * Servant class for Recorder.
  *
@@ -22,9 +22,13 @@
  * 02110-1301, USA.
  */
 
+#define __STDC_FORMAT_MACROS
+#define __STDC_LIMIT_MACROS
+
 #include <ace/OS_NS_time.h>
 #include <ace/OS_NS_unistd.h>
 
+#include <sys/statvfs.h>
 #include <sstream>
 
 #include <Database.h>
@@ -37,6 +41,7 @@
 #include "FileUtils.h"
 #include "Timecode.h"
 #include "DateTime.h"
+#include "MaterialResolution.h"
 
 IngexRecorderImpl * IngexRecorderImpl::mInstance = 0;
 
@@ -132,8 +137,72 @@ char * IngexRecorderImpl::RecordingFormat (
     ::CORBA::SystemException
   )
 {
-  // Add your implementation here
     return CORBA::string_dup("Ingex recorder");
+}
+
+namespace
+{
+// Used in calculation of available record time
+class kbytes
+{
+public:
+    kbytes() : kbytes_per_minute(0) {}
+    uint32_t kbytes_per_minute;
+    uint64_t kbytes_available;
+};
+}
+
+::CORBA::ULong IngexRecorderImpl::RecordTimeAvailable (void)
+{
+    // Get video parameters of capture buffers
+    Ingex::VideoRaster::EnumType primary_video_raster = IngexShm::Instance()->PrimaryVideoRaster();
+    Ingex::VideoRaster::EnumType secondary_video_raster = IngexShm::Instance()->SecondaryVideoRaster();
+    Ingex::PixelFormat::EnumType primary_pixel_format = IngexShm::Instance()->PrimaryPixelFormat();
+    Ingex::PixelFormat::EnumType secondary_pixel_format = IngexShm::Instance()->SecondaryPixelFormat();
+    unsigned int channels = IngexShm::Instance()->Channels();
+
+    // Get current recorder settings
+    RecorderSettings * settings = RecorderSettings::Instance();
+
+    CORBA::ULong minutes_available = UINT32_MAX;
+
+    // Get record resolutions and destinations
+    // and calculate record time available
+    std::map<unsigned long, kbytes> kbytes_by_filesystem;
+    for (std::vector<EncodeParams>::iterator it = settings->encodings.begin();
+        it != settings->encodings.end(); ++it)
+    {
+        // Resolution
+        MaterialResolution::EnumType resolution = MaterialResolution::EnumType(it->resolution);
+
+        // kbytes per minute
+        uint32_t kbytes_per_minute;
+        
+        if (MaterialResolution::CheckVideoFormat(resolution, primary_video_raster, primary_pixel_format, kbytes_per_minute)
+            || MaterialResolution::CheckVideoFormat(resolution, secondary_video_raster, secondary_pixel_format, kbytes_per_minute))
+        {
+            struct statvfs stats;
+            if (0 == statvfs(it->dir.c_str(), &stats))
+            {
+                kbytes_by_filesystem[stats.f_fsid].kbytes_per_minute += (kbytes_per_minute * channels);
+                kbytes_by_filesystem[stats.f_fsid].kbytes_available = uint64_t(stats.f_bavail) * stats.f_bsize / 1000;
+                //fprintf(stderr, "Filesystem %s, id %lu, kbytes_per_minute %"PRIu32", kbytes_avail %"PRIu64"\n", it->dir.c_str(), stats.f_fsid, kbytes_by_filesystem[stats.f_fsid].kbytes_per_minute, kbytes_by_filesystem[stats.f_fsid].kbytes_available);
+            }
+        }
+
+        for (std::map<unsigned long, kbytes>::const_iterator
+            it = kbytes_by_filesystem.begin(); it != kbytes_by_filesystem.end(); ++it)
+        {
+            uint64_t mins = it->second.kbytes_available / it->second.kbytes_per_minute;
+            if (mins < minutes_available)
+            {
+                minutes_available = mins;
+            }
+        }
+        
+    }
+
+    return minutes_available;
 }
 
 ::ProdAuto::MxfDuration IngexRecorderImpl::MaxPreRoll (

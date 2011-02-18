@@ -1,7 +1,7 @@
 /***************************************************************************
- *   $Id: ingexgui.cpp,v 1.39 2011/02/14 13:32:55 john_f Exp $           *
+ *   $Id: ingexgui.cpp,v 1.40 2011/02/18 16:31:15 john_f Exp $           *
  *                                                                         *
- *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
+ *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
  *   Author: Matthew Marks                                                 *
  *                                                                         *
@@ -408,9 +408,6 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
         mPlayer = new Player(this, wxID_ANY, true);
 #else
         mPlayer = new Player(this, wxID_ANY, true);
-#endif
-#ifdef HAVE_DVS
-        mPlayer->EnableSDIOSD(GetMenuBar()->FindItem(MENU_PlayerEnableSDIOSD)->IsChecked());
 #endif
         sizer2bH->Add(mPlayer, 0, wxEXPAND | wxALL, CONTROL_BORDER);
     }
@@ -1478,28 +1475,28 @@ void IngexguiFrame::OnPlayerCommand(wxCommandEvent & event)
                 mPlayer->ChangeOutputType(prodauto::X11_OUTPUT);
                 break;
             case MENU_PlayerAbsoluteTimecode:
-                mPlayer->SetOSDType(SOURCE_TIMECODE);
+                mPlayer->ChangeOSDType(SOURCE_TIMECODE);
                 break;
             case MENU_PlayerRelativeTimecode:
-                mPlayer->SetOSDType(CONTROL_TIMECODE);
+                mPlayer->ChangeOSDType(CONTROL_TIMECODE);
                 break;
             case MENU_PlayerNoOSD:
-                mPlayer->SetOSDType(OSD_OFF);
+                mPlayer->ChangeOSDType(OSD_OFF);
                 break;
             case MENU_PlayerNoLevelMeters:
-                mPlayer->SetNumLevelMeters(0);
+                mPlayer->ChangeNumLevelMeters(0);
                 break;
             case MENU_PlayerTwoLevelMeters:
-                mPlayer->SetNumLevelMeters(2);
+                mPlayer->ChangeNumLevelMeters(2);
                 break;
             case MENU_PlayerFourLevelMeters:
-                mPlayer->SetNumLevelMeters(4);
+                mPlayer->ChangeNumLevelMeters(4);
                 break;
             case MENU_PlayerEightLevelMeters:
-                mPlayer->SetNumLevelMeters(8);
+                mPlayer->ChangeNumLevelMeters(8);
                 break;
             case MENU_PlayerAudioFollowsVideo:
-                mPlayer->AudioFollowsVideo(event.IsChecked());
+                mPlayer->EnableAudioFollowsVideo(event.IsChecked());
                 break;
             case MENU_PlayerLimitSplitToQuad:
                 mPlayer->LimitSplitToQuad(event.IsChecked());
@@ -1943,6 +1940,11 @@ void IngexguiFrame::OnUpdateUI(wxUpdateUIEvent& event)
         case MENU_PlayerDisableScalingFiltering:
             event.Check(mPlayer && mPlayer->IsScalingFilteringDisabled());
             break;
+#ifdef HAVE_DVS
+        case MENU_PlayerEnableSDIOSD:
+            event.Check(mPlayer && mPlayer->IsSDIOSDEnabled());
+            break;
+#endif
         default:
             break;
     }

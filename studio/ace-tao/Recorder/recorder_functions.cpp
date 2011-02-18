@@ -1,5 +1,5 @@
 /*
- * $Id: recorder_functions.cpp,v 1.53 2010/12/03 14:31:13 john_f Exp $
+ * $Id: recorder_functions.cpp,v 1.54 2011/02/18 16:31:15 john_f Exp $
  *
  * Functions which execute in recording threads.
  *
@@ -43,8 +43,8 @@
 #include "EncodeFrameBuffer.h"
 #include "MtEncoder.h"
 
-#include "YUV_frame.h"
-#include "YUV_quarter_frame.h"
+#include "yuvlib/YUV_frame.h"
+#include "yuvlib/YUV_quarter_frame.h"
 
 // prodauto database
 #include "Database.h"
@@ -463,13 +463,14 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     // Check which capture buffer has suitable format
     bool use_primary_video = true;
     bool incompatible_format = false;
-    if (MaterialResolution::CheckVideoFormat(resolution, primary_video_raster, primary_pixel_format))
+    uint32_t bytes_per_minute;
+    if (MaterialResolution::CheckVideoFormat(resolution, primary_video_raster, primary_pixel_format, bytes_per_minute))
     {
         // Primary buffer is suitable
         ACE_DEBUG((LM_DEBUG, ACE_TEXT("Using primary buffer for %C\n"), resolution_name.c_str()));
         use_primary_video = true;
     }
-    else if (MaterialResolution::CheckVideoFormat(resolution, secondary_video_raster, secondary_pixel_format))
+    else if (MaterialResolution::CheckVideoFormat(resolution, secondary_video_raster, secondary_pixel_format, bytes_per_minute))
     {
         // Secondary buffer is suitable
         ACE_DEBUG((LM_DEBUG, ACE_TEXT("Using secondary buffer for %C\n"), resolution_name.c_str()));

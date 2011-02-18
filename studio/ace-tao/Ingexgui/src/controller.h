@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: controller.h,v 1.9 2010/08/03 09:27:07 john_f Exp $           *
+ *   $Id: controller.h,v 1.10 2011/02/18 16:31:15 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -42,8 +42,10 @@ public:
     Controller(const wxString &, Comms *, wxEvtHandler *);
     ~Controller();
     bool IsOK();
+    const wxString GetName();
     void SetTapeIds(const CORBA::StringSeq &, const CORBA::StringSeq &);
     void AddProjectNames(const CORBA::StringSeq &);
+    void RequestRecordTimeAvailable();
     void Record(const ProdAuto::MxfTimecode &, const ProdAuto::MxfDuration &, const wxString &, const CORBA::BooleanSeq &);
     void Stop(const ProdAuto::MxfTimecode &, const ProdAuto::MxfDuration &, const wxString &, const ProdAuto::LocatorSeq &);
     bool IsRouterRecorder();
@@ -58,6 +60,7 @@ public:
         CONNECT,
         SET_TAPE_IDS,
         ADD_PROJECT_NAMES,
+        REC_TIME_AVAILABLE,
         RECONNECT,
         STATUS,
         RECORD,
@@ -149,6 +152,7 @@ public:
     void SetTimecode(ProdAuto::MxfTimecode_var timecode) { mTimecode = timecode; };
     void SetTimecodeState(Controller::TimecodeState state) { mTimecodeState = state; };
     void SetTimecodeStateChanged(bool changed = true) { mTimecodeStateChanged = changed; };
+    void SetRecordTimeAvailable(long timeAvailable) { mRecordTimeAvailable = timeAvailable; };
     const wxString GetName() { return mName; };
     const wxString GetMessage() { return mMessage; };
     const ProdAuto::TrackList_var & GetTrackList() { return mTrackList; };
@@ -159,6 +163,7 @@ public:
     const ProdAuto::MxfTimecode GetTimecode() { return mTimecode; };
     Controller::TimecodeState GetTimecodeState() { return mTimecodeState; };
     bool TimecodeStateHasChanged() { return mTimecodeStateChanged; };
+    long GetRecordTimeAvailable() { return mRecordTimeAvailable; };
     DECLARE_DYNAMIC_CLASS(ControllerThreadEvent)
 private:
     wxString mName;
@@ -171,5 +176,6 @@ private:
     ProdAuto::MxfTimecode mTimecode; //deletes itself
     Controller::TimecodeState mTimecodeState;
     bool mTimecodeStateChanged;
+    long mRecordTimeAvailable;
 };
 #endif

@@ -1,5 +1,5 @@
 /*
- * $Id: FileUtils.h,v 1.1 2007/09/11 14:08:33 stuart_hc Exp $
+ * $Id: FileUtils.h,v 1.2 2011/02/18 16:31:15 john_f Exp $
  *
  * File utilities.
  *
@@ -30,6 +30,7 @@
 class FileUtils
 {
 public:
+    static void CleanFilename(std::string & filename);
     static bool CreatePath(const std::string & path);
     static bool CreateUniquePath(std::string & path);
 };
