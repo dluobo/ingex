@@ -1,5 +1,5 @@
 /*
- * $Id: detect_digibeta_dropouts.c,v 1.2 2010/06/02 10:52:38 philipn Exp $
+ * $Id: detect_digibeta_dropouts.c,v 1.3 2011/02/18 16:26:54 john_f Exp $
  *
  * Utility to detect digibeta dropouts
  *
@@ -31,7 +31,7 @@
 
 #include <digibeta_dropout.h>
 #include <video_conversion_10bits.h>
-#include <YUV_frame.h>
+#include <yuvlib/YUV_frame.h>
 
 
 static const int DEFAULT_WIDTH = 720;

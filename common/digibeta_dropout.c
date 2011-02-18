@@ -1,5 +1,5 @@
 /*
- * $Id: digibeta_dropout.c,v 1.1 2010/01/12 16:02:07 john_f Exp $
+ * $Id: digibeta_dropout.c,v 1.2 2011/02/18 16:26:54 john_f Exp $
  *
  * DigiBeta dropout detector
  *
@@ -27,7 +27,7 @@
 #include <stdlib.h>     // for qsort
 #include <string.h>     // for memset
 
-#include "YUV_frame.h"
+#include "yuvlib/YUV_frame.h"
 #include "digibeta_dropout.h"
 
 #define WIDTH   720

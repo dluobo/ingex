@@ -1,5 +1,5 @@
 /*
- * $Id: digibeta_dropout.h,v 1.1 2010/01/12 16:02:06 john_f Exp $
+ * $Id: digibeta_dropout.h,v 1.2 2011/02/18 16:26:54 john_f Exp $
  *
  * DigiBeta dropout detector
  *
@@ -27,7 +27,7 @@
 #ifndef __DIGIBETA_DROPOUT__
 #define __DIGIBETA_DROPOUT__
 
-#include "YUV_frame.h"
+#include "yuvlib/YUV_frame.h"
 
 
 #ifdef __cplusplus

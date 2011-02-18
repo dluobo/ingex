@@ -1,5 +1,5 @@
 /*
- * $Id: clapperboard_avsync.c,v 1.1 2008/05/07 17:04:18 philipn Exp $
+ * $Id: clapperboard_avsync.c,v 1.2 2011/02/18 16:26:54 john_f Exp $
  *
  * 
  *
@@ -179,16 +179,6 @@ static int mxf_read_kl(FILE* mxfFile, mxfKey* key, uint8_t* llen, uint64_t *len)
 static int mxf_skip(FILE* mxfFile, uint64_t len)
 {
     CHK_ORET(fseeko(mxfFile, len, SEEK_CUR) == 0);
-    
-    return 1;
-}
-
-int mxf_read_uint16(FILE* mxfFile, uint16_t* value)
-{
-    uint8_t buffer[2];
-    CHK_ORET(fread(buffer, 1, 2, mxfFile) == 2);
-    
-    *value = (buffer[0]<<8) | (buffer[1]);
     
     return 1;
 }

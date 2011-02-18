@@ -28,7 +28,7 @@
 #include <inttypes.h>
 
 #include "multicast_video.h"
-#include "YUV_scale_pic.h"
+#include "yuvlib/YUV_scale_pic.h"
 
 
 

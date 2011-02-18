@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.11 2010/09/29 09:32:43 john_f Exp $
+# $Id: Makefile,v 1.12 2011/02/18 16:26:54 john_f Exp $
 #
 # Makefile for building useful command-line tools
 #
@@ -25,7 +25,7 @@ include ../../common/libmxf.mk
 
 CC = gcc
 
-INCLUDE=-I.. -I../../YUVlib $(LIBMXF_INCLUDE)
+INCLUDE=-I.. $(LIBMXF_INCLUDE)
 
 CPPFLAGS = -Wall -W -Wno-unused-parameter -g -DDEBUG -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE $(INCLUDE)
 CFLAGS = -Wall -W -Wno-unused-parameter -g -O3
@@ -33,11 +33,11 @@ CXXFLAGS = -Wall -W -Wno-unused-parameter -g -O3
 TARGET_ARCH = -mmmx -msse2
 
 LIB_COMMON = ../libcommon.a
-YUV_LIB = -L../../YUVlib -lYUVlib
+YUV_LIB = -lYUVlib
 
 PROGS = convert_audio convert_10bit_video create_video_test_signal detect_digibeta_dropouts \
 	compare_archive_mxf clapperboard_avsync disk_rw_benchmark send_video receive_video \
-	create_audio_test_signal dump_vc3 simple_mxf_demux
+	create_audio_test_signal dump_vc3 simple_mxf_demux add_bitc
 
 .PHONY: all
 all: $(PROGS) dvs_hardware
@@ -78,6 +78,10 @@ dump_vc3: dump_vc3.o
 
 simple_mxf_demux: simple_mxf_demux.o
 	$(CC) $(CXXFLAGS) $(TARGET_ARCH) -o $@ $<
+
+add_bitc: add_bitc.o $(LIB_COMMON)
+	$(CXX) $(CXXFLAGS) $(TARGET_ARCH) -o $@ $< $(LIB_COMMON)
+
 
 clean:
 	cd dvs_hardware && $(MAKE) $@

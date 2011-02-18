@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_control.cpp,v 1.3 2010/11/02 16:45:19 john_f Exp $
+ * $Id: nexus_control.cpp,v 1.4 2011/02/18 16:26:54 john_f Exp $
  *
  * Module for creating and accessing nexus shared control memory
  *
@@ -135,7 +135,14 @@ extern int nexus_num_aud_samp(const NexusControl *pctl, uint8_t *ring[], int cha
 
 extern int nexus_signal_ok(const NexusControl *pctl, uint8_t *ring[], int channel, int frame)
 {
-    return nexus_frame_data(pctl, ring, channel, frame)->signal_ok;
+    if (pctl)
+    {
+        return nexus_frame_data(pctl, ring, channel, frame)->signal_ok;
+    }
+    else
+    {
+        return 0;
+    }
 }
 
 extern int nexus_frame_number(const NexusControl *pctl, uint8_t *ring[], int channel, int frame)

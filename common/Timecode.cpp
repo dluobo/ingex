@@ -1,5 +1,5 @@
 /*
- * $Id: Timecode.cpp,v 1.11 2010/10/12 17:42:25 john_f Exp $
+ * $Id: Timecode.cpp,v 1.12 2011/02/18 16:26:54 john_f Exp $
  *
  * Class to hold a Timecode
  *
@@ -615,21 +615,24 @@ allowed range.
 */
 void Timecode::CheckFramesSinceMidnight()
 {
-    // Not quite right for drop-frame formats because
-    // the number of frames-per-day is non-integer.
-    // In non-drop 1000/1001 rates we are fine because
-    // the "day" length is adjusted.
-    int frames_per_day = NominalFps() * 24 * 60 * 60;
-    if (DropFrame())
+    if (!IsNull())
     {
-        frames_per_day -= frames_per_day / 1001;
-    }
+        // Not quite right for drop-frame formats because
+        // the number of frames-per-day is non-integer.
+        // In non-drop 1000/1001 rates we are fine because
+        // the "day" length is adjusted.
+        int frames_per_day = NominalFps() * 24 * 60 * 60;
+        if (DropFrame())
+        {
+            frames_per_day -= frames_per_day / 1001;
+        }
 
-    if (mFramesSinceMidnight < 0)
-    {
-        mFramesSinceMidnight += frames_per_day;
+        if (mFramesSinceMidnight < 0)
+        {
+            mFramesSinceMidnight += frames_per_day;
+        }
+        mFramesSinceMidnight %= frames_per_day;
     }
-    mFramesSinceMidnight %= frames_per_day;
 }
 
 /**
@@ -637,9 +640,12 @@ Add a number of frames.
 */
 void Timecode::operator+=(int frames)
 {
-    mFramesSinceMidnight += frames;
-    UpdateHoursMinsEtc();
-    UpdateText();
+    if (!IsNull())
+    {
+        mFramesSinceMidnight += frames;
+        UpdateHoursMinsEtc();
+        UpdateText();
+    }
 }
 
 /**
@@ -647,10 +653,12 @@ Subtract a number of frames.
 */
 void Timecode::operator-=(int frames)
 {
-    mFramesSinceMidnight -= frames;
-
-    UpdateHoursMinsEtc();
-    UpdateText();
+    if (!IsNull())
+    {
+        mFramesSinceMidnight -= frames;
+        UpdateHoursMinsEtc();
+        UpdateText();
+    }
 }
 
 
