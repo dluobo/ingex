@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.1 2010/09/29 09:01:13 john_f Exp $
+# $Id: Makefile,v 1.2 2011/02/18 16:08:53 john_f Exp $
 #
 # Makefile for building YUVlib
 #
@@ -21,6 +21,8 @@
 # 02110-1301, USA.
 #
 
+INSTALL_PREFIX ?= /usr/local
+
 CC=gcc
 OPT=-O3 -mmmx -msse2
 INCLUDES=-I/usr/local/include/ffmpeg -I/usr/include/freetype2 -I/usr/include/fontconfig
@@ -41,17 +43,33 @@ ifndef DISABLE_FFMPEG
 
 endif	
 
-HEADERS=$(wildcard, *.h)
+HEADERS=$(filter-out YUV_DirectShow.h,$(wildcard *.h))
 CFILES=$(wildcard *.c)
 OBJECTS=$(CFILES:%.c=%.o)
 
 LIBYUVLIB=libYUVlib.a
 
-.PHONY: all clean
+.PHONY: all
 all: $(LIBYUVLIB)($(OBJECTS))
-
-clean:
-	rm -f *.o *.a
 
 $(LIBYUVLIB)(%.o): %.o
 	ar rcv $(LIBYUVLIB) $<
+
+.PHONY: install
+install: $(LIBYUVLIB)
+	mkdir -p $(INSTALL_PREFIX)/lib
+	cp $(LIBYUVLIB) $(INSTALL_PREFIX)/lib
+	mkdir -p $(INSTALL_PREFIX)/include/yuvlib
+	cp $(HEADERS) $(INSTALL_PREFIX)/include/yuvlib/
+
+.PHONY: uninstall
+uninstall:
+	rm -f $(INSTALL_PREFIX)/lib/$(LIBYUVLIB)
+	rm -fR $(INSTALL_PREFIX)/include/yuvlib
+
+.PHONY: clean
+clean:
+	rm -f *.o *.a
+
+
+
