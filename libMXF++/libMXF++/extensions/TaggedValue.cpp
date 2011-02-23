@@ -1,5 +1,5 @@
 /*
- * $Id: TaggedValue.cpp,v 1.4 2010/07/26 16:02:38 philipn Exp $
+ * $Id: TaggedValue.cpp,v 1.5 2011/02/23 14:43:09 philipn Exp $
  *
  * Copyright (C) 2009  British Broadcasting Corporation.
  * All Rights Reserved.
@@ -133,11 +133,11 @@ string TaggedValue::getStringValue()
         }
         utf16_value[str_size] = 0;
 
-        utf8_size = wcstombs(0, utf16_value, 0);
+        utf8_size = mxf_utf16_to_utf8(0, utf16_value, 0);
         MXFPP_CHECK(utf8_size != (size_t)(-1));
         utf8_size += 1;
         utf8_value = new char[utf8_size];
-        wcstombs(utf8_value, utf16_value, utf8_size);
+        mxf_utf16_to_utf8(utf8_value, utf16_value, utf8_size);
         
         result = utf8_value;
         
@@ -167,11 +167,11 @@ void TaggedValue::setStringValue(string value)
     size_t utf16ValSize;
     try
     {
-        utf16ValSize = mbstowcs(NULL, value.c_str(), 0);
+        utf16ValSize = mxf_utf8_to_utf16(NULL, value.c_str(), 0);
         MXFPP_CHECK(utf16ValSize != (size_t)(-1));
         utf16ValSize += 1;
         utf16Val = new wchar_t[utf16ValSize];
-        mbstowcs(utf16Val, value.c_str(), utf16ValSize);
+        mxf_utf8_to_utf16(utf16Val, value.c_str(), utf16ValSize);
         
         indirectVal.length = (uint16_t)(sizeof(g_prefix_be) + utf16ValSize * mxfUTF16Char_extlen);
         indirectVal.data = new uint8_t[indirectVal.length];

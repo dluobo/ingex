@@ -1,5 +1,5 @@
 /*
- * $Id: MetadataSet.cpp,v 1.6 2010/11/02 13:19:20 philipn Exp $
+ * $Id: MetadataSet.cpp,v 1.7 2011/02/23 14:43:09 philipn Exp $
  *
  * 
  *
@@ -288,11 +288,11 @@ string MetadataSet::getStringItem(const mxfKey* itemKey) const
         utf16Result = new mxfUTF16Char[utf16Size];
         MXFPP_CHECK(mxf_get_utf16string_item(_cMetadataSet, itemKey, utf16Result));
        
-        size_t utf8Size = wcstombs(0, utf16Result, 0);
+        size_t utf8Size = mxf_utf16_to_utf8(0, utf16Result, 0);
         MXFPP_CHECK(utf8Size != (size_t)(-1));
         utf8Size += 1;
         utf8Result = new char[utf8Size];
-        wcstombs(utf8Result, utf16Result, utf8Size);
+        mxf_utf16_to_utf8(utf8Result, utf16Result, utf8Size);
         result = utf8Result;
         delete [] utf16Result;
         utf16Result = 0;
@@ -804,11 +804,11 @@ void MetadataSet::setStringItem(const mxfKey* itemKey, string value)
     size_t utf16ValSize;
     try
     {
-        utf16ValSize = mbstowcs(NULL, value.c_str(), 0);
+        utf16ValSize = mxf_utf8_to_utf16(NULL, value.c_str(), 0);
         MXFPP_CHECK(utf16ValSize != (size_t)(-1));
         utf16ValSize += 1;
         utf16Val = new wchar_t[utf16ValSize];
-        mbstowcs(utf16Val, value.c_str(), utf16ValSize);
+        mxf_utf8_to_utf16(utf16Val, value.c_str(), utf16ValSize);
        
         MXFPP_CHECK(mxf_set_utf16string_item(_cMetadataSet, itemKey, utf16Val));
        
@@ -828,11 +828,11 @@ void MetadataSet::setFixedSizeStringItem(const mxfKey* itemKey, string value, ui
     size_t utf16ValSize;
     try
     {
-        utf16ValSize = mbstowcs(NULL, value.c_str(), 0);
+        utf16ValSize = mxf_utf8_to_utf16(NULL, value.c_str(), 0);
         MXFPP_CHECK(utf16ValSize != (size_t)(-1));
         utf16ValSize += 1;
         utf16Val = new wchar_t[utf16ValSize];
-        mbstowcs(utf16Val, value.c_str(), utf16ValSize);
+        mxf_utf8_to_utf16(utf16Val, value.c_str(), utf16ValSize);
        
         MXFPP_CHECK(mxf_set_fixed_size_utf16string_item(_cMetadataSet, itemKey, utf16Val, size));
        
@@ -1297,17 +1297,17 @@ void MetadataSet::attachAvidAttribute(string name, string value)
     size_t utf16ValSize;
     try
     {
-        utf16NameSize = mbstowcs(NULL, name.c_str(), 0);
+        utf16NameSize = mxf_utf8_to_utf16(NULL, name.c_str(), 0);
         MXFPP_CHECK(utf16NameSize != (size_t)(-1));
         utf16NameSize += 1;
         utf16Name = new wchar_t[utf16NameSize];
-        mbstowcs(utf16Name, name.c_str(), utf16NameSize);
+        mxf_utf8_to_utf16(utf16Name, name.c_str(), utf16NameSize);
        
-        utf16ValSize = mbstowcs(NULL, value.c_str(), 0);
+        utf16ValSize = mxf_utf8_to_utf16(NULL, value.c_str(), 0);
         MXFPP_CHECK(utf16ValSize != (size_t)(-1));
         utf16ValSize += 1;
         utf16Val = new wchar_t[utf16ValSize];
-        mbstowcs(utf16Val, value.c_str(), utf16ValSize);
+        mxf_utf8_to_utf16(utf16Val, value.c_str(), utf16ValSize);
        
         MXFPP_CHECK(mxf_avid_attach_mob_attribute(_headerMetadata->getCHeaderMetadata(), _cMetadataSet, 
             utf16Name, utf16Val));
@@ -1331,17 +1331,17 @@ void MetadataSet::attachAvidUserComment(string name, string value)
     size_t utf16ValSize;
     try
     {
-        utf16NameSize = mbstowcs(NULL, name.c_str(), 0);
+        utf16NameSize = mxf_utf8_to_utf16(NULL, name.c_str(), 0);
         MXFPP_CHECK(utf16NameSize != (size_t)(-1));
         utf16NameSize += 1;
         utf16Name = new wchar_t[utf16NameSize];
-        mbstowcs(utf16Name, name.c_str(), utf16NameSize);
+        mxf_utf8_to_utf16(utf16Name, name.c_str(), utf16NameSize);
        
-        utf16ValSize = mbstowcs(NULL, value.c_str(), 0);
+        utf16ValSize = mxf_utf8_to_utf16(NULL, value.c_str(), 0);
         MXFPP_CHECK(utf16ValSize != (size_t)(-1));
         utf16ValSize += 1;
         utf16Val = new wchar_t[utf16ValSize];
-        mbstowcs(utf16Val, value.c_str(), utf16ValSize);
+        mxf_utf8_to_utf16(utf16Val, value.c_str(), utf16ValSize);
        
         MXFPP_CHECK(mxf_avid_attach_user_comment(_headerMetadata->getCHeaderMetadata(), _cMetadataSet, 
             utf16Name, utf16Val));
