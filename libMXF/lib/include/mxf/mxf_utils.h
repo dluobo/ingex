@@ -1,5 +1,5 @@
 /*
- * $Id: mxf_utils.h,v 1.4 2011/01/10 17:05:15 john_f Exp $
+ * $Id: mxf_utils.h,v 1.5 2011/02/23 14:42:29 philipn Exp $
  *
  * General purpose utilities
  *
@@ -68,6 +68,11 @@ void mxf_regtest_generate_uuid(mxfUUID* uuid);
 void mxf_regtest_get_timestamp_now(mxfTimestamp* now);
 void mxf_regtest_generate_umid(mxfUMID* umid);
 void mxf_regtest_generate_key(mxfKey* key);
+
+
+size_t mxf_utf16_to_utf8(char *u8_str, const mxfUTF16Char *u16_str, size_t u8_size);
+size_t mxf_utf8_to_utf16(mxfUTF16Char *u16_str, const char *u8_str, size_t u16_size);
+
 
 
 #ifdef __cplusplus

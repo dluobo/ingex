@@ -1,5 +1,5 @@
 /*
- * $Id: avid_mxf_info.c,v 1.16 2011/02/14 11:21:18 philipn Exp $
+ * $Id: avid_mxf_info.c,v 1.17 2011/02/23 14:42:29 philipn Exp $
  *
  * Parse metadata from an Avid MXF file
  *
@@ -117,13 +117,12 @@ static void print_timecode(int64_t timecode, const mxfRational* sampleRate)
 
 static int convert_string(const mxfUTF16Char* utf16Str, char** str, int printDebugError)
 {
-    size_t utf8Size;
-    
-    utf8Size = wcstombs(0, utf16Str, 0);
-    FCHECK(utf8Size != (size_t)(-1));
-    utf8Size += 1;
-    FCHECK((*str = malloc(utf8Size)) != NULL);
-    wcstombs(*str, utf16Str, utf8Size);
+    size_t utf8Len;
+ 
+    utf8Len = mxf_utf16_to_utf8(0, utf16Str, 0);
+    FCHECK(utf8Len != (size_t)(-1));
+    FCHECK((*str = malloc(utf8Len + 1)) != NULL);
+    mxf_utf16_to_utf8(*str, utf16Str, utf8Len + 1);
 
     return 1;
     
