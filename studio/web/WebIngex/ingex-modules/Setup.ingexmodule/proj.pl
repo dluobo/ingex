@@ -73,7 +73,10 @@ sub get_page_content
             '',
             '']),
         ]));
-    foreach my $proj (@{$projects})
+    foreach my $proj (
+        sort {$a->{"NAME"} cmp $b->{"NAME"}}
+        (@{$projects})
+    )
     {    
         # if ($proj->{'ID'} == 1) # id=1 is a reserved value ("Unspecified")
         # {
