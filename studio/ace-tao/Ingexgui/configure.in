@@ -1,4 +1,4 @@
-    # $Id: configure.in,v 1.21 2011/02/18 16:31:15 john_f Exp $
+    # $Id: configure.in,v 1.22 2011/03/01 14:29:14 john_f Exp $
 #
 AC_INIT(src/ingexgui.cpp)
 AM_INIT_AUTOMAKE(ingexgui, 0.1)
@@ -134,7 +134,13 @@ LIBS="-lTAO -lACE -lTAO_CosNaming -lTAO_PortableServer -lTAO_AnyTypeCode -lTAO_V
 LIBDIRS="-L$ACE_ROOT/lib -L$WORKSPACE/common"
 CPPFLAGS+=" -I/usr/local/include/mxf/examples/avidmxfinfo -I/usr/local/include/mxf/examples/archive/info -I/usr/local/include/mxf/examples/reader"
 LIBS+=" -larchivemxfinfo -lavidmxfinfo -lMXFReader -lMXF"
-LDFLAGS="$LDFLAGS $LIBS $LIBDIRS $IDLLOC/$IDLLIB $WORKSPACE/player/IngexPlayer/$PLAYERLIB $DVS_LDFLAGS"
+LDFLAGS="$LDFLAGS $LIBS $LIBDIRS $IDLLOC/$IDLLIB $DVS_LDFLAGS"
+if test -n "$USE_HTTP_PLAYER"; then
+	CPPFLAGS+=" -I$WORKSPACE/player/http_IngexPlayer -I$WORKSPACE/player/http_IngexPlayer/client -DUSE_HTTP_PLAYER"
+	LDFLAGS+="-lcurl $WORKSPACE/player/http_IngexPlayer/client/libHTTPPlayerClient.a"
+else
+	LDFLAGS+=" $WORKSPACE/player/IngexPlayer/$PLAYERLIB"
+fi
 
 #AC_CONFIG_MACRO_DIR([m4])
 AC_SUBST(WX_LIBS)
