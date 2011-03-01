@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.cpp,v 1.20 2011/02/18 16:32:26 john_f Exp $
+ * $Id: dvs_sdi.cpp,v 1.21 2011/03/01 14:24:03 john_f Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -141,6 +141,7 @@ int aes_routing = 0;
 int use_ffmpeg_hd_sd_scaling = 0;
 int use_yuvlib_filter = 0;
 uint8_t *hd2sd_interm[MAX_CHANNELS];
+uint8_t *hd2sd_interm2[MAX_CHANNELS];
 uint8_t *hd2sd_workspace[MAX_CHANNELS];
 
 int last_ltc_bits[MAX_CHANNELS];
@@ -1433,11 +1434,29 @@ int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_from_vi
                 YUV_frame_from_buffer(&yuv_hd_frame, dma_dest, width, height, UYVY);
                 YUV_frame_from_buffer(&yuv_sd_frame, scale_output_buffer, sec_width, sec_height, UYVY);
 
+#if 0
                 scale_pic(&yuv_hd_frame, &yuv_sd_frame,
                           0, 0, sec_width, sec_height,
                           interlace,
                           use_yuvlib_filter, use_yuvlib_filter,
                           hd2sd_workspace[chan]);
+#else
+// More efficient if we first scale by a factor of 2 horizontally
+                YUV_frame yuv_int_frame;
+                YUV_frame_from_buffer(&yuv_int_frame, hd2sd_interm2[chan], width/2, sec_height, UYVY);
+
+                scale_pic(&yuv_hd_frame, &yuv_int_frame,
+                          0, 0, width/2, sec_height,
+                          interlace,
+                          use_yuvlib_filter, use_yuvlib_filter,
+                          hd2sd_workspace[chan]);
+
+                scale_pic(&yuv_int_frame, &yuv_sd_frame,
+                          0, 0, sec_width, sec_height,
+                          interlace,
+                          use_yuvlib_filter, use_yuvlib_filter,
+                          hd2sd_workspace[chan]);
+#endif
             }
 
 
@@ -3384,6 +3403,13 @@ int main (int argc, char ** argv)
                 return 1;
             }
 
+            hd2sd_interm2[chan] = (uint8_t *)malloc((width/2) * sec_height * 2);
+            if (!hd2sd_interm2[chan])
+            {
+                fprintf(stderr, "Failed to allocate HD-to-SD intermediate buffer 2.\n");
+                return 1;
+            }
+
             hd2sd_workspace[chan] = (uint8_t *)malloc(2*width*4);
             if (!hd2sd_workspace[chan])
             {
@@ -3395,6 +3421,7 @@ int main (int argc, char ** argv)
         {
             video_work_area[chan] = NULL;
             hd2sd_interm[chan] = NULL;
+            hd2sd_interm2[chan] = NULL;
             hd2sd_workspace[chan] = NULL;
         }
     }
@@ -3440,6 +3467,10 @@ int main (int argc, char ** argv)
         if (hd2sd_interm[chan])
         {
             free(hd2sd_interm[chan]);
+        }
+        if (hd2sd_interm2[chan])
+        {
+            free(hd2sd_interm2[chan]);
         }
         if (hd2sd_workspace[chan])
         {
