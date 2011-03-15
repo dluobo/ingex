@@ -1,5 +1,5 @@
 /*
- * $Id: MaterialResolution.h,v 1.6 2011/02/18 16:42:49 john_f Exp $
+ * $Id: MaterialResolution.h,v 1.7 2011/03/15 16:20:32 philipn Exp $
  *
  * Material resolution codes and details
  *
@@ -24,6 +24,7 @@
 #ifndef Database_MaterialResolution_h
 #define Database_MaterialResolution_h
 
+#include "integer_types.h"
 #include "VideoRaster.h"
 
 #include <string>
