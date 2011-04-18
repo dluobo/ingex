@@ -308,6 +308,7 @@ int main(int argc, char *argv[])
     }
 
     /* Setup X parameters */
+    x_attr.backing_store = Always;
     x_attr.background_pixel = 0;
     x_attr.event_mask = ExposureMask | StructureNotifyMask;
 

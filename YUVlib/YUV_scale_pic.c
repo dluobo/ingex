@@ -1,8 +1,4 @@
 /*
- * $Id: YUV_scale_pic.c,v 1.4 2011/01/10 16:57:36 john_f Exp $
- *
- *
- *
  * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
  * Author: Jim Easterbrook
  *
@@ -57,6 +53,8 @@ static void h_sub_alias(const BYTE* srcLine, BYTE* dstLine,
                         const int xup, const int xdown, const int w,
                         uint32_t* work)
 {
+    (void)work;
+
     int     i;
     int     dx_int;
     int     dx_frac;
@@ -212,6 +210,94 @@ static void h_sub_scale_ave(const BYTE* srcLine, uint32_t* dstLine,
         }
         return;
     }
+    if ((xup * 4) == (xdown * 3))
+    {
+        // common 3/4 resize, e.g. 1920 -> 1440
+        acc = 32 * *srcLine;
+        for (i = 0; i < (w / 3); i++)
+        {
+            // 1/8, 6/8, 1/8 filter
+            acc += 192 * *srcLine;
+            srcLine += inStride;
+            *dstLine++ = acc + (32 * *srcLine);
+            // 5/8, 3/8 filter
+            acc = 160 * *srcLine;
+            srcLine += inStride;
+            *dstLine++ = acc + (96 * *srcLine);
+            // 3/8, 5/8 filter
+            acc = 96 * *srcLine;
+            srcLine += inStride;
+            *dstLine++ = acc + (160 * *srcLine);
+            // load acc for next iteration
+            acc = 32 * *srcLine;
+            srcLine += inStride;
+        }
+        if ((w % 3) > 0)
+        {
+            // 1/8, 6/8, 1/8 filter
+            acc += 192 * *srcLine;
+            srcLine += inStride;
+            *dstLine++ = acc + (32 * *srcLine);
+        }
+        if ((w % 3) > 1)
+        {
+            // 5/8, 3/8 filter
+            acc = 160 * *srcLine;
+            srcLine += inStride;
+            *dstLine++ = acc + (96 * *srcLine);
+        }
+        return;
+    }
+    if ((xup * 8) == (xdown * 3))
+    {
+        // common 3/8 resize, e.g. 1920 -> 720
+        acc = 80 * *srcLine;
+        for (i = 0; i < (w / 3); i++)
+        {
+            // 5/16, 6/16, 5/16 filter
+            acc += 96 * *srcLine;
+            srcLine += inStride;
+            *dstLine++ = acc + (80 * *srcLine);
+            // 1/16, 6/16, 6/16, 3/16 filter
+            acc = 16 * *srcLine;
+            srcLine += inStride;
+            acc += 96 * *srcLine;
+            srcLine += inStride;
+            acc += 96 * *srcLine;
+            srcLine += inStride;
+            *dstLine++ = acc + (48 * *srcLine);
+            // 3/16, 6/16, 6/16, 1/16 filter
+            acc = 48 * *srcLine;
+            srcLine += inStride;
+            acc += 96 * *srcLine;
+            srcLine += inStride;
+            acc += 96 * *srcLine;
+            srcLine += inStride;
+            *dstLine++ = acc + (16 * *srcLine);
+            // load acc for next iteration
+            acc = 80 * *srcLine;
+            srcLine += inStride;
+        }
+        if ((w % 3) > 0)
+        {
+            // 5/16, 6/16, 5/16 filter
+            acc += 96 * *srcLine;
+            srcLine += inStride;
+            *dstLine++ = acc + (80 * *srcLine);
+        }
+        if ((w % 3) > 1)
+        {
+            // 1/16, 6/16, 6/16, 3/16 filter
+            acc = 16 * *srcLine;
+            srcLine += inStride;
+            acc += 96 * *srcLine;
+            srcLine += inStride;
+            acc += 96 * *srcLine;
+            srcLine += inStride;
+            *dstLine++ = acc + (48 * *srcLine);
+        }
+        return;
+    }
     // start at centre of first input sample group
     err = (xdown - xup) / 2;
     // initialise accumulated output with edge padding
@@ -230,9 +316,8 @@ static void h_sub_scale_ave(const BYTE* srcLine, uint32_t* dstLine,
         // this output
         whole = *srcLine;
         srcLine += inStride;
-        part = whole * err;
-        *dstLine++ = ((acc + part) * 256) / xdown;
-        acc = (whole * xup) - part; // residue of input sample
+        *dstLine++ = ((acc + (whole * err)) * 256) / xdown;
+        acc = whole * (xup - err); // residue of input sample
         err += xdown - xup;
     }
 }
