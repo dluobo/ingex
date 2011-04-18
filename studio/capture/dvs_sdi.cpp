@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.cpp,v 1.21 2011/03/01 14:24:03 john_f Exp $
+ * $Id: dvs_sdi.cpp,v 1.22 2011/04/18 10:39:22 john_f Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -76,6 +76,14 @@ const bool CHECK_AUDIO_OFFSET = false;
 // Option for selecting more efficient SV_FIFO_FLAG_AUDIOINTERLEAVED for audio capture
 bool AUDIO_INTERLEAVED = false;
 
+#if 1
+// Older DVS SDK
+const unsigned int AUDIO_PAIR_OFFSET = 0x4000;
+#else
+// More recent DVS SDK (> 4.0.0.8)
+const unsigned int AUDIO_PAIR_OFFSET = 0x6000;
+#endif
+
 const int PAL_AUDIO_SAMPLES = 1920;
 const int NTSC_AUDIO_SAMPLES[5] = { 1602, 1601, 1602, 1601, 1602 };
 static int ntsc_audio_seq = 0;
@@ -108,6 +116,7 @@ NexusControl    *p_control = NULL;
 uint8_t         *ring[MAX_CHANNELS] = {0};
 int             control_id, ring_id[MAX_CHANNELS];
 int             width = 0, height = 0;
+int             video_size = 0;
 int             sec_width = 0, sec_height = 0;
 int             frame_rate_numer = 0, frame_rate_denom = 0;
 VideoRaster::EnumType primary_video_raster = VideoRaster::NONE;
@@ -919,9 +928,8 @@ void dvsaudio32_deinterleave_16bit(uint8_t *audio12, uint8_t *audio34, uint8_t *
 void dvsaudio32_to_4_mono_tracks(uint8_t *src, uint8_t *dst32, uint8_t *dst16, int num_samples)
 {
     // src contains either 4 channels or 8 channels as multiplexed pairs
-    // where each pair is aligned on a 0x4000 boundary
     uint8_t *audio12 = src;
-    uint8_t *audio34 = src + 0x4000;
+    uint8_t *audio34 = src + AUDIO_PAIR_OFFSET;
 
     // De-interleave to 32bit mono buffers
     //
@@ -959,8 +967,8 @@ void dvsaudio32_to_mono_audio(uint8_t *src, uint8_t *dst32, uint8_t *dst16, int 
     {
         // 32bit buffer is fixed by DVS internals to have channel 5,6 at offset 0x8000
         // 16bit buffer has channel 5 start immediately after channel 4
-        dvsaudio32_to_4_mono_tracks(tmp + 0x8000,
-                                    dst32 + 0x8000,
+        dvsaudio32_to_4_mono_tracks(tmp + 2 * AUDIO_PAIR_OFFSET,
+                                    dst32 + 2 * AUDIO_PAIR_OFFSET,
                                     dst16 + MAX_AUDIO_SAMPLES_PER_FRAME * 2 * 4,
                                     num_samples);
     }
@@ -1018,7 +1026,6 @@ void dvs_interleaved16_deinterleave_16bit(uint8_t *audio_16channels, uint8_t *a1
 void dvs_interleaved16_to_4_mono_tracks(uint8_t *src, uint8_t *dst32, uint8_t *dst16, int num_samples)
 {
     // src contains 16 channels as interleaved 32bit samples
-    // where each pair is aligned on a 0x4000 boundary
 
     // De-interleave to 32bit mono buffers
     //
@@ -1047,7 +1054,6 @@ void dvs_interleaved16_audio_to_mono_audio(uint8_t *src, uint8_t *dst32, uint8_t
 {
     // For historical reasons, format of audio buffer in shared mem is:
     // <video> <audio12><audio34><audio56><audio78>
-    // where audio34 is fixed at 0x4000 offset and audio56 is fixed at 0x8000
 
     // src and dst32 can be the same buffer, so first read full src audio into tmp buffer
     uint8_t tmp[audio_size];
@@ -1202,6 +1208,7 @@ int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_from_vi
     nfd->frame_number = frame_number;
 
     uint8_t *vid_dest = ring[chan] + element_size * ((pc->lastframe+1) % ring_len);
+#if 0
     uint8_t *dma_dest = vid_dest;
 
     // If primary format is not native DMA format (UYVY) use video_work_area[]
@@ -1216,6 +1223,12 @@ int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_from_vi
         dma_dest = video_work_area[chan];
 #endif
     }
+#else
+    // We always transfer to video_work_area[] first, even if we want the
+    // native DMA format (UYVY)
+    uint8_t * dma_dest = video_work_area[chan];
+#endif
+
     pbuffer->dma.addr = (char *)dma_dest;
     pbuffer->dma.size = dma_total_size;         // video + audio
 
@@ -1360,7 +1373,10 @@ int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_from_vi
     }
     else
     {
-        // No video reformat required, just de-interleave audio to give mono audio
+        // No video reformat required, we just copy.
+        memcpy(vid_dest, dma_dest, video_size);
+        
+        // De-interleave audio to give mono audio
         if (!no_audio)
         {
             // reformats 32bit interleaved and writes back to same audio buffer
@@ -3117,6 +3133,9 @@ int main (int argc, char ** argv)
     // Instead use the following values found experimentally since we need
     // to allocate buffers before successful dma transfers occur.
 
+    // Video size for 422
+    video_size = width * height * 2;
+
     // Need to know card type. (We assume all the same type.)
     bool dvs_dummy = false;
     int sn = 0;
@@ -3126,11 +3145,11 @@ int main (int argc, char ** argv)
     {
     case 0:  // dvs_dummy
         dvs_dummy = true;
-        dma_video_size = width * height * 2;
+        dma_video_size = video_size;
         break;
     case 11: // SDStationOEM
     case 19: // SDStationOEMII
-        dma_video_size = width * height * 2;
+        dma_video_size = video_size;
         break;
     case 13: // Centaurus
     case 20: // CentaurusII PCI-X
@@ -3164,7 +3183,7 @@ int main (int argc, char ** argv)
             dma_video_size = 0x1C3000;
             break;
         default:
-            dma_video_size = width * height * 2;
+            dma_video_size = video_size;
             break;
         }
         break;
@@ -3215,14 +3234,14 @@ int main (int argc, char ** argv)
     }
 
     // Set up audio sizes for DMA transferred audio and reformatted secondary audio
-    int audio_pair_size = 0x4000;
+
     if (audio8ch)
     {
-        audio_size = audio_pair_size * 4;
+        audio_size = AUDIO_PAIR_OFFSET * 4;
     }
     else
     {
-        audio_size = audio_pair_size * 2;
+        audio_size = AUDIO_PAIR_OFFSET * 2;
     }
     // For interleaved audio capture, audio size is fixed at 16 channels
     // NB. could make a difference here between audio size in DMA and
