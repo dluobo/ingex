@@ -1,5 +1,5 @@
 /*
- * $Id: MtEncoder.cpp,v 1.8 2010/12/03 14:31:13 john_f Exp $
+ * $Id: MtEncoder.cpp,v 1.9 2011/04/18 09:34:14 john_f Exp $
  *
  * Video encoder using multiple threads.
  *
@@ -106,9 +106,9 @@ int MtEncoder::svc()
         else
         {
             // Extract frame data.
-            DataBlock * db = ACE_dynamic_cast(DataBlock *, mb->data_block());
+            DataBlock * db = dynamic_cast<DataBlock *>(mb->data_block());
             Package * p = db->data();
-            FramePackage * fp = ACE_dynamic_cast(FramePackage *, p);
+            FramePackage * fp = dynamic_cast<FramePackage *>(p);
             EncodeFrameTrack * eft = fp->VideoData();
             uint8_t * p_input_video = (uint8_t *)eft->Data();
 

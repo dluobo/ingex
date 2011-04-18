@@ -1,5 +1,5 @@
 /*
- * $Id: Forwarder.cpp,v 1.1 2007/09/11 14:08:33 stuart_hc Exp $
+ * $Id: Forwarder.cpp,v 1.2 2011/04/18 09:34:14 john_f Exp $
  *
  * Send data to an observer.
  *
@@ -103,7 +103,7 @@ int Forwarder::svc(void)
         //           "There are %d messages remaining in the queue.\n", n));
 
         //message_block = ACE_dynamic_cast(MessageBlock *, message);
-        data_block = ACE_dynamic_cast(DataBlock *, message->data_block());
+        data_block = dynamic_cast<DataBlock *>(message->data_block());
         data = data_block->data();
 
         success = forward(data);
@@ -184,7 +184,7 @@ StatusForwarder::~StatusForwarder(void)
 
 bool StatusForwarder::forward(Package *p)
 {
-    StatusPackage * sp = ACE_dynamic_cast(StatusPackage *, p);
+    StatusPackage * sp = dynamic_cast<StatusPackage *>(p);
 
     if (sp) {
         if(sp->IsEmpty()) {
