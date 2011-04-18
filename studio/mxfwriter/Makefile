@@ -20,14 +20,12 @@ SOURCES = MXFWriterException.cpp \
 	MXFUtils.cpp \
 	MXFWriter.cpp \
 	MXFOPAtomWriter.cpp \
-	MXFOP1AWriter.cpp \
-	test_mxfwriter.cpp
-OBJECTS = $(patsubst %.cpp,.objs/%.o,$(SOURCES))
+	MXFOP1AWriter.cpp
+
+LIBOBJECTS = $(patsubst %.cpp,.objs/%.o,$(SOURCES))
+
+SOURCES += test_mxfwriter.cpp
 DEPENDENCIES = $(patsubst %.cpp,.deps/%.d,$(SOURCES))
-
-LIBOBJECTS = $(OBJECTS)
-LIBOBJECTS -= .objs/test_mxfwriter.o
-
 
 .PHONY: all
 all: libmxfwriter.a test_mxfwriter

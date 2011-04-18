@@ -27,12 +27,11 @@ COMPILE = $(CC) $(CFLAGS)
 AR = ar cr
 
 
-SOURCES = IngexMXFInfo.cpp import_mxf_info.cpp mxf_info_to_xml.cpp
-OBJECTS = $(patsubst %.cpp,.objs/%.o,$(SOURCES))
-DEPENDENCIES = $(patsubst %.cpp,.deps/%.d,$(SOURCES))
+SOURCES = IngexMXFInfo.cpp
+LIBOBJECTS = $(patsubst %.cpp,.objs/%.o,$(SOURCES))
 
-LIBOBJECTS = $(OBJECTS)
-LIBOBJECTS -= .objs/import_mxf_info.o
+SOURCES += import_mxf_info.cpp mxf_info_to_xml.cpp
+DEPENDENCIES = $(patsubst %.cpp,.deps/%.d,$(SOURCES))
 
 
 .PHONY: all
