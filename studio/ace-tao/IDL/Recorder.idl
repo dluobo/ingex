@@ -1,5 +1,5 @@
 /*
- * $Id: Recorder.idl,v 1.9 2011/02/18 16:31:15 john_f Exp $
+ * $Id: Recorder.idl,v 1.10 2011/04/18 10:19:43 john_f Exp $
  *
  * Interface for Recorder.
  *
@@ -78,7 +78,7 @@ module ProdAuto
         /// such as quad-split.
         string RecordingFormat();
 
-        // Get estimate of remaining record time in minutes
+        /// Get estimate of remaining record time in minutes
         readonly attribute unsigned long RecordTimeAvailable;
 
         /// Edit Rate of this Recorder.
