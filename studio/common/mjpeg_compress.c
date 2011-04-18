@@ -1,5 +1,5 @@
 /*
- * $Id: mjpeg_compress.c,v 1.7 2011/02/18 16:42:49 john_f Exp $
+ * $Id: mjpeg_compress.c,v 1.8 2011/04/18 09:39:59 john_f Exp $
  *
  * MJPEG encoder.
  *
@@ -364,6 +364,9 @@ static unsigned mjpeg_compress_field_yuv(
 
     // component 0 (Y) set to 2x1 (4:2:2) sampling
     cinfo->raw_data_in = TRUE;          // supply downsampled data
+#if JPEG_LIB_VERSION >= 70
+    cinfo->do_fancy_downsampling = FALSE;
+#endif
     cinfo->comp_info[0].h_samp_factor = 2;
     cinfo->comp_info[0].v_samp_factor = 1;
     cinfo->comp_info[1].h_samp_factor = 1;
