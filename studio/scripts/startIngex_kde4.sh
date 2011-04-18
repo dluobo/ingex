@@ -140,7 +140,7 @@ DB_PARAMS="--dbhost $DB_HOST --dbname $DB_NAME --dbuser $DB_USER --dbpass $DB_PA
 
 # Check to see if capture is already running. If it is, check with the user to avoid restarting by mistake
 ABORT=0
-if sudo killall -q -0 -e dvs_dummy
+if sudo killall -q -0 -e dvs_sdi
 then
   kdialog --title "Ingex is already running" --warningyesno "Are you sure you want to restart Ingex?"
   ABORT=$?
@@ -259,7 +259,7 @@ if [ $CAPTURE -ge 1 ] ; then
   echo "tab=$tab"
   if [ $CAPTURE_PROGRAM = "DVS_SDI" ] ; then
     # sudo nice -10
-    qdbus $capture_window /Sessions/$tab org.kde.konsole.Session.sendText "./dvs -c $CAPTURE_CHANNELS -mode $CAPTURE_MODE -f $CAPTURE_PRIMARY_BUFFER -s $CAPTURE_SECONDARY_BUFFER -mc 0 -tt $CAPTURE_TIMECODE $CAPTURE_OPTIONS"
+    qdbus $capture_window /Sessions/$tab org.kde.konsole.Session.sendText "./dvs_sdi -c $CAPTURE_CHANNELS -mode $CAPTURE_MODE -f $CAPTURE_PRIMARY_BUFFER -s $CAPTURE_SECONDARY_BUFFER -mc 0 -tt $CAPTURE_TIMECODE $CAPTURE_OPTIONS"
     qdbus $capture_window /Sessions/$tab org.kde.konsole.Session.sendText $'\n'
   elif [ $CAPTURE_PROGRAM = "DVS_DUMMY" ] ; then 
     qdbus $capture_window /Sessions/$tab org.kde.konsole.Session.sendText "./dvs_dummy -c $CAPTURE_CHANNELS -mode $CAPTURE_MODE -f $CAPTURE_PRIMARY_BUFFER -s $CAPTURE_SECONDARY_BUFFER -mc 0 -tt $CAPTURE_TIMECODE $CAPTURE_OPTIONS"
