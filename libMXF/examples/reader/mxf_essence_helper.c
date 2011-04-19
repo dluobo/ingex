@@ -1,5 +1,5 @@
 /*
- * $Id: mxf_essence_helper.c,v 1.20 2010/11/02 13:11:04 philipn Exp $
+ * $Id: mxf_essence_helper.c,v 1.21 2011/04/19 09:45:39 philipn Exp $
  *
  * Utilities for processing essence data and associated metadata
  *
@@ -757,7 +757,7 @@ int convert_aes_to_pcm(uint32_t channelCount, uint32_t bitsPerSample,
     uint8_t validChannel;
 
     CHK_ORET(channelCount <= aes3ChannelCount);
-    CHK_ORET(blockAlign >= 1 && blockAlign <= 3); /* only 8-bit to 24-bit sample size possible */
+    CHK_ORET(blockAlign == 2 || blockAlign == 3); /* only 16-bit to 24-bit sample size allowed */
     CHK_ORET(audioSampleCount == (aesDataLen - 4) / (8 * 4)); /* 4 bytes per sample, 8 channels */
 
     aesDataPtr = &buffer[4];
@@ -770,29 +770,21 @@ int convert_aes_to_pcm(uint32_t channelCount, uint32_t bitsPerSample,
             if (channelValidFlags & (0x01 << channel))
             {
                 /* write PCM word */
-                switch (blockAlign)
+                if (blockAlign == 2)
                 {
-                    case 1:
-                        pcmDataPtr[0] = ((aesDataPtr[2] & 0xf0 ) >> 4) |
-                            ((aesDataPtr[3] << 4) & 0xff);
-                        break;
-                    case 2:
-                        pcmDataPtr[0] = ((aesDataPtr[1] & 0xf0 ) >> 4) |
-                            ((aesDataPtr[2] << 4) & 0xff);
-                        pcmDataPtr[1] = ((aesDataPtr[2] & 0xf0 ) >> 4) |
-                            ((aesDataPtr[3] << 4) & 0xff);
-                        break;
-                    case 3:
-                        pcmDataPtr[0] = ((aesDataPtr[0] & 0xf0) >> 4) |
-                            ((aesDataPtr[1] << 4) & 0xff);
-                        pcmDataPtr[1] = ((aesDataPtr[1] & 0xf0 ) >> 4) |
-                            ((aesDataPtr[2] << 4) & 0xff);
-                        pcmDataPtr[2] = ((aesDataPtr[2] & 0xf0 ) >> 4) |
-                            ((aesDataPtr[3] << 4) & 0xff);
-                        break;
-                    default:
-                        assert(0);
-                        return 0;
+                    pcmDataPtr[0] = ((aesDataPtr[1] & 0xf0 ) >> 4) |
+                        ((aesDataPtr[2] << 4) & 0xff);
+                    pcmDataPtr[1] = ((aesDataPtr[2] & 0xf0 ) >> 4) |
+                        ((aesDataPtr[3] << 4) & 0xff);
+                }
+                else
+                {
+                    pcmDataPtr[0] = ((aesDataPtr[0] & 0xf0) >> 4) |
+                        ((aesDataPtr[1] << 4) & 0xff);
+                    pcmDataPtr[1] = ((aesDataPtr[1] & 0xf0 ) >> 4) |
+                        ((aesDataPtr[2] << 4) & 0xff);
+                    pcmDataPtr[2] = ((aesDataPtr[2] & 0xf0 ) >> 4) |
+                        ((aesDataPtr[3] << 4) & 0xff);
                 }
                 pcmDataPtr += blockAlign;
                 validChannel++;

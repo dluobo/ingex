@@ -1,5 +1,5 @@
 /*
- * $Id: D10MXFOP1AWriter.cpp,v 1.9 2011/01/10 17:05:15 john_f Exp $
+ * $Id: D10MXFOP1AWriter.cpp,v 1.10 2011/04/19 09:49:19 philipn Exp $
  *
  * D10 MXF OP-1A writer
  *
@@ -243,7 +243,7 @@ void D10MXFOP1AWriter::SetAudioChannelCount(uint32_t count)
 
 void D10MXFOP1AWriter::SetAudioQuantizationBits(uint32_t bits)
 {
-    MXFPP_CHECK(bits <= 24);
+    MXFPP_CHECK(bits >= 16 && bits <= 24);
     mAudioQuantizationBits = bits;
     mAudioBytesPerSample = (mAudioQuantizationBits + 7) / 8;
 }
@@ -937,15 +937,11 @@ uint32_t D10MXFOP1AWriter::WriteAES3AudioElement(const D10ContentPackage *conten
                 bytes[2] = ((content_package->GetAudio(c)[s * mAudioBytesPerSample + 1] >> 4) & 0x0f) |
                            ((content_package->GetAudio(c)[s * mAudioBytesPerSample + 2] << 4) & 0xf0);
                 bytes[3] = ((content_package->GetAudio(c)[s * mAudioBytesPerSample + 2] >> 4) & 0x0f);
-            } else if (mAudioBytesPerSample == 2) { // 16-bit
+            } else { // 16-bit
                 bytes[1] = ((content_package->GetAudio(c)[s * mAudioBytesPerSample] << 4) & 0xf0);
                 bytes[2] = ((content_package->GetAudio(c)[s * mAudioBytesPerSample] >> 4) & 0x0f) |
                            ((content_package->GetAudio(c)[s * mAudioBytesPerSample + 1] << 4) & 0xf0);
                 bytes[3] = ((content_package->GetAudio(c)[s * mAudioBytesPerSample + 1] >> 4) & 0x0f);
-            } else { // 8-bit
-                bytes[1] = 0x00;
-                bytes[2] = ((content_package->GetAudio(c)[s * mAudioBytesPerSample] << 4) & 0xf0);
-                bytes[3] = ((content_package->GetAudio(c)[s * mAudioBytesPerSample] >> 4) & 0x0f);
             }
             
             mAES3Block.append(bytes, 4);
