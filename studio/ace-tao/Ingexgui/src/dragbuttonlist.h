@@ -37,7 +37,7 @@ class DragButtonList : public wxScrolledWindow
     public:
         DragButtonList(wxWindow *, wxEvtHandler *);
         prodauto::PlayerInputType SetTracks(ChunkInfo*, std::vector<std::string> &, std::vector<std::string> &, unsigned int &);
-        prodauto::PlayerInputType SetMXFFiles(wxArrayString &, std::vector<std::string> &, std::vector<std::string> &, unsigned int &, ProdAuto::MxfTimecode &);
+        prodauto::PlayerInputType SetMXFFiles(wxArrayString &, std::vector<std::string> &, std::vector<std::string> &, unsigned int &);
 #ifndef DISABLE_SHARED_MEM_SOURCE
         prodauto::PlayerInputType SetEtoE(std::vector<std::string> &, std::vector<std::string> &, unsigned int &);
 #endif

@@ -1,7 +1,7 @@
 /***************************************************************************
- *   $Id: recordbutton.cpp,v 1.9 2010/08/25 17:51:06 john_f Exp $            *
+ *   $Id: recordbutton.cpp,v 1.10 2011/04/19 07:04:02 john_f Exp $            *
  *                                                                         *
- *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
+ *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
  *   Author: Matthew Marks                                                 *
  *                                                                         *
@@ -22,6 +22,7 @@
  ***************************************************************************/
 
 #include "recordbutton.h"
+#include "colours.h"
 
 BEGIN_EVENT_TABLE(RecordButton, wxButton)
     EVT_LEFT_DOWN(RecordButton::OnLMouseDown)
@@ -54,9 +55,9 @@ void RecordButton::OnLMouseDown(wxMouseEvent & event)
 bool RecordButton::Enable(bool state)
 {
     mEnabled = state;
-    if (RECORDING_COLOUR != GetBackgroundColour() && !mTimer->IsRunning()) { //in normal state
+    if (RECORD_BUTTON_RECORDING_COLOUR != GetBackgroundColour() && !mTimer->IsRunning()) { //in normal state
         wxButton::Enable(mEnabled);
-        SetBackgroundColour(mEnabled ? ENABLED_COLOUR : mInitialColour); //dull red or greyed out
+        SetBackgroundColour(mEnabled ? RECORD_BUTTON_ENABLED_COLOUR : mInitialColour); //dull red or greyed out
     }
     return mEnabled;
 }
@@ -72,18 +73,18 @@ void RecordButton::Disable()
 void RecordButton::SetLabel(const wxString & label)
 {
     mLabel = label;
-    if (RECORDING_COLOUR != GetBackgroundColour() && !mTimer->IsRunning()) { //in normal state
+    if (RECORD_BUTTON_RECORDING_COLOUR != GetBackgroundColour() && !mTimer->IsRunning()) { //in normal state
         wxButton::SetLabel(mLabel);
     }
 }
 
 /// Puts the button into the normal (non recording or pending) state, and sets the tooltip accordingly.
 void RecordButton::Normal() {
-    if (RECORDING_COLOUR == GetBackgroundColour() || mTimer->IsRunning()) { //not already in normal state
+    if (RECORD_BUTTON_RECORDING_COLOUR == GetBackgroundColour() || mTimer->IsRunning()) { //not already in normal state
 //std::cerr << "normal" << std::endl;
         wxButton::Enable(mEnabled); //can be greyed out or not
         SetLabel(mLabel);
-        SetBackgroundColour(mEnabled ? ENABLED_COLOUR : mInitialColour); //dull red or greyed out
+        SetBackgroundColour(mEnabled ? RECORD_BUTTON_ENABLED_COLOUR : mInitialColour); //dull red or greyed out
         mTimer->Stop();
         SetToolTip(wxT("Start a new recording"));
     }
@@ -91,11 +92,11 @@ void RecordButton::Normal() {
 
 /// Puts the button into the bright red textless and disabled "record" state, and sets the tooltip accordingly.
 void RecordButton::Record() {
-    if (RECORDING_COLOUR != GetBackgroundColour() || mTimer->IsRunning()) { //not already in record state
+    if (RECORD_BUTTON_RECORDING_COLOUR != GetBackgroundColour() || mTimer->IsRunning()) { //not already in record state
 //std::cerr << "record" << std::endl;
         wxButton::Enable(); //so it's not greyed out
         SetLabel(wxT(""));
-        SetBackgroundColour(RECORDING_COLOUR);
+        SetBackgroundColour(RECORD_BUTTON_RECORDING_COLOUR);
         mTimer->Stop();
         SetToolTip(wxT("Recording"));
     }
@@ -109,7 +110,7 @@ void RecordButton::Pending(bool runningUp) {
         mRunningUp = runningUp;
         wxButton::Enable(); //so it's not greyed out
         wxButton::SetLabel(wxT(""));
-        SetBackgroundColour(mRunningUp ? RECORDING_COLOUR : ENABLED_COLOUR);
+        SetBackgroundColour(mRunningUp ? RECORD_BUTTON_RECORDING_COLOUR : RECORD_BUTTON_ENABLED_COLOUR);
         mTimer->Start(125); //for flashing
         SetToolTip(mRunningUp ? wxT("Running up") : wxT("Running down"));
     }
@@ -120,7 +121,7 @@ void RecordButton::OnTimer(wxTimerEvent & WXUNUSED(event)) {
 //std::cerr << "timer" << std::endl;
     if (mTimer->IsRunning()) { //trap timer being stopped with event in the system - if this ever happens...
         if (mInitialColour == GetBackgroundColour()) {
-            SetBackgroundColour(mRunningUp ? RECORDING_COLOUR : ENABLED_COLOUR);
+            SetBackgroundColour(mRunningUp ? RECORD_BUTTON_RECORDING_COLOUR : RECORD_BUTTON_ENABLED_COLOUR);
         }
         else {
             SetBackgroundColour(mInitialColour);

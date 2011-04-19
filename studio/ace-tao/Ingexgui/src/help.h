@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2006-2008 British Broadcasting Corporation              *
+ *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -22,7 +22,6 @@
 #define _HELP_H_
 
 #include <wx/wx.h>
-#include <wx/notebook.h> //for wx 2.7+
 
 /// Tabbed dialogue of help text
 class HelpDlg : public wxDialog

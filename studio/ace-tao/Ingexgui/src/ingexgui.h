@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: ingexgui.h,v 1.24 2011/01/04 11:37:18 john_f Exp $              *
+ *   $Id: ingexgui.h,v 1.25 2011/04/19 07:04:02 john_f Exp $              *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -39,15 +39,13 @@
 #define TOOLTIP_DELAY 1000 //ms
 #define TITLE wxT("Ingex Control")
 
-#define BUTTON_WARNING_COLOUR wxColour(0xFF, 0x80, 0x00)
-
 #define UNKNOWN_TIMECODE wxT("??:??:??:??")
 
 #define SAVED_STATE_FILENAME wxT(".ingexguirc")
-#define RECORDING_SERVER_ROOT wxT("/store")
+#define RECORDING_SERVER_ROOT wxT("/store") //FIXME: not Windows-compatible
 #define ONLINE_SUBDIR wxT("mxf_online")
 #define OFFLINE_SUBDIR wxT("mxf_offline")
-
+#define SNAPSHOT_PATH wxT("/tmp") //FIXME: not Windows-compatible
 
 #define USING_ULONGLONG 0 //this allows larger numbers to be incrementable in tape ID cells but if the C runtime library does not support 64-bit numbers the increment buttons will not work at all
 
@@ -81,6 +79,7 @@ class EventList;
 class ChunkInfo;
 class PlayerControl;
 class SavedState;
+class SetProjectDlg;
 
 /// As the stock text ctrl but passes on focus set and kill events
 class MyTextCtrl : public wxTextCtrl
@@ -129,19 +128,20 @@ class IngexguiFrame : public wxFrame
         MENU_PlayerOpen,
         MENU_OpenMOV,
         MENU_OpenMXF,
-        MENU_OpenRec,
+        MENU_OpenServer,
         MENU_PlayerType,
         MENU_PlayerAccelOutput,
-#ifdef HAVE_DVS
         MENU_PlayerEnableSDIOSD,
         MENU_PlayerExtOutput,
         MENU_PlayerExtAccelOutput,
         MENU_PlayerExtUnaccelOutput,
-#endif
         MENU_PlayerUnaccelOutput,
         MENU_PlayerAbsoluteTimecode,
         MENU_PlayerRelativeTimecode,
         MENU_PlayerNoOSD,
+        MENU_PlayerOSDTop,
+        MENU_PlayerOSDMiddle,
+        MENU_PlayerOSDBottom,
         MENU_PlayerNoLevelMeters,
         MENU_PlayerTwoLevelMeters,
         MENU_PlayerFourLevelMeters,
@@ -267,6 +267,8 @@ class IngexguiFrame : public wxFrame
         wxDateTime mToday;
         unsigned int mSnapshotIndex;
         wxMenu *mMenuShortcuts;
+        wxString mSnapshotPath;
+        SetProjectDlg *mSetProjectDlg;
         DECLARE_EVENT_TABLE()
 };
 

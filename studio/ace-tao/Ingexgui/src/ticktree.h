@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
+ *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -30,11 +30,6 @@ DECLARE_EVENT_TYPE(EVT_TREE_MESSAGE, -1)
 class SavedState;
 class wxXmlNode;
 
-#define VIDEO_TRACK_COLOUR wxColour(wxT("#00A000"))
-#define AUDIO_TRACK_COLOUR wxColour(wxT("#0000B0"))
-#define ROUTER_TRACK_COLOUR wxColour(wxT("#00A0A0"))
-#define NO_SIGNAL_COLOUR wxColour(wxT("#FF8000"))
-
 // flags
 #define TAPE_IDS_OK 1
 #define ALL_SIGNALS 2
@@ -53,12 +48,13 @@ class TickTreeCtrl : public wxTreeCtrl
         bool GetRecordEnables(const wxString &, CORBA::BooleanSeq &, bool);
         void SetTrackStatus(const wxString &, bool, bool, ProdAuto::TrackStatusList_var);
         bool SomeEnabled();
+        bool IsRecorderPresent(const wxString &);
         bool IsRecording();
         bool AllRecording();
         bool AllStopped();
         bool UsingTapeIds();
         bool AreTapeIdsOK();
-        bool HasRecorders();
+        unsigned int GetRecorderCount();
         bool IsUnknown();
         bool HasProblem();
         bool HasAllSignals();

@@ -1,7 +1,7 @@
 /***************************************************************************
- *   $Id: eventlist.cpp,v 1.19 2011/02/18 16:31:15 john_f Exp $           *
+ *   $Id: eventlist.cpp,v 1.20 2011/04/19 07:04:02 john_f Exp $           *
  *                                                                         *
- *   Copyright (C) 2009-2010 British Broadcasting Corporation                   *
+ *   Copyright (C) 2009-2011 British Broadcasting Corporation                   *
  *   - all rights reserved.                                                *
  *   Author: Matthew Marks                                                 *
  *                                                                         *
@@ -634,16 +634,16 @@ ProdAuto::MxfTimecode EventList::GetStartTimecode()
 void EventList::AddRecorderData(RecorderData * data, bool reload)
 {
     if (mChunkInfoArray.GetCount() > mChunking ? 1 : 0) { //sanity check
-        mChunkInfoArray.Item(mChunkInfoArray.GetCount() - (mChunking ? 2 : 1)).AddRecorder(data->GetTrackList(), data->GetFileList());
+        mChunkInfoArray.Item(mChunkInfoArray.GetCount() - (mChunking ? 2 : 1)).AddRecorder(data->GetTrackList(), data->GetStringSeq());
         unsigned int index = 0;
         mMutex.Lock();
         wxXmlNode * recorderNode = new wxXmlNode(mChunking ? mPrevRecordingNode : mRecordingNode, wxXML_ELEMENT_NODE, wxT("Recorder"), wxT(""), new wxXmlProperty(wxT("Index"), wxString::Format(wxT("%d"), mChunkInfoArray.Item(mChunkInfoArray.GetCount() - (mChunking ? 2 : 1)).GetTracks().GetCount() - 1)));
         for (size_t i = 0; i < data->GetTrackList()->length(); i++) {
-            if (data->GetTrackList()[i].has_source && strlen(data->GetFileList()[i].in())) { //tracks not enabled for record have blank filenames
+            if (data->GetTrackList()[i].has_source && strlen(data->GetStringSeq()[i].in())) { //tracks not enabled for record have blank filenames
                 wxXmlNode * fileNode = new wxXmlNode(recorderNode, wxXML_ELEMENT_NODE, wxT("File"), wxT(""), new wxXmlProperty(wxT("Index"), wxString::Format(wxT("%d"), index++)));
                 fileNode->AddProperty(wxT("Type"), ProdAuto::VIDEO == (data->GetTrackList())[i].type ? wxT("Video") : wxT("Audio"));
                 new wxXmlNode(new wxXmlNode(fileNode, wxXML_ELEMENT_NODE, wxT("Label")), wxXML_CDATA_SECTION_NODE, wxT(""), wxString((data->GetTrackList())[i].src.package_name, *wxConvCurrent));
-                new wxXmlNode(new wxXmlNode(fileNode, wxXML_ELEMENT_NODE, wxT("Path")), wxXML_CDATA_SECTION_NODE, wxT(""), wxString((data->GetFileList())[i].in(), *wxConvCurrent));
+                new wxXmlNode(new wxXmlNode(fileNode, wxXML_ELEMENT_NODE, wxT("Path")), wxXML_CDATA_SECTION_NODE, wxT(""), wxString((data->GetStringSeq())[i].in(), *wxConvCurrent));
             }
         }
         //save updated XML tree

@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: timepos.cpp,v 1.15 2010/09/06 13:48:24 john_f Exp $             *
+ *   $Id: timepos.cpp,v 1.16 2011/04/19 07:04:02 john_f Exp $             *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -326,11 +326,12 @@ void Timepos::Reset()
     mTriggerTimecode.undefined = true;
 }
 
-/// Manually sets the position display to a given position, based on the edit rate in use.
+/// Manually sets the position display to a given position.
 /// @param samples The number of frames into the recording.
-void Timepos::SetPosition(unsigned long samples) {
-    if (!mLastKnownTimecode.undefined && mLastKnownTimecode.edit_rate.numerator) {
-        mPositionDisplay->SetLabel(FormatPosition(wxTimeSpan(0, 0, 0, (long) (INT64_C(1000) * samples * mLastKnownTimecode.edit_rate.denominator / mLastKnownTimecode.edit_rate.numerator)), mLastKnownTimecode));
+/// @param editRate The edit rate corresponding to the frame count.
+void Timepos::SetPosition(unsigned long samples, ProdAuto::MxfTimecode * editRate) {
+    if (!editRate->undefined && editRate->edit_rate.numerator) { //sanity check
+        mPositionDisplay->SetLabel(FormatPosition(wxTimeSpan(0, 0, 0, (long) (INT64_C(1000) * samples * editRate->edit_rate.denominator / editRate->edit_rate.numerator)), *editRate));
     }
 }
 

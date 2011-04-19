@@ -1,7 +1,7 @@
 /***************************************************************************
- *   $Id: controller.cpp,v 1.15 2011/02/18 17:22:51 john_f Exp $          *
+ *   $Id: controller.cpp,v 1.16 2011/04/19 07:04:02 john_f Exp $          *
  *                                                                         *
- *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
+ *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
  *   Author: Matthew Marks                                                 *
  *                                                                         *
@@ -39,7 +39,7 @@ END_EVENT_TABLE()
 /// @param comms The comms object, to allow the recorder object to be resolved.
 /// @param handler The handler where events will be sent.
 Controller::Controller(const wxString & name, Comms * comms, wxEvtHandler * handler)
-: wxThread(wxTHREAD_JOINABLE), mComms(comms), mTimecodeRunning(false), mReconnecting(false), mPendingCommand(NONE), mPendingCommandSent(false), mName(name), mPrevCommand(NONE)  //joinable means we can wait until the thread terminates, and this object doesn't delete itself when that happens
+: wxThread(wxTHREAD_JOINABLE), mComms(comms), mTimecodeRunning(false), mReconnecting(false), mPendingCommand(NONE), mPendingCommandSent(false), mName(name), mPrevCommand(NONE), mOK(false) //making the thread joinable means that we can start the deletion process without waiting for it to end, which might take a long time if there is a CORBA command waiting for a response.  Instead, we issue an event to signal when the thread has exited and hence the object can be deleted.
 {
     mCondition = new wxCondition(mMutex);
     SetNextHandler(handler); //allow thread ControllerThreadEvents to propagate to the frame
@@ -56,6 +56,7 @@ Controller::Controller(const wxString & name, Comms * comms, wxEvtHandler * hand
         msg = wxT("Could not run thread for recorder.");
     }
     else { //thread is starting
+        mOK = true;
         mMutex.Lock(); //wait, if necessary, for thread to be ready to accept signals (which is indicated by it unlocking the mutex, locked before the thread started)
         mMutex.Unlock(); //undo the above to return to normal
         Signal(CONNECT);
@@ -81,25 +82,27 @@ Controller::~Controller()
 /// @return True if OK.
 bool Controller::IsOK()
 {
-    return IsAlive();
+    return mOK;
 }
 
 /// @return The recorder name.
 const wxString Controller::GetName()
 {
-    wxMutexLocker lock(mMutex); //prevent concurrent access to mName
+    wxMutexLocker lock(mMutex); //prevent concurrent access
     return mName;
 }
 
 /// @return The maximum preroll the recorder allows.
 const ProdAuto::MxfDuration Controller::GetMaxPreroll()
 {
+    wxMutexLocker lock(mMutex); //prevent concurrent access
     return mMaxPreroll;
 }
 
 /// @return The maximum postroll the recorder allows.
 const ProdAuto::MxfDuration Controller::GetMaxPostroll()
 {
+    wxMutexLocker lock(mMutex); //prevent concurrent access
     return mMaxPostroll;
 }
 
@@ -119,7 +122,7 @@ void Controller::SetTapeIds(const CORBA::StringSeq & sourceNames, const CORBA::S
     //SET_TAPE_IDs is always sent after reconnection
 }
 
-/// Signals to the thread to tell the recorder a project name, or stores the command for later execution.
+/// Signals to the thread to tell the recorder a list of project names, or stores the command for later execution if it can, or does nothing.
 /// @param name The project name.
 void Controller::AddProjectNames(const CORBA::StringSeq & projectNames)
 {
@@ -135,7 +138,7 @@ void Controller::AddProjectNames(const CORBA::StringSeq & projectNames)
     }
 }
 
-/// Signals to the thread to ask the recorder to return how much record time is available, or stores the command for later execution.
+/// Signals to the thread to ask the recorder to return how much record time is available, stores the command for later execution if it can, or does nothing.
 /// Does nothing if this is a router recorder.
 void Controller::RequestRecordTimeAvailable()
 {
@@ -148,6 +151,25 @@ void Controller::RequestRecordTimeAvailable()
             mPendingCommandSent = true;
         }
     }
+}
+
+/// Signals to the thread to ask the recorder to return a list of project names, stores the command for later execution if it can, or does nothing.
+/// Does nothing if this is a router recorder.
+/// @return False if unable to do anything (so an event will not be generated).
+bool Controller::RequestProjectNames()
+{
+    bool rc = false;
+    if (!mRouterRecorder) {
+        if (NONE == mPendingCommand) { //nothing more important is happening - requesting project names is not a vital thing to do
+            mPendingCommand = GET_PROJECT_NAMES; //act on it later or detect if it is superceded while retrying
+            rc = true;
+        }
+        if (!mReconnecting) { //can send a command now
+            Signal(GET_PROJECT_NAMES);
+            mPendingCommandSent = true;
+        }
+    }
+    return rc;
 }
 
 /// Signals to the thread to tell the recorder to start recording, or stores the command for later execution.
@@ -215,10 +237,12 @@ bool Controller::IsRouterRecorder()
 void Controller::Destroy()
 {
     wxDELETE(mPollingTimer); //stops it too!
-    if (IsAlive()) { //won't be if initialisation failed
+    mOK = false;
+    if (IsAlive()) { //initialisation succeeded
         Signal(DIE);
     }
-    else { //write a suicide note now
+    else {
+        //write a suicide note now
         ControllerThreadEvent event(EVT_CONTROLLER_THREAD);
         mMutex.Lock();
         event.SetName(mName);
@@ -287,7 +311,7 @@ void Controller::OnThreadEvent(ControllerThreadEvent & event)
                 //let the parent know
                 GetNextHandler()->AddPendingEvent(event);
                 //buffer the failed command
-                if ((RECORD == event.GetCommand() || STOP == event.GetCommand() || ADD_PROJECT_NAMES == event.GetCommand()) && NONE == mPendingCommand) { //make sure the event doesn't override a command received while waiting for a response
+                if ((RECORD == event.GetCommand() || STOP == event.GetCommand() || ADD_PROJECT_NAMES == event.GetCommand() || REC_TIME_AVAILABLE == event.GetCommand() || GET_PROJECT_NAMES == event.GetCommand()) && NONE == mPendingCommand) { //make sure the event doesn't override a command received while waiting for a response
 //std::cerr << "new pending command" << std::endl;
                     //execute command when reconnected
                     mPendingCommand = event.GetCommand();
@@ -385,13 +409,13 @@ wxThread::ExitCode Controller::Entry()
                             maxPreroll = mRecorder->MaxPreRoll();
                             maxPostroll = mRecorder->MaxPostRoll();
                             event.SetTrackStatusList(mRecorder->TracksStatus());
-                            routerRecorder = wxString(mRecorder->RecordingFormat(), *wxConvCurrent).MakeUpper().Matches(wxT("*ROUTER*"));
+                            routerRecorder = wxString(mRecorder->RecordingFormat(), wxConvISO8859_1).MakeUpper().Matches(wxT("*ROUTER*"));
                             strings = mRecorder->ProjectNames();
                             recordTimeAvailable = mRecorder->RecordTimeAvailable();
                         }
                         catch (const CORBA::Exception & e) {
 //std::cerr << "connect/reconnect exception: " << e._name() << std::endl;
-                            msg = wxT("Error communicating with this recorder: ") + wxString(e._name(), *wxConvCurrent) + wxT(".  Is it operational and connected to the network?  The problem may resolve itself if you try again.");
+                            msg = wxT("Error communicating with this recorder: ") + wxString(e._name(), wxConvISO8859_1) + wxT(".  Is it operational and connected to the network?  The problem may resolve itself if you try again.");
                         }
                     }
                     if (!msg.IsEmpty()) { //failed to select
@@ -471,7 +495,7 @@ wxThread::ExitCode Controller::Entry()
                                         msg = wxT("track name");
                                     }
                                     if (msg.Length()) {
-                                        msg = wxT("track \"") + wxString(mTrackList[i].name, *wxConvCurrent) + wxT("\" has changed ") + msg;
+                                        msg = wxT("track \"") + wxString(mTrackList[i].name, wxConvISO8859_1) + wxT("\" has changed ") + msg;
                                         break;
                                     }
                                 }
@@ -521,19 +545,29 @@ wxThread::ExitCode Controller::Entry()
                     rc = ProdAuto::Recorder::SUCCESS; //no return code suppled by AddProject()
                     break;
                 }
-                case REC_TIME_AVAILABLE: {
+                case REC_TIME_AVAILABLE: { //already checked that this isn't a router recorder
 //std::cerr << "thread REC_TIME_AVAILABLE" << std::endl;
                     long recordTimeAvailable = -1;
-                    if (!mRouterRecorder) {
-                        try {
-                            recordTimeAvailable = mRecorder->RecordTimeAvailable();
-                        }
-                        catch (const CORBA::Exception & e) {
+                    try {
+                        recordTimeAvailable = mRecorder->RecordTimeAvailable();
+                    }
+                    catch (const CORBA::Exception & e) {
 //std::cerr << "RecordTimeAvailable exception: " << e._name() << std::endl;
-                            event.SetResult(COMM_FAILURE);
-                        }
+                        event.SetResult(COMM_FAILURE);
                     }
                     event.SetRecordTimeAvailable(recordTimeAvailable);
+                    rc = ProdAuto::Recorder::SUCCESS; //no return code available
+                    break;
+                }
+                case GET_PROJECT_NAMES: { //assumed not to be a router recorder
+//std::cerr << "thread GET_PROJECT_NAMES" << std::endl;
+                    try {
+                        strings = mRecorder->ProjectNames();
+                    }
+                    catch (const CORBA::Exception & e) {
+//std::cerr << "GetProjectNames exception: " << e._name() << std::endl;
+                        event.SetResult(COMM_FAILURE);
+                    }
                     rc = ProdAuto::Recorder::SUCCESS; //no return code available
                     break;
                 }
@@ -543,7 +577,7 @@ wxThread::ExitCode Controller::Entry()
                     timecode = mStartTimecode;
                     ProdAuto::MxfDuration preroll = mPreroll;
                     CORBA::BooleanSeq rec_enable = mEnableList;
-                    std::string project = (const char *) mProject.mb_str(*wxConvCurrent);
+                    std::string project = (const char *) mProject.mb_str(wxConvISO8859_1);
                     mMutex.Unlock();
                     try {
                         rc = mRecorder->Start(timecode, preroll, rec_enable, project.c_str(), false);
@@ -559,7 +593,7 @@ wxThread::ExitCode Controller::Entry()
                     mMutex.Lock();
                     timecode = mStopTimecode;
                     ProdAuto::MxfDuration postroll = mPostroll;
-                    char * description = CORBA::string_dup(mDescription.mb_str(*wxConvCurrent));
+                    char * description = CORBA::string_dup(mDescription.mb_str(wxConvISO8859_1));
                     ProdAuto::LocatorSeq locators = mLocators; 
                     mMutex.Unlock();
                     try {
@@ -577,7 +611,7 @@ wxThread::ExitCode Controller::Entry()
             }
             if (COMM_FAILURE != event.GetResult()) {
                 if (ProdAuto::Recorder::SUCCESS == rc) {
-                    event.SetStrings(strings); //only relevant for STOP (list of files) and CONNECT (list of project names)
+                    event.SetStrings(strings); //only relevant for STOP (list of files), and CONNECT or GET_PROJECT_NAMES (list of project names)
                     if (!timecode.edit_rate.numerator || !timecode.edit_rate.denominator) {
                         timecode.undefined = true;
                     }

@@ -1,5 +1,5 @@
 # these are the headers for your project
-noinst_HEADERS = eventlist.h savedstate.h
+noinst_HEADERS = colours.h eventlist.h savedstate.h
 	comms.h connection_matrix.h controller.h \
 	dialogues.h dragbuttonlist.h frame_info.h help.h ingexgui.h media_control.h \
 	media_player.h media_sink.h media_sink_frame.h media_source.h player.h \

@@ -1,7 +1,7 @@
 /***************************************************************************
- *   $Id: dialogues.cpp,v 1.26 2011/01/04 11:37:18 john_f Exp $           *
+ *   $Id: dialogues.cpp,v 1.27 2011/04/19 07:04:02 john_f Exp $           *
  *                                                                         *
- *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
+ *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
  *   Author: Matthew Marks                                                 *
  *                                                                         *
@@ -29,6 +29,7 @@
 #include <wx/colordlg.h>
 #include <wx/filename.h>
 #include <wx/dir.h>
+#include "colours.h"
 
 #include "up.xpm"
 #include "down.xpm"
@@ -129,15 +130,8 @@ int SetRollsDlg::ShowModal()
 {
     int rc = wxDialog::ShowModal();
     if (wxID_OK == rc) {
-        //create new node
-        wxXmlNode * node = mSavedState->GetTopLevelNode(wxT("Preroll"), true, true); //replace existing node
-        //add text node containing value
-        new wxXmlNode(node, wxXML_TEXT_NODE, wxEmptyString, wxString::Format(wxT("%d"), GetPreroll().samples));
-        //create new node
-        node = mSavedState->GetTopLevelNode(wxT("Postroll"), true, true); //replace existing node
-        //add text node containing value
-        new wxXmlNode(node, wxXML_TEXT_NODE, wxEmptyString, wxString::Format(wxT("%d"), GetPostroll().samples));
-        mSavedState->Save();
+        mSavedState->SetUnsignedLongValue(wxT("Preroll"), GetPreroll().samples);
+        mSavedState->SetUnsignedLongValue(wxT("Postroll"), GetPostroll().samples);
     }
     return rc;
 }
@@ -151,13 +145,10 @@ BEGIN_EVENT_TABLE( SetProjectDlg, wxDialog )
     EVT_CHOICE(wxID_ANY, SetProjectDlg::OnChoice)
 END_EVENT_TABLE()
 
-/// Displays list of project names from the recorders and the selected project from the XML doc and allows the list to be added to
+/// Waits for list of project names from the recorders, then displays it and the selected project from the XML doc and allows the list to be added to.
 /// Updates the document if user changes the selected project.
 /// @param parent The parent window.
-/// @param projectNamees The current list of project names (can be empty)
-/// @param doc The XML document to read and modify.
-/// @param force When true, disables the cancel button etc to force the user to press OK.
-SetProjectDlg::SetProjectDlg(wxWindow * parent, const wxSortedArrayString & projectNames, SavedState * savedState) : wxDialog(parent, wxID_ANY, (const wxString &) wxT("Select a project name"), wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER), mProjectNames(projectNames), mSavedState(savedState)
+SetProjectDlg::SetProjectDlg(wxWindow * parent) : wxDialog(parent, wxID_ANY, (const wxString &) wxT("Select a project name"), wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
 {
     wxBoxSizer * mainSizer = new wxBoxSizer(wxVERTICAL);
     SetSizer(mainSizer);
@@ -167,8 +158,9 @@ SetProjectDlg::SetProjectDlg(wxWindow * parent, const wxSortedArrayString & proj
     mListSizer->Add(mProjectList, 1, wxEXPAND | wxALL, CONTROL_BORDER);
     wxBoxSizer * buttonSizer1 = new wxBoxSizer(wxHORIZONTAL);
     mainSizer->Add(buttonSizer1, 0, wxEXPAND);
-    wxButton * addButton = new wxButton(this, ADD, wxT("Add"));
-    buttonSizer1->Add(addButton, 0, wxALL, CONTROL_BORDER);
+    mAddButton = new wxButton(this, ADD, wxT("Add"));
+    buttonSizer1->Add(mAddButton, 0, wxALL, CONTROL_BORDER);
+//  buttonSizer1->AddStretchSpacer();
 //  mDeleteButton = new wxButton(this, DELETE, wxT("Delete"));
 //  buttonSizer1->AddStretchSpacer();
 //  buttonSizer1->Add(mDeleteButton, 0, wxALL, CONTROL_BORDER);
@@ -181,44 +173,59 @@ SetProjectDlg::SetProjectDlg(wxWindow * parent, const wxSortedArrayString & proj
     buttonSizer2->Add(mOKButton, 1, wxALL, CONTROL_BORDER);
     wxButton * CancelButton = new wxButton(this, wxID_CANCEL, wxT("Cancel"));
     buttonSizer2->Add(CancelButton, 1, wxALL, CONTROL_BORDER);
-    mProjectList->Append(mProjectNames);
-    wxString selectedProject = GetCurrentProjectName(mSavedState);
-    if (selectedProject.IsEmpty() && mProjectList->GetCount()) { //recorder has returned project names but no selected project from the file
-        mProjectList->SetSelection(0); //just select something as a default project
-    }
-    else {
-        mProjectList->SetSelection(mProjectNames.Index(selectedProject)); //could be nothing
-    }
-    Fit();
-    SetMinSize(GetSize());
-    mOKButton->SetFocus(); //especially useful to get through the dialogue quickly when it immediately brings up an add project box when there are no project names
+    mProjectList->Append(wxT("Getting project names..."));
+    mProjectList->Select(0);
+    mProjectList->Disable();
+    EnableButtons(false); //wait until SetProjectNames() is called
 }
 
-/// Obtains the currently selected project name from the supplied XML document; returns an empty string if not found
-const wxString SetProjectDlg::GetCurrentProjectName(SavedState * savedState)
+/// If list of names supplied, removes holding message and populates the list of project names.  If list not empty, highlights the current project name (if any), and makes dialogue fully active; if list empty, asks user for a project name and ends modal with cancel if one isn't entered.
+/// If list not supplied, warns the user and (if dialogue showing modally) ends modal with cancel.
+/// If dialogue is left active, this method will do nothing if called again.
+/// @param projectNames The current list of project names (can be empty).
+/// @param currentProjectName The current project name (can be empty).
+void SetProjectDlg::SetProjectNames(CORBA::StringSeq_var projectNames, const wxString & currentProjectName)
 {
-    return savedState->GetStringValue(wxT("CurrentProject"), wxEmptyString);
-}
-
-/// Overloads Show Modal to prompt the addition of one project name if there are none, and to update the XML document
-int SetProjectDlg::ShowModal()
-{
-    if (!mProjectList->GetCount()) { //must enter at least one project name
-        EnterName(wxT("No project names stored: enter a project name"), wxT("New Project"));
-    }
-    if (mProjectList->GetCount()) { //names obtained from recorder(s), or selected name from rc file, or name has just been entered
-        int rc = wxDialog::ShowModal();
-        if (wxID_OK == rc) {
-            //update saved state
-            wxXmlNode * node = mSavedState->GetTopLevelNode(wxT("CurrentProject"), true, true); //replace existing node
-            new wxXmlNode(node, wxXML_TEXT_NODE, wxEmptyString, mProjectList->GetStringSelection());
-            mSavedState->Save();
+    if (!projectNames) {
+        wxMessageDialog dlg(this, wxT("Cannot get list of project names from recorder.  It may work if you try again."), wxT("Communication error"), wxOK | wxICON_ERROR);
+        dlg.ShowModal();
+        if (IsModal()) {
+            EndModal(wxID_CANCEL);
         }
-        return rc;
     }
-    else { //cancel has been pressed in the EnterName box above
-        return wxID_CANCEL;
+    else if (!mProjectList->IsEnabled()) {
+        mProjectList->Enable();
+        mProjectList->Clear(); //remove holding message
+        for (size_t i = 0; i < projectNames->length(); i++) {
+            mProjectNames.Add(wxString((*projectNames)[i], wxConvISO8859_1));
+        }
+        mProjectNames.Sort();
+        mProjectList->Append(mProjectNames);
+        if (currentProjectName.IsEmpty() && mProjectList->GetCount()) { //recorder has returned project names but no selected project from the saved state
+            mProjectList->SetSelection(0); //just select something as a default project
+        }
+        else {
+            mProjectList->SetSelection(mProjectNames.Index(currentProjectName)); //could be nothing if no match
+        }
+        Fit();
+        SetMinSize(GetSize());
+        mAddButton->Enable();
+        mOKButton->Enable();
+        mOKButton->SetFocus(); //especially useful to get through the dialogue quickly when it immediately brings up an add project box when there are no project names
+
+        if (!mProjectList->GetCount()) { //must enter at least one project name
+            EnterName(wxT("No project names stored: enter a project name"), wxT("New Project"));
+        }
+        if (!mProjectList->GetCount()) { //no existing names and user has refused to enter one
+            EndModal(wxID_CANCEL);
+        }
     }
+}
+
+/// Returns the currently selected project name.
+const wxString SetProjectDlg::GetCurrentProjectName()
+{
+    return mProjectList->GetStringSelection();
 }
 
 /// Responds to the "Add" button.
@@ -239,8 +246,8 @@ void SetProjectDlg::OnEdit( wxCommandEvent& WXUNUSED( event ) )
 /// Adjusts button enable states accordingly.
 /// @param msg The instruction to the user.
 /// @param caption The dialogue title.
-/// @param item The item to edit, if editing.
-void SetProjectDlg::EnterName(const wxString & msg, const wxString & caption, int item) //item defaults to wxNOT_FOUND
+/// @param item The item to edit, if editing.  NOT FULLY IMPLEMENTED
+void SetProjectDlg::EnterName(const wxString & msg, const wxString & caption, int item)
 {
     while (true) {
         wxString name = wxGetTextFromUser(msg, caption, mProjectList->GetString(item), this);
@@ -251,11 +258,14 @@ void SetProjectDlg::EnterName(const wxString & msg, const wxString & caption, in
         mProjectList->Delete(item); //so that searching for duplicates is accurate
         if (wxNOT_FOUND == mProjectList->FindString(name)) { //case-insensitive match
             if (wxNOT_FOUND == item) { //adding a new name
-                int index = mProjectNames.Add(name);
+                mProjectNames.Add(name);
+                mProjectNames.Sort();
+                int index = mProjectNames.Index(name);
                 mProjectList->Insert(name, index);
                 mProjectList->Select(index);
+                mNewProjectNames.Add(name);
             }
-            else {
+            else { //Not fully implemented for editing
                 mProjectList->Insert(name, item);
                 mProjectList->Select(item);
             }
@@ -302,15 +312,23 @@ const wxString SetProjectDlg::GetSelectedProject()
 }
 
 /// @return Sorted list of project names.
-const wxSortedArrayString & SetProjectDlg::GetProjectNames()
+const CORBA::StringSeq SetProjectDlg::GetNewProjectNames()
 {
-    return mProjectNames;
+    CORBA::StringSeq corbaNames;
+    for (size_t i = 0; i < mNewProjectNames.GetCount(); i++) {
+            corbaNames.length(corbaNames.length() + 1);
+            // Assignment to the CORBA::StringSeq element must be from a const char *
+            // and should use ISO Latin-1 character set.
+            corbaNames[corbaNames.length() - 1] = (const char *) mNewProjectNames[i].mb_str(wxConvISO8859_1);
+    }
+    return corbaNames;
 }
 
 /// Enable or disable all dialogue's "Add", "Delete" and "Edit" buttons.
 /// @param state True to enable.
 void SetProjectDlg::EnableButtons(bool state)
 {
+    mAddButton->Enable(state);
 //  mDeleteButton->Enable(state);
 //  mEditButton->Enable(state);
     mOKButton->Enable(state);
@@ -498,9 +516,9 @@ const wxString SetTapeIdsDlg::GetTapeId(SavedState * savedState, const wxString 
         if (packageName == tapeIdNode->GetPropVal(wxT("PackageName"), wxEmptyString)) { //found it!
             wxXmlNode * sectionNode = tapeIdNode->GetChildren();
             while (sectionNode) {
-                long sectionNumber;
-                if (wxT("Section") == sectionNode->GetName() && sectionNode->GetPropVal(wxT("Number"), wxT("X")).ToLong(&sectionNumber) && sectionNumber > 0) {
-                    sections->SetCount(sectionNumber); //make sure the array's big enough
+                unsigned long sectionNumber;
+                if (wxT("Section") == sectionNode->GetName() && sectionNode->GetPropVal(wxT("Number"), wxT("X")).ToULong(&sectionNumber) && sectionNumber > 0) {
+                    if (sections->GetCount() < sectionNumber) sections->SetCount(sectionNumber); //make sure the array's big enough
                     (*sections)[sectionNumber - 1] = sectionNode->GetNodeContent().Trim(false).Trim(true);
                 }
                 sectionNode = sectionNode->GetNext();
@@ -2114,8 +2132,10 @@ BEGIN_EVENT_TABLE(SelectRecDlg, wxDialog)
     EVT_TOGGLEBUTTON(PREFER_ONLINE, SelectRecDlg::OnPreferOnline)
 END_EVENT_TABLE()
 
-/// Sets up dialogue.
-SelectRecDlg::SelectRecDlg(wxWindow * parent) : wxDialog(parent, wxID_ANY, wxT("Select a recording"), wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
+#define NO_RECORDINGS wxT("NO RECORDINGS")
+
+/// @param root Root path of recordings
+SelectRecDlg::SelectRecDlg(wxWindow * parent, const wxString & root) : wxDialog(parent, wxID_ANY, wxT("Select a recording"), wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER), mRoot(root)
 {
     //controls
     wxBoxSizer * mainSizer = new wxBoxSizer(wxVERTICAL);
@@ -2151,7 +2171,7 @@ SelectRecDlg::SelectRecDlg(wxWindow * parent) : wxDialog(parent, wxID_ANY, wxT("
     mainSizer->Add(qualityBox, 0, wxEXPAND | wxALL, CONTROL_BORDER);
     mPreferOnline = new wxToggleButton(this, PREFER_ONLINE, wxT("Prefer Online"));
     qualityBox->Add(mPreferOnline, 0, wxEXPAND | wxALL, CONTROL_BORDER);
-    mOnlineMessage = new wxStaticText(this, wxID_ANY, wxT("Online available"));
+    mOnlineMessage = new wxStaticText(this, wxID_ANY, wxEmptyString);
     qualityBox->Add(mOnlineMessage, 0, wxEXPAND | wxALL | wxALIGN_CENTRE_VERTICAL, CONTROL_BORDER);
 
     mainSizer->Add(CreateButtonSizer(wxOK|wxCANCEL), 0, wxALL, CONTROL_BORDER);
@@ -2168,71 +2188,101 @@ SelectRecDlg::SelectRecDlg(wxWindow * parent) : wxDialog(parent, wxID_ANY, wxT("
     SetMinSize(GetSize()); //stops window being shrunk far enough for controls to overlap
 }
 
-/// Populates and displays dialogue.
+/// Populates the project selector with available projects.
+/// If previously-selected project is found, or only one date is found, selects this and generates a project select event.
+/// Displays dialogue.
 int SelectRecDlg::ShowModal()
 {
-    wxDir offlineDir(wxString(RECORDING_SERVER_ROOT) + wxFileName::GetPathSeparator() + OFFLINE_SUBDIR);
-    if (offlineDir.IsOpened()) {
+    //reset all controls, as available material may have changed
+    mProjectSelector->Clear();
+    mProjectSelector->Disable();
+    mDateSelector->Clear();
+    mDateSelector->Disable();
+    mRecordingSelector->Clear();
+    mUpButton->Disable();
+    mDownButton->Disable();
+    mPreferOnline->SetBackgroundColour(wxNullColour);
+    mOnlineMessage->Hide();
+    FindWindow(wxID_OK)->Disable();
+    //choose category directory
+    mCategoryDir = mRoot + wxFileName::GetPathSeparator() + OFFLINE_SUBDIR; //prioritise offline dir as smaller files and more likely to be there
+    wxDir categoryDir(mCategoryDir);
+    mOfflineDir = categoryDir.IsOpened();
+    if (!mOfflineDir) {
+        //look for online directory
+        mCategoryDir = mRoot + wxFileName::GetPathSeparator() + ONLINE_SUBDIR;
+        categoryDir.Open(mCategoryDir);
+    }
+    if (categoryDir.IsOpened()) {
+        if (mOfflineDir) {
+            mOnlineMessage->SetLabel(wxT("Online available")); //will be shown/hidden as necessary
+        }
+        else {
+            mOnlineMessage->SetLabel(wxT("Online only"));
+            mOnlineMessage->Show(); //this message will be shown permanently
+        }
         wxString project;
-        mProjectSelector->Clear(); //repopulating it in case directory structure has changed
-        if (offlineDir.GetFirst(&project, wxEmptyString, wxDIR_DIRS)) { //GetAllFiles() doesn't return directory names so use this method instead
-            mProjectSelector->Enable();
+        if (categoryDir.GetFirst(&project, wxEmptyString, wxDIR_DIRS)) { //GetAllFiles() doesn't return directory names so use this method instead
+            //populate project selector
+            wxArrayString projects; //to allow sorting
             do {
-                mProjectSelector->Append(project);
-                //maintain the selection if this was the previously selected project
-                if (project == mSelectedProject) {
-                    mProjectSelector->SetSelection(mProjectSelector->GetCount() - 1);
-                    wxCommandEvent event(wxEVT_COMMAND_CHOICE_SELECTED, PROJECT);
-                    AddPendingEvent(event); //trigger repopulating of date control
-                }
-            } while (offlineDir.GetNext(&project));
+                projects.Add(project);
+            } while (categoryDir.GetNext(&project));
+            projects.Sort();
+            mProjectSelector->Append(projects);
             //if only a single project, select it for convenience
-            if (1 == mProjectSelector->GetCount() && wxNOT_FOUND == mProjectSelector->GetSelection()) {
+            if (1 == projects.GetCount()) {
                 mProjectSelector->SetSelection(0);
                 wxCommandEvent event(wxEVT_COMMAND_CHOICE_SELECTED, PROJECT);
-                AddPendingEvent(event); //trigger repopulating of date control
+                AddPendingEvent(event); //trigger repopulating of date selector
+            }
+            else {
+                mProjectSelector->Enable();
+                //maintain the selection if this was the previously selected project
+                int index;
+                if (wxNOT_FOUND != (index = projects.Index(mSelectedProject))) {
+                    mProjectSelector->SetSelection(index);
+                    wxCommandEvent event(wxEVT_COMMAND_CHOICE_SELECTED, PROJECT);
+                    AddPendingEvent(event); //trigger repopulating of date selector
+                }
             }
         }
         else { //no projects
             mProjectSelector->Append(wxT("NO PROJECTS"));
             mProjectSelector->Select(0);
-            mProjectSelector->Disable();
         }
     }
     else {
-        mProjectSelector->Append(wxT("NO OFFLINE MATERIAL DIRECTORY"));
+        mProjectSelector->Append(wxT("NO MATERIAL DIRECTORIES"));
         mProjectSelector->Select(0);
-        mProjectSelector->Disable();
-    }
-    if (!mProjectSelector->IsEnabled() || wxNOT_FOUND == mProjectSelector->GetSelection()) { //no project selected
-        //can select no dates and recordings so clear
-        mDateSelector->Clear();
-        mDateSelector->Disable();
-        mRecordingSelector->Clear();
-        mRecordingSelector->Disable();
-        mUpButton->Disable();
-        mDownButton->Disable();
-        mPreferOnline->SetBackgroundColour(wxNullColour);
-        mOnlineMessage->Hide();
-        FindWindow(wxID_OK)->Disable();
     }
     Fit(); //make sure all text can all be displayed
     return wxDialog::ShowModal();
 }
 
-/// Populates the date selector with available dates for this project.
+/// Populates the date selector with available dates for currently selected project.
 /// If previously-selected date is found, or only one date is found, selects this and generates a date select event.
 void SelectRecDlg::OnSelectProject(wxCommandEvent & WXUNUSED(event))
 {
+    //reset date selector and controls depending on it
+    mDateSelector->Clear();
+    mDateSelector->Disable();
+    mRecordingSelector->Clear();
+    mUpButton->Disable();
+    mDownButton->Disable();
+    mPreferOnline->SetBackgroundColour(wxNullColour);
+    if (mOfflineDir) mOnlineMessage->Hide();
+    FindWindow(wxID_OK)->Disable();
+    //look at project directory
     mSelectedProject = mProjectSelector->GetStringSelection();
-    wxDir projDir(wxString(RECORDING_SERVER_ROOT) + wxFileName::GetPathSeparator() + OFFLINE_SUBDIR + wxFileName::GetPathSeparator() + mSelectedProject); //produces rubbish if ROOT_DIR not turned into a wxString
+    wxDir projDir(mCategoryDir + wxFileName::GetPathSeparator() + mSelectedProject);
     wxString date;
-    mDateSelector->Clear(); //repopulating it in case directory structure has changed
-    wxArrayString dates; //to allow sorting
+    wxArrayString dates; //to allow audio files to be found first, by sorting
     if (projDir.GetFirst(&date, wxEmptyString, wxDIR_DIRS)) { //GetAllFiles() doesn't return directory names so use this method instead
-        mDateSelector->Enable();
+        //populate date selector
         long value;
         do {
+            //check for valid directory name
             if (8 == date.Len() && wxNOT_FOUND == date.Find(wxT("-")) && date.ToLong(&value)) { //it's an 8-digit date directory
                 dates.Add(date);
             }
@@ -2248,123 +2298,122 @@ void SelectRecDlg::OnSelectProject(wxCommandEvent & WXUNUSED(event))
             dateTime.SetMonth((wxDateTime::Month) (value - 1));
             date.Right(2).ToLong(&value);
             dateTime.SetDay((wxDateTime::wxDateTime_t) value);
-            mDateSelector->Append(dateTime.Format(wxT("%a %d %b %g")));
-            //store the directory name for later use
+//            mDateSelector->Append(dateTime.Format(wxT("%a %d %b %g"))); //%g seems to be broken near the beginning of the year, showing a year behind
+            mDateSelector->Append(dateTime.Format(wxT("%a %d %b ")) + date.Left(4)); //see above
+            //store the date directory name for later use
             mDateSelector->SetClientObject(mDateSelector->GetCount() - 1, new StringContainer(date)); //deleted by control
-            //maintain the selection if this was the previously selected date, or select for convenience if it's the only date
-            if (date == mSelectedDate || (1 == mDateSelector->GetCount() && dates.GetCount() == i + 1)) {
-                mDateSelector->SetSelection(mDateSelector->GetCount() - 1);
+        }
+        //if only a single date, select it for convenience
+        if (1 == dates.GetCount()) {
+            mDateSelector->SetSelection(0);
+            wxCommandEvent event(wxEVT_COMMAND_CHOICE_SELECTED, DATE);
+            AddPendingEvent(event); //trigger repopulating of recording selector
+        }
+        else if (dates.GetCount()) {
+            mDateSelector->Enable();
+            //maintain the selection if this was the previously selected date
+            int index;
+            if (wxNOT_FOUND != (index = dates.Index(mSelectedDate))) {
+                mDateSelector->SetSelection(index);
                 wxCommandEvent event(wxEVT_COMMAND_CHOICE_SELECTED, DATE);
-                AddPendingEvent(event); //trigger repopulating of timecode control
+                AddPendingEvent(event); //trigger repopulating of recording selector
             }
         }
     }
-    else { //no dates for selected project
+    if (!dates.GetCount()) { //no dates for selected project
         mDateSelector->Append(wxT("NO DATES"));
         mDateSelector->Select(0);
-        mDateSelector->Disable();
-    }
-    if (!mDateSelector->IsEnabled() || wxNOT_FOUND == mDateSelector->GetSelection()) { //no date selected
-        //can select no recordings so clear
-        mRecordingSelector->Clear();
-        mRecordingSelector->Disable();
-        mUpButton->Disable();
-        mDownButton->Disable();
-        mOnlineMessage->Hide();
-        mPreferOnline->SetBackgroundColour(wxNullColour);
-        FindWindow(wxID_OK)->Disable();
     }
 }
 
-/// Populates the recording selector with available recordings for this project and date.
-/// If previously-selected recording is found, or only one recording is found, selects this and enables thmPreferOnline->SetBackgroundColour(e OK button.
+/// Populates the recording selector with available recordings for currently selected project and date.
+/// If previously-selected recording is found, or only one recording is found, selects this and enables the OK button.
 void SelectRecDlg::OnSelectDate(wxCommandEvent & WXUNUSED(event))
 {
+    //reset recording selector and associated controls
+    mRecordingSelector->Clear();
+    mUpButton->Disable();
+    mDownButton->Disable();
+    mPreferOnline->SetBackgroundColour(wxNullColour);
+    if (mOfflineDir) mOnlineMessage->Hide();
+    FindWindow(wxID_OK)->Disable();
+    //look at date directory
     mSelectedDate = dynamic_cast<StringContainer *>(mDateSelector->GetClientObject(mDateSelector->GetSelection()))->GetString();
-    mRecordingSelector->Clear(); //repopulating it in case directory structure has changed
     wxArrayString paths; //to allow sorting
-    wxDir::GetAllFiles(wxString(RECORDING_SERVER_ROOT) + wxFileName::GetPathSeparator() + OFFLINE_SUBDIR + wxFileName::GetPathSeparator() + mSelectedProject + wxFileName::GetPathSeparator() + mSelectedDate, &paths, wxEmptyString, wxDIR_FILES); //produces rubbish if ROOT_DIR not turned into a wxString
-    if (paths.GetCount()) {
-        paths.Sort(); //into time order
-        mRecordingSelector->Enable();
-        long value;
-        for (size_t i = 0; i < paths.GetCount(); i++) {
-            wxString file = paths[i].Mid(paths[i].Find(wxFileName::GetPathSeparator(), true) + 1); //remove path
-            if (file.Left(8) == mSelectedDate //first 8 digits (date)
-             && file[8] == wxT('_') //following underscore
-             && wxNOT_FOUND == file.Mid(9, 8).Find(wxT("-")) && file.Mid(9, 8).ToLong(&value) //next 8 digits (time)
-             && file[17] == wxT('_') //following underscore
-             && 0 == file.Mid(18).Find(mSelectedProject + wxT("_")) //project name and following underscore
-             && !file.Right(4).CmpNoCase(wxT(".mxf")) //extension
-            ) { //it's a valid filename
-                wxString recording = file.Mid(9, 2) + wxT(":") + file.Mid(11, 2) + wxT(":") + file.Mid(13, 2) + wxT(":") + file.Mid(15, 2);// + (file.Right(6)[0] == wxT('a') ? wxT(" (Audio only)") : wxEmptyString);
-                if (!mRecordingSelector->GetCount() || mRecordingSelector->GetString(mRecordingSelector->GetCount() - 1).Left(11) != recording.Left(11)) { //new recording
-                    mRecordingSelector->Append(recording + (file.Right(6)[0] == wxT('a') ? wxT(" (Audio only)") : wxEmptyString)); //subsequently found video tracks will overwrite the "audio only" indication
-                }
-                else if (file.Right(6)[0] != wxT('a')) { //already added this recording, and this is a video track
-                    mRecordingSelector->SetString(mRecordingSelector->GetCount() - 1, recording); //it might have been marked audio only
-                }
-                //maintain the selection if this was the previously selected recording
-                if (mSelectedRecording == recording) { //the previously selected recording still exists
-                    //maintain the selection
-                    mRecordingSelector->SetSelection(mRecordingSelector->GetCount() - 1);
-                    wxCommandEvent event(wxEVT_COMMAND_LISTBOX_SELECTED, RECORDING);
-                    AddPendingEvent(event); //trigger repopulating of timecode control
-                }
+    wxDir::GetAllFiles(mCategoryDir + wxFileName::GetPathSeparator() + mSelectedProject + wxFileName::GetPathSeparator() + mSelectedDate, &paths, wxEmptyString, wxDIR_FILES); //likely to be several files per recording
+    //populate recording selector
+    paths.Sort(); //into time order
+    long value;
+    for (size_t i = 0; i < paths.GetCount(); i++) {
+        //check for valid filename
+        wxString file = paths[i].Mid(paths[i].Find(wxFileName::GetPathSeparator(), true) + 1); //remove path
+        if (file.Left(8) == mSelectedDate //first 8 digits (date)
+         && file[8] == wxT('_') //following underscore
+         && wxNOT_FOUND == file.Mid(9, 8).Find(wxT("-")) && file.Mid(9, 8).ToLong(&value) //next 8 digits (time)
+         && file[17] == wxT('_') //following underscore
+         && 0 == file.Mid(18).Find(mSelectedProject + wxT("_")) //project name and following underscore
+         && !file.Right(4).CmpNoCase(wxT(".mxf")) //extension
+        ) { //it's a valid filename
+            wxString startTime = file.Mid(9, 2) + wxT(":") + file.Mid(11, 2) + wxT(":") + file.Mid(13, 2) + wxT(":") + file.Mid(15, 2);
+            if (!mRecordingSelector->GetCount() || mRecordingSelector->GetString(mRecordingSelector->GetCount() - 1).Left(11) != startTime) { //new recording
+                mRecordingSelector->Append(startTime + (file.Right(6)[0] == wxT('a') ? wxT(" (Audio only)") : wxEmptyString)); //subsequently found video tracks will overwrite the "audio only" indication
+            }
+            else if (file.Right(6)[0] != wxT('a')) { //already added this recording, and this is a video track
+                mRecordingSelector->SetString(mRecordingSelector->GetCount() - 1, startTime); //it might have been marked audio only
+            }
+            //maintain the selection if this was the previously selected recording
+            if (mSelectedRecording == startTime && wxNOT_FOUND == mRecordingSelector->GetSelection()) { //not already selected as a previous file
+                //maintain the selection
+                mRecordingSelector->SetSelection(mRecordingSelector->GetCount() - 1);
+                wxCommandEvent event(wxEVT_COMMAND_LISTBOX_SELECTED, RECORDING);
+                AddPendingEvent(event); //trigger updating of other controls
             }
         }
-        //if only a single recording, select it for convenience
-        if (1 == mRecordingSelector->GetCount() && wxNOT_FOUND == mRecordingSelector->GetSelection()) {
-            mRecordingSelector->SetSelection(0);
-            wxCommandEvent event(wxEVT_COMMAND_LISTBOX_SELECTED, RECORDING);
-            AddPendingEvent(event); //trigger repopulating of date control
-        }
     }
-    else {
-        mRecordingSelector->Append(wxT("NO RECORDINGS"));
-        mRecordingSelector->Select(0);
-        mRecordingSelector->Disable();
+    //if only a single recording, select it for convenience
+    if (1 == mRecordingSelector->GetCount() && wxNOT_FOUND == mRecordingSelector->GetSelection()) { //not already selected by being the previously selected recording
+        mRecordingSelector->SetSelection(0);
+        wxCommandEvent event(wxEVT_COMMAND_LISTBOX_SELECTED, RECORDING);
+        AddPendingEvent(event); //trigger updating of other controls
     }
-    if (!mRecordingSelector->IsEnabled() || wxNOT_FOUND == mRecordingSelector->GetSelection()) { //no recording selected
-        //can select no recordings so clear
-        mUpButton->Disable();
-        mDownButton->Disable();
-        mOnlineMessage->Hide();
-        mPreferOnline->SetBackgroundColour(wxNullColour);
-        FindWindow(wxID_OK)->Disable();
+    else if (!mRecordingSelector->GetCount()) {
+        mRecordingSelector->Append(NO_RECORDINGS); //control has to be enabled in order to display this.  Selection of it won't be allowed.
     }
 }
 
 /// Sets state of up and down buttons, OK button, background colour of PreferOnline button and visibility of online message depending on the recording selected.
 void SelectRecDlg::OnSelectRecording(wxCommandEvent & WXUNUSED(event))
 {
-    if (wxNOT_FOUND == mRecordingSelector->GetSelection()) { //deselecting - this is fairly pointless so could be disabled but would require control to be subclassed
-        FindWindow(wxID_OK)->Disable();
-        mUpButton->Disable();
-        mDownButton->Disable();
-        mOnlineMessage->Hide();
-        mPreferOnline->SetBackgroundColour(wxNullColour);
-    }
-    else {
-        mSelectedRecording = mRecordingSelector->GetString(mRecordingSelector->GetSelection()).Left(11);
-        FindWindow(wxID_OK)->Enable();
-        mUpButton->Enable(mRecordingSelector->GetSelection());
-        mDownButton->Enable((unsigned int) mRecordingSelector->GetSelection() != mRecordingSelector->GetCount() - 1);
+    if (wxNOT_FOUND != mRecordingSelector->GetSelection()) { //sometimes spurious events appear
+        if (NO_RECORDINGS != mRecordingSelector->GetString(0)) {
+            mSelectedRecording = mRecordingSelector->GetString(mRecordingSelector->GetSelection()).Left(11); //remove any "audio only" indication
+            FindWindow(wxID_OK)->Enable();
+            mUpButton->Enable(mRecordingSelector->GetSelection());
+            mDownButton->Enable((unsigned int) mRecordingSelector->GetSelection() != mRecordingSelector->GetCount() - 1);
+            FindWindow(wxID_OK)->SetFocus(); //If this is not done, the OK button ends up with or without focus depending on whether the arrow button just pressed remains enabled or not
         //see if online is available
-        wxArrayString dummy;
-        GetPaths(dummy, true);
-        if (dummy.GetCount()) {
-            mOnlineMessage->Show(dummy.GetCount());
-            Layout(); //needed to put messge in the right place
+            if (mOfflineDir) {
+                wxArrayString dummy;
+                GetPaths(dummy, true); //get online paths
+                if (dummy.GetCount()) {
+                    mOnlineMessage->Show(dummy.GetCount());
+                    Layout(); //needed to put message in the right place
+                }
+                mPreferOnline->SetBackgroundColour((mPreferOnline->GetValue() && mOnlineMessage->IsShown()) ? BUTTON_WARNING_COLOUR : wxNullColour); //highlight button if prefer online and online file(s) are present
+            }
         }
-        mPreferOnline->SetBackgroundColour((mPreferOnline->GetValue() && mOnlineMessage->IsShown()) ? BUTTON_WARNING_COLOUR : wxNullColour); //highlight button if prefer online and online file(s) are present
+        else { //no recordings
+            mRecordingSelector->SetSelection(wxNOT_FOUND); //not allowed to select this item
+        }
     }
 }
 
 /// Closes the dialogue as if the OK button had been pressed.
 void SelectRecDlg::OnDoubleClick(wxCommandEvent & WXUNUSED(event))
 {
-    EndModal(wxID_OK);
+    if (NO_RECORDINGS != mRecordingSelector->GetString(0)) {
+        EndModal(wxID_OK);
+    }
 }
 
 /// Selects previous or next recording in the list, if possible.
@@ -2384,16 +2433,16 @@ void SelectRecDlg::OnNavigateRecordings(wxCommandEvent & event)
 /// Sets the background colour of the PreferOnline button depending on its state and if online material is available.
 void SelectRecDlg::OnPreferOnline(wxCommandEvent & WXUNUSED(event))
 {
-    mPreferOnline->SetBackgroundColour((mPreferOnline->GetValue() && mOnlineMessage->IsShown()) ? BUTTON_WARNING_COLOUR : wxNullColour); //highlight button if prefer online and online file(s) are present
+    mPreferOnline->SetBackgroundColour(mOfflineDir && (mPreferOnline->GetValue() && mOnlineMessage->IsShown()) ? BUTTON_WARNING_COLOUR : wxNullColour); //highlight button if there is a choice of types, prefer online and online file(s) are present
 }
 
 /// Gets the paths of the files of the selected recording.
 /// @param paths Returns the full path of each file, sorted alphabetically.
-/// @param selectOnline Forces online files to be returned; otherwise, online files are returned if PreferOnline button is pressed and at least one is available.
+/// @param selectOnline Forces online files to be returned; otherwise, online files are returned if they are the only ones available or PreferOnline button is pressed and at least one is available.
 void SelectRecDlg::GetPaths(wxArrayString & paths, bool selectOnline)
 {
     paths.Clear();
-    wxString stem = wxString(RECORDING_SERVER_ROOT) + wxFileName::GetPathSeparator() + ((selectOnline || BUTTON_WARNING_COLOUR == mPreferOnline->GetBackgroundColour()) ? ONLINE_SUBDIR : OFFLINE_SUBDIR) + wxFileName::GetPathSeparator() + mSelectedProject + wxFileName::GetPathSeparator() + mSelectedDate;
+    wxString stem = wxString(mRoot) + wxFileName::GetPathSeparator() + ((!mOfflineDir || selectOnline || BUTTON_WARNING_COLOUR == mPreferOnline->GetBackgroundColour()) ? ONLINE_SUBDIR : OFFLINE_SUBDIR) + wxFileName::GetPathSeparator() + mSelectedProject + wxFileName::GetPathSeparator() + mSelectedDate;
     wxDir::GetAllFiles(stem, &paths, wxEmptyString, wxDIR_FILES); //all files in the recording's directory
     stem += wxFileName::GetPathSeparator() + mSelectedDate + wxT("_") + mSelectedRecording.Left(2) + mSelectedRecording.Mid(3, 2) + mSelectedRecording(6, 2) + mSelectedRecording(9, 2) + wxT("_") + mSelectedProject + wxT("_"); //common stem for all files in the wanted recording
     for (size_t i = 0; i < paths.GetCount(); i++) {

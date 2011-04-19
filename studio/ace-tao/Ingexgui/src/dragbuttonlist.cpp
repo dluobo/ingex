@@ -1,7 +1,7 @@
 /***************************************************************************
- *   $Id: dragbuttonlist.cpp,v 1.18 2011/02/18 16:31:15 john_f Exp $      *
+ *   $Id: dragbuttonlist.cpp,v 1.19 2011/04/19 07:04:02 john_f Exp $      *
  *                                                                         *
- *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
+ *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
  *   Author: Matthew Marks                                                 *
  *                                                                         *
@@ -136,9 +136,8 @@ prodauto::PlayerInputType DragButtonList::SetTracks(ChunkInfo* chunkInfo, std::v
 /// @param fileNames Returns the file name associated with each video file, with the audio filenames at the end.
 /// @param trackNames Returns corresponding Clip Track Strings.
 /// @param nVideoTracks Returns the number of video tracks.
-/// @param editRate Returns an edit rate.
 /// @return The input type.
-prodauto::PlayerInputType DragButtonList::SetMXFFiles(wxArrayString & paths, std::vector<std::string> & fileNames, std::vector<std::string> & trackNames, unsigned int & nVideoTracks, ProdAuto::MxfTimecode & editRate)
+prodauto::PlayerInputType DragButtonList::SetMXFFiles(wxArrayString & paths, std::vector<std::string> & fileNames, std::vector<std::string> & trackNames, unsigned int & nVideoTracks)
 {
     Clear();
     fileNames.clear();
@@ -153,8 +152,6 @@ prodauto::PlayerInputType DragButtonList::SetMXFFiles(wxArrayString & paths, std
     AvidMXFInfo info;
     MXFReader *mxfReader;
     mxfRational frameRate;
-    editRate.undefined = true;
-    editRate.samples = 0;
     for (size_t i = 0; i < paths.GetCount(); i++) {
         std::string path = (const char *) paths[i].mb_str(*wxConvCurrent);
         if (!ami_read_info(path.c_str(), &info, 0)) { //recognises the file
@@ -174,9 +171,6 @@ prodauto::PlayerInputType DragButtonList::SetMXFFiles(wxArrayString & paths, std
                         mProjectName = p;
                     }
                 }
-                editRate.edit_rate.numerator = info.editRate.numerator;
-                editRate.edit_rate.denominator = info.editRate.denominator;
-                editRate.undefined = false;
                 nVideoTracks++;
             }
             else {
@@ -193,9 +187,6 @@ prodauto::PlayerInputType DragButtonList::SetMXFFiles(wxArrayString & paths, std
                 mEnableStates.Add(false); //we don't know whether the player can open this file yet
                 trackNames.push_back(get_tracks_string(mxfReader));
                 get_frame_rate(mxfReader, &frameRate);
-                editRate.edit_rate.numerator = frameRate.numerator;
-                editRate.edit_rate.denominator = frameRate.denominator;
-                editRate.undefined = false;
                 nVideoTracks++;
             }
             else {
@@ -353,7 +344,7 @@ void DragButtonList::ToggleSplitView(const unsigned int source)
     }
 }
 
-/// Returns the ID of the selected source; 0 for a split.
+/// Returns the ID of the selected source; 0 for a split or if there are no buttons.
 unsigned int DragButtonList::GetSelectedSource()
 {
     return mSelected;

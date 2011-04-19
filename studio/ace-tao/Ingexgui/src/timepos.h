@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: timepos.h,v 1.14 2010/09/06 13:48:24 john_f Exp $           *
+ *   $Id: timepos.h,v 1.15 2011/04/19 07:04:02 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -43,7 +43,7 @@ class Timepos : public wxEvtHandler
         Timepos(wxEvtHandler *, wxStaticText *, wxStaticText *);
         void Reset();
         void SetTimecode(const ProdAuto::MxfTimecode, bool);
-        void SetPosition(unsigned long);
+        void SetPosition(unsigned long, ProdAuto::MxfTimecode *);
         void SetDefaultEditRate(const ProdAuto::MxfTimecode);
         void SetPositionUnknown(bool = false);
         const wxString Record(const ProdAuto::MxfTimecode);

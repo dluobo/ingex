@@ -1,7 +1,7 @@
 /***************************************************************************
- *   $Id: dialogues.h,v 1.17 2011/01/04 11:37:18 john_f Exp $             *
+ *   $Id: dialogues.h,v 1.18 2011/04/19 07:04:02 john_f Exp $             *
  *                                                                         *
- *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
+ *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
  *   Author: Matthew Marks                                                 *
  *                                                                         *
@@ -67,11 +67,11 @@ class SavedState;
 class SetProjectDlg : public wxDialog
 {
     public:
-        SetProjectDlg(wxWindow *, const wxSortedArrayString &, SavedState *);
-        int ShowModal();
+        SetProjectDlg(wxWindow *);
+        void SetProjectNames(CORBA::StringSeq_var = 0, const wxString & = wxEmptyString);
         const wxString GetSelectedProject();
-        const wxSortedArrayString & GetProjectNames();
-        static const wxString GetCurrentProjectName(SavedState *);
+        const CORBA::StringSeq GetNewProjectNames();
+        const wxString GetCurrentProjectName();
     private:
         enum {
             ADD = wxID_HIGHEST + 1,
@@ -86,12 +86,13 @@ class SetProjectDlg : public wxDialog
         void EnableButtons(bool);
 
 //      wxListBox * mProjectList;
+        wxButton * mAddButton;
         wxButton * mDeleteButton;
         wxButton * mEditButton;
         wxButton * mOKButton;
         wxChoice * mProjectList;
-        wxSortedArrayString mProjectNames; //needed because there is no sort style for a wxChoice
-        SavedState * mSavedState;
+        wxArrayString mProjectNames; //needed because there is no sort style for a wxChoice; was using wxSortedArrayString but can't add this to a wxControlWithItems in 2.8.11.
+        wxArrayString mNewProjectNames;
     DECLARE_EVENT_TABLE()
 };
 
@@ -357,7 +358,7 @@ class ChunkingDlg : public wxDialog
 class SelectRecDlg : public wxDialog
 {
     public:
-        SelectRecDlg(wxWindow *);
+        SelectRecDlg(wxWindow *, const wxString &);
         int ShowModal();
         void GetPaths(wxArrayString &, bool = false);
     private:
@@ -374,9 +375,12 @@ class SelectRecDlg : public wxDialog
         wxBitmapButton * mDownButton;
         wxStaticText * mOnlineMessage;
         wxToggleButton * mPreferOnline;
+        wxString mCategoryDir;
         wxString mSelectedProject;
         wxString mSelectedDate;
         wxString mSelectedRecording;
+        const wxString mRoot;
+        bool mOfflineDir;
         enum {
             PROJECT = wxID_HIGHEST + 1,
             DATE,

@@ -1,7 +1,7 @@
 /***************************************************************************
- *   $Id: player.cpp,v 1.31 2011/02/18 16:31:15 john_f Exp $              *
+ *   $Id: player.cpp,v 1.32 2011/04/19 07:04:02 john_f Exp $              *
  *                                                                         *
- *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
+ *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
  *   Author: Matthew Marks                                                 *
  *                                                                         *
@@ -28,7 +28,6 @@
 #include "dialogues.h"
 #include "dragbuttonlist.h"
 #include "eventlist.h"
-#include "ingexgui.h"
 #include "savedstate.h"
 
 DEFINE_EVENT_TYPE(EVT_PLAYER_MESSAGE)
@@ -48,7 +47,7 @@ BEGIN_EVENT_TABLE(Player, wxPanel)
     EVT_COMMAND(IMAGE_CLICK, EVT_PLAYER_MESSAGE, Player::OnImageClick)
     EVT_COMMAND(KEYPRESS, EVT_PLAYER_MESSAGE, Player::OnKeyPress)
     EVT_COMMAND(SOURCE_NAME, EVT_PLAYER_MESSAGE, Player::OnSourceNameChange)
-    EVT_TIMER(wxID_ANY, Player::OnFilePollTimer)
+    EVT_TIMER(wxID_ANY, Player::OnTimer)
     EVT_SOCKET(wxID_ANY, Player::OnSocketEvent)
     EVT_TOGGLEBUTTON(wxID_ANY, Player::OnModeButton)
     EVT_RADIOBUTTON(wxID_ANY, Player::OnPlaybackTrackSelect)
@@ -59,20 +58,31 @@ END_EVENT_TABLE()
 /// Player must be deleted explicitly or a traffic control notification will be missed.
 /// @param parent Parent object.
 /// @param enabled True to enable player.
-Player::Player(wxWindow* parent, const wxWindowID id, const bool enabled) :
-wxPanel(parent, id), LocalIngexPlayer(&mListenerRegistry),
+/// @param recServerRoot Root directory for recordings from server.
+Player::Player(wxWindow* parent, const wxWindowID id, const bool enabled, const wxString & recServerRoot) :
+wxPanel(parent, id),
+#ifndef USE_HTTP_PLAYER
+LocalIngexPlayer(&mListenerRegistry),
+#endif
 mTrackSelector(0), //to check before accessing as it's not created automatically
-mEnabled(enabled), mOK(false), mState(PlayerState::STOPPED), mSpeed(0), mMuted(false), mOpeningSocket(false),
+mEnabled(false),
+mOK(false),
+mState(PlayerState::STOPPED),
+#ifdef USE_HTTP_PLAYER
+mConnected(false), //not yet connected
+#else
+mConnected(true), //built-in so always connected
+#endif
+mSpeed(0), mMuted(false), mOpeningSocket(false),
 mPrevTrafficControl(true), //so that it can be switched off
 mMode(RECORDINGS), mPreviousMode(RECORDINGS),
 mCurrentChunkInfo(0), //to check before accessing in case it hasn't been set
 mDivertKeyPresses(false),
 mRecording(false),
 mPrematureStart(false),
-#ifdef HAVE_DVS
 mUsingDVSCard(false),
-#endif
-mSavedState(0) //must call SetSavedState to use this
+mSavedState(0), //must call SetSavedState to use this
+mRecServerRoot(recServerRoot)
 {
     //Controls
     wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
@@ -88,12 +98,15 @@ mSavedState(0) //must call SetSavedState to use this
     Fit(); //or buttons shrink (as a result of wxEXPAND)
     Layout(); //or buttons are superimposed!
 
-    //set up LocalIngexPlayer
-    Rational unity = {1, 1};
-    setPixelAspectRatio(&unity);
+    mSelectRecDlg = new SelectRecDlg(this, mRecServerRoot); //persistent so that it can remember what was the last recording played
 
-    mSelectRecDlg = new SelectRecDlg(this); //persistent so that it can remember what was the last recording played
+#ifdef USE_HTTP_PLAYER
+    mListener = new Listener(this);
+    registerListener(mListener);
+#else
     mListener = new Listener(this, &mListenerRegistry); //registers with the player
+#endif //USE_HTTP_PLAYER
+    mConnectRetryTimer = new wxTimer(this, wxID_ANY);
     mFilePollTimer = new wxTimer(this, wxID_ANY);
     mDesiredTrackName = ""; //display the split view by default
     mSocket = new wxSocketClient();
@@ -101,6 +114,7 @@ mSavedState(0) //must call SetSavedState to use this
     mSocket->SetNotify(wxSOCKET_CONNECTION_FLAG);
     mSocket->Notify(true);
     TrafficControl(false); //in case it has just been restarted after crashing and leaving traffic control on
+    Enable(enabled);
 }
 
 /// Provides the saved state and loads from the saved state; player will not work properly until this is called.
@@ -109,16 +123,25 @@ void Player::SetSavedState(SavedState * savedState)
 {
     mSavedState = savedState;
     //Apply settings from saved state
-    SetOutputType();
-    SetOSDType();
-    SetVideoSplit();
-#ifdef HAVE_DVS
-    SetSDIOSDEnable();
-#endif
-    SetApplyScaleFilter();
-    SetNumLevelMeters();
-    SetAudioFollowsVideo();
-    if (mPrematureStart) Start();
+    Setup();
+}
+
+/// Sets player parameters from the saved state and completes any premature start requests
+void Player::Setup()
+{
+    if (mConnected) {
+        SetOutputType();
+        SetOSDType();
+        SetOSDPosition();
+        SetVideoSplit();
+        SetSDIOSDEnable();
+        SetApplyScaleFilter();
+        SetNumLevelMeters();
+        SetAudioFollowsVideo();
+        Rational unity = {1, 1};
+        setPixelAspectRatio(&unity);
+        if (mPrematureStart) Start();
+    }
 }
 
 /// Calls SetMode() if a button is being pressed (as opposed to released)
@@ -138,7 +161,7 @@ void Player::OnUpdateUI(wxUpdateUIEvent& event)
         case ETOE:
 #endif
         case FILES:
-            event.Enable(mModesAllowed[event.GetId()]);
+            event.Enable(!mConnectRetryTimer->IsRunning() && mModesAllowed[event.GetId()]);
             dynamic_cast<wxToggleButton*>(event.GetEventObject())->SetValue(event.GetId() == mMode && mEnabled);
             break;
         default:
@@ -268,7 +291,7 @@ void Player::OnKeyPress(wxCommandEvent& event)
             }
         }
         if (111 == event.GetInt() && 2 == event.GetExtraLong()) { //ctrl-O
-            Open(OPEN_RECORDINGS);
+            Open(OPEN_FROM_SERVER);
             found = true;
         }
         if (!found) {
@@ -321,8 +344,8 @@ void Player::SetPreviousMode()
     }
 }
 
-/// Returns the label for the player project name
-const wxString Player::GetProjectName()
+/// Returns the label for the playback name box.
+const wxString Player::GetPlaybackName()
 {
     wxString name;
     if (FILES == mMode) {
@@ -333,24 +356,31 @@ const wxString Player::GetProjectName()
             name = mFileModeMovFile; //no project so show file name instead
         }
     }
+#ifndef DISABLE_SHARED_MEM_SOURCE
+    else if (ETOE == mMode) {
+        name = wxT("E to E");
+    }
+#endif
     else if (mCurrentChunkInfo) {
         name = mCurrentChunkInfo->GetProjectName();
     }
     return name;
 }
 
-/// Returns the label for the player project static box; if blank, box should be hidden.
-const wxString Player::GetProjectType()
+/// Returns the label for the playback static box; if blank, box should be hidden.
+const wxString Player::GetPlaybackType()
 {
     wxString type;
     if (FILES == mMode && !mFileModeMovFile.IsEmpty()) { //showing a MOV file
         type = wxT("Filename");
     }
-#ifndef DISABLE_SHARED_MEM_SOURCE
+#ifdef DISABLE_SHARED_MEM_SOURCE
+    else {
+#else
     else if (ETOE != mMode) {
+#endif
         type = wxT("Project");
     }
-#endif
     return type;
 }
 
@@ -429,7 +459,7 @@ void Player::SetMode(const PlayerMode mode, const bool force)
                         Load();
                         //clear the position display (even if loading failed) - no more FRAME_DISPLAYED events will be sent in this mode
                         wxCommandEvent event(EVT_PLAYER_MESSAGE, FRAME_DISPLAYED);
-                        event.SetInt(false); //invalid position
+                        event.SetClientData(0); //invalid position
                         GetParent()->AddPendingEvent(event); //don't add it to this handler or it will be blocked
                         break;
                     }
@@ -437,12 +467,7 @@ void Player::SetMode(const PlayerMode mode, const bool force)
                 case FILES:
                     {
                         if (mFileModeMovFile.IsEmpty()) { //MXF files
-                            ProdAuto::MxfTimecode* editRate = new ProdAuto::MxfTimecode; //event handler must delete this!
-                            mInputType = mTrackSelector->SetMXFFiles(mFileModeMxfFiles, mFileNames, mTrackNames, mNVideoTracks, *editRate);
-                            //Notify the edit rate to allow position display to work if it hasn't got it from anywhere else
-                            wxCommandEvent event(EVT_PLAYER_MESSAGE, EDIT_RATE);
-                            event.SetClientData(editRate); //invalid position
-                            GetParent()->AddPendingEvent(event); //don't add it to this handler or it will be blocked
+                            mInputType = mTrackSelector->SetMXFFiles(mFileModeMxfFiles, mFileNames, mTrackNames, mNVideoTracks);
                         }
                         else { //MOV file
                             mFileNames.clear();
@@ -483,15 +508,15 @@ void Player::Open(const PlayerOpenType type)
             }
             break;
         }
-        case OPEN_RECORDINGS:
-            if (wxDirExists(RECORDING_SERVER_ROOT)) {
+        case OPEN_FROM_SERVER:
+            if (wxDirExists(mRecServerRoot)) {
                 if ((opened = (wxID_OK == mSelectRecDlg->ShowModal()))) {
                     mSelectRecDlg->GetPaths(mFileModeMxfFiles);
                     mFileModeMovFile.Clear();
                 }
             }
             else {
-                wxMessageDialog dlg(this, wxString(RECORDING_SERVER_ROOT) + wxT(" is not a directory: no recordings can be chosen\n"), wxT("Cannot access recordings area"));
+                wxMessageDialog dlg(this, wxString(mRecServerRoot) + wxT(" is not a directory: no recordings can be chosen\n"), wxT("Cannot access recordings area"));
                 dlg.ShowModal();
                 opened = false;
             }
@@ -507,8 +532,32 @@ void Player::Open(const PlayerOpenType type)
 Player::~Player()
 {
     TrafficControl(false, true); //must do this synchronously or the socket will be opened but the data will never be sent
-    delete mListener;
+#ifdef USE_HTTP_PLAYER
+    if (mConnected) {
+        reset();
+        disconnect();
+    }
+#endif //USE_HTTP_PLAYER
+    delete mListener; //causes segfault if using HTTP player, due to reset call above
     delete mSocket;
+}
+
+
+///Tries to connect and setup if using HTTP player.
+///If connected or using built-in player, loads files if they are present.
+void Player::Connect()
+{
+#ifdef USE_HTTP_PLAYER
+    mConnected = connect(HTTP_PLAYER_HOST, HTTP_PLAYER_PORT, HTTP_PLAYER_STATE_POLL_INTERVAL);
+#endif //USE_HTTP_PLAYER
+    if (mConnected) {
+#ifdef USE_HTTP_PLAYER
+        Setup(); //may be a new player
+#else
+        SetOutputType(); //in case the available output types have changed
+#endif // !USE_HTTP_PLAYER
+        if (mFileNames.size()) Load(); //a clip was already registered
+    }
 }
 
 /// Enables or disables the player.
@@ -521,27 +570,32 @@ bool Player::Enable(bool state)
     if (state != mEnabled) {
         mEnabled = state;
         if (mEnabled) {
-            if (mFileNames.size()) {
-                //a clip was already registered: reload
-                SetOutputType(); //in case the available output types have changed
-                Load();
-            }
+            Connect();
+#ifdef USE_HTTP_PLAYER
+            if (!mConnected) mConnectRetryTimer->Start(HTTP_PLAYER_RETRY_TIMER_INTERVAL);
+#endif //USE_HTTP_PLAYER
         }
         else {
+#ifdef USE_HTTP_PLAYER
+            if (mConnected) {
+                Reset();
+                disconnect();
+                mConnected = false;
+            }
+            mConnectRetryTimer->Stop(); //suspend any current attempts to connect
+#endif //USE_HTTP_PLAYER
             mFilePollTimer->Stop(); //suspend any current attempts to load
-            close(); //stops and closes window
+            if (mConnected) close(); //stops and closes window
             if (mSpeed) {
                 mSpeed = 0;
                 TrafficControl(false);
             }
             //clear the position display
             wxCommandEvent guiFrameEvent(EVT_PLAYER_MESSAGE, FRAME_DISPLAYED);
-            guiFrameEvent.SetInt(false); //invalid position
+            guiFrameEvent.SetClientData(0); //invalid position
             AddPendingEvent(guiFrameEvent);
             mOK = false;
-#ifdef HAVE_DVS
             mUsingDVSCard = false;
-#endif
         }
     }
     return mEnabled;
@@ -578,7 +632,7 @@ void Player::Load()
         if (!mNFilesExisting) {
 #endif
             TrafficControl(false);
-            mOK = reset(); //otherwise it keeps showing what was there before even if it can't open any files/shared memory
+            mOK = mConnected && reset(); //otherwise it keeps showing what was there before even if it can't open any files/shared memory
         }
 #ifndef DISABLE_SHARED_MEM_SOURCE
         if (ETOE == mMode) {
@@ -597,7 +651,7 @@ void Player::Load()
     }
 }
 
-/// If player is enabled and saved state exists, tries to load.
+/// If player is enabled, and saved state exists and there are files to play, tries to load.
 /// Tries to select the file position previously selected by the user.  If this wasn't opened, selects the only file open or a split view otherwise.
 /// This method is the same as Load() except that it does not manipulate the polling timer or change the playing state.
 /// @return True if all files were opened.
@@ -606,10 +660,8 @@ bool Player::Start()
 //std::cerr << "Player Start" << std::endl;
     bool allFilesOpen = false;
     if (mEnabled) {
-        if (!mSavedState) { //have not yet set the player up with parameters from the saved state
-            mPrematureStart = true; //start once we get the saved state
-        }
-        else {
+        mPrematureStart = !mSavedState; //start once we get the saved state
+        if (mSavedState && mFileNames.size()) {
             mOpened.clear();
             mAtChunkStart = false; //set when a frame is displayed
             mAtChunkEnd = false; //set when a frame is displayed
@@ -637,9 +689,8 @@ bool Player::Start()
                     frameOffset = 0;
             }
             SetVideoSplit(false); //need to call this here as the video split type depends on the number of files
-#ifdef HAVE_DVS
-            prodauto::PlayerOutputType OutputType = GetOutputType();
-#endif
+            prodauto::PlayerOutputType OutputType = GetOutputType(); //before starting, so mUsingDVSCard can be set correctly later
+            //mOpened below should be considered tainted if using HTTP player
 #ifndef DISABLE_SHARED_MEM_SOURCE
             mOK = start(inputs, mOpened, SHM_INPUT != mInputType && LOAD_FIRST_CHUNK != mChunkLinking && (PlayerState::PAUSED == mState || PlayerState::STOPPED == mState), frameOffset > -1 ? frameOffset : 0); //play forwards or paused
 #else
@@ -648,9 +699,7 @@ bool Player::Start()
             if (-1 == frameOffset) seek(0, SEEK_END, FRAME_PLAY_UNIT);
             int trackToSelect = (1 == mFileNames.size() ? 1 : 0); //display split view by default unless only one file
             if (mOK) { //at least one source opened
-#ifdef HAVE_DVS
                 mUsingDVSCard = (DVS_OUTPUT == OutputType) || (DUAL_DVS_AUTO_OUTPUT == OutputType) || (DUAL_DVS_X11_OUTPUT == OutputType) || (DUAL_DVS_X11_XV_OUTPUT == OutputType);
-#endif
                 if (RECORDINGS == mMode && mCurrentChunkInfo) {
                     for (size_t i = 0; i < mCurrentChunkInfo->GetCuePointFrames().size(); i++) {
                         markPosition(mCurrentChunkInfo->GetCuePointFrames()[i] - mCurrentChunkInfo->GetStartPosition(), 0); //so that the pointer changes colour at each cue point
@@ -667,6 +716,7 @@ bool Player::Start()
                         playSpeed(-1);
                     }
                     SetOSDType();
+                    SetOSDPosition();
 #ifndef DISABLE_SHARED_MEM_SOURCE
                 }
                 else {
@@ -706,9 +756,7 @@ bool Player::Start()
                 muteAudio(mMuted);
             }
             else {
-#ifdef HAVE_DVS
                 mUsingDVSCard = false;
-#endif
                 SetWindowName(wxT("Ingex Player - no files"));
             }
             //tell the track selection list the situation
@@ -750,21 +798,14 @@ void Player::SelectTrack(const int id, const bool remember)
     }
 }
 
-/// Returns the filename of the currently selected track, or an empty string if showing a split.
+/// Returns the filename of the currently selected track, or an empty string if showing a split or a MOV file.
 std::string Player::GetCurrentFileName()
 {
     std::string currentFileName;
-    if (mTrackSelector && mTrackSelector->GetSelectedSource()) { //not split view
+    if (mTrackSelector && mTrackSelector->GetSelectedSource()) { //buttons present and not split view
         currentFileName = mFileNames[mTrackSelector->GetSelectedSource() - 1]; //-1 to offset for split view
     }
     return currentFileName;
-}
-
-/// Returns true if showing a split view.
-/// Undefined if not showing anything.
-bool Player::IsShowingSplit()
-{
-    return mTrackSelector && 0 == mTrackSelector->GetSelectedSource();
 }
 
 /// Plays at an absolute speed, forwards or backwards, or pauses.
@@ -921,7 +962,8 @@ void Player::Reset()
 {
 //std::cerr << "Player Reset" << std::endl;
     mFilePollTimer->Stop();
-    mOK = reset();
+//    mConnectRetryTimer->Stop(); //suspend any current attempts to connect
+    mOK = mConnected && reset();
     if (mOK) {
         SetWindowName(wxT("Ingex Player - no files"));
     }
@@ -932,7 +974,7 @@ void Player::Reset()
     mChunkLinking = STATE_CHANGE; //next recording loaded will be treated as isolated
     if (mTrackSelector) mTrackSelector->Clear();
     wxCommandEvent event(EVT_PLAYER_MESSAGE, FRAME_DISPLAYED);
-    event.SetInt(false); //invalid position
+    event.SetClientData(0); //invalid position
     GetParent()->AddPendingEvent(event); //don't add it to this handler or it will be blocked
 }
 
@@ -959,7 +1001,7 @@ PlayerOSDtype Player::GetOSDType()
 }
 
 /// Sets the type of on screen display and remembers this in the saved state, if SetSavedState() has been called.
-/// @param OSDtype :
+/// @param type :
 /// OSD_OFF : none
 /// CONTROL_TIMECODE : timecode based on file position
 /// SOURCE_TIMECODE : timecode read from file
@@ -988,14 +1030,45 @@ void Player::SetOSDType()
     }
 }
 
-#ifdef HAVE_DVS
+/// Returns the position of the on screen display.
+PlayerOSDposition Player::GetOSDPosition()
+{
+    PlayerOSDposition position = OSD_BOTTOM;
+    if (mSavedState) position = (PlayerOSDposition) mSavedState->GetUnsignedLongValue(wxT("PlayerOSDPosition"), (unsigned long) OSD_BOTTOM);
+    return position;
+}
+
+/// Sets the position of the on screen display and remembers this in the saved state, if SetSavedState() has been called.
+/// This is remembered by the player between invocations.
+void Player::ChangeOSDPosition(const PlayerOSDposition position)
+{
+//std::cerr << "Player ChangeOSDPosition " << position << std::endl;
+    if (mSavedState) mSavedState->SetUnsignedLongValue(wxT("PlayerOSDPosition"), (unsigned long) position);
+    SetOSDPosition();
+}
+
+/// Sets the player OSD position, from the saved value if SetSavedState() has been called; otherwise, to a default value.
+void Player::SetOSDPosition()
+{
+    switch (GetOSDPosition()) {
+        case OSD_TOP:
+            setOSDPlayStatePosition(OSD_PS_POSITION_TOP);
+            break;
+        case OSD_MIDDLE:
+            setOSDPlayStatePosition(OSD_PS_POSITION_MIDDLE);
+            break;
+        case OSD_BOTTOM:
+            setOSDPlayStatePosition(OSD_PS_POSITION_BOTTOM);
+            break;
+    }
+}
+
 /// Returns true if there is an external output available or if it's already being used by the player
 bool Player::ExtOutputIsAvailable()
 {
     //if player is already using the card, dvsCardIsAvailable() will return false if there isn't another card available
-    return dvsCardIsAvailable() || mUsingDVSCard;
+    return !mConnected || dvsCardIsAvailable() || mUsingDVSCard;
 }
-#endif
 
 /// Responds to a frame displayed event from the listener. If not playing from shared memory:
 /// - Detects reaching the start, the end, a chunk start/end while playing, or leaving the start/end of a file and generates a player event accordingly.
@@ -1010,9 +1083,9 @@ void Player::OnFrameDisplayed(wxCommandEvent& event) {
 #ifndef DISABLE_SHARED_MEM_SOURCE
     if (SHM_INPUT != mInputType) {
 #endif
-        if (event.GetInt()) { //a valid frame value (i,e, not the zero that's sent when the player is disabled)
+        if (event.GetClientData()) { //a valid frame value (i,e, not the zero that's sent when the player is disabled)
             mAtChunkStart = !event.GetExtraLong();
-            mAtChunkEnd = (bool) event.GetClientData();
+            mAtChunkEnd = event.GetInt();
             mPreviousFrameDisplayed = event.GetExtraLong();
             if (!event.GetExtraLong() && 0 > mSpeed && HasChunkBefore()) { //just reached the start of a chunk, playing backwards (this may disrupt the first frame playing but academic as there will be a disturbance anyway as new files are loaded)
                 mChunkLinking = LOAD_PREV_CHUNK; //so we know what to do when the player is reloaded
@@ -1033,7 +1106,7 @@ void Player::OnFrameDisplayed(wxCommandEvent& event) {
                     Pause();
                 }
             }
-            else if ((bool) event.GetClientData() && !HasChunkAfter()) { //at the end of a recording
+            else if (event.GetInt() && !HasChunkAfter()) { //at the end of a recording
                 wxCommandEvent guiFrameEvent(EVT_PLAYER_MESSAGE, AT_END);
                 AddPendingEvent(guiFrameEvent);
                 Pause();
@@ -1141,26 +1214,32 @@ void Player::OnSourceNameChange(wxCommandEvent& event)
     }
 }
 
-/// Responds to the file poll timer.
-/// Checks to see if any more files have appeared, and if so, restarts the player.
-/// If all files have appeared, kills the timer.
+/// Responds to a timer: file poll or HTTP player connect.
+/// If file poll timer, checks to see if any more files have appeared, and if so, restarts the player. If all files have appeared, kills the timer.
+/// If connect timer, tries to connect. If connected, kills the timer
 /// @param event The timer event.
-void Player::OnFilePollTimer(wxTimerEvent& WXUNUSED(event))
+void Player::OnTimer(wxTimerEvent& event)
 {
-//std::cerr << "Player OnFilePollTimer" << std::endl;
-    //Have any more files appeared?
-    unsigned int nFilesExisting = 0;
-    for (size_t i = 0; i < mFileNames.size(); i++) {
-        if (wxFile::Exists(wxString(mFileNames[i].c_str(), *wxConvCurrent))) {
-            nFilesExisting++;
-        }
+//std::cerr << "Player OnTimer" << std::endl;
+    if (mConnectRetryTimer == (wxTimer *) event.GetEventObject()) {
+        Connect();
+        if (mConnected) mConnectRetryTimer->Stop();
     }
-    if (nFilesExisting > mNFilesExisting) {
-        mNFilesExisting = nFilesExisting; //prevents restarting continually unless more files appear
-        Start(); //existing parameters
-        if (nFilesExisting == mFileNames.size()) {
-            //all the files are there - even if the player is unhappy there's nothing else we can do
-            mFilePollTimer->Stop();
+    else {
+        //Have any more files appeared?
+        unsigned int nFilesExisting = 0;
+        for (size_t i = 0; i < mFileNames.size(); i++) {
+            if (wxFile::Exists(wxString(mFileNames[i].c_str(), *wxConvCurrent))) {
+                nFilesExisting++;
+            }
+        }
+        if (nFilesExisting > mNFilesExisting) {
+            mNFilesExisting = nFilesExisting; //prevents restarting continually unless more files appear
+            Start(); //existing parameters
+            if (nFilesExisting == mFileNames.size()) {
+                //all the files are there - even if the player is unhappy there's nothing else we can do
+                mFilePollTimer->Stop();
+            }
         }
     }
 }
@@ -1215,7 +1294,7 @@ void Player::SetWindowName(const wxString & name)
         else { //split view
             unsigned int nTracks = 0;
             for (size_t i = 0; i < mTrackNames.size(); i++) { //only go through video files
-                if (mOpened[i]) {
+                if (i < mOpened.size() && mOpened[i]) { //taint check
                     title += wxString(mTrackNames[i].c_str(), *wxConvCurrent) + wxT("; ");
                     if ((mSavedState && mSavedState->GetBoolValue(wxT("LimitSplitToQuad"), false) ? 4 : 9) == ++nTracks) break; //split view displays up to the first four or nine successfully opened files
                 }
@@ -1326,7 +1405,11 @@ void Player::ChangeOutputType(const PlayerOutputType outputType)
 void Player::SetOutputType()
 {
 //std::cerr << "Player SetOutputType" << std::endl;
+#ifdef USE_HTTP_PLAYER
+    setOutputType(GetOutputType(), 1.0);
+#else
     setOutputType(GetOutputType());
+#endif //USE_HTTP_PLAYER
     //above call has stopped the player so start it again
     if (mOK) Start();
 }
@@ -1338,11 +1421,7 @@ prodauto::PlayerOutputType Player::GetOutputType(const bool fallback)
     //don't use getOutputType() inherited function as doesn't give right answer when player not open
     prodauto::PlayerOutputType outputType = prodauto::X11_AUTO_OUTPUT; //doesn't really matter what this is but must not be a DVS type
     if (mSavedState) {
-#ifdef HAVE_DVS
         outputType = (prodauto::PlayerOutputType) mSavedState->GetUnsignedLongValue(wxT("PlayerOutputType"), (unsigned long) prodauto::DUAL_DVS_AUTO_OUTPUT);
-#else
-        outputType = (prodauto::PlayerOutputType) mSavedState->GetUnsignedLongValue(wxT("PlayerOutputType"), (unsigned long) prodauto::X11_AUTO_OUTPUT);
-#endif //NOT HAVE_DVS
     }
     if (fallback) {
         outputType = Fallback(outputType);
@@ -1399,9 +1478,7 @@ const wxString Player::GetOutputTypeDescription(const prodauto::PlayerOutputType
 prodauto::PlayerOutputType Player::Fallback(const prodauto::PlayerOutputType desiredType)
 {
     prodauto::PlayerOutputType actualType = desiredType;
-#ifdef HAVE_DVS
-    if (!dvsCardIsAvailable() && !mUsingDVSCard) {
-#endif //HAVE_DVS
+    if (!ExtOutputIsAvailable()) {
         switch (desiredType) {
             case DVS_OUTPUT:
             case DUAL_DVS_AUTO_OUTPUT:
@@ -1416,9 +1493,7 @@ prodauto::PlayerOutputType Player::Fallback(const prodauto::PlayerOutputType des
             default:
                 break;
         }
-#ifdef HAVE_DVS
     }
-#endif
     return actualType;
 }
 
@@ -1449,8 +1524,6 @@ void Player::SetApplyScaleFilter()
     if (mOK) Start();
 }
 
-#ifdef HAVE_DVS
-
 /// Enable/disable OSD on the SDI output, and save if SetSavedState() has been called.
 /// @param enable True to enable.
 void Player::EnableSDIOSD(const bool enable)
@@ -1476,8 +1549,6 @@ void Player::SetSDIOSDEnable()
     //this doesn't take effect until the player is reloaded
     if (mOK) Start();
 }
-
-#endif //HAVE_DVS
 
 /// Sets audio to follow video or stick to the first audio files; save setting if SetSavedState() has been called.
 /// @param follows true to follow video
@@ -1507,7 +1578,7 @@ void Player::SetAudioFollowsVideo()
 void Player::SetVideoSplit(const bool restart)
 {
     bool limited = mSavedState && mSavedState->GetBoolValue(wxT("LimitSplitToQuad"), false);
-    setVideoSplit((mNVideoTracks > 4 && !limited) ? NONA_SPLIT_VIDEO_SWITCH : QUAD_SPLIT_VIDEO_SWITCH); //this doesn't take effect until the player is reloaded
+    if (mConnected) setVideoSplit((mNVideoTracks > 4 && !limited) ? NONA_SPLIT_VIDEO_SWITCH : QUAD_SPLIT_VIDEO_SWITCH); //this doesn't take effect until the player is reloaded
     if (mTrackSelector) mTrackSelector->LimitSplitToQuad(limited);
     if (
      mOK
@@ -1548,6 +1619,21 @@ unsigned int Player::GetNumLevelMeters()
  *   LISTENER                                                              *
  ***************************************************************************/
 
+#ifdef USE_HTTP_PLAYER
+Listener::Listener(Player * player) :
+mPlayer(player)
+{
+    memset(&mPreviousState, 0, sizeof(mPreviousState));
+}
+
+void Listener::stateUpdate(ingex::HTTPPlayerClient* client, ingex::HTTPPlayerState state)
+{
+    (void) client;
+    ProcessFrameDisplayedEvent(&(state.displayedFrame));
+    ProcessStateChangeEvent(mPreviousState.stop != state.stop, state.stop, mPreviousState.play != state.play, state.play, mPreviousState.speed != state.speed, state.speed);
+    mPreviousState = state;
+}
+#else
 /// @param player The player associated with this listener.
 Listener::Listener(Player * player, prodauto::IngexPlayerListenerRegistry * registry) : prodauto::IngexPlayerListener(registry), mPlayer(player)
 {
@@ -1559,13 +1645,7 @@ Listener::Listener(Player * player, prodauto::IngexPlayerListenerRegistry * regi
 /// NB Called in another thread context.
 void Listener::frameDisplayedEvent(const FrameInfo* frameInfo)
 {
-    wxCommandEvent guiFrameEvent(EVT_PLAYER_MESSAGE, FRAME_DISPLAYED);
-    guiFrameEvent.SetExtraLong(frameInfo->position);
-    guiFrameEvent.SetInt(true); //valid position
-    if (frameInfo->position == frameInfo->sourceLength - 1) { //at the end of the file
-        guiFrameEvent.SetClientData((void *) 1);
-    }
-    mPlayer->AddPendingEvent(guiFrameEvent);
+    ProcessFrameDisplayedEvent(frameInfo);
 }
 
 /// Callback for a frame being repeated from the SDI card because the player didn't supply the next one in time.
@@ -1583,37 +1663,7 @@ void Listener::frameDroppedEvent(const FrameInfo*)
 /// NB Called in another thread context
 void Listener::stateChangeEvent(const MediaPlayerStateEvent* playerEvent)
 {
-//std::cerr << "state change event" << std::endl;
-    if (playerEvent->stopChanged) {
-        if (playerEvent->stop) {
-            wxCommandEvent guiEvent(EVT_PLAYER_MESSAGE, STATE_CHANGE);
-            guiEvent.SetInt(PlayerState::STOPPED);
-            mPlayer->AddPendingEvent(guiEvent);
-        }
-    }
-    if (playerEvent->playChanged) {
-        //play/pause
-        wxCommandEvent stateEvent(EVT_PLAYER_MESSAGE, STATE_CHANGE);
-        wxCommandEvent speedEvent(EVT_PLAYER_MESSAGE, SPEED_CHANGE);
-        if (playerEvent->play) {
-//std::cerr << "state change PLAY: speed: " << playerEvent->speed << std::endl;
-            stateEvent.SetInt(playerEvent->speed < 0 ? PlayerState::PLAYING_BACKWARDS : PlayerState::PLAYING);
-            speedEvent.SetInt(playerEvent->speed); //always need this as mSpeed will be 0 and speedChanged will be false if speed is 1
-        }
-        else {
-//std::cerr << "state change PAUSE: speed: " << playerEvent->speed << std::endl;
-            stateEvent.SetInt(PlayerState::PAUSED);
-            speedEvent.SetInt(0); //Pause reports speed as being 1
-        }   
-        mPlayer->AddPendingEvent(stateEvent);
-        mPlayer->AddPendingEvent(speedEvent);
-    }
-    else if (playerEvent->speedChanged) {
-        wxCommandEvent speedEvent(EVT_PLAYER_MESSAGE, SPEED_CHANGE);
-        speedEvent.SetInt(playerEvent->speed);
-        mPlayer->AddPendingEvent(speedEvent);
-//std::cerr << "speed change: " << playerEvent->speed << std::endl;
-    }
+    ProcessStateChangeEvent(playerEvent->stopChanged, playerEvent->stop, playerEvent->playChanged, playerEvent->play, playerEvent->speedChanged, playerEvent->speed);
 }
 
 /// Callback for the player reaching the end of the file (while playing forwards).
@@ -1711,4 +1761,57 @@ void Listener::sourceNameChangeEvent(int sourceIndex, const char* name)
     event.SetInt(sourceIndex);
     event.SetString(wxString(name, *wxConvCurrent));
     mPlayer->AddPendingEvent(event);
+}
+#endif //NOT USE_HTTP_PLAYER
+
+/// Common handler for FrameInfo
+void Listener::ProcessFrameDisplayedEvent(const FrameInfo* frameInfo)
+{
+    wxCommandEvent guiFrameEvent(EVT_PLAYER_MESSAGE, FRAME_DISPLAYED);
+    guiFrameEvent.SetExtraLong(frameInfo->position);
+
+    ProdAuto::MxfTimecode* editRate = new ProdAuto::MxfTimecode; //event handler must delete this!
+    editRate->undefined = false;
+    editRate->edit_rate.numerator = frameInfo->frameRate.num;
+    editRate->edit_rate.denominator = frameInfo->frameRate.den;
+    guiFrameEvent.SetClientData(editRate); //indicates a valid position as well the the edit rate
+
+    guiFrameEvent.SetInt(frameInfo->position == frameInfo->sourceLength - 1); //true if at the end of the file
+    mPlayer->AddPendingEvent(guiFrameEvent);
+}
+
+/// Common handler for state change
+void Listener::ProcessStateChangeEvent(const bool stopChanged, const bool stop, const bool playChanged, const bool play, const bool speedChanged, const int speed)
+{
+//std::cerr << "state change event" << std::endl;
+    if (stopChanged) {
+        if (stop) {
+            wxCommandEvent guiEvent(EVT_PLAYER_MESSAGE, STATE_CHANGE);
+            guiEvent.SetInt(PlayerState::STOPPED);
+            mPlayer->AddPendingEvent(guiEvent);
+        }
+    }
+    if (playChanged) {
+        //play/pause
+        wxCommandEvent stateEvent(EVT_PLAYER_MESSAGE, STATE_CHANGE);
+        wxCommandEvent speedEvent(EVT_PLAYER_MESSAGE, SPEED_CHANGE);
+        if (play) {
+//std::cerr << "state change PLAY: speed: " << speed << std::endl;
+            stateEvent.SetInt(speed < 0 ? PlayerState::PLAYING_BACKWARDS : PlayerState::PLAYING);
+            speedEvent.SetInt(speed); //always need this as mSpeed will be 0 and speedChanged will be false if speed is 1
+        }
+        else {
+//std::cerr << "state change PAUSE: speed: " << speed << std::endl;
+            stateEvent.SetInt(PlayerState::PAUSED);
+            speedEvent.SetInt(0); //Pause reports speed as being 1
+        }
+        mPlayer->AddPendingEvent(stateEvent);
+        mPlayer->AddPendingEvent(speedEvent);
+    }
+    else if (speedChanged) {
+        wxCommandEvent speedEvent(EVT_PLAYER_MESSAGE, SPEED_CHANGE);
+        speedEvent.SetInt(speed);
+        mPlayer->AddPendingEvent(speedEvent);
+//std::cerr << "speed change: " << speed << std::endl;
+    }
 }

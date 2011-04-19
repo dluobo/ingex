@@ -1,7 +1,7 @@
 /***************************************************************************
- *   $Id: controller.h,v 1.10 2011/02/18 16:31:15 john_f Exp $           *
+ *   $Id: controller.h,v 1.11 2011/04/19 07:04:02 john_f Exp $           *
  *                                                                         *
- *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
+ *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
  *   Author: Matthew Marks                                                 *
  *                                                                         *
@@ -46,6 +46,7 @@ public:
     void SetTapeIds(const CORBA::StringSeq &, const CORBA::StringSeq &);
     void AddProjectNames(const CORBA::StringSeq &);
     void RequestRecordTimeAvailable();
+    bool RequestProjectNames();
     void Record(const ProdAuto::MxfTimecode &, const ProdAuto::MxfDuration &, const wxString &, const CORBA::BooleanSeq &);
     void Stop(const ProdAuto::MxfTimecode &, const ProdAuto::MxfDuration &, const wxString &, const ProdAuto::LocatorSeq &);
     bool IsRouterRecorder();
@@ -61,6 +62,7 @@ public:
         SET_TAPE_IDS,
         ADD_PROJECT_NAMES,
         REC_TIME_AVAILABLE,
+        GET_PROJECT_NAMES,
         RECONNECT,
         STATUS,
         RECORD,
@@ -117,6 +119,7 @@ private:
     ProdAuto::LocatorSeq mLocators; 
     ProdAuto::MxfTimecode mStartTimecode;
     ProdAuto::MxfTimecode mStopTimecode;
+    bool mOK;
     DECLARE_EVENT_TABLE()
 };
 

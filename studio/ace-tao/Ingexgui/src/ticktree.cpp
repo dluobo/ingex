@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
+ *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -29,6 +29,7 @@
 #include "wx/xml/xml.h"
 #include "dialogues.h" //for the XML tape ID functions
 #include "savedstate.h"
+#include "colours.h"
 
 WX_DECLARE_STRING_HASH_MAP(wxTreeItemId, TreeItemHash);
 
@@ -164,6 +165,14 @@ void TickTreeCtrl::RemoveRecorder(const wxString & recorderName)
     }
 }
 
+/// Returns true if the given recorder name is in the tree.
+/// @param recorderName The name to search for.
+bool TickTreeCtrl::IsRecorderPresent(const wxString & recorderName)
+{
+    return FindRecorder(recorderName).IsOk();
+}
+
+
 /// Finds the root node of a recorder by recorder name.
 /// @param recorderName The name to search for.
 /// @return The root node of the recorder (may not be valid).
@@ -254,9 +263,9 @@ bool TickTreeCtrl::HasAllSignals()
 
 /// Indicates whether any recorders are present.
 /// @return True if any recorders.
-bool TickTreeCtrl::HasRecorders()
+unsigned int TickTreeCtrl::GetRecorderCount()
 {
-    return GetCount() > 1;
+    return GetChildrenCount(GetRootItem(), false);
 }
 
 /// Returns the total number of tracks enabled to record
@@ -338,7 +347,7 @@ int TickTreeCtrl::SelectRecursively(wxTreeItemId id, unsigned int * enabledTrack
             dynamic_cast<ItemData *>(GetItemData(id))->SetBool(enabled);
         }
         if (dynamic_cast<ItemData *>(GetItemData(id))->GetBool()) { //enabled for recording
-            if (enabledTracks) *enabledTracks++; //add one to the total if this track is enabled
+            if (enabledTracks) (*enabledTracks)++; //add one to the total if this track is enabled
             if (NO_SIGNAL_COLOUR == GetItemBackgroundColour(id)) { //no signal on a track enabled for recording
                 rc &= ~ALL_SIGNALS;
             }

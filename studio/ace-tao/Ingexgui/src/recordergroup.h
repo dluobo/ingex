@@ -1,7 +1,7 @@
 /***************************************************************************
- *   $Id: recordergroup.h,v 1.17 2011/02/18 17:25:06 john_f Exp $         *
+ *   $Id: recordergroup.h,v 1.18 2011/04/19 07:04:02 john_f Exp $         *
  *                                                                         *
- *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
+ *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
  *   Author: Matthew Marks                                                 *
  *                                                                         *
@@ -39,6 +39,7 @@ class RecorderGroupCtrl : public wxListView
     public:
         RecorderGroupCtrl(wxWindow *, wxWindowID id, const wxPoint &, const wxSize &, int&, char**);
         ~RecorderGroupCtrl();
+        void Shutdown();
         void SetTree(TickTreeCtrl * tree) {mTree = tree;};
         void SetSavedState(SavedState * savedState) { mSavedState = savedState; };
         void StartGettingRecorders();
@@ -55,13 +56,13 @@ class RecorderGroupCtrl : public wxListView
         void ChunkStop(const ProdAuto::MxfTimecode &, const wxString &, const ProdAuto::LocatorSeq &);
         void EnableForInput(bool state = true) { mEnabledForInput = state; };
         bool IsEnabledForInput() { return mEnabledForInput; };
-        void SetProjectNames(const wxSortedArrayString &);
-        const wxSortedArrayString & GetProjectNames();
+        void AddProjectNames(const CORBA::StringSeq &, Controller * controller = 0);
         void SetCurrentProjectName(const wxString &);
-        const wxString & GetCurrentProjectName();
+        const wxString GetCurrentProjectName();
         const wxString & GetCurrentDescription();
-        void Deselect(const int);
+        bool DisconnectAll();
         const wxString& GetTimecodeRecorder() { return mTimecodeRecorder; };
+        bool RequestProjectNames();
         enum RecorderGroupCtrlEventType {
             ENABLE_REFRESH,
             NEW_RECORDER,
@@ -81,6 +82,8 @@ class RecorderGroupCtrl : public wxListView
             CHUNK_START,
             CHUNK_END,
             SET_TRIGGER,
+            PROJECT_NAMES,
+            DIE,
         };
     private:
         void OnListRefreshed(wxCommandEvent &);
@@ -91,10 +94,9 @@ class RecorderGroupCtrl : public wxListView
         void OnTimeposEvent(wxCommandEvent &);
         const wxString GetName(const int);
         void BeginConnecting(const int);
-        unsigned int GetNumberRecordersConnected();
-        void Disconnect(const int);
+        bool Disconnect(const int);
         void SetTimecodeRecorder(wxString name = wxEmptyString);
-        void SetRecTimeAvailable(const int, const long);
+        void SetRecTimeAvailable(const unsigned int, const long, const bool = false);
         Comms * mComms;
         bool mEnabledForInput;
         ProdAuto::MxfDuration mMaxPreroll, mMaxPostroll, mPreroll, mPostroll;
@@ -102,8 +104,6 @@ class RecorderGroupCtrl : public wxListView
         bool mTimecodeRecorderStuck;
         ProdAuto::MxfTimecode mChunkStartTimecode;
         SavedState * mSavedState;
-        wxSortedArrayString mProjectNames;
-        wxString mCurrentProject;
         wxString mCurrentDescription;
         enum Mode {
             STOPPED,
@@ -114,6 +114,7 @@ class RecorderGroupCtrl : public wxListView
             CHUNK_WAIT,
             CHUNK_RECORD_WAIT,
             CHUNK_RECORDING,
+            DYING,
         };
         Mode mMode;
         bool mHaveNonRouterRecorders;
@@ -129,15 +130,16 @@ class RecorderData
         RecorderData(const ProdAuto::TrackStatusList_var & trackStatusList, const ProdAuto::TrackList_var & trackList) : mTrackStatusList(trackStatusList), mTrackList(trackList) {};
         RecorderData(const ProdAuto::TrackStatusList_var & trackStatusList) : mTrackStatusList(trackStatusList) {};
         RecorderData(ProdAuto::MxfTimecode tc) : mTimecode(tc) {};
-        RecorderData(ProdAuto::TrackList_var trackList, CORBA::StringSeq_var fileList, ProdAuto::MxfTimecode tc = InvalidMxfTimecode) : mTrackList(trackList), mFileList(fileList), mTimecode(tc) {};
+        RecorderData(ProdAuto::TrackList_var trackList, CORBA::StringSeq_var fileList, ProdAuto::MxfTimecode tc = InvalidMxfTimecode) : mTrackList(trackList), mStringSeq(fileList), mTimecode(tc) {};
+        RecorderData(CORBA::StringSeq_var stringSeq) : mStringSeq(stringSeq) {};
         const ProdAuto::TrackList_var & GetTrackList() {return mTrackList;};
         const ProdAuto::TrackStatusList_var & GetTrackStatusList() {return mTrackStatusList;};
-        CORBA::StringSeq_var GetFileList() {return mFileList;};
+        CORBA::StringSeq_var GetStringSeq() {return mStringSeq;};
         ProdAuto::MxfTimecode GetTimecode() {return mTimecode;};
     private:
         ProdAuto::TrackStatusList_var mTrackStatusList;
         ProdAuto::TrackList_var mTrackList;
-        CORBA::StringSeq_var mFileList;
+        CORBA::StringSeq_var mStringSeq;
         ProdAuto::MxfTimecode mTimecode;
 };
 
