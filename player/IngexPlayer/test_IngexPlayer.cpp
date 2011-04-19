@@ -1,5 +1,5 @@
 /*
- * $Id: test_IngexPlayer.cpp,v 1.15 2010/10/26 18:28:23 john_f Exp $
+ * $Id: test_IngexPlayer.cpp,v 1.16 2011/04/19 10:15:18 philipn Exp $
  *
  * Copyright (C) 2008-2010 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
@@ -118,6 +118,16 @@ public:
         {
             printf("'f' for fit window was pressed\n");
             _player->fitX11Window();
+        }
+        else if (key == 'p')
+        {
+            printf("'p' for play state position top was pressed\n");
+            _player->setOSDPlayStatePosition(OSD_PS_POSITION_TOP);
+        }
+        else if (key == 'l')
+        {
+            printf("'p' for play state position bottom was pressed\n");
+            _player->setOSDPlayStatePosition(OSD_PS_POSITION_BOTTOM);
         }
     }
 
@@ -641,7 +651,7 @@ int main (int argc, const char** argv)
     CHECK(player->switchAudioGroup(2));
 
     sleep(1);
-    CHECK(player->snapAudioToVideo());
+    CHECK(player->snapAudioToVideo(1));
 
     sleep(1);
     CHECK(player->switchVideo(0));

@@ -1,5 +1,5 @@
 /*
- * $Id: LocalIngexPlayer.cpp,v 1.25 2010/11/02 15:18:28 john_f Exp $
+ * $Id: LocalIngexPlayer.cpp,v 1.26 2011/04/19 10:15:18 philipn Exp $
  *
  * Copyright (C) 2008-2010 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
@@ -200,29 +200,29 @@ public:
     {
         _dataVersion = -1;
     }
-    
+
     bool isCurrent(int currentDataVersion)
     {
         return currentDataVersion == _dataVersion;
     }
-    
+
     void setVersion(int dataVersion)
     {
         _dataVersion = dataVersion;
     }
-    
+
     void clearSources()
     {
         _sourceIdToIndex.clear();
         _sourceName.clear();
     }
-    
+
     void registerSource(int sourceId, int sourceIndex)
     {
         _sourceIdToIndex[sourceId] = sourceIndex;
         _sourceName[sourceIndex] = "";
     }
-    
+
     int getSourceIndex(int sourceId)
     {
         map<int, int>::const_iterator result = _sourceIdToIndex.find(sourceId);
@@ -232,7 +232,7 @@ public:
         }
         return result->second;
     }
-    
+
     int updateSourceName(int sourceId, const char* name)
     {
         int sourceIndex = getSourceIndex(sourceId);
@@ -246,7 +246,7 @@ public:
             {
                 return -1;
             }
-            
+
             _sourceName[sourceIndex] = "";
             return sourceIndex;
         }
@@ -261,7 +261,7 @@ public:
             return sourceIndex;
         }
     }
-    
+
 private:
     int _dataVersion;
     map<int, int> _sourceIdToIndex;
@@ -590,7 +590,7 @@ static void source_name_change_event(void* data, int sourceId, const char* name)
             listener_registry->_listeners[i].second = listener_data;
         }
         player->updateListenerData(listener_data);
-        
+
         updatedSourceIndex = listener_data->updateSourceName(sourceId, name);
         if (updatedSourceIndex >= 0)
         {
@@ -624,15 +624,16 @@ LocalIngexPlayer::LocalIngexPlayer(IngexPlayerListenerRegistry* listenerRegistry
     _config.enableAudioSwitch = true;
     _config.useDisplayDimensions = false;
     memset(&_config.externalWindowInfo, 0, sizeof(_config.externalWindowInfo));
-    
+
     _nextConfig = _config;
-    
+
     _actualOutputType = X11_OUTPUT;
 
     memset(&_windowInfo, 0, sizeof(_windowInfo));
 
     _x11WindowName = "Ingex Player";
-    
+
+    _osdPlayStatePosition = OSD_PS_POSITION_BOTTOM;
 
     _playState = 0;
 
@@ -945,20 +946,20 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
             currentPlayState = _playState;
             _playState = 0;
         }
-        
+
         // reset listener data
         {
             ReadWriteLockGuard guard(&_listenerRegistry->_listenersRWLock, true);
             _sourceIdToIndexVersion++;
             _sourceIdToIndex.clear();
         }
-        
+
         // stop playing
         if (currentPlayState)
         {
             currentPlayState->stopPlaying();
         }
-        
+
         // get the next config
         PTHREAD_MUTEX_LOCK(&_configMutex);
         nextConfig = _nextConfig;
@@ -972,7 +973,7 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
 
 
         // open the media sources
-        
+
         _shmDefaultTCType = UNKNOWN_TIMECODE_TYPE;
         _shmDefaultTCSubType = NO_TIMECODE_SUBTYPE;
 
@@ -1064,7 +1065,7 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
                         continue;
                     }
                     mediaSource = shms_get_media_source(shmSource);
-                    
+
                     // check whether all streams are disabled - if true, then source is closed
                     int numStreams = msc_get_num_streams(mediaSource);
                     int i;
@@ -1193,7 +1194,7 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
             {
                 newSourceIdToIndex[sourceId] = inputIndex;
             }
-            
+
             opened.push_back(true);
             inputsPresent.push_back(true);
             atLeastOneInputOpened = true;
@@ -1617,6 +1618,12 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
                 AudioSwitchSink* audioSwitch;
                 CHK_OTHROW(qas_create_audio_switch(newPlayState->mediaSink, &audioSwitch));
                 newPlayState->mediaSink = asw_get_media_sink(audioSwitch);
+
+                // if blank video source then default to not snap audio to video
+                if (videoStreamIndex == -1)
+                {
+                    asw_snap_audio_to_video(audioSwitch, 0);
+                }
             }
         }
 
@@ -1637,6 +1644,9 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
         // start with player state screen
         mc_set_osd_screen(ply_get_media_control(newPlayState->mediaPlayer), OSD_PLAY_STATE_SCREEN);
 
+        // set osd player state position
+        mc_set_osd_play_state_position(ply_get_media_control(newPlayState->mediaPlayer), _osdPlayStatePosition);
+
 
         // seek to the start position
         if (startPosition > 0)
@@ -1650,7 +1660,6 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
             mc_set_osd_timecode(ply_get_media_control(newPlayState->mediaPlayer), 0, _shmDefaultTCType,
                 _shmDefaultTCSubType);
         }
-        
 
         // reset listener data
         {
@@ -1658,7 +1667,7 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
             _sourceIdToIndexVersion++;
             _sourceIdToIndex = newSourceIdToIndex;
         }
-        
+
         // start play thread
 
         newPlayState->playThreadArgs.startPaused = startPaused;
@@ -2207,7 +2216,7 @@ bool LocalIngexPlayer::setOSDTimecodeDefaultSHM()
         {
             return false;
         }
-        
+
         mc_set_osd_timecode(ply_get_media_control(_playState->mediaPlayer), 0, _shmDefaultTCType, _shmDefaultTCSubType);
     }
     catch (...)
@@ -2233,6 +2242,31 @@ bool LocalIngexPlayer::nextOSDTimecode()
         }
 
         mc_next_osd_timecode(ply_get_media_control(_playState->mediaPlayer));
+    }
+    catch (...)
+    {
+        return false;
+    }
+    return true;
+}
+
+bool LocalIngexPlayer::setOSDPlayStatePosition(OSDPlayStatePosition position)
+{
+    try
+    {
+        ReadWriteLockGuard guard(&_playStateRWLock, false);
+
+        if (!_playState)
+        {
+            return false;
+        }
+        if (_playState->hasStopped())
+        {
+            return false;
+        }
+
+        mc_set_osd_play_state_position(ply_get_media_control(_playState->mediaPlayer), position);
+        _osdPlayStatePosition = position;
     }
     catch (...)
     {
@@ -2441,7 +2475,7 @@ bool LocalIngexPlayer::switchAudioGroup(int index)
     return true;
 }
 
-bool LocalIngexPlayer::snapAudioToVideo()
+bool LocalIngexPlayer::snapAudioToVideo(int enable)
 {
     try
     {
@@ -2456,7 +2490,7 @@ bool LocalIngexPlayer::snapAudioToVideo()
             return false;
         }
 
-        mc_snap_audio_to_video(ply_get_media_control(_playState->mediaPlayer));
+        mc_snap_audio_to_video(ply_get_media_control(_playState->mediaPlayer), enable);
     }
     catch (...)
     {
@@ -2585,15 +2619,15 @@ void LocalIngexPlayer::updateListenerData(LocalIngexPlayerListenerData* listener
     {
         return;
     }
-    
+
     listenerData->clearSources();
-    
+
     map<int, int>::const_iterator iter;
     for (iter = _sourceIdToIndex.begin(); iter != _sourceIdToIndex.end(); iter++)
     {
         listenerData->registerSource(iter->first, iter->second);
     }
-    
+
     listenerData->setVersion(_sourceIdToIndexVersion);
 }
 

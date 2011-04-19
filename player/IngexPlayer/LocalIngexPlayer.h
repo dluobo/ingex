@@ -1,5 +1,5 @@
 /*
- * $Id: LocalIngexPlayer.h,v 1.20 2011/01/10 17:09:30 john_f Exp $
+ * $Id: LocalIngexPlayer.h,v 1.21 2011/04/19 10:15:18 philipn Exp $
  *
  * Copyright (C) 2008-2010 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
@@ -99,7 +99,7 @@ public:
 
     /* returns true if an X11 XV output is available */
     bool x11XVIsAvailable();
-    
+
 
     /* configuration - call these methods before calling start() */
     void setWindowInfo(const X11WindowInfo* windowInfo); /* default: not set */
@@ -142,8 +142,8 @@ public:
     /* same as getOutputType(), except it returns the actual output type if an auto type is used */
     /* eg. if X11_AUTO_OUTPUT is set then returns either X11_XV_OUTPUT or X11_OUTPUT */
     PlayerOutputType getActualOutputType();
-    
-    
+
+
     /* functions inherited from IngexPlayer */
     virtual bool setX11WindowName(std::string name);
     virtual bool fitX11Window();
@@ -168,13 +168,14 @@ public:
     virtual bool setOSDTimecodeDefaultSHM();
     virtual bool showProgressBar(bool show);
     virtual bool nextOSDTimecode();
+    virtual bool setOSDPlayStatePosition(OSDPlayStatePosition position);
     virtual bool switchNextVideo();
     virtual bool switchPrevVideo();
     virtual bool switchVideo(int index);
     virtual bool switchNextAudioGroup();
     virtual bool switchPrevAudioGroup();
     virtual bool switchAudioGroup(int index); /* index == 0 is equiv. to snapAudioToVideo */
-    virtual bool snapAudioToVideo();
+    virtual bool snapAudioToVideo(int enable); /* -1=toggle, 0=disable, 1=enable*/
     virtual bool reviewStart(int64_t duration);
     virtual bool reviewEnd(int64_t duration);
     virtual bool review(int64_t duration);
@@ -206,7 +207,7 @@ private:
         bool enableAudioSwitch;
         bool useDisplayDimensions;
     } Configuration;
-    
+
 private:
     bool setOrCreateX11Window(const X11WindowInfo* externalWindowInfo);
     void closeLocalX11Window();
@@ -217,7 +218,7 @@ private:
     Configuration _nextConfig;
 
     PlayerOutputType _actualOutputType;
-    
+
     TimecodeType _shmDefaultTCType;
     TimecodeSubType _shmDefaultTCSubType;
 
@@ -236,11 +237,13 @@ private:
 
     StreamInfo _videoStreamInfo;
 
+    OSDPlayStatePosition _osdPlayStatePosition;
+
 public:
     // for listener callbacks
     void updateListenerData(LocalIngexPlayerListenerData* listenerData);
     IngexPlayerListenerRegistry* _listenerRegistry;
-    
+
 private:
     int _sourceIdToIndexVersion;
     std::map<int, int> _sourceIdToIndex;

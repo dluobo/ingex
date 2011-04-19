@@ -1,5 +1,5 @@
 /*
- * $Id: IngexPlayer.h,v 1.6 2011/01/10 17:09:30 john_f Exp $
+ * $Id: IngexPlayer.h,v 1.7 2011/04/19 10:15:18 philipn Exp $
  *
  * Copyright (C) 2008-2010 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
@@ -124,12 +124,13 @@ public:
     virtual bool seekPrevMark() = 0;
 
 
-    /* on screen timecode display */
+    /* on screen display */
 
     virtual bool setOSDScreen(OSDScreen screen) = 0;
     virtual bool nextOSDScreen() = 0;
     virtual bool setOSDTimecode(int index, int type, int subType) = 0;
     virtual bool nextOSDTimecode() = 0;
+    virtual bool setOSDPlayStatePosition(OSDPlayStatePosition position) = 0;
 
 
     /* video switch control */
@@ -144,7 +145,7 @@ public:
     virtual bool switchNextAudioGroup() = 0;
     virtual bool switchPrevAudioGroup() = 0;
     virtual bool switchAudioGroup(int index) = 0; /* index == 0 is equiv. to snapAudioToVideo */
-    virtual bool snapAudioToVideo() = 0;
+    virtual bool snapAudioToVideo(int enable) = 0; /* -1=toggle, 0=disable, 1=enable*/
 
 
     /* review */
