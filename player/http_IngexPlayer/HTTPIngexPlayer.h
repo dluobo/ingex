@@ -1,5 +1,5 @@
 /*
- * $Id: HTTPIngexPlayer.h,v 1.3 2011/01/10 17:09:30 john_f Exp $
+ * $Id: HTTPIngexPlayer.h,v 1.4 2011/04/19 10:19:10 philipn Exp $
  *
  * Copyright (C) 2008-2010 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
@@ -98,6 +98,7 @@ public:
     void nextOSDScreen(HTTPConnection* connection);
     void setOSDTimecode(HTTPConnection* connection);
     void nextOSDTimecode(HTTPConnection* connection);
+    void setOSDPlayStatePosition(HTTPConnection* connection);
     void switchNextVideo(HTTPConnection* connection);
     void switchPrevVideo(HTTPConnection* connection);
     void switchVideo(HTTPConnection* connection);

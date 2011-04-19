@@ -1,5 +1,5 @@
 /*
- * $Id: Utilities.cpp,v 1.1 2009/02/24 08:21:17 stuart_hc Exp $
+ * $Id: Utilities.cpp,v 1.2 2011/04/19 10:19:10 philipn Exp $
  *
  * Common utility functions
  *
@@ -73,12 +73,12 @@ bool ingex::parse_int64(string strValue, int64_t* value)
 
 bool ingex::parse_bool(string strValue, bool* value)
 {
-    if (strValue.compare("true") == 0)
+    if (strValue == "true")
     {
         *value = true;
         return true;
     }
-    else if (strValue.compare("false") == 0)
+    else if (strValue == "false")
     {
         *value = false;
         return true;

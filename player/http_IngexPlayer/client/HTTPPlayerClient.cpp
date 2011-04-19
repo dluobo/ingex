@@ -1,7 +1,7 @@
 /*
- * $Id: HTTPPlayerClient.cpp,v 1.3 2011/02/18 16:28:51 john_f Exp $
+ * $Id: HTTPPlayerClient.cpp,v 1.4 2011/04/19 10:19:10 philipn Exp $
  *
- * Copyright (C) 2008-2010 British Broadcasting Corporation, All Rights Reserved
+ * Copyright (C) 2008-2011 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
@@ -250,6 +250,7 @@ bool HTTPPlayerClient::ping()
 
 void HTTPPlayerClient::disconnect()
 {
+    stopPollThread();
     LOCK_SECTION(&_connectionMutex);
 
     _hostName.clear();
@@ -1062,6 +1063,39 @@ bool HTTPPlayerClient::nextOSDTimecode()
     return true;
 }
 
+bool HTTPPlayerClient::setOSDPlayStatePosition(OSDPlayStatePosition position)
+{
+    LOCK_SECTION(&_connectionMutex);
+
+    if (!isConnected())
+    {
+        fprintf(stderr, "setOSDPlayStatePosition command failed: not connected\n");
+        return false;
+    }
+
+    string cmd = "control/osd/setplaystateposition";
+    map<string, string> args;
+    switch (screen)
+    {
+        case OSD_PS_POSITION_TOP:
+            args.insert(pair<string, string>("pos", "TOP"));
+            break;
+        case OSD_PS_POSITION_MIDDLE:
+            args.insert(pair<string, string>("pos", "MIDDLE"));
+            break;
+        case OSD_PS_POSITION_BOTTOM:
+            args.insert(pair<string, string>("pos", "BOTTOM"));
+            break;
+    }
+
+    if (!sendSimpleCommand(cmd, args))
+    {
+        return false;
+    }
+
+    return true;
+}
+
 bool HTTPPlayerClient::switchNextVideo()
 {
     LOCK_SECTION(&_connectionMutex);
@@ -1178,7 +1212,7 @@ bool HTTPPlayerClient::switchAudioGroup(int index)
     return true;
 }
 
-bool HTTPPlayerClient::snapAudioToVideo()
+bool HTTPPlayerClient::snapAudioToVideo(int enable)
 {
     LOCK_SECTION(&_connectionMutex);
 
@@ -1188,7 +1222,11 @@ bool HTTPPlayerClient::snapAudioToVideo()
         return false;
     }
 
-    if (!sendSimpleCommand("control/audio/snapvideo"))
+    string cmd = "control/audio/snapvideo";
+    map<string, string> args;
+    args.insert(pair<string, string>("enable", int_to_string(enable)));
+
+    if (!sendSimpleCommand(cmd, args))
     {
         return false;
     }

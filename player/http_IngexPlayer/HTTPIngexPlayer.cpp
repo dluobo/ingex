@@ -1,7 +1,7 @@
 /*
- * $Id: HTTPIngexPlayer.cpp,v 1.5 2011/01/10 17:09:30 john_f Exp $
+ * $Id: HTTPIngexPlayer.cpp,v 1.6 2011/04/19 10:19:10 philipn Exp $
  *
- * Copyright (C) 2008-2010 British Broadcasting Corporation, All Rights Reserved
+ * Copyright (C) 2008-2011 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
  * Modifications: Matthew Marks
  *
@@ -74,6 +74,7 @@ static const char* g_controlSetOSDScreenURL = "/control/osd/screen";
 static const char* g_controlNextOSDScreenURL = "/control/osd/nextscreen";
 static const char* g_controlSetOSDTimecodeURL = "/control/osd/timecode";
 static const char* g_controlNextOSDTimecodeURL = "/control/osd/nexttimecode";
+static const char* g_controlSetOSDPlayStatePositionURL = "/control/osd/setplaystateposition";
 static const char* g_controlSetVideoURL = "/control/video/set";
 static const char* g_controlNextVideoURL = "/control/video/next";
 static const char* g_controlPrevVideoURL = "/control/video/prev";
@@ -248,6 +249,10 @@ HTTPIngexPlayer::HTTPIngexPlayer(HTTPServer* server, LocalIngexPlayer* player, p
     service = server->registerService(new HTTPServiceDescription(g_controlNextOSDTimecodeURL), this);
     service->setDescription("Show the next timecode in the OSD");
 
+    service = server->registerService(new HTTPServiceDescription(g_controlSetOSDPlayStatePositionURL), this);
+    service->setDescription("Set the position of the OSD play state (state, timecode and progress bar)");
+    service->addArgument("pos", "enum", true, "One of the following: TOP, MIDDLE, BOTTOM");
+
     service = server->registerService(new HTTPServiceDescription(g_controlSetVideoURL), this);
     service->setDescription("Switch to the video source");
     service->addArgument("index", "int", true, "The index of the video");
@@ -274,6 +279,7 @@ HTTPIngexPlayer::HTTPIngexPlayer(HTTPServer* server, LocalIngexPlayer* player, p
 
     service = server->registerService(new HTTPServiceDescription(g_controlSnapAudioGroupURL), this);
     service->setDescription("Snap the audio group to the video");
+    service->addArgument("enable", "int", true, "toggle (-1), disable (0) or enable (1) snap audio to video");
 
     service = server->registerService(new HTTPServiceDescription(g_controlReviewStartURL), this);
     service->setDescription("Review the start");
@@ -384,187 +390,191 @@ void HTTPIngexPlayer::sourceNameChangeEvent(int sourceIndex, const char* name)
 
 bool HTTPIngexPlayer::processRequest(HTTPServiceDescription* serviceDescription, HTTPConnection* connection)
 {
-    if (serviceDescription->getURL().compare(g_pingURL) == 0)
+    if (serviceDescription->getURL() == g_pingURL)
     {
         ping(connection);
     }
-    else if (serviceDescription->getURL().compare(g_settingsOutputTypeURL) == 0)
+    else if (serviceDescription->getURL() == g_settingsOutputTypeURL)
     {
         setOutputType(connection);
     }
-    else if (serviceDescription->getURL().compare(g_settingsDVSTargetURL) == 0)
+    else if (serviceDescription->getURL() == g_settingsDVSTargetURL)
     {
         setDVSTarget(connection);
     }
-    else if (serviceDescription->getURL().compare(g_settingsVideoSplitURL) == 0)
+    else if (serviceDescription->getURL() == g_settingsVideoSplitURL)
     {
         setVideoSplit(connection);
     }
-    else if (serviceDescription->getURL().compare(g_settingsSDIOSDEnableURL) == 0)
+    else if (serviceDescription->getURL() == g_settingsSDIOSDEnableURL)
     {
         setSDIOSDEnable(connection);
     }
-    else if (serviceDescription->getURL().compare(g_settingsX11WindowNameURL) == 0)
+    else if (serviceDescription->getURL() == g_settingsX11WindowNameURL)
     {
         setX11WindowName(connection);
     }
-    else if (serviceDescription->getURL().compare(g_settingsSetPixelAspectRatio) == 0)
+    else if (serviceDescription->getURL() == g_settingsSetPixelAspectRatio)
     {
         setPixelAspectRatio(connection);
     }
-    else if (serviceDescription->getURL().compare(g_settingsSetNumAudioLevelMonitors) == 0)
+    else if (serviceDescription->getURL() == g_settingsSetNumAudioLevelMonitors)
     {
         setNumAudioLevelMonitors(connection);
     }
-    else if (serviceDescription->getURL().compare(g_settingsSetApplyScaleFilter) == 0)
+    else if (serviceDescription->getURL() == g_settingsSetApplyScaleFilter)
     {
         setApplyScaleFilter(connection);
     }
-    else if (serviceDescription->getURL().compare(g_settingsShowProgressBar) == 0)
+    else if (serviceDescription->getURL() == g_settingsShowProgressBar)
     {
         showProgressBar(connection);
     }
-    else if (serviceDescription->getURL().compare(g_infoStateURL) == 0)
+    else if (serviceDescription->getURL() == g_infoStateURL)
     {
         getState(connection);
     }
-    else if (serviceDescription->getURL().compare(g_infoStatePushURL) == 0)
+    else if (serviceDescription->getURL() == g_infoStatePushURL)
     {
         return getStatePush(connection);
     }
-    else if (serviceDescription->getURL().compare(g_infoDVSIsAvailableURL) == 0)
+    else if (serviceDescription->getURL() == g_infoDVSIsAvailableURL)
     {
         dvsIsAvailable(connection);
     }
-    else if (serviceDescription->getURL().compare(g_infoOutputTypeURL) == 0)
+    else if (serviceDescription->getURL() == g_infoOutputTypeURL)
     {
         getOutputType(connection);
     }
-    else if (serviceDescription->getURL().compare(g_infoActualOutputTypeURL) == 0)
+    else if (serviceDescription->getURL() == g_infoActualOutputTypeURL)
     {
         getActualOutputType(connection);
     }
-    else if (serviceDescription->getURL().compare(g_startURL) == 0)
+    else if (serviceDescription->getURL() == g_startURL)
     {
         start(connection);
     }
-    else if (serviceDescription->getURL().compare(g_closeURL) == 0)
+    else if (serviceDescription->getURL() == g_closeURL)
     {
         close(connection);
     }
-    else if (serviceDescription->getURL().compare(g_resetURL) == 0)
+    else if (serviceDescription->getURL() == g_resetURL)
     {
         reset(connection);
     }
-    else if (serviceDescription->getURL().compare(g_controlToggleLockURL) == 0)
+    else if (serviceDescription->getURL() == g_controlToggleLockURL)
     {
         toggleLock(connection);
     }
-    else if (serviceDescription->getURL().compare(g_controlPlayURL) == 0)
+    else if (serviceDescription->getURL() == g_controlPlayURL)
     {
         play(connection);
     }
-    else if (serviceDescription->getURL().compare(g_controlPauseURL) == 0)
+    else if (serviceDescription->getURL() == g_controlPauseURL)
     {
         pause(connection);
     }
-    else if (serviceDescription->getURL().compare(g_controlTogglePlayPauseURL) == 0)
+    else if (serviceDescription->getURL() == g_controlTogglePlayPauseURL)
     {
         togglePlayPause(connection);
     }
-    else if (serviceDescription->getURL().compare(g_controlPlaySpeedURL) == 0)
+    else if (serviceDescription->getURL() == g_controlPlaySpeedURL)
     {
         playSpeed(connection);
     }
-    else if (serviceDescription->getURL().compare(g_controlSeekURL) == 0)
+    else if (serviceDescription->getURL() == g_controlSeekURL)
     {
         seek(connection);
     }
-    else if (serviceDescription->getURL().compare(g_controlStepURL) == 0)
+    else if (serviceDescription->getURL() == g_controlStepURL)
     {
         step(connection);
     }
-    else if (serviceDescription->getURL().compare(g_controlMarkURL) == 0)
+    else if (serviceDescription->getURL() == g_controlMarkURL)
     {
         mark(connection);
     }
-    else if (serviceDescription->getURL().compare(g_controlMarkPositionURL) == 0)
+    else if (serviceDescription->getURL() == g_controlMarkPositionURL)
     {
         markPosition(connection);
     }
-    else if (serviceDescription->getURL().compare(g_controlClearMarkURL) == 0)
+    else if (serviceDescription->getURL() == g_controlClearMarkURL)
     {
         clearMark(connection);
     }
-    else if (serviceDescription->getURL().compare(g_controlClearAllMarksURL) == 0)
+    else if (serviceDescription->getURL() == g_controlClearAllMarksURL)
     {
         clearAllMarks(connection);
     }
-    else if (serviceDescription->getURL().compare(g_controlSeekNextMarkURL) == 0)
+    else if (serviceDescription->getURL() == g_controlSeekNextMarkURL)
     {
         seekNextMark(connection);
     }
-    else if (serviceDescription->getURL().compare(g_controlSeekPrevMarkURL) == 0)
+    else if (serviceDescription->getURL() == g_controlSeekPrevMarkURL)
     {
         seekPrevMark(connection);
     }
-    else if (serviceDescription->getURL().compare(g_controlSetOSDScreenURL) == 0)
+    else if (serviceDescription->getURL() == g_controlSetOSDScreenURL)
     {
         setOSDScreen(connection);
     }
-    else if (serviceDescription->getURL().compare(g_controlNextOSDScreenURL) == 0)
+    else if (serviceDescription->getURL() == g_controlNextOSDScreenURL)
     {
         nextOSDScreen(connection);
     }
-    else if (serviceDescription->getURL().compare(g_controlSetOSDTimecodeURL) == 0)
+    else if (serviceDescription->getURL() == g_controlSetOSDTimecodeURL)
     {
         setOSDTimecode(connection);
     }
-    else if (serviceDescription->getURL().compare(g_controlNextOSDTimecodeURL) == 0)
+    else if (serviceDescription->getURL() == g_controlNextOSDTimecodeURL)
     {
         nextOSDTimecode(connection);
     }
-    else if (serviceDescription->getURL().compare(g_controlNextVideoURL) == 0)
+    else if (serviceDescription->getURL() == g_controlSetOSDPlayStatePositionURL)
+    {
+        setOSDPlayStatePosition(connection);
+    }
+    else if (serviceDescription->getURL() == g_controlNextVideoURL)
     {
         switchNextVideo(connection);
     }
-    else if (serviceDescription->getURL().compare(g_controlPrevVideoURL) == 0)
+    else if (serviceDescription->getURL() == g_controlPrevVideoURL)
     {
         switchPrevVideo(connection);
     }
-    else if (serviceDescription->getURL().compare(g_controlSetVideoURL) == 0)
+    else if (serviceDescription->getURL() == g_controlSetVideoURL)
     {
         switchVideo(connection);
     }
-    else if (serviceDescription->getURL().compare(g_controlMuteAudioURL) == 0)
+    else if (serviceDescription->getURL() == g_controlMuteAudioURL)
     {
         muteAudio(connection);
     }
-    else if (serviceDescription->getURL().compare(g_controlNextAudioGroupURL) == 0)
+    else if (serviceDescription->getURL() == g_controlNextAudioGroupURL)
     {
         switchNextAudioGroup(connection);
     }
-    else if (serviceDescription->getURL().compare(g_controlPrevAudioGroupURL) == 0)
+    else if (serviceDescription->getURL() == g_controlPrevAudioGroupURL)
     {
         switchPrevAudioGroup(connection);
     }
-    else if (serviceDescription->getURL().compare(g_controlSetAudioGroupURL) == 0)
+    else if (serviceDescription->getURL() == g_controlSetAudioGroupURL)
     {
         switchAudioGroup(connection);
     }
-    else if (serviceDescription->getURL().compare(g_controlSnapAudioGroupURL) == 0)
+    else if (serviceDescription->getURL() == g_controlSnapAudioGroupURL)
     {
         snapAudioToVideo(connection);
     }
-    else if (serviceDescription->getURL().compare(g_controlReviewStartURL) == 0)
+    else if (serviceDescription->getURL() == g_controlReviewStartURL)
     {
         reviewStart(connection);
     }
-    else if (serviceDescription->getURL().compare(g_controlReviewEndURL) == 0)
+    else if (serviceDescription->getURL() == g_controlReviewEndURL)
     {
         reviewEnd(connection);
     }
-    else if (serviceDescription->getURL().compare(g_controlReviewURL) == 0)
+    else if (serviceDescription->getURL() == g_controlReviewURL)
     {
         review(connection);
     }
@@ -1052,6 +1062,9 @@ void HTTPIngexPlayer::start(HTTPConnection* connection)
     if (!_player->start(inputs, opened, startPaused, startPosition))
     {
         Logging::warning("Failed to start player\n");
+        for (size_t i = 0; i < inputs.size(); i++) {
+            openedArray->append(new JSONBool(false));
+        }
     }
     else
     {
@@ -1163,15 +1176,15 @@ void HTTPIngexPlayer::seek(HTTPConnection* connection)
         reportMissingQueryArgument(connection, "whence");
         return;
     }
-    if (whenceArg.compare("SEEK_SET") == 0)
+    if (whenceArg == "SEEK_SET")
     {
         whence = SEEK_SET;
     }
-    else if (whenceArg.compare("SEEK_CUR") == 0)
+    else if (whenceArg == "SEEK_CUR")
     {
         whence = SEEK_CUR;
     }
-    else if (whenceArg.compare("SEEK_END") == 0)
+    else if (whenceArg == "SEEK_END")
     {
         whence = SEEK_END;
     }
@@ -1187,11 +1200,11 @@ void HTTPIngexPlayer::seek(HTTPConnection* connection)
         reportMissingQueryArgument(connection, "unit");
         return;
     }
-    if (unitArg.compare("FRAME_PLAY_UNIT") == 0)
+    if (unitArg == "FRAME_PLAY_UNIT")
     {
         unit = FRAME_PLAY_UNIT;
     }
-    else if (unitArg.compare("PERCENTAGE_PLAY_UNIT") == 0)
+    else if (unitArg == "PERCENTAGE_PLAY_UNIT")
     {
         unit = PERCENTAGE_PLAY_UNIT;
     }
@@ -1369,19 +1382,19 @@ void HTTPIngexPlayer::setOSDScreen(HTTPConnection* connection)
         reportMissingQueryArgument(connection, "screen");
         return;
     }
-    if (screenArg.compare("SOURCE_INFO") == 0)
+    if (screenArg == "SOURCE_INFO")
     {
         screen = OSD_SOURCE_INFO_SCREEN;
     }
-    else if (screenArg.compare("PLAY_STATE") == 0)
+    else if (screenArg == "PLAY_STATE")
     {
         screen = OSD_PLAY_STATE_SCREEN;
     }
-    else if (screenArg.compare("MENU") == 0)
+    else if (screenArg == "MENU")
     {
         screen = OSD_MENU_SCREEN;
     }
-    else if (screenArg.compare("EMPTY") == 0)
+    else if (screenArg == "EMPTY")
     {
         screen = OSD_EMPTY_SCREEN;
     }
@@ -1461,6 +1474,42 @@ void HTTPIngexPlayer::nextOSDTimecode(HTTPConnection* connection)
     if (!_player->nextOSDTimecode())
     {
         Logging::warning("Failed to nextOSDTimecode\n");
+    }
+
+    connection->sendOk();
+}
+
+void HTTPIngexPlayer::setOSDPlayStatePosition(HTTPConnection* connection)
+{
+    OSDPlayStatePosition position;
+
+    string posArg = connection->getQueryValue("pos");
+    if (posArg.size() == 0)
+    {
+        reportMissingQueryArgument(connection, "pos");
+        return;
+    }
+    if (posArg == "TOP")
+    {
+        position = OSD_PS_POSITION_TOP;
+    }
+    else if (posArg == "MIDDLE")
+    {
+        position = OSD_PS_POSITION_MIDDLE;
+    }
+    else if (posArg == "BOTTOM")
+    {
+        position = OSD_PS_POSITION_BOTTOM;
+    }
+    else
+    {
+        reportInvalidQueryArgument(connection, "pos", "enum TOP, MIDDLE, BOTTOM");
+        return;
+    }
+
+    if (!_player->setOSDPlayStatePosition(position))
+    {
+        Logging::warning("Failed to setOSDPlayStatePosition(%s)\n", posArg.c_str());
     }
 
     connection->sendOk();
@@ -1580,7 +1629,21 @@ void HTTPIngexPlayer::switchAudioGroup(HTTPConnection* connection)
 
 void HTTPIngexPlayer::snapAudioToVideo(HTTPConnection* connection)
 {
-    if (!_player->snapAudioToVideo())
+    int enable;
+
+    string enableArg = connection->getQueryValue("enable");
+    if (enableArg.size() == 0)
+    {
+        reportMissingQueryArgument(connection, "enable");
+        return;
+    }
+    if (!parse_int(enableArg, &enable))
+    {
+        reportInvalidQueryArgument(connection, "enable", "int");
+        return;
+    }
+
+    if (!_player->snapAudioToVideo(enable))
     {
         Logging::warning("Failed to snapAudioToVideo\n");
     }

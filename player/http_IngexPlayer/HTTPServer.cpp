@@ -1,5 +1,5 @@
 /*
- * $Id: HTTPServer.cpp,v 1.1 2009/02/24 08:21:16 stuart_hc Exp $
+ * $Id: HTTPServer.cpp,v 1.2 2011/04/19 10:19:10 philipn Exp $
  *
  * Wraps the shttpd embedded web server
  *
@@ -540,7 +540,7 @@ bool HTTPConnection::requestIsReady()
     // TODO: check for closed connection
 
     // append POST data
-    if (_requestMethod.compare("POST") == 0)
+    if (_requestMethod == "POST")
     {
         if (_arg->in.num_bytes < _arg->in.len)
         {

@@ -1,7 +1,7 @@
 /*
- * $Id: HTTPPlayerClient.h,v 1.3 2011/01/10 17:09:30 john_f Exp $
+ * $Id: HTTPPlayerClient.h,v 1.4 2011/04/19 10:19:10 philipn Exp $
  *
- * Copyright (C) 2008-2010 British Broadcasting Corporation, All Rights Reserved
+ * Copyright (C) 2008-2011 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
  * Modifications: Matthew Marks
  *
@@ -87,7 +87,7 @@ class HTTPPlayerClientListener
 public:
     virtual ~HTTPPlayerClientListener() {}
 
-    virtual void stateUpdate(HTTPPlayerClient* client, HTTPPlayerState state) {};
+    virtual void stateUpdate(HTTPPlayerClient* client, HTTPPlayerState state) {(void) client; (void) state;}; //dummy operations avoid compiler warnings
 };
 
 
@@ -177,13 +177,14 @@ public:
     virtual bool nextOSDScreen();
     virtual bool setOSDTimecode(int index, int type, int subType);
     virtual bool nextOSDTimecode();
+    virtual bool setOSDPlayStatePosition(OSDPlayStatePosition position);
     virtual bool switchNextVideo();
     virtual bool switchPrevVideo();
     virtual bool switchVideo(int index);
     virtual bool switchNextAudioGroup();
     virtual bool switchPrevAudioGroup();
     virtual bool switchAudioGroup(int index); /* index == 0 is equiv. to snapAudioToVideo */
-    virtual bool snapAudioToVideo();
+    virtual bool snapAudioToVideo(int enable); /* -1=toggle, 0=disable, 1=enable*/
     virtual bool reviewStart(int64_t duration);
     virtual bool reviewEnd(int64_t duration);
     virtual bool review(int64_t duration);

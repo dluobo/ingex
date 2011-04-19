@@ -1,5 +1,5 @@
 /*
- * $Id: JSONObject.cpp,v 1.2 2009/10/26 09:33:20 john_f Exp $
+ * $Id: JSONObject.cpp,v 1.3 2011/04/19 10:19:10 philipn Exp $
  *
  * Utility class for serialising data to JSON text strings
  *
@@ -499,7 +499,7 @@ JSONValue* JSONObject::getValue(string name)
     vector<std::pair<JSONString*, JSONValue*> >::const_iterator iter;
     for (iter = _value.begin(); iter != _value.end(); iter++)
     {
-        if ((*iter).first->getValue().compare(name) == 0)
+        if ((*iter).first->getValue() == name)
         {
             return (*iter).second;
         }

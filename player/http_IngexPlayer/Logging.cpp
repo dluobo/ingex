@@ -1,5 +1,5 @@
 /*
- * $Id: Logging.cpp,v 1.1 2009/02/24 08:21:16 stuart_hc Exp $
+ * $Id: Logging.cpp,v 1.2 2011/04/19 10:19:10 philipn Exp $
  *
  * Provides methods for various levels of logging to standard streams and/or file
  *
@@ -487,7 +487,7 @@ void FileLogging::ivdebugMore(bool newLine, const char* format, va_list ap)
 
 bool FileLogging::reopenLogFile(string newFilename)
 {
-    if (newFilename.compare(_filename) == 0)
+    if (newFilename == _filename)
     {
         // already open
         return true;
