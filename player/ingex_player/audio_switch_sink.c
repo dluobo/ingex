@@ -1,5 +1,5 @@
 /*
- * $Id: audio_switch_sink.c,v 1.4 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: audio_switch_sink.c,v 1.5 2011/04/19 10:08:48 philipn Exp $
  *
  *
  *
@@ -786,14 +786,14 @@ static int qas_switch_prev_audio_group(void* data)
     return haveSwitched;
 }
 
-static void qas_snap_audio_to_video(void* data)
+static void qas_snap_audio_to_video(void* data, int enable)
 {
     DefaultAudioSwitch* swtch = (DefaultAudioSwitch*)data;
     int haveSwitched = 0;
 
     PTHREAD_MUTEX_LOCK(&swtch->nextCurrentGroupMutex);
-    haveSwitched = (swtch->snapToVideo != 1);
-    swtch->snapToVideo = 1;
+    haveSwitched = (enable < 0 || swtch->snapToVideo != enable);
+    swtch->snapToVideo = (enable < 0 ? !swtch->snapToVideo : enable);
     PTHREAD_MUTEX_UNLOCK(&swtch->nextCurrentGroupMutex);
 
     if (haveSwitched)
@@ -811,7 +811,7 @@ static int qas_switch_audio_group(void* data, int index)
 
     if (index == 0)
     {
-        qas_snap_audio_to_video(data);
+        qas_snap_audio_to_video(data, 1);
         return 1;
     }
 
@@ -935,11 +935,11 @@ int asw_switch_audio_group(AudioSwitchSink* swtch, int index)
     return 0;
 }
 
-void asw_snap_audio_to_video(AudioSwitchSink* swtch)
+void asw_snap_audio_to_video(AudioSwitchSink* swtch, int enable)
 {
     if (swtch && swtch->snap_audio_to_video)
     {
-        swtch->snap_audio_to_video(swtch->data);
+        swtch->snap_audio_to_video(swtch->data, enable);
     }
 }
 

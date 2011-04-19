@@ -1,5 +1,5 @@
 /*
- * $Id: player.c,v 1.29 2010/10/18 17:56:14 john_f Exp $
+ * $Id: player.c,v 1.30 2011/04/19 10:08:48 philipn Exp $
  *
  *
  *
@@ -620,22 +620,22 @@ static int parse_length(const char* text, int allowDecimal, int64_t* value, Rati
 static int parse_vitc_lines(const char *text, unsigned int *vitcLines, int *numVITCLines)
 {
     (*numVITCLines) = 0;
-    
+
     const char *text_ptr = text;
     while ((*numVITCLines) < MAX_VITC_LINE_READ) {
         if (sscanf(text_ptr, "%d", &vitcLines[(*numVITCLines)]) != 1)
             break;
         (*numVITCLines)++;
-        
+
         text_ptr = strchr(text_ptr, ',');
         if (!text_ptr)
             break;
         text_ptr++;
     }
-    
+
     if (text_ptr && text_ptr[0] != '\0')
         return 0;
-    
+
     return 1;
 }
 
@@ -770,6 +770,26 @@ static int parse_timecode_selection(const char* arg, int* tcIndex, int* tcType, 
     return 0;
 }
 
+static int parse_osd_position(const char* arg, OSDPlayStatePosition* position)
+{
+    if (strcmp(arg, "top") == 0)
+    {
+        *position = OSD_PS_POSITION_TOP;
+        return 1;
+    }
+    else if (strcmp(arg, "middle") == 0)
+    {
+        *position = OSD_PS_POSITION_MIDDLE;
+        return 1;
+    }
+    else if (strcmp(arg, "bottom") == 0)
+    {
+        *position = OSD_PS_POSITION_BOTTOM;
+        return 1;
+    }
+
+    return 0;
+}
 
 
 static void usage(const char* cmd)
@@ -899,6 +919,7 @@ static void usage(const char* cmd)
     fprintf(stderr, "  --disable-shuttle        Do not grab and use the jog-shuttle control\n");
     fprintf(stderr, "  --vitc-read <lines>      Read VITC from 625-line VBI, where <lines> is comma seperated list of lines to try (e.g. '19,21')\n");
     fprintf(stderr, "  --display-dim            Output image at display dimensions rather than stored dimensions, eg. skip VBI\n");
+    fprintf(stderr, "  --osd-pos <pos>          Set the position of the player state OSD. Valid values are 'top', 'middle' and 'bottom'. Default is 'bottom'\n");
     fprintf(stderr, "\n");
     fprintf(stderr, "Inputs:\n");
     fprintf(stderr, "  -m, --mxf  <file>        MXF file input\n");
@@ -1062,6 +1083,7 @@ int main(int argc, const char **argv)
     int numVITCLines = 0;
     VITCReaderSinkSource *vitcReaderSonk = NULL;
     int useDisplayDimensions = 0;
+    OSDPlayStatePosition osdPlayStatePosition = OSD_PS_POSITION_BOTTOM;
 
     memset(inputs, 0, sizeof(inputs));
     memset(&markConfigs, 0, sizeof(markConfigs));
@@ -2002,6 +2024,22 @@ int main(int argc, const char **argv)
             useDisplayDimensions = 1;
             cmdlnIndex++;
         }
+        else if (strcmp(argv[cmdlnIndex], "--osd-pos") == 0)
+        {
+            if (cmdlnIndex + 1 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            if (!parse_osd_position(argv[cmdlnIndex + 1], &osdPlayStatePosition))
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Invalid argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            cmdlnIndex += 2;
+        }
         else if (strcmp(argv[cmdlnIndex], "-m") == 0 ||
             strcmp(argv[cmdlnIndex], "--mxf") == 0)
         {
@@ -2599,7 +2637,7 @@ int main(int argc, const char **argv)
             goto fail;
         }
     }
-    
+
     /* finalise the blank video sources */
     if (!mls_finalise_blank_sources(multipleSource))
     {
@@ -2641,7 +2679,7 @@ int main(int argc, const char **argv)
 
 
     /* open vitc reader */
-    
+
     if (numVITCLines > 0)
     {
         if (srcBufferSize > 0)
@@ -2649,7 +2687,7 @@ int main(int argc, const char **argv)
             /* create another multiple source that includes the buffered source and the vitc reader */
             /* this is needed because the vitc reader can't be buffered because it requires the raw (decoded)
                video image to decode the vitc */
-            
+
             if (!mls_create(&sourceAspectRatio, maxLength, &maxLengthFrameRate, &multipleSource))
             {
                 ml_log_error("Failed to create multiple source data\n");
@@ -2662,9 +2700,9 @@ int main(int argc, const char **argv)
             }
             g_player.mediaSource = mls_get_media_source(multipleSource);
         }
-        
+
         /* create vitc reader and assign */
-        
+
         if (!vss_create_vitc_reader(vitcLines, numVITCLines, &vitcReaderSonk))
         {
             ml_log_error("Failed to open vitc reader\n");
@@ -2677,7 +2715,7 @@ int main(int argc, const char **argv)
             ml_log_error("Failed to assign media source to multiple source\n");
             goto fail;
         }
-        
+
         if (!mls_finalise_blank_sources(multipleSource))
         {
             ml_log_error("Failed to finalise blank video sources\n");
@@ -2851,8 +2889,8 @@ int main(int argc, const char **argv)
             ml_log_error("No output sink or unsupported sink type specified\n");
             assert(0);
     }
-    
-    
+
+
 #if defined(HAVE_PORTAUDIO)
     /* create audio sink */
     if (!disablePCAudio)
@@ -2887,7 +2925,7 @@ int main(int argc, const char **argv)
             osd_set_progress_bar_visibility(osd, !hideProgressBar);
         }
     }
-    
+
 
     /* create video switch, half split or frame sequence sink */
 
@@ -3031,13 +3069,13 @@ int main(int argc, const char **argv)
     }
 
     /* set vitc reader target sink */
-    
+
     if (vitcReaderSonk != NULL)
     {
         vss_set_target_sink(vitcReaderSonk, g_player.mediaSink);
         g_player.mediaSink = vss_get_media_sink(vitcReaderSonk);
     }
-    
+
 
     /* disable streams */
 
@@ -3173,22 +3211,22 @@ int main(int argc, const char **argv)
     {
         mc_set_osd_timecode(ply_get_media_control(g_player.mediaPlayer), 0, shmDefaultTimecodeType, shmDefaultTimecodeSubType);
     }
-    
-    
+
+
     /* set the VTR error level and register the VTR error sources */
-    
+
     mc_set_vtr_error_level(ply_get_media_control(g_player.mediaPlayer), (VTRErrorLevel)vtrErrorLevel);
     mc_show_vtr_error_level(ply_get_media_control(g_player.mediaPlayer), showVTRErrorLevel);
 
-    
+
     /* set mark filter */
-    
+
     for (i = 0; i < numMarkFilters; i++)
     {
         mc_set_mark_filter(ply_get_media_control(g_player.mediaPlayer), i, markFilters[i]);
     }
-    
-    
+
+
     /* qc or not control stuff */
 
     if (qcControl)
@@ -3228,6 +3266,11 @@ int main(int argc, const char **argv)
             osd_set_mark_display(msk_get_osd(g_player.mediaSink), &g_player.markConfigs);
         }
     }
+
+
+    /* set the OSD position */
+
+    mc_set_osd_play_state_position(ply_get_media_control(g_player.mediaPlayer), osdPlayStatePosition);
 
 
     /* print source info */

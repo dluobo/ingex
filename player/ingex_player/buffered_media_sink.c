@@ -1,5 +1,5 @@
 /*
- * $Id: buffered_media_sink.c,v 1.7 2010/02/12 14:00:06 philipn Exp $
+ * $Id: buffered_media_sink.c,v 1.8 2011/04/19 10:08:48 philipn Exp $
  *
  *
  *
@@ -548,6 +548,13 @@ static int bms_osd_set_state(void* data, const OnScreenDisplayState* state)
     return osd_set_state(osds_get_osd(bufSink->osdState), state);
 }
 
+static void bms_osd_set_play_state_position(void* data, OSDPlayStatePosition position)
+{
+    BufferedMediaSink* bufSink = (BufferedMediaSink*)data;
+
+    osd_set_play_state_position(osds_get_osd(bufSink->osdState), position);
+}
+
 static void bms_osd_set_minimum_audio_stream_level(void* data, double level)
 {
     BufferedMediaSink* bufSink = (BufferedMediaSink*)data;
@@ -754,6 +761,7 @@ int bms_create(MediaSink** targetSink, int size, int dropFrameWhenFull, Buffered
     newBufSink->bufOSD.set_timecode = bms_osd_set_timecode;
     newBufSink->bufOSD.set_play_state = bms_osd_set_play_state;
     newBufSink->bufOSD.set_state = bms_osd_set_state;
+    newBufSink->bufOSD.set_play_state_position = bms_osd_set_play_state_position;
     newBufSink->bufOSD.set_minimum_audio_stream_level = bms_osd_set_minimum_audio_stream_level;
     newBufSink->bufOSD.set_audio_lineup_level = bms_osd_set_audio_lineup_level;
     newBufSink->bufOSD.reset_audio_stream_levels = bms_osd_reset_audio_stream_levels;

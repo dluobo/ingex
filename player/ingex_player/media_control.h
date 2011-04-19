@@ -1,5 +1,5 @@
 /*
- * $Id: media_control.h,v 1.11 2010/06/02 11:12:14 philipn Exp $
+ * $Id: media_control.h,v 1.12 2011/04/19 10:08:48 philipn Exp $
  *
  *
  *
@@ -103,6 +103,7 @@ typedef struct
     void (*set_osd_timecode)(void* data, int index, int type, int subType);
     void (*next_osd_timecode)(void* data);
     void (*toggle_show_audio_level)(void* data);
+    void (*set_osd_play_state_position)(void* data, OSDPlayStatePosition position);
 
 
     /* video switch control */
@@ -119,7 +120,7 @@ typedef struct
     void (*switch_next_audio_group)(void* data);
     void (*switch_prev_audio_group)(void* data);
     void (*switch_audio_group)(void* data, int index);
-    void (*snap_audio_to_video)(void* data);
+    void (*snap_audio_to_video)(void* data, int enable /* -1=toggle, 0=disable, 1=enable*/);
 
 
     /* functions for sinks supporting half-split */
@@ -187,6 +188,7 @@ void mc_next_osd_screen(MediaControl* control);
 void mc_set_osd_timecode(MediaControl* control, int index, int type, int subType);
 void mc_next_osd_timecode(MediaControl* control);
 void mc_toggle_show_audio_level(MediaControl* control);
+void mc_set_osd_play_state_position(MediaControl *control, OSDPlayStatePosition position);
 
 void mc_switch_next_video(MediaControl* control);
 void mc_switch_prev_video(MediaControl* control);
@@ -197,7 +199,7 @@ void mc_toggle_show_source_name(MediaControl* control);
 void mc_switch_next_audio_group(MediaControl* control);
 void mc_switch_prev_audio_group(MediaControl* control);
 void mc_switch_audio_group(MediaControl* control, int index);
-void mc_snap_audio_to_video(MediaControl* control);
+void mc_snap_audio_to_video(MediaControl* control, int enable);
 
 void mc_set_half_split_orientation(MediaControl* sink, int vertical);
 void mc_set_half_split_type(MediaControl* sink, HalfSplitType type);

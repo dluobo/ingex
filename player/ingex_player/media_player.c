@@ -1,5 +1,5 @@
 /*
- * $Id: media_player.c,v 1.16 2010/10/13 12:34:32 philipn Exp $
+ * $Id: media_player.c,v 1.17 2011/04/19 10:08:48 philipn Exp $
  *
  *
  *
@@ -84,7 +84,7 @@ typedef struct
     int nextOSDTimecode;
     int disableOSDDisplay;
     int disableOSDDisplayChanged;
-    
+
     VTRErrorLevel vtrErrorLevel;
     int nextVTRErrorLevel;
     unsigned int enabledShowMarks[MAX_MARK_SELECTIONS];
@@ -168,7 +168,7 @@ struct MediaPlayer
     unsigned int enabledShowMarks[MAX_MARK_SELECTIONS];
     int markFilterPos[MAX_MARK_SELECTIONS];
     int numMarkSelections;
-    
+
     /* menu handler */
     MenuHandler* menuHandler;
     MenuHandlerListener menuListener;
@@ -766,7 +766,7 @@ static void ply_next_active_mark_selection(void* data)
 static void ply_set_vtr_error_level(void* data, VTRErrorLevel level)
 {
     MediaPlayer* player = (MediaPlayer*)data;
-    
+
     PTHREAD_MUTEX_LOCK(&player->stateMutex)
 
     if (!player->state.locked)
@@ -782,7 +782,7 @@ static void ply_set_vtr_error_level(void* data, VTRErrorLevel level)
 static void ply_next_vtr_error_level(void* data)
 {
     MediaPlayer* player = (MediaPlayer*)data;
-    
+
     PTHREAD_MUTEX_LOCK(&player->stateMutex)
 
     if (!player->state.locked)
@@ -802,7 +802,7 @@ static void ply_show_vtr_error_level(void* data, int enable)
     if (!player->state.locked)
     {
         osd_show_vtr_error_level(msk_get_osd(player->mediaSink), enable);
-        
+
         switch_source_info_screen(player);
     }
 }
@@ -833,7 +833,7 @@ static void ply_next_show_marks(void* data, int selection)
     MediaPlayer* player = (MediaPlayer*)data;
 
     PTHREAD_MUTEX_LOCK(&player->stateMutex)
-    
+
     if (!player->state.locked)
     {
         if (selection >= 0 && selection < player->numMarkSelections)
@@ -844,7 +844,7 @@ static void ply_next_show_marks(void* data, int selection)
             switch_source_info_screen(player);
         }
     }
-    
+
     PTHREAD_MUTEX_UNLOCK(&player->stateMutex)
 }
 
@@ -853,7 +853,7 @@ static void ply_set_osd_screen(void* data, OSDScreen screen)
     MediaPlayer* player = (MediaPlayer*)data;
 
     PTHREAD_MUTEX_LOCK(&player->stateMutex)
-    
+
     if (!player->state.locked)
     {
         if (osd_set_screen(msk_get_osd(player->mediaSink), screen))
@@ -861,7 +861,7 @@ static void ply_set_osd_screen(void* data, OSDScreen screen)
             player->state.refreshRequired = 1;
         }
     }
-    
+
     PTHREAD_MUTEX_UNLOCK(&player->stateMutex)
 }
 
@@ -870,7 +870,7 @@ static void ply_next_osd_screen(void* data)
     MediaPlayer* player = (MediaPlayer*)data;
 
     PTHREAD_MUTEX_LOCK(&player->stateMutex)
-    
+
     if (!player->state.locked)
     {
         if (osd_next_screen(msk_get_osd(player->mediaSink)))
@@ -878,7 +878,7 @@ static void ply_next_osd_screen(void* data)
             player->state.refreshRequired = 1;
         }
     }
-    
+
     PTHREAD_MUTEX_UNLOCK(&player->stateMutex)
 }
 
@@ -928,6 +928,23 @@ static void ply_toggle_show_audio_level(void* data)
         osd_toggle_audio_level_visibility(msk_get_osd(player->mediaSink));
 
         switch_source_info_screen(player);
+    }
+
+    PTHREAD_MUTEX_UNLOCK(&player->stateMutex)
+}
+
+static void ply_set_osd_play_state_position(void* data, OSDPlayStatePosition position)
+{
+    MediaPlayer* player = (MediaPlayer*)data;
+
+    PTHREAD_MUTEX_LOCK(&player->stateMutex)
+
+    if (!player->state.locked)
+    {
+        osd_set_play_state_position(msk_get_osd(player->mediaSink), position);
+
+        switch_source_info_screen(player);
+        player->state.refreshRequired = 1;
     }
 
     PTHREAD_MUTEX_UNLOCK(&player->stateMutex)
@@ -1029,13 +1046,13 @@ static void ply_switch_audio_group(void* data, int index)
     }
 }
 
-static void ply_snap_audio_to_video(void* data)
+static void ply_snap_audio_to_video(void* data, int enable)
 {
     MediaPlayer* player = (MediaPlayer*)data;
 
     if (!player->state.locked)
     {
-        asw_snap_audio_to_video(msk_get_audio_switch(player->mediaSink));
+        asw_snap_audio_to_video(msk_get_audio_switch(player->mediaSink), enable);
 
         switch_source_info_screen(player);
     }
@@ -1365,15 +1382,15 @@ static int ply_sink_get_stream_buffer(void* data, int streamId, unsigned int buf
                     ml_log_error("Buffer size (%d) != timecode event data size (%d)\n", bufferSize, sizeof(Timecode));
                     return 0;
                 }
-    
+
                 if ((size_t)player->frameInfo.numTimecodes < sizeof(player->frameInfo.timecodes) / sizeof(TimecodeInfo))
                 {
                     player->frameInfo.timecodes[player->frameInfo.numTimecodes].streamId = streamId;
                     player->frameInfo.timecodes[player->frameInfo.numTimecodes].timecodeType = streamInfo->timecodeType;
                     player->frameInfo.timecodes[player->frameInfo.numTimecodes].timecodeSubType = streamInfo->timecodeSubType;
-    
+
                     *buffer = (unsigned char*)&player->frameInfo.timecodes[player->frameInfo.numTimecodes].timecode;
-    
+
                     player->frameInfo.numTimecodes++;
                 }
             }
@@ -1407,7 +1424,7 @@ static int ply_sink_receive_stream_frame(void* data, int streamId, unsigned char
         ml_log_error("Unknown stream %d\n", streamId);
         return 0;
     }
-    
+
     haveStreamInfo = msc_get_stream_info(player->mediaSource, streamId, &streamInfo);
 
     result = 1;
@@ -1605,7 +1622,7 @@ static void send_source_name_change_event(MediaPlayer* player)
             streamEle = streamEle->next;
             continue;
         }
-        
+
         numEvents = svt_read_num_events(streamEle->eventBuffer);
         for (i = 0; i < numEvents; i++)
         {
@@ -1620,7 +1637,7 @@ static void send_source_name_change_event(MediaPlayer* player)
                 }
             }
         }
-        
+
         /* reset */
         streamEle->eventBufferSize = 0;
 
@@ -2125,6 +2142,7 @@ int ply_create_player(MediaSource* mediaSource, MediaSink* mediaSink,
     newPlayer->control.set_osd_timecode = ply_set_osd_timecode;
     newPlayer->control.next_osd_timecode = ply_next_osd_timecode;
     newPlayer->control.toggle_show_audio_level = ply_toggle_show_audio_level;
+    newPlayer->control.set_osd_play_state_position = ply_set_osd_play_state_position;
     newPlayer->control.switch_next_video = ply_switch_next_video;
     newPlayer->control.switch_prev_video = ply_switch_prev_video;
     newPlayer->control.switch_video = ply_switch_video;
@@ -2332,9 +2350,9 @@ int ply_start_player(MediaPlayer* player, int startPaused)
         currentState = player->state;
         PTHREAD_MUTEX_UNLOCK(&player->stateMutex)
 
-        
+
         /* process VTR error level changes */
-        
+
         if (currentState.vtrErrorLevel != player->vtrErrorLevel)
         {
             player->vtrErrorLevel = currentState.vtrErrorLevel;
@@ -2347,7 +2365,7 @@ int ply_start_player(MediaPlayer* player, int startPaused)
         }
 
         /* process marks filter changes */
-        
+
         for (i = 0; i < player->numMarkSelections; i++)
         {
             if (currentState.enabledShowMarks[i] != player->enabledShowMarks[i] ||
@@ -2366,7 +2384,7 @@ int ply_start_player(MediaPlayer* player, int startPaused)
                     mpm_set_mark_filter(&player->playerMarks, i, 0x00000001 << currentState.markFilterPos[i]);
                 }
                 /* else ignore change */
-                
+
                 player->enabledShowMarks[i] = currentState.enabledShowMarks[i];
                 player->markFilterPos[i] = currentState.markFilterPos[i];
             }
@@ -2380,7 +2398,7 @@ int ply_start_player(MediaPlayer* player, int startPaused)
                     {
                         player->markFilterPos[i] = SHOW_ALL_MARK_FILTER_POS;
                     }
-                    
+
                     if (player->markFilterPos[i] >= SHOW_NONE_MARK_FILTER_POS) {
                         markFilter = 0;
                         break;
@@ -2397,7 +2415,7 @@ int ply_start_player(MediaPlayer* player, int startPaused)
             }
         }
 
-        
+
         /* update the sink OSD */
 
         if (currentState.nextOSDTimecode)
@@ -2424,7 +2442,7 @@ int ply_start_player(MediaPlayer* player, int startPaused)
             refreshRequired = 1;
         }
 
-        
+
         PTHREAD_MUTEX_LOCK(&player->stateMutex)
         player->state.setOSDTimecode = 0;
         player->state.nextOSDTimecode = 0;
@@ -2788,10 +2806,10 @@ int ply_start_player(MediaPlayer* player, int startPaused)
         /* send state change events */
 
         send_state_change_event(player);
-        
-        
+
+
         /* send source name change events */
-        
+
         send_source_name_change_event(player);
 
 
@@ -2874,14 +2892,14 @@ void ply_close_player(MediaPlayer** player)
 int ply_get_marks(MediaPlayer* player, Mark** marks)
 {
     assert(sizeof(BasicMark) == sizeof(Mark));
-    
+
     BasicMark *basicMarks = NULL;
     int numMarks = mpm_get_marks(&player->playerMarks, &basicMarks);
     if (numMarks == 0)
     {
         return 0;
     }
-    
+
     *marks = (Mark*)basicMarks;
     return numMarks;
 }

@@ -1,5 +1,5 @@
 /*
- * $Id: on_screen_display.c,v 1.20 2011/02/18 16:28:52 john_f Exp $
+ * $Id: on_screen_display.c,v 1.21 2011/04/19 10:08:48 philipn Exp $
  *
  *
  *
@@ -147,7 +147,7 @@ struct DefaultOnScreenDisplay
     OnScreenDisplayState prevState; /* NOTE: does not include mark colours */
 
     OSDListener* listener;
-    
+
     OverlayWorkspace workspace;
 
     p_info_rec p_info;
@@ -612,6 +612,7 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
     int isMarked;
     int markOn;
     int haveVTRErrorLevel;
+    int yPosAdjustment = 0;
 
 
     /* determine whether to show a mark - a frame could be marked but not shown if it is masked out, or is a
@@ -625,6 +626,21 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
                 (((frameInfo->markTypes[i] & frameInfo->markTypeMasks[i]) != VTR_ERROR_MARK_TYPE) ||
                     (frameInfo->vtrErrorLevel != VTR_NO_ERROR_LEVEL &&
                      frameInfo->vtrErrorCode >= frameInfo->vtrErrorLevel)));
+    }
+
+
+    /* y position adjustment for elements associated with the timecode and progress bar */
+    switch (osdd->state->osdPlayStatePosition)
+    {
+        case OSD_PS_POSITION_TOP:
+            yPosAdjustment = - 10;
+            break;
+        case OSD_PS_POSITION_MIDDLE:
+            yPosAdjustment = - 5;
+            break;
+        case OSD_PS_POSITION_BOTTOM:
+            yPosAdjustment = 0;
+            break;
     }
 
 
@@ -690,21 +706,21 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
         if (!osdd->state->isPlaying)
         {
             xPos = (width - osdd->osdPauseSymbol->w) / 2;
-            yPos = (height * 11) / 16 - osdd->osdPauseSymbol->h / 2;
+            yPos = (height * (11 + yPosAdjustment)) / 16 - osdd->osdPauseSymbol->h / 2;
             CHK_ORET(apply_overlay(osdd->osdPauseSymbol, image, osdd->videoFormat, width, height,
                 xPos, yPos, txtY, txtU, txtV, box, &osdd->workspace));
         }
         else if (osdd->state->playSpeed == 1)
         {
             xPos = (width - osdd->osdPlaySymbol->w) / 2;
-            yPos = (height * 11) / 16 - osdd->osdPlaySymbol->h / 2;
+            yPos = (height * (11 + yPosAdjustment)) / 16 - osdd->osdPlaySymbol->h / 2;
             CHK_ORET(apply_overlay(osdd->osdPlaySymbol, image, osdd->videoFormat, width, height,
                 xPos, yPos, txtY, txtU, txtV, box, &osdd->workspace));
         }
         else if (osdd->state->playSpeed == -1)
         {
             xPos = (width - osdd->osdReversePlaySymbol->w) / 2;
-            yPos = (height * 11) / 16 - osdd->osdReversePlaySymbol->h / 2;
+            yPos = (height * (11 + yPosAdjustment)) / 16 - osdd->osdReversePlaySymbol->h / 2;
             CHK_ORET(apply_overlay(osdd->osdReversePlaySymbol, image, osdd->videoFormat, width, height,
                 xPos, yPos, txtY, txtU, txtV, box, &osdd->workspace));
         }
@@ -714,7 +730,7 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
             numberStringLen = strlen(numberString);
 
             xPos = (width - (osdd->osdPlaySymbol->w + osdd->numberData.cs_ovly[0].w * numberStringLen + 5)) / 2;
-            yPos = (height * 11) / 16 - osdd->osdPlaySymbol->h / 2;
+            yPos = (height * (11 + yPosAdjustment)) / 16 - osdd->osdPlaySymbol->h / 2;
             CHK_ORET(apply_overlay(osdd->osdFastForwardSymbol, image, osdd->videoFormat, width, height,
                 xPos, yPos, txtY, txtU, txtV, box, &osdd->workspace));
 
@@ -732,7 +748,7 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
             numberStringLen = strlen(numberString);
 
             xPos = (width - (osdd->osdPlaySymbol->w + osdd->numberData.cs_ovly[0].w * numberStringLen + 5)) / 2;
-            yPos = (height * 11) / 16 - osdd->osdPlaySymbol->h / 2;
+            yPos = (height * (11 + yPosAdjustment)) / 16 - osdd->osdPlaySymbol->h / 2;
             for (i = 0; i < numberStringLen; i++)
             {
                 CHK_ORET(apply_overlay(&osdd->numberData.cs_ovly[numberString[i] - '0'],
@@ -752,7 +768,7 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
     if (isMarked)
     {
         xPos = (width - (osdd->state->markConfigs.numConfigs * (osdd->markOverlay.w + MARK_OVERLAY_SPACING)) - MARK_OVERLAY_SPACING) / 2;
-        yPos = (height * 11) / 16 + osdd->osdPlaySymbol->h / 2 + 5;
+        yPos = (height * (11 + yPosAdjustment)) / 16 + osdd->osdPlaySymbol->h / 2 + 5;
 
         for (i = 0; i < osdd->state->markConfigs.numConfigs; i++)
         {
@@ -764,7 +780,7 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
                          ((frameInfo->markTypes[j] & osdd->state->markConfigs.configs[i].type & frameInfo->markTypeMasks[j]) != VTR_ERROR_MARK_TYPE ||
                             (frameInfo->vtrErrorLevel != VTR_NO_ERROR_LEVEL && frameInfo->vtrErrorCode >= frameInfo->vtrErrorLevel)));
             }
-            
+
             if (markOn)
             {
                 /* on */
@@ -788,10 +804,10 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
             xPos += osdd->markOverlay.w + MARK_OVERLAY_SPACING;
         }
     }
-    
-    
+
+
     /* vtr error level */
-    
+
     haveVTRErrorLevel = 0;
     for (i = 0; i < frameInfo->numMarkSelections; i++)
     {
@@ -800,20 +816,29 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
                              frameInfo->vtrErrorLevel != VTR_NO_ERROR_LEVEL &&
                              frameInfo->vtrErrorCode >= (uint8_t)frameInfo->vtrErrorLevel);
     }
-    
+
     if (osdd->state->showVTRErrorLevel && isMarked && haveVTRErrorLevel)
     {
         txtY = g_rec601YUVColours[LIGHT_WHITE_COLOUR].Y;
         txtU = g_rec601YUVColours[LIGHT_WHITE_COLOUR].U;
         txtV = g_rec601YUVColours[LIGHT_WHITE_COLOUR].V;
         box = 80;
-        
+
         sprintf(vtrErrorCodeString, "%d+%d", frameInfo->vtrErrorCode & 0x0f, (frameInfo->vtrErrorCode >> 4) & 0x0f);
         vtrErrorCodeStringLen = strlen(vtrErrorCodeString);
 
         xPos = (width - (osdd->vtrErrorCodeData.cs_ovly[0].w * vtrErrorCodeStringLen)) / 2;
-        yPos = (height * 8) / 16 - osdd->vtrErrorCodeData.cs_ovly[0].h / 2;
-        
+        switch (osdd->state->osdPlayStatePosition)
+        {
+            case OSD_PS_POSITION_TOP:
+            case OSD_PS_POSITION_BOTTOM:
+                yPos = (height * 8) / 16 - osdd->vtrErrorCodeData.cs_ovly[0].h / 2;
+                break;
+            case OSD_PS_POSITION_MIDDLE:
+                yPos = (height * 3) / 16 - osdd->vtrErrorCodeData.cs_ovly[0].h / 2;
+                break;
+        }
+
         for (i = 0; i < vtrErrorCodeStringLen; i++)
         {
             if (vtrErrorCodeString[i] == '+')
@@ -824,7 +849,7 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
             {
                 k = vtrErrorCodeString[i] - '0';
             }
-            
+
             CHK_ORET(apply_overlay(&osdd->vtrErrorCodeData.cs_ovly[k],
                 image, osdd->videoFormat, width, height, xPos, yPos, txtY, txtU, txtV, box, &osdd->workspace));
             xPos += osdd->vtrErrorCodeData.cs_ovly[k].w;
@@ -851,7 +876,7 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
 
     timecodeXPos = (width - (osdd->timecodeTypeData.cs_ovly[UNKNOWN_TC_OVLY_IDX].w * 5 / 3 +
         osdd->timecodeTextData.width)) / 2;
-    timecodeYPos = (height * 13) / 16 - osdd->timecodeTextData.height / 2;
+    timecodeYPos = (height * (13 + yPosAdjustment)) / 16 - osdd->timecodeTextData.height / 2;
     timecodeWidth = osdd->timecodeTypeData.cs_ovly[UNKNOWN_TC_OVLY_IDX].w * 5 / 3 +
         osdd->timecodeTextData.width;
     timecodeHeight = osdd->timecodeTextData.height;
@@ -877,7 +902,7 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
         {
             hour %= 24;
         }
-        
+
         if ((frameInfo->frameRate.num == 50 && frameInfo->frameRate.den == 1) ||
             (frameInfo->frameRate.num == 60 && frameInfo->frameRate.den == 1) ||
             (frameInfo->frameRate.num == 60000 && frameInfo->frameRate.den == 1001))
@@ -924,7 +949,7 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
 
         timecodeXPos = (width - (osdd->timecodeTypeData.cs_ovly[UNKNOWN_TC_OVLY_IDX].w * 5 / 3 +
             osdd->timecodeTextData.width)) / 2;
-        timecodeYPos = (height * 13) / 16 - osdd->timecodeTextData.height / 2;
+        timecodeYPos = (height * (13 + yPosAdjustment)) / 16 - osdd->timecodeTextData.height / 2;
         timecodeWidth = osdd->timecodeTypeData.cs_ovly[UNKNOWN_TC_OVLY_IDX].w * 5 / 3 +
             osdd->timecodeTextData.width;
         timecodeHeight = osdd->timecodeTextData.height;
@@ -935,8 +960,8 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
 
         /* timecode */
         xPos = timecodeXPos + osdd->timecodeTypeData.cs_ovly[UNKNOWN_TC_OVLY_IDX].w * 5 / 3;
-        CHK_ORET(apply_timecode_overlay(&osdd->timecodeTextData, hour, min, sec, frame, 
-            frameInfo->timecodes[osdd->state->timecodeIndex].timecode.isDropFrame, image, osdd->videoFormat, width, height, 
+        CHK_ORET(apply_timecode_overlay(&osdd->timecodeTextData, hour, min, sec, frame,
+            frameInfo->timecodes[osdd->state->timecodeIndex].timecode.isDropFrame, image, osdd->videoFormat, width, height,
             xPos, timecodeYPos, txtY, txtU, txtV, box, &osdd->workspace));
     }
 
@@ -2176,6 +2201,13 @@ static int osdd_set_state(void* data, const OnScreenDisplayState* state)
     return osd_set_state(osds_get_osd(osdd->state), state);
 }
 
+static void osdd_set_play_state_position(void* data, OSDPlayStatePosition position)
+{
+    DefaultOnScreenDisplay* osdd = (DefaultOnScreenDisplay*)data;
+
+    osd_set_play_state_position(osds_get_osd(osdd->state), position);
+}
+
 static void osdd_set_minimum_audio_stream_level(void* data, double level)
 {
     DefaultOnScreenDisplay* osdd = (DefaultOnScreenDisplay*)data;
@@ -2558,7 +2590,7 @@ static void osdd_free(void* data)
 
     destroy_mutex(&osdd->setMenuModelMutex);
     destroy_mutex(&osdd->setMarksModelMutex);
-    
+
     clear_overlay_workspace(&osdd->workspace);
 
     SAFE_FREE(&osdd);
@@ -2686,6 +2718,14 @@ int osd_set_state(OnScreenDisplay* osd, const OnScreenDisplayState* state)
         return osd->set_state(osd->data, state);
     }
     return 0;
+}
+
+void osd_set_play_state_position(OnScreenDisplay* osd, OSDPlayStatePosition position)
+{
+    if (osd && osd->set_play_state_position)
+    {
+        osd->set_play_state_position(osd->data, position);
+    }
 }
 
 void osd_set_minimum_audio_stream_level(OnScreenDisplay* osd, double level)
@@ -2878,7 +2918,7 @@ int osdd_create(OnScreenDisplay** osd)
     DefaultOnScreenDisplay* newOSDD;
 
     CALLOC_ORET(newOSDD, DefaultOnScreenDisplay, 1);
-    
+
     init_overlay_workspace(&newOSDD->workspace);
 
     newOSDD->maxAudioLevels = -1;
@@ -2897,6 +2937,7 @@ int osdd_create(OnScreenDisplay** osd)
     newOSDD->osd.next_timecode = osdd_next_timecode;
     newOSDD->osd.set_play_state = osdd_set_play_state;
     newOSDD->osd.set_state = osdd_set_state;
+    newOSDD->osd.set_play_state_position = osdd_set_play_state_position;
     newOSDD->osd.set_minimum_audio_stream_level = osdd_set_minimum_audio_stream_level;
     newOSDD->osd.set_audio_lineup_level = osdd_set_audio_lineup_level;
     newOSDD->osd.reset_audio_stream_levels = osdd_reset_audio_stream_levels;
@@ -3600,6 +3641,13 @@ static int osds_set_state(void* data, const OnScreenDisplayState* newState)
     return stateChanged;
 }
 
+static void osds_set_play_state_position(void* data, OSDPlayStatePosition position)
+{
+    OnScreenDisplayState* state = (OnScreenDisplayState*)data;
+
+    state->osdPlayStatePosition = position;
+}
+
 
 
 int osds_create(OnScreenDisplayState** state)
@@ -3622,6 +3670,7 @@ int osds_create(OnScreenDisplayState** state)
     newState->osd.next_timecode = osds_next_timecode;
     newState->osd.set_play_state = osds_set_play_state;
     newState->osd.set_state = osds_set_state;
+    newState->osd.set_play_state_position = osds_set_play_state_position;
     newState->osd.set_minimum_audio_stream_level = osds_set_minimum_audio_stream_level;
     newState->osd.set_audio_lineup_level = osds_set_audio_lineup_level;
     newState->osd.reset_audio_stream_levels = osds_reset_audio_stream_levels;

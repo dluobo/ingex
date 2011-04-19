@@ -1,5 +1,5 @@
 /*
- * $Id: media_control.c,v 1.11 2010/06/02 11:12:14 philipn Exp $
+ * $Id: media_control.c,v 1.12 2011/04/19 10:08:48 philipn Exp $
  *
  *
  *
@@ -283,6 +283,14 @@ void mc_toggle_show_audio_level(MediaControl* control)
     }
 }
 
+void mc_set_osd_play_state_position(MediaControl *control, OSDPlayStatePosition position)
+{
+    if (control && control->set_osd_play_state_position)
+    {
+        control->set_osd_play_state_position(control->data, position);
+    }
+}
+
 void mc_switch_next_video(MediaControl* control)
 {
     if (control && control->switch_next_video)
@@ -347,11 +355,11 @@ void mc_switch_audio_group(MediaControl* control, int index)
     }
 }
 
-void mc_snap_audio_to_video(MediaControl* control)
+void mc_snap_audio_to_video(MediaControl* control, int enable)
 {
     if (control && control->snap_audio_to_video)
     {
-        control->snap_audio_to_video(control->data);
+        control->snap_audio_to_video(control->data, enable);
     }
 }
 

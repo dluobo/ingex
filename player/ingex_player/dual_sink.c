@@ -1,5 +1,5 @@
 /*
- * $Id: dual_sink.c,v 1.14 2010/10/26 18:28:23 john_f Exp $
+ * $Id: dual_sink.c,v 1.15 2011/04/19 10:08:48 philipn Exp $
  *
  *
  *
@@ -331,6 +331,16 @@ static int dusk_osd_set_state(void* data, const OnScreenDisplayState* state)
     return result;
 }
 
+static void dusk_osd_set_play_state_position(void* data, OSDPlayStatePosition position)
+{
+    DualSink* dualSink = (DualSink*)data;
+
+    CHK_ORETV(check_dvs_is_open(dualSink));
+
+    osd_set_play_state_position(msk_get_osd(dualSink->x11Sink), position);
+    osd_set_play_state_position(msk_get_osd(dualSink->dvsSink), position);
+}
+
 static void dusk_osd_set_minimum_audio_stream_level(void* data, double level)
 {
     DualSink* dualSink = (DualSink*)data;
@@ -617,7 +627,7 @@ static int dusk_register_stream(void* data, int streamId, const StreamInfo* stre
             CHK_ORET(add_target_sink_info(streamId, &dualSink->dvsInfo));
         }
     }
-    
+
     if ((streamInfo->type != PICTURE_STREAM_TYPE || !streamInfo->isScaledPicture) && /* only pass unscaled pictures */
         msk_accept_stream(dualSink->x11Sink, streamInfo))
     {
@@ -694,7 +704,7 @@ static int dusk_receive_stream_frame(void* data, int streamId, unsigned char* bu
     dvsInfo = get_dvs_info(dualSink, streamId);
     if (dvsInfo && dvsInfo->buffer)
         dvs_result = msk_receive_stream_frame(dualSink->dvsSink, streamId, dvsInfo->buffer, bufferSize);
-    
+
     x11Info = get_x11_info(dualSink, streamId);
     if (x11Info && x11Info->buffer) {
         if (buffer != x11Info->buffer)
@@ -913,6 +923,7 @@ int dusk_open(int reviewDuration, int dvsCard, int dvsChannel, SDIVITCSource sdi
     newDualSink->dualOSD.set_timecode = dusk_osd_set_timecode;
     newDualSink->dualOSD.set_play_state = dusk_osd_set_play_state;
     newDualSink->dualOSD.set_state = dusk_osd_set_state;
+    newDualSink->dualOSD.set_play_state_position = dusk_osd_set_play_state_position;
     newDualSink->dualOSD.set_minimum_audio_stream_level = dusk_osd_set_minimum_audio_stream_level;
     newDualSink->dualOSD.set_audio_lineup_level = dusk_osd_set_audio_lineup_level;
     newDualSink->dualOSD.reset_audio_stream_levels = dusk_osd_reset_audio_stream_levels;

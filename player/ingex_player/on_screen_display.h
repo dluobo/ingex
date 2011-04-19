@@ -1,5 +1,5 @@
 /*
- * $Id: on_screen_display.h,v 1.8 2010/06/02 11:12:14 philipn Exp $
+ * $Id: on_screen_display.h,v 1.9 2011/04/19 10:08:48 philipn Exp $
  *
  *
  *
@@ -116,6 +116,13 @@ typedef enum
 
 typedef struct OnScreenDisplayState OnScreenDisplayState;
 
+typedef enum
+{
+    OSD_PS_POSITION_BOTTOM = 0,
+    OSD_PS_POSITION_MIDDLE,
+    OSD_PS_POSITION_TOP,
+} OSDPlayStatePosition;
+
 typedef struct
 {
     int* markCounts;
@@ -152,6 +159,8 @@ typedef struct
     int (*set_play_state)(void* data, OSDPlayState state, int value);
     int (*set_state)(void* data, const OnScreenDisplayState* state);
 
+    void (*set_play_state_position)(void* data, OSDPlayStatePosition position);
+
     void (*set_minimum_audio_stream_level)(void* data, double level);
     void (*set_audio_lineup_level)(void* data, float level);
     void (*reset_audio_stream_levels)(void* data);
@@ -167,7 +176,7 @@ typedef struct
     void (*free_marks_model)(void* data, OSDMarksModel** model);
     void (*set_marks_model)(void* data, int updateMask, OSDMarksModel* model);
     void (*set_second_marks_model)(void* data, int updateMask, OSDMarksModel* model);
-    
+
     void (*show_vtr_error_level)(void* data, int enable);
 
     void (*set_progress_bar_visibility)(void* data, int visible);
@@ -207,6 +216,7 @@ int osd_set_timecode(OnScreenDisplay* osd, int index, int type, int subType);
 int osd_next_timecode(OnScreenDisplay* osd);
 int osd_set_play_state(OnScreenDisplay* osd, OSDPlayState state, int value);
 int osd_set_state(OnScreenDisplay* osd, const OnScreenDisplayState* state);
+void osd_set_play_state_position(OnScreenDisplay* osd, OSDPlayStatePosition position);
 void osd_set_minimum_audio_stream_level(OnScreenDisplay* osd, double level);
 void osd_set_audio_lineup_level(OnScreenDisplay* osd, float level);
 void osd_reset_audio_stream_levels(OnScreenDisplay* osd);
@@ -287,6 +297,7 @@ struct OnScreenDisplayState
     int playForwards;
     int timecodeIndex;
     int timecodeStreamId;
+    OSDPlayStatePosition osdPlayStatePosition;
     int showFieldSymbol;
     int showVTRErrorLevel;
 

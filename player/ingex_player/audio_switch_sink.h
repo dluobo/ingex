@@ -1,5 +1,5 @@
 /*
- * $Id: audio_switch_sink.h,v 1.4 2010/06/02 11:12:14 philipn Exp $
+ * $Id: audio_switch_sink.h,v 1.5 2011/04/19 10:08:48 philipn Exp $
  *
  *
  *
@@ -38,7 +38,7 @@ struct AudioSwitchSink
     int (*switch_next_audio_group)(void* data);
     int (*switch_prev_audio_group)(void* data);
     int (*switch_audio_group)(void* data, int index);
-    void (*snap_audio_to_video)(void* data);
+    void (*snap_audio_to_video)(void* data, int enable);
 };
 
 /* utility functions for calling AudioSwitchSink functions */
@@ -47,7 +47,7 @@ MediaSink* asw_get_media_sink(AudioSwitchSink* swtch);
 int asw_switch_next_audio_group(AudioSwitchSink* swtch);
 int asw_switch_prev_audio_group(AudioSwitchSink* swtch);
 int asw_switch_audio_group(AudioSwitchSink* swtch, int index);
-void asw_snap_audio_to_video(AudioSwitchSink* swtch);
+void asw_snap_audio_to_video(AudioSwitchSink* swtch, int enable);
 
 
 /* audio switch */

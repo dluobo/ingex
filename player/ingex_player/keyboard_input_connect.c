@@ -1,5 +1,5 @@
 /*
- * $Id: keyboard_input_connect.c,v 1.13 2010/06/18 09:44:51 philipn Exp $
+ * $Id: keyboard_input_connect.c,v 1.14 2011/04/19 10:08:48 philipn Exp $
  *
  *
  *
@@ -306,7 +306,7 @@ static void default_key_pressed(void* data, int key, int modifier)
             mc_switch_prev_audio_group(connect->control);
             break;
         case 'p':
-            mc_snap_audio_to_video(connect->control);
+            mc_snap_audio_to_video(connect->control, -1);
             break;
         case 'r':
             mc_switch_next_audio_group(connect->control);
