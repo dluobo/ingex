@@ -1,5 +1,5 @@
 /*
- * $Id: IngexPlayerListener.cpp,v 1.2 2010/06/02 11:12:13 philipn Exp $
+ * $Id: IngexPlayerListener.cpp,v 1.3 2011/04/19 10:12:43 philipn Exp $
  *
  * Copyright (C) 2009 British Broadcasting Corporation, All Rights Reserved
  * Author: Matthew Marks
@@ -94,7 +94,7 @@ bool IngexPlayerListenerRegistry::registerListener(IngexPlayerListener* listener
         _listeners.push_back(std::make_pair(listener, (IngexPlayerListenerData*)0));
         if (listener->getRegistry() != 0 && listener->getRegistry() != this)
         {
-            // first unregister the listener with the 'other' player 
+            // first unregister the listener with the 'other' player
             listener->getRegistry()->unregisterListener(listener);
         }
         listener->setRegistry(this);
@@ -140,7 +140,7 @@ IngexPlayerListener::IngexPlayerListener(IngexPlayerListenerRegistry* registry)
     registry->registerListener(this);
 }
 
-IngexPlayerListener::~IngexPlayerListener() 
+IngexPlayerListener::~IngexPlayerListener()
 {
     if (_registry != 0)
     {

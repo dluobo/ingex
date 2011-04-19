@@ -1,5 +1,5 @@
 /*
- * $Id: IngexPlayerListener.h,v 1.6 2010/06/02 11:12:13 philipn Exp $
+ * $Id: IngexPlayerListener.h,v 1.7 2011/04/19 10:12:43 philipn Exp $
  *
  * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
@@ -56,10 +56,10 @@ class IngexPlayerListenerRegistry
 public:
     IngexPlayerListenerRegistry();
     ~IngexPlayerListenerRegistry();
-    
+
     bool registerListener(IngexPlayerListener* listener);
     bool unregisterListener(IngexPlayerListener* listener);
-    
+
     /* allowing access for C callback functions */
     pthread_rwlock_t _listenersRWLock;
     std::vector<std::pair<IngexPlayerListener*, IngexPlayerListenerData*> > _listeners;
