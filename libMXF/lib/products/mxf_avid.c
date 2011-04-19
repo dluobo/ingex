@@ -1,5 +1,5 @@
 /*
- * $Id: mxf_avid.c,v 1.14 2011/01/25 17:39:50 philipn Exp $
+ * $Id: mxf_avid.c,v 1.15 2011/04/19 09:46:28 philipn Exp $
  *
  * Avid data model extensions and utilities
  *
@@ -766,6 +766,23 @@ fail:
     return 0;    
 }
 
+int mxf_avid_set_indirect_int32_item(MXFMetadataSet *set, const mxfKey *itemKey, int32_t value)
+{
+    /* prefix is 0x42 ('B') for big endian, followed by half-swapped key for Int32 type */
+    uint8_t itemValue[21] =
+    {
+        0x42,
+        0x01, 0x01, 0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x06, 0x0e, 0x2b, 0x34, 0x01, 0x04, 0x01, 0x01,
+        0x00, 0x00, 0x00, 0x00
+    };
+
+    mxf_set_int32(value, &itemValue[17]);
+
+    CHK_ORET(mxf_set_item(set, itemKey, itemValue, sizeof(itemValue)));
+
+    return 1;
+}
+
 
 int mxf_avid_set_rgb_color_item(MXFMetadataSet* set, const mxfKey* itemKey, const RGBColor* value)
 {
@@ -854,6 +871,20 @@ int mxf_avid_attach_mob_attribute(MXFHeaderMetadata* headerMetadata, MXFMetadata
     
     return 1;
 }    
+
+int mxf_avid_attach_int32_mob_attribute(MXFHeaderMetadata *headerMetadata, MXFMetadataSet *packageSet,
+                                         const mxfUTF16Char *name, int32_t value)
+{
+    MXFMetadataSet *taggedValueSet;
+    CHK_ORET(name != NULL);
+
+    CHK_ORET(mxf_create_set(headerMetadata, &MXF_SET_K(TaggedValue), &taggedValueSet));
+    CHK_ORET(mxf_add_array_item_strongref(packageSet, &MXF_ITEM_K(GenericPackage, MobAttributeList), taggedValueSet));
+    CHK_ORET(mxf_set_utf16string_item(taggedValueSet, &MXF_ITEM_K(TaggedValue, Name), name));
+    CHK_ORET(mxf_avid_set_indirect_int32_item(taggedValueSet, &MXF_ITEM_K(TaggedValue, Value), value));
+
+    return 1;
+}
 
 int mxf_avid_attach_user_comment(MXFHeaderMetadata* headerMetadata, MXFMetadataSet* packageSet, 
     mxfUTF16Char* name, mxfUTF16Char* value)

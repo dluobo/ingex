@@ -1,5 +1,5 @@
 /*
- * $Id: mxf_avid.h,v 1.12 2011/01/25 17:39:50 philipn Exp $
+ * $Id: mxf_avid.h,v 1.13 2011/04/19 09:46:29 philipn Exp $
  *
  * Avid data model extensions and utilities
  *
@@ -81,6 +81,7 @@ void mxf_regtest_generate_old_aafsdk_umid(mxfUMID* umid);
 
 
 int mxf_avid_set_indirect_string_item(MXFMetadataSet* set, const mxfKey* itemKey, const mxfUTF16Char* value);
+int mxf_avid_set_indirect_int32_item(MXFMetadataSet *set, const mxfKey *itemKey, int32_t value);
 
 int mxf_avid_set_rgb_color_item(MXFMetadataSet* set, const mxfKey* itemKey, const RGBColor* value);
 int mxf_avid_get_rgb_color_item(MXFMetadataSet* set, const mxfKey* itemKey, RGBColor* value);
@@ -92,6 +93,8 @@ int mxf_avid_write_index_entry_array_header(MXFFile* mxfFile, uint8_t sliceCount
 
 int mxf_avid_attach_mob_attribute(MXFHeaderMetadata* headerMetadata, MXFMetadataSet* packageSet, 
     mxfUTF16Char* name, mxfUTF16Char* value);
+int mxf_avid_attach_int32_mob_attribute(MXFHeaderMetadata *headerMetadata, MXFMetadataSet *packageSet,
+                                        const mxfUTF16Char *name, int32_t value);
 int mxf_avid_attach_user_comment(MXFHeaderMetadata* headerMetadata, MXFMetadataSet* packageSet, 
     mxfUTF16Char* name, mxfUTF16Char* value);
     
