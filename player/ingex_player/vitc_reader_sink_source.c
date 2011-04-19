@@ -1,5 +1,5 @@
 /*
- * $Id: vitc_reader_sink_source.c,v 1.3 2010/08/02 16:45:03 john_f Exp $
+ * $Id: vitc_reader_sink_source.c,v 1.4 2011/04/19 10:03:53 philipn Exp $
  *
  * Copyright (C) 2010 British Broadcasting Corporation, All Rights Reserved
  *
@@ -39,7 +39,7 @@ struct VITCReaderSinkSource
 {
     unsigned int *vitcLines;
     int numVITCLines;
-    
+
     MediaSource source;
     StreamInfo sourceStreamInfo;
     int isDisabled;
@@ -51,7 +51,7 @@ struct VITCReaderSinkSource
     MediaSink sink;
     int videoStreamId;
     StreamInfo videoStreamInfo;
-    
+
     pthread_mutex_t timecodeMutex;
     pthread_cond_t timecodeReadyCond;
     Timecode timecode;
@@ -256,14 +256,14 @@ static void vss_source_close(void *data)
 
     if (data == NULL)
         return;
-    
+
     PTHREAD_MUTEX_LOCK(&source->timecodeMutex);
     source->stopped = 1;
     pthread_cond_broadcast(&source->timecodeReadyCond);
     PTHREAD_MUTEX_UNLOCK(&source->timecodeMutex);
 
     clear_stream_info(&source->sourceStreamInfo);
-    
+
     source->isDisabled = 0;
     source->position = 0;
 
@@ -296,7 +296,7 @@ static int vss_accept_stream(void *data, const StreamInfo *streamInfo)
 static int vss_register_stream(void *data, int streamId, const StreamInfo *streamInfo)
 {
     VITCReaderSinkSource *sink = (VITCReaderSinkSource*)data;
-    
+
     if (msk_register_stream(sink->targetSink, streamId, streamInfo)) {
         if (sink->videoStreamId < 0 &&
             streamInfo->type == PICTURE_STREAM_TYPE &&
@@ -310,10 +310,10 @@ static int vss_register_stream(void *data, int streamId, const StreamInfo *strea
             sink->videoStreamId = streamId;
             sink->videoStreamInfo = *streamInfo;
         }
-        
+
         return 1;
     }
-    
+
     return 0;
 }
 
@@ -321,7 +321,7 @@ static int vss_accept_stream_frame(void *data, int streamId, const FrameInfo* fr
 {
     VITCReaderSinkSource *sink = (VITCReaderSinkSource*)data;
     int result;
-    
+
     result = msk_accept_stream_frame(sink->targetSink, streamId, frameInfo);
 
     if (!result && sink->videoStreamId == streamId) {
@@ -332,7 +332,7 @@ static int vss_accept_stream_frame(void *data, int streamId, const FrameInfo* fr
         pthread_cond_broadcast(&sink->timecodeReadyCond);
         PTHREAD_MUTEX_UNLOCK(&sink->timecodeMutex);
     }
-    
+
     return result;
 }
 
@@ -351,14 +351,14 @@ static int vss_get_stream_buffer(void *data, int streamId, unsigned int bufferSi
         pthread_cond_broadcast(&sink->timecodeReadyCond);
         PTHREAD_MUTEX_UNLOCK(&sink->timecodeMutex);
     }
-    
+
     return result;
 }
 
 static int vss_receive_stream_frame(void *data, int streamId, unsigned char *buffer, unsigned int bufferSize)
 {
     VITCReaderSinkSource *sink = (VITCReaderSinkSource*)data;
-    
+
     if (streamId == sink->videoStreamId)
         decode_vitc(sink, buffer, bufferSize);
 
@@ -453,9 +453,9 @@ static void vss_sink_close(void *data)
     VITCReaderSinkSource *sink = (VITCReaderSinkSource*)data;
 
     vss_source_close(data);
-    
+
     msk_close(sink->targetSink);
-    
+
     SAFE_FREE(&sink->vitcLines);
 
     destroy_cond_var(&sink->timecodeReadyCond);
@@ -477,7 +477,7 @@ static int vss_reset_or_close(void *data)
             /* target sink was closed */
             sink->targetSink = NULL;
         }
-        
+
         vss_sink_close(data);
         return 2;
     }
@@ -490,13 +490,13 @@ static int vss_reset_or_close(void *data)
 int vss_create_vitc_reader(unsigned int *vitc_lines, int num_vitc_lines, VITCReaderSinkSource **sonk)
 {
     VITCReaderSinkSource *newSonk;
-    
+
     CHK_ORET(vitc_lines && num_vitc_lines > 0);
 
     CALLOC_ORET(newSonk, VITCReaderSinkSource, 1);
     newSonk->videoStreamId = -1;
     newSonk->length = 0x7fffffffffffffffLL;
-    
+
     CALLOC_ORET(newSonk->vitcLines, unsigned int, num_vitc_lines);
     memcpy(newSonk->vitcLines, vitc_lines, num_vitc_lines * sizeof(unsigned int));
     newSonk->numVITCLines = num_vitc_lines;

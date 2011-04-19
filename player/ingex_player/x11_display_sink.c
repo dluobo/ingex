@@ -1,5 +1,5 @@
 /*
- * $Id: x11_display_sink.c,v 1.15 2011/02/18 16:28:52 john_f Exp $
+ * $Id: x11_display_sink.c,v 1.16 2011/04/19 10:03:53 philipn Exp $
  *
  *
  *
@@ -439,7 +439,7 @@ static int display_frame(X11DisplaySink* sink, X11DisplayFrame* frame, const Fra
             inputBuffer = frame->inputBuffer;
             rgbInputFormat = frame->videoFormat;
         }
-        
+
         /* scale image */
         if (sink->swScale != 1)
         {
@@ -491,7 +491,7 @@ static int display_frame(X11DisplaySink* sink, X11DisplayFrame* frame, const Fra
 
 
         XLockDisplay(sink->x11Common.windowInfo.display);
-        
+
         if (sink->useSharedMemory)
         {
             XShmPutImage(sink->x11Common.windowInfo.display, sink->x11Common.windowInfo.window, sink->x11Common.windowInfo.gc,
@@ -512,7 +512,7 @@ static int display_frame(X11DisplaySink* sink, X11DisplayFrame* frame, const Fra
 
         XUnlockDisplay(sink->x11Common.windowInfo.display);
 
-        
+
         x11c_process_events(&sink->x11Common);
 
 
@@ -612,7 +612,7 @@ static int init_frame(X11DisplayFrame* frame)
 
     PTHREAD_MUTEX_LOCK(&sink->x11Common.eventMutex)
     XLockDisplay(sink->x11Common.windowInfo.display);
-    
+
     if (sink->useSharedMemory)
     {
         CHK_OFAIL((frame->xImage =
@@ -878,7 +878,7 @@ static void xskf_free(void* data)
             XLockDisplay(frame->sink->x11Common.windowInfo.display);
             XShmDetach(frame->sink->x11Common.windowInfo.display, &frame->shminfo);
             XUnlockDisplay(frame->sink->x11Common.windowInfo.display);
-            
+
             shmdt(frame->shminfo.shmaddr);
             XFree(frame->xImage);
         }

@@ -1,5 +1,5 @@
 /*
- * $Id: mxf_source.c,v 1.22 2010/12/03 14:27:35 john_f Exp $
+ * $Id: mxf_source.c,v 1.23 2011/04/19 10:03:53 philipn Exp $
  *
  *
  *
@@ -81,7 +81,7 @@ struct MXFFileSource
     char* filename;
 
     MediaSource mediaSource;
-    
+
     MXFDataModel* dataModel;
     MXFReader* mxfReader;
     MXFReaderListener mxfListener;
@@ -1003,7 +1003,7 @@ static void mxfs_close(void* data)
 
     mxf_free_data_model(&source->dataModel);
     SAFE_FREE(&source->filename);
-    
+
     SAFE_FREE(&source);
 }
 
@@ -1104,7 +1104,7 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
             ml_log_warn("Failed to read archive MXF information\n");
         }
     }
-    
+
     newSource->isMetadataOnly = is_metadata_only(newSource->mxfReader);
 
     duration = get_duration(newSource->mxfReader);
@@ -1131,7 +1131,7 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
     newSource->mediaSource.set_clip_id = mxfs_set_clip_id;
     newSource->mediaSource.close = mxfs_close;
     newSource->mediaSource.data = newSource;
-    
+
     newSource->mxfListener.accept_frame = map_accept_frame;
     newSource->mxfListener.allocate_buffer = map_allocate_buffer;
     newSource->mxfListener.deallocate_buffer = map_deallocate_buffer;
@@ -1363,12 +1363,12 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
             if (track->audio.channelCount > 0)
             {
                 CHK_OFAIL(create_output_streams(&newSource->trackData[i], track->audio.channelCount, &commonStreamInfo, &nextOutputStreamId));
-    
+
                 /* TODO: don't assume PCM */
                 for (j = 0; j < (int)track->audio.channelCount; j++)
                 {
                     outputStream = &newSource->trackData[i].streamData[j];
-    
+
                     outputStream->streamInfo.type = SOUND_STREAM_TYPE;
                     outputStream->streamInfo.format = PCM_FORMAT;
                     outputStream->streamInfo.samplingRate.num = track->audio.samplingRate.numerator;
@@ -1385,7 +1385,7 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
         /* control/playout timecode streams */
         CHK_OFAIL(create_output_streams(&newSource->trackData[numTracks], 1, &commonStreamInfo, &nextOutputStreamId));
         outputStream = &newSource->trackData[numTracks].streamData[0];
-    
+
         outputStream->streamInfo.type = TIMECODE_STREAM_TYPE;
         outputStream->streamInfo.format = TIMECODE_FORMAT;
         outputStream->streamInfo.timecodeType = CONTROL_TIMECODE_TYPE;
@@ -1417,7 +1417,7 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
                 else
                 {
                     outputStream->streamInfo.timecodeSubType = NO_TIMECODE_SUBTYPE;
-    
+
                     /* we disable it because it doesn't apply for archive MXF files */
                     outputStream->isDisabled = 1;
                 }
@@ -1440,9 +1440,9 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
                     {
                         /* this is unexpected because a archive MXF file should only have a VITC and LTC timecode */
                         ml_log_warn("Found more than 2 system item timecodes for archive MXF file\n");
-    
+
                         outputStream->streamInfo.timecodeSubType = NO_TIMECODE_SUBTYPE;
-    
+
                         /* we disable it because it doesn't apply for archive MXF files */
                         outputStream->isDisabled = 1;
                     }
@@ -1450,7 +1450,7 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
                 else
                 {
                     outputStream->streamInfo.timecodeSubType = NO_TIMECODE_SUBTYPE;
-    
+
                     /* we disable it because it doesn't apply for archive MXF files */
                     outputStream->isDisabled = 1;
                 }

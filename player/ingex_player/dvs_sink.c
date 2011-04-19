@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sink.c,v 1.20 2011/02/18 16:28:52 john_f Exp $
+ * $Id: dvs_sink.c,v 1.21 2011/04/19 10:03:53 philipn Exp $
  *
  *
  *
@@ -239,7 +239,7 @@ struct DVSSink
     int reversePlay;
 
     int muteAudio;
-    
+
     unsigned char* workBuffer1;
     unsigned int workBuffer1Size;
     unsigned char* workBuffer2;
@@ -571,7 +571,7 @@ static int display_on_sv_fifo(DVSSink* sink, DVSFifoBuffer* fifoBuffer)
 
 
     return 1;
-    
+
 fail:
     PTHREAD_MUTEX_UNLOCK(&sink->dvsFifoMutex)
     return 0;
@@ -970,7 +970,7 @@ static int dvs_register_stream(void* data, int streamId, const StreamInfo* strea
         if (sink->osd != NULL && !sink->osdInitialised)
         {
             /* TODO: clean this up */
-            
+
             StreamFormat format = streamInfo->format;
             if (streamInfo->format == YUV422_FORMAT ||
                 (streamInfo->format == UYVY_10BIT_FORMAT && sink->depth8Bit))
@@ -1003,7 +1003,7 @@ static int dvs_register_stream(void* data, int streamId, const StreamInfo* strea
         CALLOC_ORET(sink->workBuffer1, unsigned char, sink->workBuffer1Size);
         sink->workBuffer2Size = sink->workBuffer1Size;
         CALLOC_ORET(sink->workBuffer2, unsigned char, sink->workBuffer2Size);
-        
+
         if (((streamInfo->format == UYVY_FORMAT && sink->depth8Bit) ||
                 (streamInfo->format == UYVY_10BIT_FORMAT && !sink->depth8Bit)) &&
             (unsigned int)streamInfo->width == sink->rasterWidth &&
@@ -1319,7 +1319,7 @@ static int dvs_complete_frame(void* data, const FrameInfo* frameInfo)
     {
         /* only support 8-bit */
         CHK_ORET(activeBufferDepth8Bit);
-        
+
         unsigned char* inData;
         unsigned char* outData;
         int imageYStart = 0;
@@ -1536,7 +1536,7 @@ static int dvs_complete_frame(void* data, const FrameInfo* frameInfo)
             /* continue anyway */
         }
     }
-    
+
     if (!sink->depth8Bit && activeBufferDepth8Bit)
     {
         /* convert 8-bit UYVY to 10-bit */
@@ -1544,7 +1544,7 @@ static int dvs_complete_frame(void* data, const FrameInfo* frameInfo)
             (sink->rasterWidth + 5) / 6 * 16, sink->rasterWidth * 2,
             sink->rasterWidth, sink->rasterHeight);
     }
-    
+
 
 
     PTHREAD_MUTEX_LOCK(&sink->frameInfosMutex);
@@ -1821,10 +1821,10 @@ int dvs_open(int dvsCard, int dvsChannel, SDIVITCSource sdiVITCSource, SDIVITCSo
 
     SV_CHK_OFAIL(sv_status(newSink->sv, &status_info));
     ml_log_info("DVS card [card=%d,channel=%d] display raster is %dx%di, mode is 0x%x\n", selectedCard, selectedChannel, status_info.xsize, status_info.ysize, status_info.config);
-    
+
     CHK_OFAIL(status_info.nbit == 8 || status_info.nbit == 10);
     newSink->depth8Bit = (status_info.nbit == 8);
-    
+
     if ((status_info.config & SV_MODE_MASK) == SV_MODE_PAL ||
         (status_info.config & SV_MODE_MASK) == SV_MODE_SMPTE274_25I ||
         (status_info.config & SV_MODE_MASK) == SV_MODE_SMPTE274_25sF)

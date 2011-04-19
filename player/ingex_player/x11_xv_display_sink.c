@@ -1,5 +1,5 @@
 /*
- * $Id: x11_xv_display_sink.c,v 1.18 2011/02/18 16:28:52 john_f Exp $
+ * $Id: x11_xv_display_sink.c,v 1.19 2011/04/19 10:03:53 philipn Exp $
  *
  *
  *
@@ -371,7 +371,7 @@ static int init_display(X11XVDisplaySink* sink, const StreamInfo* streamInfo)
 
         /* default to square pixels */
         sampleAspectRatio = (Rational){1, 1};
-    
+
         if (sink->inputWidth == 720 || sink->inputWidth == 702 || sink->inputWidth == 704 ||
             sink->inputWidth == 360 || sink->inputWidth == 351 || sink->inputWidth == 352 ||
             sink->inputWidth == 288)
@@ -405,10 +405,10 @@ static int init_display(X11XVDisplaySink* sink, const StreamInfo* streamInfo)
             /* DVCPro-HD */
             sampleAspectRatio = (Rational){4, 3};
         }
-        
+
         sampleAspectRatio.num *= sink->pixelAspectRatio.den;
         sampleAspectRatio.den *= sink->pixelAspectRatio.num;
-        
+
         wFactor = (sampleAspectRatio.num * sink->pixelAspectRatio.den) /
                 (double)(sampleAspectRatio.den * sink->pixelAspectRatio.num);
 
@@ -954,7 +954,7 @@ static void xvskf_free(void* data)
                 XLockDisplay(frame->sink->x11Common.windowInfo.display);
                 XShmDetach(frame->sink->x11Common.windowInfo.display, &frame->yuv_shminfo);
                 XUnlockDisplay(frame->sink->x11Common.windowInfo.display);
-                
+
                 shmdt(frame->yuv_shminfo.shmaddr);
             }
             else

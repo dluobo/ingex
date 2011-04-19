@@ -1,5 +1,5 @@
 /*
- * $Id: udp_source.c,v 1.8 2010/06/14 15:26:51 john_f Exp $
+ * $Id: udp_source.c,v 1.9 2011/04/19 10:03:53 philipn Exp $
  *
  *
  *
@@ -363,7 +363,7 @@ static void udp_close(void* data)
     }
 
 #ifndef MULTICAST_SINGLE_THREAD
-	udp_shutdown_reader(&source->udp_reader);
+    udp_shutdown_reader(&source->udp_reader);
 #endif
 
     for (i = 0; i < source->numTracks; i++)
@@ -401,32 +401,32 @@ int udp_open(const char *address, MediaSource** source)
 //         port = atol(p+1);    // extract port
 //         *p = '\0';          // terminate remote string
 //     }
-	if ((p = strchr(remote, ']')) == NULL)
-	{			/* search for [ipv6] end */
-		if ((p = strchr(remote, ':')) == NULL) //v4 version
-		{	/* get the port number */
-			port =MULTICAST_DEFAULT_PORT;				/* default port to 1234 */
-		}
-	
-		else 
-		{
-			port = atol(p+1);
-			*(p) = '\0';
-		}
-	}
-	else//v6 version
-	{
-		const char *p_bracket = strchr(address, '[');
-		strcpy(remote, p_bracket + 1);
-		if ((strchr(remote, ']'))-strrchr(remote,':')<= 0) 
-		{	/* get the port number */
-			port =1234;				/* default port to 1234 */
-		}
+    if ((p = strchr(remote, ']')) == NULL)
+    {           /* search for [ipv6] end */
+        if ((p = strchr(remote, ':')) == NULL) //v4 version
+        {   /* get the port number */
+            port =MULTICAST_DEFAULT_PORT;               /* default port to 1234 */
+        }
 
-		p=strrchr(remote,':');
-		port =atol(p+1);
-		*(p-1) = '\0';
-	}
+        else
+        {
+            port = atol(p+1);
+            *(p) = '\0';
+        }
+    }
+    else//v6 version
+    {
+        const char *p_bracket = strchr(address, '[');
+        strcpy(remote, p_bracket + 1);
+        if ((strchr(remote, ']'))-strrchr(remote,':')<= 0)
+        {   /* get the port number */
+            port =1234;             /* default port to 1234 */
+        }
+
+        p=strrchr(remote,':');
+        port =atol(p+1);
+        *(p-1) = '\0';
+    }
     // setup network socket
     int fd;
     printf("The UDP Address is: %s and the port is: %d \n",remote,port); // show address and port

@@ -1,5 +1,5 @@
 /*
- * $Id: shared_mem_source.c,v 1.15 2010/08/27 17:41:32 john_f Exp $
+ * $Id: shared_mem_source.c,v 1.16 2011/04/19 10:03:53 philipn Exp $
  *
  *
  *
@@ -87,7 +87,7 @@ struct SharedMemSource
     int channel;
     int primary;                    // boolean: primary video buffer or secondary
     CaptureFormat captureFormat;
-    
+
     TimecodeType defaultTCType;
     TimecodeSubType defaultTCSubType;
 
@@ -208,7 +208,7 @@ static Ingex::Timecode rec_ring_timecode(SharedMemSource *source, int track, int
 {
     assert(track < NUM_TIMECODE_TRACKS);
     TimecodeTrackType timecodeTrack = (TimecodeTrackType)track;
-    
+
     NexusTimecode tc_type = NexusTC_VITC;
     switch (timecodeTrack)
     {
@@ -261,7 +261,7 @@ static int shm_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceLis
             ml_log_info("Could not re-connect to shared mem - timeout\n");
             return -2;
         }
-        
+
         connected = 1;
         ml_log_info("Connected to shared memory\n");
     }
@@ -285,7 +285,7 @@ static int shm_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceLis
 
 
     /* check for updated source name */
-    
+
     nexus_get_source_name(conn.pctl, source->channel, source->sourceName, sizeof(source->sourceName), &updateCount);
     nameUpdated = (updateCount != source->sourceNameUpdate);
     source->sourceNameUpdate = updateCount;
@@ -302,7 +302,7 @@ static int shm_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceLis
 
         if (track->streamInfo.type == EVENT_STREAM_TYPE && !nameUpdated)
             continue;
-        
+
         if (! sdl_accept_frame(listener, i, frameInfo))
             continue;
 
@@ -413,7 +413,7 @@ static int shm_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceLis
         if (track->streamInfo.type == EVENT_STREAM_TYPE)
         {
             assert(nameUpdated);
-            
+
             SourceEvent event;
             svt_set_name_update_event(&event, source->sourceName);
 
@@ -552,7 +552,7 @@ int shms_open(const char* channel_name, double timeout, SharedMemSource** source
         nexus_disconnect_from_shared_mem(&conn);
         connected = 0;
     }
-    
+
     /* (re-)connect to shared memory */
     /* If timeout is negative, loop forever until shared mem connection made */
     if (timeout < 0)
@@ -575,7 +575,7 @@ int shms_open(const char* channel_name, double timeout, SharedMemSource** source
     }
     connected = 1;
     ml_log_info("Connected to shared memory\n");
-    
+
 
     captureFormat = primary ? conn.pctl->pri_video_format : conn.pctl->sec_video_format;
 
@@ -614,7 +614,7 @@ int shms_open(const char* channel_name, double timeout, SharedMemSource** source
         width = conn.pctl->sec_width;
         height = conn.pctl->sec_height;
     }
-    
+
     newSource->numAudioTracks = conn.pctl->num_audio_tracks;
 
     switch (conn.pctl->default_tc_type)
@@ -717,7 +717,7 @@ int shms_open(const char* channel_name, double timeout, SharedMemSource** source
     for (i = 0; i < newSource->numAudioTracks; i++)
     {
         sprintf(nameBuf, "Shared Memory Audio %d\n", i);
-        
+
         CHK_OFAIL(initialise_stream_info(&newSource->tracks[newSource->numTracks].streamInfo));
         newSource->tracks[newSource->numTracks].streamInfo.type = SOUND_STREAM_TYPE;
         newSource->tracks[newSource->numTracks].streamInfo.format = PCM_FORMAT;
@@ -779,7 +779,7 @@ int shms_open(const char* channel_name, double timeout, SharedMemSource** source
 
         newSource->numTracks++;
     }
-        
+
 
     /* event track */
     CHK_OFAIL(initialise_stream_info(&newSource->tracks[newSource->numTracks].streamInfo));
@@ -819,7 +819,7 @@ int shms_get_default_timecode(SharedMemSource* source, TimecodeType* type, Timec
 {
     *type = source->defaultTCType;
     *subType = source->defaultTCSubType;
-    
+
     return 1;
 }
 

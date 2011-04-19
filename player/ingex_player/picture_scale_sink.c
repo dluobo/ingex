@@ -1,5 +1,5 @@
 /*
- * $Id: picture_scale_sink.c,v 1.2 2011/02/18 16:28:52 john_f Exp $
+ * $Id: picture_scale_sink.c,v 1.3 2011/04/19 10:03:53 philipn Exp $
  *
  * Copyright (C) 2010 British Broadcasting Corporation, All Rights Reserved
  *
@@ -781,7 +781,7 @@ static int scale_picture(PictureScaleSink *sink, ScaledStreamGroup *group, Scale
 
     int x_scale = INPUT_STREAM->output_stream_info.width / scaled_stream->output_stream_info.width;
     int y_scale = (INPUT_STREAM->output_stream_info.height - scaled_stream->y_display_offset) / scaled_stream->output_stream_info.height;
-    
+
     if (x_scale * scaled_stream->output_stream_info.width == INPUT_STREAM->output_stream_info.width &&
         y_scale * scaled_stream->output_stream_info.height ==
                 (INPUT_STREAM->output_stream_info.height - scaled_stream->y_display_offset) - scaled_stream->y_display_offset)
@@ -817,7 +817,7 @@ static int crop_picture(ScaledStreamGroup *group, ScaledStream *scaled_stream)
     int output_width = input_width;
     int output_height = input_height - scaled_stream->y_display_offset;
     int y_offset = scaled_stream->y_display_offset;
-    
+
     switch (INPUT_STREAM->output_stream_info.format)
     {
         case UYVY_FORMAT:
@@ -882,7 +882,7 @@ static int pss_accept_stream(void *data, const StreamInfo *stream_info)
             stream_info->format != YUV422_FORMAT &&
             stream_info->format != YUV420_FORMAT))
     {
-        /* scaling of input type/format not supported */ 
+        /* scaling of input type/format not supported */
         return msk_accept_stream(sink->target_sink, stream_info);
     }
 
@@ -903,9 +903,9 @@ static int pss_accept_stream(void *data, const StreamInfo *stream_info)
         init_scale_stream_group(sink, &group, 0, stream_info);
 
         /* split streams */
-        
+
         int split_yoffset = find_display_yoffset(sink, stream_info);
-        
+
         init_split_stream_info(&group, split_yoffset, QUAD_SPLIT, &mod_stream_info);
         result = msk_accept_stream(sink->target_sink, &mod_stream_info) || result;
 
@@ -914,7 +914,7 @@ static int pss_accept_stream(void *data, const StreamInfo *stream_info)
 
 
         /* raster scale and associated split streams */
-        
+
         if (sink->raster != PSS_UNKNOWN_RASTER) {
             size_t raster_scale_index = find_raster_scale_index(sink, stream_info);
 
@@ -953,7 +953,7 @@ static int pss_register_stream(void *data, int stream_id, const StreamInfo *stre
             stream_info->format != YUV422_FORMAT &&
             stream_info->format != YUV420_FORMAT))
     {
-        /* scaling of input type/format not supported */ 
+        /* scaling of input type/format not supported */
         return msk_register_stream(sink->target_sink, stream_id, stream_info);
     }
 
@@ -963,7 +963,7 @@ static int pss_register_stream(void *data, int stream_id, const StreamInfo *stre
 
     /* raster scale and associated split streams */
     /* Note: register raster scale streams first so that it gets picked up by DVS sink */
-    
+
     if (sink->raster != PSS_UNKNOWN_RASTER) {
         size_t raster_scale_index = find_raster_scale_index(sink, &INPUT_STREAM->output_stream_info);
         if (raster_scale_index != (size_t)(-1)) {
@@ -993,7 +993,7 @@ static int pss_register_stream(void *data, int stream_id, const StreamInfo *stre
 
     if (group->registered_input) {
         int split_yoffset = find_display_yoffset(sink, &INPUT_STREAM->output_stream_info);
-        
+
         init_split_stream_info(group, split_yoffset, QUAD_SPLIT, &mod_stream_info);
         if (msk_register_stream(sink->target_sink, sink->next_output_stream_id, &mod_stream_info)) {
             CHK_OFAIL(add_split_stream(sink, group, split_yoffset, QUAD_SPLIT));
@@ -1012,7 +1012,7 @@ static int pss_register_stream(void *data, int stream_id, const StreamInfo *stre
     }
 
     return 1;
-    
+
 fail:
     remove_last_stream_group(sink);
     return 0;
@@ -1086,7 +1086,7 @@ static int pss_get_stream_buffer(void *data, int stream_id, unsigned int buffer_
                                                                       &INPUT_STREAM->output_buffer);
         target_allocated_buffer = target_allocated_buffer || INPUT_STREAM->target_allocated_buffer;
     }
-    
+
     if (scaled_stream_target_allocated_buffer)
         *buffer = group->input_buffer;
     else if (INPUT_STREAM->target_allocated_buffer)
@@ -1131,7 +1131,7 @@ static int pss_receive_stream_frame(void *data, int stream_id, unsigned char *bu
                                                     buffer_size) || result;
         }
     }
-    
+
     ScaledStream *scaled_stream = group->scaled_streams;
     scaled_stream = scaled_stream->next; /* skip INPUT_STREAM */
     while (scaled_stream) {

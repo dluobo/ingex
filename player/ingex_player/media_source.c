@@ -1,5 +1,5 @@
 /*
- * $Id: media_source.c,v 1.7 2010/06/02 11:12:14 philipn Exp $
+ * $Id: media_source.c,v 1.8 2011/04/19 10:03:53 philipn Exp $
  *
  *
  *
@@ -286,7 +286,7 @@ int msc_get_id(MediaSource* source, int* sourceId)
     {
         return 0;
     }
-    
+
     *sourceId = streamInfo->sourceId;
     return 1;
 }

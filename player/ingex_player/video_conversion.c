@@ -1,5 +1,5 @@
 /*
- * $Id: video_conversion.c,v 1.6 2009/12/17 15:57:41 john_f Exp $
+ * $Id: video_conversion.c,v 1.7 2011/04/19 10:03:53 philipn Exp $
  *
  *
  *
@@ -765,7 +765,7 @@ void fill_black(StreamFormat format, int width, int height, unsigned char* image
             image[i + 9] = 0x02;
             image[i + 10] = 0x01;
             image[i + 11] = 0x20;
-            
+
             image[i + 12] = 0x40;
             image[i + 13] = 0x00;
             image[i + 14] = 0x08;

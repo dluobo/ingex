@@ -1,5 +1,5 @@
 /*
- * $Id: media_player_marks.h,v 1.1 2010/06/02 11:12:14 philipn Exp $
+ * $Id: media_player_marks.h,v 1.2 2011/04/19 10:03:53 philipn Exp $
  *
  * Copyright (C) 2010 British Broadcasting Corporation, All Rights Reserved
  *
@@ -55,7 +55,7 @@ typedef struct
     int count;
 
     unsigned int typeMask;
-    
+
     int64_t sourceLength;
 
     OSDMarksModel *marksModel;
@@ -68,7 +68,7 @@ typedef struct
     pthread_mutex_t mutex;
 
     OnScreenDisplay *osd;
-    
+
     int numMarkSelections;
     int activeMarkSelection;
     TimelineMarks timelineMarks[MAX_MARK_SELECTIONS];

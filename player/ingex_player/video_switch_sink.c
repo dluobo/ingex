@@ -1,5 +1,5 @@
 /*
- * $Id: video_switch_sink.c,v 1.12 2011/02/18 16:28:52 john_f Exp $
+ * $Id: video_switch_sink.c,v 1.13 2011/04/19 10:03:53 philipn Exp $
  *
  *
  *
@@ -58,7 +58,7 @@ typedef struct VideoStreamElement
 
     int sourceNameEventStreamIndex;
     char sourceName[64];
-    
+
     VideoStreamScaledElement scaledStreams[MAX_SPLITS];
     int numScaledStreams;
 } VideoStreamElement;

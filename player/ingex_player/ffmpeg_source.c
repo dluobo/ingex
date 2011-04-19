@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_source.c,v 1.9 2010/12/03 14:27:35 john_f Exp $
+ * $Id: ffmpeg_source.c,v 1.10 2011/04/19 10:03:53 philipn Exp $
  *
  *
  *
@@ -563,7 +563,7 @@ static int open_video_stream(FFMPEGSource* source, int sourceId, int avStreamInd
     {
         sampleAspectRatio = codecContext->sample_aspect_ratio;
     }
-        
+
     if (sampleAspectRatio.num == 0 || sampleAspectRatio.den == 0)
     {
         /* assume 4:3 */
@@ -637,7 +637,7 @@ static int open_video_stream(FFMPEGSource* source, int sourceId, int avStreamInd
             }
         }
     }
-    
+
     if (source->forceUYVYFormat)
     {
         videoStream->outputStream.streamInfo.format = UYVY_FORMAT;

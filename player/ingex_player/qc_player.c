@@ -1,5 +1,5 @@
 /*
- * $Id: qc_player.c,v 1.18 2011/01/10 17:09:30 john_f Exp $
+ * $Id: qc_player.c,v 1.19 2011/04/19 10:05:55 philipn Exp $
  *
  *
  *
@@ -91,7 +91,7 @@ typedef struct
 #ifndef DISABLE_X11_SUPPORT
     X11DisplaySink* x11DisplaySink;
     X11XVDisplaySink* x11XVDisplaySink;
-    X11WindowListener x11WindowListener;    
+    X11WindowListener x11WindowListener;
     DualSink* dualSink;
 #endif
     DVSSink* dvsSink;
@@ -674,7 +674,7 @@ static int play_balls(QCPlayer* player, Options* options)
     osd_set_mark_display(msk_get_osd(player->mediaSink), &player->markConfigs);
 
     ply_enable_clip_marks(player->mediaPlayer, options->clipMarkType);
-    
+
 #ifndef DISABLE_X11_SUPPORT
     /* reconnect the X11 display keyboard and mouse input */
 
@@ -884,9 +884,9 @@ static int play_archive_mxf_file(QCPlayer* player, int argc, const char** argv, 
     osd_set_mark_display(msk_get_osd(player->mediaSink), &player->markConfigs);
 
     ply_enable_clip_marks(player->mediaPlayer, options->clipMarkType);
-    
+
     ply_set_qc_quit_validator(player->mediaPlayer, validate_player_quit, player);
-    
+
     mc_set_vtr_error_level(ply_get_media_control(player->mediaPlayer), (VTRErrorLevel)options->vtrErrorLevel);
     mc_show_vtr_error_level(ply_get_media_control(player->mediaPlayer), options->showVTRErrorLevel);
 
@@ -1086,7 +1086,7 @@ static int reset_player(QCPlayer* player, Options* options)
         player->x11DisplaySink = NULL;
         player->x11XVDisplaySink = NULL;
         player->dualSink = NULL;
-#endif        
+#endif
         player->dvsSink = NULL;
     }
 

@@ -1,5 +1,5 @@
 /*
- * $Id: overlay.c,v 1.2 2010/08/27 17:41:32 john_f Exp $
+ * $Id: overlay.c,v 1.3 2011/04/19 10:03:53 philipn Exp $
  *
  * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
@@ -44,17 +44,17 @@ static inline int min(int a, int b)
 static int alloc_overlay_workspace(OverlayWorkspace *workspace, int width, int height)
 {
     int required_size = width * height * 2;
-    
+
     if (workspace->image && workspace->image_size < required_size) {
         free(workspace->image);
         workspace->image = NULL;
     }
-    
+
     if (!workspace->image) {
         workspace->image = (unsigned short*)malloc(required_size * sizeof(unsigned short));
         workspace->image_size = required_size;
     }
-    
+
     return workspace->image != NULL;
 }
 
@@ -218,49 +218,49 @@ static int apply_overlay_10bit(overlay *ovly, unsigned char *image, int width, i
     int target_x0, target_y0, target_x1, target_y1;
     int target_width, target_height;
     unsigned char *source_image;
-    
-    
+
+
     // select target image area for applying the overlay
-    
+
     target_x0 = (x / 12) * 12; // round down to 12 pixel pack
     target_y0 = y;
     target_x1 = ((x + ovly->w + 11) / 12) * 12; // round up to 12 pixel pack
     target_y1 = y + ovly->h;
-    
+
     target_x0 = max(target_x0, 0);
     target_y0 = max(target_y0, 0);
     target_x1 = min(target_x1, width);
     target_y1 = min(target_y1, height);
-    
+
     target_width = target_x1 - target_x0;
     target_height = target_y1 - target_y0;
-    
+
     if (target_width <= 0 || target_height <= 0)
         return 1;
-    
+
     target_linestride_y = target_width * 2;
     target_pixelstride_y = 2;
     target_linestride_uv = target_linestride_y;
     target_pixelstride_uv = 4;
-    
+
 
     // unpack the target image area
 
     if (!alloc_overlay_workspace(workspace, target_width, target_height))
         return 0;
-    
+
     source_image = image + (target_y0 * ((width + 5) / 6 * 16)) +
                            ((target_x0 + 5) / 6 * 16);
-    
+
     unpack_10bit_image(workspace->image, source_image, target_width * 2, (width + 5) / 6 * 16,
                        target_width, target_height);
     image_upack_u = workspace->image;
     image_upack_y = workspace->image + 1;
     image_upack_v = workspace->image + 2;
-    
+
 
     // apply overlay to target image area
-    
+
     // set clipped start and end points
     x0 = max(x, 0);
     y0 = max(y, 0);
@@ -332,13 +332,13 @@ static int apply_overlay_10bit(overlay *ovly, unsigned char *image, int width, i
         dstLine += target_linestride_uv;
         dstLine2 += target_linestride_uv;
     }
-    
+
 
     // pack target area back to source
-    
+
     pack_10bit_image(source_image, workspace->image, (width + 5) / 6 * 16, target_width * 2,
                      target_width, target_height);
-    
+
     return 1;
 }
 
@@ -353,7 +353,7 @@ void clear_overlay_workspace(OverlayWorkspace *workspace)
 {
     if (workspace->image)
         free(workspace->image);
-    
+
     init_overlay_workspace(workspace);
 }
 
@@ -363,10 +363,10 @@ int apply_overlay(overlay *ovly, unsigned char *image, StreamFormat format, int 
 {
     if (format == UYVY_10BIT_FORMAT)
         return apply_overlay_10bit(ovly, image, width, height, x, y, colour_y, colour_u, colour_v, box, workspace);
-    
-    
+
+
     YUV_frame frame;
-    
+
     switch (format)
     {
         case UYVY_FORMAT:
@@ -381,9 +381,9 @@ int apply_overlay(overlay *ovly, unsigned char *image, StreamFormat format, int 
         default:
             return 0;
     }
-    
+
     CHK_ORET(add_overlay(ovly, &frame, x, y, colour_y, colour_u, colour_v, box) == YUV_OK);
-    
+
     return 1;
 }
 
@@ -400,7 +400,7 @@ int apply_timecode_overlay(timecode_data* tc_data, int hr, int mn, int sc, int f
         sprintf(tc_str, "%02d:%02d:%02d;%02d", hr, mn, sc, fr);
     else
         sprintf(tc_str, "%02d:%02d:%02d:%02d", hr, mn, sc, fr);
-    
+
     // legitimise start point
     if (x < 0) x = 0;
     if (y < 0) y = 0;
@@ -413,7 +413,7 @@ int apply_timecode_overlay(timecode_data* tc_data, int hr, int mn, int sc, int f
                                x + offset, y, colour_y, colour_u, colour_v, box, workspace));
         offset += tc_data->tc_ovly[c].w;
     }
-    
+
     return 1;
 }
 

@@ -1,5 +1,5 @@
 /*
- * $Id: x11_common.c,v 1.10 2010/10/26 18:28:23 john_f Exp $
+ * $Id: x11_common.c,v 1.11 2011/04/19 10:03:53 philipn Exp $
  *
  *
  *
@@ -190,7 +190,7 @@ int x11c_initialise(X11Common* x11Common, int reviewDuration, int haveXV, OnScre
     }
 
     CHK_ORET(XInitThreads() != 0);
-    
+
     CHK_ORET(init_mutex(&x11Common->eventMutex));
 
     CHK_ORET(create_joinable_thread(&x11Common->processEventThreadId, process_event_thread, x11Common));
@@ -468,7 +468,7 @@ int x11c_process_events(X11Common* x11Common)
     gettimeofday(&x11Common->processEventTime, NULL);
 
     XLockDisplay(x11Common->windowInfo.display);
-    
+
     if (!XPending(x11Common->windowInfo.display))
     {
         processedEvent = 0;
@@ -575,7 +575,7 @@ int x11c_process_events(X11Common* x11Common)
     }
 
     XUnlockDisplay(x11Common->windowInfo.display);
-    
+
     PTHREAD_MUTEX_UNLOCK(&x11Common->eventMutex)
 
     return processedEvent;
@@ -651,7 +651,7 @@ int x11c_shared_memory_available(X11Common* common)
     XLockDisplay(common->windowInfo.display);
     result = XShmQueryExtension(common->windowInfo.display);
     XUnlockDisplay(common->windowInfo.display);
-    
+
     if (!result)
     {
         return 0;

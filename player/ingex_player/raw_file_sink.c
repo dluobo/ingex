@@ -1,5 +1,5 @@
 /*
- * $Id: raw_file_sink.c,v 1.8 2010/10/18 17:56:14 john_f Exp $
+ * $Id: raw_file_sink.c,v 1.9 2011/04/19 10:03:53 philipn Exp $
  *
  *
  *
@@ -58,7 +58,7 @@ typedef struct
     /* Type and format of stream to accept. */
     StreamType acceptStreamType;
     StreamFormat acceptStreamFormat;
-    
+
     /* listener */
     MediaSinkListener* listener;
 
@@ -118,20 +118,20 @@ static void rms_unregister_listener(void* data, MediaSinkListener* listener)
 static int rms_accept_stream(void* data, const StreamInfo* streamInfo)
 {
     RawFileSink* sink = (RawFileSink*) data;
-    
+
     /* reject streams intended for the video split */
     if (streamInfo->isSplitScaledPicture)
     {
         return 0;
     }
-    
+
     /* make sure the stream type matches the accept type for the sink, if set */
-    if (sink->acceptStreamType != NULL && 
-        streamInfo->type != sink->acceptStreamType) 
+    if (sink->acceptStreamType != NULL &&
+        streamInfo->type != sink->acceptStreamType)
     {
         return 0;
     }
-    
+
     /* make sure the stream format matches the accept for the sink, if set */
     if (sink->acceptStreamFormat != NULL)
     {
@@ -139,7 +139,7 @@ static int rms_accept_stream(void* data, const StreamInfo* streamInfo)
         {
             return 0;
         }
-    } 
+    }
     else
     {
         /* make sure the picture is UYVY/UYVY-10bit/YUV422/YUV420/YUV411/YUV444 */
@@ -153,15 +153,15 @@ static int rms_accept_stream(void* data, const StreamInfo* streamInfo)
         {
             return 0;
         }
-        
+
         /* make sure the sound is PCM */
         if (streamInfo->type == SOUND_STREAM_TYPE &&
             streamInfo->format != PCM_FORMAT)
         {
             return 0;
-        }   
+        }
     }
-    
+
     return 1;
 }
 
@@ -327,7 +327,7 @@ static void rms_close(void* data)
 }
 
 
-int rms_open(const char* filenameTemplate, StreamType rawType, 
+int rms_open(const char* filenameTemplate, StreamType rawType,
     StreamFormat rawFormat, MediaSink** sink)
 {
     RawFileSink* newSink;
