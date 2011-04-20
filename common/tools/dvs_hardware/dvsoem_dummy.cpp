@@ -1,5 +1,5 @@
 /*
- * $Id: dvsoem_dummy.cpp,v 1.10 2010/10/08 16:43:40 john_f Exp $
+ * $Id: dvsoem_dummy.cpp,v 1.11 2011/04/20 13:52:35 john_f Exp $
  *
  * Implement a debug-only DVS hardware library for testing.
  *
@@ -434,6 +434,9 @@ static void setup_source_buf(DvsCard * dvs)
     // Setup fifo_buffer which contains offsets to audio buffers
     dvs->fifo_buffer.audio[0].addr[0] = (char*)0 + video_size;
     dvs->fifo_buffer.audio[0].addr[1] = (char*)0 + video_size + 0x4000;
+    dvs->fifo_buffer.audio[0].addr[2] = (char*)0 + video_size + 2 * 0x4000;
+    dvs->fifo_buffer.audio[0].addr[3] = (char*)0 + video_size + 3 * 0x4000;
+    dvs->fifo_buffer.audio[0].size = 0x3c00;
 }
 
 // SV implementations
