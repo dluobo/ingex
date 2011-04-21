@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: colours.h,v 1.1 2011/04/18 09:37:34 john_f Exp $             *
+ *   $Id: colours.h,v 1.2 2011/04/21 15:57:17 john_f Exp $             *
  *                                                                         *
  *   Copyright (C) 2011 British Broadcasting Corporation                   *
  *   - all rights reserved.                                                *
@@ -25,7 +25,7 @@
 #define _COLOURS_H_
 
 #define BUTTON_WARNING_COLOUR wxColour(0xFF, 0x80, 0x00)
-#define RECORD_BUTTON_ENABLED_COLOUR wxColour(wxT("#B00000"))
+#define RECORD_BUTTON_ENABLED_COLOUR wxColour(wxT("#FFB9B9")) // pink
 #define RECORD_BUTTON_RECORDING_COLOUR wxColour(wxT("RED"))
 #define VIDEO_TRACK_COLOUR wxColour(wxT("#00A000"))
 #define AUDIO_TRACK_COLOUR wxColour(wxT("#0000B0"))
@@ -33,3 +33,4 @@
 #define NO_SIGNAL_COLOUR wxColour(wxT("#FF8000"))
 
 #endif
+
