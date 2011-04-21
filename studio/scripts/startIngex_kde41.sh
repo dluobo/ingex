@@ -234,7 +234,6 @@ if [ $CAPTURE -ge 1 ] ; then
         "Capture (dvs)" \
         "$capture_path" \
         "sudo nice --10 ./dvs_sdi -c $CAPTURE_CHANNELS -mode $CAPTURE_MODE -f $CAPTURE_PRIMARY_BUFFER -s $CAPTURE_SECONDARY_BUFFER -mc 0 -tt $CAPTURE_TIMECODE $CAPTURE_OPTIONS"
-    return 1
   fi
 fi
 
