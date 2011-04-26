@@ -1,5 +1,5 @@
 /*
- * $Id: on_screen_display.c,v 1.21 2011/04/19 10:08:48 philipn Exp $
+ * $Id: on_screen_display.c,v 1.22 2011/04/26 13:42:15 philipn Exp $
  *
  *
  *
@@ -2363,12 +2363,26 @@ static float osdd_get_position_in_progress_bar(void* data, int x, int y)
         return -1.0;
     }
 
-    /* TODO: need to keep this in sync with the positioning and size of the progress bar */
+    int yPosAdjustment = 0;
+
+    /* y position adjustment for elements associated with the timecode and progress bar */
+    switch (osdd->state->osdPlayStatePosition)
+    {
+        case OSD_PS_POSITION_TOP:
+            yPosAdjustment = - 10;
+            break;
+        case OSD_PS_POSITION_MIDDLE:
+            yPosAdjustment = - 5;
+            break;
+        case OSD_PS_POSITION_BOTTOM:
+            yPosAdjustment = 0;
+            break;
+    }
 
     float position;
 
     int progressBarXPos = (osdd->imageWidth - osdd->progressBarOverlay.w) / 2;
-    int progressBarYPos = (osdd->imageHeight * 13) / 16 - osdd->timecodeTextData.height / 2 +
+    int progressBarYPos = (osdd->imageHeight * (13 + yPosAdjustment)) / 16 - osdd->timecodeTextData.height / 2 +
         osdd->timecodeTextData.height + 20 + osdd->progressBarOverlay.h / 2;
     if (x >= progressBarXPos - PROGRESS_BAR_REGION_X_MARGIN &&
         x <= progressBarXPos + osdd->progressBarOverlay.w + PROGRESS_BAR_REGION_X_MARGIN &&
