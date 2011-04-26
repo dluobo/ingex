@@ -1,5 +1,5 @@
 /*
- * $Id: mxf_avid.c,v 1.15 2011/04/19 09:46:28 philipn Exp $
+ * $Id: mxf_avid.c,v 1.16 2011/04/26 15:41:30 philipn Exp $
  *
  * Avid data model extensions and utilities
  *
@@ -30,6 +30,9 @@
 
 #include <time.h>
 #include <windows.h>
+
+/* Visual C++ doesn't have snprintf */
+#define snprintf _snprintf
 
 #else
 
@@ -719,10 +722,10 @@ void mxf_regtest_generate_aafsdk_umid(mxfUMID* umid)
     static uint32_t count = 1;
 
     memset(umid, 0, sizeof(*umid));
-    umid->octet28 = (count >> 24) & 0xff;
-    umid->octet29 = (count >> 16) & 0xff;
-    umid->octet30 = (count >> 8) & 0xff;
-    umid->octet31 = count & 0xff;
+    umid->octet28 = (uint8_t)((count >> 24) & 0xff);
+    umid->octet29 = (uint8_t)((count >> 16) & 0xff);
+    umid->octet30 = (uint8_t)((count >> 8) & 0xff);
+    umid->octet31 = (uint8_t)(count & 0xff);
 
     count++;
 }
@@ -732,10 +735,10 @@ void mxf_regtest_generate_old_aafsdk_umid(mxfUMID* umid)
     static uint32_t count = 1;
 
     memset(umid, 0, sizeof(*umid));
-    umid->octet28 = (count >> 24) & 0xff;
-    umid->octet29 = (count >> 16) & 0xff;
-    umid->octet30 = (count >> 8) & 0xff;
-    umid->octet31 = count & 0xff;
+    umid->octet28 = (uint8_t)((count >> 24) & 0xff);
+    umid->octet29 = (uint8_t)((count >> 16) & 0xff);
+    umid->octet30 = (uint8_t)((count >> 8) & 0xff);
+    umid->octet31 = (uint8_t)(count & 0xff);
 
     count++;
 }
