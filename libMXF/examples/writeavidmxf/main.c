@@ -1,5 +1,5 @@
 /*
- * $Id: main.c,v 1.24 2011/01/10 17:05:15 john_f Exp $
+ * $Id: main.c,v 1.25 2011/04/26 15:42:48 philipn Exp $
  *
  * Test writing video and audio to MXF files supported by Avid editing software
  *
@@ -24,6 +24,18 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+
+#if defined(_MSC_VER)
+#if (_MSC_VER < 1400)
+#   include <io.h>
+#   define fseeko(stream, offset, whence)  _lseeki64(fileno(stream), offset, whence)
+#   define ftello(stream)                  _telli64(fileno(stream))
+#else
+/* 64-bit ftell and fseek were introduced in Visual C++ 2005 */
+#   define fseeko _fseeki64
+#   define ftello _ftelli64
+#endif
+#endif
 
 #include <write_avid_mxf.h>
 #include <mxf/mxf.h>
@@ -60,8 +72,8 @@ typedef struct
 typedef struct
 {
     FILE* file;
-    size_t dataOffset;
-    size_t dataSize;
+    int64_t dataOffset;
+    int64_t dataSize;
     
     uint16_t numAudioChannels;
     mxfRational audioSamplingRate;
@@ -70,7 +82,7 @@ typedef struct
 
     int bytesPerSample;
 
-    size_t totalRead;
+    int64_t totalRead;
 } WAVInput;
 
 typedef struct
@@ -78,14 +90,14 @@ typedef struct
     AvidMJPEGResolution resolution;
     
     unsigned char* buffer;
-    long bufferSize;
-    long position;
-    long prevPosition;
-    long dataSize;
+    uint32_t bufferSize;
+    uint32_t position;
+    uint32_t prevPosition;
+    uint32_t dataSize;
     
     int endOfField;
     int field2;
-    long skipCount;
+    uint32_t skipCount;
     int haveLenByte1;
     int haveLenByte2;
     // states
@@ -117,10 +129,10 @@ typedef struct
     EssenceInfo essenceInfo;
     const char* filename;
     FILE* file;
-    unsigned long frameSize;
-    unsigned long frameSizeSeq[10];
-    unsigned long minFrameSize;
-    unsigned long availFrameSize;
+    uint32_t frameSize;
+    uint32_t frameSizeSeq[10];
+    uint32_t minFrameSize;
+    uint32_t availFrameSize;
     int frameSeqLen;
     int seqIndex;
     unsigned char* buffer;
@@ -162,7 +174,7 @@ static int get_dv_stream_info(const char* filename, Input* input)
 {
     FILE* inputFile;
     unsigned char buffer[DV_DIF_SEQUENCE_SIZE];
-    size_t result;
+    uint32_t result;
     unsigned char byte;
     int isIEC;
     
@@ -173,7 +185,7 @@ static int get_dv_stream_info(const char* filename, Input* input)
         return 0;
     }
     
-    result = fread(buffer, DV_DIF_SEQUENCE_SIZE, 1, inputFile);
+    result = (uint32_t)fread(buffer, DV_DIF_SEQUENCE_SIZE, 1, inputFile);
     fclose(inputFile);
     if (result != 1)
     {
@@ -289,7 +301,7 @@ static int get_dv_stream_info(const char* filename, Input* input)
 
 /* TODO: have a problem if start-of-frame marker not found directly after end-of-frame */
 static int read_next_mjpeg_image_data(FILE* file, MJPEGState* state, 
-    unsigned char** dataOut, long* dataOutSize, int* haveImage)
+    unsigned char** dataOut, uint32_t* dataOutSize, int* haveImage)
 {
     *haveImage = 0;
     
@@ -301,7 +313,7 @@ static int read_next_mjpeg_image_data(FILE* file, MJPEGState* state,
             return 0;
         }
         
-        if ((state->dataSize = (long)fread(state->buffer, 1, state->bufferSize, file)) == 0)
+        if ((state->dataSize = (uint32_t)fread(state->buffer, 1, state->bufferSize, file)) == 0)
         {
             /* EOF if nothing was read */
             return 0;
@@ -323,7 +335,7 @@ static int read_next_mjpeg_image_data(FILE* file, MJPEGState* state,
                 else
                 {
                     fprintf(stderr, "Warning: MJPEG image start is non-0xFF byte - trailing data ignored\n");
-                    fprintf(stderr, "Warning: near file offset %ld\n", ftell(file));
+                    fprintf(stderr, "Warning: near file offset %"PFi64"\n", ftello(file));
                     return 0;
                 }
                 break;
@@ -429,7 +441,7 @@ static uint16_t get_uint16_le(unsigned char* buffer)
 
 static int prepare_wave_file(const char* filename, WAVInput* input)
 {
-    size_t size = 0;
+    int64_t size = 0;
     int haveFormatData = 0;
     int haveWAVEData = 0;
     unsigned char buffer[512];
@@ -510,7 +522,7 @@ static int prepare_wave_file(const char* filename, WAVInput* input)
             }
             
             
-            if (fseek(input->file, (long)(size - 14 - 2), SEEK_CUR) < 0)
+            if (fseeko(input->file, size - 14 - 2, SEEK_CUR) < 0)
             {
                 fprintf(stderr, "Failed to seek to end of wav chunk\n");
                 return 0;
@@ -522,9 +534,9 @@ static int prepare_wave_file(const char* filename, WAVInput* input)
         {
             /* get the wave data offset and size */
             
-            input->dataOffset = ftell(input->file);
+            input->dataOffset = ftello(input->file);
             input->dataSize = size;
-            if (fseek(input->file, (long)size, SEEK_CUR) < 0)
+            if (fseeko(input->file, size, SEEK_CUR) < 0)
             {
                 fprintf(stderr, "Failed to seek to end of wav chunk\n");
                 return 0;
@@ -533,7 +545,7 @@ static int prepare_wave_file(const char* filename, WAVInput* input)
         }
         else
         {
-            if (fseek(input->file, (long)size, SEEK_CUR) < 0)
+            if (fseeko(input->file, size, SEEK_CUR) < 0)
             {
                 fprintf(stderr, "Failed to seek to end of wav chunk\n");
                 return 0;
@@ -542,7 +554,7 @@ static int prepare_wave_file(const char* filename, WAVInput* input)
     }
 
     /* position at wave data */
-    if (fseek(input->file, (long)input->dataOffset, SEEK_SET) < 0)
+    if (fseeko(input->file, input->dataOffset, SEEK_SET) < 0)
     {
         fprintf(stderr, "Failed to seek to start of wav data chunk\n");
         return 0;
@@ -551,10 +563,10 @@ static int prepare_wave_file(const char* filename, WAVInput* input)
     return 1;
 }
 
-static int get_wave_data(WAVInput* input, unsigned char* buffer, size_t dataSize, size_t* numRead)
+static int get_wave_data(WAVInput* input, unsigned char* buffer, uint32_t dataSize, uint32_t* numRead)
 {
-    size_t numToRead;
-    size_t actualRead;
+    uint32_t numToRead;
+    uint32_t actualRead;
     
     if (input->totalRead >= input->dataSize)
     {
@@ -564,16 +576,16 @@ static int get_wave_data(WAVInput* input, unsigned char* buffer, size_t dataSize
     
     if (dataSize > input->dataSize - input->totalRead)
     {
-        numToRead = input->dataSize - input->totalRead;
+        numToRead = (uint32_t)(input->dataSize - input->totalRead);
     }
     else
     {
         numToRead = dataSize;
     }
     
-    if ((actualRead = fread(buffer, 1, numToRead, input->file)) != numToRead)
+    if ((actualRead = (uint32_t)fread(buffer, 1, numToRead, input->file)) != numToRead)
     {
-        fprintf(stderr, "Failed to read %"PFszt" bytes of wave data. Actual read was %"PFszt"\n", numToRead, actualRead);
+        fprintf(stderr, "Failed to read %u bytes of wave data. Actual read was %u\n", numToRead, actualRead);
         return 0;
     }
     
@@ -583,13 +595,13 @@ static int get_wave_data(WAVInput* input, unsigned char* buffer, size_t dataSize
     return 1;
 }
 
-static void get_wave_channel(WAVInput* input, size_t dataSize, unsigned char* buffer, 
+static void get_wave_channel(WAVInput* input, uint32_t dataSize, unsigned char* buffer, 
     int channelIndex, unsigned char* channelBuffer)
 {
-    size_t i;
+    uint32_t i;
     int j;
     int channelOffset = channelIndex * input->bytesPerSample;
-    size_t numSamples = dataSize / input->nBlockAlign;
+    uint32_t numSamples = dataSize / input->nBlockAlign;
     
     for (i = 0; i < numSamples; i++)
     {
@@ -966,11 +978,11 @@ int main(int argc, const char* argv[])
     int done = 0;
     int useLegacy = 0;
     int useLegacyUMID = 0;
-    size_t numRead;
+    uint32_t numRead;
     uint16_t numAudioChannels;
     int haveImage;
     unsigned char* data = NULL;
-    long dataSize;
+    uint32_t dataSize;
     PackageDefinitions* packageDefinitions = NULL;
     mxfUMID materialPackageUID = g_Null_UMID;
     mxfUMID filePackageUID = g_Null_UMID;
@@ -2479,11 +2491,11 @@ int main(int argc, const char* argv[])
                 /* read frame sizes corresponding to the sequence set in inputs[i].frameSizeSeq. The last frame can
                    be MAX_AUDIO_VARIATION samples more or less than the average. */
                 
-                unsigned long availFrameSize;
+                uint32_t availFrameSize;
                 uint32_t numSamples;
                 
                 /* read to get upto the maximum frame size in buffer */
-                numRead = fread(inputs[i].buffer + inputs[i].bufferOffset, 1, inputs[i].frameSize - inputs[i].bufferOffset, inputs[i].file);
+                numRead = (uint32_t)fread(inputs[i].buffer + inputs[i].bufferOffset, 1, inputs[i].frameSize - inputs[i].bufferOffset, inputs[i].file);
                 if (inputs[i].bufferOffset + numRead < inputs[i].frameSize)
                 {
                     /* last or incomplete frame */
@@ -2496,7 +2508,7 @@ int main(int argc, const char* argv[])
                     }
                     
                     /* frame size is the remaining samples */
-                    availFrameSize = ((inputs[i].bufferOffset + (uint32_t)numRead) / inputs[i].bytesPerSample) * inputs[i].bytesPerSample;
+                    availFrameSize = ((inputs[i].bufferOffset + numRead) / inputs[i].bytesPerSample) * inputs[i].bytesPerSample;
                 }
                 else
                 {
@@ -2548,7 +2560,7 @@ int main(int argc, const char* argv[])
                         }
 
                         /* frame size is the remaining samples */
-                        inputs[i].availFrameSize = ((inputs[i].bufferOffset + (uint32_t)numRead) / 
+                        inputs[i].availFrameSize = ((inputs[i].bufferOffset + numRead) / 
                             (inputs[i].wavInput.numAudioChannels * inputs[i].bytesPerSample)) * 
                             inputs[i].bytesPerSample;
                     }
