@@ -1,5 +1,5 @@
 /*
- * $Id: mxf_utils.c,v 1.8 2011/02/23 14:42:29 philipn Exp $
+ * $Id: mxf_utils.c,v 1.9 2011/04/26 15:40:39 philipn Exp $
  *
  * General purpose utilities
  *
@@ -437,10 +437,10 @@ void mxf_regtest_generate_uuid(mxfUUID* uuid)
     static uint32_t count = 1;
 
     memset(uuid, 0, sizeof(*uuid));
-    uuid->octet12 = (count >> 24) & 0xff;
-    uuid->octet13 = (count >> 16) & 0xff;
-    uuid->octet14 = (count >> 8) & 0xff;
-    uuid->octet15 = count & 0xff;
+    uuid->octet12 = (uint8_t)((count >> 24) & 0xff);
+    uuid->octet13 = (uint8_t)((count >> 16) & 0xff);
+    uuid->octet14 = (uint8_t)((count >> 8) & 0xff);
+    uuid->octet15 = (uint8_t)(count & 0xff);
 
     count++;
 }
@@ -455,10 +455,10 @@ void mxf_regtest_generate_umid(mxfUMID* umid)
     static uint32_t count = 1;
 
     memset(umid, 0, sizeof(*umid));
-    umid->octet28 = (count >> 24) & 0xff;
-    umid->octet29 = (count >> 16) & 0xff;
-    umid->octet30 = (count >> 8) & 0xff;
-    umid->octet31 = count & 0xff;
+    umid->octet28 = (uint8_t)((count >> 24) & 0xff);
+    umid->octet29 = (uint8_t)((count >> 16) & 0xff);
+    umid->octet30 = (uint8_t)((count >> 8) & 0xff);
+    umid->octet31 = (uint8_t)(count & 0xff);
 
     count++;
 }
@@ -468,28 +468,30 @@ void mxf_regtest_generate_key(mxfKey* key)
     static uint32_t count = 1;
 
     memset(key, 0, sizeof(*key));
-    key->octet12 = (count >> 24) & 0xff;
-    key->octet13 = (count >> 16) & 0xff;
-    key->octet14 = (count >> 8) & 0xff;
-    key->octet15 = count & 0xff;
+    key->octet12 = (uint8_t)((count >> 24) & 0xff);
+    key->octet13 = (uint8_t)((count >> 16) & 0xff);
+    key->octet14 = (uint8_t)((count >> 8) & 0xff);
+    key->octet15 = (uint8_t)(count & 0xff);
 
     count++;
 }
 
 size_t mxf_utf16_to_utf8(char *u8_str, const mxfUTF16Char *u16_str, size_t u8_size)
 {
-    if (!u16_str)
-        return (size_t)(-1);
-
-    size_t u8_len = utf8_strlen_from_utf16(u16_str);
-    if (u8_len == (size_t)(-1) || !u8_str)
-        return u8_len;
-
+    size_t u8_len;
     size_t convert_size = 0;
     const mxfUTF16Char *u16_str_ptr = u16_str;
     char *u8_str_ptr = u8_str;
     size_t u8_code_len = 0;
     size_t u16_code_len = 0;
+
+    if (!u16_str)
+        return (size_t)(-1);
+
+    u8_len = utf8_strlen_from_utf16(u16_str);
+    if (u8_len == (size_t)(-1) || !u8_str)
+        return u8_len;
+
     while (*u16_str_ptr && convert_size < u8_size) {
         if (utf16_code_to_utf8(u8_str_ptr, u8_size - convert_size, u16_str_ptr,
                                &u16_code_len, &u8_code_len) == (size_t)(-1))
@@ -509,18 +511,20 @@ size_t mxf_utf16_to_utf8(char *u8_str, const mxfUTF16Char *u16_str, size_t u8_si
 
 size_t mxf_utf8_to_utf16(mxfUTF16Char *u16_str, const char *u8_str, size_t u16_size)
 {
-    if (!u8_str)
-        return (size_t)(-1);
-
-    size_t u16_len = utf16_strlen_from_utf8(u8_str);
-    if (u16_len == (size_t)(-1) || !u16_str)
-        return u16_len;
-
+    size_t u16_len;
     size_t convert_size = 0;
     mxfUTF16Char *u16_str_ptr = u16_str;
     const char *u8_str_ptr = u8_str;
     size_t u8_code_len = 0;
     size_t u16_code_len = 0;
+
+    if (!u8_str)
+        return (size_t)(-1);
+
+    u16_len = utf16_strlen_from_utf8(u8_str);
+    if (u16_len == (size_t)(-1) || !u16_str)
+        return u16_len;
+
     while (*u8_str_ptr && convert_size < u16_size) {
         if (utf8_code_to_utf16(u16_str_ptr, u16_size - convert_size, u8_str_ptr,
                                &u8_code_len, &u16_code_len) == (size_t)(-1))
