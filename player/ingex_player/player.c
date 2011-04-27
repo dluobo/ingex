@@ -1,5 +1,5 @@
 /*
- * $Id: player.c,v 1.30 2011/04/19 10:08:48 philipn Exp $
+ * $Id: player.c,v 1.31 2011/04/27 10:57:48 john_f Exp $
  *
  *
  *
@@ -114,6 +114,8 @@ typedef enum
 typedef struct
 {
     InputType type;
+
+    int fallbackBlank;
 
     /* file input */
     const char* filename;
@@ -951,6 +953,7 @@ static void usage(const char* cmd)
     fprintf(stderr, "  --disable-audio          Disable audio from the next input\n");
     fprintf(stderr, "  --src-name <name>        Set the source name (eg. used to label the sources in the split sink)\n");
     fprintf(stderr, "  --clip-id <val>          Set the clip identifier for the source\n");
+    fprintf(stderr, "  --fallback-blank         Use a blank video source if fail to open the next input\n");
     fprintf(stderr, "\n");
 }
 
@@ -1084,6 +1087,7 @@ int main(int argc, const char **argv)
     VITCReaderSinkSource *vitcReaderSonk = NULL;
     int useDisplayDimensions = 0;
     OSDPlayStatePosition osdPlayStatePosition = OSD_PS_POSITION_BOTTOM;
+    int openInputFailed = 0;
 
     memset(inputs, 0, sizeof(inputs));
     memset(&markConfigs, 0, sizeof(markConfigs));
@@ -2383,6 +2387,17 @@ int main(int argc, const char **argv)
             inputs[numInputs].clipId = argv[cmdlnIndex + 1];
             cmdlnIndex += 2;
         }
+        else if (strcmp(argv[cmdlnIndex], "--fallback-blank") == 0)
+        {
+            if (cmdlnIndex + 1 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            inputs[numInputs].fallbackBlank = 1;
+            cmdlnIndex++;
+        }
         else
         {
             usage(argv[0]);
@@ -2498,6 +2513,7 @@ int main(int argc, const char **argv)
 
     for (i = 0; i < numInputs; i++)
     {
+        openInputFailed = 0;
         switch (inputs[i].type)
         {
             case MXF_INPUT:
@@ -2505,9 +2521,12 @@ int main(int argc, const char **argv)
                     markTimecodeBreaks, &mxfSource))
                 {
                     ml_log_error("Failed to open MXF file source\n");
-                    goto fail;
+                    openInputFailed = 1;
                 }
-                mediaSource = mxfs_get_media_source(mxfSource);
+                else
+                {
+                    mediaSource = mxfs_get_media_source(mxfSource);
+                }
                 break;
 
 #if !defined(DISABLE_SHARED_MEM_SOURCE)
@@ -2515,17 +2534,20 @@ int main(int argc, const char **argv)
                 if (!shms_open(inputs[i].shmSourceName, timeout, &shmSource))
                 {
                     ml_log_error("Failed to open shared memory source\n");
-                    goto fail;
+                    openInputFailed = 1;
                 }
-                shms_get_default_timecode(shmSource, &shmDefaultTimecodeType, &shmDefaultTimecodeSubType);
-                mediaSource = shms_get_media_source(shmSource);
+                else
+                {
+                    shms_get_default_timecode(shmSource, &shmDefaultTimecodeType, &shmDefaultTimecodeSubType);
+                    mediaSource = shms_get_media_source(shmSource);
+                }
                 break;
 #endif
             case UDP_INPUT:
                 if (!udp_open(inputs[i].filename, &mediaSource))
                 {
                     ml_log_error("Failed to open udp network source\n");
-                    goto fail;
+                    openInputFailed = 1;
                 }
                 break;
 
@@ -2533,7 +2555,7 @@ int main(int argc, const char **argv)
                 if (!rfs_open(inputs[i].filename, &inputs[i].streamInfo, &mediaSource))
                 {
                     ml_log_error("Failed to open raw file source\n");
-                    goto fail;
+                    openInputFailed = 1;
                 }
                 break;
 
@@ -2541,7 +2563,7 @@ int main(int argc, const char **argv)
                 if (!bbs_create(&inputs[i].streamInfo, 2160000, inputs[i].numBalls, &mediaSource))
                 {
                     ml_log_error("Failed to create bouncing balls source\n");
-                    goto fail;
+                    openInputFailed = 1;
                 }
                 break;
 
@@ -2549,7 +2571,7 @@ int main(int argc, const char **argv)
                 if (!bks_create(&inputs[i].streamInfo, 2160000, &mediaSource))
                 {
                     ml_log_error("Failed to create blank source\n");
-                    goto fail;
+                    openInputFailed = 1;
                 }
                 break;
 
@@ -2557,7 +2579,7 @@ int main(int argc, const char **argv)
                 if (!clp_create(&inputs[i].streamInfo, &inputs[i].streamInfo2, 2160000, &mediaSource))
                 {
                     ml_log_error("Failed to create clapper source\n");
-                    goto fail;
+                    openInputFailed = 1;
                 }
                 break;
 
@@ -2565,7 +2587,7 @@ int main(int argc, const char **argv)
                 if (!rds_open(inputs[i].filename, &mediaSource))
                 {
                     ml_log_error("Failed to open DV file source\n");
-                    goto fail;
+                    openInputFailed = 1;
                 }
                 break;
 
@@ -2574,13 +2596,35 @@ int main(int argc, const char **argv)
                 if (!fms_open(inputs[i].filename, numFFMPEGThreads, forceUYVYFormat, &mediaSource))
                 {
                     ml_log_error("Failed to open FFmpeg file source\n");
-                    goto fail;
+                    openInputFailed = 1;
                 }
                 break;
 
             default:
                 ml_log_error("Unknown input type (%d) for input %d\n", inputs[i].type, i);
                 assert(0);
+        }
+
+        /* fail or open a blank video source if fallback selected */
+        if (openInputFailed && inputs[i].fallbackBlank)
+        {
+            memset(&inputs[i], 0, sizeof(inputs[i]));
+            inputs[i].type = BLANK_INPUT;
+            inputs[i].streamInfo.type = PICTURE_STREAM_TYPE;
+
+            if (!bks_create(&inputs[i].streamInfo, 2160000, &mediaSource))
+            {
+                ml_log_error("Failed to create fallback blank video source\n");
+            }
+            else
+            {
+                ml_log_info("Opened fallback blank video source\n");
+                openInputFailed = 0;
+            }
+        }
+        if (openInputFailed)
+        {
+            goto fail;
         }
 
         /* disable audio */

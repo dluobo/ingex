@@ -1,5 +1,5 @@
 /*
- * $Id: LocalIngexPlayer.cpp,v 1.26 2011/04/19 10:15:18 philipn Exp $
+ * $Id: LocalIngexPlayer.cpp,v 1.27 2011/04/27 10:59:06 john_f Exp $
  *
  * Copyright (C) 2008-2010 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
@@ -288,6 +288,28 @@ static int parse_int_option(const map<string, string>& options, string name, int
         if (sscanf(value.c_str(), "%d", &result) != 1)
         {
             ml_log_warn("Failed to parse int option: '%s' = '%s'\n", name.c_str(), value.c_str());
+        }
+    }
+    return result;
+}
+
+static bool parse_bool_option(const map<string, string>& options, string name, bool defaultValue)
+{
+    bool result = defaultValue;
+    string value = get_option(options, name);
+    if (value.size() != 0)
+    {
+        if (value == "true")
+        {
+            result = true;
+        }
+        else if (value == "false")
+        {
+            result = false;
+        }
+        else
+        {
+            ml_log_warn("Failed to parse bool option: '%s' = '%s'\n", name.c_str(), value.c_str());
         }
     }
     return result;
@@ -991,6 +1013,7 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
             int numBalls = 5;
             int numFFMPEGThreads = 0;
             int sourceId;
+            bool fallbackBlank = parse_bool_option(input.options, "fallback_blank", false);
 
             memset(&streamInfo, 0, sizeof(streamInfo));
             memset(&soundStreamInfo, 0, sizeof(soundStreamInfo));
@@ -1005,9 +1028,15 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
                         ml_log_warn("Failed to open MXF file source '%s'\n", input.name.c_str());
                         opened.push_back(false);
                         inputsPresent.push_back(false);
-                        continue;
+                        if (!fallbackBlank || !createFallbackBlankSource(&mediaSource))
+                        {
+                            continue;
+                        }
                     }
-                    mediaSource = mxfs_get_media_source(mxfSource);
+                    else
+                    {
+                        mediaSource = mxfs_get_media_source(mxfSource);
+                    }
                 }
                 break;
 
@@ -1019,7 +1048,10 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
                         ml_log_error("Failed to open raw file source '%s'\n", input.name.c_str());
                         opened.push_back(false);
                         inputsPresent.push_back(false);
-                        continue;
+                        if (!fallbackBlank || !createFallbackBlankSource(&mediaSource))
+                        {
+                            continue;
+                        }
                     }
                 }
                 break;
@@ -1031,7 +1063,10 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
                         ml_log_error("Failed to open DV file source '%s'\n", input.name.c_str());
                         opened.push_back(false);
                         inputsPresent.push_back(false);
-                        continue;
+                        if (!fallbackBlank || !createFallbackBlankSource(&mediaSource))
+                        {
+                            continue;
+                        }
                     }
                 }
                 break;
@@ -1048,7 +1083,10 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
                         ml_log_warn("Failed to open FFmpeg file source '%s'\n", input.name.c_str());
                         opened.push_back(false);
                         inputsPresent.push_back(false);
-                        continue;
+                        if (!fallbackBlank || !createFallbackBlankSource(&mediaSource))
+                        {
+                            continue;
+                        }
                     }
                 }
                 break;
@@ -1062,32 +1100,43 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
                         ml_log_error("Failed to open shared memory source '%s'\n", input.name.c_str());
                         opened.push_back(false);
                         inputsPresent.push_back(false);
-                        continue;
-                    }
-                    mediaSource = shms_get_media_source(shmSource);
-
-                    // check whether all streams are disabled - if true, then source is closed
-                    int numStreams = msc_get_num_streams(mediaSource);
-                    int i;
-                    bool allDisabled = true;
-                    for (i = 0; i < numStreams; i++)
-                    {
-                        if (!msc_stream_is_disabled(mediaSource, i))
+                        if (!fallbackBlank || !createFallbackBlankSource(&mediaSource))
                         {
-                            allDisabled = false;
-                            break;
+                            continue;
                         }
                     }
-                    if (allDisabled)
+                    else
                     {
-                        msc_close(mediaSource);
-                        ml_log_warn("Closed shared memory source '%s'\n", input.name.c_str());
-                        opened.push_back(false);
-                        inputsPresent.push_back(false);
-                        continue;
+                        mediaSource = shms_get_media_source(shmSource);
+    
+                        // check whether all streams are disabled - if true, then source is closed
+                        int numStreams = msc_get_num_streams(mediaSource);
+                        int i;
+                        bool allDisabled = true;
+                        for (i = 0; i < numStreams; i++)
+                        {
+                            if (!msc_stream_is_disabled(mediaSource, i))
+                            {
+                                allDisabled = false;
+                                break;
+                            }
+                        }
+                        if (allDisabled)
+                        {
+                            msc_close(mediaSource);
+                            ml_log_warn("Closed shared memory source '%s'\n", input.name.c_str());
+                            opened.push_back(false);
+                            inputsPresent.push_back(false);
+                            if (!fallbackBlank || !createFallbackBlankSource(&mediaSource))
+                            {
+                                continue;
+                            }
+                        }
+                        else
+                        {
+                            shms_get_default_timecode(shmSource, &_shmDefaultTCType, &_shmDefaultTCSubType);
+                        }
                     }
-
-                    shms_get_default_timecode(shmSource, &_shmDefaultTCType, &_shmDefaultTCSubType);
                 }
                 break;
 #endif
@@ -1099,7 +1148,10 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
                         ml_log_warn("Failed to open UDP source '%s'\n", input.name.c_str());
                         opened.push_back(false);
                         inputsPresent.push_back(false);
-                        continue;
+                        if (!fallbackBlank || !createFallbackBlankSource(&mediaSource))
+                        {
+                            continue;
+                        }
                     }
                 }
                 break;
@@ -1114,7 +1166,10 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
                         ml_log_error("Failed to create bouncing balls source\n");
                         opened.push_back(false);
                         inputsPresent.push_back(false);
-                        continue;
+                        if (!fallbackBlank || !createFallbackBlankSource(&mediaSource))
+                        {
+                            continue;
+                        }
                     }
                 }
                 break;
@@ -1128,7 +1183,10 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
                         ml_log_error("Failed to create blank source\n");
                         opened.push_back(false);
                         inputsPresent.push_back(false);
-                        continue;
+                        if (!fallbackBlank || !createFallbackBlankSource(&mediaSource))
+                        {
+                            continue;
+                        }
                     }
                 }
                 break;
@@ -1143,7 +1201,10 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
                         ml_log_error("Failed to create clapper source\n");
                         opened.push_back(false);
                         inputsPresent.push_back(false);
-                        continue;
+                        if (!fallbackBlank || !createFallbackBlankSource(&mediaSource))
+                        {
+                            continue;
+                        }
                     }
                 }
                 break;
@@ -2629,5 +2690,21 @@ void LocalIngexPlayer::updateListenerData(LocalIngexPlayerListenerData* listener
     }
 
     listenerData->setVersion(_sourceIdToIndexVersion);
+}
+
+bool LocalIngexPlayer::createFallbackBlankSource(MediaSource** mediaSource)
+{
+    StreamInfo streamInfo;
+    memset(&streamInfo, 0, sizeof(streamInfo));
+    streamInfo.type = PICTURE_STREAM_TYPE;
+
+    if (!bks_create(&streamInfo, 2160000, mediaSource))
+    {
+        ml_log_error("Failed to create fallback blank source\n");
+        return false;
+    }
+
+    ml_log_info("Opened fallback blank video source\n");
+    return true;
 }
 

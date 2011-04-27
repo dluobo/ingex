@@ -1,5 +1,5 @@
 /*
- * $Id: LocalIngexPlayer.h,v 1.21 2011/04/19 10:15:18 philipn Exp $
+ * $Id: LocalIngexPlayer.h,v 1.22 2011/04/27 10:59:06 john_f Exp $
  *
  * Copyright (C) 2008-2010 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
@@ -43,12 +43,13 @@ class LocalIngexPlayerListenerData;
 /* options for each PlayerInputType are as follows:
 
     MXF_INPUT:
-        none
+        "fallback_blank": "true", "false" (default "false")
 
     RAW_INPUT:
         "stream_type": "picture", "sound", "timecode" or "event"  (default "picture")
         "stream_format": "uyvy", "yuv422", "yuv420", "yuv411", "pcm", "timecode"  (default "uyvy")
         "frame_rate": "<numerator>/<denominator>"  (default 25/1)
+        "fallback_blank": "true", "false" (default "false")
       video only:
         "width": <image width> (default 720)
         "height": <image height> (default 576)
@@ -59,16 +60,17 @@ class LocalIngexPlayerListenerData;
         "bits_per_sample": <bps>  (default 16)
 
     DV_INPUT:
-        none
+        "fallback_blank": "true", "false" (default "false")
 
     FFMPEG_INPUT:
         "num_ffmpeg_threads" <num> (default 0)
+        "fallback_blank": "true", "false" (default "false")
 
     SHM_INPUT:
-        none
+        "fallback_blank": "true", "false" (default "false")
 
     UDP_INPUT:
-        none
+        "fallback_blank": "true", "false" (default "false")
 
     BBALLS_INPUT:
         same as RAW_INPUT
@@ -211,6 +213,8 @@ private:
 private:
     bool setOrCreateX11Window(const X11WindowInfo* externalWindowInfo);
     void closeLocalX11Window();
+
+    bool createFallbackBlankSource(MediaSource** mediaSource);
 
 private:
     pthread_mutex_t _configMutex;
