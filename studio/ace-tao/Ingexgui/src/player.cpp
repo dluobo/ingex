@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: player.cpp,v 1.32 2011/04/19 07:04:02 john_f Exp $              *
+ *   $Id: player.cpp,v 1.33 2011/04/28 16:35:41 john_f Exp $              *
  *                                                                         *
  *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -670,6 +670,8 @@ bool Player::Start()
                 PlayerInput input;
                 input.name = mFileNames[i];
                 input.type = mInputType;
+// line below must remain commented out until player is updated for option to work correctly in all formats
+//                input.options["fallback_blank"] = (i < mNVideoTracks) ? "true" : "false"; //display a blank source if the file cannot be opened, to avoid pictures rearranging themselves as files appear
                 inputs.push_back(input);
             }
             int64_t frameOffset;
@@ -716,7 +718,6 @@ bool Player::Start()
                         playSpeed(-1);
                     }
                     SetOSDType();
-                    SetOSDPosition();
 #ifndef DISABLE_SHARED_MEM_SOURCE
                 }
                 else {
@@ -728,6 +729,7 @@ bool Player::Start()
                     }
                 }
 #endif
+                SetOSDPosition();
                 mChunkLinking = STATE_CHANGE; //next recording loaded is not linked to this one
                 // work out which track to select
                 unsigned int nFilesOpen = 0;
