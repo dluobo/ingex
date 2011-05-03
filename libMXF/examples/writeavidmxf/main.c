@@ -1,5 +1,5 @@
 /*
- * $Id: main.c,v 1.25 2011/04/26 15:42:48 philipn Exp $
+ * $Id: main.c,v 1.26 2011/05/03 09:36:27 philipn Exp $
  *
  * Test writing video and audio to MXF files supported by Avid editing software
  *
@@ -25,18 +25,6 @@
 #include <string.h>
 #include <assert.h>
 
-#if defined(_MSC_VER)
-#if (_MSC_VER < 1400)
-#   include <io.h>
-#   define fseeko(stream, offset, whence)  _lseeki64(fileno(stream), offset, whence)
-#   define ftello(stream)                  _telli64(fileno(stream))
-#else
-/* 64-bit ftell and fseek were introduced in Visual C++ 2005 */
-#   define fseeko _fseeki64
-#   define ftello _ftelli64
-#endif
-#endif
-
 #include <write_avid_mxf.h>
 #include <mxf/mxf.h>
 #include <mxf/mxf_avid.h>
@@ -55,6 +43,8 @@
 
 
 
+typedef MXFFile RawFile;
+
 typedef struct
 {
     const char* name;
@@ -71,7 +61,7 @@ typedef struct
 
 typedef struct
 {
-    FILE* file;
+    RawFile *file;
     int64_t dataOffset;
     int64_t dataSize;
     
@@ -128,7 +118,7 @@ typedef struct
     uint32_t materialTrackID;
     EssenceInfo essenceInfo;
     const char* filename;
-    FILE* file;
+    RawFile *file;
     uint32_t frameSize;
     uint32_t frameSizeSeq[10];
     uint32_t minFrameSize;
@@ -170,24 +160,58 @@ static const int g_defaultIMX50FrameSizeNTSC = 208896;
 
 
 
+static RawFile* rf_open(const char *filename)
+{
+    RawFile *file;
+    if (!mxf_disk_file_open_read(filename, &file))
+        return NULL;
+
+    return file;
+}
+
+static void rf_close(RawFile *file)
+{
+    mxf_file_close(&file);
+}
+
+uint32_t rf_read(RawFile *file, uint8_t *data, uint32_t count)
+{
+    return mxf_file_read(file, data, count);
+}
+
+static int rf_seek(RawFile *file, off_t offset, int whence)
+{
+    return mxf_file_seek(file, offset, whence);
+}
+
+static int64_t rf_tell(RawFile *file)
+{
+    return mxf_file_tell(file);
+}
+
+static int rf_eof(RawFile *file)
+{
+    return mxf_file_eof(file);
+}
+
 static int get_dv_stream_info(const char* filename, Input* input)
 {
-    FILE* inputFile;
+    RawFile *inputFile;
     unsigned char buffer[DV_DIF_SEQUENCE_SIZE];
     uint32_t result;
     unsigned char byte;
     int isIEC;
     
-    inputFile = fopen(filename, "rb");
+    inputFile = rf_open(filename);
     if (inputFile == NULL)
     {
         fprintf(stderr, "%s: Failed to open DV file\n", filename);
         return 0;
     }
     
-    result = (uint32_t)fread(buffer, DV_DIF_SEQUENCE_SIZE, 1, inputFile);
-    fclose(inputFile);
-    if (result != 1)
+    result = rf_read(inputFile, buffer, DV_DIF_SEQUENCE_SIZE);
+    rf_close(inputFile);
+    if (result != DV_DIF_SEQUENCE_SIZE)
     {
         fprintf(stderr, "%s: Failed to read first DV DIF sequence from DV file\n", filename);
         return 0;
@@ -300,7 +324,7 @@ static int get_dv_stream_info(const char* filename, Input* input)
 
 
 /* TODO: have a problem if start-of-frame marker not found directly after end-of-frame */
-static int read_next_mjpeg_image_data(FILE* file, MJPEGState* state, 
+static int read_next_mjpeg_image_data(RawFile* file, MJPEGState* state, 
     unsigned char** dataOut, uint32_t* dataOutSize, int* haveImage)
 {
     *haveImage = 0;
@@ -313,7 +337,7 @@ static int read_next_mjpeg_image_data(FILE* file, MJPEGState* state,
             return 0;
         }
         
-        if ((state->dataSize = (uint32_t)fread(state->buffer, 1, state->bufferSize, file)) == 0)
+        if ((state->dataSize = rf_read(file, state->buffer, state->bufferSize)) == 0)
         {
             /* EOF if nothing was read */
             return 0;
@@ -335,7 +359,7 @@ static int read_next_mjpeg_image_data(FILE* file, MJPEGState* state,
                 else
                 {
                     fprintf(stderr, "Warning: MJPEG image start is non-0xFF byte - trailing data ignored\n");
-                    fprintf(stderr, "Warning: near file offset %"PFi64"\n", ftello(file));
+                    fprintf(stderr, "Warning: near file offset %"PFi64"\n", rf_tell(file));
                     return 0;
                 }
                 break;
@@ -450,14 +474,14 @@ static int prepare_wave_file(const char* filename, WAVInput* input)
     memset(input, 0, sizeof(WAVInput));
     
     
-    if ((input->file = fopen(filename, "rb")) == NULL)
+    if ((input->file = rf_open(filename)) == NULL)
     {
         fprintf(stderr, "Failed to open WAV file '%s'\n", filename);
         return 0;
     }
     
     /* 'RIFF'(4) + size (4) + 'WAVE' (4) */     
-    if (fread(buffer, 1, 12, input->file) < 12)
+    if (rf_read(input->file, buffer, 12) < 12)
     {
         fprintf(stderr, "Failed to read wav RIFF format specifier\n");
         return 0;
@@ -472,9 +496,9 @@ static int prepare_wave_file(const char* filename, WAVInput* input)
     while (1)
     {
         /* read chunk id (4) plus chunk data size (4) */
-        if (fread(buffer, 1, 8, input->file) < 8)
+        if (rf_read(input->file, buffer, 8) < 8)
         {
-            if (feof(input->file) != 0)
+            if (rf_eof(input->file) != 0)
             {
                 break;
             }
@@ -487,7 +511,7 @@ static int prepare_wave_file(const char* filename, WAVInput* input)
         {
             /* read the common fmt data */
             
-            if (fread(buffer, 1, 14, input->file) < 14)
+            if (rf_read(input->file, buffer, 14) < 14)
             {
                 fprintf(stderr, "Failed to read the wav format chunk (common part)\n");
                 return 0;
@@ -507,7 +531,7 @@ static int prepare_wave_file(const char* filename, WAVInput* input)
             input->audioSamplingRate.denominator = 1;
             input->nBlockAlign = get_uint16_le(&buffer[12]);
             
-            if (fread(buffer, 1, 2, input->file) < 2)
+            if (rf_read(input->file, buffer, 2) < 2)
             {
                 fprintf(stderr, "Failed to read the wav PCM sample size\n");
                 return 0;
@@ -522,7 +546,7 @@ static int prepare_wave_file(const char* filename, WAVInput* input)
             }
             
             
-            if (fseeko(input->file, size - 14 - 2, SEEK_CUR) < 0)
+            if (rf_seek(input->file, size - 14 - 2, SEEK_CUR) < 0)
             {
                 fprintf(stderr, "Failed to seek to end of wav chunk\n");
                 return 0;
@@ -534,9 +558,9 @@ static int prepare_wave_file(const char* filename, WAVInput* input)
         {
             /* get the wave data offset and size */
             
-            input->dataOffset = ftello(input->file);
+            input->dataOffset = rf_tell(input->file);
             input->dataSize = size;
-            if (fseeko(input->file, size, SEEK_CUR) < 0)
+            if (rf_seek(input->file, size, SEEK_CUR) < 0)
             {
                 fprintf(stderr, "Failed to seek to end of wav chunk\n");
                 return 0;
@@ -545,7 +569,7 @@ static int prepare_wave_file(const char* filename, WAVInput* input)
         }
         else
         {
-            if (fseeko(input->file, size, SEEK_CUR) < 0)
+            if (rf_seek(input->file, size, SEEK_CUR) < 0)
             {
                 fprintf(stderr, "Failed to seek to end of wav chunk\n");
                 return 0;
@@ -554,7 +578,7 @@ static int prepare_wave_file(const char* filename, WAVInput* input)
     }
 
     /* position at wave data */
-    if (fseeko(input->file, input->dataOffset, SEEK_SET) < 0)
+    if (rf_seek(input->file, input->dataOffset, SEEK_SET) < 0)
     {
         fprintf(stderr, "Failed to seek to start of wav data chunk\n");
         return 0;
@@ -583,7 +607,7 @@ static int get_wave_data(WAVInput* input, unsigned char* buffer, uint32_t dataSi
         numToRead = dataSize;
     }
     
-    if ((actualRead = (uint32_t)fread(buffer, 1, numToRead, input->file)) != numToRead)
+    if ((actualRead = rf_read(input->file, buffer, numToRead)) != numToRead)
     {
         fprintf(stderr, "Failed to read %u bytes of wave data. Actual read was %u\n", numToRead, actualRead);
         return 0;
@@ -2339,7 +2363,7 @@ int main(int argc, const char* argv[])
     {
         if (!inputs[i].isWAVFile) /* WAVE file already open */
         {
-            if ((inputs[i].file = fopen(inputs[i].filename, "rb")) == NULL)
+            if ((inputs[i].file = rf_open(inputs[i].filename)) == NULL)
             {
                 fprintf(stderr, "Failed to open file '%s'\n", inputs[i].filename);
                 goto fail;
@@ -2402,7 +2426,7 @@ int main(int argc, const char* argv[])
             }
             else if (inputs[i].essenceType == IECDV25 || inputs[i].essenceType == DVBased25)
             {
-                if (fread(inputs[i].buffer, 1, inputs[i].frameSize, inputs[i].file) != inputs[i].frameSize)
+                if (rf_read(inputs[i].file, inputs[i].buffer, inputs[i].frameSize) != inputs[i].frameSize)
                 {
                     done = 1;
                     break;
@@ -2415,7 +2439,7 @@ int main(int argc, const char* argv[])
             }
             else if (inputs[i].essenceType == DVBased50)
             {
-                if (fread(inputs[i].buffer, 1, inputs[i].frameSize, inputs[i].file) != inputs[i].frameSize)
+                if (rf_read(inputs[i].file, inputs[i].buffer, inputs[i].frameSize) != inputs[i].frameSize)
                 {
                     done = 1;
                     break;
@@ -2428,7 +2452,7 @@ int main(int argc, const char* argv[])
             }
             else if (inputs[i].essenceType == DV1080i50 || inputs[i].essenceType == DV720p50)
             {
-                if (fread(inputs[i].buffer, 1, inputs[i].frameSize, inputs[i].file) != inputs[i].frameSize)
+                if (rf_read(inputs[i].file, inputs[i].buffer, inputs[i].frameSize) != inputs[i].frameSize)
                 {
                     done = 1;
                     break;
@@ -2443,7 +2467,7 @@ int main(int argc, const char* argv[])
                      inputs[i].essenceType == IMX40 ||
                      inputs[i].essenceType == IMX50)
             {
-                if (fread(inputs[i].buffer, 1, inputs[i].frameSize, inputs[i].file) != inputs[i].frameSize)
+                if (rf_read(inputs[i].file, inputs[i].buffer, inputs[i].frameSize) != inputs[i].frameSize)
                 {
                     done = 1;
                     break;
@@ -2460,7 +2484,7 @@ int main(int argc, const char* argv[])
                      inputs[i].essenceType == DNxHD1080p120 || inputs[i].essenceType == DNxHD1080p185 ||
                      inputs[i].essenceType == DNxHD1080p36)
             {
-                if (fread(inputs[i].buffer, 1, inputs[i].frameSize, inputs[i].file) != inputs[i].frameSize)
+                if (rf_read(inputs[i].file, inputs[i].buffer, inputs[i].frameSize) != inputs[i].frameSize)
                 {
                     done = 1;
                     break;
@@ -2475,7 +2499,7 @@ int main(int argc, const char* argv[])
                      inputs[i].essenceType == Unc1080iUYVY ||
                      inputs[i].essenceType == Unc720pUYVY)
             {
-                if (fread(inputs[i].buffer, 1, inputs[i].frameSize, inputs[i].file) != inputs[i].frameSize)
+                if (rf_read(inputs[i].file, inputs[i].buffer, inputs[i].frameSize) != inputs[i].frameSize)
                 {
                     done = 1;
                     break;
@@ -2495,7 +2519,7 @@ int main(int argc, const char* argv[])
                 uint32_t numSamples;
                 
                 /* read to get upto the maximum frame size in buffer */
-                numRead = (uint32_t)fread(inputs[i].buffer + inputs[i].bufferOffset, 1, inputs[i].frameSize - inputs[i].bufferOffset, inputs[i].file);
+                numRead = rf_read(inputs[i].file, inputs[i].buffer + inputs[i].bufferOffset, inputs[i].frameSize - inputs[i].bufferOffset);
                 if (inputs[i].bufferOffset + numRead < inputs[i].frameSize)
                 {
                     /* last or incomplete frame */
@@ -2628,12 +2652,12 @@ int main(int argc, const char* argv[])
         {
             if (inputs[i].channelIndex == 0)
             {
-                fclose(inputs[i].wavInput.file);
+                rf_close(inputs[i].wavInput.file);
             }
         }
         else
         {
-            fclose(inputs[i].file);
+            rf_close(inputs[i].file);
         }
         
         if (inputs[i].buffer != NULL)
@@ -2675,7 +2699,7 @@ fail:
             {
                 if (inputs[i].wavInput.file != NULL)
                 {
-                    fclose(inputs[i].wavInput.file);
+                    rf_close(inputs[i].wavInput.file);
                 }
             }
         }
@@ -2683,7 +2707,7 @@ fail:
         {
             if (inputs[i].file != NULL)
             {
-                fclose(inputs[i].file);
+                rf_close(inputs[i].file);
             }
         }
 
