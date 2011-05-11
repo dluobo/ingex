@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_web.cpp,v 1.2 2010/07/14 13:06:36 john_f Exp $
+ * $Id: nexus_web.cpp,v 1.3 2011/05/11 08:30:19 john_f Exp $
  *
  * Stand-alone web server to monitor and control nexus applications
  *
@@ -47,22 +47,6 @@
 int verbose = 1;
 int show_audio34 = 0;
 
-
-/*struct NexusTC {
-    int h;
-    int m;
-    int s;
-    int f;
-};
-
-static void framesToTC(int tc, NexusTC *p)
-{
-    p->f = tc % 25;
-    p->h = (int)(tc / (60 * 60 * 25));
-    p->m = (int)((tc - (p->h * 60 * 60 * 25)) / (60 * 25));
-    p->s = (int)((tc - (p->h * 60 * 60 * 25) - (p->m * 60 * 25)) / 25);
-}
-*/
 static int64_t tv_diff_microsecs(const struct timeval* a, const struct timeval* b)
 {
     int64_t diff = (b->tv_sec - a->tv_sec) * 1000000 + b->tv_usec - a->tv_usec;
