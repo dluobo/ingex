@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.2 2010/07/14 13:06:36 john_f Exp $
+# $Id: Makefile,v 1.3 2011/05/11 10:40:37 philipn Exp $
 #
 #
 #
@@ -32,27 +32,45 @@ SOURCES = ArchiveMXFWriter.cpp
 OBJECTS = $(patsubst %.cpp,.objs/%.o,$(SOURCES))
 DEPENDENCIES = $(patsubst %.cpp,.deps/%.d,$(SOURCES))
 
-COMMON_OBJECTS = $(COMMON_DIR)/.objs/DynamicByteArray.o
+COMMON_SOURCES = DynamicByteArray.cpp
+COMMON_OBJECTS = $(patsubst %.cpp,$(COMMON_DIR)/.objs/%.o,$(COMMON_SOURCES))
+DEPENDENCIES += $(patsubst %.cpp,.deps/%.d,$(COMMON_SOURCES))
 
-READER_OBJECTS = $(READER_DIR)/.objs/ArchiveMXFContentPackage.o
-
+READER_SOURCES = ArchiveMXFContentPackage.cpp
+READER_OBJECTS = $(patsubst %.cpp,$(READER_DIR)/.objs/%.o,$(READER_SOURCES))
+DEPENDENCIES += $(patsubst %.cpp,.deps/%.d,$(READER_SOURCES))
 
 
 .PHONY: all
 all: libArchiveMXFWriter.a test_archivemxfwriter
 
-.PHONY: common
-common:
-	@cd $(COMMON_DIR) && $(MAKE) all
-
-.PHONY: reader
-reader:
-	@cd $(READER_DIR) && $(MAKE) all
 
 
-libArchiveMXFWriter.a: $(OBJECTS) common reader
+libArchiveMXFWriter.a: $(OBJECTS) $(COMMON_OBJECTS) $(READER_OBJECTS)
 	$(AR) $@ $(OBJECTS) $(COMMON_OBJECTS) $(READER_OBJECTS)
 
+
+
+$(COMMON_OBJECTS):
+	@cd $(COMMON_DIR) && $(MAKE) all
+
+.deps/%.d : $(COMMON_DIR)/%.cpp
+	@echo Generating dependency file for $<; \
+	mkdir -p .deps; \
+	$(COMPILE) $(INCLUDES) -MM $< > $@.$$$$; \
+	sed 's,\($*\)\.o[ :]*,$(COMMON_DIR)/\.objs/\1.o $@ : ,g' < $@.$$$$ > $@; \
+	rm -f $@.$$$$
+
+
+$(READER_OBJECTS):
+	@cd $(READER_DIR) && $(MAKE) all
+
+.deps/%.d : $(READER_DIR)/%.cpp
+	@echo Generating dependency file for $<; \
+	mkdir -p .deps; \
+	$(COMPILE) $(INCLUDES) -MM $< > $@.$$$$; \
+	sed 's,\($*\)\.o[ :]*,$(READER_DIR)/\.objs/\1.o $@ : ,g' < $@.$$$$ > $@; \
+	rm -f $@.$$$$
 
 
 .deps/%.d : %.cpp

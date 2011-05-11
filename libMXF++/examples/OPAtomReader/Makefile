@@ -3,7 +3,6 @@ include $(TOPLEVEL)/vars.mk
 
 COMMON_DIR = ../Common
 INCLUDES += -I$(COMMON_DIR)
-COMMON_OBJECTS = $(COMMON_DIR)/.objs/DynamicByteArray.o
 
 SOURCES = OPAtomContentPackage.cpp \
 	FrameOffsetIndexTable.cpp \
@@ -16,18 +15,31 @@ SOURCES = OPAtomContentPackage.cpp \
 OBJECTS = $(patsubst %.cpp,.objs/%.o,$(SOURCES))
 DEPENDENCIES = $(patsubst %.cpp,.deps/%.d,$(SOURCES))
 
+COMMON_SOURCES = DynamicByteArray.cpp
+COMMON_OBJECTS = $(patsubst %.cpp,$(COMMON_DIR)/.objs/%.o,$(COMMON_SOURCES))
+DEPENDENCIES += $(patsubst %.cpp,.deps/%.d,$(COMMON_SOURCES))
+
+
 
 .PHONY: all
 all: libOPAtomReader.a test_opatomreader
 
-.PHONY: common
-common:
-	$(MAKE) -C $(COMMON_DIR) all
 
 
-libOPAtomReader.a: $(OBJECTS) common
+libOPAtomReader.a: $(OBJECTS) $(COMMON_OBJECTS)
 	$(AR) $@ $(OBJECTS) $(COMMON_OBJECTS)
 
+
+
+$(COMMON_OBJECTS):
+	@cd $(COMMON_DIR) && $(MAKE) all
+
+.deps/%.d : $(COMMON_DIR)/%.cpp
+	@echo Generating dependency file for $<; \
+	mkdir -p .deps; \
+	$(COMPILE) $(INCLUDES) -MM $< > $@.$$$$; \
+	sed 's,\($*\)\.o[ :]*,$(COMMON_DIR)/\.objs/\1.o $@ : ,g' < $@.$$$$ > $@; \
+	rm -f $@.$$$$
 
 
 .deps/%.d : %.cpp

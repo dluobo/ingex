@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.2 2010/07/21 16:29:34 john_f Exp $
+# $Id: Makefile,v 1.3 2011/05/11 10:40:37 philipn Exp $
 #
 #
 #
@@ -30,20 +30,30 @@ INCLUDES += -I$(COMMON_DIR)
 SOURCES = AvidClipWriter.cpp
 OBJECTS = $(patsubst %.cpp,.objs/%.o,$(SOURCES))
 DEPENDENCIES = $(patsubst %.cpp,.deps/%.d,$(SOURCES))
-COMMON_OBJECTS = $(COMMON_DIR)/.objs/DynamicByteArray.o
+
+COMMON_SOURCES = DynamicByteArray.cpp
+COMMON_OBJECTS = $(patsubst %.cpp,$(COMMON_DIR)/.objs/%.o,$(COMMON_SOURCES))
+DEPENDENCIES += $(patsubst %.cpp,.deps/%.d,$(COMMON_SOURCES))
 
 
 .PHONY: all
 all: libAvidClipWriter.a avidclipwriter
 
-.PHONY: common
-common:
-	@cd $(COMMON_DIR) && $(MAKE) all
 
-
-libAvidClipWriter.a: $(OBJECTS) common
+libAvidClipWriter.a: $(OBJECTS) $(COMMON_OBJECTS)
 	$(AR) $@ $(OBJECTS) $(COMMON_OBJECTS)
 
+
+
+$(COMMON_OBJECTS):
+	@cd $(COMMON_DIR) && $(MAKE) all
+
+.deps/%.d : $(COMMON_DIR)/%.cpp
+	@echo Generating dependency file for $<; \
+	mkdir -p .deps; \
+	$(COMPILE) $(INCLUDES) -MM $< > $@.$$$$; \
+	sed 's,\($*\)\.o[ :]*,$(COMMON_DIR)/\.objs/\1.o $@ : ,g' < $@.$$$$ > $@; \
+	rm -f $@.$$$$
 
 
 .deps/%.d : %.cpp
