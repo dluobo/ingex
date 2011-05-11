@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sink.c,v 1.21 2011/04/19 10:03:53 philipn Exp $
+ * $Id: dvs_sink.c,v 1.22 2011/05/11 10:55:24 philipn Exp $
  *
  *
  *
@@ -248,26 +248,33 @@ struct DVSSink
 
 
 
-
-static inline void write_bcd(unsigned char* target, int val)
-{
-    *target = ((val / 10) << 4) + (val % 10);
-}
-
 static int int_to_dvs_tc(DVSSink *sink, int tc)
 {
-    // e.g. turn 1020219 into hex 0x11200819
+    // e.g. turn frame count 1020219 into hex 0x11200819
     int fr = tc % sink->roundedTimecodeBase;
     int hr = (int)(tc / (60*60*sink->roundedTimecodeBase));
     int mi = (int)((tc - (hr * 60*60*sink->roundedTimecodeBase)) / (60 * sink->roundedTimecodeBase));
     int se = (int)((tc - (hr * 60*60*sink->roundedTimecodeBase) - (mi * 60*sink->roundedTimecodeBase)) / sink->roundedTimecodeBase);
 
-    unsigned char raw_tc[4];
-    write_bcd(raw_tc + 0, fr);
-    write_bcd(raw_tc + 1, se);
-    write_bcd(raw_tc + 2, mi);
-    write_bcd(raw_tc + 3, hr);
-    int result = *(int *)(raw_tc);
+    int fr01 = fr % 10;
+    int fr10 = fr / 10;
+    int se01 = se % 10;
+    int se10 = se / 10;
+    int mi01 = mi % 10;
+    int mi10 = mi / 10;
+    int hr01 = hr % 10;
+    int hr10 = hr / 10;
+
+    int result = 0;
+    result &= fr01;
+    result &= (fr10 << 4);
+    result &= (se01 << 8);
+    result &= (se10 << 12);
+    result &= (mi01 << 16);
+    result &= (mi10 << 20);
+    result &= (hr01 << 24);
+    result &= (hr10 << 28);
+
     return result;
 }
 
