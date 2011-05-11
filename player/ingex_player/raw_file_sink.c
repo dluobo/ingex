@@ -1,5 +1,5 @@
 /*
- * $Id: raw_file_sink.c,v 1.9 2011/04/19 10:03:53 philipn Exp $
+ * $Id: raw_file_sink.c,v 1.10 2011/05/11 10:57:57 philipn Exp $
  *
  *
  *
@@ -126,14 +126,14 @@ static int rms_accept_stream(void* data, const StreamInfo* streamInfo)
     }
 
     /* make sure the stream type matches the accept type for the sink, if set */
-    if (sink->acceptStreamType != NULL &&
+    if (sink->acceptStreamType != UNKNOWN_STREAM_TYPE &&
         streamInfo->type != sink->acceptStreamType)
     {
         return 0;
     }
 
     /* make sure the stream format matches the accept for the sink, if set */
-    if (sink->acceptStreamFormat != NULL)
+    if (sink->acceptStreamFormat != UNKNOWN_FORMAT)
     {
         if (streamInfo->format != sink->acceptStreamFormat)
         {
