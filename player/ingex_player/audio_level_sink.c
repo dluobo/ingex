@@ -1,5 +1,5 @@
 /*
- * $Id: audio_level_sink.c,v 1.6 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: audio_level_sink.c,v 1.7 2011/05/11 10:53:27 philipn Exp $
  *
  *
  *
@@ -113,7 +113,7 @@ static int als_register_stream(void* data, int streamId, const StreamInfo* strea
             /* monitor this PCM audio stream's level */
             sink->audioStreams[sink->numAudioStreams].streamId = streamId;
             sink->audioStreams[sink->numAudioStreams].byteAlignment = (streamInfo->bitsPerSample + 7) / 8;
-            sink->audioStreams[sink->numAudioStreams].level = 0.0;
+            sink->audioStreams[sink->numAudioStreams].level = sink->nullAudioLevel;
             sink->numAudioStreams++;
 
             /* register stream in OSD */
