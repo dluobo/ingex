@@ -25,7 +25,7 @@ case $LOCATION in
   ( stage )
 
 ./routerlogger --dbuser bamzooki --dbpass bamzooki \
-  -v -r 192.168.100.22:9001 -s  \
+  -v -r 192.168.100.22:9001 -s -l \
   -n Router-Stage \
   -m 20 \
   -d "Stage-Rx1" -p 1 \
@@ -40,7 +40,7 @@ case $LOCATION in
   ( lot)
 
 ./routerlogger --dbuser bamzooki --dbpass bamzooki \
-  -v -r 192.168.100.32:9001 -s  \
+  -v -r 192.168.100.32:9001 -s -l \
   -n Router-Lot \
   -m 20 \
   -d "Lot-Rx1" -p 1 \
