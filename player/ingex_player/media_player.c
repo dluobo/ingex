@@ -1,5 +1,5 @@
 /*
- * $Id: media_player.c,v 1.17 2011/04/19 10:08:48 philipn Exp $
+ * $Id: media_player.c,v 1.18 2011/05/11 10:47:39 philipn Exp $
  *
  *
  *
@@ -2028,6 +2028,7 @@ int ply_create_player(MediaSource* mediaSource, MediaSink* mediaSink,
         if (msc_get_stream_info(mediaSource, i, &streamInfo))
         {
             if (streamInfo->type == PICTURE_STREAM_TYPE &&
+                streamInfo->format != UNKNOWN_FORMAT &&
                 streamInfo->isHardFrameRate)
             {
                 newPlayer->frameRate = streamInfo->frameRate;
@@ -2058,7 +2059,8 @@ int ply_create_player(MediaSource* mediaSource, MediaSink* mediaSink,
             const StreamInfo* streamInfo;
             if (msc_get_stream_info(mediaSource, i, &streamInfo))
             {
-                if (streamInfo->type == PICTURE_STREAM_TYPE)
+                if (streamInfo->type == PICTURE_STREAM_TYPE &&
+                    streamInfo->format != UNKNOWN_FORMAT)
                 {
                     newPlayer->frameRate = streamInfo->frameRate;
                     haveFrameRate = 1;
