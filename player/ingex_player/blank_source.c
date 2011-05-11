@@ -1,5 +1,5 @@
 /*
- * $Id: blank_source.c,v 1.6 2011/02/18 16:28:51 john_f Exp $
+ * $Id: blank_source.c,v 1.7 2011/05/11 10:49:17 philipn Exp $
  *
  *
  *
@@ -78,29 +78,30 @@ static int bks_finalise_blank_source(void* data, const StreamInfo* streamInfo)
         source->streamInfo.aspectRatio = streamInfo->aspectRatio;
     }
 
-    if (source->streamInfo.format == UYVY_FORMAT)
+    if (source->streamInfo.format == UYVY_FORMAT || source->streamInfo.format == YUV422_FORMAT)
     {
         source->imageSize = source->streamInfo.width * source->streamInfo.height * 2;
-        MALLOC_ORET(source->image, unsigned char, source->imageSize);
-        fill_black(UYVY_FORMAT, source->streamInfo.width, source->streamInfo.height, source->image);
     }
-    else if (source->streamInfo.format == YUV422_FORMAT)
+    else if (source->streamInfo.format == UYVY_10BIT_FORMAT)
     {
-        source->imageSize = source->streamInfo.width * source->streamInfo.height * 2;
-        MALLOC_ORET(source->image, unsigned char, source->imageSize);
-        fill_black(YUV422_FORMAT, source->streamInfo.width, source->streamInfo.height, source->image);
+        source->imageSize = (source->streamInfo.width + 47) / 48 * 128 * source->streamInfo.height;
     }
-    else if (source->streamInfo.format == YUV420_FORMAT)
+    else if (source->streamInfo.format == YUV420_FORMAT || source->streamInfo.format == YUV411_FORMAT)
     {
         source->imageSize = source->streamInfo.width * source->streamInfo.height * 3 / 2;
-        MALLOC_ORET(source->image, unsigned char, source->imageSize);
-        fill_black(YUV420_FORMAT, source->streamInfo.width, source->streamInfo.height, source->image);
+    }
+    else if (source->streamInfo.format == YUV444_FORMAT)
+    {
+        source->imageSize = source->streamInfo.width * source->streamInfo.height * 3;
     }
     else
     {
         ml_log_error("Unsupported video format for blank video source: %d\n", source->streamInfo.format);
         return 0;
     }
+
+    MALLOC_ORET(source->image, unsigned char, source->imageSize);
+    fill_black(source->streamInfo.format, source->streamInfo.width, source->streamInfo.height, source->image);
 
     source->wasFinalised = 1;
     return 1;
