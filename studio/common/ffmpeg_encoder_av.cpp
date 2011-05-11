@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder_av.cpp,v 1.13 2010/12/22 14:12:27 john_f Exp $
+ * $Id: ffmpeg_encoder_av.cpp,v 1.14 2011/05/11 08:35:15 john_f Exp $
  *
  * Encode AV and write to file.
  *
@@ -51,6 +51,7 @@ extern "C" {
 }
 #endif
 
+#include "VideoRaster.h"
 #include "ffmpeg_encoder_av.h"
 
 #define MPA_FRAME_SIZE              1152 // taken from ffmpeg's private mpegaudio.h
@@ -109,14 +110,47 @@ typedef struct
 namespace
 {
 
-int init_video_xdcam(internal_ffmpeg_encoder_t * enc, int64_t start_tc)
+int init_video_xdcam(internal_ffmpeg_encoder_t * enc, Ingex::VideoRaster::EnumType raster, int64_t start_tc)
 {
-    AVCodecContext * codec_context;
+    /* allocate input video frame */
+    enc->inputFrame = avcodec_alloc_frame();
+    if (!enc->inputFrame)
+    {
+        fprintf(stderr, "Could not allocate input frame\n");
+        return 0;
+    }
 
-    codec_context = enc->video_st->codec;
+    /* get codec context and set codec */
+    AVCodecContext * codec_context = enc->video_st->codec;
+
     codec_context->codec_id = CODEC_ID_MPEG2VIDEO;
     codec_context->codec_type = CODEC_TYPE_VIDEO;
    
+    /* set interlace parameters */
+    int width;
+    int height;
+    int fps_num;
+    int fps_den;
+    Ingex::Interlace::EnumType interlace;
+    Ingex::VideoRaster::GetInfo(raster, width, height, fps_num, fps_den, interlace);
+
+    switch (interlace)
+    {
+    case Ingex::Interlace::TOP_FIELD_FIRST:
+        enc->inputFrame->interlaced_frame = 1;
+        enc->inputFrame->top_field_first = 1;
+        codec_context->flags |= CODEC_FLAG_INTERLACED_DCT;
+        break;
+    case Ingex::Interlace::BOTTOM_FIELD_FIRST:
+        enc->inputFrame->interlaced_frame = 1;
+        enc->inputFrame->top_field_first = 0;
+        codec_context->flags |= CODEC_FLAG_INTERLACED_DCT;
+        break;
+    case Ingex::Interlace::NONE:
+    default:
+        enc->inputFrame->interlaced_frame = 0;
+        enc->inputFrame->top_field_first = 0;
+    }
 
     codec_context->gop_size = 12;
 #if defined(FFMPEG_NONLINEAR_PATCH)
@@ -130,7 +164,6 @@ int init_video_xdcam(internal_ffmpeg_encoder_t * enc, int64_t start_tc)
     codec_context->qmax = 12;
 #endif
     codec_context->me_method = 5; // (epzs)
-    codec_context->flags |= CODEC_FLAG_INTERLACED_DCT;
    // codec_context->flags |= CODEC_FLAG_CLOSED_GOP; //No need for closed GOP in non MXF/XDCAM
     codec_context->flags2 |= CODEC_FLAG2_NON_LINEAR_QUANT;
     codec_context->flags2 |= CODEC_FLAG2_INTRA_VLC;
@@ -141,7 +174,7 @@ int init_video_xdcam(internal_ffmpeg_encoder_t * enc, int64_t start_tc)
     codec_context->max_b_frames =2;
     codec_context->mb_decision = FF_MB_DECISION_SIMPLE;
     codec_context->pix_fmt = PIX_FMT_YUV422P;
-    codec_context->bit_rate =50000000;
+    codec_context->bit_rate = 50000000;
     codec_context->rc_max_rate = 60000000;
     codec_context->rc_min_rate = 0;
     codec_context->rc_buffer_size = 50000000; 
@@ -160,7 +193,7 @@ int init_video_xdcam(internal_ffmpeg_encoder_t * enc, int64_t start_tc)
         codec_context->flags |= CODEC_FLAG_GLOBAL_HEADER;
     }
 
-/* find the video encoder */
+    /* find the video encoder */
     AVCodec * codec = avcodec_find_encoder(codec_context->codec_id);
     if (!codec)
     {
@@ -176,15 +209,6 @@ int init_video_xdcam(internal_ffmpeg_encoder_t * enc, int64_t start_tc)
         return -1;
     }
 
-
-    /* allocate input video frame */
-    enc->inputFrame = avcodec_alloc_frame();
-    if (!enc->inputFrame)
-    {
-        fprintf(stderr, "Could not allocate input frame\n");
-        return 0;
-    }
-    enc->inputFrame->top_field_first = 1;
 
     /* allocate output buffer */
     enc->video_outbuf = NULL;
@@ -370,13 +394,48 @@ int init_video_mpeg4(internal_ffmpeg_encoder_t * enc, Ingex::VideoRaster::EnumTy
 /* initialise video stream for DV encoding */
 int init_video_dv(internal_ffmpeg_encoder_t * enc, MaterialResolution::EnumType res, Ingex::VideoRaster::EnumType raster, int64_t start_tc)
 {
+    /* allocate input video frame */
+    enc->inputFrame = avcodec_alloc_frame();
+    if (!enc->inputFrame)
+    {
+        fprintf(stderr, "Could not allocate input frame\n");
+        return 0;
+    }
+
+    /* get codec context and set codec */
     AVCodecContext * codec_context = enc->video_st->codec;
 
     codec_context->codec_id = CODEC_ID_DVVIDEO;
     codec_context->codec_type = CODEC_TYPE_VIDEO;
 
+    /* set interlace parameters */
+    int width;
+    int height;
+    int fps_num;
+    int fps_den;
+    Ingex::Interlace::EnumType interlace;
+    Ingex::VideoRaster::GetInfo(raster, width, height, fps_num, fps_den, interlace);
+
+    switch (interlace)
+    {
+    case Ingex::Interlace::TOP_FIELD_FIRST:
+        enc->inputFrame->interlaced_frame = 1;
+        enc->inputFrame->top_field_first = 1;
+        codec_context->flags |= CODEC_FLAG_INTERLACED_DCT;
+        break;
+    case Ingex::Interlace::BOTTOM_FIELD_FIRST:
+        enc->inputFrame->interlaced_frame = 1;
+        enc->inputFrame->top_field_first = 0;
+        codec_context->flags |= CODEC_FLAG_INTERLACED_DCT;
+        break;
+    case Ingex::Interlace::NONE:
+    default:
+        enc->inputFrame->interlaced_frame = 0;
+        enc->inputFrame->top_field_first = 0;
+    }
+
+
     int encoded_frame_size = 0;
-    int top_field_first = 1;
 
     // Set coding parameters according to SMPTE 370M (note horizontal scaling in HD formats)
     switch (res)
@@ -389,14 +448,12 @@ int init_video_dv(internal_ffmpeg_encoder_t * enc, MaterialResolution::EnumType 
         case Ingex::VideoRaster::PAL_B_16x9:
             codec_context->pix_fmt = PIX_FMT_YUV420P;
             encoded_frame_size = 144000;
-            top_field_first = 0;
             break;
         case Ingex::VideoRaster::NTSC:
         case Ingex::VideoRaster::NTSC_4x3:
         case Ingex::VideoRaster::NTSC_16x9:
             codec_context->pix_fmt = PIX_FMT_YUV411P;
             encoded_frame_size = 120000;
-            top_field_first = 0;
             enc->input_width = 720;
             enc->input_height = 486;
             avcodec_set_dimensions(codec_context, 720, 480);
@@ -414,14 +471,12 @@ int init_video_dv(internal_ffmpeg_encoder_t * enc, MaterialResolution::EnumType 
         case Ingex::VideoRaster::PAL_B_16x9:
             codec_context->pix_fmt = PIX_FMT_YUV422P;
             encoded_frame_size = 288000;
-            top_field_first = 0;
             break;
         case Ingex::VideoRaster::NTSC:
         case Ingex::VideoRaster::NTSC_4x3:
         case Ingex::VideoRaster::NTSC_16x9:
             codec_context->pix_fmt = PIX_FMT_YUV422P;
             encoded_frame_size = 240000;
-            top_field_first = 0;
             enc->input_width = 720;
             enc->input_height = 486;
             avcodec_set_dimensions(codec_context, 720, 480);
@@ -448,7 +503,6 @@ int init_video_dv(internal_ffmpeg_encoder_t * enc, MaterialResolution::EnumType 
             }
             enc->tmpFrame = (AVPicture *)av_mallocz(sizeof(AVPicture));
             encoded_frame_size = 576000;
-            top_field_first = 1;
             break;
         case Ingex::VideoRaster::SMPTE274_29I:
         case Ingex::VideoRaster::SMPTE274_29PSF:
@@ -464,7 +518,6 @@ int init_video_dv(internal_ffmpeg_encoder_t * enc, MaterialResolution::EnumType 
             }
             enc->tmpFrame = (AVPicture *)av_mallocz(sizeof(AVPicture));
             encoded_frame_size = 480000;
-            top_field_first = 0;
             break;
         // 720p formats not tested
         case Ingex::VideoRaster::SMPTE296_50P:
@@ -479,7 +532,6 @@ int init_video_dv(internal_ffmpeg_encoder_t * enc, MaterialResolution::EnumType 
             }
             enc->tmpFrame = (AVPicture *)av_mallocz(sizeof(AVPicture));
             encoded_frame_size = 288000;
-            top_field_first = 1;
             break;
         case Ingex::VideoRaster::SMPTE296_59P:
             enc->scale_image = 1;
@@ -493,7 +545,6 @@ int init_video_dv(internal_ffmpeg_encoder_t * enc, MaterialResolution::EnumType 
             }
             enc->tmpFrame = (AVPicture *)av_mallocz(sizeof(AVPicture));
             encoded_frame_size = 240000;
-            top_field_first = 1;
             break;
         default:
             break;
@@ -531,15 +582,6 @@ int init_video_dv(internal_ffmpeg_encoder_t * enc, MaterialResolution::EnumType 
         fprintf(stderr, "could not open video codec\n");
         return -1;
     }
-
-    /* allocate input video frame */
-    enc->inputFrame = avcodec_alloc_frame();
-    if (!enc->inputFrame)
-    {
-        fprintf(stderr, "Could not allocate input frame\n");
-        return 0;
-    }
-    enc->inputFrame->top_field_first = top_field_first;
 
     /* allocate output buffer */
     enc->video_outbuf = NULL;
@@ -1063,7 +1105,7 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename,
         init_video_dv(enc, res, raster, start_tc);
         break;
     case MaterialResolution::XDCAMHD422_MOV:
-        init_video_xdcam(enc, start_tc);
+        init_video_xdcam(enc, raster, start_tc);
         break;
     default:
         break;
