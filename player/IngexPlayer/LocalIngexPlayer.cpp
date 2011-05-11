@@ -1,5 +1,5 @@
 /*
- * $Id: LocalIngexPlayer.cpp,v 1.27 2011/04/27 10:59:06 john_f Exp $
+ * $Id: LocalIngexPlayer.cpp,v 1.28 2011/05/11 11:01:18 philipn Exp $
  *
  * Copyright (C) 2008-2010 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
@@ -1315,11 +1315,6 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
             CHK_OTHROW(mls_assign_source(multipleSource, &mediaSource));
 
         }
-
-        // finalise blank sources
-
-        CHK_OTHROW(mls_finalise_blank_sources(multipleSource));
-
 
         // open the buffered media source
 
