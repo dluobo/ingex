@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: player.cpp,v 1.33 2011/04/28 16:35:41 john_f Exp $              *
+ *   $Id: player.cpp,v 1.34 2011/05/11 08:54:09 john_f Exp $              *
  *                                                                         *
  *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -670,8 +670,7 @@ bool Player::Start()
                 PlayerInput input;
                 input.name = mFileNames[i];
                 input.type = mInputType;
-// line below must remain commented out until player is updated for option to work correctly in all formats
-//                input.options["fallback_blank"] = (i < mNVideoTracks) ? "true" : "false"; //display a blank source if the file cannot be opened, to avoid pictures rearranging themselves as files appear
+                input.options["fallback_blank"] = (i < mNVideoTracks) ? "true" : "false"; //display a blank source if the file cannot be opened, to avoid pictures rearranging themselves as files appear
                 inputs.push_back(input);
             }
             int64_t frameOffset;

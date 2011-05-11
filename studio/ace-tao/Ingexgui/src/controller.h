@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: controller.h,v 1.11 2011/04/19 07:04:02 john_f Exp $           *
+ *   $Id: controller.h,v 1.12 2011/05/11 08:54:09 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -140,33 +140,32 @@ DECLARE_EVENT_TYPE(EVT_CONTROLLER_THREAD, -1)
 class ControllerThreadEvent : public wxNotifyEvent //Needs to be a Notify type event
 {
 public:
-    ControllerThreadEvent() : mTrackStatusList(0), mTimecodeState(Controller::ABSENT), mTimecodeStateChanged(false) {};
-    ControllerThreadEvent(const wxEventType & type) : wxNotifyEvent(type), mTrackStatusList(0), mTimecodeState(Controller::ABSENT), mTimecodeStateChanged(false) {};
-    ~ControllerThreadEvent() {};
-    virtual wxEvent * Clone() const { return new ControllerThreadEvent(*this); }; //Called when posted to the event queue - must have exactly this prototype or base class one will be called which won't copy extra stuff
-    CORBA::ULong GetNTracks() { if (mTrackStatusList.operator->()) return mTrackStatusList->length(); else return 0; };
-    void SetName(const wxString & name) { mName = name; };
-    void SetMessage(const wxString & msg) { mMessage = msg; };
-    void SetTrackList(ProdAuto::TrackList_var trackList) { mTrackList = trackList; };
-    void SetTrackStatusList(ProdAuto::TrackStatusList_var trackStatusList) { mTrackStatusList = trackStatusList; };
-    void SetCommand(Controller::Command command) { mCommand = command; };
-    void SetResult(Controller::Result result) { mResult = result; };
-    void SetStrings(CORBA::StringSeq_var strings) { mStrings = strings; };
-    void SetTimecode(ProdAuto::MxfTimecode_var timecode) { mTimecode = timecode; };
-    void SetTimecodeState(Controller::TimecodeState state) { mTimecodeState = state; };
-    void SetTimecodeStateChanged(bool changed = true) { mTimecodeStateChanged = changed; };
-    void SetRecordTimeAvailable(long timeAvailable) { mRecordTimeAvailable = timeAvailable; };
-    const wxString GetName() { return mName; };
-    const wxString GetMessage() { return mMessage; };
-    const ProdAuto::TrackList_var & GetTrackList() { return mTrackList; };
-    const ProdAuto::TrackStatusList_var & GetTrackStatusList() { return mTrackStatusList; };
-    Controller::Command GetCommand() { return mCommand; };
-    Controller::Result GetResult() { return mResult; };
-    CORBA::StringSeq_var GetStrings() { return mStrings; };
-    const ProdAuto::MxfTimecode GetTimecode() { return mTimecode; };
-    Controller::TimecodeState GetTimecodeState() { return mTimecodeState; };
-    bool TimecodeStateHasChanged() { return mTimecodeStateChanged; };
-    long GetRecordTimeAvailable() { return mRecordTimeAvailable; };
+    ControllerThreadEvent();
+    ControllerThreadEvent(const wxEventType &);
+    virtual wxEvent * Clone() const; //Called when posted to the event queue - must have exactly this prototype or base class one will be called which won't copy extra stuff
+    CORBA::ULong GetNTracks();
+    void SetName(const wxString &);
+    void SetMessage(const wxString &);
+    void SetTrackList(ProdAuto::TrackList_var);
+    void SetTrackStatusList(ProdAuto::TrackStatusList_var);
+    void SetCommand(Controller::Command);
+    void SetResult(Controller::Result);
+    void SetStrings(CORBA::StringSeq_var);
+    void SetTimecode(ProdAuto::MxfTimecode_var);
+    void SetTimecodeState(Controller::TimecodeState);
+    void SetTimecodeStateChanged(bool = true);
+    void SetRecordTimeAvailable(long);
+    const wxString GetName();
+    const wxString GetMessage();
+    const ProdAuto::TrackList_var & GetTrackList();
+    const ProdAuto::TrackStatusList_var & GetTrackStatusList();
+    Controller::Command GetCommand();
+    Controller::Result GetResult();
+    CORBA::StringSeq_var GetStrings();
+    const ProdAuto::MxfTimecode GetTimecode();
+    Controller::TimecodeState GetTimecodeState();
+    bool TimecodeStateHasChanged();
+    long GetRecordTimeAvailable();
     DECLARE_DYNAMIC_CLASS(ControllerThreadEvent)
 private:
     wxString mName;

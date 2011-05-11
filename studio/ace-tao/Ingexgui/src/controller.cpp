@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: controller.cpp,v 1.16 2011/04/19 07:04:02 john_f Exp $          *
+ *   $Id: controller.cpp,v 1.17 2011/05/11 08:54:09 john_f Exp $          *
  *                                                                         *
  *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -20,6 +20,9 @@
  *   Free Software Foundation, Inc.,                                       *
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
+
+#define __STDC_LIMIT_MACROS
+#include <stdint.h>
 
 #include "controller.h"
 #include "comms.h"
@@ -411,7 +414,6 @@ wxThread::ExitCode Controller::Entry()
                             event.SetTrackStatusList(mRecorder->TracksStatus());
                             routerRecorder = wxString(mRecorder->RecordingFormat(), wxConvISO8859_1).MakeUpper().Matches(wxT("*ROUTER*"));
                             strings = mRecorder->ProjectNames();
-                            recordTimeAvailable = mRecorder->RecordTimeAvailable();
                         }
                         catch (const CORBA::Exception & e) {
 //std::cerr << "connect/reconnect exception: " << e._name() << std::endl;
@@ -422,6 +424,12 @@ wxThread::ExitCode Controller::Entry()
                         event.SetResult(COMM_FAILURE);
                     }
                     else { //OK so far
+                        try {
+                            recordTimeAvailable = mRecorder->RecordTimeAvailable();
+                        }
+                        catch (const CORBA::Exception & e) {
+                            //do nothing - ignore old recorders that don't understand this command, and other errors are likely to have been detected by the previous calls
+                        }
                         mMutex.Lock();
                         if (CONNECT == event.GetCommand()) {
                             //various checks on the data we've acquired
@@ -550,6 +558,9 @@ wxThread::ExitCode Controller::Entry()
                     long recordTimeAvailable = -1;
                     try {
                         recordTimeAvailable = mRecorder->RecordTimeAvailable();
+                    }
+                    catch (const CORBA::BAD_OPERATION & e) {
+                        //do nothing - ignore old recorders that don't understand this command
                     }
                     catch (const CORBA::Exception & e) {
 //std::cerr << "RecordTimeAvailable exception: " << e._name() << std::endl;
@@ -685,4 +696,137 @@ wxThread::ExitCode Controller::Entry()
         mMutex.Lock();
     }
     return 0;
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+ControllerThreadEvent::ControllerThreadEvent() : mTrackStatusList(0), mTimecodeState(Controller::ABSENT), mTimecodeStateChanged(false)
+{
+}
+
+ControllerThreadEvent::ControllerThreadEvent(const wxEventType & type) : wxNotifyEvent(type), mTrackStatusList(0), mTimecodeState(Controller::ABSENT), mTimecodeStateChanged(false)
+{
+}
+
+///Called when posted to the event queue - must have exactly this prototype or base class one will be called which won't copy extra stuff
+wxEvent * ControllerThreadEvent::Clone() const
+{
+    return new ControllerThreadEvent(*this);
+}
+
+CORBA::ULong ControllerThreadEvent::GetNTracks()
+{
+    if (mTrackStatusList.operator->())
+        return mTrackStatusList->length();
+    else
+        return 0;
+}
+
+void ControllerThreadEvent::SetName(const wxString & name)
+{
+    mName = name;
+}
+
+void ControllerThreadEvent::SetMessage(const wxString & msg)
+{
+    mMessage = msg;
+}
+
+void ControllerThreadEvent::SetTrackList(ProdAuto::TrackList_var trackList)
+{
+    mTrackList = trackList;
+}
+
+void ControllerThreadEvent::SetTrackStatusList(ProdAuto::TrackStatusList_var trackStatusList)
+{
+    mTrackStatusList = trackStatusList;
+}
+
+void ControllerThreadEvent::SetCommand(Controller::Command command)
+{
+    mCommand = command;
+}
+
+void ControllerThreadEvent::SetResult(Controller::Result result)
+{
+    mResult = result;
+}
+
+void ControllerThreadEvent::SetStrings(CORBA::StringSeq_var strings)
+{
+    mStrings = strings;
+}
+
+void ControllerThreadEvent::SetTimecode(ProdAuto::MxfTimecode_var timecode)
+{
+    mTimecode = timecode;
+}
+
+void ControllerThreadEvent::SetTimecodeState(Controller::TimecodeState state)
+{
+    mTimecodeState = state;
+}
+
+void ControllerThreadEvent::SetTimecodeStateChanged(bool changed)
+{
+    mTimecodeStateChanged = changed;
+}
+
+void ControllerThreadEvent::SetRecordTimeAvailable(long timeAvailable)
+{
+    mRecordTimeAvailable = (UINT32_MAX == timeAvailable ? -1 : timeAvailable);
+}
+
+const wxString ControllerThreadEvent::GetName()
+{
+    return mName;
+}
+
+const wxString ControllerThreadEvent::GetMessage()
+{
+    return mMessage;
+}
+
+const ProdAuto::TrackList_var & ControllerThreadEvent::GetTrackList()
+{
+    return mTrackList;
+}
+
+const ProdAuto::TrackStatusList_var & ControllerThreadEvent::GetTrackStatusList()
+{
+    return mTrackStatusList;
+}
+
+Controller::Command ControllerThreadEvent::GetCommand() {
+    return mCommand;
+}
+
+Controller::Result ControllerThreadEvent::GetResult()
+{
+    return mResult;
+}
+
+CORBA::StringSeq_var ControllerThreadEvent::GetStrings()
+{
+    return mStrings;
+}
+
+const ProdAuto::MxfTimecode ControllerThreadEvent::GetTimecode()
+{
+    return mTimecode;
+}
+
+Controller::TimecodeState ControllerThreadEvent::GetTimecodeState()
+{
+    return mTimecodeState;
+}
+
+bool ControllerThreadEvent::TimecodeStateHasChanged()
+{
+    return mTimecodeStateChanged;
+}
+
+long ControllerThreadEvent::GetRecordTimeAvailable()
+{
+    return mRecordTimeAvailable;
 }
