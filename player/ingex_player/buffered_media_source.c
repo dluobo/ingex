@@ -1,5 +1,5 @@
 /*
- * $Id: buffered_media_source.c,v 1.7 2010/06/18 09:44:51 philipn Exp $
+ * $Id: buffered_media_source.c,v 1.8 2011/05/11 10:52:32 philipn Exp $
  *
  *
  *
@@ -108,6 +108,7 @@ struct BufferedMediaSource
 
 	pthread_t readThreadId;
 
+	int started; /* set when source initialization is complete */
     int stopped; /* set when the read thread is stopped */
 };
 
@@ -189,6 +190,7 @@ static int bmsrc_receive_frame(void* data, int streamId, unsigned char* buffer, 
 static void* read_thread(void* arg)
 {
     BufferedMediaSource* bufSource = (BufferedMediaSource*)arg;
+    int started = 0;
     int doneWaiting;
     int64_t position = 0;
     int readResult;
@@ -212,6 +214,19 @@ static void* read_thread(void* arg)
 
     memset(&dummyFrameInfo, 0, sizeof(FrameInfo));
 
+
+    /* wait until received start signal */
+    while (!bufSource->stopped && !started)
+    {
+        PTHREAD_MUTEX_LOCK(&bufSource->stateMutex);
+        started = bufSource->started;
+        PTHREAD_MUTEX_UNLOCK(&bufSource->stateMutex);
+
+        if (!bufSource->stopped && !started)
+        {
+            usleep(5);
+        }
+    }
 
     while (!bufSource->stopped)
     {
@@ -480,6 +495,23 @@ static int bmsrc_post_complete(void* data, MediaSource* rootSource, MediaControl
     BufferedMediaSource* bufSource = (BufferedMediaSource*)data;
 
     return msc_post_complete(bufSource->targetSource, rootSource, mediaControl);
+}
+
+static int bmsrc_finalise_blank_source(void* data, const StreamInfo* streamInfo)
+{
+    BufferedMediaSource* bufSource = (BufferedMediaSource*)data;
+
+    int result = msc_finalise_blank_source(bufSource->targetSource, streamInfo);
+
+    if (result)
+    {
+        /* signal to the read thread that it can start */
+        PTHREAD_MUTEX_LOCK(&bufSource->stateMutex);
+        bufSource->started = 1;
+        PTHREAD_MUTEX_UNLOCK(&bufSource->stateMutex);
+    }
+
+    return result;
 }
 
 static int bmsrc_get_num_streams(void* data)
@@ -1033,6 +1065,7 @@ int bmsrc_create(MediaSource* targetSource, int size, int blocking, float byteRa
     newBufSource->mediaSource.data = newBufSource;
     newBufSource->mediaSource.is_complete = bmsrc_is_complete;
     newBufSource->mediaSource.post_complete = bmsrc_post_complete;
+    newBufSource->mediaSource.finalise_blank_source = bmsrc_finalise_blank_source;
     newBufSource->mediaSource.get_num_streams = bmsrc_get_num_streams;
     newBufSource->mediaSource.get_stream_info = bmsrc_get_stream_info;
     newBufSource->mediaSource.set_frame_rate_or_disable = bmsrc_set_frame_rate_or_disable;

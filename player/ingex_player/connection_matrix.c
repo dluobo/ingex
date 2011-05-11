@@ -1,5 +1,5 @@
 /*
- * $Id: connection_matrix.c,v 1.4 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: connection_matrix.c,v 1.5 2011/05/11 10:52:32 philipn Exp $
  *
  *
  *
@@ -135,12 +135,51 @@ int stm_create_connection_matrix(MediaSource* source, MediaSink* sink, int numFF
     int numSourceStreams;
     int i;
     const StreamInfo* streamInfo;
+    StreamInfo decodedStreamInfo;
     int streamIndex;
 
     CALLOC_ORET(newMatrix, ConnectionMatrix, 1);
 
-    /* count the number of media source streams that can be connected */
     numSourceStreams = msc_get_num_streams(source);
+
+
+    /* complete blank video sources using the first or default video stream info */
+    for (i = 0; i < numSourceStreams; i++)
+    {
+        if (msc_stream_is_disabled(source, i))
+        {
+            continue;
+        }
+
+        CHK_OFAIL(msc_get_stream_info(source, i, &streamInfo));
+        if (streamInfo->type == PICTURE_STREAM_TYPE &&
+            streamInfo->format != UNKNOWN_FORMAT)
+        {
+            if (pass_through_accept(sink, streamInfo, &decodedStreamInfo) ||
+                dv_connect_accept(sink, streamInfo, &decodedStreamInfo) ||
+                mpegi_connect_accept(sink, streamInfo, &decodedStreamInfo) ||
+                mjpeg_connect_accept(sink, streamInfo, &decodedStreamInfo) ||
+                dnxhd_connect_accept(sink, streamInfo, &decodedStreamInfo))
+            {
+                break;
+            }
+        }
+    }
+    if (i >= numSourceStreams)
+    {
+        /* use default settings if no video source was accepted */
+        decodedStreamInfo.type = PICTURE_STREAM_TYPE;
+        decodedStreamInfo.format = UYVY_FORMAT;
+        decodedStreamInfo.width = 720;
+        decodedStreamInfo.height = 576;
+        decodedStreamInfo.frameRate = g_palFrameRate;
+        decodedStreamInfo.aspectRatio.num = 4;
+        decodedStreamInfo.aspectRatio.den = 3;
+    }
+    CHK_OFAIL(msc_finalise_blank_source(source, &decodedStreamInfo));
+
+
+    /* count the number of media source streams that can be connected */
     for (i = 0; i < numSourceStreams; i++)
     {
         if (msc_stream_is_disabled(source, i))
@@ -150,23 +189,23 @@ int stm_create_connection_matrix(MediaSource* source, MediaSink* sink, int numFF
         }
 
         CHK_OFAIL(msc_get_stream_info(source, i, &streamInfo));
-        if (pass_through_accept(sink, streamInfo))
+        if (pass_through_accept(sink, streamInfo, &decodedStreamInfo))
         {
             newMatrix->numStreams++;
         }
-        else if (dv_connect_accept(sink, streamInfo))
+        else if (dv_connect_accept(sink, streamInfo, &decodedStreamInfo))
         {
             newMatrix->numStreams++;
         }
-        else if (mpegi_connect_accept(sink, streamInfo))
+        else if (mpegi_connect_accept(sink, streamInfo, &decodedStreamInfo))
         {
             newMatrix->numStreams++;
         }
-        else if (mjpeg_connect_accept(sink, streamInfo))
+        else if (mjpeg_connect_accept(sink, streamInfo, &decodedStreamInfo))
         {
             newMatrix->numStreams++;
         }
-        else if (dnxhd_connect_accept(sink, streamInfo))
+        else if (dnxhd_connect_accept(sink, streamInfo, &decodedStreamInfo))
         {
             newMatrix->numStreams++;
         }
@@ -200,7 +239,7 @@ int stm_create_connection_matrix(MediaSource* source, MediaSink* sink, int numFF
             }
 
             CHK_OFAIL(msc_get_stream_info(source, i, &streamInfo));
-            if (pass_through_accept(sink, streamInfo))
+            if (pass_through_accept(sink, streamInfo, &decodedStreamInfo))
             {
                 if (create_pass_through_connect(sink, i, i, streamInfo, &newMatrix->entries[streamIndex].connect))
                 {
@@ -217,7 +256,7 @@ int stm_create_connection_matrix(MediaSource* source, MediaSink* sink, int numFF
 
                 streamIndex++;
             }
-            else if (dv_connect_accept(sink, streamInfo))
+            else if (dv_connect_accept(sink, streamInfo, &decodedStreamInfo))
             {
                 if (create_dv_connect(sink, i, i, streamInfo, numFFMPEGThreads, useWorkerThreads,
                         &newMatrix->entries[streamIndex].connect))
@@ -235,7 +274,7 @@ int stm_create_connection_matrix(MediaSource* source, MediaSink* sink, int numFF
 
                 streamIndex++;
             }
-            else if (mpegi_connect_accept(sink, streamInfo))
+            else if (mpegi_connect_accept(sink, streamInfo, &decodedStreamInfo))
             {
                 if (create_mpegi_connect(sink, i, i, streamInfo, numFFMPEGThreads, useWorkerThreads,
                         &newMatrix->entries[streamIndex].connect))
@@ -253,7 +292,7 @@ int stm_create_connection_matrix(MediaSource* source, MediaSink* sink, int numFF
 
                 streamIndex++;
             }
-            else if (mjpeg_connect_accept(sink, streamInfo))
+            else if (mjpeg_connect_accept(sink, streamInfo, &decodedStreamInfo))
             {
                 if (create_mjpeg_connect(sink, i, i, streamInfo, numFFMPEGThreads, useWorkerThreads,
                         &newMatrix->entries[streamIndex].connect))
@@ -271,7 +310,7 @@ int stm_create_connection_matrix(MediaSource* source, MediaSink* sink, int numFF
 
                 streamIndex++;
             }
-            else if (dnxhd_connect_accept(sink, streamInfo))
+            else if (dnxhd_connect_accept(sink, streamInfo, &decodedStreamInfo))
             {
                 if (create_dnxhd_connect(sink, i, i, streamInfo, numFFMPEGThreads, useWorkerThreads,
                         &newMatrix->entries[streamIndex].connect))

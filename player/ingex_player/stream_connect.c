@@ -1,5 +1,5 @@
 /*
- * $Id: stream_connect.c,v 1.3 2009/01/29 07:10:27 stuart_hc Exp $
+ * $Id: stream_connect.c,v 1.4 2011/05/11 10:52:32 philipn Exp $
  *
  *
  *
@@ -156,10 +156,16 @@ static int cyc_receive_frame_const(void* data, int streamId, const unsigned char
 }
 
 
-int pass_through_accept(MediaSink* sink, const StreamInfo* streamInfo)
+int pass_through_accept(MediaSink* sink, const StreamInfo* streamInfo, StreamInfo* decodedStreamInfo)
 {
     /* accept streams where frames can be passed directly to sink */
-    return msk_accept_stream(sink, streamInfo);
+    int result = msk_accept_stream(sink, streamInfo);
+    if (result)
+    {
+        *decodedStreamInfo = *streamInfo;
+    }
+
+    return result;
 }
 
 int create_pass_through_connect(MediaSink* sink, int sinkStreamId, int sourceStreamId,

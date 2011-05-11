@@ -1,5 +1,5 @@
 /*
- * $Id: dnxhd_stream_connect.h,v 1.4 2010/06/02 11:12:14 philipn Exp $
+ * $Id: dnxhd_stream_connect.h,v 1.5 2011/05/11 10:52:32 philipn Exp $
  *
  *
  *
@@ -31,7 +31,7 @@
 
 /* connector that decodes DNxHD */
 
-int dnxhd_connect_accept(MediaSink* sink, const StreamInfo* streamInfo);
+int dnxhd_connect_accept(MediaSink* sink, const StreamInfo* streamInfo, StreamInfo* decodedStreamInfo);
 int create_dnxhd_connect(MediaSink* sink, int sinkStreamId, int sourceStreamId,
     const StreamInfo* streamInfo, int numFFMPEGThreads, int useWorkerThread,
     StreamConnect** connect);

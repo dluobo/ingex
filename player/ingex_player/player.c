@@ -1,5 +1,5 @@
 /*
- * $Id: player.c,v 1.31 2011/04/27 10:57:48 john_f Exp $
+ * $Id: player.c,v 1.32 2011/05/11 10:52:32 philipn Exp $
  *
  *
  *
@@ -2682,14 +2682,6 @@ int main(int argc, const char **argv)
         }
     }
 
-    /* finalise the blank video sources */
-    if (!mls_finalise_blank_sources(multipleSource))
-    {
-        ml_log_error("Failed to finalise blank video sources\n");
-        goto fail;
-    }
-
-
     /* add a system timecode source */
 
     if (systemStartTimecode >= 0)
@@ -2757,12 +2749,6 @@ int main(int argc, const char **argv)
         if (!mls_assign_source(multipleSource, &mediaSource))
         {
             ml_log_error("Failed to assign media source to multiple source\n");
-            goto fail;
-        }
-
-        if (!mls_finalise_blank_sources(multipleSource))
-        {
-            ml_log_error("Failed to finalise blank video sources\n");
             goto fail;
         }
     }

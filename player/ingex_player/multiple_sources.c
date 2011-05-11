@@ -1,5 +1,5 @@
 /*
- * $Id: multiple_sources.c,v 1.6 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: multiple_sources.c,v 1.7 2011/05/11 10:52:32 philipn Exp $
  *
  *
  *
@@ -219,6 +219,21 @@ static int mls_post_complete(void* data, MediaSource* rootSource, MediaControl* 
             ele->postComplete = msc_post_complete(ele->source, rootSource, mediaControl);
         }
         result &= ele->isComplete && ele->postComplete;
+        ele = ele->next;
+    }
+
+    return result;
+}
+
+static int mls_finalise_blank_source(void* data, const StreamInfo* streamInfo)
+{
+    MultipleMediaSources* multSource = (MultipleMediaSources*)data;
+    MediaSourceElement* ele = &multSource->sources;
+    int result = 1;
+
+    while (ele != NULL && ele->source != NULL)
+    {
+        result = msc_finalise_blank_source(ele->source, streamInfo) && result;
         ele = ele->next;
     }
 
@@ -756,6 +771,7 @@ int mls_create(const Rational* aspectRatio, int64_t maxLength, const Rational* m
     newMultSource->collectiveSource.data = newMultSource;
     newMultSource->collectiveSource.is_complete = mls_is_complete;
     newMultSource->collectiveSource.post_complete = mls_post_complete;
+    newMultSource->collectiveSource.finalise_blank_source = mls_finalise_blank_source;
     newMultSource->collectiveSource.get_num_streams = mls_get_num_streams;
     newMultSource->collectiveSource.get_stream_info = mls_get_stream_info;
     newMultSource->collectiveSource.set_frame_rate_or_disable = mls_set_frame_rate_or_disable;
@@ -782,52 +798,6 @@ int mls_create(const Rational* aspectRatio, int64_t maxLength, const Rational* m
 int mls_assign_source(MultipleMediaSources* multSource, MediaSource** source)
 {
     return append_source(&multSource->sources, source);
-}
-
-int mls_finalise_blank_sources(MultipleMediaSources* multSource)
-{
-    MediaSourceElement* ele = &multSource->sources;
-    StreamInfo videoStreamInfo;
-    int i;
-    const StreamInfo* streamInfo;
-    int haveVideoStreamInfo = 0;
-
-    while (ele != NULL && ele->source != NULL)
-    {
-        int numStreams = msc_get_num_streams(ele->source);
-        for (i = 0; i < numStreams; i++)
-        {
-            CHK_ORET(msc_get_stream_info(ele->source, i, &streamInfo));
-            if (streamInfo->type == PICTURE_STREAM_TYPE &&
-                streamInfo->format != UNKNOWN_FORMAT)
-            {
-                videoStreamInfo = *streamInfo;
-                haveVideoStreamInfo = 1;
-                break;
-            }
-        }
-        ele = ele->next;
-    }
-    if (!haveVideoStreamInfo)
-    {
-        /* use default settings if no video source with known format is present */
-        videoStreamInfo.type = PICTURE_STREAM_TYPE;
-        videoStreamInfo.format = UYVY_FORMAT;
-        videoStreamInfo.width = 720;
-        videoStreamInfo.height = 576;
-        videoStreamInfo.frameRate = g_palFrameRate;
-        videoStreamInfo.aspectRatio.num = 4;
-        videoStreamInfo.aspectRatio.den = 3;
-    }
-
-    ele = &multSource->sources;
-    while (ele != NULL && ele->source != NULL)
-    {
-        CHK_ORET(msc_finalise_blank_source(ele->source, &videoStreamInfo));
-        ele = ele->next;
-    }
-
-    return 1;
 }
 
 MediaSource* mls_get_media_source(MultipleMediaSources* multSource)

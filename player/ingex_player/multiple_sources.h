@@ -1,5 +1,5 @@
 /*
- * $Id: multiple_sources.h,v 1.4 2010/06/02 11:12:14 philipn Exp $
+ * $Id: multiple_sources.h,v 1.5 2011/05/11 10:52:32 philipn Exp $
  *
  *
  *
@@ -35,7 +35,6 @@ typedef struct MultipleMediaSources MultipleMediaSources;
 int mls_create(const Rational* aspectRatio, int64_t maxLength, const Rational* maxLengthFrameRate, MultipleMediaSources** multSource);
 int mls_assign_source(MultipleMediaSources* multSource, MediaSource** source);
 MediaSource* mls_get_media_source(MultipleMediaSources* multSource);
-int mls_finalise_blank_sources(MultipleMediaSources* multSource);
 
 
 

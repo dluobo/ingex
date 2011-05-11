@@ -1,5 +1,5 @@
 /*
- * $Id: dv_stream_connect.c,v 1.10 2010/10/13 12:34:32 philipn Exp $
+ * $Id: dv_stream_connect.c,v 1.11 2011/05/11 10:52:32 philipn Exp $
  *
  *
  *
@@ -37,7 +37,7 @@
 
 #if !defined(HAVE_FFMPEG)
 
-int dv_connect_accept(MediaSink* sink, const StreamInfo* streamInfo)
+int dv_connect_accept(MediaSink* sink, const StreamInfo* streamInfo, StreamInfo* decodedStreamInfo)
 {
     return 0;
 }
@@ -722,7 +722,7 @@ static int ddc_receive_frame_const(void* data, int streamId, const unsigned char
 
 
 
-int dv_connect_accept(MediaSink* sink, const StreamInfo* streamInfo)
+int dv_connect_accept(MediaSink* sink, const StreamInfo* streamInfo, StreamInfo* decodedStreamInfoOut)
 {
     StreamInfo decodedStreamInfo;
     int result;
@@ -774,6 +774,11 @@ int dv_connect_accept(MediaSink* sink, const StreamInfo* streamInfo)
         decodedStreamInfo.format = UYVY_FORMAT;
 
         result = msk_accept_stream(sink, &decodedStreamInfo);
+    }
+
+    if (result)
+    {
+        *decodedStreamInfoOut = decodedStreamInfo;
     }
 
     return result;
