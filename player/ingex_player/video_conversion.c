@@ -1,5 +1,5 @@
 /*
- * $Id: video_conversion.c,v 1.7 2011/04/19 10:03:53 philipn Exp $
+ * $Id: video_conversion.c,v 1.8 2011/05/11 10:45:54 philipn Exp $
  *
  *
  *
@@ -790,7 +790,7 @@ void fill_black(StreamFormat format, int width, int height, unsigned char* image
             }
         }
     }
-    else if (format == YUV420_FORMAT)
+    else if (format == YUV420_FORMAT || format == YUV411_FORMAT)
     {
         int i;
         int size = width * height;
@@ -806,6 +806,21 @@ void fill_black(StreamFormat format, int width, int height, unsigned char* image
                 *u++ = 0x80;
                 *v++ = 0x80;
             }
+        }
+    }
+    else if (format == YUV444_FORMAT)
+    {
+        int i;
+        int size = width * height;
+        unsigned char* y = image;
+        unsigned char* u = &image[width * height];
+        unsigned char* v = &image[width * height * 2];
+
+        for (i = 0; i < size; i ++)
+        {
+            *y++ = 0x10;
+            *u++ = 0x80;
+            *v++ = 0x80;
         }
     }
     else
