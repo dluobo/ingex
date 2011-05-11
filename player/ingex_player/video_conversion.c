@@ -1,5 +1,5 @@
 /*
- * $Id: video_conversion.c,v 1.8 2011/05/11 10:45:54 philipn Exp $
+ * $Id: video_conversion.c,v 1.9 2011/05/11 14:23:26 philipn Exp $
  *
  *
  *
@@ -478,6 +478,42 @@ void yuv422_to_yuv422(int width, int height, int shift_picture_up, AVFrame *inpu
         memset(uOut, 0x80, width / 2);
         memset(vOut, 0x80, width / 2);
 	}
+}
+
+void uyvy_to_uyvy(int width, int height, int shift_picture_up, AVFrame *input, uint8_t *output)
+{
+    uint8_t *output_ptr = output;
+    uint8_t *input_ptr = input->data[0];
+    int data_width = width * 2;
+    int h;
+    int start_line = 0;
+
+    if (shift_picture_up)
+    {
+        // Skip one line of input picture and start one line lower
+        start_line = 1;
+        input_ptr += input->linesize[0];
+    }
+
+    for (h = start_line; h < height; h++)
+    {
+        memcpy(output_ptr, input_ptr, data_width);
+        output_ptr += data_width;
+        input_ptr += input->linesize[0];
+    }
+
+    if (shift_picture_up)
+    {
+        // Fill bottom line with one line of black
+        int i;
+        for (i = 0; i < data_width; i += 4)
+        {
+            *output_ptr++ = 0x80;
+            *output_ptr++ = 0x10;
+            *output_ptr++ = 0x80;
+            *output_ptr++ = 0x10;
+        }
+    }
 }
 
 void yuv4xx_to_yuv4xx(int width, int height, int shift_picture_up, AVFrame *input, uint8_t *output)

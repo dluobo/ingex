@@ -1,5 +1,5 @@
 /*
- * $Id: video_conversion.h,v 1.6 2010/06/02 11:12:14 philipn Exp $
+ * $Id: video_conversion.h,v 1.7 2011/05/11 14:23:26 philipn Exp $
  *
  *
  *
@@ -57,6 +57,8 @@ void yuv422_to_uyvy(int width, int height, int shift_picture_up, AVFrame *input,
 void yuv4xx_to_yuv4xx(int width, int height, int shift_picture_up, AVFrame *input, uint8_t *output);
 
 void yuv422_to_yuv422(int width, int height, int shift_picture_up, AVFrame *input, uint8_t *output);
+
+void uyvy_to_uyvy(int width, int height, int shift_picture_up, AVFrame *input, uint8_t *output);
 
 #endif /* defined(HAVE_FFMPEG) */
 
