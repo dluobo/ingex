@@ -1,5 +1,5 @@
 /*
- * $Id: audio_switch_sink.c,v 1.5 2011/04/19 10:08:48 philipn Exp $
+ * $Id: audio_switch_sink.c,v 1.6 2011/05/11 10:54:41 philipn Exp $
  *
  *
  *
@@ -472,9 +472,12 @@ static int qas_accept_stream_frame(void* data, int streamId, const FrameInfo* fr
     AudioStreamElement* inputStream = NULL;
     AudioStreamElement* outputStream = NULL;
     VideoSwitchSink* videoSwitch = NULL;
-    char clipId[CLIP_ID_SIZE];
-    int sourceId;
+    char clipIds[CLIP_ID_SIZE][MAX_SPLIT_COUNT];
+    int sourceIds[MAX_SPLIT_COUNT];
+    int numIds;
     AudioStreamGroup* videoGroup = NULL;
+    AudioStreamGroup* firstVideoGroupWithAudio = NULL;
+    int i;
 
     if (!swtch->disableSwitching)
     {
@@ -485,14 +488,56 @@ static int qas_accept_stream_frame(void* data, int streamId, const FrameInfo* fr
         if (swtch->snapToVideo)
         {
             videoSwitch = msk_get_video_switch(swtch->targetSink);
-            if (videoSwitch != NULL)
+            if (videoSwitch)
             {
-                if (vsw_get_first_active_clip_id(videoSwitch, clipId, &sourceId))
+                if (vsw_get_active_clip_ids(videoSwitch, clipIds, sourceIds, &numIds))
                 {
-                    videoGroup = get_stream_group_with_id(&swtch->groups, clipId, sourceId);
-                    if (videoGroup != NULL)
+                    if (numIds > 1)
                     {
-                        swtch->currentGroup = videoGroup;
+                        /* if there is a choice then keep the current selected audio group if possible,
+                           otherwise choose the first available group with audio */
+                        for (i = 0; i < numIds; i++)
+                        {
+                            videoGroup = get_stream_group_with_id(&swtch->groups, clipIds[i], sourceIds[i]);
+                            if (videoGroup)
+                            {
+                                if (videoGroup == swtch->currentGroup)
+                                {
+                                    /* choose current selected group */
+                                    swtch->currentGroup = videoGroup;
+                                    break;
+                                }
+                                else if (!firstVideoGroupWithAudio)
+                                {
+                                    firstVideoGroupWithAudio = videoGroup;
+                                }
+                            }
+                        }
+                        if (i >= numIds)
+                        {
+                            if (firstVideoGroupWithAudio)
+                            {
+                                /* choose first available group */
+                                swtch->currentGroup = videoGroup;
+                            }
+                            else
+                            {
+                                swtch->noAudioGroup = 1;
+                            }
+                        }
+                    }
+                    else if (numIds == 1)
+                    {
+                        /* no choice - either have audio or not */
+                        videoGroup = get_stream_group_with_id(&swtch->groups, clipIds[0], sourceIds[0]);
+                        if (videoGroup)
+                        {
+                            swtch->currentGroup = videoGroup;
+                        }
+                        else
+                        {
+                            swtch->noAudioGroup = 1;
+                        }
                     }
                     else
                     {
@@ -500,6 +545,7 @@ static int qas_accept_stream_frame(void* data, int streamId, const FrameInfo* fr
                     }
                 }
             }
+
             swtch->nextCurrentGroup = swtch->currentGroup;
         }
         else
@@ -514,18 +560,16 @@ static int qas_accept_stream_frame(void* data, int streamId, const FrameInfo* fr
 
     if (is_input_stream(swtch, streamId))
     {
-        if (swtch->noAudioGroup)
+        if (!swtch->noAudioGroup)
         {
-            return 0;
-        }
-
-        inputStream = get_stream_element(&swtch->currentGroup->elements, streamId);
-        if (inputStream != NULL)
-        {
-            outputStream = get_stream_element(&swtch->outputElements, inputStream->outputStreamId);
-            if (outputStream != NULL)
+            inputStream = get_stream_element(&swtch->currentGroup->elements, streamId);
+            if (inputStream)
             {
-                return msk_accept_stream_frame(swtch->targetSink, outputStream->streamId, frameInfo);
+                outputStream = get_stream_element(&swtch->outputElements, inputStream->outputStreamId);
+                if (outputStream)
+                {
+                    return msk_accept_stream_frame(swtch->targetSink, outputStream->streamId, frameInfo);
+                }
             }
         }
 

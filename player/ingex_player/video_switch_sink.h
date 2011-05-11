@@ -1,5 +1,5 @@
 /*
- * $Id: video_switch_sink.h,v 1.9 2010/10/01 15:56:21 john_f Exp $
+ * $Id: video_switch_sink.h,v 1.10 2011/05/11 10:54:41 philipn Exp $
  *
  *
  *
@@ -30,6 +30,10 @@
 #include "video_switch_database.h"
 
 
+#define MAX_SPLIT_COUNT                 9
+
+
+
 struct VideoSwitchSink
 {
     void* data;
@@ -42,7 +46,8 @@ struct VideoSwitchSink
     void (*show_source_name)(void* data, int enable);
     void (*toggle_show_source_name)(void* data);
     int (*get_video_index)(void* data, int imageWidth, int imageHeight, int xPos, int yPos, int* index);
-    int (*get_first_active_clip_id)(void* data, char* clipId, int* sourceId);
+    int (*get_active_clip_ids)(void *data, char clipIds[][MAX_SPLIT_COUNT], int sourceIds[MAX_SPLIT_COUNT],
+                               int *numIds);
 };
 
 /* utility functions for calling VideoSwitchSink functions */
@@ -54,7 +59,8 @@ int vsw_switch_video(VideoSwitchSink* swtch, int index);
 void vsw_show_source_name(VideoSwitchSink* swtch, int enable);
 void vsw_toggle_show_source_name(VideoSwitchSink* swtch);
 int vsw_get_video_index(VideoSwitchSink* swtch, int imageWidth, int imageHeight, int xPos, int yPos, int* index);
-int vsw_get_first_active_clip_id(VideoSwitchSink* swtch, char* clipId, int* sourceId);
+int vsw_get_active_clip_ids(VideoSwitchSink *swtch, char clipId[][MAX_SPLIT_COUNT], int sourceId[MAX_SPLIT_COUNT],
+                            int *numIds);
 
 
 /* video switch */

@@ -1,5 +1,5 @@
 /*
- * $Id: video_switch_sink.c,v 1.13 2011/04/19 10:03:53 philipn Exp $
+ * $Id: video_switch_sink.c,v 1.14 2011/05/11 10:54:41 philipn Exp $
  *
  *
  *
@@ -1861,7 +1861,8 @@ static int qvs_get_video_index(void* data, int imageWidth, int imageHeight, int 
     return 1;
 }
 
-static int qvs_get_first_active_clip_id(void* data, char* clipId, int* sourceId)
+static int qvs_get_active_clip_ids(void *data, char clipIds[][MAX_SPLIT_COUNT], int sourceIds[MAX_SPLIT_COUNT],
+                                   int *numIds)
 {
     DefaultVideoSwitch *swtch = (DefaultVideoSwitch*)data;
     int result = 0;
@@ -1888,18 +1889,27 @@ static int qvs_get_first_active_clip_id(void* data, char* clipId, int* sourceId)
     {
         if (!showSplitSelect && currentStream == swtch->splitStream)
         {
-            /* the active clip is the clip associated with the first video stream in the split view */
-            strcpy(clipId, swtch->firstInputStream->streamInfo.clipId);
-            *sourceId = swtch->firstInputStream->streamInfo.sourceId;
-            result = 1;
+            /* the active clips are all the clips in the split view */
+            *numIds = 0;
+            VideoStreamElement* element = swtch->firstInputStream;
+            int i;
+            for (i = 0; i < swtch->splitCount && i < 9 && element; i++)
+            {
+                strcpy(clipIds[i], element->streamInfo.clipId);
+                sourceIds[i] = element->streamInfo.sourceId;
+                (*numIds)++;
+                element = element->next;
+            }
         }
         else
         {
             /* the active clip is the clip associated with the current video stream */
-            strcpy(clipId, currentStream->streamInfo.clipId);
-            *sourceId = currentStream->streamInfo.sourceId;
-            result = 1;
+            strcpy(clipIds[0], currentStream->streamInfo.clipId);
+            sourceIds[0] = currentStream->streamInfo.sourceId;
+            *numIds = 1;
         }
+
+        result = 1;
     }
 
     PTHREAD_MUTEX_UNLOCK(&swtch->nextCurrentStreamMutex);
@@ -1956,7 +1966,7 @@ int qvs_create_video_switch(MediaSink* sink, VideoSwitchSplit split, int splitSe
     newSwitch->switchSink.show_source_name = qvs_show_source_name;
     newSwitch->switchSink.toggle_show_source_name = qvs_toggle_show_source_name;
     newSwitch->switchSink.get_video_index = qvs_get_video_index;
-    newSwitch->switchSink.get_first_active_clip_id = qvs_get_first_active_clip_id;
+    newSwitch->switchSink.get_active_clip_ids = qvs_get_active_clip_ids;
 
     newSwitch->targetSinkListener.data = newSwitch;
     newSwitch->targetSinkListener.frame_displayed = qvs_frame_displayed;
@@ -2063,11 +2073,11 @@ int vsw_get_video_index(VideoSwitchSink* swtch, int width, int height, int xPos,
     return 0;
 }
 
-int vsw_get_first_active_clip_id(VideoSwitchSink* swtch, char* clipId, int* sourceId)
+int vsw_get_active_clip_ids(VideoSwitchSink* swtch, char clipId[][9], int sourceId[9], int* numIds)
 {
-    if (swtch && swtch->get_first_active_clip_id)
+    if (swtch && swtch->get_active_clip_ids)
     {
-        return swtch->get_first_active_clip_id(swtch->data, clipId, sourceId);
+        return swtch->get_active_clip_ids(swtch->data, clipId, sourceId, numIds);
     }
     return 0;
 }
