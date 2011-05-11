@@ -1,5 +1,5 @@
 /*
- * $Id: picture_scale_sink.c,v 1.3 2011/04/19 10:03:53 philipn Exp $
+ * $Id: picture_scale_sink.c,v 1.4 2011/05/11 10:48:31 philipn Exp $
  *
  * Copyright (C) 2010 British Broadcasting Corporation, All Rights Reserved
  *
@@ -1164,6 +1164,8 @@ static int pss_receive_stream_frame_const(void *data, int stream_id, const unsig
 
     if (!pss_get_stream_buffer(data, stream_id, buffer_size, &input_buffer))
         return 0;
+
+    memcpy(input_buffer, buffer, buffer_size);
 
     return pss_receive_stream_frame(data, stream_id, input_buffer, buffer_size);
 }
