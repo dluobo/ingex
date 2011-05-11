@@ -1,5 +1,5 @@
 /*
- * $Id: dv_stream_connect.c,v 1.11 2011/05/11 10:52:32 philipn Exp $
+ * $Id: dv_stream_connect.c,v 1.12 2011/05/11 14:22:51 philipn Exp $
  *
  *
  *
@@ -117,6 +117,7 @@ typedef struct
 
     StreamInfo streamInfo;
     StreamFormat decodedFormat;
+    int shiftLineUp;
 
     DVDecoder* decoder;
 
@@ -322,39 +323,39 @@ static int decode_and_send_const(DVDecodeStreamConnect* connect, const unsigned 
     {
         if (connect->decodedFormat == UYVY_FORMAT)
         {
-            yuv4xx_to_uyvy(connect->streamInfo.width, connect->streamInfo.height, stream_is_pal_frame_rate(&connect->streamInfo),
-                connect->decoder->decFrame, connect->sinkBuffer);
+            yuv4xx_to_uyvy(connect->streamInfo.width, connect->streamInfo.height, connect->shiftLineUp,
+                           connect->decoder->decFrame, connect->sinkBuffer);
         }
         else /* YUV420 */
         {
-            yuv4xx_to_yuv4xx(connect->streamInfo.width, connect->streamInfo.height, stream_is_pal_frame_rate(&connect->streamInfo),
-                connect->decoder->decFrame, connect->sinkBuffer);
+            yuv4xx_to_yuv4xx(connect->streamInfo.width, connect->streamInfo.height, connect->shiftLineUp,
+                             connect->decoder->decFrame, connect->sinkBuffer);
         }
     }
     else if (connect->streamInfo.format == DV25_YUV411_FORMAT)
     {
         if (connect->decodedFormat == UYVY_FORMAT)
         {
-            yuv4xx_to_uyvy(connect->streamInfo.width, connect->streamInfo.height, stream_is_pal_frame_rate(&connect->streamInfo),
-                connect->decoder->decFrame, connect->sinkBuffer);
+            yuv4xx_to_uyvy(connect->streamInfo.width, connect->streamInfo.height, connect->shiftLineUp,
+                           connect->decoder->decFrame, connect->sinkBuffer);
         }
         else /* YUV411 */
         {
-            yuv4xx_to_yuv4xx(connect->streamInfo.width, connect->streamInfo.height, stream_is_pal_frame_rate(&connect->streamInfo),
-                connect->decoder->decFrame, connect->sinkBuffer);
+            yuv4xx_to_yuv4xx(connect->streamInfo.width, connect->streamInfo.height, connect->shiftLineUp,
+                             connect->decoder->decFrame, connect->sinkBuffer);
         }
     }
     else /* DV50_FORMAT/DV100_1080I_FORMAT/DV100_720P_FORMAT */
     {
         if (connect->decodedFormat == UYVY_FORMAT)
         {
-            yuv422_to_uyvy(connect->streamInfo.width, connect->streamInfo.height, stream_is_pal_frame_rate(&connect->streamInfo),
-                connect->decoder->decFrame, connect->sinkBuffer);
+            yuv422_to_uyvy(connect->streamInfo.width, connect->streamInfo.height, connect->shiftLineUp,
+                           connect->decoder->decFrame, connect->sinkBuffer);
         }
         else /* YUV422 */
         {
-            yuv422_to_yuv422(connect->streamInfo.width, connect->streamInfo.height, stream_is_pal_frame_rate(&connect->streamInfo),
-                connect->decoder->decFrame, connect->sinkBuffer);
+            yuv422_to_yuv422(connect->streamInfo.width, connect->streamInfo.height, connect->shiftLineUp,
+                             connect->decoder->decFrame, connect->sinkBuffer);
         }
     }
 
@@ -855,18 +856,22 @@ int create_dv_connect(MediaSink* sink, int sinkStreamId, int sourceStreamId,
     if (streamInfo->format == DV25_YUV420_FORMAT || streamInfo->format == DV25_YUV411_FORMAT)
     {
         newConnect->dvDataSize = (stream_is_pal_frame_rate(streamInfo) ? 144000 : 120000);
+        newConnect->shiftLineUp = stream_is_pal_frame_rate(streamInfo);
     }
     else if (streamInfo->format == DV50_FORMAT)
     {
         newConnect->dvDataSize = (stream_is_pal_frame_rate(streamInfo) ? 288000 : 240000);
+        newConnect->shiftLineUp = stream_is_pal_frame_rate(streamInfo);
     }
     else if (streamInfo->format == DV100_1080I_FORMAT)
     {
         newConnect->dvDataSize = (stream_is_pal_frame_rate(streamInfo) ? 576000 : 480000);
+        newConnect->shiftLineUp = 0;
     }
     else /* DV100_720P_FORMAT */
     {
         newConnect->dvDataSize = (streamInfo->frameRate.num == 50 ? 288000 : 240000);
+        newConnect->shiftLineUp = 0;
     }
     if ((newConnect->dvData = (unsigned char*)calloc(
         newConnect->dvDataSize + FF_INPUT_BUFFER_PADDING_SIZE /* FFMPEG for some reason needs the extra space */,
