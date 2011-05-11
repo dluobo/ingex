@@ -1,5 +1,5 @@
 /*
- * $Id: audio_sink.c,v 1.8 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: audio_sink.c,v 1.9 2011/05/11 10:57:08 philipn Exp $
  *
  *
  *
@@ -59,6 +59,8 @@ MediaSink* aus_get_media_sink(AudioSink* sink)
 typedef struct
 {
     int streamId;
+
+    int haveInputData[2];
 
     unsigned int bufferSize[2];
     unsigned char* buffer[2];
@@ -138,7 +140,7 @@ static int paAudioCallback(const void *inputBuffer, void *outputBuffer,
     }
 #endif
 
-    while (!sink->stop && totalFramesWritten < framesPerBuffer)
+    while (!sink->stop && sink->paStreamStarted && totalFramesWritten < framesPerBuffer)
     {
         bufferIsReadyForRead = 1;
         returnEmptyFrame = 0;
@@ -186,7 +188,6 @@ static int paAudioCallback(const void *inputBuffer, void *outputBuffer,
             usleep(500);
             continue;
         }
-
 
         /* transfer samples from source buffer to output */
         if (sink->numAudioStreams == 1)
@@ -441,93 +442,39 @@ static int aus_accept_stream_frame(void* data, int streamId, const FrameInfo* fr
                 return 0;
             }
 
-            /* take opportunity to do first time initialisation */
-            if (!sink->paStreamInitialised)
-            {
-                PaError err;
-                if (sink->audioDevice < 0)
-                {
-                    /* Open an audio I/O stream on the default audio device. */
-                    err = Pa_OpenDefaultStream(&sink->paStream,
-                        0,          /* no input channels */
-                        sink->numAudioStreams,
-                        sink->paFormat,
-                        sink->samplingRate.num / (double)sink->samplingRate.den,
-                        0,
-                        paAudioCallback,
-                        sink);
-                }
-                else
-                {
-                    /* Open an audio I/O stream on specific audio device */
-                    PaStreamParameters outParam;
-                    outParam.device = sink->audioDevice;
-                    outParam.channelCount = sink->numAudioStreams;
-                    outParam.sampleFormat = sink->paFormat;
-                    outParam.suggestedLatency = Pa_GetDeviceInfo(sink->audioDevice)->defaultHighOutputLatency;
-                    outParam.hostApiSpecificStreamInfo = NULL;
-                    err = Pa_OpenStream(&sink->paStream,
-                        NULL, /* no input channels */
-                        &outParam,
-                        sink->samplingRate.num / (double)sink->samplingRate.den,
-                        0,
-                        paNoFlag,
-                        paAudioCallback,
-                        sink);
-                }
-                if (err != paNoError)
-                {
-                    ml_log_error("An error occured while initialising the portaudio stream: (%d) %s\n", err, Pa_GetErrorText(err));
-                    ml_log_warn("The audio sink has been disabled\n");
-                    sink->sinkDisabled = 1;
-                    return 0;
-                }
-
-                sink->paStreamInitialised = 1;
-
-                /* start the stream */
-                err = Pa_StartStream(sink->paStream);
-                if (err != paNoError)
-                {
-                    ml_log_error("An error occured while starting the portaudio stream: (%d) %s\n", err, Pa_GetErrorText(err));
-                    ml_log_warn("The audio sink has been disabled\n");
-                    sink->sinkDisabled = 1;
-                    return 0;
-                }
-                sink->paStreamStarted = 1;
-            }
-
             /* wait until a buffer is ready if the audio stream is active */
-            PaError result = Pa_IsStreamActive(sink->paStream);
-            if (result == 1)
+            if (sink->paStreamInitialised)
             {
-                while (1)
+                PaError result = Pa_IsStreamActive(sink->paStream);
+                if (result == 1)
                 {
-                    bufferIsReadyForWrite = 1;
-                    PTHREAD_MUTEX_LOCK(&sink->bufferMutex);
-                    if (sink->writeBuffer == sink->readBuffer &&
-                        sink->audioStreams[i].bufferIsReadyForRead[sink->writeBuffer])
+                    while (1)
                     {
-                        bufferIsReadyForWrite = 0;
-                    }
-                    PTHREAD_MUTEX_UNLOCK(&sink->bufferMutex);
+                        bufferIsReadyForWrite = 1;
+                        PTHREAD_MUTEX_LOCK(&sink->bufferMutex);
+                        if (sink->writeBuffer == sink->readBuffer &&
+                            sink->audioStreams[i].bufferIsReadyForRead[sink->writeBuffer])
+                        {
+                            bufferIsReadyForWrite = 0;
+                        }
+                        PTHREAD_MUTEX_UNLOCK(&sink->bufferMutex);
 
-                    if (bufferIsReadyForWrite)
-                    {
-                        break;
-                    }
+                        if (bufferIsReadyForWrite)
+                        {
+                            break;
+                        }
 
-                    usleep(100);
+                        usleep(100);
+                    }
+                }
+                else if (result < 0)
+                {
+                    ml_log_error("An error occured while checking the status of the portaudio stream: (%d) %s\n", result, Pa_GetErrorText(result));
+                    ml_log_warn("The audio sink has been disabled\n");
+                    sink->sinkDisabled = 1;
+                    return 0;
                 }
             }
-            else if (result < 0)
-            {
-                ml_log_error("An error occured while checking the status of the portaudio stream: (%d) %s\n", result, Pa_GetErrorText(result));
-                ml_log_warn("The audio sink has been disabled\n");
-                sink->sinkDisabled = 1;
-                return 0;
-            }
-
 
             return 1;
         }
@@ -602,6 +549,7 @@ static int aus_receive_stream_frame(void* data, int streamId, unsigned char* buf
             /* the buffer size could have shrinked */
             sink->audioStreams[i].bufferSize[sink->writeBuffer] = bufferSize;
 
+            sink->audioStreams[i].haveInputData[sink->writeBuffer] = 1;
             return 1;
         }
     }
@@ -641,6 +589,8 @@ static int aus_receive_stream_frame_const(void* data, int streamId, const unsign
             }
 
             memcpy(sink->audioStreams[i].buffer[sink->writeBuffer], buffer, bufferSize);
+
+            sink->audioStreams[i].haveInputData[sink->writeBuffer] = 1;
             return 1;
         }
     }
@@ -656,49 +606,144 @@ static int aus_complete_frame(void* data, const FrameInfo* frameInfo)
     unsigned char tmp[4];
     unsigned char* front;
     unsigned char* back;
+    int firstInputDataIndex = -1;
 
     for (i = 0; i < sink->numAudioStreams; i++)
     {
+        if (sink->audioStreams[i].haveInputData[sink->writeBuffer] && firstInputDataIndex < 0)
+        {
+            firstInputDataIndex = i;
+        }
+
         sink->audioStreams[i].nextSinkBuffer = NULL;
         sink->audioStreams[i].nextSinkBufferSize = 0;
         sink->audioStreams[i].nextSinkAcceptedFrame = 0;
     }
 
-    if (sink->numAudioStreams > 0)
+    if (firstInputDataIndex >= 0 && !(frameInfo->isRepeat || frameInfo->muteAudio || sink->muteAudio))
     {
-        if (!(frameInfo->isRepeat || frameInfo->muteAudio || sink->muteAudio))
+        AudioStream* primaryStream = &sink->audioStreams[firstInputDataIndex];
+
+        /* fill missing audio streams and reverse the audio if required */
+        for (i = 0; i < sink->numAudioStreams; i++)
         {
-            if (frameInfo->reversePlay)
+            AudioStream* stream = &sink->audioStreams[i];
+
+            /* set silence if no audio data or data size differs from first audio stream with data */
+            if (!stream->haveInputData[sink->writeBuffer] ||
+                stream->bufferSize[sink->writeBuffer] != primaryStream->bufferSize[sink->writeBuffer])
             {
-                /* reverse the audio */
-                for (i = 0; i < sink->numAudioStreams; i++)
+                if (stream->allocatedBufferSize[sink->writeBuffer] < primaryStream->bufferSize[sink->writeBuffer])
                 {
-                    front = sink->audioStreams[i].buffer[sink->writeBuffer];
-                    back = &sink->audioStreams[i].buffer[sink->writeBuffer][sink->audioStreams[i].bufferSize[sink->writeBuffer] - sink->byteAlignment];
-                    for (j = 0; j < sink->audioStreams[i].bufferSize[sink->writeBuffer] / 2; j += sink->byteAlignment)
-                    {
-                        memcpy(tmp, front, sink->byteAlignment);
-                        memcpy(front, back, sink->byteAlignment);
-                        memcpy(back, tmp, sink->byteAlignment);
-                        front += sink->byteAlignment;
-                        back -= sink->byteAlignment;
-                    }
+                    /* reallocate the buffer and set to silence */
+
+                    SAFE_FREE(&stream->buffer[sink->writeBuffer]);
+                    stream->allocatedBufferSize[sink->writeBuffer] = 0;
+                    stream->bufferSize[sink->writeBuffer] = 0;
+
+                    CALLOC_ORET(stream->buffer[sink->writeBuffer], unsigned char,
+                                primaryStream->allocatedBufferSize[sink->writeBuffer]);
+                    stream->allocatedBufferSize[sink->writeBuffer] = primaryStream->allocatedBufferSize[sink->writeBuffer];
+                }
+                else
+                {
+                    /* silence */
+                    memset(stream->buffer[sink->writeBuffer], 0, primaryStream->bufferSize[sink->writeBuffer]);
+                }
+
+                stream->bufferSize[sink->writeBuffer] = primaryStream->bufferSize[sink->writeBuffer];
+            }
+            else if (frameInfo->reversePlay)
+            {
+                front = stream->buffer[sink->writeBuffer];
+                back = &stream->buffer[sink->writeBuffer][stream->bufferSize[sink->writeBuffer] - sink->byteAlignment];
+                for (j = 0; j < stream->bufferSize[sink->writeBuffer] / 2; j += sink->byteAlignment)
+                {
+                    memcpy(tmp, front, sink->byteAlignment);
+                    memcpy(front, back, sink->byteAlignment);
+                    memcpy(back, tmp, sink->byteAlignment);
+                    front += sink->byteAlignment;
+                    back -= sink->byteAlignment;
                 }
             }
-
-            /* signal buffer is ready */
-            PTHREAD_MUTEX_LOCK(&sink->bufferMutex);
-            for (i = 0; i < sink->numAudioStreams; i++)
-            {
-                sink->audioStreams[i].bufferIsReadyForRead[sink->writeBuffer] = 1;
-            }
-            sink->writeBuffer = (sink->writeBuffer + 1) % 2;
-            PTHREAD_MUTEX_UNLOCK(&sink->bufferMutex);
-
         }
-        /* else don't send any audio */
-    }
 
+        /* do first time initialisation */
+        if (!sink->paStreamInitialised)
+        {
+            PaError err;
+            if (sink->audioDevice < 0)
+            {
+                /* Open an audio I/O stream on the default audio device. */
+                err = Pa_OpenDefaultStream(&sink->paStream,
+                                           0,          /* no input channels */
+                                           sink->numAudioStreams,
+                                           sink->paFormat,
+                                           sink->samplingRate.num / (double)sink->samplingRate.den,
+                                           0,
+                                           paAudioCallback,
+                                           sink);
+            }
+            else
+            {
+                /* Open an audio I/O stream on specific audio device */
+                PaStreamParameters outParam;
+                outParam.device = sink->audioDevice;
+                outParam.channelCount = sink->numAudioStreams;
+                outParam.sampleFormat = sink->paFormat;
+                outParam.suggestedLatency = Pa_GetDeviceInfo(sink->audioDevice)->defaultHighOutputLatency;
+                outParam.hostApiSpecificStreamInfo = NULL;
+                err = Pa_OpenStream(&sink->paStream,
+                                    NULL, /* no input channels */
+                                    &outParam,
+                                    sink->samplingRate.num / (double)sink->samplingRate.den,
+                                    0,
+                                    paNoFlag,
+                                    paAudioCallback,
+                                    sink);
+            }
+            if (err != paNoError)
+            {
+                ml_log_error("An error occured while initialising the portaudio stream: (%d) %s\n", err, Pa_GetErrorText(err));
+                ml_log_warn("The audio sink has been disabled\n");
+                sink->sinkDisabled = 1;
+                return 0;
+            }
+
+            sink->paStreamInitialised = 1;
+
+            /* start the stream */
+            sink->paStreamStarted = 0;
+            err = Pa_StartStream(sink->paStream);
+            if (err != paNoError)
+            {
+                ml_log_error("An error occured while starting the portaudio stream: (%d) %s\n", err, Pa_GetErrorText(err));
+                ml_log_warn("The audio sink has been disabled\n");
+                sink->sinkDisabled = 1;
+                return 0;
+            }
+            sink->paStreamStarted = 1;
+        }
+
+        /* signal buffer is ready and reset haveInputData */
+        PTHREAD_MUTEX_LOCK(&sink->bufferMutex);
+        for (i = 0; i < sink->numAudioStreams; i++)
+        {
+            sink->audioStreams[i].bufferIsReadyForRead[sink->writeBuffer] = 1;
+            sink->audioStreams[i].haveInputData[sink->writeBuffer] = 0;
+        }
+        sink->writeBuffer = (sink->writeBuffer + 1) % 2;
+        PTHREAD_MUTEX_UNLOCK(&sink->bufferMutex);
+
+    }
+    /* else don't send any audio and reset haveInputData */
+    else
+    {
+        for (i = 0; i < sink->numAudioStreams; i++)
+        {
+            sink->audioStreams[i].haveInputData[sink->writeBuffer] = 0;
+        }
+    }
 
     return msk_complete_frame(sink->nextSink, frameInfo);
 }
@@ -710,6 +755,7 @@ static void aus_cancel_frame(void* data)
 
     for (i = 0; i < sink->numAudioStreams; i++)
     {
+        sink->audioStreams[i].haveInputData[sink->writeBuffer] = 0;
         sink->audioStreams[i].nextSinkBuffer = NULL;
         sink->audioStreams[i].nextSinkBufferSize = 0;
         sink->audioStreams[i].nextSinkAcceptedFrame = 0;
@@ -864,6 +910,8 @@ static int aus_reset_or_close(void* data)
         sink->audioStreams[i].bufferIsReadyForRead[1] = 0;
         sink->audioStreams[i].bufferBytesUsed[0] = 0;
         sink->audioStreams[i].bufferBytesUsed[1] = 0;
+        sink->audioStreams[i].haveInputData[0] = 0;
+        sink->audioStreams[i].haveInputData[1] = 0;
     }
     sink->numAudioStreams = 0;
 
