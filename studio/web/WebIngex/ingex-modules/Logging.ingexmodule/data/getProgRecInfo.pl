@@ -2,7 +2,7 @@
 
 # Copyright (C) 2008  British Broadcasting Corporation
 # Author: Rowan de Pomerai <rdepom@users.sourceforge.net>
-#
+# Modified 2011
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
 # as published by the Free Software Foundation; either version 2
@@ -23,11 +23,11 @@ use strict;
 use CGI::Pretty qw(:standard);
 
 use lib ".";
-use lib "../../ingex-config";
+use lib "../../../ingex-config";
 use ingexconfig;
 use ingexhtmlutil;
 use prodautodb;
-use IngexJSON;
+use JSON::XS;
 use DBI qw(:sql_types);
 
 print header;
@@ -43,8 +43,9 @@ my %data;
 $data{'recLocs'} = getRecLocs();
 $data{'series'} = getSeries();
 
-print hashToJSON(%data);
-
+my $encodedJson = encode_json(\%data);
+print $encodedJson;
+prodautodb::disconnect($dbh) if ($dbh);
 exit(0);
 
 sub getRecLocs

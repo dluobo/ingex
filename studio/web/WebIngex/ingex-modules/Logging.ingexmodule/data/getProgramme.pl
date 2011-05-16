@@ -63,10 +63,10 @@ sub getItems
 		%i = %$item;
 		my $takes = getTakes($i{'ID'});
 		my $newItem = {
-			id=>$i{'ORDERINDEX'},
+			orderIndex=>$i{'ORDERINDEX'},
 			itemName=>$i{'ITEMNAME'},
 			sequence=>$i{'SEQUENCE'},
-			databaseID=>$i{'ID'},
+			databaseId=>$i{'ID'},
 			uiProvider=>'item',
 			children=>$takes
 		};
@@ -91,7 +91,7 @@ sub getTakes
 		my @frameVals = split /(\d+),(\d+)/, $t{'EDITRATE'}, 2;
 		my $editrate = ($frameVals[1] / $frameVals[2]);
 		my $newTake = {
-			id=>$t{'ID'},
+			databaseId=>$t{'ID'},
 			takeNo=>$t{'TAKENO'},
 			location=>$t{'LOCATION'},
 			date=>$t{'DATE'},

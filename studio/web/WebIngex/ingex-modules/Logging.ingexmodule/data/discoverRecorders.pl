@@ -1,7 +1,7 @@
 #!/usr/bin/perl -wT
 
 # Copyright (C) 2008  British Broadcasting Corporation
-# Created 2010
+# Author: Rowan de Pomerai <rdepom@users.sourceforge.net>
 # Modified 2011
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -23,15 +23,11 @@ use strict;
 use CGI::Pretty qw(:standard);
 
 use lib ".";
-use lib "..";
 use lib "../../../ingex-config";
 use ingexconfig;
 use ingexhtmlutil;
 use prodautodb;
 use JSON::XS;
-use ILutil;
-
-sub validate_params;
 
 print header;
 
@@ -42,32 +38,22 @@ my $dbh = prodautodb::connect(
         $ingexConfig{"db_password"}) 
     or die();
 
-my $errorMessage;
-
-if (($errorMessage = validate_params()) eq "ok")
-{
-    my $ok = "yes";
-    my $progId = param('progid');
-    #get database object
-    my $allItems = prodautodb::load_items($dbh,$progId) or $ok = "no";
-   
-    if($ok eq "yes") {
-        #convert the database object to JSON object and print
-        my $encodedJson = encode_json($allItems);
-        print $encodedJson;
-    } else {
-        my $err = $prodautodb::errstr;
-        $err =~ s/"/\\"/g;
-        print '{"success":false,"error":"'.$err.'","progid":"'.$progId.'"}';
-    }
-} else {
-    print '{"success":false,"error":"'.$errorMessage.'"}';
-}
+my $encodedJson = encode_json(getNodes());
+print $encodedJson;
 prodautodb::disconnect($dbh) if ($dbh);
 exit(0);
 
-sub validate_params()
+sub getNodes
 {
-    return "No input data defined" if (!defined param('progid') || param('progid') =~ /^\s*$/);
-    return "ok";
+	my %nodes;
+	my %n;
+	my $nodesArray = load_nodes($dbh) 
+	    or return_error_page("failed to load nodes: $prodautodb::errstr");
+	
+	foreach my $node (@$nodesArray) {
+		%n = %$node;
+		$nodes{$n{'NAME'}} = {nodeType=>$n{'TYPE'},ip=>$n{'IP'},volumes=>$n{'VOLUMES'}};
+	}
+	
+	return \%nodes;
 }

@@ -1,8 +1,8 @@
 #!/usr/bin/perl -wT
 
 # Copyright (C) 2008  British Broadcasting Corporation
-# Created 2010
-# Modified 2011
+# Created 2011
+# 
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
 # as published by the Free Software Foundation; either version 2
@@ -31,6 +31,7 @@ use prodautodb;
 use JSON::XS;
 use ILutil;
 
+#forward declaration to avoid warning
 sub validate_params;
 
 print header;
@@ -47,20 +48,33 @@ my $errorMessage;
 if (($errorMessage = validate_params()) eq "ok")
 {
     my $ok = "yes";
-    my $progId = param('progid');
-    #get database object
-    my $allItems = prodautodb::load_items($dbh,$progId) or $ok = "no";
-   
+    my $itemId = param('itemId');
     if($ok eq "yes") {
-        #convert the database object to JSON object and print
-        my $encodedJson = encode_json($allItems);
-        print $encodedJson;
-    } else {
+              my $takesForItem = load_takes($dbh,$itemId) or $ok = "no";
+   
+             if($ok eq "yes") 
+             {
+                            #convert the database object to JSON object and print
+                            my $encodedJsonTakes = encode_json($takesForItem);
+                            print $encodedJsonTakes;
+            }
+            else 
+            {
+                     my $err = $prodautodb::errstr;
+                    $err =~ s/"/\\"/g;
+                    print '{"success":false,"error":"'.$err.'","itemId":"'.$itemId.'"}';
+            }
+            
+    } 
+    else 
+    {
         my $err = $prodautodb::errstr;
         $err =~ s/"/\\"/g;
-        print '{"success":false,"error":"'.$err.'","progid":"'.$progId.'"}';
+        print '{"success":false,"error":"'.$err.'","itemId":"'.$itemId.'"}';
     }
-} else {
+} 
+else 
+{
     print '{"success":false,"error":"'.$errorMessage.'"}';
 }
 prodautodb::disconnect($dbh) if ($dbh);
@@ -68,6 +82,6 @@ exit(0);
 
 sub validate_params()
 {
-    return "No input data defined" if (!defined param('progid') || param('progid') =~ /^\s*$/);
+    return "No input data defined" if (!defined param('itemId') || param('itemId') =~ /^\s*$/);
     return "ok";
 }

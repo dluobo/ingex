@@ -1,7 +1,7 @@
 #!/usr/bin/perl -wT
 
-# Copyright (C) 2008  British Broadcasting Corporation
-# Author: Rowan de Pomerai <rdepom@users.sourceforge.net>
+# Copyright (C) 2009  British Broadcasting Corporation
+# Author: Sean Casey <seantc@users.sourceforge.net>
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -18,41 +18,42 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
 # 02110-1301, USA.
 
-use strict;
 
-use CGI::Pretty qw(:standard);
+#
+# download script - outputs contents of a local filename so it can be downloaded
+#
+
+use strict;
+use CGI qw(:standard);
 
 use lib ".";
 use lib "../../ingex-config";
-use ingexconfig;
 use ingexhtmlutil;
-use prodautodb;
-use IngexJSON;
 
-print header;
+my $fname = param("fileIn");
+my $outname;
 
-my $dbh = prodautodb::connect(
-        $ingexConfig{"db_host"},
-        $ingexConfig{"db_name"},
-        $ingexConfig{"db_user"},
-        $ingexConfig{"db_password"}) 
-    or die();
+# extract file name from path
+my $endpath = rindex($fname,"/");
 
-print hashToJSON(getNodes());
-
-exit(0);
-
-sub getNodes
-{
-	my %nodes;
-	my %n;
-	my $nodesArray = load_nodes($dbh) 
-	    or return_error_page("failed to load nodes: $prodautodb::errstr");
-	
-	foreach my $node (@$nodesArray) {
-		%n = %$node;
-		$nodes{$n{'NAME'}} = {nodeType=>$n{'TYPE'},ip=>$n{'IP'},volumes=>$n{'VOLUMES'}};
-	}
-	
-	return %nodes;
+if($endpath > -1){
+    $outname = substr $fname, $endpath+1; # strip path
 }
+else{
+    $outname = $fname;
+}
+
+
+if($fname eq ''){
+    return_error_page("No filename supplied");
+}
+
+open FILE, $fname or 
+	return_error_page("File does not exist");
+	
+my @data = <FILE>;
+close FILE;
+
+print "Content-Type:application/x-download\n";
+print "Content-Disposition:attachment;filename=$outname\n\n";
+print @data;

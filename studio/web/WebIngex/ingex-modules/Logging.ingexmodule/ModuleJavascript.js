@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008  British Broadcasting Corporation
+ * Copyright (C) 2011  British Broadcasting Corporation
  * Created 2008
  * Modified 2011
  * This program is free software; you can redistribute it and/or
@@ -180,7 +180,7 @@ function Logging_init ()
 	            dataIndex:'duration'
 	        },{
 	            header:'Result',
-	            width:60,
+	            width:70,
 	            dataIndex:'result'
 	        },{
 	            header:'Comment',
@@ -227,15 +227,15 @@ function Logging_init ()
 	        }, {
 	            key: Ext.EventObject.G,
 	            ctrl:true,
-	            fn: ILsetGood,
+	            fn: ILsetCircled,
 	            stopEvent: true
 	        }, {
 	            key: Ext.EventObject.B,
 	            ctrl: true,
-	            fn: ILsetNoGood,
+	            fn: ILsetNotCircled,
 	            stopEvent: true
 	        }, {
-	            key: Ext.EventObject.SPACE,
+	            key: [Ext.EventObject.SPACE,Ext.EventObject.R],
 	            ctrl: true,
 	            fn: ILstartStop,
 	            stopEvent: true
@@ -292,8 +292,9 @@ function Logging_init ()
 	ILdiscoverRecorders();
 	//gets the recorder locations, series and the programmes within the series
 	ILpopulateSeriesLocInfo();
-    //create new ingexLiggingTimecode object
-    ILtc = new ingexLoggingTimecode();
+        //create new ingexLiggingTimecode object
+        ILtc = new ingexLoggingTimecode();
+        document.getElementById('stopButton').disabled = true;
 }// end function logging_init()
 
 //determines if a series is selected
@@ -305,7 +306,6 @@ function ILcheckSeriesSelected()
         Ext.MessageBox.alert('ERROR!', 'NO SERIES SELECTED : Please select a series');
         seriesSel.style.color = "rgb(255,0,0)";
         return false;
-        
     }
     else //series is selected
     {
@@ -380,6 +380,7 @@ function ILexpandSingleItem()
                        ILtempNode.expand();
                        document.getElementById('currentItemName').innerHTML = ILtempNode.attributes.itemName;
                        document.getElementById('currentItemName').className = 'itemSelected';
+                       document.getElementById('currentTakeNum').className = 'itemSelected';
                        //if this item is not empty
                        
                        if(ILtempNode.lastChild != null)
@@ -395,7 +396,7 @@ function ILexpandSingleItem()
                        }//end item has takes
                        else
                        {
-                         ILresetTakeNum();   
+                         ILresetTakeNum();
                        }
                 }//end is current item != null
             }//if programme has items
@@ -406,19 +407,26 @@ function ILexpandSingleItem()
 //select first item in tree
 function ILselectFirstItem() 
 {
+    if (tree.getRootNode() != null && tree.getRootNode().firstChild != null)
+    {
         tree.getSelectionModel().select(tree.getRootNode().firstChild);
         ILtempNode = tree.getRootNode().firstChild;
         ILcurrentItemId = ILtempNode.id;
         ILexpandSingleItem();
+    }
+
  }//end select first item
 
 //select last item in tree
 function ILselectLastItem()
 {
-    tree.getSelectionModel().select(tree.getRootNode().lastChild);
-    ILtempNode = tree.getRootNode().lastChild;
-    ILcurrentItemId = ILtempNode.id;
-    ILexpandSingleItem();
+    if (tree.getRootNode() != null && tree.getRootNode().lastChild != null)
+    {
+        tree.getSelectionModel().select(tree.getRootNode().lastChild);
+        ILtempNode = tree.getRootNode().lastChild;
+        ILcurrentItemId = ILtempNode.id;
+        ILexpandSingleItem();
+    }
 }//end select last item
 
 /// Select the previous item in the item list
@@ -486,8 +494,8 @@ function ILselectPrevItem()
 
 function ILresetTakeNum()
 {
-    document.getElementById('currentTakeNum').innerHTML = "No Takes";
-    document.getElementById('currentTakeNum').className = 'itemNameNone';
+    document.getElementById('currentTakeNum').innerHTML = "1";
+    document.getElementById('currentItemName').className = 'itemSelected';
 }//end resetTakeNum()
 
 
@@ -525,12 +533,13 @@ function ILreplaceSlashQuotesNewLines(inputString)
 
 function ILresultToID(resultString)
 {
+    // TODO make this result string come from database on load of page
     var resultID;
-    if(resultString == "Good")
+    if(resultString == "Circled")
     {
         resultID = 2;
     }
-    else if (resultString == "No Good")
+    else if (resultString == "Not Circled")
     {
         resultID = 3;
     }
@@ -678,7 +687,13 @@ function ILgetTextFromFramesTotal (clipLength, timEditRate)
       //will have already been covered by 
       }
   }//if is edit rate = 29.97
-      
+  
+  // ensure that hours never goes above 23 and wraps round
+  if (h > 23)
+  {
+      h = h % 24;
+  }
+  
   //ensure that prefix zero for single value times e.g 9 becomes 09
   if (h < 10) { h = "0" + h; }
   if (m < 10) { m = "0" + m; }
@@ -725,7 +740,7 @@ function ILdeleteItem ()
                     Ext.Ajax.request({
                         url: '/cgi-bin/ingex-modules/Logging.ingexmodule/data/deleteItem.pl',
                         params : {
-                            id: ILtempNode.attributes.databaseID
+                            id: ILtempNode.attributes.databaseId
                         },
                         success: function(response) {
                             try {
@@ -868,7 +883,7 @@ function ILstoreItem (itemName, itemSeq)
   //if there are items get the last one
   if (ILrootNode.lastChild != null){
       var lastItem = ILrootNode.lastChild;
-      newID = Number(lastItem.attributes.id) + 1;
+      newID = Number(lastItem.attributes.orderIndex) + 1;
   }
   else //if no items already exist, set to first item in order index 
   {
@@ -960,11 +975,11 @@ function ILupdateItemInDb(newItemName, newSeq, dbId)
 }//end ILupdateIteminDB()
 
 //process item update form and determine if a change has taken place
-function ILitemUpdate (ILnewItemName, ILnewSeq)
+/*function ILitemUpdate (ILnewItemName, ILnewSeq)
 {
     //process changes, update if necessary and then close the window
     ILtempNode = tree.getNodeById(ILcurrentItemId);
-    var dbId = ILtempNode.attributes.databaseID;
+    var dbId = ILtempNode.attributes.databaseId;
     var ILoldItemName = ILtempNode.attributes.itemName;
     var ILoldSeq = ILtempNode.attributes.sequence;
   
@@ -976,40 +991,92 @@ function ILitemUpdate (ILnewItemName, ILnewSeq)
         //DEBUG 
         insole.warn("sending "+ILnewItemName+" "+ILnewSeq+" "+dbId);
     }   
-}//end ILitemUpdate()
+}*///end ILitemUpdate()
 
 /// Start/stop timecode updates for a take
 function ILstartStop ()
 {
-  var ILrecSelected = ILcheckRecorderSelected();
+  
+    // TODO fix this so on key up space bar doesn't auto enter on the ok button in ext messagebox
+    // temp solution is to use some key other than space
+    // could alter creation of message box to be self created and ensure focus is not on ok button so space doesn't 
+    // or could change away from 'pop-up' alert style to a notification area
+    var seriesSelected = ILcheckSeriesSelected();
+    
+    if (seriesSelected)
+    {
+        var progSelected = ILcheckProgSelected();
 
-  if (ILrecSelected)
-  {
-      if(tree && tree.getSelectionModel().getSelectedNode()) 
-      {
-          //if no take is running
-          if(ILtc.takeRunning == false)
-          {
-              // START and change text of button to Stop
-              document.getElementById('startStopButton').innerHTML = 'Stop';
-              document.getElementById('startStopButton').className = 'stopButton';
-              //start the take
-              ILtc.startTake();
-          }//end there is no take running
-          else //there is a take already running
-          {
-              // STOP and change button text to stop
-              document.getElementById('startStopButton').innerHTML = 'Start';
-              document.getElementById('startStopButton').className = 'startButton';
-              //stop take
-              ILtc.stopTake();
-          }//end there is a take already running
-      }//end if item selected
-      else
-      {
-          Ext.MessageBox.alert('ERROR!', 'NO ITEM SELECTED : Please select an item');
-      }
-  }//end a recorder selected
+        if (progSelected)
+        { 
+            var ILrecSelected = ILcheckRecorderSelected();
+            
+            if (ILrecSelected)
+            {
+                if(tree && tree.getSelectionModel().getSelectedNode()) 
+                {
+                    //if no take is running
+                    if(ILtc.takeRunning == false)
+                    {
+                        // START and change text of button to Stop
+                        // document.getElementById('startStopButton').innerHTML = 'Stop';
+                        //document.getElementById('startStopButton').className = 'stopButton';
+                        //start the take
+                        ILtc.startTake();
+                        /*move focus to comment box (this also ensures if focus was on any element that will be disabled that
+                            it won't break key mapping by operating on disabled item)*/
+                        document.getElementById('commentBox').focus();
+                        //Change the background colour of the section to indicate in record mode
+                        // change to be a class change rather than hard coded colour change
+                        document.getElementById('newTake').style.backgroundColor = '#FFEEEE' ;
+                        //disable start and enable stop button
+                        document.getElementById('startButton').disabled = true;
+                        document.getElementById('stopButton').disabled = false;
+                        //disable series, programme, location, tree reset, delete Item,new Item, Pickup and Import
+                        document.getElementById('seriesSelector').disabled = true;
+                        document.getElementById('programmeSelector').disabled = true;
+                        document.getElementById('recLocSelector').disabled = true;
+                        document.getElementById('resetButton').disabled = true;
+                        document.getElementById('newItemButton').disabled = true;
+                        document.getElementById('deleteItemButton').disabled = true;
+                        document.getElementById('pickupItemButton').disabled = true;
+                        document.getElementById('importButton').disabled = true;
+                        //disable the recorder selector whilst a take is running
+                        document.getElementById('recorderSelector').disabled = true;
+                    }//end there is no take running
+                    else //there is a take already running
+                    {
+                        // STOP and change button text to stop
+                        //document.getElementById('startStopButton').innerHTML = 'Start';
+                        // document.getElementById('startStopButton').className = 'startButton';
+                        //stop take
+                        ILtc.stopTake();
+                        //enable start and disable stop button
+                        document.getElementById('startButton').disabled = false;
+                        document.getElementById('stopButton').disabled = true;
+                        //enable series, programme, location, tree reset, delete Item,new Item, Pickup and Import
+                        document.getElementById('seriesSelector').disabled = false;
+                        document.getElementById('programmeSelector').disabled = false;
+                        document.getElementById('recLocSelector').disabled = false;
+                        document.getElementById('resetButton').disabled = false;
+                        document.getElementById('newItemButton').disabled = false;
+                        document.getElementById('deleteItemButton').disabled = false;
+                        document.getElementById('pickupItemButton').disabled = false;
+                        document.getElementById('importButton').disabled = false;
+                        //enable the recorder selector whilst a take is NOT running
+                        document.getElementById('recorderSelector').disabled = false;
+                        //indicate not logging take
+                        document.getElementById('newTake').style.backgroundColor = '#FFFFEE';
+            
+                    }//end there is a take already running
+                }//end if item selected
+                else
+                {
+                    Ext.MessageBox.alert('ERROR!', 'NO ITEM SELECTED : Please select an item');
+                }
+            }//end a recorder selected
+        } //end a programme is selected
+    }//end a series is selected
 }//end ILstartStop()
 
 //send the information to the database for the updated node
@@ -1018,6 +1085,13 @@ function ILupdateTakeInDb(newResult, newComment, dbId)
 
 newResult = ILresultToID(newResult);
 newComment = ILreplaceSlashQuotesNewLines(newComment);
+
+//process changes, update if necessary and then close the window
+ILtempNode = tree.getNodeById(ILcurrentItemId);
+var ILoldComment = ILtempNode.attributes.comment;
+var ILoldResult = ILtempNode.attributes.sequence;
+
+
 
 var jsonText ="{\"RESULT\":\""+newResult+"\",\"COMMENT\":\""+newComment+"\"}"; 
   
@@ -1089,7 +1163,7 @@ function ILstoreTake ()
 		                var ILnodeDepth =ILtempNode.getDepth(); 
 		                if (ILnodeDepth > 1) //is a take or lower
 		                {
-                            //if is an event market or take child then need to add code here to separate cases
+                            //if is an event marker or take child then need to add code here to separate cases
 		                    //select the parent item of a take
 		                    ILtempNode = ILtempNode.parentNode;
 		                    ILcurrentItemId = ILtempNode.id;
@@ -1111,8 +1185,8 @@ function ILstoreTake ()
 		                if (comment == "") comment  = "[no data]";
 		                if (comment.length < 512)
 		                {
-		                    var inpoint = document.getElementById('inpointBox').value;
-		                    var outpoint = document.getElementById('outpointBox').value;
+		                    var inpoint = document.getElementById('inpointBox').innerHTML;
+		                    var outpoint = document.getElementById('outpointBox').innerHTML;
 		                    //DEBUG insole.warn("dropframe status = "+dropFrame);
 		                    if (dropFrame)
 		                    {
@@ -1127,7 +1201,7 @@ function ILstoreTake ()
 		                    var editRateCombined = "("+frameNumer+","+frameDenom+")";
 		                    //DEBUG insole.warn("edit rate:"+editRateCombined);
 		                    //convert from current option item to the database id
-		                    var itemIdent = ILtempNode.attributes.databaseID;
+		                    var itemIdent = ILtempNode.attributes.databaseId;
 		                    var takeNumber;
 		                    //if this item is not empty
 		                    if(ILtempNode.lastChild != null)
@@ -1217,29 +1291,45 @@ function ILresetTake () {
     }
     else
     {
-        document.getElementById('inpointBox').value = "00:00:00:00";
-        document.getElementById('outpointBox').value = "00:00:00:00";
-        document.getElementById('durationBox').value = "00:00:00:00";
+        document.getElementById('inpointBox').innerHTML = "00:00:00:00";
+        document.getElementById('outpointBox').innerHTML = "00:00:00:00";
+        document.getElementById('durationBox').innerHTML = "00:00:00:00";
         document.getElementById('commentBox').value = "";
-        document.getElementById('resultText').innerHTML = "Good";
-        document.getElementById('resultText').className = "good";
+        document.getElementById('resultText').innerHTML = "Not Circled";
+        document.getElementById('resultText').className = "notCircled";
     }
 }//end ILresetTake()
 
-/// Set the new take's result to "good"
-function ILsetGood() {
-	document.getElementById('resultText').innerHTML = "Good";
-	document.getElementById('resultText').className = "good";
-}//end ILsetGood()
-
-/// Set the new take's result to "no good"
-function ILsetNoGood() 
-{
-    //DEBUG insole.warn("setting to NOGood");
+/// Set the new take's result to "Circled"
+function ILsetCircled() {
     
-	document.getElementById('resultText').innerHTML = "No Good";
-	document.getElementById('resultText').className = "noGood";
-}//end ILsetNoGood
+    if(tree && tree.getSelectionModel().getSelectedNode()) 
+    {
+        //check that an item/take is selected
+	document.getElementById('resultText').innerHTML = "Circled";
+	document.getElementById('resultText').className = "circled";
+    }
+    else
+    {
+         Ext.MessageBox.alert('ERROR!', 'NO TAKE SELECTED : Please select a take');
+    }
+}//end ILsetCircled()
+
+/// Set the new take's result to "Not Circled"
+function ILsetNotCircled() 
+{
+    //DEBUG insole.warn("setting to Not Circled");
+    
+    if(tree && tree.getSelectionModel().getSelectedNode()) 
+    {//check that an item/take is selected
+	document.getElementById('resultText').innerHTML = "Not Circled";
+	document.getElementById('resultText').className = "notCircled";
+    }
+    else
+    {
+          Ext.MessageBox.alert('ERROR!', 'NO TAKE SELECTED : Please select a take');
+    }
+}//end ILsetNotCircled
 
 //call the correct popup form for the node on form button call
 function ILformCall (ILbuttonText)
@@ -1324,15 +1414,15 @@ function ILformCall (ILbuttonText)
 
 function ILswitchFormResult()
 {
-    if (document.getElementById('goodTake').checked)
+    if (document.getElementById('circledTake').checked)
     {
-        document.getElementById('goodButton').className = 'goodTakeForm';
-        document.getElementById('noGoodButton').className = 'unselectedResult';
+        document.getElementById('circledButton').className = 'circledTakeForm';
+        document.getElementById('notCircledButton').className = 'unselectedResult';
     }
     else
     {
-        document.getElementById('goodButton').className = 'unselectedResult';
-        document.getElementById('noGoodButton').className = 'noGoodTakeForm';
+        document.getElementById('circledButton').className = 'unselectedResult';
+        document.getElementById('notCircledButton').className = 'notCircledTakeForm';
     }
 }//end ILswitchFormResult()
 
@@ -1348,34 +1438,33 @@ function ILtakeFormDisplay(ILtakeData)
                        " <table class = 'alignmentTable'> <tbody> <tr> <td>Result : "+
                        "<form> <table class='alignmentTable'> <tbody> <tr>";
 
-    if (ILtempNode.attributes.result == "Good")
+    if (ILtempNode.attributes.result == "Circled")
     {
-        ILradioButtons = "<td><input type='radio' name='takeResult' onclick='ILswitchFormResult()' checked='checked' id ='goodTake'/></td>"+
-        "<td><div id='goodButton' class='goodTakeForm'> Good </div></td>"+
+        ILradioButtons = "<td><input type='radio' name='takeResult' onclick='ILswitchFormResult()' checked='checked' id ='circledTake'/></td>"+
+        "<td><div id='circledButton' class='circledTakeForm'> Circled </div></td>"+
         "</tr><tr>"+
         "<td><input type='radio' id ='badTake'  name='takeResult' onclick='ILswitchFormResult()' /></td>" +
-        "<td><div id='noGoodButton' class='unselectedResult'>   No Good</div></td>";
+        "<td><div id='notCircledButton' class='unselectedResult'>   Not Circled</div></td>";
     }
     else
     {
-        ILradioButtons = " <td><input type='radio' name='takeResult' id ='goodTake' onclick='ILswitchFormResult()'/></td>"+
-                        "<td><div id='goodButton' class='unselectedResult'> Good </div></td>"+
+        ILradioButtons = " <td><input type='radio' name='takeResult' id ='circledTake' onclick='ILswitchFormResult()'/></td>"+
+                        "<td><div id='circledButton' class='unselectedResult'> Circled </div></td>"+
                         "</tr><tr>"+
                         "<td><input type='radio' name='takeResult' id ='badTake' checked='checked' onclick='ILswitchFormResult()' /></td>"+
-                        "<td><div id='noGoodButton' class='noGoodTakeForm'>   No Good</div></td>";
+                        "<td><div id='notCircledButton' class='notCircledTakeForm'> Not Circled</div></td>";
 
     }
     
     var ILtableClose = " </tr> </tbody> </table> </form> </td> </tr> <tr><td>Location : "+ILtempNode.attributes.location+
                         "</td></tr> </tbody> </table> </td> <td><table class = 'alignmentTable'> <tbody> <tr>"+
-                        " <td>Comment : <textarea id='editTakeCommentBox'>"+ILtempNode.attributes.comment+
+                        " <td>Comment:</td><td> <textarea id='editTakeCommentBox'cols='75' rows='6'>"+ILtempNode.attributes.comment+
                         "</textarea>  </td> </tr> </tbody> </table> </td> </tr> </tbody> </table> </tr>"+
                         "<tr><td>Date : "+ILtempNode.attributes.date+"</td></tr><tr><td>Inpoint : "+
                         ILtempNode.attributes.inpoint+"</td></tr><tr><td>Outpoint : "+
                         ILtempNode.attributes.out+"</td></tr><tr><td>Duration : "+
                         ILtempNode.attributes.duration+"</td></tr>"+
-                        "<tr><td><a class='simpleButton' href='javascript:ILprocessTakeForm();'>Update</a></td>"+
-                        "<td><a class='simpleButton' href='javascript:ILhideForm();'>Cancel</a></td></tr></tbody></table></div>";
+                        "<tr><td><form><input type='button' class='buttons' id='updateButton' value='Update' onclick='ILprocessTakeForm()' /> &nbsp <input type='button' class='buttons' id='cancelButton' value='Cancel' onclick='ILhideForm()' /></form></td></tr></tbody></table></div>";
     
     var title ="EDIT TAKE";        
     var content =  ILtableStart + ILradioButtons + ILtableClose;
@@ -1390,7 +1479,7 @@ function ILtakeFormDisplay(ILtakeData)
 function ILtakeFormCreate()
 {
     ILtempNode = tree.getNodeById(ILcurrentItemId);
-    var dbId = ILtempNode.attributes.id;
+    var dbId = ILtempNode.attributes.databaseId;
     //requires a database call
      Ext.Ajax.request({
             url: '/cgi-bin/ingex-modules/Logging.ingexmodule/data/getSingleTake.pl',
@@ -1428,34 +1517,36 @@ function ILitemFormDisplay(itemVal, seqValStart, seqValEnd)
     var ILseqStartValue = "value='"+seqValStart+"'";
     var ILitemSandE= "> </td><td>TO:<input type='text' name='seq' id='seqBoxEnd' class='itemPopupHeading'"; 
     var ILseqEndValue = "value='"+seqValEnd+"'";
-    var ILitemFormToButtons ="></div></td></tr>"+
+    var ILitemFormToButtonsLayout ="></div></td></tr>"+
                           "<tr> <td> <div class='spacer'>&nbsp;</div> </td> </tr> <tr> <td>";
     var title = "";
     var ILbuttonFunctionAndText = "";
     if(ILformType == "edit")
     {
         title="EDIT ITEM";
-        ILbuttonFunctionAndText = "<a class='simpleButton' href='javascript:ILprocessItemForm(\"update\");'>Update</a>";
-           
+//         ILbuttonFunctionAndText = "<a class='simpleButton' href='javascript:ILprocessItemForm(\"update\");'>Update</a>";
+           ILbuttonFunctionAndText = "<input type='button' class='buttons' id='updateButton' value='Update' onclick='ILprocessItemForm(\"update\")' /> &nbsp ";
     }
     else if (ILformType == "pickup")
     {
         title="PICKUP ITEM";
-        ILbuttonFunctionAndText = "<a class='simpleButton' href='javascript:ILprocessItemForm(\"new\");'>Add Pickup</a>";
+//         ILbuttonFunctionAndText = "<a class='simpleButton' href='javascript:ILprocessItemForm(\"new\");'>Add Pickup</a>";
+           ILbuttonFunctionAndText = "<input type='button' class='buttons' id='updateButton' value='Update' onclick='ILprocessItemForm(\"new\")' /> &nbsp ";
     }
     else if (ILformType == "new")
     {
         title="NEW ITEM";
-        ILbuttonFunctionAndText = "<a class='simpleButton' href='javascript:ILprocessItemForm(\"new\");'>Add Item</a>";
+//         ILbuttonFunctionAndText = "<a class='simpleButton' href='javascript:ILprocessItemForm(\"new\");'>Add Item</a>";
+           ILbuttonFunctionAndText = "<input type='button' class='buttons' id='updateButton' value='Update' onclick='ILprocessItemForm(\"new\")' /> &nbsp ";
     }
     else
     {
-        ILbuttonFunctionAndText = "INVALID FORM TYPE CALLED";
+        ILbuttonFunctionAndText = "<form>INVALID FORM TYPE CALLED";
     }
 
-    var ILcancelButtonAndTableClose = "</td><td><a class='simpleButton' href='javascript:ILhideForm();'>Cancel</a></td></tr> </table></div>";
-    
-      var content = ILitemFormStart + ILitemNameValue + ILitemFormContinued + ILseqStartValue + ILitemSandE + ILseqEndValue + ILitemFormToButtons +
+//      var ILcancelButtonAndTableClose = "</td><td><a class='simpleButton' href='javascript:ILhideForm();'>Cancel</a></td></tr> </table></div>";
+      var ILcancelButtonAndTableClose = "<input type='button' class='buttons' id='cancelButton' value='Cancel' onclick='ILhideForm()' /> &nbsp </form></td></tr> </table></div>";
+      var content = ILitemFormStart + ILitemNameValue + ILitemFormContinued + ILseqStartValue + ILitemSandE + ILseqEndValue + ILitemFormToButtonsLayout +
                ILbuttonFunctionAndText + ILcancelButtonAndTableClose;
       
       //standard wrapping to the individual content
@@ -1473,7 +1564,7 @@ function ILitemFormCreate()
     else if (ILformType == "edit" || ILformType == "pickup")
     {
         ILtempNode = tree.getNodeById(ILcurrentItemId);
-        var dbId = ILtempNode.attributes.databaseID;
+        var dbId = ILtempNode.attributes.databaseId;
         //requires a database call
          Ext.Ajax.request({
                 url: '/cgi-bin/ingex-modules/Logging.ingexmodule/data/getSingleItem.pl',
@@ -1574,7 +1665,21 @@ function ILprocessItemForm(ILprocessType)
         var ILnewSeq = ILnewStartSeq+","+ILnewEndSeq;
         if(ILprocessType == "update")
         {
-            ILitemUpdate(ILnewItemName, ILnewSeq);
+          //process changes, update if necessary and then close the window
+          ILtempNode = tree.getNodeById(ILcurrentItemId);
+          var dbId = ILtempNode.attributes.databaseId;
+          var ILoldItemName = ILtempNode.attributes.itemName;
+          var ILoldSeq = ILtempNode.attributes.sequence;
+          //if there are any changes
+          if(ILnewItemName != ILoldItemName || ILnewSeq != ILoldSeq)
+          {
+                //update item name and seq
+                ILupdateItemInDb(ILnewItemName, ILnewSeq, dbId);
+                //DEBUG 
+                insole.warn("sending "+ILnewItemName+" "+ILnewSeq+" "+dbId);
+            }   
+            
+            //ILitemUpdate(ILnewItemName, ILnewSeq);
         }
         else if(ILprocessType == "new")
         {
@@ -1596,28 +1701,27 @@ function ILprocessTakeForm ()
     var ILcurrentResult = ILtempNode.attributes.result;
     var ILcurrentComment = ILtempNode.attributes.comment;
    
-    var dbId = ILtempNode.attributes.id;
+    var dbId = ILtempNode.attributes.databaseId;
     var ILnewComment = document.getElementById('editTakeCommentBox').value;
     
-    if(document.getElementById('goodTake').checked == true)
+    if(document.getElementById('circledTake').checked == true)
     {
-        var ILnewResult = "Good";
+        var ILnewResult = "Circled";
     }
     else
     {
-        var ILnewResult = "No Good";
+        var ILnewResult = "Not Circled";
     }
-    
     if(ILnewResult != ILcurrentResult || ILnewComment != ILcurrentComment)
     {
         //update result
-        //DEBUG insole.warn("updating take");
+        //DEBUG 
+        insole.warn("updating take");
         ILupdateTakeInDb(ILnewResult, ILnewComment, dbId);
+      //set it to expand the takes parent item if a change has been made
+        ILtempNode = ILtempNode.parentNode;
+        ILcurrentItemId = ILtempNode.id;
     }
-    
-    //set it to expand the takes parent item
-    ILtempNode = ILtempNode.parentNode;
-    ILcurrentItemId = ILtempNode.id;
     ILhideForm();
 }//end ILprocessTakeUpdate ()
 
@@ -1796,6 +1900,7 @@ function ILpopulateSeriesLocInfo()
 			ILseriesData = data.series;
 			//make programme selector unavailable until a series is selected
 			document.getElementById('programmeSelector').disabled = true;
+                        
 		},
 		failure: function()	{
 			insole.alert("Error loading series, programme & recording location lists");
@@ -1815,7 +1920,7 @@ function ILupdateProgrammes()
     
     //DEBUG insole.warn("after style change");
     //as the series has changed reset the programmes and reload the tree
-	document.getElementById('programmeSelector').selectedIndex = -1;
+	document.getElementById('programmeSelector').selectedIndex = 0;
 	ILrefreshTree();
 	
 	//reset the programme
@@ -1830,6 +1935,12 @@ function ILupdateProgrammes()
 	} catch (e) {
 		elSel.add(elOptNew); // IE only
 	}
+
+        document.getElementById('currentItemName').innerHTML = "No Item Selected";
+        document.getElementById('currentItemName').className = 'itemNameNone';
+        document.getElementById('currentTakeNum').innerHTML = "-";
+        document.getElementById('currentTakeNum').className = 'itemNameNone';
+
 	if (seriesID == -1){
 		//disable the programme item selectors and set them to show nothing
 		document.getElementById('programmeSelector').disabled=true;
@@ -1837,56 +1948,60 @@ function ILupdateProgrammes()
 	}
 	else
 	{   //a series is selected
-		//enable the programme selector
-		document.getElementById('programmeSelector').disabled=false;
-		var programmes = ILseriesData[seriesID].programmes;
+            //enable the programme selector
+            document.getElementById('programmeSelector').disabled=false;
+            var programmes = ILseriesData[seriesID].programmes;
 
-		//JSON does not returned an ordered list, sort by alphabetical and then add to drop down
-		var genArray = new Array();
-        var genIndexCount = 0;
-        
-        for (var prog in programmes) 
-        {
-            genArray.push([programmes[prog], prog]);
-            genIndexCount++;
-        }
-        
-        //sort the array into alphabetical order
-        genArray.sort(ILcompareNames);
-        
-        for (var i = 0; i <genIndexCount ; i++)  
-        {
-            var elOptNew = document.createElement('option');
-            elOptNew.text = genArray[i][0];
-            elOptNew.value = genArray[i][1];
-            try {
-                elSel.add(elOptNew, null); // standards compliant; doesn't work in IE
-            } catch (e) {
-                elSel.add(elOptNew); // IE only
+            //JSON does not returned an ordered list, sort by alphabetical and then add to drop down
+            var genArray = new Array();
+            var genIndexCount = 0;
+            
+            for (var prog in programmes) 
+            {
+                genArray.push([programmes[prog], prog]);
+                genIndexCount++;
             }
-        }
-        
-        //clear array
-        genArray.length = 0;
-        //reset index count to zero
-        genIndexCount = 0;
-		       
-	}//a series is selected
-	
+            
+            //sort the array into alphabetical order
+            genArray.sort(ILcompareNames);
+            
+            for (var i = 0; i <genIndexCount ; i++)  
+            {
+                var elOptNew = document.createElement('option');
+                elOptNew.text = genArray[i][0];
+                elOptNew.value = genArray[i][1];
+                try {
+                    elSel.add(elOptNew, null); // standards compliant; doesn't work in IE
+                } catch (e) {
+                    elSel.add(elOptNew); // IE only
+                }
+            }
+            
+            //clear array
+            genArray.length = 0;
+            //reset index count to zero
+            genIndexCount = 0;
+       }//a series is selected
+	document.getElementById('seriesSelector').blur();
 }//end ILupdateProgrammes
 
 /// Grab the selected programme's items/takes info from the database (refresh tree and reset item name)
 function ILloadNewProgInfo () 
 {
-    ILresetItemName();
-    
-    document.getElementById('programmeSelector').style.color = "rgb(0,0,0)";
-	//automatically clears previous nodes on load by default
+        ILresetItemName();
+        //ensure clears any error colouring may have
+        document.getElementById('programmeSelector').style.color = "rgb(0,0,0)";
+        //if no longer have items available get rid of take display
+            document.getElementById('currentItemName').innerHTML = "No Item Selected";
+            document.getElementById('currentItemName').className = 'itemNameNone';
+            document.getElementById('currentTakeNum').innerHTML = "-";
+            document.getElementById('currentTakeNum').className = 'itemNameNone';
+        //automatically clears previous nodes on load by default
 	//url from which to get a JSON response
 	ILtreeLoader.url = '/cgi-bin/ingex-modules/Logging.ingexmodule/data/getProgramme.pl';
 	//load the info to a root node
 	ILtreeLoader.load(tree.getRootNode());
-    	
+        document.getElementById('programmeSelector').blur();
 }//end ILloadNewProgInfo
 
 //just refreshes the tree without resetting the selected item
@@ -1907,7 +2022,7 @@ function ILcallbackDownloadPdf(response)
             var filenameData = JSON.parse(response.responseText);
             
             var message = '';
-            message += "Download PDF file: " + fileLink(filenameData.filename) + "<BR>";
+            message += "Download PDF file: " + ILfileLink(filenameData.filename) + "<BR>";
             
             Ext.MessageBox.alert("Created Log Sheet", message);
         }
@@ -1932,18 +2047,17 @@ function ILcallbackPrintData(response)
         
     /* 
      * progData contains all items and takes
-     * Here is where you would perform options tasks such as only print good takes and elements to be included etc.
+     * Here is where you would perform options tasks such as only print marked/circled takes and elements to be included etc.
      */
     var selectedIndex = document.getElementById('seriesSelector').selectedIndex;
-    var seriesName = document.getElementById('seriesSelector').options[selectedIndex].value;
+    var seriesName = document.getElementById('seriesSelector').options[selectedIndex].text;
     selectedIndex = document.getElementById('programmeSelector').selectedIndex;
     var progName = document.getElementById('programmeSelector').options[selectedIndex].text;
-    var progId = document.getElementById('programmeSelector').options[selectedIndex].value;
     
     var json = {
                 "DataRoot": progData,
-                "Programme":progId,
-                "Series": seriesId
+                "Programme": progName,
+                "Series": seriesName
                 };
     var jsonText = JSON.stringify(json);
     //from material module, should probably use the same ext ajax as rest of module for consistency
@@ -1977,10 +2091,7 @@ function ILpdf ()
         var progSelected = ILcheckProgSelected();
         if (progSelected)
         {
-            var selectedIndex = document.getElementById('seriesSelector').selectedIndex;
-            var seriesName = document.getElementById('seriesSelector').options[selectedIndex].text;
-            selectedIndex = document.getElementById('programmeSelector').selectedIndex;
-            var progName = document.getElementById('programmeSelector').options[selectedIndex].text;
+            var selectedIndex = document.getElementById('programmeSelector').selectedIndex;
             var progId = document.getElementById('programmeSelector').options[selectedIndex].value;
 
             //get items and takes from database
@@ -2046,7 +2157,7 @@ function ILprint ()
             var tmp = newwindow.document;
             tmp.write('<html><head><title>Ingex Log</title>');
             tmp.write('<link rel="stylesheet" href="/ingex/printpage.css">');
-            tmp.write('</head><body><div id="progInfoDiv">');
+            tmp.write('</head><body><div id="progInfoDiv" style="float:left">');
             tmp.write('<div class="date">Date: '+date+'</div>');
             //tmp.write('<div class="producer">Producer: '+document.getElementById('producer').value+'</div>');
             //tmp.write('<div class="director">Director: '+document.getElementById('director').value+'</div>');
@@ -2054,7 +2165,7 @@ function ILprint ()
             tmp.write('<h1>'+series+'</h1>');
             tmp.write('<h2>'+programme+'</h2>');
             tmp.write('<div style="clear:both">&nbsp;</div>');
-            tmp.write('<table><tr class="header"><th>TAKE</th><th colspan=2>TIMECODE</th><th>RESULT</th><th>COMMENT</th><th>LOCATION</th><th>DATE</th>');
+            tmp.write('<table><tr class="header"><th>TAKE</th><th colspan=2>TIMECODE</th><th>COMMENT</th>');
             var items = tree.getRootNode().childNodes;
             for(var i in items) 
             {
@@ -2070,13 +2181,13 @@ function ILprint ()
                             {
                                 var a = takes[t].attributes;
                                 tmp.write('<tr>');
-                                tmp.write('<td class="take">'+a.takeNo+'</td>');
-                                tmp.write('<td class="tclabel">in:<br />out:<br />dur:</td>');
-                                tmp.write('<td class="timecode">'+a.inpoint+'<br />'+a.out+'<br />'+a.duration+'</td>');
-                                tmp.write('<td class="result">'+a.result+'</td>');
+                                tmp.write('<td class="take">'+a.takeNo+'<br />'+a.result+'</td>');
+                                tmp.write('<td class="tclabel">in:<br />out:<br />dur:<br />date:</td>');
+                                tmp.write('<td class="timecode">'+a.inpoint+'<br />'+a.out+'<br />'+a.duration+'<br />'+a.date+'</td>');
+                               //tmp.write('<td class="result">'+a.result+'</td>');
                                 tmp.write('<td class="comment">'+a.comment+'</td>');
-                                tmp.write('<td class="location">'+a.location+'</td>');
-                                tmp.write('<td class="date">'+a.date+'</td>');
+                               // tmp.write('<td class="location">'+a.location+'</td>');
+                               // tmp.write('<td class="date">'+a.date+'</td>');
                                 tmp.write('</tr>');
                             }
                         }
@@ -2087,10 +2198,8 @@ function ILprint ()
                         tmp.write('<td class="take">NO TAKES</td>');
                         tmp.write('<td class="tclabel"><br /><br /></td>');
                         tmp.write('<td class="timecode"><br /><br /></td>');
-                        tmp.write('<td class="result"><br /></td>');
                         tmp.write('<td class="comment">NO TAKES HAVE BEEN MADE<br /></td>');
-                        tmp.write('<td class="location"><br /></td>');
-                        tmp.write('<td class="date"></td>');
+                        //tmp.write('<td class="date"></td>');
                         tmp.write('</tr>');
                     }
                 }//end item exists and has attributes
@@ -2166,9 +2275,7 @@ function ingexLoggingTimecode ()
 			dropFrame = false;
 			document.getElementById('tcDisplay').innerHTML = "--:--:--:--";
 		}
-		
-		//if system time selected
-		else if (recSel.options[recSel.selectedIndex].value >= numOfRecs)
+		else if (recSel.options[recSel.selectedIndex].value >= numOfRecs) //if system time selected
 		{ 
 			if(document.getElementById('tcDisplay').innerHTML == "--:--:--:--" ) {
 					showLoading('tcDisplay');
@@ -2276,6 +2383,7 @@ function ingexLoggingTimecode ()
 				
 			}//end if on logging tab
 		}//end a recorder is selected
+                document.getElementById('recorderSelector').blur();
 	};//end this.incrementMethod = function()
 	
 	this.startRecIncrement = function(){
@@ -2387,14 +2495,14 @@ function ingexLoggingTimecode ()
 				}
 				else
 				{
-					//display to timcode display
+					//display to timecode area
 					if (dropFrame)
 					{
-						document.getElementById('tcDisplay').innerHTML == h+";"+m+";"+s+";"+f;
+						document.getElementById('tcDisplay').innerHTML = h+";"+m+";"+s+";"+f;
 					}
 					else
 					{
-						document.getElementById('tcDisplay').innerHTML == h+":"+m+":"+s+":"+f;
+						document.getElementById('tcDisplay').innerHTML = h+":"+m+":"+s+":"+f;
 					}
 				}//not showing NaN
 				
@@ -2661,8 +2769,10 @@ function ingexLoggingTimecode ()
 				//if(this.durF == 1 && this.durS == 0){this.durF = 3}
 				}
 			}*/
-		
-			
+		        // TODO convert duration to Min' Sec"
+// 			var durMin = (this.durH * 60) + this.durM;
+//                         var durSec = this.durS + 1; //just ceil to second
+//                         if (durSec < 10) { durSec = "0" + durSec; }
 			// Format as 2 digit numbers
 			var dh; var dm; var ds; var df;
 			if (this.durH < 10) { dh = "0" + this.durH; } else { dh = this.durH; }
@@ -2672,19 +2782,23 @@ function ingexLoggingTimecode ()
 			
 			if(dropFrame){
 				if(showFrames){
-					document.getElementById('outpointBox').value = h+ ";" + m + ";" + s + ";" + f;
-					document.getElementById('durationBox').value = dh + ":" + dm + ":" + ds + ":" + df;
+					document.getElementById('outpointBox').innerHTML = h+ ";" + m + ";" + s + ";" + f;
+					document.getElementById('durationBox').innerHTML = dh + ":" + dm + ":" + ds + ":" + df;
+//                                         document.getElementById('durationBox').innerHTML = durMin + "' " + durSec + "\"";
 				}else{
-					document.getElementById('outpointBox').value = h + ";" + m + ";" + s + ";"+ fr;
-					document.getElementById('durationBox').value = dh + ":" + dm + ":" + ds + ":" + fr;
+					document.getElementById('outpointBox').innerHTML = h + ";" + m + ";" + s + ";"+ fr;
+					document.getElementById('durationBox').innerHTML = dh + ":" + dm + ":" + ds + ":" + fr;
+//                                         document.getElementById('durationBox').innerHTML = durMin + "' " + durSec + "\"";
 				}
 			}else{
 				if(showFrames){
-					document.getElementById('outpointBox').value = h+ ":" + m + ":" + s + ":" + f;
-					document.getElementById('durationBox').value = dh + ":" + dm + ":" + ds + ":" + df;
+					document.getElementById('outpointBox').innerHTML = h+ ":" + m + ":" + s + ":" + f;
+					document.getElementById('durationBox').innerHTML = dh + ":" + dm + ":" + ds + ":" + df;
+//                                         document.getElementById('durationBox').innerHTML = durMin + "' " + durSec + "\"";
 				}else{
-					document.getElementById('outpointBox').value = h + ":" + m + ":" + s + ":"+ fr;
-					document.getElementById('durationBox').value = dh + ":" + dm + ":" + ds + ":" + fr;
+					document.getElementById('outpointBox').innerHTML = h + ":" + m + ":" + s + ":"+ fr;
+					document.getElementById('durationBox').innerHTML = dh + ":" + dm + ":" + ds + ":" + fr;
+//                                         document.getElementById('durationBox').innerHTML = durMin + "' " + durSec + "\"";
 				}
 			}
 		}
@@ -2709,6 +2823,15 @@ function ingexLoggingTimecode ()
 			this.lastFrame = this.firstFrame;
 		}
 		
+//                  owuld reset everything
+//                 ILresetTake();
+
+                //resets everyting except the comment in case has been entered already
+                document.getElementById('inpointBox').innerHTML = "00:00:00:00";
+                document.getElementById('outpointBox').innerHTML = "00:00:00:00";
+                document.getElementById('durationBox').innerHTML = "00:00:00:00";
+                document.getElementById('resultText').innerHTML = "Not Circled";
+                document.getElementById('resultText').className = "notCircled";
 		ILtc.updateTimecodeFromFrameCount(this.firstFrame);
 		
 		// Format as 2 digit numbers
@@ -2719,23 +2842,22 @@ function ingexLoggingTimecode ()
 		if (this.f < 10) { f = "0" + this.f; } else { f = this.f; }
 		if(dropFrame)
 		{
-			document.getElementById('inpointBox').value = h + ";" + m + ";" + s + ";" + f;
-			document.getElementById('outpointBox').value = h + ";" + m + ";" + s + ";" + f;
+			/*document.getElementById('inpointBox').value = h + ";" + m + ";" + s + ";" + f;
+			document.getElementById('outpointBox').value = h + ";" + m + ";" + s + ";" + f;*/
+                        document.getElementById('inpointBox').innerHTML = h + ";" + m + ";" + s + ";" + f;
+			document.getElementById('outpointBox').innerHTML = h + ";" + m + ";" + s + ";" + f;
 		}
 		else
 		{
-			document.getElementById('inpointBox').value = h + ":" + m + ":" + s + ":" + f;
-			document.getElementById('outpointBox').value = h + ":" + m + ":" + s + ":" + f;
+			document.getElementById('inpointBox').innerHTML = h + ":" + m + ":" + s + ":" + f;
+			document.getElementById('outpointBox').innerHTML = h + ":" + m + ":" + s + ":" + f;
 		}
-		document.getElementById('durationBox').value = "00:00:00:00";	
+
 		this.durH = 0;
 		this.durM = 0;
 		this.durS = 0;
 		this.durF = 0;
 		ILtc.takeRunning = true;
-		
-		//disable the recorder selector whilst a take is running
-		document.getElementById('recorderSelector').disabled = true;
 
 	};//end this.startTake
 
@@ -2853,6 +2975,8 @@ Ext.tree.TakeNodeUI = Ext.extend(Ext.tree.TreeNodeUI, {
         var cols = t.columns;
         var bw = t.borderWidth;
         var c = cols[0];
+        n.id = n.parentNode.attributes.databaseId +"-"+ n.attributes.databaseId;
+        n.attributes.id = n.id; 
 
         var buf = [
              '<li><div ext:tree-node-id="',n.id,'" class="x-tree-node-el x-tree-node-leaf ', a.cls,'">',
@@ -2926,6 +3050,8 @@ Ext.tree.ItemNodeUI = Ext.extend(Ext.tree.TreeNodeUI, {
         var cols = t.columns;
         var bw = t.borderWidth;
         var c = cols[0];
+        n.id = n.attributes.databaseId;
+        n.attributes.id = n.id;
 
         var buf = [
                    '<li><div ext:tree-node-id="',n.id,'" class="x-tree-node-el x-tree-node-leaf ', a.cls,'">',

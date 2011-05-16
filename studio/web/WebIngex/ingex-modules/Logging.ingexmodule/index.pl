@@ -97,20 +97,24 @@ sub get_page_content
           <tbody>
           <tr>
           <td>
-                <a class='simpleButton' href='javascript:ILloadNewProgInfo();'>Reset</a>
+                <form><input type='button' class='buttons' id='resetButton' value='Reset' onclick='ILloadNewProgInfo()' /> <input type='button' class='buttons' id='expandAllButton' value='Expand All' onclick='ILexpandItems()' /> <input type='button' class='buttons' id='collapseAllButton' value='Collapse All' onclick='ILcollapseItems()' /></form>
+                <!-- <a class='simpleButton' href='javascript:ILloadNewProgInfo();'>Reset</a> 
                 <a class='simpleButton' href='javascript:ILexpandItems();'>Expand All</a>
-                <a class='simpleButton' href='javascript:ILcollapseItems();'>Collapse All</a>
-                
-            </td><td>   
-                <a class='simpleButton' href='javascript:ILformCall(\"new\");'>New Item</a>
-                <a class='simpleButton' href='javascript:ILformCall(\"pickup\");'>Pickup</a>
-                <a class='simpleButton' href='javascript:ILformCall(\"edit\");'>Edit</a>
+                <a class='simpleButton' href='javascript:ILcollapseItems();'>Collapse All</a> -->
             </td><td>
-                <a class='simpleButton' href='javascript:ILdeleteItem();'>Delete Item</a>
-            </td><td>   
+                <form> <input type='button' class='buttons' id='newItemButton' value='New Item' onclick='ILformCall(\"new\")' /> <input type='button' class='buttons' id='pickupItemButton' value='Pickup' onclick='ILformCall(\"pickup\")' /> <input type='button' class='buttons' id='editItemButton' value='Edit' onclick='ILformCall(\"edit\")' /></form>
+                <!-- <a class='simpleButton' href='javascript:ILformCall(\"new\");'>New Item</a>
+                <a class='simpleButton' href='javascript:ILformCall(\"pickup\");'>Pickup</a>
+                <a class='simpleButton' href='javascript:ILformCall(\"edit\");'>Edit</a> -->
+            </td><td>
+                <form><input type='button' class='buttons' id='deleteItemButton' value='Delete Item' onclick='ILdeleteItem()' /></form>
+               <!-- <a class='simpleButton' href='javascript:ILdeleteItem();'>Delete Item</a> -->
+            </td><td>
+            <form><input type='button' class='buttons' id='importButton' value='Import' onclick='ILimport()' /> <input type='button' class='buttons' id='printButton' value='Print' onclick='ILprint()' /> <input type='button' class='buttons' id='pdfButton' value='PDF' onclick='ILpdf()' /></form>
+            <!--
                 <a class='simpleButton' href='javascript:ILimport();'>Import</a>
                 <a class='simpleButton' href='javascript:ILprint();'>Print</a>
-                <a class='simpleButton' href='javascript:ILpdf();'>PDF</a>  
+                <a class='simpleButton' href='javascript:ILpdf();'>PDF</a> -->
             </td>
             </tr>
             </tbody>
@@ -130,22 +134,19 @@ sub get_page_content
              <table class='alignmentTable'>
                 <tbody>
                     <tr>
-                    <td>
-                              <div class='itemName'>
+                      <td>
+                              <div>
                                     <span id='currentItemName' class='itemNameNone' >No Item Selected</span>
+                              </div>
+                      </td>
+                      <td width='100px'>
+                                 <!-- <div class='leftButtons'> -->
+                                    <div>
+                                    <form><input type='button' class='buttons' id='prevItemButton' value='prev' onclick='ILselectPrevItem()' /> &nbsp <input type='button' class='buttons' id='nextItemButton' value='next' onclick='ILselectNextItem()' /></form>
+                                   <!-- <a class='simpleButton' href='javascript:ILselectPrevItem();'>prev</a>
+                                    <a class='simpleButton' href='javascript:ILselectNextItem();'>next</a> -->
                                 </div>
                       </td>
-                      <td width='200px' vertical-align='middle'>
-                            Next Take: <div id='currentTakeNum' class='itemNameNone'>No Takes</div>
-                       </td>
-                      </tr>
-                      <tr>
-                      <td width='700px'>
-                                 <div class='leftButtons'>
-                                    <a class='simpleButton' href='javascript:ILselectPrevItem();'>prev</a>
-                                    <a class='simpleButton' href='javascript:ILselectNextItem();'>next</a>
-                                </div>
-                    </td>
                      </tr>
                   </tbody>
               </table>
@@ -171,39 +172,32 @@ sub get_page_content
                                  </tr>
                                  <tr>
                                  <td>    
-                                    <select name='recordingLocation' class='takeInfoFormElement' id='recLocSelector'>
+                                    <select name='recordingLocation' class='takeInfoFormElement' id='recLocSelector' onchange='javascript:this.blur();'>
                                            <option value='0'>Loading...</option>
                                    </select>
                                 </td>
                                 </tr>
+                                <tr>
+                                 <td width='200px' vertical-align='middle'>
+                                            Next Take: <div id='currentTakeNum' class='itemNameNone'>-</div>
+                                 </td>
+                                 </tr>
+                                 <tr>
+                                 <td>
+                                        <form><input type='button' class='startButton' id='startButton' value='Start' onclick='ILstartStop()' /> &nbsp <input type='button' class='stopButton' id='stopButton' value='Stop' onclick='ILstartStop()' /></form>
+                                 </td>
+                                 
+                                </tr>
+                                <tr>
+                                    
+                                </tr>
                                 </tbody>
                             </table>
-                        </fieldset>
-                        <div class='spacer'>&nbsp;</div>
-                        <fieldset>
-                        <table class='alignmentTable'>
-                            <tbody>
-                            <tr>
-                                <th>Result:</th>
-                            </tr>
-                            <tr>
-                                <td id='resultText' class='good'>Good</td>
-                            </tr>
-                            <tr>
-                            <td>
-                                <div class ='centerButtons'>
-                                       <a class='simpleButton' href='javascript:ILsetGood();'>Good</a>
-                                       <a class='simpleButton' href='javascript:ILsetNoGood();'>No Good</a>
-                            </div>
-                            </td>
-                            </tr>
-                            </tbody>
-                        </table>
-                        </fieldset>
+                        </fieldset> 
                         </td>
-                        <td width='500px'> 
+                        <td width='500px'>
                         <fieldset>
-                        <table class='alignmentTable'>
+                          <table class='alignmentTable'>
                           <tbody>
                             <tr>
                             <th>Comments:</th>
@@ -212,25 +206,54 @@ sub get_page_content
                                 <td><textarea id='commentBox'></textarea></td>
                             </tr>
                           </tbody>
-                        </table>
+                          </table>
                         </fieldset>
                         </td>
                         <td>
+                            <table class='alignmentTable'>
+                            <tbody>
+                                <tr>
+                                    Circled Status:
+                                </tr>
+                                <tr>
+                                   <td>
+                                         <table class='alignmentTable'>
+                                            <tbody>
+                                            <tr>
+                                               <td id='resultText' class='notCircled'>Not Circled</td>
+                                            </tr>
+                                            <tr>
+                                            <td>
+                                                <!-- <div class ='centerButtons'>-->
+                                                <div>
+                                                    <form style='float:right'><input type='button' class='buttons' id='setCircledButton' value='Circled' onclick='ILsetCircled()' /> <input type='button' class='buttons' id='setNotCircledButton' value='Not Circled' onclick='ILsetNotCircled()' /></form>
+
+                                                    <!-- <a class='simpleButton' href='javascript:ILsetCircled();'>Circled</a>
+                                                    <a class='simpleButton' href='javascript:ILsetNotCircled();'>Not Circled</a> -->
+                                            </div>
+                                            </td>
+                                            </tr>
+                                            </tbody>
+                                        </table>
+                                    </td>
+                                </tr>
+                             </tbody>
+                             </table>
                              <table class='alignmentTable'>
-                                <tbody>
+                             <tbody>
                                 <tr>
                                     <th>In:</th>
-                                    <td><input type='text' name='in' class='takeDetailsFormElement' value='00:00:00:00' id='inpointBox' disabled='disabled'></td>
+                                    <td> <p class=''takeDetailsFormElement' id='inpointBox' name='in'>00:00:00:00</p></td>
                                 </tr>    
                                 <tr>   
                                     <th>Out:</th>
-                                    <td><input type='text' name='out' class='takeDetailsFormElement' value='00:00:00:00' id='outpointBox' disabled='disabled'></td>
+                                    <td><p class=''takeDetailsFormElement' id='outpointBox' name='out'>00:00:00:00</p></td>
                                 </tr>   
                                 <tr>    
                                     <th>Duration:</th>
-                                    <td><input type='text' name='duration' class='takeDetailsFormElement' value='00:00:00:00' id='durationBox' disabled='disabled'></td>
+                                    <td><p class=''takeDetailsFormElement' id='durationBox' name='duration'>00:00:00:00</p></td>
                                 </tr>
-                                </tbody>
+                            </tbody>
                             </table>
                         </td>
                     </tr>
@@ -241,14 +264,17 @@ sub get_page_content
                     <tbody>
                     <tr>
                        <td>
-                            <div class='rightButtons'>
+                            <!-- <div class='rightButtons'>-->
+                             <div>
                              <table class ='alignmentTable'>
                                 <tbody>
                                 <tr>
                                     <td>
-                                     <a class='startButton' href='javascript:ILstartStop();' id='startStopButton'>Start</a>
-                                     <a class='simpleButton' href='javascript:ILresetTake();'>Clear Details</a>
-                                     <a class='simpleButton' href='javascript:ILstoreTake();'>Store Take</a>
+                                     <!--<a class='startButton' href='javascript:ILstartStop();' id='startStopButton'>Start</a>-->
+                                     
+                                     <!-- <a class='simpleButton' href='javascript:ILresetTake();'>Clear Details</a>
+                                     <a class='simpleButton' href='javascript:ILstoreTake();'>Store Take</a> -->
+                                     <form style='float:right'><input type='button' class='buttons' id='resetTakeButton' value='Clear Details' onclick='ILresetTake()' /> <input type='button' class='buttons' id='storeTakeButton' value='StoreTake' onclick='ILstoreTake()' /></form>
                                      </td>
                                  </tr>
                                  </tbody>

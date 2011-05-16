@@ -53,16 +53,30 @@ if (($errorMessage = validate_params()) eq "ok")
     my $itemid;
 	$itemid = prodautodb::save_item($dbh, $decodedJson) or $ok = "no";
 
-	my $loadedItem = prodautodb::load_item($dbh, $itemid) or $ok = "no";
-    
-    if($ok eq "yes") {
-    	  print '{"success":true,"error":"","id":'.$itemid.'}';
-	} else {
+    if($ok eq "yes") 
+    {
+      	my $loadedItem = prodautodb::load_item($dbh, $itemid) or $ok = "no";
+
+        if($ok eq "yes") 
+        {
+          	  print '{"success":true,"error":"","id":'.$itemid.'}';
+        } 
+        else 
+        {
+                   my $err = $prodautodb::errstr;
+                      $err =~ s/"/\\"/g;
+                      print '{"success":false,"error":"'.$err.'"}';
+        }
+	} 
+	else 
+	{
 		  my $err = $prodautodb::errstr;
 		  $err =~ s/"/\\"/g;
 		  print '{"success":false,"error":"'.$err.'"}';
 	}
-} else {
+} 
+else 
+{
 	print '{"success":false,"error":"'.$errorMessage.'","id":-1}';
 }
 prodautodb::disconnect($dbh) if ($dbh);

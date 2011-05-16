@@ -51,16 +51,31 @@ if (($errorMessage = validate_params()) eq "ok")
 
 	my $takeid;
 	$takeid = prodautodb::save_take($dbh, $decodedJson) or $ok = "no";
-	my $loadedTake = prodautodb::load_take($dbh, $takeid) or $ok = "no";
+	
+	if($ok eq "yes") 
+	{
+	       my $loadedTake = prodautodb::load_take($dbh, $takeid) or $ok = "no";
     
-	if($ok eq "yes") {
-		print '{"success":true,"error":"","id":'.$takeid.'}';
-	} else {
+	       if($ok eq "yes") 
+	       {
+		        print '{"success":true,"error":"","id":'.$takeid.'}';
+		   }
+		   else
+		   {
+		          my $err = $prodautodb::errstr;
+                  $err =~ s/"/\\"/g;
+                  print '{"success":false,"error":"'.$err.'"}';
+		   }
+	} 
+	else 
+	{
 		my $err = $prodautodb::errstr;
 		$err =~ s/"/\\"/g;
 		print '{"success":false,"error":"'.$err.'"}';
 	}
-} else {
+}
+else
+{
 	print '{"success":false,"error":"'.$errorMessage.'","id":-1}';
 }
 prodautodb::disconnect($dbh) if ($dbh);
