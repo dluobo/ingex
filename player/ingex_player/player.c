@@ -1,5 +1,5 @@
 /*
- * $Id: player.c,v 1.32 2011/05/11 10:52:32 philipn Exp $
+ * $Id: player.c,v 1.33 2011/05/16 09:30:15 john_f Exp $
  *
  *
  *
@@ -172,6 +172,10 @@ typedef struct
 
     int writeAllMarks;
 } Player;
+
+
+static const char* DEFAULT_WINDOW_TITLE = "Ingex Player";
+
 
 
 static void* shuttle_control_thread(void* arg)
@@ -823,6 +827,7 @@ static void usage(const char* cmd)
     fprintf(stderr, "  --xv                     X11 Xv extension display output (YUV colourspace)\n");
     fprintf(stderr, "  --x11                    X11 display output (RGB colourspace)\n");
     fprintf(stderr, "  --window-id <id>         Don't create a new window, use existing window id e.g. for browser plugin use\n");
+    fprintf(stderr, "  --window-title <title>   Set the window title. Default is '%s'\n", DEFAULT_WINDOW_TITLE);
 #if defined(HAVE_SDL)
     fprintf(stderr, "  --sdl                    Simple DirectMedia Layer output\n");
 #endif
@@ -1088,6 +1093,7 @@ int main(int argc, const char **argv)
     int useDisplayDimensions = 0;
     OSDPlayStatePosition osdPlayStatePosition = OSD_PS_POSITION_BOTTOM;
     int openInputFailed = 0;
+    const char *windowTitle = DEFAULT_WINDOW_TITLE;
 
     memset(inputs, 0, sizeof(inputs));
     memset(&markConfigs, 0, sizeof(markConfigs));
@@ -1309,6 +1315,17 @@ int main(int argc, const char **argv)
                 }
             }
 #endif
+            cmdlnIndex += 2;
+        }
+        else if (strcmp(argv[cmdlnIndex], "--window-title") == 0)
+        {
+            if (cmdlnIndex + 1 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            windowTitle = argv[cmdlnIndex + 1];
             cmdlnIndex += 2;
         }
         else if (strcmp(argv[cmdlnIndex], "--disable-x11-osd") == 0)
@@ -2825,7 +2842,7 @@ int main(int argc, const char **argv)
                 ml_log_error("Failed to open x11 xv display sink\n");
                 goto fail;
             }
-            xvsk_set_window_name(g_player.x11XVDisplaySink, "Ingex Player");
+            xvsk_set_window_name(g_player.x11XVDisplaySink, windowTitle);
             xvsk_register_window_listener(g_player.x11XVDisplaySink, &g_player.x11WindowListener);
             g_player.mediaSink = xvsk_get_media_sink(g_player.x11XVDisplaySink);
 
@@ -2847,7 +2864,7 @@ int main(int argc, const char **argv)
                 ml_log_error("Failed to open x11 display sink\n");
                 goto fail;
             }
-            xsk_set_window_name(g_player.x11DisplaySink, "Ingex Player");
+            xsk_set_window_name(g_player.x11DisplaySink, windowTitle);
             xsk_register_window_listener(g_player.x11DisplaySink, &g_player.x11WindowListener);
             g_player.mediaSink = xsk_get_media_sink(g_player.x11DisplaySink);
 
@@ -2881,7 +2898,7 @@ int main(int argc, const char **argv)
                 ml_log_error("Failed to open dual X11 and DVS sink\n");
                 goto fail;
             }
-            dusk_set_x11_window_name(g_player.dualSink, "Ingex Player");
+            dusk_set_x11_window_name(g_player.dualSink, windowTitle);
             dusk_register_window_listener(g_player.dualSink, &g_player.x11WindowListener);
             g_player.mediaSink = dusk_get_media_sink(g_player.dualSink);
             break;
