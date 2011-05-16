@@ -7,6 +7,7 @@ PROCESSES="player Recorder nexus_multicast nexus_web system_info_web dvs_sdi dvs
 KONSOLE_PIDS="/tmp/ingexPIDs.txt"
 
 # Check to see if capture is already running. If it is, check with the user to avoid stopping it by mistake
+export $(dbus-launch)
 ABORT=0
 if sudo killall -q -0 -e dvs_sdi
 then

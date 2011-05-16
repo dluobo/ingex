@@ -138,6 +138,8 @@ run_routerLogger="./run_routerlogger.sh"
 # assemble the database arguments 
 DB_PARAMS="--dbhost $DB_HOST --dbname $DB_NAME --dbuser $DB_USER --dbpass $DB_PASS"
 
+export $(dbus-launch)
+
 # Check to see if capture is already running. If it is, check with the user to avoid restarting by mistake
 ABORT=0
 if sudo killall -q -0 -e dvs_sdi
