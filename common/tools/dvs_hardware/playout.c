@@ -1,5 +1,5 @@
 /*
- * $Id: playout.c,v 1.3 2010/07/14 13:06:35 john_f Exp $
+ * $Id: playout.c,v 1.4 2011/05/16 09:16:34 john_f Exp $
  *
  * Playout uncompressed video and audio files over SDI.
  *
@@ -70,25 +70,33 @@ static int black_frames_displayed = 0;
 static int video_size = 0;
 static uint8_t *black_frame_buf;
 
-static inline void write_bcd(unsigned char* target, int val)
-{
-    *target = ((val / 10) << 4) + (val % 10);
-}
-
 static int int_to_dvs_tc(int tc)
 {
-    // e.g. turn 1020219 into hex 0x11200819
+    // e.g. turn frame count 1020219 into hex 0x11200819
     int fr = tc % 25;
     int hr = (int)(tc / (60*60*25));
     int mi = (int)((tc - (hr * 60*60*25)) / (60 * 25));
     int se = (int)((tc - (hr * 60*60*25) - (mi * 60*25)) / 25);
 
-    unsigned char raw_tc[4];
-    write_bcd(raw_tc + 0, fr);
-    write_bcd(raw_tc + 1, se);
-    write_bcd(raw_tc + 2, mi);
-    write_bcd(raw_tc + 3, hr);
-    int result = *(int *)(raw_tc);
+    int fr01 = fr % 10;
+    int fr10 = fr / 10;
+    int se01 = se % 10;
+    int se10 = se / 10;
+    int mi01 = mi % 10;
+    int mi10 = mi / 10;
+    int hr01 = hr % 10;
+    int hr10 = hr / 10;
+
+    int result = 0;
+    result &= fr01;
+    result &= (fr10 << 4);
+    result &= (se01 << 8);
+    result &= (se10 << 12);
+    result &= (mi01 << 16);
+    result &= (mi10 << 20);
+    result &= (hr01 << 24);
+    result &= (hr10 << 28);
+
     return result;
 }
 
