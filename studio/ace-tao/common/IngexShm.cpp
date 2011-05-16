@@ -1,5 +1,5 @@
 /*
- * $Id: IngexShm.cpp,v 1.8 2011/02/18 16:31:15 john_f Exp $
+ * $Id: IngexShm.cpp,v 1.9 2011/05/16 09:34:59 john_f Exp $
  *
  * Interface for reading audio/video data from shared memory.
  *
@@ -26,6 +26,7 @@
 #include <ace/Thread.h>
 #include <ace/Log_Msg.h>
 #include <ace/OS_NS_sys_shm.h>
+#include <ace/OS_NS_sys_time.h>
 #include <ace/OS_NS_unistd.h>
 #include <ace/OS_NS_stdio.h>
 #include <ace/OS_NS_signal.h>

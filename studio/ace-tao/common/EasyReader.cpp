@@ -3,7 +3,8 @@
 #include <ace/Thread.h>
 #include <ace/Guard_T.h>
 #include <ace/Time_Value.h>
-//#include <ace/OS_NS_unistd.h>
+#include <ace/OS_NS_unistd.h>
+#include <ace/OS_NS_string.h>
 
 #include "EasyReader.h"
 #include "SerialPort.h"
