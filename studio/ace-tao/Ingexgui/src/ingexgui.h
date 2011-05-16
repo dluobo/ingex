@@ -1,7 +1,7 @@
 /***************************************************************************
- *   $Id: ingexgui.h,v 1.25 2011/04/19 07:04:02 john_f Exp $              *
+ *   $Id: ingexgui.h,v 1.26 2011/05/16 09:37:22 john_f Exp $              *
  *                                                                         *
- *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
+ *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
  *   Author: Matthew Marks                                                 *
  *                                                                         *
@@ -48,6 +48,8 @@
 #define SNAPSHOT_PATH wxT("/tmp") //FIXME: not Windows-compatible
 
 #define USING_ULONGLONG 0 //this allows larger numbers to be incrementable in tape ID cells but if the C runtime library does not support 64-bit numbers the increment buttons will not work at all
+
+DECLARE_EVENT_TYPE(EVT_LOGGING_MESSAGE, wxID_ANY)
 
 static const ProdAuto::MxfTimecode InvalidMxfTimecode = { {0, 0}, 0, false, true};
 static const ProdAuto::MxfDuration InvalidMxfDuration = { {0, 0}, 0, true};
@@ -232,6 +234,7 @@ class IngexguiFrame : public wxFrame
         void OnTestMode(wxCommandEvent&);
         void OnPlayerCommand(wxCommandEvent&);
         void OnJogShuttleEvent(wxCommandEvent&);
+        void OnLoggingEvent(wxCommandEvent&);
 
         void SetStatus(Stat);
         ProdAuto::MxfDuration SetRoll(const wxChar *, int, const ProdAuto::MxfDuration &, wxStaticBoxSizer *);

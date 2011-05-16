@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: ingexgui.cpp,v 1.41 2011/04/19 07:04:02 john_f Exp $           *
+ *   $Id: ingexgui.cpp,v 1.42 2011/05/16 09:37:22 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -72,6 +72,8 @@
 WX_DEFINE_OBJARRAY(ChunkInfoArray);
 WX_DEFINE_OBJARRAY(ArrayOfTrackList_var);
 WX_DEFINE_OBJARRAY(ArrayOfStringSeq_var);
+
+DEFINE_EVENT_TYPE(EVT_LOGGING_MESSAGE)
 
 BEGIN_EVENT_TABLE( MyTextCtrl, wxTextCtrl )
     EVT_SET_FOCUS( MyTextCtrl::OnFocus )
@@ -159,6 +161,7 @@ BEGIN_EVENT_TABLE( IngexguiFrame, wxFrame )
     EVT_COMMAND( wxID_ANY, EVT_JOGSHUTTLE_MESSAGE, IngexguiFrame::OnJogShuttleEvent )
     EVT_COMMAND( wxID_ANY, EVT_TIMEPOS_EVENT, IngexguiFrame::OnTimeposEvent )
     EVT_COMMAND( wxID_ANY, EVT_JUMP_TO_TIMECODE, IngexguiFrame::OnJumpToTimecodeEvent )
+    EVT_COMMAND( wxID_ANY, EVT_LOGGING_MESSAGE, IngexguiFrame::OnLoggingEvent )
     EVT_MENU( MENU_PlayRecordings, IngexguiFrame::OnPlayerCommand )
 #ifndef DISABLE_SHARED_MEM_SOURCE
     EVT_MENU( MENU_EtoE, IngexguiFrame::OnPlayerCommand )
@@ -1541,6 +1544,12 @@ void IngexguiFrame::OnClearDescription(wxCommandEvent & WXUNUSED(event))
 void IngexguiFrame::OnDescriptionEnterKey(wxCommandEvent & WXUNUSED(event))
 {
     FindWindowById(NOTEBOOK, this)->SetFocus(); //seems as good a thing as any - has to be something which is enabled
+}
+
+/// Responds to a logging event by logging the message within
+void IngexguiFrame::OnLoggingEvent(wxCommandEvent& event)
+{
+    Log(event.GetString());
 }
 
 /// Deal with log messages: send to log stream

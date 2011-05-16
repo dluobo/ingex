@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: controller.cpp,v 1.17 2011/05/11 08:54:09 john_f Exp $          *
+ *   $Id: controller.cpp,v 1.18 2011/05/16 09:37:22 john_f Exp $          *
  *                                                                         *
  *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -26,6 +26,7 @@
 
 #include "controller.h"
 #include "comms.h"
+#include "timepos.h"
 #include "ingexgui.h"
 
 DEFINE_EVENT_TYPE (EVT_CONTROLLER_THREAD);
@@ -584,12 +585,15 @@ wxThread::ExitCode Controller::Entry()
                 }
                 case RECORD: {
 //std::cerr << "thread RECORD" << std::endl;
+                    wxCommandEvent loggingEvent(EVT_LOGGING_MESSAGE);
                     mMutex.Lock();
                     timecode = mStartTimecode;
                     ProdAuto::MxfDuration preroll = mPreroll;
                     CORBA::BooleanSeq rec_enable = mEnableList;
                     std::string project = (const char *) mProject.mb_str(wxConvISO8859_1);
+                    loggingEvent.SetString(wxT("Start() being called for ") + mName + wxT(" @ ") + Timepos::FormatTimecode(timecode));
                     mMutex.Unlock();
+                    AddPendingEvent(loggingEvent);
                     try {
                         rc = mRecorder->Start(timecode, preroll, rec_enable, project.c_str(), false);
                     }
@@ -601,12 +605,15 @@ wxThread::ExitCode Controller::Entry()
                 }
                 case STOP: {
 //std::cerr << "thread STOP" << std::endl;
+                    wxCommandEvent loggingEvent(EVT_LOGGING_MESSAGE);
                     mMutex.Lock();
                     timecode = mStopTimecode;
                     ProdAuto::MxfDuration postroll = mPostroll;
                     char * description = CORBA::string_dup(mDescription.mb_str(wxConvISO8859_1));
                     ProdAuto::LocatorSeq locators = mLocators; 
+                    loggingEvent.SetString(wxT("Stop() being called for ") + mName + wxT(" @ ") + Timepos::FormatTimecode(timecode));
                     mMutex.Unlock();
+                    AddPendingEvent(loggingEvent);
                     try {
                         rc = mRecorder->Stop(timecode, postroll, description, locators, strings.out());
                     }
