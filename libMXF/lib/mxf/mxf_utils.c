@@ -1,5 +1,5 @@
 /*
- * $Id: mxf_utils.c,v 1.9 2011/04/26 15:40:39 philipn Exp $
+ * $Id: mxf_utils.c,v 1.10 2011/05/19 17:14:20 philipn Exp $
  *
  * General purpose utilities
  *
@@ -35,6 +35,7 @@
 #else
 
 #include <uuid/uuid.h>
+#include <time.h>
 #include <sys/time.h>
 
 #endif
