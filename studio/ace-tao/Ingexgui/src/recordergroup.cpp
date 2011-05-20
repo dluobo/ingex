@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: recordergroup.cpp,v 1.25 2011/04/19 07:04:02 john_f Exp $       *
+ *   $Id: recordergroup.cpp,v 1.26 2011/05/20 08:43:00 john_f Exp $       *
  *                                                                         *
  *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -225,6 +225,7 @@ bool RecorderGroupCtrl::Disconnect(const int index)
             }
         }
         ((Controller *) GetItemData(index))->Destroy(); //Destroy even if not OK
+        StartGettingRecorders(); //Refresh the list in case this recorder has disappeared since connecting to it.
     }
     return exists;
 }
