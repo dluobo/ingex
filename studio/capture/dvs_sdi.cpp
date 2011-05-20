@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.cpp,v 1.23 2011/04/20 13:55:05 john_f Exp $
+ * $Id: dvs_sdi.cpp,v 1.24 2011/05/20 15:00:18 john_f Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -74,7 +74,8 @@ extern "C"
 using namespace Ingex;
 
 const bool DEBUG_OFFSETS = false;
-const size_t DMA_ALIGN = 16;
+const size_t DMA_ALIGN = 256;
+const bool CHECK_ALIGNMENT = false;
 const int MAX_AUDIO_DMA_PAIR_SIZE = 0x6000; // Size of audio DMA block can vary with SDK version
 const int MAX_VIDEO_DMA_SIZE = 0x3F6000; // Size varies with raster and card type
 
@@ -2708,7 +2709,7 @@ int main (int argc, char ** argv)
             }
             if (res == SV_OK)
             {
-                if (0)
+                if (CHECK_ALIGNMENT)
                 {
                     // Check required memory alignment for DMA
                     int alignment = 0;
