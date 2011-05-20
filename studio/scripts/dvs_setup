@@ -1,5 +1,5 @@
 #! /bin/sh
-# $Id: dvs_setup,v 1.6 2009/11/25 17:24:03 john_f Exp $
+# $Id: dvs_setup,v 1.7 2011/05/20 08:30:31 john_f Exp $
 # Author: Stuart Cunningham
 #
 # /etc/init.d/dvs_setup
@@ -17,7 +17,8 @@
 rc_reset
 
 #DVS_DIR=/home/ingex/dvs/sdk3.2.14.9/linux-x86_64
-DVS_DIR=/home/ingex/dvs/sdk3.4.0.1/linux-x86_64
+#DVS_DIR=/home/ingex/dvs/sdk3.4.0.1/linux-x86_64
+DVS_DIR=/home/ingex/dvs/sdk4.0.1.17/linux-x86_64
 
 #DRIVER_DIR=/usr/lib/dvs
 DRIVER_DIR=$DVS_DIR/driver
