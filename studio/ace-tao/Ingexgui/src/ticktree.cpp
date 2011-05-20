@@ -231,7 +231,7 @@ bool TickTreeCtrl::SomeEnabled()
 /// @return True if any tracks recording.
 bool TickTreeCtrl::IsRecording()
 {
-    return RECORDING == dynamic_cast<ItemData *>(GetItemData(GetRootItem()))->GetUnderlyingState() || PARTIALLY_RECORDING == ((ItemData *) GetItemData(GetRootItem()))->GetUnderlyingState();
+    return RECORDING == dynamic_cast<ItemData *>(GetItemData(GetRootItem()))->GetUnderlyingState() || PARTIALLY_RECORDING == dynamic_cast<ItemData *>(GetItemData(GetRootItem()))->GetUnderlyingState();
 }
 
 /// Returns true if all enabled tracks' packages have tape IDs, or tape IDs are not being used.
@@ -282,8 +282,9 @@ bool TickTreeCtrl::AllRecording()
     wxTreeItemIdValue cookie;
     wxTreeItemId recorder = GetFirstChild(GetRootItem(), cookie);
     while (recorder.IsOk()) {
-        if (ENABLED == dynamic_cast<ItemData *>(GetItemData(recorder))->GetUnderlyingState() || PARTIALLY_ENABLED == ((ItemData *) GetItemData(recorder))->GetUnderlyingState()) { //some tracks enabled but not recording
+        if (ENABLED == dynamic_cast<ItemData *>(GetItemData(recorder))->GetUnderlyingState() || PARTIALLY_ENABLED == dynamic_cast<ItemData *>(GetItemData(recorder))->GetUnderlyingState()) { //some tracks enabled but not recording
             allRecording = false;
+            break;
         }
         recorder = GetNextChild(GetRootItem(), cookie);
     }
@@ -298,8 +299,9 @@ bool TickTreeCtrl::AllStopped()
     wxTreeItemIdValue cookie;
     wxTreeItemId recorder = GetFirstChild(GetRootItem(), cookie);
     while (recorder.IsOk()) {
-        if (RECORDING == dynamic_cast<ItemData *>(GetItemData(recorder))->GetUnderlyingState() || PARTIALLY_RECORDING == ((ItemData *) GetItemData(recorder))->GetUnderlyingState()) { //some tracks enabled but not recording
+        if (RECORDING == dynamic_cast<ItemData *>(GetItemData(recorder))->GetUnderlyingState() || PARTIALLY_RECORDING == dynamic_cast<ItemData *>(GetItemData(recorder))->GetUnderlyingState()) { //some tracks enabled but not recording
             allStopped = false;
+            break;
         }
         recorder = GetNextChild(GetRootItem(), cookie);
     }
@@ -356,7 +358,7 @@ int TickTreeCtrl::SelectRecursively(wxTreeItemId id, unsigned int * enabledTrack
     }
     else {
         if (TRACK_NODE & rc) { //no grandchildren so this is a package node
-            if (DISABLED != dynamic_cast<ItemData *>(GetItemData(id))->GetUnderlyingState() && !((ItemData *) GetItemData(id))->GetBool()) { //no tape ID on a package with track(s) enabled for recording
+            if (DISABLED != dynamic_cast<ItemData *>(GetItemData(id))->GetUnderlyingState() && !dynamic_cast<ItemData *>(GetItemData(id))->GetBool()) { //no tape ID on a package with track(s) enabled for recording
                 rc &= ~TAPE_IDS_OK;
             }
         }
@@ -800,8 +802,8 @@ void TickTreeCtrl::RemoveMessage(const wxTreeItemId item)
 /// Sets both the displayed image and the stored underlying state of the given node, optionally adding or removing a message to/from the item text
 /// @param id The item to set.
 /// @param state The state to set it to.
-/// @param retain True to retain any message added to the item text
-/// @param message Message to add - ignored if "retain" is true
+/// @param retain True to retain any message added to the item text.
+/// @param message Message to add - ignored if "retain" is true.
 void TickTreeCtrl::SetNodeState(const wxTreeItemId id, const TickTreeCtrl::state state, const bool retain, const wxString & message)
 {
     SetItemImage(id, state);
