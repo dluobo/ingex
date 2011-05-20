@@ -1,5 +1,5 @@
 /*
- * $Id: video_conversion.c,v 1.7 2010/06/02 10:52:38 philipn Exp $
+ * $Id: video_conversion.c,v 1.8 2011/05/20 08:26:59 john_f Exp $
  *
  * MMX optimised video format conversion functions
  *
@@ -38,15 +38,24 @@
 void uyvy_to_yuv420_nommx(int width, int height, int shift_picture_down, const uint8_t *input, uint8_t *output)
 {
     int i;
+    uint8_t *Y_out = output;
+    uint8_t *U_out = Y_out + width * height;
+    uint8_t *V_out = U_out + width * height / 4;
+    uint8_t *orig_Y_out = Y_out;
+    uint8_t *orig_U_out = U_out;
+    uint8_t *orig_V_out = V_out;
 
-    // TODO:
-    // support shift_picture_down arg
-    // by shifting picture down one line
+    if (shift_picture_down) {
+        Y_out += width;                     // adjust output pointers to skip first line
+        U_out += width/2;
+        V_out += width/2;
+        height--;                           // height is now 1 line less
+    }
 
     // Copy Y plane as is
     for (i = 0; i < width*height; i++)
     {
-        output[i] = input[ i*2 + 1 ];
+        Y_out[i] = input[ i*2 + 1 ];
     }
 
     // Copy U & V planes, downsampling in vertical direction
@@ -55,14 +64,22 @@ void uyvy_to_yuv420_nommx(int width, int height, int shift_picture_down, const u
     int i_macropixel = 0;
     for (i = 0; i < width*height / 4; i++)
     {
-        output[width*height + i] = input[ i_macropixel*4 ];         // U
-        output[width*height*5/4 + i] = input[ i_macropixel*4 + 2 ]; // V
+        U_out[i] = input[ i_macropixel*4 ];
+        V_out[i] = input[ i_macropixel*4 + 2 ];
 
         // skip every second line
         if (i_macropixel % (width) == (width - 1))
             i_macropixel += width/2;
 
         i_macropixel++;
+    }
+
+    if (shift_picture_down) {
+        // Duplicate second line up so it fills in otherwise blank top line
+        // to avoid nasty compression artifacts later on.
+        memcpy(orig_Y_out, Y_out, width);       // write one line of copied Y
+        memcpy(orig_U_out, U_out, width/2);     // copy one line of subsampled U
+        memcpy(orig_V_out, V_out, width/2);     // copy one line of subsampled V
     }
 }
 
@@ -71,15 +88,24 @@ void uyvy_to_yuv420_nommx(int width, int height, int shift_picture_down, const u
 void uyvy_to_yuv422_nommx(int width, int height, int shift_picture_down, const uint8_t *input, uint8_t *output)
 {
     int i;
+    uint8_t *Y_out = output;
+    uint8_t *U_out = Y_out + width * height;
+    uint8_t *V_out = U_out + width * height / 2;
+    uint8_t *orig_Y_out = Y_out;
+    uint8_t *orig_U_out = U_out;
+    uint8_t *orig_V_out = V_out;
 
-    // TODO:
-    // support shift_picture_down arg
-    // by shifting picture down one line
+    if (shift_picture_down) {
+        Y_out += width;                     // adjust output pointers to skip first line
+        U_out += width/2;
+        V_out += width/2;
+        height--;                           // height is now 1 line less
+    }
 
     // Copy Y plane as is
     for (i = 0; i < width*height; i++)
     {
-        output[i] = input[ i*2 + 1 ];
+        Y_out[i] = input[ i*2 + 1 ];
     }
 
     // Copy U & V planes
@@ -87,10 +113,18 @@ void uyvy_to_yuv422_nommx(int width, int height, int shift_picture_down, const u
     int i_macropixel = 0;
     for (i = 0; i < width*height / 2; i++)
     {
-        output[width*height + i] = input[ i_macropixel*4 ];         // U
-        output[width*height*3/2 + i] = input[ i_macropixel*4 + 2 ]; // V
+        U_out[i] = input[ i_macropixel*4 ];
+        V_out[i] = input[ i_macropixel*4 + 2 ];
 
         i_macropixel++;
+    }
+
+    if (shift_picture_down) {
+        // Duplicate second line up so it fills in otherwise blank top line
+        // to avoid nasty compression artifacts later on.
+        memcpy(orig_Y_out, Y_out, width);       // write one line of copied Y
+        memcpy(orig_U_out, U_out, width/2);     // copy one line of subsampled U
+        memcpy(orig_V_out, V_out, width/2);     // copy one line of subsampled V
     }
 }
 
@@ -416,6 +450,22 @@ static void downconvert_chroma_component(const uint8_t *C_in, int height, uint8_
 void yuv422_to_yuv420_DV_sampling(int width, int height, int shift_picture_down, const uint8_t *input, uint8_t *output)
 {
     int i;
+    uint8_t *Y_out = output;
+    uint8_t *U_out = Y_out + width * height;
+    uint8_t *V_out = U_out + width * height / 4;
+    uint8_t *orig_Y_out = Y_out;
+    uint8_t *orig_U_out = U_out;
+    uint8_t *orig_V_out = V_out;
+    const uint8_t *Y_in = input;
+    const uint8_t *U_in = Y_in + width * height;
+    const uint8_t *V_in = U_in + width * height / 2;
+
+    if (shift_picture_down) {
+        Y_out += width;                     // adjust output pointers to skip first line
+        U_out += width/2;
+        V_out += width/2;
+        height--;                           // height is now 1 line less
+    }
 
     // Copy Y plane as is
     for (i = 0; i < width*height; i++)
@@ -423,20 +473,19 @@ void yuv422_to_yuv420_DV_sampling(int width, int height, int shift_picture_down,
         output[i] = input[i];
     }
 
-    const uint8_t *U_in = input + width * height;
-    const uint8_t *V_in = U_in + width * height / 2;
-
-    uint8_t *U_out = output + width * height;
-    uint8_t *V_out = U_out + width * height / 4;
-
-    int width2 = width / 2;
-    int height2 = height / 2;
-
     /* Downconvert the U component */
-    downconvert_chroma_component(U_in, height, U_out, width2, height2, 0);
+    downconvert_chroma_component(U_in, height, U_out, width / 2, height / 2, 0);
 
     /* Downconvert the V component */
-    downconvert_chroma_component(V_in, height, V_out, width2, height2, 1);
+    downconvert_chroma_component(V_in, height, V_out, width / 2, height / 2, 1);
+
+    if (shift_picture_down) {
+        // Duplicate second line up so it fills in otherwise blank top line
+        // to avoid nasty compression artifacts later on.
+        memcpy(orig_Y_out, Y_out, width);     // write one line of copied Y
+        memcpy(orig_U_out, U_out, width/2);     // copy one line of subsampled U
+        memcpy(orig_V_out, V_out, width/2);     // copy one line of subsampled V
+    }
 }
 
 /*
@@ -501,13 +550,11 @@ void uyvy_to_yuv420_DV_sampling(int width, int height, int shift_picture_down, c
     uint8_t *orig_U_out = U_out;
     uint8_t *orig_V_out = V_out;
 
-    int start_line = 0;
     if (shift_picture_down) {
         output += width;                    // adjust output pointers to skip first line
         U_out += width/2;
         V_out += width/2;
         height--;                           // height is now 1 line less
-        start_line = 1;
     }
 
     // Copy Y plane as is
