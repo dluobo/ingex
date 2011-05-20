@@ -1,5 +1,5 @@
 /*
- * $Id: mxf_essence_helper.c,v 1.21 2011/04/19 09:45:39 philipn Exp $
+ * $Id: mxf_essence_helper.c,v 1.22 2011/05/20 09:05:28 john_f Exp $
  *
  * Utilities for processing essence data and associated metadata
  *
@@ -487,10 +487,9 @@ int process_cdci_descriptor(MXFMetadataSet* descriptorSet, MXFTrack* track, Esse
             {
                 /* Only support 10-bit UYVY 4:2:2 */
                 CHK_ORET(mxf_equals_ul(&track->pictureEssenceCodingLabel, &MXF_CMDEF_L(UNC_10B_422_INTERLEAVED)));
-                /* SMPTE 377M-2009 states in G.2.25 that "Stored width shall be a multiple of 6" */
-                CHK_ORET((fieldWidth / 6) * 6 == fieldWidth);
+                CHK_ORET((fieldWidth / 48) * 48 == fieldWidth);
                 
-                essenceTrack->frameSize = (uint32_t)(fieldWidth / 6 * 16 * fieldHeight);
+                essenceTrack->frameSize = (uint32_t)((fieldWidth + 47) / 48 * 128 * fieldHeight);
             }
         }
     }
@@ -499,8 +498,7 @@ int process_cdci_descriptor(MXFMetadataSet* descriptorSet, MXFTrack* track, Esse
              mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(HD_Unc_1080_5994i_422_FrameWrapped)) ||
              mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(HD_Unc_1080_5994i_422_ClipWrapped)))
     {
-        /* only 8-bit supported */
-        CHK_ORET(track->video.componentDepth == 8);
+        CHK_ORET(track->video.componentDepth == 8 || track->video.componentDepth == 10);
 
 
         CHK_ORET(mxf_get_uint32_item(descriptorSet, &MXF_ITEM_K(GenericPictureEssenceDescriptor, StoredHeight), &fieldHeight));
@@ -566,8 +564,19 @@ int process_cdci_descriptor(MXFMetadataSet* descriptorSet, MXFTrack* track, Esse
         }
         else
         {
-            essenceTrack->frameSize = (uint32_t)(fieldWidth * fieldHeight * 
-                (1 + 2.0 / (track->video.horizSubsampling * track->video.vertSubsampling)) + 0.5);
+            if (track->video.componentDepth == 8)
+            {
+                essenceTrack->frameSize = (uint32_t)(fieldWidth * fieldHeight * 
+                    (1 + 2.0 / (track->video.horizSubsampling * track->video.vertSubsampling)) + 0.5);
+            }
+            else
+            {
+                /* Only support 10-bit UYVY 4:2:2 */
+                CHK_ORET(mxf_equals_ul(&track->pictureEssenceCodingLabel, &MXF_CMDEF_L(UNC_10B_422_INTERLEAVED)));
+                CHK_ORET((fieldWidth / 48) * 48 == fieldWidth);
+                
+                essenceTrack->frameSize = (uint32_t)((fieldWidth + 47) / 48 * 128 * fieldHeight);
+            }
         }
     }
     else if (mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(HD_Unc_720_50p_422_FrameWrapped)) ||
@@ -575,8 +584,7 @@ int process_cdci_descriptor(MXFMetadataSet* descriptorSet, MXFTrack* track, Esse
              mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(HD_Unc_720_5994p_422_FrameWrapped)) ||
              mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(HD_Unc_720_5994p_422_ClipWrapped)))
     {
-        /* only 8-bit supported */
-        CHK_ORET(track->video.componentDepth == 8);
+        CHK_ORET(track->video.componentDepth == 8 || track->video.componentDepth == 10);
 
 
         CHK_ORET(mxf_get_uint32_item(descriptorSet, &MXF_ITEM_K(GenericPictureEssenceDescriptor, StoredHeight), &fieldHeight));
@@ -641,8 +649,19 @@ int process_cdci_descriptor(MXFMetadataSet* descriptorSet, MXFTrack* track, Esse
         }
         else
         {
-            essenceTrack->frameSize = (uint32_t)(fieldWidth * fieldHeight * 
-                (1 + 2.0 / (track->video.horizSubsampling * track->video.vertSubsampling)) + 0.5);
+            if (track->video.componentDepth == 8)
+            {
+                essenceTrack->frameSize = (uint32_t)(fieldWidth * fieldHeight * 
+                    (1 + 2.0 / (track->video.horizSubsampling * track->video.vertSubsampling)) + 0.5);
+            }
+            else
+            {
+                /* Only support 10-bit UYVY 4:2:2 */
+                CHK_ORET(mxf_equals_ul(&track->pictureEssenceCodingLabel, &MXF_CMDEF_L(UNC_10B_422_INTERLEAVED)));
+                CHK_ORET((fieldWidth / 48) * 48 == fieldWidth);
+                
+                essenceTrack->frameSize = (uint32_t)((fieldWidth + 47) / 48 * 128 * fieldHeight);
+            }
         }
     }
     else if (mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(AvidMJPEGClipWrapped)))
