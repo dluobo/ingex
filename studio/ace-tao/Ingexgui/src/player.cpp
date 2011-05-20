@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: player.cpp,v 1.34 2011/05/11 08:54:09 john_f Exp $              *
+ *   $Id: player.cpp,v 1.35 2011/05/20 08:41:43 john_f Exp $              *
  *                                                                         *
  *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -670,7 +670,7 @@ bool Player::Start()
                 PlayerInput input;
                 input.name = mFileNames[i];
                 input.type = mInputType;
-                input.options["fallback_blank"] = (i < mNVideoTracks) ? "true" : "false"; //display a blank source if the file cannot be opened, to avoid pictures rearranging themselves as files appear
+                input.options["fallback_blank"] = (i < mNVideoTracks && prodauto::SHM_INPUT != mInputType) ? "true" : "false"; //display a blank source if the file cannot be opened, to avoid pictures rearranging themselves as files appear, but don't with shared memory as this situation won't occur and it only produces a black window and uses unnecessary CPU resources
                 inputs.push_back(input);
             }
             int64_t frameOffset;
