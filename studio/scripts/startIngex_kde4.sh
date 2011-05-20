@@ -138,6 +138,7 @@ run_routerLogger="./run_routerlogger.sh"
 # assemble the database arguments 
 DB_PARAMS="--dbhost $DB_HOST --dbname $DB_NAME --dbuser $DB_USER --dbpass $DB_PASS"
 
+# allow KDE apps to work properly over the network
 export $(dbus-launch)
 
 # Check to see if capture is already running. If it is, check with the user to avoid restarting by mistake
@@ -161,7 +162,7 @@ for PROC in  $PROCESSES ; do
     sudo killall -s SIGINT -e ${PROC}
     while sudo killall -q -0 -e ${PROC}
     do
-    	usleep 100000
+      usleep 100000
     done
   fi
   usleep 1000000
@@ -232,203 +233,136 @@ for pid in $PIDS; do
 done
 
 # start a new konsole window
-konsole
+#export $(dbus-launch)
+#konsole
 
 # find the pid of the new window
-PID=$(pidof ${ARGS} konsole)
+#PID=$(pidof ${ARGS} konsole)
 
-capture_window="org.kde.konsole-${PID}"
 
 #echo "New Window is $capture_window..."
 
 # save PID
-echo ${PID} >> ${KONSOLE_PIDS}
+#echo ${PID} >> ${KONSOLE_PIDS}
 
 # seem to need this to allow things to settle!
-sleep 1
+#sleep 1
 # move/resize the window in pixels
 #qdbus $capture_window /konsole/MainWindow_1 \
 #  org.freedesktop.DBus.Properties.Set com.trolltech.Qt.QWidget geometry 0,0,1024,344
 
-echo "Started konsole $capture_window..."
-tab=$(qdbus $capture_window /Konsole org.kde.konsole.Konsole.currentSession)
+#echo "Started konsole $capture_window..."
+
+function SetupTab { # arg: name of tab
+  RC_FILE=/tmp/ingex-$1-bashrc
+  echo "title: $HOSTNAME $1;; command: bash --rcfile $RC_FILE" >> $KONSOLE_TABS_FILE
+  HISTORY=~/.ingex-$1-bash-history # don't put in /tmp as this won't be read until capture process finishes?
+  rm $HISTORY 2>/dev/null
+  echo "HISTFILE=$HISTORY" > $RC_FILE
+}
+
+function WriteCommand { #arg: command
+  echo "echo $1" >> $RC_FILE
+  echo $1 >> $RC_FILE
+  echo $1 >> $HISTORY
+}  
+
+KONSOLE_TABS_FILE=/tmp/ingex-tabs # the file given to the konsole command, containing tab names and a command to be executed for each tab, which only seems to work as a single word, so each points to an executable file
+rm $KONSOLE_TABS_FILE 2>/dev/null
 
 # set the required script path to all sessions
 if [ $CAPTURE -ge 1 ] ; then
-  qdbus $capture_window /Sessions/$tab org.kde.konsole.Session.setTitle 1 "Capture"
-  qdbus $capture_window /Sessions/$tab org.kde.konsole.Session.sendText "cd $capture_path"
-  qdbus $capture_window /Sessions/$tab org.kde.konsole.Session.sendText $'\n'
-  echo "tab=$tab"
+  SetupTab "Capture"
+  WriteCommand "cd $capture_path"
   if [ $CAPTURE_PROGRAM = "DVS_SDI" ] ; then
     # sudo nice -10
-    qdbus $capture_window /Sessions/$tab org.kde.konsole.Session.sendText "./dvs_sdi -c $CAPTURE_CHANNELS -mode $CAPTURE_MODE -f $CAPTURE_PRIMARY_BUFFER -s $CAPTURE_SECONDARY_BUFFER -mc 0 -tt $CAPTURE_TIMECODE $CAPTURE_OPTIONS"
-    qdbus $capture_window /Sessions/$tab org.kde.konsole.Session.sendText $'\n'
+    WriteCommand "./dvs_sdi -c $CAPTURE_CHANNELS -mode $CAPTURE_MODE -f $CAPTURE_PRIMARY_BUFFER -s $CAPTURE_SECONDARY_BUFFER -mc 0 -tt $CAPTURE_TIMECODE $CAPTURE_OPTIONS"
   elif [ $CAPTURE_PROGRAM = "DVS_DUMMY" ] ; then 
-    qdbus $capture_window /Sessions/$tab org.kde.konsole.Session.sendText "./dvs_dummy -c $CAPTURE_CHANNELS -mode $CAPTURE_MODE -f $CAPTURE_PRIMARY_BUFFER -s $CAPTURE_SECONDARY_BUFFER -mc 0 -tt $CAPTURE_TIMECODE $CAPTURE_OPTIONS"
-    qdbus $capture_window /Sessions/$tab org.kde.konsole.Session.sendText $'\n'
+    WriteCommand "./dvs_dummy -c $CAPTURE_CHANNELS -mode $CAPTURE_MODE -f $CAPTURE_PRIMARY_BUFFER -s $CAPTURE_SECONDARY_BUFFER -mc 0 -tt $CAPTURE_TIMECODE $CAPTURE_OPTIONS"
   elif [ $CAPTURE_PROGRAM = "BMD_ANASDI" ] ; then 
-    qdbus $capture_window /Sessions/$tab org.kde.konsole.Session.sendText "./bmd_anasdi -c $CAPTURE_CHANNELS -mode $CAPTURE_MODE -f $CAPTURE_PRIMARY_BUFFER -s $CAPTURE_SECONDARY_BUFFER -mc 0 -tt $CAPTURE_TIMECODE $CAPTURE_OPTIONS"
-    qdbus $capture_window /Sessions/$tab org.kde.konsole.Session.sendText $'\n'
+    WriteCommand "./bmd_anasdi -c $CAPTURE_CHANNELS -mode $CAPTURE_MODE -f $CAPTURE_PRIMARY_BUFFER -s $CAPTURE_SECONDARY_BUFFER -mc 0 -tt $CAPTURE_TIMECODE $CAPTURE_OPTIONS"
   elif [ $CAPTURE_PROGRAM = "TESTGEN" ] ; then
-    qdbus $capture_window /Sessions/$tab org.kde.konsole.Session.sendText "./testgen -c $CAPTURE_CHANNELS"
-    qdbus $capture_window /Sessions/$tab org.kde.konsole.Session.sendText $'\n'
+    WriteCommand "./testgen -c $CAPTURE_CHANNELS"
   else
     echo "Invalid ingex.conf or argument. exit."
     return 1
   fi
-  tab=
 fi
 
 # ** multicasting **
 if [ $MULTICAST -ge 1 ] ; then
-  if [ -z $tab ] ; then
-    tab=$(qdbus $capture_window /Konsole org.kde.konsole.Konsole.newSession)
-    sleep 1
-  fi
+  SetupTab "Multicast"
   # Prepare options. If mpeg transport stream, set -t option and bitrate
   if [ $MULTICAST_MPEG_TS -ge 1 ] ; then
     OPTIONS="-t -b ${MULTICAST_MPEG_BIT_RATE}"
   fi
   OPTIONS="${OPTIONS} -s ${MULTICAST_SIZE}"
 
-  qdbus $capture_window /Sessions/$tab org.kde.konsole.Session.setTitle 1 "Multicast"
-  qdbus $capture_window /Sessions/$tab org.kde.konsole.Session.sendText "cd $capture_path"
-  qdbus $capture_window /Sessions/$tab org.kde.konsole.Session.sendText $'\n'
   PORT=$MULTICAST_FIRST_PORT
   while [ "$CHAN" -lt "$CAPTURE_CHANNELS" ] ; do
     #echo "Starting multicast channel ${CHAN}"
-    qdbus $capture_window /Sessions/$tab org.kde.konsole.Session.sendText "./nexus_multicast -c ${CHAN} -q ${OPTIONS} ${MULTICAST_ADDR}:${PORT} &"
-    qdbus $capture_window /Sessions/$tab org.kde.konsole.Session.sendText $'\n'
+    WriteCommand "./nexus_multicast -c ${CHAN} -q ${OPTIONS} ${MULTICAST_ADDR}:${PORT} &\n"
     let CHAN=$CHAN+1
     let PORT=$PORT+1
   done
-  tab=
 fi
 
 # ** Transfer **
 if [ $TRANSFER -ge 1 ] ; then
-  if [ -z $tab ] ; then
-    tab=$(qdbus $capture_window /Konsole org.kde.konsole.Konsole.newSession)
-    sleep 1
-  fi
-  qdbus $capture_window /Sessions/$tab org.kde.konsole.Session.setTitle 1 "Copy"
-  qdbus $capture_window /Sessions/$tab org.kde.konsole.Session.sendText "cd $xfer_path"
-  qdbus $capture_window /Sessions/$tab org.kde.konsole.Session.sendText $'\n'
+  SetupTab "Copy"
+  WriteCommand "cd $xfer_path"
 
   if [ -n "${COPY_EXTRA_DEST}" ] ; then
     EXTRA_DEST="-e ${COPY_EXTRA_DEST}"
   fi
   if [ -z "${COPY_FTP_SERVER}" ] ; then
-    qdbus $capture_window /Sessions/$tab org.kde.konsole.Session.sendText "./xferserver.pl ${EXTRA_DEST}"
-    qdbus $capture_window /Sessions/$tab org.kde.konsole.Session.sendText $'\n'
+    WriteCommand "./xferserver.pl ${EXTRA_DEST}"
   else
     FTP_OPTIONS="'${COPY_FTP_SERVER} ${COPY_FTP_USER} ${COPY_FTP_PASSWORD}'" 
-    qdbus $capture_window /Sessions/$tab org.kde.konsole.Session.sendText "./xferserver.pl ${EXTRA_DEST} -f $FTP_OPTIONS"
-    qdbus $capture_window /Sessions/$tab org.kde.konsole.Session.sendText $'\n'
+    WriteCommand "./xferserver.pl ${EXTRA_DEST} -f $FTP_OPTIONS"
   fi
-  tab=
 fi
 
 if [ $INGEX_MONITOR -ge 1 ] ; then
-  if [ -z $tab ] ; then
-    tab=$(qdbus $capture_window /Konsole org.kde.konsole.Konsole.newSession)
-    sleep 1
-  fi
-  qdbus $capture_window /Sessions/$tab org.kde.konsole.Session.setTitle 1 "nexusWeb"
-  qdbus $capture_window /Sessions/$tab org.kde.konsole.Session.sendText "cd $capture_path"
-  qdbus $capture_window /Sessions/$tab org.kde.konsole.Session.sendText $'\n'
+  SetupTab "nexusWeb"
+  WriteCommand "cd $capture_path"
 
-  qdbus $capture_window /Sessions/$tab org.kde.konsole.Session.sendText "./nexus_web"
-  qdbus $capture_window /Sessions/$tab org.kde.konsole.Session.sendText $'\n'
-  tab=
+  WriteCommand "./nexus_web"
 fi
 
 if [ $SYSTEM_MONITOR -ge 1 ] ; then
-  if [ -z $tab ] ; then
-    tab=$(qdbus $capture_window /Konsole org.kde.konsole.Konsole.newSession)
-    sleep 1
-  fi
-  qdbus $capture_window /Sessions/$tab org.kde.konsole.Session.setTitle 1 sysInfo
-  qdbus $capture_window /Sessions/$tab org.kde.konsole.Session.sendText "cd $capture_path"
-  qdbus $capture_window /Sessions/$tab org.kde.konsole.Session.sendText $'\n'
-  qdbus $capture_window /Sessions/$tab org.kde.konsole.Session.sendText "./system_info_web"
-  qdbus $capture_window /Sessions/$tab org.kde.konsole.Session.sendText $'\n'
-  tab=
+  SetupTab "sysInfo"
+  WriteCommand "cd $capture_path"
+
+  WriteCommand "./system_info_web"
 fi
+
 if [ $QUAD_SPLIT -ge 1 ] ; then
-  if [ -z $tab ] ; then
-    tab=$(qdbus $capture_window /Konsole org.kde.konsole.Konsole.newSession)
-    sleep 1
-  fi
-  qdbus $capture_window /Sessions/$tab org.kde.konsole.Session.setTitle 1 Quad
-  qdbus $capture_window /Sessions/$tab org.kde.konsole.Session.sendText "cd $scripts_path"
-  qdbus $capture_window /Sessions/$tab org.kde.konsole.Session.sendText $'\n'
-  qdbus $capture_window /Sessions/$tab org.kde.konsole.Session.sendText "$INGEX_DIR/player/ingex_player/player $QUAD_OPTIONS"
-  qdbus $capture_window /Sessions/$tab org.kde.konsole.Session.sendText $'\n'
-  tab=
+  SetupTab "Quad"
+  WriteCommand "cd $scripts_path"
+
+  WriteCommand "$INGEX_DIR/player/ingex_player/player $QUAD_OPTIONS"
 fi
+
 if [ $ROUTER_LOGGER -ge 1 ] ; then
-  if [ -z $tab ] ; then
-    tab=$(qdbus $capture_window /Konsole org.kde.konsole.Konsole.newSession)
-    sleep 1
-  fi
-  qdbus $capture_window /Sessions/$tab org.kde.konsole.Session.setTitle 1 RouterLogger
-  qdbus $capture_window /Sessions/$tab org.kde.konsole.Session.sendText "cd $routerlogger_path"
-  qdbus $capture_window /Sessions/$tab org.kde.konsole.Session.sendText $'\n'
-  qdbus $capture_window /Sessions/$tab org.kde.konsole.Session.sendText "${run_routerLogger}"
-  qdbus $capture_window /Sessions/$tab org.kde.konsole.Session.sendText $'\n'
-  tab=
+  SetupTab "RouterLogger"
+  WriteCommand "${run_routerLogger}"
 fi
 
-# Start recorders if any are set in the configuration
+# Start recorders if any are set in the configuration - in the same konsole as they can be detached by the user
 if [ -n "$RECORDERS" ] ; then
-  # get the pids of exisiting windows
-  PIDS=`pidof konsole`
-
-  # make an exclusion list of existing windows
-  ARGS=""
-  for pid in $PIDS; do
-    ARGS="${ARGS} -o ${pid}"
-  done
-
-  # start a new konsole window
-  #konsole
-
-  # find the pid of the new window
-  PID=$(pidof ${ARGS} konsole)
-
-  #order_window="org.kde.konsole-${PID}"
-  #echo "New Window is $recorder_window..."
-  
-  # save PID
-  echo ${PID} >> ${KONSOLE_PIDS}
-  
-  # seem to need this to allow things to settle!
-  sleep 1
-
-  # move/resize the window in pixels
-  #qdbus $recorder_window /konsole/MainWindow_1 \
-  #  org.freedesktop.DBus.Properties.Set com.trolltech.Qt.QWidget geometry 0,500,1024,344
-  #echo "Started konsole $capture_window"
-
-  # start ingex recorders
-  #tab=$(qdbus $recorder_window /Konsole org.kde.konsole.Konsole.currentSession)
   echo $RECORDERS
   for REC in $RECORDERS ; do
     echo "Starting recorder: $REC" 
-    if [ -z $tab ] ; then
-      tab=$(qdbus $capture_window /Konsole org.kde.konsole.Konsole.newSession)
-    fi
-    echo $REC
-    #echo "tab is $tab"
-    qdbus $capture_window /Sessions/$tab org.kde.konsole.Session.setTitle 1 $REC
-    qdbus $capture_window /Sessions/$tab org.kde.konsole.Session.sendText "cd $recorder_path"
-    qdbus $capture_window /Sessions/$tab org.kde.konsole.Session.sendText $'\n'
+    SetupTab "Recorder_$REC"
+    WriteCommand "cd $recorder_path"
 
-    qdbus $capture_window /Sessions/$tab org.kde.konsole.Session.sendText "${run_recorder} --name ${REC} ${DB_PARAMS} ${CORBA_OPTIONS}"
-    qdbus $capture_window /Sessions/$tab org.kde.konsole.Session.sendText $'\n'
-    tab=
+    WriteCommand "${run_recorder} --name ${REC} ${DB_PARAMS} ${CORBA_OPTIONS}"
   done
-
 fi
 
+# Start it all up
+konsole --tabs-from-file $KONSOLE_TABS_FILE --name "Ingex"
+
+# Save konsole PID for killing later
+echo $(ps -fC konsole|grep "\--tabs-from-file"|sed -e "s/[^0-9]*//; s/[^0-9].*//") > $KONSOLE_PIDS
