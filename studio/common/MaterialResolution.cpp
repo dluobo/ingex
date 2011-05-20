@@ -1,5 +1,5 @@
 /*
- * $Id: MaterialResolution.cpp,v 1.9 2011/02/18 16:42:49 john_f Exp $
+ * $Id: MaterialResolution.cpp,v 1.10 2011/05/20 08:28:24 john_f Exp $
  *
  * Material resolution codes and details
  *
@@ -43,9 +43,6 @@ std::string FileFormat::Name(FileFormat::EnumType format)
     case MPG:
         name = "MPEG programme stream";
         break;
-    default:
-        name = "Unknown";
-        break;
     }
     return name;
 }
@@ -63,9 +60,6 @@ std::string OperationalPattern::Name(OperationalPattern::EnumType pattern)
         break;
     case OP_1A:
         name = "OP-1A";
-        break;
-    default:
-        name = "Unknown";
         break;
     }
     return name;
@@ -221,10 +215,6 @@ std::string MaterialResolution::Name(MaterialResolution::EnumType res)
     case XDCAMHD422_MXF_1A:
         name = "MPEG2 422 Long GOP 50 Mbit/s MXF OP-1A";
         break;
-
-    default:
-        name = "Unknown";
-        break;
     }
 
     return name;
@@ -354,6 +344,10 @@ bool MaterialResolution::CheckVideoFormat(MaterialResolution::EnumType res,
     kbyte_per_minute = 0;
     switch (res)
     {
+    case MaterialResolution::NONE:
+        result = true;
+        kbyte_per_minute = 0;
+        break;
     case MaterialResolution::DV25_RAW:
     case MaterialResolution::DV25_MXF_ATOM:
     case MaterialResolution::DV25_MOV:
@@ -655,7 +649,9 @@ bool MaterialResolution::CheckVideoFormat(MaterialResolution::EnumType res,
         result = true;
         kbyte_per_minute = 960; // 128 kbit/s
         break;
-    default:
+    case MaterialResolution::CUTS:
+        result = true;
+        kbyte_per_minute = 1;
         break;
     }
     return result;
