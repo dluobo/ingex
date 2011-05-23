@@ -1,5 +1,5 @@
 /*
- * $Id: VideoRaster.cpp,v 1.5 2010/09/23 17:17:58 john_f Exp $
+ * $Id: VideoRaster.cpp,v 1.6 2011/05/23 16:27:05 philipn Exp $
  *
  * Video raster codes and details
  *
@@ -216,7 +216,7 @@ void Ingex::VideoRaster::GetInfo(Ingex::VideoRaster::EnumType raster,
         height = 1080;
         fps_num = 30000;
         fps_den = 1001;
-        interlace = Ingex::Interlace::BOTTOM_FIELD_FIRST;
+        interlace = Ingex::Interlace::TOP_FIELD_FIRST;
         break;
     case SMPTE274_25PSF:
     case SMPTE274_25P:
