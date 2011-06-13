@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: ingexgui.cpp,v 1.42 2011/05/16 09:37:22 john_f Exp $           *
+ *   $Id: ingexgui.cpp,v 1.43 2011/06/13 10:41:05 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -359,15 +359,15 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
     mMenuShortcuts->Append(MENU_Down); //label set dynamically
     mMenuShortcuts->Append(BUTTON_MENU_PrevTake); //label set dynamically
     mMenuShortcuts->Append(BUTTON_MENU_NextTake); //label set dynamically
-    mMenuShortcuts->Append(MENU_FirstTake, wxT("Move to start of first take\tHOME"));
-    mMenuShortcuts->Append(MENU_LastTake, wxT("Move to start of last take\tEND"));
-    if (!parser.Found(wxT("p"))) mMenuShortcuts->Append(MENU_JumpToTimecode, wxT("Jump to a particular timecode\tT"));
-    if (!parser.Found(wxT("p"))) mMenuShortcuts->Append(MENU_PlayBackwards, wxT("Play/fast backwards\tJ"));
-    if (!parser.Found(wxT("p"))) mMenuShortcuts->Append(MENU_Pause, wxT("Pause\tK"));
-    if (!parser.Found(wxT("p"))) mMenuShortcuts->Append(MENU_PlayForwards, wxT("Play/fast forwards\tL"));
-    if (!parser.Found(wxT("p"))) mMenuShortcuts->Append(MENU_PlayPause, wxT("Play/Pause\tSPACE"));
-    if (!parser.Found(wxT("p"))) mMenuShortcuts->Append(MENU_StepBackwards, wxT("Step backwards\t3"));
-    if (!parser.Found(wxT("p"))) mMenuShortcuts->Append(MENU_StepForwards, wxT("Step forwards\t4"));
+    mMenuShortcuts->Append(MENU_FirstTake, wxEmptyString); //dynamically set to allow shortcut to be switched on and off
+    mMenuShortcuts->Append(MENU_LastTake, wxEmptyString); //dynamically set to allow shortcut to be switched on and off
+    if (!parser.Found(wxT("p"))) mMenuShortcuts->Append(MENU_JumpToTimecode, wxEmptyString); //dynamically set to allow shortcut to be switched on and off
+    if (!parser.Found(wxT("p"))) mMenuShortcuts->Append(MENU_PlayBackwards, wxEmptyString); //dynamically set to allow shortcut to be switched on and off
+    if (!parser.Found(wxT("p"))) mMenuShortcuts->Append(MENU_Pause, wxEmptyString); //dynamically set to allow shortcut to be switched on and off
+    if (!parser.Found(wxT("p"))) mMenuShortcuts->Append(MENU_PlayForwards, wxEmptyString); //dynamically set to allow shortcut to be switched on and off
+    if (!parser.Found(wxT("p"))) mMenuShortcuts->Append(MENU_PlayPause, wxEmptyString); //dynamically set to allow shortcut to be switched on and off
+    if (!parser.Found(wxT("p"))) mMenuShortcuts->Append(MENU_StepBackwards, wxEmptyString); //dynamically set to allow shortcut to be switched on and off
+    if (!parser.Found(wxT("p"))) mMenuShortcuts->Append(MENU_StepForwards, wxEmptyString); //dynamically set to allow shortcut to be switched on and off
     if (!parser.Found(wxT("p"))) mMenuShortcuts->Append(MENU_OpenServer, wxT("Open recording from server\tCTRL-O"));
 
     if (!parser.Found(wxT("p"))) mMenuShortcuts->Append(MENU_PlayRecordings, wxT("Play Recordings\tF10"));
@@ -375,7 +375,7 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
     if (!parser.Found(wxT("p"))) mMenuShortcuts->Append(MENU_EtoE, wxT("Play E to E\tF11"));
 #endif
     if (!parser.Found(wxT("p"))) mMenuShortcuts->Append(MENU_PlayFiles, wxT("Play Opened Files\tF12"));
-    if (!parser.Found(wxT("p"))) mMenuShortcuts->Append(MENU_Mute, wxT("Mute/unmute playback audio\tM"));
+    if (!parser.Found(wxT("p"))) mMenuShortcuts->Append(MENU_Mute, wxEmptyString); //dynamically set to allow shortcut to be switched on and off
     menuHelp->Append(wxID_ANY, wxT("Shortcuts"), mMenuShortcuts); //add this after adding menu items to it
 
     SetMenuBar(menuBar);
@@ -528,7 +528,8 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
 
     mRecorderGroup->StartGettingRecorders(); //safe to let it generate events now that everything has been created (events will be processed if any dialogue is visible, such as the saved preferences warnings above)
     SetStatus(STOPPED);
-    wxUpdateUIEvent::SetUpdateInterval(10); //update controls frequently but not as often as possible!
+    wxUpdateUIEvent::SetUpdateInterval(50); //update controls frequently but not as often as possible!
+    mMenuShortcuts->UpdateUI(); //otherwise doesn't apply shortcuts on dynamically-generated menu labels until the menu is displayed
 }
 
 /// Responds to an application close event by closing, preventing closure or seeking confirmation, depending on the circumstances.
@@ -1590,15 +1591,16 @@ void IngexguiFrame::OnTakeSnapshot(wxCommandEvent & WXUNUSED(event))
     if (mPlayer) { //sanity check
         std::string fileName = mPlayer->GetCurrentFileName();
         unsigned long offset = mPlayer->GetLatestFrameDisplayed();
-        wxExecute(wxString::Format(wxT("player --exit-at-end --disable-shuttle --raw-out /tmp/snapshot%%d.raw --clip-start %ld --clip-duration 1 -m \""), offset) + wxString(fileName.c_str(), *wxConvCurrent) + wxT("\""), wxEXEC_SYNC); //FIXME: This assumes a command-line player is installed
-        wxString snapshotStem = mPlayer->GetPlaybackName();
-        for (size_t i = 0; i < wxFileName::GetForbiddenChars().Len(); i++) {
-            snapshotStem.Replace(wxFileName::GetForbiddenChars().Mid(i, 1), wxT("_"));
-        }
-        snapshotStem.Replace(wxString(wxFileName::GetPathSeparator()), wxT("_"));
-        snapshotStem = mSnapshotPath + wxFileName::GetPathSeparator() + wxT("snapshot-") + snapshotStem;
+        if (!wxExecute(wxString::Format(wxT("player --exit-at-end --disable-shuttle --raw-out /tmp/snapshot%%d.raw --clip-start %ld --clip-duration 1 -m \""), offset) + wxString(fileName.c_str(), *wxConvCurrent) + wxT("\""), wxEXEC_SYNC)) { //FIXME: This assumes a command-line player is installed
+            wxString snapshotStem = mPlayer->GetPlaybackName();
+            for (size_t i = 0; i < wxFileName::GetForbiddenChars().Len(); i++) {
+                snapshotStem.Replace(wxFileName::GetForbiddenChars().Mid(i, 1), wxT("_"));
+            }
+            snapshotStem.Replace(wxString(wxFileName::GetPathSeparator()), wxT("_"));
+            snapshotStem = mSnapshotPath + wxFileName::GetPathSeparator() + wxT("snapshot-") + snapshotStem;
             //FIXME: The following command is specific to MJPEG SD formats!  Because the data order is planar, the cropping has to be done at the output stage or the chroma breaks.  This may happen to the already-encoded picture which is unfortunate as the black lines may introduce artifacts.  Cropping at the top is to get rid of the VBI; cropping at the bottom is to get rid of one black line (but an even number of lines must be removed).
             wxExecute(wxT("ffmpeg -s 720x592 -f rawvideo -pix_fmt yuv422p -y -i /tmp/snapshot0.raw -s 1024x592 -croptop 16 -cropbottom 2 \"") + snapshotStem + wxString::Format(wxT("-%03d.jpg\""), mSnapshotIndex++));
+        }
     }
 }
 
@@ -1697,6 +1699,33 @@ void IngexguiFrame::OnUpdateUI(wxUpdateUIEvent& event)
                     event.SetText(wxT("Move to start of next take\tPGDN"));
                 }
             }
+            break;
+        case MENU_FirstTake:
+            GetMenuBar()->FindItem(MENU_FirstTake)->SetItemLabel(wxString::Format(wxT("Move to start of first take%s"), mTextFieldHasFocus ? wxEmptyString : wxT("\tHOME")));
+            break;
+        case MENU_LastTake:
+            GetMenuBar()->FindItem(MENU_LastTake)->SetItemLabel(wxString::Format(wxT("Move to start of last take%s"), mTextFieldHasFocus ? wxEmptyString : wxT("\tEND")));
+            break;
+        case MENU_JumpToTimecode:
+            GetMenuBar()->FindItem(MENU_JumpToTimecode)->SetItemLabel(wxString::Format(wxT("Jump to a particular timecode%s"), mTextFieldHasFocus ? wxEmptyString : wxT("\tT")));
+            break;
+        case MENU_PlayBackwards:
+            GetMenuBar()->FindItem(MENU_PlayBackwards)->SetItemLabel(wxString::Format(wxT("Play/fast backwards%s"), mTextFieldHasFocus ? wxEmptyString : wxT("\tJ")));
+            break;
+        case MENU_Pause:
+            GetMenuBar()->FindItem(MENU_Pause)->SetItemLabel(wxString::Format(wxT("Pause%s"), mTextFieldHasFocus ? wxEmptyString : wxT("\tK")));
+            break;
+        case MENU_PlayForwards:
+            GetMenuBar()->FindItem(MENU_PlayForwards)->SetItemLabel(wxString::Format(wxT("Play/fast forwards%s"), mTextFieldHasFocus ? wxEmptyString : wxT("\tL")));
+            break;
+        case MENU_PlayPause:
+            GetMenuBar()->FindItem(MENU_PlayPause)->SetItemLabel(wxString::Format(wxT("Play/Pause%s"), mTextFieldHasFocus ? wxEmptyString : wxT("\tSPACE")));
+            break;
+        case MENU_StepBackwards:
+            GetMenuBar()->FindItem(MENU_StepBackwards)->SetItemLabel(wxString::Format(wxT("Step backwards%s"), mTextFieldHasFocus ? wxEmptyString : wxT("\t3")));
+            break;
+        case MENU_StepForwards:
+            GetMenuBar()->FindItem(MENU_StepForwards)->SetItemLabel(wxString::Format(wxT("Step forwards%s"), mTextFieldHasFocus ? wxEmptyString : wxT("\t4")));
             break;
         case MENU_UseTapeIds:
             event.Check(SetTapeIdsDlg::AreTapeIdsEnabled(mSavedState));
@@ -1958,6 +1987,9 @@ void IngexguiFrame::OnUpdateUI(wxUpdateUIEvent& event)
         case MENU_PlayerEnableSDIOSD:
             event.Check(mPlayer && mPlayer->IsSDIOSDEnabled());
             break;
+        case MENU_Mute:
+            GetMenuBar()->FindItem(MENU_Mute)->SetItemLabel(wxString::Format(wxT("Mute/unmute playback audio%s"), mTextFieldHasFocus ? wxEmptyString : wxT("\tM")));
+            break;
         default:
             break;
     }
@@ -1972,8 +2004,8 @@ void IngexguiFrame::OnUpdateUI(wxUpdateUIEvent& event)
 
 /// Indicates if the given operation is allowed.
 /// @param operation The ID of the operation.
-/// @param found If non-zero, dereferenced value is set to true if the shortcut is known about, or false if it is not.  Presence of this parameter also affects return value - see below.
-/// @return True if shortcut is allowed; if a shortcut is associated with a text key and parameter "found" is non-zero, false is always returned if a text field has focus (to stop shortcuts preventing certain characters from being typed).
+/// @param found If non-zero, dereferenced value is set to true if the shortcut is known about, or false if it is not.
+/// @return True if shortcut is allowed.
 bool IngexguiFrame::OperationAllowed(const int operation, bool* found)
 {
     bool enabled = false;
@@ -2003,13 +2035,10 @@ bool IngexguiFrame::OperationAllowed(const int operation, bool* found)
             enabled = mPlayer && mPlayer->HasLaterTrack();
             break;
         case MENU_StepBackwards:
-            enabled = mPlayer && (!found || !mTextFieldHasFocus) && PAUSED == mStatus && mPlayer->WithinRecording();
+            enabled = mPlayer && PAUSED == mStatus && mPlayer->WithinRecording();
             break;
         case MENU_StepForwards:
-            enabled = mPlayer && (!found || !mTextFieldHasFocus) && PAUSED == mStatus && !mPlayer->AtRecordingEnd();
-            break;
-        case MENU_Mute:
-            enabled = !found || !mTextFieldHasFocus;
+            enabled = mPlayer && PAUSED == mStatus && !mPlayer->AtRecordingEnd();
             break;
         case MENU_Up:
             if (mPlayer) {
@@ -2046,29 +2075,29 @@ bool IngexguiFrame::OperationAllowed(const int operation, bool* found)
             enabled = (!mPlayer || RECORDINGS == mPlayer->GetMode()) && mEventList->GetItemCount() && !mEventList->AtBottom();
             break;
         case MENU_FirstTake:
-            enabled = (!found || !mTextFieldHasFocus) && (!mEventList->AtTop() || (mPlayer && mPlayer->WithinRecording()));
+            enabled = !mEventList->AtTop() || (mPlayer && mPlayer->WithinRecording());
             break;
         case MENU_LastTake:
-            enabled = (!found || !mTextFieldHasFocus) && !mEventList->AtBottom();
+            enabled = !mEventList->AtBottom();
             break;
         case MENU_PlayBackwards:
-            enabled = mPlayer && (!found || !mTextFieldHasFocus) && mPlayer->WithinRecording() && !mPlayer->AtMaxReverseSpeed();
+            enabled = mPlayer && mPlayer->WithinRecording() && !mPlayer->AtMaxReverseSpeed();
             break;
         case MENU_Pause:
-            enabled = mPlayer && (!found || !mTextFieldHasFocus) && !IsRecording() && mPlayer->IsOK() && PAUSED != mStatus;
+            enabled = mPlayer && !IsRecording() && mPlayer->IsOK() && PAUSED != mStatus;
             break;
         case MENU_PlayForwards:
-            enabled = mPlayer && (!found || !mTextFieldHasFocus) && !IsRecording() && mPlayer->IsOK() && !mPlayer->AtMaxForwardSpeed();
+            enabled = mPlayer && !IsRecording() && mPlayer->IsOK() && !mPlayer->AtMaxForwardSpeed();
             break;
         case MENU_PlayPause:
-            enabled = mPlayer && (!found || !mTextFieldHasFocus) && mPlayer->IsOK() && !IsRecording() && (PLAYING == mStatus || PLAYING_BACKWARDS == mStatus || (PAUSED == mStatus && (!mPlayer->LastPlayingBackwards() || mPlayer->WithinRecording())));
+            enabled = mPlayer && mPlayer->IsOK() && !IsRecording() && (PLAYING == mStatus || PLAYING_BACKWARDS == mStatus || (PAUSED == mStatus && (!mPlayer->LastPlayingBackwards() || mPlayer->WithinRecording())));
             break;
         case MENU_ClearLog:
             enabled = mEventList->GetCurrentChunkInfo();
             break;
         case BUTTON_JumpToTimecode:
         case MENU_JumpToTimecode:
-            enabled = mPlayer && (BUTTON_JumpToTimecode == operation || !found || !mTextFieldHasFocus) && RECORDINGS == mPlayer->GetMode() && !IsRecording() && mEventList->GetCurrentChunkInfo();
+            enabled = mPlayer && RECORDINGS == mPlayer->GetMode() && !IsRecording() && mEventList->GetCurrentChunkInfo();
             break;
         case BUTTON_RecorderListRefresh:
             enabled = mRecorderGroup->IsEnabledForInput();
