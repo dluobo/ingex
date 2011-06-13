@@ -1,5 +1,5 @@
 /*
- * $Id: CopyManager.cpp,v 1.8 2010/07/14 13:06:36 john_f Exp $
+ * $Id: CopyManager.cpp,v 1.9 2011/06/13 15:57:51 john_f Exp $
  *
  * Class to manage file copying in a separate process.
  *
@@ -105,7 +105,7 @@ void CopyManager::StartCopying(unsigned int index)
         break;
 
     case CopyMode::NEW:
-        if (!mArgs.empty())
+        //if (!mArgs.empty())
         {
             // Create command
             std::ostringstream ss;
@@ -145,7 +145,7 @@ void CopyManager::StopCopying(unsigned int index)
         break;
 
     case CopyMode::NEW:
-        if (!mArgs.empty())
+        //if (!mArgs.empty())
         {
             // Create command
             std::ostringstream ss;
