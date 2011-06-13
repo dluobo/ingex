@@ -296,7 +296,7 @@ if [ $TRANSFER -ge 1 ] ; then
   dcop $capture_window $tab renameSession Copy
   dcop $capture_window $tab sendSession "cd $xfer_path"
   if [ -n "${COPY_EXTRA_DEST}" ] ; then
-    EXTRA_DEST="-e ${COPY_EXTRA_DEST}"
+    EXTRA_DEST="-g ${COPY_EXTRA_DEST}"
   fi
   if [ -z "${COPY_FTP_SERVER}" ] ; then
     dcop $capture_window $tab sendSession "./xferserver.pl ${EXTRA_DEST}"
