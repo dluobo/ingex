@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_defs.h,v 1.2 2010/09/29 16:57:37 john_f Exp $
+ * $Id: ffmpeg_defs.h,v 1.3 2011/06/13 15:27:19 john_f Exp $
  *
  * Common definitions for ffmpeg_encoder and ffmpeg_encoder_av
  *
@@ -31,7 +31,7 @@
 
 /* Avid-compatible intra quantisation matrices for IMX */
 const uint16_t imx30_intra_matrix[] = {
-  32, 16, 16, 17, 19, 22, 26, 34,
+  8, 16, 16, 17, 19, 22, 26, 34,
   16, 16, 18, 19, 21, 26, 33, 37,
   19, 18, 19, 23, 21, 28, 35, 45,
   18, 19, 20, 22, 28, 35, 32, 49,
@@ -42,7 +42,7 @@ const uint16_t imx30_intra_matrix[] = {
 };
 
 const uint16_t imx4050_intra_matrix[] = {
-  32, 16, 16, 17, 19, 22, 23, 31,
+  8, 16, 16, 17, 19, 22, 23, 31,
   16, 16, 17, 19, 20, 23, 29, 29,
   19, 17, 19, 22, 19, 25, 28, 35,
   17, 19, 19, 20, 25, 28, 25, 33,
