@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder.cpp,v 1.10 2010/09/29 16:57:37 john_f Exp $
+ * $Id: ffmpeg_encoder.cpp,v 1.11 2011/06/13 15:25:23 john_f Exp $
  *
  * Encode uncompressed video to DV using libavcodec
  *
@@ -292,6 +292,8 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init(MaterialResolution::EnumType res, 
             case Ingex::VideoRaster::PAL:
             case Ingex::VideoRaster::PAL_4x3:
             case Ingex::VideoRaster::PAL_16x9:
+            case Ingex::VideoRaster::PAL_592:
+            case Ingex::VideoRaster::PAL_608:
                 encoded_frame_size = 150000;
                 break;
             case Ingex::VideoRaster::NTSC:
@@ -314,6 +316,8 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init(MaterialResolution::EnumType res, 
             case Ingex::VideoRaster::PAL:
             case Ingex::VideoRaster::PAL_4x3:
             case Ingex::VideoRaster::PAL_16x9:
+            case Ingex::VideoRaster::PAL_592:
+            case Ingex::VideoRaster::PAL_608:
                 encoded_frame_size = 200000;
                 break;
             case Ingex::VideoRaster::NTSC:
@@ -336,6 +340,8 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init(MaterialResolution::EnumType res, 
             case Ingex::VideoRaster::PAL:
             case Ingex::VideoRaster::PAL_4x3:
             case Ingex::VideoRaster::PAL_16x9:
+            case Ingex::VideoRaster::PAL_592:
+            case Ingex::VideoRaster::PAL_608:
                 encoded_frame_size = 250000;
                 break;
             case Ingex::VideoRaster::NTSC:
@@ -496,6 +502,8 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init(MaterialResolution::EnumType res, 
             case Ingex::VideoRaster::PAL:
             case Ingex::VideoRaster::PAL_4x3:
             case Ingex::VideoRaster::PAL_16x9:
+            case Ingex::VideoRaster::PAL_592:
+            case Ingex::VideoRaster::PAL_608:
                 encoder->padtop = 608 - height;
                 break;
             case Ingex::VideoRaster::NTSC:
