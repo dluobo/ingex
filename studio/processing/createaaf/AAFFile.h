@@ -1,5 +1,5 @@
 /*
- * $Id: AAFFile.h,v 1.4 2009/09/18 17:05:47 philipn Exp $
+ * $Id: AAFFile.h,v 1.5 2011/06/13 15:37:04 john_f Exp $
  *
  * AAF file for defining clips, multi-camera clips, etc
  *
@@ -78,7 +78,9 @@ private:
     
     Rational _targetEditRate;
     bool _addAudioEdits;
-    
+
+    bool _zddTimestamp;
+
     IAAFSmartPointer<IAAFFile> pFile;
     IAAFSmartPointer<IAAFHeader> pHeader;
     IAAFSmartPointer<IAAFDictionary> pDictionary;

@@ -1,5 +1,5 @@
 /*
- * $Id: AAFFile.cpp,v 1.13 2010/08/27 18:14:22 john_f Exp $
+ * $Id: AAFFile.cpp,v 1.14 2011/06/13 15:37:04 john_f Exp $
  *
  * AAF file for defining clips, multi-camera clips, etc
  *
@@ -196,7 +196,7 @@ static aafMobID_t convertUMID(prodauto::UMID& umid)
     return mobID;
 }
 
-static aafTimeStamp_t convertTimestamp(prodauto::Timestamp& in)
+static aafTimeStamp_t convertTimestamp(prodauto::Timestamp& in, bool zddTimestamp)
 {
     aafTimeStamp_t out;
     
@@ -206,7 +206,16 @@ static aafTimeStamp_t convertTimestamp(prodauto::Timestamp& in)
     out.time.hour = in.hour;
     out.time.minute = in.min;
     out.time.second = in.sec;
-    out.time.fraction = in.qmsec * 4 / 10; // MXF is 1/250th second and AAF is 1/100th second
+    if (zddTimestamp)
+    {
+        // MXF and AAF are both 1/250th second
+        out.time.fraction = in.qmsec;
+    }
+    else
+    {
+        // MXF is 1/250th second and AAF is 1/100th second
+        out.time.fraction = in.qmsec * 4 / 10;
+    }
     
     return out;
 }
@@ -313,6 +322,15 @@ AAFFile::AAFFile(string filename, Rational targetEditRate, bool aafxml, bool add
     IAAFSmartPointer<IAAFPropertyDef> pPropertyDef;
     IAAFSmartPointer<IAAFTypeDefRecord> pRecordDef;
     IAAFSmartPointer<IAAFTypeDef> pMemberTypeDef;
+
+    // if AAF SDK version >= 1.1.4 then fractional part of AAF and MXF Timestamp are both 1/250 second
+    // otherwise the fractional part in AAF is 1/100 second
+    aafProductVersion_t aafVersion;
+    AAF_CHECK(AAFGetLibraryVersion(&aafVersion));
+    _zddTimestamp = aafVersion.major > 1 ||
+                   (aafVersion.major == 1 && aafVersion.minor > 1) ||
+                   (aafVersion.major == 1 && aafVersion.minor == 1 && aafVersion.tertiary >= 4);
+
 
     remove(filename.c_str());
     wchar_t wFilename[FILENAME_MAX];
@@ -1910,7 +1928,7 @@ void AAFFile::mapMasterMob(MaterialPackage* materialPackage)
     AAF_CHECK(pMasterMob->QueryInterface(IID_IAAFMob, (void **)&pMob));
     AAF_CHECK(pMob->SetMobID(convertUMID(materialPackage->uid)));
     AAF_CHECK(pMob->SetName(convertString(materialPackage->name)));
-    AAF_CHECK(pMob->SetCreateTime(convertTimestamp(materialPackage->creationDate)));
+    AAF_CHECK(pMob->SetCreateTime(convertTimestamp(materialPackage->creationDate, _zddTimestamp)));
     AAF_CHECK(pHeader->AddMob(pMob));
 
     // user comments
@@ -1988,7 +2006,7 @@ void AAFFile::mapFileSourceMob(SourcePackage* sourcePackage)
     AAF_CHECK(pFileSourceMob->QueryInterface(IID_IAAFMob, (void **)&pMob));
     AAF_CHECK(pMob->SetMobID(convertUMID(sourcePackage->uid)));
     AAF_CHECK(pMob->SetName(convertString(sourcePackage->name)));
-    AAF_CHECK(pMob->SetCreateTime(convertTimestamp(sourcePackage->creationDate)));
+    AAF_CHECK(pMob->SetCreateTime(convertTimestamp(sourcePackage->creationDate, _zddTimestamp)));
     AAF_CHECK(pHeader->AddMob(pMob));
 
     // user comments
@@ -2483,7 +2501,7 @@ void AAFFile::mapTapeSourceMob(SourcePackage* sourcePackage)
     AAF_CHECK(pTapeSourceMob->QueryInterface(IID_IAAFMob, (void **)&pMob));
     AAF_CHECK(pMob->SetMobID(convertUMID(sourcePackage->uid)));
     AAF_CHECK(pMob->SetName(convertString(sourcePackage->name)));
-    AAF_CHECK(pMob->SetCreateTime(convertTimestamp(sourcePackage->creationDate)));
+    AAF_CHECK(pMob->SetCreateTime(convertTimestamp(sourcePackage->creationDate, _zddTimestamp)));
     AAF_CHECK(pHeader->AddMob(pMob));
 
     // user comments
