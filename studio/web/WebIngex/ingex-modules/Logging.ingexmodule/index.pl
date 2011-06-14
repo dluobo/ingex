@@ -69,17 +69,6 @@ sub get_page_content
                             <br />  
                             <p class='tcNum' id='tcDisplay'>--:--:--:--</p>
                            </td>
-                            
-                            <!-- COMMENTED OUT <td>
-                            Producer:
-                            <br /><input type='text' id='producer' name='producer' class='progInfoFormElement' value='' disabled=true>
-                         <div class='spacer'>&nbsp;</div>
-                            Director:
-                            <br /><input type='text' id='director' name='director' class='progInfoFormElement' value='' disabled=true>
-                         </td><td>
-                            PA:
-                            <br /><input type='text' id='pa' name='pa' class='progInfoFormElement' value='' disabled=true>
-                        </td> -->
                 </tr>
                 </tbody>
             </table>
@@ -98,23 +87,13 @@ sub get_page_content
           <tr>
           <td>
                 <form><input type='button' class='buttons' id='resetButton' value='Reset' onclick='ILloadNewProgInfo()' /> <input type='button' class='buttons' id='expandAllButton' value='Expand All' onclick='ILexpandItems()' /> <input type='button' class='buttons' id='collapseAllButton' value='Collapse All' onclick='ILcollapseItems()' /></form>
-                <!-- <a class='simpleButton' href='javascript:ILloadNewProgInfo();'>Reset</a> 
-                <a class='simpleButton' href='javascript:ILexpandItems();'>Expand All</a>
-                <a class='simpleButton' href='javascript:ILcollapseItems();'>Collapse All</a> -->
             </td><td>
                 <form> <input type='button' class='buttons' id='newItemButton' value='New Item' onclick='ILformCall(\"new\")' /> <input type='button' class='buttons' id='pickupItemButton' value='Pickup' onclick='ILformCall(\"pickup\")' /> <input type='button' class='buttons' id='editItemButton' value='Edit' onclick='ILformCall(\"edit\")' /></form>
-                <!-- <a class='simpleButton' href='javascript:ILformCall(\"new\");'>New Item</a>
-                <a class='simpleButton' href='javascript:ILformCall(\"pickup\");'>Pickup</a>
-                <a class='simpleButton' href='javascript:ILformCall(\"edit\");'>Edit</a> -->
             </td><td>
                 <form><input type='button' class='buttons' id='deleteItemButton' value='Delete Item' onclick='ILdeleteItem()' /></form>
                <!-- <a class='simpleButton' href='javascript:ILdeleteItem();'>Delete Item</a> -->
             </td><td>
             <form><input type='button' class='buttons' id='importButton' value='Import' onclick='ILimport()' /> <input type='button' class='buttons' id='printButton' value='Print' onclick='ILprint()' /> <input type='button' class='buttons' id='pdfButton' value='PDF' onclick='ILpdf()' /></form>
-            <!--
-                <a class='simpleButton' href='javascript:ILimport();'>Import</a>
-                <a class='simpleButton' href='javascript:ILprint();'>Print</a>
-                <a class='simpleButton' href='javascript:ILpdf();'>PDF</a> -->
             </td>
             </tr>
             </tbody>
@@ -140,18 +119,15 @@ sub get_page_content
                               </div>
                       </td>
                       <td width='100px'>
-                                 <!-- <div class='leftButtons'> -->
-                                    <div>
+                                <div>
                                     <form><input type='button' class='buttons' id='prevItemButton' value='prev' onclick='ILselectPrevItem()' /> &nbsp <input type='button' class='buttons' id='nextItemButton' value='next' onclick='ILselectNextItem()' /></form>
-                                   <!-- <a class='simpleButton' href='javascript:ILselectPrevItem();'>prev</a>
-                                    <a class='simpleButton' href='javascript:ILselectNextItem();'>next</a> -->
                                 </div>
                       </td>
                      </tr>
                   </tbody>
               </table>
              </fieldset>
-            </td> 
+            </td>
          </tr>
          <tr>
            <td>
@@ -224,12 +200,8 @@ sub get_page_content
                                             </tr>
                                             <tr>
                                             <td>
-                                                <!-- <div class ='centerButtons'>-->
                                                 <div>
                                                     <form style='float:right'><input type='button' class='buttons' id='setCircledButton' value='Circled' onclick='ILsetCircled()' /> <input type='button' class='buttons' id='setNotCircledButton' value='Not Circled' onclick='ILsetNotCircled()' /></form>
-
-                                                    <!-- <a class='simpleButton' href='javascript:ILsetCircled();'>Circled</a>
-                                                    <a class='simpleButton' href='javascript:ILsetNotCircled();'>Not Circled</a> -->
                                             </div>
                                             </td>
                                             </tr>
@@ -264,16 +236,11 @@ sub get_page_content
                     <tbody>
                     <tr>
                        <td>
-                            <!-- <div class='rightButtons'>-->
                              <div>
                              <table class ='alignmentTable'>
                                 <tbody>
                                 <tr>
                                     <td>
-                                     <!--<a class='startButton' href='javascript:ILstartStop();' id='startStopButton'>Start</a>-->
-                                     
-                                     <!-- <a class='simpleButton' href='javascript:ILresetTake();'>Clear Details</a>
-                                     <a class='simpleButton' href='javascript:ILstoreTake();'>Store Take</a> -->
                                      <form style='float:right'><input type='button' class='buttons' id='resetTakeButton' value='Clear Details' onclick='ILresetTake()' /> <input type='button' class='buttons' id='storeTakeButton' value='StoreTake' onclick='ILstoreTake()' /></form>
                                      </td>
                                  </tr>
