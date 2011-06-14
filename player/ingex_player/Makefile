@@ -230,6 +230,7 @@ SOURCES = audio_level_sink.c \
 	mov_helper.c \
 	mpegi_stream_connect.c \
 	multiple_sources.c \
+	mxf_linux_disk_file.c \
 	mxf_source.c \
 	null_sink.c \
 	on_screen_display.c \

@@ -1,10 +1,8 @@
 /*
- * $Id: mxf_source.h,v 1.7 2011/06/14 15:43:40 philipn Exp $
+ * Copyright (C) 2011  British Broadcasting Corporation.
+ * All Rights Reserved.
  *
- *
- *
- * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
- * Author: Philip de Nier
+ * Author: Tom Heritage
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,25 +19,34 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifndef __MXF_SOURCE_H__
-#define __MXF_SOURCE_H__
+#ifndef __MXF_LINUX_DISK_FILE_H__
+#define __MXF_LINUX_DISK_FILE_H__
+
+
+#include <mxf/mxf_file.h>
+
+
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
+
+typedef struct MXFLinuxDiskFile MXFLinuxDiskFile;
 
 
 
+int mldf_open_read(const char *filename, MXFLinuxDiskFile **mxfLinuxDiskFile);
 
-#include "media_source.h"
-#include "archive_types.h"
+MXFFile* mldf_get_file(MXFLinuxDiskFile* mxfLinuxDiskFile);
+
+int mldf_set_content_package_size(int packageSize, MXFLinuxDiskFile *mxfLinuxDiskFile);
 
 
-typedef struct MXFFileSource MXFFileSource;
 
-
-/* MXF file source */
-
-int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailure, int markVTRErrors, int markDigiBetaDropouts,
-              int markTimecodeBreaks, int mxfLinuxDiskAccess, int mxfLinux8bitPreload, int mxfLinux10bitPreload,
-              MXFFileSource** source);
-MediaSource* mxfs_get_media_source(MXFFileSource* source);
+#ifdef __cplusplus
+}
+#endif
 
 
 

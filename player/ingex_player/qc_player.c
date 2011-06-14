@@ -1,5 +1,5 @@
 /*
- * $Id: qc_player.c,v 1.19 2011/04/19 10:05:55 philipn Exp $
+ * $Id: qc_player.c,v 1.20 2011/06/14 15:43:40 philipn Exp $
  *
  *
  *
@@ -150,6 +150,9 @@ typedef struct
     int vtrErrorLevel;
     int showVTRErrorLevel;
     float srcRateLimit;
+    int mxfLinuxDiskAccess;
+    int mxfLinux8bitPreload;
+    int mxfLinux10bitPreload;
 } Options;
 
 static const Options g_defaultOptions =
@@ -191,7 +194,10 @@ static const Options g_defaultOptions =
     {0},
     VTR_ALMOST_GOOD_LEVEL,
     0,
-    -1.0
+    -1.0,
+    0,
+    870000,
+    1150000
 };
 
 
@@ -806,7 +812,9 @@ static int play_archive_mxf_file(QCPlayer* player, int argc, const char** argv, 
     strcat(filename, name);
 
     /* open mxf file */
-    if (!mxfs_open(filename, 0, options->markPSEFails, options->markVTRErrors, options->markDigiBetaDropouts, 0, &mxfSource))
+    if (!mxfs_open(filename, 0, options->markPSEFails, options->markVTRErrors, options->markDigiBetaDropouts, 0,
+                   options->mxfLinuxDiskAccess, options->mxfLinux8bitPreload, options->mxfLinux10bitPreload,
+                   &mxfSource))
     {
         ml_log_error("Failed to open MXF file source '%s'\n", filename);
         goto fail;
@@ -1407,6 +1415,12 @@ static void usage(const char* cmd)
     fprintf(stderr, "                           Only works when --src-buf is used\n");
     fprintf(stderr, "                           Note: only takes bytes passed to the sink into account and this can\n");
     fprintf(stderr, "                               be less than the number of bytes read from disk\n");
+    fprintf(stderr, "  --mxf-linux-disk-access  Use the MXF disk file access functions optimised for use on Linux systems\n");
+    fprintf(stderr, "                           Whenever a seek is performed data is pre-loaded into the system page cache\n");
+    fprintf(stderr, "                           The amount of data pre-loaded should generally be the same size as the content package for a frame\n");
+    fprintf(stderr, "  --mxf-linux-8b-pload <value>   Data (bytes) to pre-load for an MXF file containing 8-bit video (default %d bytes)\n", g_defaultOptions.mxfLinux8bitPreload);    
+    fprintf(stderr, "  --mxf-linux-10b-pload <value>  Data (bytes) to pre-load for an MXF file containing 10-bit video (default %d bytes)\n", g_defaultOptions.mxfLinux10bitPreload);    
+    fprintf(stderr, "                           Note: for both pload options, only component depth of final video track in MXF file is considered\n");
     fprintf(stderr, "\n");
 }
 
@@ -1936,6 +1950,43 @@ int main(int argc, const char **argv)
                 return 1;
             }
             if (sscanf(argv[cmdlnIndex + 1], "%f", &options.srcRateLimit) != 1 || options.srcRateLimit <= 0.0)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Invalid argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            cmdlnIndex += 2;
+        }
+        else if (strcmp(argv[cmdlnIndex], "--mxf-linux-disk-access") == 0)
+        {
+            options.mxfLinuxDiskAccess = 1;
+            cmdlnIndex += 1;
+        }
+        else if (strcmp(argv[cmdlnIndex], "--mxf-linux-8b-pload") == 0)
+        {
+            if (cmdlnIndex + 1 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            if (sscanf(argv[cmdlnIndex + 1], "%d", &options.mxfLinux8bitPreload) != 1 || options.mxfLinux8bitPreload < 0)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Invalid argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            cmdlnIndex += 2;
+        }
+        else if (strcmp(argv[cmdlnIndex], "--mxf-linux-10b-pload") == 0)
+        {
+            if (cmdlnIndex + 1 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            if (sscanf(argv[cmdlnIndex + 1], "%d", &options.mxfLinux10bitPreload) != 1 || options.mxfLinux10bitPreload < 0)
             {
                 usage(argv[0]);
                 fprintf(stderr, "Invalid argument for %s\n", argv[cmdlnIndex]);

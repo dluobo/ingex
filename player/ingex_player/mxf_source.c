@@ -1,5 +1,5 @@
 /*
- * $Id: mxf_source.c,v 1.23 2011/04/19 10:03:53 philipn Exp $
+ * $Id: mxf_source.c,v 1.24 2011/06/14 15:43:40 philipn Exp $
  *
  *
  *
@@ -36,6 +36,7 @@
 #include <archive_mxf_info_lib.h>
 #include <mxf/mxf_page_file.h>
 #include <mxf/mxf_avid_labels_and_keys.h>
+#include "mxf_linux_disk_file.h"
 
 /* undefine macros from libMXF */
 #undef CHK_ORET
@@ -1009,11 +1010,13 @@ static void mxfs_close(void* data)
 
 
 int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int markVTRErrors, int markDigiBetaDropouts,
-    int markTimecodeBreaks, MXFFileSource** source)
+              int markTimecodeBreaks, int mxfLinuxDiskAccess, int mxfLinux8bitPreload, int mxfLinux10bitPreload,
+              MXFFileSource** source)
 {
     MXFFileSource* newSource = NULL;
     MXFFile* mxfFile = NULL;
     MXFPageFile* mxfPageFile = NULL;
+    MXFLinuxDiskFile* mxfLinuxDiskFile = NULL;
     int i;
     int j;
     ArchiveMXFInfo archiveMXFInfo;
@@ -1051,6 +1054,15 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
             return 0;
         }
         mxfFile = mxf_page_file_get_file(mxfPageFile);
+    }
+    else if (mxfLinuxDiskAccess)
+    {
+        if (!mldf_open_read(filename, &mxfLinuxDiskFile))
+        {
+            ml_log_error("Failed to open MXF disk file '%s' using Linux access functions\n", filename);
+            return 0;
+        }
+        mxfFile = mldf_get_file(mxfLinuxDiskFile);
     }
     else
     {
@@ -1459,6 +1471,34 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
         else
         {
             outputStream->streamInfo.timecodeSubType = NO_TIMECODE_SUBTYPE;
+        }
+    }
+
+
+    if (mxfLinuxDiskAccess)
+    {
+        // Set the frame content package size (i.e. data chunk preload size) based on the bit-depth of the last video
+        // track in the MXF file, as long as the bit-depth is either 8 or 10 bits. If it is not then the default
+        // frame content package size value will be used.
+        // In general we assume that all MXF files are current Archive MXF files i.e. uncompressed with a
+        // fixed number of audio tracks etc i.e. we're assuming that we can predict the frame content package size
+        // from the video bit-depth.
+
+        for (i = 0; i < numTracks; i++)
+        {
+            MXFTrack* track = get_mxf_track(newSource->mxfReader, i);
+
+            if (track->isVideo)
+            {
+                if (track->video.componentDepth == 8)
+                {
+                    mldf_set_content_package_size(mxfLinux8bitPreload, mxfLinuxDiskFile);
+                }
+                else if (track->video.componentDepth == 10)
+                {
+                    mldf_set_content_package_size(mxfLinux10bitPreload, mxfLinuxDiskFile);
+                }
+            }
         }
     }
 

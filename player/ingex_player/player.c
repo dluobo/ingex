@@ -1,5 +1,5 @@
 /*
- * $Id: player.c,v 1.33 2011/05/16 09:30:15 john_f Exp $
+ * $Id: player.c,v 1.34 2011/06/14 15:43:40 philipn Exp $
  *
  *
  *
@@ -926,6 +926,12 @@ static void usage(const char* cmd)
     fprintf(stderr, "  --disable-shuttle        Do not grab and use the jog-shuttle control\n");
     fprintf(stderr, "  --vitc-read <lines>      Read VITC from 625-line VBI, where <lines> is comma seperated list of lines to try (e.g. '19,21')\n");
     fprintf(stderr, "  --display-dim            Output image at display dimensions rather than stored dimensions, eg. skip VBI\n");
+    fprintf(stderr, "  --mxf-linux-disk-access  Use the MXF disk file access functions optimised for use on Linux systems\n");
+    fprintf(stderr, "                           Whenever a seek is performed data is pre-loaded into the system page cache\n");
+    fprintf(stderr, "                           The amount of data pre-loaded should generally be the same size as the content package for a frame\n");
+    fprintf(stderr, "  --mxf-linux-8b-pload <value>   Data (bytes) to pre-load for an MXF file containing 8-bit video (default 870000 bytes)\n");    
+    fprintf(stderr, "  --mxf-linux-10b-pload <value>  Data (bytes) to pre-load for an MXF file containing 10-bit video (default 1150000 bytes)\n");    
+    fprintf(stderr, "                           Note: for both pload options, only component depth of final video track in MXF file is considered\n");
     fprintf(stderr, "  --osd-pos <pos>          Set the position of the player state OSD. Valid values are 'top', 'middle' and 'bottom'. Default is 'bottom'\n");
     fprintf(stderr, "\n");
     fprintf(stderr, "Inputs:\n");
@@ -1091,6 +1097,9 @@ int main(int argc, const char **argv)
     int numVITCLines = 0;
     VITCReaderSinkSource *vitcReaderSonk = NULL;
     int useDisplayDimensions = 0;
+    int mxfLinuxDiskAccess = 0;
+    int mxfLinux8bitPreload = 870000;
+    int mxfLinux10bitPreload = 1150000;
     OSDPlayStatePosition osdPlayStatePosition = OSD_PS_POSITION_BOTTOM;
     int openInputFailed = 0;
     const char *windowTitle = DEFAULT_WINDOW_TITLE;
@@ -2045,6 +2054,43 @@ int main(int argc, const char **argv)
             useDisplayDimensions = 1;
             cmdlnIndex++;
         }
+        else if (strcmp(argv[cmdlnIndex], "--mxf-linux-disk-access") == 0)
+        {
+            mxfLinuxDiskAccess = 1;
+            cmdlnIndex += 1;
+        }
+        else if (strcmp(argv[cmdlnIndex], "--mxf-linux-8b-pload") == 0)
+        {
+            if (cmdlnIndex + 1 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            if (sscanf(argv[cmdlnIndex + 1], "%d", &mxfLinux8bitPreload) != 1 || mxfLinux8bitPreload < 0)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Invalid argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            cmdlnIndex += 2;
+        }
+        else if (strcmp(argv[cmdlnIndex], "--mxf-linux-10b-pload") == 0)
+        {
+            if (cmdlnIndex + 1 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            if (sscanf(argv[cmdlnIndex + 1], "%d", &mxfLinux10bitPreload) != 1 || mxfLinux10bitPreload < 0)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Invalid argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            cmdlnIndex += 2;
+        }
         else if (strcmp(argv[cmdlnIndex], "--osd-pos") == 0)
         {
             if (cmdlnIndex + 1 >= argc)
@@ -2535,7 +2581,8 @@ int main(int argc, const char **argv)
         {
             case MXF_INPUT:
                 if (!mxfs_open(inputs[i].filename, forceD3MXFInput, markPSEFails, markVTRErrors, markDigiBetaDropouts,
-                    markTimecodeBreaks, &mxfSource))
+                               markTimecodeBreaks, mxfLinuxDiskAccess, mxfLinux8bitPreload, mxfLinux10bitPreload,
+                               &mxfSource))
                 {
                     ml_log_error("Failed to open MXF file source\n");
                     openInputFailed = 1;
