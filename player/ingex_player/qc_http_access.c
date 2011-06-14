@@ -1,10 +1,12 @@
 /*
- * $Id: qc_http_access.c,v 1.7 2010/06/02 11:12:14 philipn Exp $
+ * $Id: qc_http_access.c,v 1.8 2011/06/14 15:44:39 philipn Exp $
  *
  *
  *
- * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Copyright (C) 2008-2011 British Broadcasting Corporation, All Rights Reserved
+ *
  * Author: Philip de Nier
+ *         Tom Heritage
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -121,6 +123,11 @@ static const char* qc_qcReportControl =
     "	var commentsUpdateRequest = null;\n"
     "	var enableCommentsUpdateRequest = true;\n"
     "	\n"
+    "	\n"	
+    "	var finalsessionrecordSearchRequest = null;\n"
+    "	var finalsessionrecordWriteRequest = null;\n"
+    "	\n"	
+    "	var enableSubmitandPrintRequest = true;\n"
     "	\n"
     "	function get_page_parameter(name)\n"
     "	{\n"
@@ -196,6 +203,107 @@ static const char* qc_qcReportControl =
     "			}\n"
     "		}\n"
     "	}\n"
+    "\n"
+    "	function finalsessionrecordSearch_handler()\n"
+    "	{\n"
+    "		try\n"
+    "		{\n"
+    "			if (finalsessionrecordSearchRequest.readyState == 4)\n"
+    "			{\n"
+////    "		                alert(\"ready state is 4\");        		\n"
+////    "				var controlCommentsE = document.getElementById(\"comments\");\n"
+////    "				controlCommentsE.value = finalsessionrecordSearchRequest.responseText;		\n"
+    "                       var user_OK_to_proceed = false;\n"
+    "                       if (finalsessionrecordSearchRequest.responseText == \"FOUND\")\n" 
+    "                       {\n"
+    "                           user_OK_to_proceed = confirm(\"WARNING!!\\n\\nA QC report has already been submitted to the database for this MXF file. If you proceed then the existing QC report entry will be overwritten.\\n\\nPress 'OK' to proceed and overwrite the existing QC report entry. The QC report will then be printed.\\n\\nIf you press 'Cancel' then no submission will be made to the database and no report will be printed. \");\n"
+    "                       }\n"
+
+    "                       if ( (finalsessionrecordSearchRequest.responseText == \"NOT_FOUND\") || (user_OK_to_proceed == true) )\n"
+    "                       {\n"
+    "				var reportName = get_page_parameter(\"report\");\n"
+    "				var sessionName = get_page_parameter(\"session\");\n"
+    "				var carrierName = get_page_parameter(\"carrier\");\n"
+    "\n"
+    "				finalsessionrecordWriteRequest = new XMLHttpRequest();\n"
+    "				finalsessionrecordWriteRequest.open(\"POST\", \"/qcreport/finalsessionrecord/write\", true);\n"
+    "				finalsessionrecordWriteRequest.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');    \n"
+    "				finalsessionrecordWriteRequest.onreadystatechange = finalsessionrecordWrite_handler;\n"
+    "				finalsessionrecordWriteRequest.send(\n"
+    "					\"&report=\" + encodeURIComponent(reportName) +\n"
+    "					\"&session=\" + encodeURIComponent(sessionName) + \n"
+    "					\"&carrier=\" + encodeURIComponent(carrierName));\n"
+    "				\n"
+    "                       }\n"
+    "                       else\n"
+    "                       {\n"
+    "                           alert(\"No submission has been made to the database and no report has been printed.\");\n"
+    "			        enableSubmitandPrintRequest = true;\n"
+    "                       }\n"
+    "			}\n"
+    "		} \n"
+    "		catch (err)\n"
+    "		{\n"
+/////Do we need to change this error handling at all?
+
+    "                   alert(\"An error has occurred while trying to Submit and Print the QC report. No report has been printed but a submission may have been made to the database.\");\n"    
+    "			enableSubmitandPrintRequest = true;\n"
+    "		}\n"
+    "	}\n"
+    "	\n"
+    "	function finalsessionrecordWrite_handler()\n"
+    "	{\n"
+    "		try\n"
+    "		{\n"
+    "			if (finalsessionrecordWriteRequest.readyState == 4)\n"
+    "			{\n"
+    "			    if (finalsessionrecordWriteRequest.responseText == \"SUCCESS\")\n"
+    "                       {\n"
+    "                           parent.frames.reportframe.print()\n"
+    "			    }\n"
+    "                       else\n"
+    "                       {\n"
+    "                           alert(\"An error has occurred while trying to Submit and Print the QC report. No report has been printed but a submission may have been made to the database.\");\n"    
+    "			    }\n"
+    "			}\n"
+    "		} \n"
+    "		catch (err)\n"
+    "		{\n"
+/////Do we need to change this error handling at all?
+    "                   alert(\"An error has occurred while trying to Submit and Print the QC report. No report has been printed but a submission may have been made to the database.\");\n"    
+    "		}\n"
+    "		enableSubmitandPrintRequest = true;\n"
+    "	}\n"
+    "	\n"
+    "	function SubmitandPrint()\n"
+    "	{\n"
+    "		if (enableSubmitandPrintRequest)\n"
+    "		{\n"
+    "			enableSubmitandPrintRequest = false;\n"
+    "			\n"
+    "			try\n"
+    "			{\n"
+    "				var reportName = get_page_parameter(\"report\");\n"
+    "				var sessionName = get_page_parameter(\"session\");\n"
+    "				var carrierName = get_page_parameter(\"carrier\");\n"
+    "\n"
+    "				finalsessionrecordSearchRequest = new XMLHttpRequest();\n"
+    "				finalsessionrecordSearchRequest.open(\"POST\", \"/qcreport/finalsessionrecord/search\", true);\n"
+    "				finalsessionrecordSearchRequest.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');    \n"
+    "				finalsessionrecordSearchRequest.onreadystatechange = finalsessionrecordSearch_handler;\n"
+    "				finalsessionrecordSearchRequest.send(\n"
+    "					\"&report=\" + encodeURIComponent(reportName) +\n"
+    "					\"&session=\" + encodeURIComponent(sessionName) + \n"
+    "					\"&carrier=\" + encodeURIComponent(carrierName));\n"
+    "				\n"
+    "			}\n"
+    "			catch (err)\n"
+    "			{\n"
+    "				enableSubmitandPrintRequest = true;\n"
+    "                           alert(\"An error has occurred while trying to Submit and Print the QC report. No report has been printed and no submission has been made to the database.\");\n"
+    "			}\n"
+    "		}\n"
+    "	}\n"
     "	\n"
     "	-->\n"
     "	</script>\n"
@@ -207,14 +315,14 @@ static const char* qc_qcReportControl =
     "<tbody>\n"
     "	<tr>\n"
     "		<td id=\"print\">\n"
-    "			<input type=\"button\" value=\"Print\" class=\"control-button\" accesskey=\"P\" onclick=\"parent.frames.reportframe.focus(); parent.frames.reportframe.print()\" onfocus=\"this.setAttribute('style', 'background-color:#FFFFD5')\" onblur=\"this.setAttribute('style', '')\"/>\n"
+    "			<input type=\"button\" value=\"Submit to&#13;&#10;Database&#13;&#10;and Print\" class=\"control-button\" accesskey=\"P\" onclick=\"parent.frames.reportframe.focus(); SubmitandPrint();\" onfocus=\"this.setAttribute('style', 'background-color:#FFFFD5')\" onblur=\"this.setAttribute('style', '')\"/>\n"
     "		</td>\n"
     "		<td>\n"
     "			<input type=\"button\" value=\"Update Comments\" class=\"control-button\" accesskey=\"U\" onclick=\"update_comments()\" onfocus=\"this.setAttribute('style', 'background-color:#FFFFD5')\" onblur=\"this.setAttribute('style', '')\"/><br/>\n"
     "			<span id=\"comments-comment\">(max 400 characters)</span>\n"
     "		</td>\n"
     "		<td>\n"
-    "			<textarea id=\"comments\" rows=\"2\" cols=\"80\" accesskey=\"C\" onfocus=\"this.setAttribute('style', 'background-color:#ffff66')\" onblur=\"this.setAttribute('style', '')\"></textarea>\n"
+    "			<textarea id=\"comments\" rows=\"2\" cols=\"75\" accesskey=\"C\" onfocus=\"this.setAttribute('style', 'background-color:#ffff66')\" onblur=\"this.setAttribute('style', '')\"></textarea>\n"
     "		</td>\n"
     "	</tr>\n"
     "</tbody>\n"
@@ -556,6 +664,7 @@ fail:
 }
 
 
+
 static int get_query_value(struct shttpd_arg* arg, const char* name, char* value, int valueSize)
 {
     const char* queryString;
@@ -834,7 +943,6 @@ static void http_qcreport_comments_update_page(struct shttpd_arg* arg)
         send_bad_request(arg, "Missing 'carrier' parameter");
         return;
     }
-
     if (!update_qc_report(access, reportName, comments) ||
         !update_session_files(access, sessionName, carrierName, comments))
     {
@@ -845,6 +953,424 @@ static void http_qcreport_comments_update_page(struct shttpd_arg* arg)
     shttpd_printf(arg, "HTTP/1.1 200 OK\r\n\r\n");
 
 	arg->flags |= SHTTPD_END_OF_OUTPUT;
+}
+
+
+static int finalsessionrecord_search(QCHTTPAccess* access, const char* reportName, const char* sessionName, const char* carrierName)
+//////Return values:
+//////  0   --   FAIL / ERROR
+//////  1   --   A Final Session Record File exists for the specified MXF file
+//////  2   --   No Final Session Record File exists for the specified MXF file
+{
+    int returnValue;
+    char finalsessionrecordFilename_cachedir[FILENAME_MAX];
+    finalsessionrecordFilename_cachedir[0]=0;
+    char finalsessionrecordFilename_backupdir[FILENAME_MAX];
+    finalsessionrecordFilename_backupdir[0]=0;
+    char mxfFilePrefix[FILENAME_MAX];
+    mxfFilePrefix[0]=0;
+    char finalsessionrecordFilename[FILENAME_MAX];
+    finalsessionrecordFilename[0]=0;
+
+    char search_string[] = ".";
+    int mxfFilePrefixLength = strcspn (reportName, search_string);
+    strncpy (mxfFilePrefix, reportName, mxfFilePrefixLength);
+    mxfFilePrefix[mxfFilePrefixLength]=0;              ////Omitting this line can lead to unpredictable behaviour.
+
+    strcpy(finalsessionrecordFilename, mxfFilePrefix);
+    strcat(finalsessionrecordFilename, "_final_session_record.txt");
+
+    strcpy(finalsessionrecordFilename_cachedir, access->cacheDirectory);
+    strcat_separator(finalsessionrecordFilename_cachedir);
+    strcat(finalsessionrecordFilename_cachedir, carrierName);
+    strcat_separator(finalsessionrecordFilename_cachedir);
+    strcat(finalsessionrecordFilename_cachedir, finalsessionrecordFilename);
+
+    strcpy(finalsessionrecordFilename_backupdir, access->reportDirectory);
+    strcat_separator(finalsessionrecordFilename_backupdir);
+    strcat(finalsessionrecordFilename_backupdir, carrierName);
+    strcat(finalsessionrecordFilename_backupdir, "_backup");
+    strcat_separator(finalsessionrecordFilename_backupdir);
+    strcat(finalsessionrecordFilename_backupdir, finalsessionrecordFilename);
+
+    //// We need to check both possible locations for the Final Session Record file.
+    FILE* finalsessionrecordFile_cachedir = NULL;
+    FILE* finalsessionrecordFile_backupdir = NULL;
+
+    finalsessionrecordFile_cachedir = fopen(finalsessionrecordFilename_cachedir, "r");
+    finalsessionrecordFile_backupdir = fopen(finalsessionrecordFilename_backupdir, "r");
+    
+    if ( (finalsessionrecordFile_cachedir == NULL) && (finalsessionrecordFile_backupdir == NULL) )
+    {
+        returnValue = 2;
+    } 
+    else
+    {
+        returnValue = 1;
+    }
+    
+    if (finalsessionrecordFile_cachedir != NULL)
+    {
+        fclose (finalsessionrecordFile_cachedir);
+    }
+
+    if (finalsessionrecordFile_backupdir != NULL)
+    {
+        fclose (finalsessionrecordFile_backupdir);
+    }
+    
+    return returnValue;
+}
+
+
+static void http_qcreport_finalsessionrecord_search_page(struct shttpd_arg* arg)
+{
+    QCHTTPAccess* access = (QCHTTPAccess*)arg->user_data;
+    char reportName[256];
+    char sessionName[256];
+    char carrierName[256];
+
+    const char* requestMethod = shttpd_get_env(arg, "REQUEST_METHOD");
+    if (strcmp(requestMethod, "POST") != 0)
+    {
+        send_bad_request(arg, "Not a POST request");
+        return;
+    }
+
+    if (arg->flags & SHTTPD_MORE_POST_DATA)
+    {
+        /* wait for the rest of the post data */
+        return;
+    }
+
+
+    if (!get_post_value(arg, "report", reportName, sizeof(reportName)))
+    {
+        send_bad_request(arg, "Missing 'report' parameter");
+        return;
+    }
+
+    if (!get_post_value(arg, "session", sessionName, sizeof(sessionName)))
+    {
+        send_bad_request(arg, "Missing 'session' parameter");
+        return;
+    }
+
+
+    if (!get_post_value(arg, "carrier", carrierName, sizeof(carrierName)))
+    {
+        send_bad_request(arg, "Missing 'carrier' parameter");
+        return;
+    }
+    
+    int finalsessionrecord_search_result = finalsessionrecord_search(access, reportName, sessionName, carrierName);
+    
+
+    if ( finalsessionrecord_search_result == 1 )
+    {
+        shttpd_printf(arg, "HTTP/1.1 200 OK\r\n");
+        shttpd_printf(arg, "Content-Type: %s\r\n\r\n", "text/plain");
+        shttpd_printf(arg, "FOUND");
+        arg->flags |= SHTTPD_END_OF_OUTPUT;
+    }
+    else if ( finalsessionrecord_search_result == 2 )
+    {
+        shttpd_printf(arg, "HTTP/1.1 200 OK\r\n");
+        shttpd_printf(arg, "Content-Type: %s\r\n\r\n", "text/plain");
+        shttpd_printf(arg, "NOT_FOUND");
+        arg->flags |= SHTTPD_END_OF_OUTPUT;
+    }
+    else
+    {
+        send_server_error(arg, "Failed to search for Final Session Record files");
+    }
+}
+
+
+static int finalsessionrecord_write(QCHTTPAccess* access, const char* reportName, const char* sessionName, const char* carrierName)
+//////Return values:
+//////  0   --   FAIL / ERROR
+//////  1   --   Final Session Record files created successfuly.
+{
+    //Run a check to be sure that sessionName and carrierName are valid. Note that this does NOT ensure that
+    //they relate to the report identified by reportName. However, the level of checking required to ensure that
+    //would go beyond the level of checking of these parameters that has been implemented elsewhere in this C file.
+    char sessionFilename[FILENAME_MAX];
+    sessionFilename[0]=0;
+    FILE* sessionFile = NULL;
+    strcpy(sessionFilename, access->cacheDirectory);
+    strcat_separator(sessionFilename);
+    strcat(sessionFilename, carrierName);
+    strcat_separator(sessionFilename);
+    strcat(sessionFilename, sessionName);
+    sessionFile = fopen(sessionFilename, "r");
+    if (sessionFile == NULL)
+    {
+        return 0;
+    }
+    else
+    {
+        fclose(sessionFile);
+    }
+
+    //Check that the report identified by reportName does exist.
+    char reportFilename[FILENAME_MAX];
+    reportFilename[0]=0;
+    FILE* reportFile = NULL;
+    strcpy(reportFilename, access->reportDirectory);
+    strcat_separator(reportFilename);
+    strcat(reportFilename, reportName);
+    reportFile = fopen(reportFilename, "r");
+    if (reportFile == NULL)
+    {
+        return 0;
+    }
+    else
+    {
+        fclose(reportFile);
+    }
+
+
+    //Generate the filenames etc
+    char finalsessionrecordFilename_cachedir[FILENAME_MAX];
+    finalsessionrecordFilename_cachedir[0]=0;
+    char finalsessionrecordFilename_backupdir[FILENAME_MAX];
+    finalsessionrecordFilename_backupdir[0]=0;
+    char mxfFilePrefix[FILENAME_MAX];
+    mxfFilePrefix[0]=0;
+    char finalsessionrecordFilename[FILENAME_MAX];
+    finalsessionrecordFilename[0]=0;
+    
+    char search_string[] = ".";
+    int mxfFilePrefixLength = strcspn (reportName, search_string);
+    strncpy (mxfFilePrefix, reportName, mxfFilePrefixLength);
+    mxfFilePrefix[mxfFilePrefixLength]=0;        ////Omitting this line can lead to unpredictable behaviour.
+    strcpy(finalsessionrecordFilename, mxfFilePrefix);
+    strcat(finalsessionrecordFilename, "_final_session_record.txt");
+   
+    
+    strcpy(finalsessionrecordFilename_cachedir, access->cacheDirectory);
+    strcat_separator(finalsessionrecordFilename_cachedir);
+    strcat(finalsessionrecordFilename_cachedir, carrierName);
+    strcat_separator(finalsessionrecordFilename_cachedir);
+    strcat(finalsessionrecordFilename_cachedir, finalsessionrecordFilename);
+
+    strcpy(finalsessionrecordFilename_backupdir, access->reportDirectory);
+    strcat_separator(finalsessionrecordFilename_backupdir);
+    strcat(finalsessionrecordFilename_backupdir, carrierName);
+    strcat(finalsessionrecordFilename_backupdir, "_backup");
+    strcat_separator(finalsessionrecordFilename_backupdir);
+    strcat(finalsessionrecordFilename_backupdir, finalsessionrecordFilename);
+
+
+    //Record the status and contents of any existing Final Session Record files before we change them
+    FILE* finalsessionrecordFile_cachedir = NULL;
+    FILE* finalsessionrecordFile_backupdir = NULL;
+
+    char finalsessionrecordFileOrigContents_cachedir[FILENAME_MAX];
+    finalsessionrecordFileOrigContents_cachedir[0]=0;
+    char finalsessionrecordFileOrigContents_backupdir[FILENAME_MAX];
+    finalsessionrecordFileOrigContents_backupdir[0]=0;
+
+    int finalsessionrecordFileOrigExisted_cachedir = 0; 
+    int finalsessionrecordFileOrigExisted_backupdir = 0; 
+
+    finalsessionrecordFile_cachedir = fopen(finalsessionrecordFilename_cachedir, "r");
+    finalsessionrecordFile_backupdir = fopen(finalsessionrecordFilename_backupdir, "r");
+
+
+    if (finalsessionrecordFile_cachedir != NULL)
+    {
+        finalsessionrecordFileOrigExisted_cachedir = 1; 
+        fgets ( finalsessionrecordFileOrigContents_cachedir, FILENAME_MAX, finalsessionrecordFile_cachedir); //Only worry about the first line of the file
+        fclose (finalsessionrecordFile_cachedir);
+    }
+
+    if (finalsessionrecordFile_backupdir != NULL)
+    {
+        finalsessionrecordFileOrigExisted_backupdir = 1; 
+        fgets ( finalsessionrecordFileOrigContents_backupdir, FILENAME_MAX, finalsessionrecordFile_backupdir); //Only worry about the first line of the file
+        fclose (finalsessionrecordFile_backupdir);
+    }
+
+
+    //Change / create the Final Session Record Files
+    finalsessionrecordFile_cachedir = fopen(finalsessionrecordFilename_cachedir, "w");
+    finalsessionrecordFile_backupdir = fopen(finalsessionrecordFilename_backupdir, "w");
+    
+    if ( (finalsessionrecordFile_cachedir == NULL) || (finalsessionrecordFile_backupdir == NULL) )
+    {
+        goto fail;
+    } 
+
+    char session_timestamp[FILENAME_MAX];
+    session_timestamp[0]=0;
+    char * timestamp_locator;
+    timestamp_locator = strstr (const_cast<char *>(sessionName), ".mxf_qcsession_");
+
+    if ( timestamp_locator == NULL)
+    {
+        goto fail;
+    } 
+
+    timestamp_locator = timestamp_locator + 15;
+    
+    strncpy (session_timestamp, timestamp_locator, 15);
+
+    if ( fputs (session_timestamp, finalsessionrecordFile_cachedir) < 0 )
+    {
+        goto fail;
+    }
+
+    if ( fputs (session_timestamp, finalsessionrecordFile_backupdir) < 0 )
+    {
+        goto fail;
+    }
+ 
+    fclose (finalsessionrecordFile_cachedir);
+    fclose (finalsessionrecordFile_backupdir);
+
+    return 1;
+ 
+
+fail:
+        
+    if (finalsessionrecordFile_cachedir != NULL)
+    {
+        fclose (finalsessionrecordFile_cachedir);
+    }
+
+    if (finalsessionrecordFile_backupdir != NULL)
+    {
+        fclose (finalsessionrecordFile_backupdir);
+    }
+
+    //Now make sure that both Final Session Record files are returned to how they were
+
+    finalsessionrecordFile_cachedir = fopen(finalsessionrecordFilename_cachedir, "r");
+    finalsessionrecordFile_backupdir = fopen(finalsessionrecordFilename_backupdir, "r");
+
+    char remove_command[FILENAME_MAX];
+    remove_command[0]=0;
+
+    if ( (finalsessionrecordFile_cachedir == NULL) && (finalsessionrecordFileOrigExisted_cachedir == 1) )
+    {
+        fclose (finalsessionrecordFile_cachedir);
+        finalsessionrecordFile_cachedir = fopen(finalsessionrecordFilename_cachedir, "w");
+        if ( finalsessionrecordFile_cachedir != NULL)
+        {
+            fputs (finalsessionrecordFileOrigContents_cachedir, finalsessionrecordFile_cachedir);
+            fclose (finalsessionrecordFile_cachedir);
+        }
+    }
+    else if ( (finalsessionrecordFile_cachedir != NULL) && (finalsessionrecordFileOrigExisted_cachedir == 0) )
+    {
+        fclose (finalsessionrecordFile_cachedir);
+        strcpy(remove_command, "rm \"");
+        strcat(remove_command, finalsessionrecordFilename_cachedir);
+        strcat(remove_command, "\"");
+        system(remove_command);
+    }
+    else if ( (finalsessionrecordFile_cachedir != NULL) && (finalsessionrecordFileOrigExisted_cachedir == 1) )
+    {
+        fclose (finalsessionrecordFile_cachedir);
+        finalsessionrecordFile_cachedir = fopen(finalsessionrecordFilename_cachedir, "w");
+        if ( finalsessionrecordFile_cachedir != NULL)
+        { 
+            fputs (finalsessionrecordFileOrigContents_cachedir, finalsessionrecordFile_cachedir);
+            fclose (finalsessionrecordFile_cachedir);
+        }
+    }
+
+
+    if ( (finalsessionrecordFile_backupdir == NULL) && (finalsessionrecordFileOrigExisted_backupdir == 1) )
+    {
+        fclose (finalsessionrecordFile_backupdir);
+        finalsessionrecordFile_backupdir = fopen(finalsessionrecordFilename_backupdir, "w");
+        if ( finalsessionrecordFile_backupdir != NULL)
+        { 
+            fputs (finalsessionrecordFileOrigContents_backupdir, finalsessionrecordFile_backupdir);
+            fclose (finalsessionrecordFile_backupdir);
+        }
+    }
+    else if ( (finalsessionrecordFile_backupdir != NULL) && (finalsessionrecordFileOrigExisted_backupdir == 0) )
+    {
+        fclose (finalsessionrecordFile_backupdir);
+        strcpy(remove_command, "rm \"");
+        strcat(remove_command, finalsessionrecordFilename_backupdir);
+        strcat(remove_command, "\"");
+        system(remove_command);
+    }
+    else if ( (finalsessionrecordFile_backupdir != NULL) && (finalsessionrecordFileOrigExisted_backupdir == 1) )
+    {
+        fclose (finalsessionrecordFile_backupdir);
+        finalsessionrecordFile_backupdir = fopen(finalsessionrecordFilename_backupdir, "w");
+        if ( finalsessionrecordFile_backupdir != NULL)
+        { 
+            fputs (finalsessionrecordFileOrigContents_backupdir, finalsessionrecordFile_backupdir);
+            fclose (finalsessionrecordFile_backupdir);
+        }
+    }
+
+    return 0;
+
+}
+
+
+static void http_qcreport_finalsessionrecord_write_page(struct shttpd_arg* arg)
+{
+    QCHTTPAccess* access = (QCHTTPAccess*)arg->user_data;
+    char reportName[256];
+    char sessionName[256];
+    char carrierName[256];
+
+    const char* requestMethod = shttpd_get_env(arg, "REQUEST_METHOD");
+    if (strcmp(requestMethod, "POST") != 0)
+    {
+        send_bad_request(arg, "Not a POST request");
+        return;
+    }
+
+    if (arg->flags & SHTTPD_MORE_POST_DATA)
+    {
+        /* wait for the rest of the post data */
+        return;
+    }
+
+
+    if (!get_post_value(arg, "report", reportName, sizeof(reportName)))
+    {
+        send_bad_request(arg, "Missing 'report' parameter");
+        return;
+    }
+
+    if (!get_post_value(arg, "session", sessionName, sizeof(sessionName)))
+    {
+        send_bad_request(arg, "Missing 'session' parameter");
+        return;
+    }
+
+
+    if (!get_post_value(arg, "carrier", carrierName, sizeof(carrierName)))
+    {
+        send_bad_request(arg, "Missing 'carrier' parameter");
+        return;
+    }
+    
+    int finalsessionrecord_write_result = finalsessionrecord_write(access, reportName, sessionName, carrierName);
+    
+
+    if ( finalsessionrecord_write_result == 1 )
+    {
+        shttpd_printf(arg, "HTTP/1.1 200 OK\r\n");
+        shttpd_printf(arg, "Content-Type: %s\r\n\r\n", "text/plain");
+        shttpd_printf(arg, "SUCCESS");
+        arg->flags |= SHTTPD_END_OF_OUTPUT;
+    }
+    else
+    {
+        send_server_error(arg, "Failed to write Final Session Record files");
+    }
 }
 
 
@@ -881,6 +1407,8 @@ int qch_create_qc_http_access(MediaPlayer* player, int port, const char* cacheDi
     shttpd_register_uri(newAccess->ctx, "/qcreport/control.html", &http_qcreport_control_page, newAccess);
     shttpd_register_uri(newAccess->ctx, "/qcreport/report.html", &http_qcreport_report_page, newAccess);
     shttpd_register_uri(newAccess->ctx, "/qcreport/comments/update", &http_qcreport_comments_update_page, newAccess);
+    shttpd_register_uri(newAccess->ctx, "/qcreport/finalsessionrecord/search", &http_qcreport_finalsessionrecord_search_page, newAccess);
+    shttpd_register_uri(newAccess->ctx, "/qcreport/finalsessionrecord/write", &http_qcreport_finalsessionrecord_write_page, newAccess);
     CHK_OFAIL(shttpd_listen(newAccess->ctx, port, 0));
 
     CHK_OFAIL(create_joinable_thread(&newAccess->httpThreadId, http_thread, newAccess));
