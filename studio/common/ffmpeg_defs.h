@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_defs.h,v 1.3 2011/06/13 15:27:19 john_f Exp $
+ * $Id: ffmpeg_defs.h,v 1.4 2011/06/14 14:44:32 john_f Exp $
  *
  * Common definitions for ffmpeg_encoder and ffmpeg_encoder_av
  *
@@ -28,6 +28,18 @@
 
 /* special value for argument num_threads to ffmpeg_encoder_init */
 #define THREADS_USE_BUILTIN_TUNING -1
+
+/* Default intra matrix (for reference) */
+const uint16_t default_intra_matrix[] = {
+  8, 16, 19, 22, 26, 27, 29, 34,
+  16, 16, 22, 24, 27, 29, 34, 37,
+  19, 22, 26, 27, 29, 34, 34, 38,
+  22, 22, 26, 27, 29, 34, 37, 40,
+  22, 26, 27, 29, 32, 35, 40, 48,
+  26, 27, 29, 32, 35, 40, 48, 58,
+  26, 27, 29, 34, 38, 46, 56, 69,
+  27, 29, 35, 38, 46, 56, 69, 83
+};
 
 /* Avid-compatible intra quantisation matrices for IMX */
 const uint16_t imx30_intra_matrix[] = {

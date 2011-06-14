@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder.cpp,v 1.11 2011/06/13 15:25:23 john_f Exp $
+ * $Id: ffmpeg_encoder.cpp,v 1.12 2011/06/14 14:44:32 john_f Exp $
  *
  * Encode uncompressed video to DV using libavcodec
  *
@@ -50,6 +50,9 @@ extern "C" {
 #include "ffmpeg_resolutions.h"
 #include "ffmpeg_encoder.h"
 #include "ffmpeg_defs.h"
+
+// Select IMX intra matrix
+const enum { DEFAULT, AVID } IMX_INTRA_MATRIX_SELECTION = AVID;
 
 /*
 const uint16_t jpeg2to1_intra_matrix[] = {
@@ -285,7 +288,15 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init(MaterialResolution::EnumType res, 
         case MaterialResolution::IMX30_MXF_ATOM:
         case MaterialResolution::IMX30_MXF_1A:
             bit_rate = 30 * 1000000;
-            intra_matrix = imx30_intra_matrix;
+            switch (IMX_INTRA_MATRIX_SELECTION)
+            {
+            case AVID:
+                intra_matrix = imx30_intra_matrix;
+                break;
+            case DEFAULT:
+                intra_matrix = default_intra_matrix;
+                break;
+            }
             //encoded_frame_size = (bit_rate / 8) * fps_den / fps_num;
             switch (raster)
             {
@@ -309,7 +320,15 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init(MaterialResolution::EnumType res, 
         case MaterialResolution::IMX40_MXF_ATOM:
         case MaterialResolution::IMX40_MXF_1A:
             bit_rate = 40 * 1000000;
-            intra_matrix = imx4050_intra_matrix;
+            switch (IMX_INTRA_MATRIX_SELECTION)
+            {
+            case AVID:
+                intra_matrix = imx4050_intra_matrix;
+                break;
+            case DEFAULT:
+                intra_matrix = default_intra_matrix;
+                break;
+            }
             //encoded_frame_size = (bit_rate / 8) * fps_den / fps_num;
             switch (raster)
             {
@@ -333,7 +352,15 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init(MaterialResolution::EnumType res, 
         case MaterialResolution::IMX50_MXF_ATOM:
         case MaterialResolution::IMX50_MXF_1A:
             bit_rate = 50 * 1000000;
-            intra_matrix = imx4050_intra_matrix;
+            switch (IMX_INTRA_MATRIX_SELECTION)
+            {
+            case AVID:
+                intra_matrix = imx4050_intra_matrix;
+                break;
+            case DEFAULT:
+                intra_matrix = default_intra_matrix;
+                break;
+            }
             //encoded_frame_size = (bit_rate / 8) * fps_den / fps_num;
             switch (raster)
             {
