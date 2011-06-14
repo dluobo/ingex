@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: recordergroup.cpp,v 1.26 2011/05/20 08:43:00 john_f Exp $       *
+ *   $Id: recordergroup.cpp,v 1.27 2011/06/14 14:12:10 john_f Exp $       *
  *                                                                         *
  *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -109,6 +109,7 @@ void RecorderGroupCtrl::OnListRefreshed(wxCommandEvent & WXUNUSED(event))
         if (errMsg.IsEmpty()) {
             wxArrayString names;
             mComms->GetRecorderList(names);
+            names.Sort();
             for (size_t j = 0; j < names.GetCount(); j++) {
                 int k = 0;
                 do {
