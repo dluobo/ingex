@@ -1,8 +1,8 @@
 #! /usr/bin/perl -w
 
-#  $Id: import_db_infod.pl,v 1.4 2010/07/28 17:19:41 john_f Exp $
+#  $Id: import_db_infod.pl,v 1.5 2011/06/22 06:49:05 john_f Exp $
 #
-# Copyright (C) 2009-2010  British Broadcasting Corporation.
+# Copyright (C) 2009-2011 British Broadcasting Corporation.
 # All Rights Reserved.
 # Author: Matthew Marks
 #
@@ -22,16 +22,13 @@
 # 02110-1301, USA.
 #
 
-
-# Scans $ROOT/@topDirs/<all subdirs>/<all 8-digit subdirs>/ for files ending in .mxf or .xml (case-insensitive), invoking $mxfImport or $xmlImport on them respectively.
-# Watches the tree for new directories and files.
-# Maintains timestamp files $timestampFile in each 8-digit subdir, holding the latest mtime, so as to avoid re-importing files.
-
+# Scans $ROOT/(keys $topDirs)/<all subdirs>/<all 8-digit subdirs>/ for files ending in .mxf (case-insensitive), invoking $importCuts on them if their mtime is <= the contents of $timestampFile in the same directory and updating $timestampFile with the latest mtime found.
+# Does the same for $ROOT/$cutsDir/<all subdirs>/<all 8-digit subdirs>/ except it invokes $importMaterial on them.
+# Creates and maintains the timestamp files .../$timestampFile to prevent re-importing (unless overridden by command-line option).
+# Watches at every level from $ROOT downwards for the creation of applicable directories/files in order to keep importing new data. 
 # If run as root, applies UID and GID of $ROOT to each $timestampFile created.
-
-# Dies if $ROOT does not initially exist
-
-# Logs to the system log (/var/log/messages)
+# Dies if $ROOT does not initially exist.
+# Logs to the system log (/var/log/messages) and stderr if not run as a daemon.
 
 use strict;
 use Getopt::Std;
@@ -42,11 +39,11 @@ use File::Glob qw( :glob); # to ensure whitespace in names returned by glob is e
 use Sys::Syslog qw(:standard :macros);
 
 my $ROOT = '/store'; #the user/group of this is applied to all files created if the script is run as root
-my %topDirs = qw(mxf_offline 1 mxf_online 1 browse 1 dv 1 cuts 1); #incoming directories to scan, below $ROOT
-my $cutsDir = "cuts"; # cuts xml files appear below this top directory; all other top directories contain material xml files
-my $timestampFile = 'import_db_info_timestamp';
-my $importCuts = '/usr/local/bin/import_cuts';
-my $importMaterial = '/usr/local/bin/import_material';
+my $cutsDir = 'cuts'; #xml files in this branch of the directory tree (below $ROOT) contain cuts xml files
+my %topDirs = qw(mxf_offline 1 mxf_online 1 browse 1 dv 1); #xml files in this branch of the directory tree (below $ROOT) contain material xml files (value 1 has no significance)
+my $timestampFile = 'import_db_info_timestamp'; #files with this name will be created in every directory containing imported files
+my $importCuts = '/usr/local/bin/import_cuts'; #executable called to import a cuts xml file
+my $importMaterial = '/usr/local/bin/import_material'; #executable called to import a material xml file
 
 use constant WATCH_FILE_MASK => IN_CREATE | IN_MOVED_TO;
 use constant WATCH_DIR_MASK => IN_CREATE | IN_MOVED_TO | IN_ONLYDIR;
@@ -107,7 +104,7 @@ my $importMaterialFile = sub {
  }
  if ($fail) {
     $_[0] =~ /(.*)\//;
-    Warn("Importing $_[0] failed: $!. Will not retry unless daemon is re-run with -c option or after deleting $1/$timestampFile");
+    Warn("Importing material file $_[0] failed: $!. Will not retry unless daemon is re-run with -c option or after deleting $1/$timestampFile");
     $imported = 0;
  }
  return $imported;
@@ -125,7 +122,7 @@ my $importCutsFile = sub {
  }
  if ($fail) {
     $_[0] =~ /(.*)\//;
-    Warn("Importing $_[0] failed: $!. Will not retry unless daemon is re-run with -c option or after deleting $1/$timestampFile");
+    Warn("Importing cuts file $_[0] failed: $!. Will not retry unless daemon is re-run with -c option or after deleting $1/$timestampFile");
     $imported = 0;
  }
  return $imported;
@@ -167,9 +164,9 @@ sub ScanTopDir {
  my $topPath = shift;
  return unless -d $topPath;
  $topPath =~ m|$ROOT/(.*)|;
- return unless exists $topDirs{$1}; #only interested in certain top-level directories
+ return unless exists $topDirs{$1} || $1 eq $cutsDir; #only interested in certain top-level directories
  Report("Watching $topPath/ for new project subdirectories");
- my $watch = $notifier->watch($topPath, WATCH_DIR_MASK, $projectChange) or Warn("Couldn't watch: $!"); #do this before scanning or we could miss a date directory being created in the intervening period
+ my $watch = $notifier->watch($topPath, WATCH_DIR_MASK, $projectChange) or Warn("Couldn't watch: $!"); #do this before scanning or we could miss a project directory being created in the intervening period
  unless (opendir TOP, $topPath) {
     Warn("Couldn't open $topPath/: $!");
     $watch->cancel;
@@ -205,9 +202,9 @@ sub ScanDateDir {
  return unless -d $datePath;
  return unless $datePath =~ /\/\d{8}$/;
 
- if ($datePath =~ /^$ROOT\/$cutsDir/) {
+ if ($datePath =~ /^$ROOT\/$cutsDir\//) {
    # scan for cuts xml files
-   ScanFileDir($datePath, $importCutsFile, $cutsFileChange);
+   ScanFileDir($datePath, 1, $cutsFileChange);
  }
  else {
    # scan for material xml directories
@@ -230,11 +227,11 @@ sub ScanMaterialXMLDir {
  my $xmlPath = shift;
  return unless -d $xmlPath;
  return unless $xmlPath =~ /\/xml$/;
- ScanFileDir($xmlPath, $importMaterialFile, $materialFileChange);
+ ScanFileDir($xmlPath, 0, $materialFileChange);
 }
 
 sub ScanFileDir {
-  my ($dirPath, $importFunc, $watchCallback) = @_;
+  my ($dirPath, $cuts, $watchCallback) = @_;
   Report("Watching $dirPath/ for new files");
   my $watch = $notifier->watch($dirPath, WATCH_FILE_MASK, $watchCallback) or Warn("Couldn't watch: $!"); #do this before scanning or we could miss a file being created in the intervening period
   unless (opendir FILE_DIR, $dirPath) {
@@ -248,16 +245,16 @@ sub ScanFileDir {
        $timestamp = <TIMESTAMP>;
        chomp $timestamp;
        if (<TIMESTAMP> || $timestamp !~ /^\d+$/) {
-          Warn("Unrecognised contents of $dirPath/$timestampFile: re-importing all files in this directory\n");
+          Warn("Unrecognised contents of $dirPath/$timestampFile: (re-)importing all files in this directory\n");
           $timestamp = 0;
        }
        close TIMESTAMP;
     }
     else {
-       Warn("Couldn't open $dirPath/$timestampFile: $!: re-importing all files in this directory\n");
+       Warn("Couldn't open $dirPath/$timestampFile: $!: (re-)importing all files in this directory\n");
     }
   }
-  Report("Scanning $dirPath/ for files to import");
+  Report("Scanning $dirPath/ for " . ($cuts ? "cuts" : "material") . " files to import");
   my %files;
   my $mtime = 0; #in case no files
   my $maxMTime = 0;
@@ -275,7 +272,7 @@ sub ScanFileDir {
   my $count = 0;
   foreach $mtime (sort keys %files) { #mtime order, oldest first
     foreach (@{$files{$mtime}}) {
-       $count++ if $importFunc->("$dirPath/$_");
+       $count++ if ($cuts ? $importCutsFile : $importMaterialFile)->("$dirPath/$_");
     }
   }
   Report('Imported ' . ($count ? $count : 'no') . ' file' . (1 == $count ? '' : 's') . " from $dirPath/");
