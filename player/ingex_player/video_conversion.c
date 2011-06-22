@@ -1,5 +1,5 @@
 /*
- * $Id: video_conversion.c,v 1.10 2011/05/11 14:25:36 philipn Exp $
+ * $Id: video_conversion.c,v 1.11 2011/06/22 06:30:07 john_f Exp $
  *
  *
  *
@@ -446,6 +446,9 @@ void yuv422_to_yuv422(int width, int height, int shift_picture_up, AVFrame *inpu
     uint8_t *yOut, *uOut, *vOut;
     int start_line = 0;
 
+    // inline conversion supported if shifting
+    assert(output != input->data[0] || shift_picture_up);
+
     // Shifting picture up one line is necessary when decoding PAL DV50
     if (shift_picture_up)
     {
@@ -488,6 +491,9 @@ void uyvy_to_uyvy(int width, int height, int shift_picture_up, AVFrame *input, u
     int h;
     int start_line = 0;
 
+    // inline conversion supported if shifting
+    assert(output != input->data[0] || shift_picture_up);
+
     if (shift_picture_up)
     {
         // Skip one line of input picture and start one line lower
@@ -522,6 +528,9 @@ void yuv4xx_to_yuv4xx(int width, int height, int shift_picture_up, AVFrame *inpu
     uint8_t *y, *u, *v;
     uint8_t *yOut, *uOut, *vOut;
     int start_line = 0;
+
+    // inline conversion supported if shifting
+    assert(output != input->data[0] || shift_picture_up);
 
     // Shifting picture up one line is necessary when decoding PAL DV25
     if (shift_picture_up)

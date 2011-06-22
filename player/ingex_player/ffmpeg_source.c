@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_source.c,v 1.11 2011/05/11 14:26:44 philipn Exp $
+ * $Id: ffmpeg_source.c,v 1.12 2011/06/22 06:30:07 john_f Exp $
  *
  *
  *
@@ -119,6 +119,11 @@ typedef struct
     PacketQueue packetQueue;
 
     AVFrame* frame;
+    int requirePixFmtConversion;
+    struct SwsContext* imageConvertContext;
+    int dataOffset[3];
+    int lineSize[3];
+    enum PixelFormat outputPixelFormat;
     int shiftPictureUp;
 
     OutputStreamData outputStream;
@@ -638,9 +643,16 @@ static int open_video_stream(FFMPEGSource* source, int sourceId, int avStreamInd
     if (source->forceUYVYFormat)
     {
         videoStream->outputStream.streamInfo.format = UYVY_FORMAT;
-        codecContext->pix_fmt = PIX_FMT_UYVY422;
+        videoStream->dataOffset[0] = 0;
+        videoStream->dataOffset[1] = 0;
+        videoStream->dataOffset[2] = 0;
+        videoStream->lineSize[0] = codecContext->width * 2;
+        videoStream->lineSize[1] = 0;
+        videoStream->lineSize[2] = 0;
+        videoStream->outputPixelFormat = PIX_FMT_UYVY422;
         videoStream->outputStream.bufferSize = codecContext->width * codecContext->height * 2;
         videoStream->outputStream.dataSize = videoStream->outputStream.bufferSize;
+        videoStream->requirePixFmtConversion = (codecContext->pix_fmt != PIX_FMT_UYVY422);
     }
     else
     {
@@ -649,14 +661,27 @@ static int open_video_stream(FFMPEGSource* source, int sourceId, int avStreamInd
             case PIX_FMT_YUV420P:
             case PIX_FMT_YUVJ420P:
                 videoStream->outputStream.streamInfo.format = YUV420_FORMAT;
-                codecContext->pix_fmt = PIX_FMT_YUV420P;
+                videoStream->dataOffset[0] = 0;
+                videoStream->dataOffset[1] = codecContext->width * codecContext->height;
+                videoStream->dataOffset[2] = codecContext->width * codecContext->height * 5 / 4;
+                videoStream->lineSize[0] = codecContext->width;
+                videoStream->lineSize[1] = codecContext->width / 2;
+                videoStream->lineSize[2] = codecContext->width / 2;
+                videoStream->outputPixelFormat = PIX_FMT_YUV420P;
                 videoStream->outputStream.bufferSize = codecContext->width * codecContext->height * 3 / 2;
                 videoStream->outputStream.dataSize = videoStream->outputStream.bufferSize;
+                // swscale treats PIX_FMT_YUV420P the same as PIX_FMT_YUVJ420P so requirePixFmtConversion == 0
                 break;
 #if 0 /* TODO: add support for YUV411 to the sinks */
             case PIX_FMT_YUV411P:
                 videoStream->outputStream.streamInfo.format = YUV411_FORMAT;
-                codecContext->pix_fmt = PIX_FMT_YUV411P;
+                videoStream->dataOffset[0] = 0;
+                videoStream->dataOffset[1] = codecContext->width * codecContext->height;
+                videoStream->dataOffset[2] = codecContext->width * codecContext->height * 5 / 4;
+                videoStream->lineSize[0] = codecContext->width;
+                videoStream->lineSize[1] = codecContext->width / 4;
+                videoStream->lineSize[2] = codecContext->width / 4;
+                videoStream->outputPixelFormat = PIX_FMT_YUV411P;
                 videoStream->outputStream.bufferSize = codecContext->width * codecContext->height * 3 / 2;
                 videoStream->outputStream.dataSize = videoStream->outputStream.bufferSize;
                 break;
@@ -664,15 +689,29 @@ static int open_video_stream(FFMPEGSource* source, int sourceId, int avStreamInd
             case PIX_FMT_YUV422P:
             case PIX_FMT_YUVJ422P:
                 videoStream->outputStream.streamInfo.format = YUV422_FORMAT;
-                codecContext->pix_fmt = PIX_FMT_YUV422P;
+                videoStream->dataOffset[0] = 0;
+                videoStream->dataOffset[1] = codecContext->width * codecContext->height;
+                videoStream->dataOffset[2] = codecContext->width * codecContext->height * 3 / 2;
+                videoStream->lineSize[0] = codecContext->width;
+                videoStream->lineSize[1] = codecContext->width / 2;
+                videoStream->lineSize[2] = codecContext->width / 2;
+                videoStream->outputPixelFormat = PIX_FMT_YUV422P;
                 videoStream->outputStream.bufferSize = codecContext->width * codecContext->height * 2;
                 videoStream->outputStream.dataSize = videoStream->outputStream.bufferSize;
+                // swscale treats PIX_FMT_YUV422P the same as PIX_FMT_YUVJ422P so requirePixFmtConversion == 0
                 break;
             default:
                 videoStream->outputStream.streamInfo.format = UYVY_FORMAT;
-                codecContext->pix_fmt = PIX_FMT_UYVY422;
+                videoStream->dataOffset[0] = 0;
+                videoStream->dataOffset[1] = 0;
+                videoStream->dataOffset[2] = 0;
+                videoStream->lineSize[0] = codecContext->width * 2;
+                videoStream->lineSize[1] = 0;
+                videoStream->lineSize[2] = 0;
+                videoStream->outputPixelFormat = PIX_FMT_UYVY422;
                 videoStream->outputStream.bufferSize = codecContext->width * codecContext->height * 2;
                 videoStream->outputStream.dataSize = videoStream->outputStream.bufferSize;
+                videoStream->requirePixFmtConversion = 1;
                 break;
         }
     }
@@ -712,6 +751,12 @@ static void close_video_stream(FFMPEGSource* source, VideoStream* videoStream)
         av_freep(&videoStream->outputStream.buffer);
         videoStream->outputStream.bufferSize = 0;
         videoStream->outputStream.dataSize = 0;
+    }
+
+    if (videoStream->imageConvertContext != NULL)
+    {
+        sws_freeContext(videoStream->imageConvertContext);
+        videoStream->imageConvertContext = NULL;
     }
 
     avcodec_close(codecContext);
@@ -916,6 +961,7 @@ static int process_video_packets(FFMPEGSource* source, VideoStream* videoStream)
     AVStream* stream = source->formatContext->streams[videoStream->avStreamIndex];
     AVCodecContext* codecContext = stream->codec;
     AVPacket packet;
+    AVPicture pict;
     int havePicture;
     int result;
     double pts;
@@ -1014,35 +1060,90 @@ static int process_video_packets(FFMPEGSource* source, VideoStream* videoStream)
     }
 
 
-    /* convert FFmpeg frame to output buffer */
-
-    if (videoStream->outputStream.streamInfo.format == UYVY_FORMAT)
+    if (videoStream->requirePixFmtConversion)
     {
-        if (codecContext->pix_fmt == PIX_FMT_UYVY422)
+        /* convert frame to required pixel format */
+
+        pict.data[0] = &videoStream->outputStream.buffer[0] + videoStream->dataOffset[0];
+        pict.linesize[0] = videoStream->lineSize[0];
+        if (videoStream->dataOffset[1] <= videoStream->dataOffset[0])
+        {
+            pict.data[1] = NULL;
+            pict.linesize[1] = 0;
+        }
+        else
+        {
+            pict.data[1] = &videoStream->outputStream.buffer[0] + videoStream->dataOffset[1];
+            pict.linesize[1] = videoStream->lineSize[1];
+        }
+        if (videoStream->dataOffset[2] <= videoStream->dataOffset[1])
+        {
+            pict.data[2] = NULL;
+            pict.linesize[2] = 0;
+        }
+        else
+        {
+            pict.data[2] = &videoStream->outputStream.buffer[0] + videoStream->dataOffset[2];
+            pict.linesize[2] = videoStream->lineSize[2];
+        }
+
+        videoStream->imageConvertContext = sws_getCachedContext(videoStream->imageConvertContext,
+                                                                codecContext->width, codecContext->height,
+                                                                codecContext->pix_fmt,
+                                                                codecContext->width, codecContext->height,
+                                                                videoStream->outputPixelFormat,
+                                                                SWS_BICUBIC, NULL, NULL, NULL);
+
+        if (videoStream->imageConvertContext == NULL)
+        {
+            ml_log_error("Cannot initialize the FFmpeg video conversion context\n");
+            result = PROCESS_PACKETS_FAILED;
+            goto done;
+        }
+
+        sws_scale(videoStream->imageConvertContext,
+                  videoStream->frame->data, videoStream->frame->linesize,
+                  0, codecContext->height,
+                  pict.data, pict.linesize);
+    }
+
+    if (!videoStream->requirePixFmtConversion || videoStream->shiftPictureUp)
+    {
+        /* remove ffmpeg padding if no pix fmt conversion has taken place and shift picture up if required */
+
+        AVFrame input_frame;
+        if (videoStream->requirePixFmtConversion)
+        {
+            /* input is pix fmt converted picture (output stream buffer) and need to shift picture up (inline) */
+            input_frame.data[0] = pict.data[0];
+            input_frame.data[1] = pict.data[1];
+            input_frame.data[2] = pict.data[2];
+            input_frame.linesize[0] = pict.linesize[0];
+            input_frame.linesize[1] = pict.linesize[1];
+            input_frame.linesize[2] = pict.linesize[2];
+        }
+        else
+        {
+            /* input is decoded frame and need to remove ffmpeg padding, shift picture up (if required) and copy to
+               output stream buffer */
+            memcpy(&input_frame, videoStream->frame, sizeof(input_frame));
+        }
+
+        if (videoStream->outputStream.streamInfo.format == UYVY_FORMAT)
         {
             uyvy_to_uyvy(videoStream->outputStream.streamInfo.width, videoStream->outputStream.streamInfo.height,
-                         videoStream->shiftPictureUp, videoStream->frame, videoStream->outputStream.buffer);
+                         videoStream->shiftPictureUp, &input_frame, videoStream->outputStream.buffer);
         }
-        else if (codecContext->pix_fmt == PIX_FMT_YUV422P)
+        else if (videoStream->outputStream.streamInfo.format == YUV422_FORMAT)
         {
-            yuv422_to_uyvy(videoStream->outputStream.streamInfo.width, videoStream->outputStream.streamInfo.height,
-                           videoStream->shiftPictureUp, videoStream->frame, videoStream->outputStream.buffer);
+            yuv422_to_yuv422(videoStream->outputStream.streamInfo.width, videoStream->outputStream.streamInfo.height,
+                             videoStream->shiftPictureUp, &input_frame, videoStream->outputStream.buffer);
         }
-        else /* PIX_FMT_YUV420P / PIX_FMT_YUV411P */
+        else /* YUV420_FORMAT / YUV411_FORMAT */
         {
-            yuv4xx_to_uyvy(videoStream->outputStream.streamInfo.width, videoStream->outputStream.streamInfo.height,
-                           videoStream->shiftPictureUp, videoStream->frame, videoStream->outputStream.buffer);
+            yuv4xx_to_yuv4xx(videoStream->outputStream.streamInfo.width, videoStream->outputStream.streamInfo.height,
+                             videoStream->shiftPictureUp, &input_frame, videoStream->outputStream.buffer);
         }
-    }
-    else if (videoStream->outputStream.streamInfo.format == YUV422_FORMAT)
-    {
-        yuv422_to_yuv422(videoStream->outputStream.streamInfo.width, videoStream->outputStream.streamInfo.height,
-                         videoStream->shiftPictureUp, videoStream->frame, videoStream->outputStream.buffer);
-    }
-    else /* YUV420_FORMAT / YUV411_FORMAT */
-    {
-        yuv4xx_to_yuv4xx(videoStream->outputStream.streamInfo.width, videoStream->outputStream.streamInfo.height,
-                         videoStream->shiftPictureUp, videoStream->frame, videoStream->outputStream.buffer);
     }
 
 
