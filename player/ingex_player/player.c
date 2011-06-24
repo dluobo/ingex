@@ -1,5 +1,5 @@
 /*
- * $Id: player.c,v 1.34 2011/06/14 15:43:40 philipn Exp $
+ * $Id: player.c,v 1.35 2011/06/24 13:01:22 philipn Exp $
  *
  *
  *
@@ -896,6 +896,7 @@ static void usage(const char* cmd)
 #if defined(HAVE_PORTAUDIO)
     fprintf(stderr, "  --disable-pc-audio       Disable audio output to the PC sound devices\n");
     fprintf(stderr, "  --audio-dev <num>        Select an audio device (default is audio device 0)\n");
+    fprintf(stderr, "  --print-audio-dev        Print list of available audio devices\n");
 #endif
     fprintf(stderr, "  --hide-progress-bar      Don't show the progress bar shown in the OSD\n");
     fprintf(stderr, "  --audio-lineup <level>   Audio line-up level in dBFS (default -18.0)\n");
@@ -1872,6 +1873,15 @@ int main(int argc, const char **argv)
                 return 1;
             }
             cmdlnIndex += 2;
+        }
+        else if (strcmp(argv[cmdlnIndex], "--print-audio-dev") == 0)
+        {
+            aus_print_audio_devices();
+            if (argc == 2)
+            {
+                return 0;
+            }
+            cmdlnIndex += 1;
         }
 #endif
         else if (strcmp(argv[cmdlnIndex], "--hide-progress-bar") == 0)

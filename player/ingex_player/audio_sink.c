@@ -1,5 +1,5 @@
 /*
- * $Id: audio_sink.c,v 1.9 2011/05/11 10:57:08 philipn Exp $
+ * $Id: audio_sink.c,v 1.10 2011/06/24 13:01:22 philipn Exp $
  *
  *
  *
@@ -40,6 +40,10 @@ int aus_create_audio_sink(MediaSink* targetSink, int audioDevice, AudioSink** si
 MediaSink* aus_get_media_sink(AudioSink* sink)
 {
     return NULL;
+}
+
+void aus_print_audio_devices()
+{
 }
 
 
@@ -938,44 +942,51 @@ fail:
 int aus_create_audio_sink(MediaSink* nextSink, int audioDevice, AudioSink** sink)
 {
     AudioSink* newSink;
+    int selectedAudioDevice = audioDevice;
+    const PaDeviceInfo *devInfo;
 
-    /* check there is at least one device available */
-    PaDeviceIndex count = Pa_GetDeviceCount();
-    if (count == 0)
-    {
-        ml_log_error("Audio device is not available\n");
-        return 0;
-    }
-
-
-    /* initialise the port audio library */
     PaError err = Pa_Initialize();
     if (err != paNoError)
     {
-        goto paerror;
+        ml_log_error("Failed to initialize PortAudio: (%d) %s\n", err, Pa_GetErrorText(err));
+        return 0;
+    }
+
+    /* check there is at least one device available */
+    PaDeviceIndex count = Pa_GetDeviceCount();
+    if (count < 0)
+    {
+        ml_log_error("Failed to get audio device count: (%d) %s\n", err, Pa_GetErrorText(err));
+        goto terminate;
+    }
+    else if (count == 0)
+    {
+        ml_log_error("No audio device is available\n");
+        goto terminate;
     }
 
 
     if (audioDevice < 0)
     {
         /* Pa_GetDefaultOutputDevice was found to return -1 if the device is already in use */
-        PaDeviceIndex devIndex = Pa_GetDefaultOutputDevice();
-        if (devIndex < 0)
+        selectedAudioDevice = Pa_GetDefaultOutputDevice();
+        if (selectedAudioDevice < 0)
         {
             ml_log_error("Default audio device is not available\n");
-            Pa_Terminate();
-            return 0;
+            goto terminate;
         }
     }
-    else
+
+    devInfo = Pa_GetDeviceInfo(selectedAudioDevice);
+    if (!devInfo)
     {
-        const PaDeviceInfo* devInfo = Pa_GetDeviceInfo(audioDevice);
-        if (devInfo == NULL)
-        {
-            ml_log_error("Audio device %d is not available\n", audioDevice);
-            Pa_Terminate();
-            return 0;
-        }
+        ml_log_error("Selected audio device %d is not available\n", selectedAudioDevice);
+        goto terminate;
+    }
+    else if (devInfo->maxOutputChannels <= 0)
+    {
+        ml_log_error("No output channels available for selected audio device %d\n", selectedAudioDevice);
+        goto terminate;
     }
 
 
@@ -1011,19 +1022,42 @@ int aus_create_audio_sink(MediaSink* nextSink, int audioDevice, AudioSink** sink
     *sink = newSink;
     return 1;
 
-paerror:
-    Pa_Terminate();
-    ml_log_error("An error occured while using the portaudio stream: (%d) %s\n", err, Pa_GetErrorText(err));
-    return 0;
-
 fail:
     aus_close(newSink);
+
+terminate:
+    Pa_Terminate();
     return 0;
 }
 
 MediaSink* aus_get_media_sink(AudioSink* sink)
 {
     return &sink->sink;
+}
+
+void aus_print_audio_devices()
+{
+    Pa_Initialize();
+
+    int num_devices = Pa_GetDeviceCount();
+    printf("Audio output devices:\n");
+
+    int i;
+    for (i = 0; i < num_devices; i++)
+    {
+        const PaDeviceInfo *device_info = Pa_GetDeviceInfo(i);
+        if (device_info->maxOutputChannels <= 0)
+        {
+            continue;
+        }
+
+        printf("Id: %d%s", i, (i == Pa_GetDefaultOutputDevice() ? " (Default)\n" : "\n"));
+        printf("  Name: %s\n", device_info->name);
+        printf("  Host API: %s\n", Pa_GetHostApiInfo(device_info->hostApi)->name);
+        printf("  Max output channels: %d\n", device_info->maxOutputChannels);
+    }
+
+    Pa_Terminate();
 }
 
 

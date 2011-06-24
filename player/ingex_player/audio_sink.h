@@ -1,5 +1,5 @@
 /*
- * $Id: audio_sink.h,v 1.4 2010/06/02 11:12:14 philipn Exp $
+ * $Id: audio_sink.h,v 1.5 2011/06/24 13:01:22 philipn Exp $
  *
  *
  *
@@ -33,6 +33,8 @@ typedef struct AudioSink AudioSink;
 
 int aus_create_audio_sink(MediaSink* targetSink, int audioDevice, AudioSink** sink);
 MediaSink* aus_get_media_sink(AudioSink* sink);
+
+void aus_print_audio_devices();
 
 
 
