@@ -1,5 +1,5 @@
 /*
- * $Id: main.c,v 1.26 2011/05/03 09:36:27 philipn Exp $
+ * $Id: main.c,v 1.27 2011/07/05 13:59:40 philipn Exp $
  *
  * Test writing video and audio to MXF files supported by Avid editing software
  *
@@ -179,7 +179,7 @@ uint32_t rf_read(RawFile *file, uint8_t *data, uint32_t count)
     return mxf_file_read(file, data, count);
 }
 
-static int rf_seek(RawFile *file, off_t offset, int whence)
+static int rf_seek(RawFile *file, int64_t offset, int whence)
 {
     return mxf_file_seek(file, offset, whence);
 }
