@@ -11,7 +11,7 @@ Summary: FFmpeg library with DNxHD(VC-3) DVCPRO-HD H.264 AAC MP3 A52(AC-3) codec
 Name: ffmpeg-DNxHD-h264-aac
 %endif
 Version: 0.5
-Release: 9
+Release: 10
 License: GPL
 Group: System Environment/Daemons
 Source: ffmpeg-%{version}.tar.bz2
@@ -29,6 +29,7 @@ Patch10: ffmpeg-0.5-quicktime-aspect-ratio.patch
 Patch11: ffmpeg-0.5-imx-frame-too-large-error.patch
 Patch12: ffmpeg-0.5-mpeg2-closed-gop-b-frames.patch
 Patch13: ffmpeg-0.5-x264-require-check.patch
+Patch14: ffmpeg-0.5-dnxhd-fix-interlaced-decoding-issue-1753.patch
 Url: http://www.ffmpeg.org/download.html
 BuildRoot: %{_tmppath}/%{name}-root
 BuildRequires: autoconf nasm
@@ -74,18 +75,19 @@ rm -rf $RPM_BUILD_ROOT
 %patch11
 %patch12
 %patch13
+%patch14
 
 %build
 %if %{build_swpat_restricted}
 
 # Restrict encoders and decoders to pcm_s16le, pcm_s16be, dvvideo, mjpeg
 # avoiding software patent encumbered codecs
-./configure --prefix=/usr --enable-shared --enable-pthreads --disable-demuxer=ogg --enable-swscale --disable-encoders --disable-decoders --disable-parser=h264 --enable-gpl --enable-encoder=pcm_s16le --enable-encoder=pcm_s16be --enable-encoder=dvvideo --enable-encoder=mjpeg --enable-decoder=pcm_s16le --enable-decoder=pcm_s16be --enable-decoder=dvvideo --enable-decoder=mjpeg
+./configure --prefix=/usr --enable-pthreads --disable-demuxer=ogg --enable-swscale --disable-encoders --disable-decoders --disable-parser=h264 --enable-gpl --enable-encoder=pcm_s16le --enable-encoder=pcm_s16be --enable-encoder=dvvideo --enable-encoder=mjpeg --enable-decoder=pcm_s16le --enable-decoder=pcm_s16be --enable-decoder=dvvideo --enable-decoder=mjpeg
 
 %else
 
 # build ffmpeg normally enabling all useful codecs for television post production
-./configure --prefix=/usr --enable-shared --enable-pthreads --disable-demuxer=ogg --enable-swscale --enable-libx264 --enable-libmp3lame --enable-gpl --enable-libfaac --enable-libfaad
+./configure --prefix=/usr --enable-pthreads --disable-demuxer=ogg --enable-swscale --enable-libx264 --enable-libmp3lame --enable-gpl --enable-libfaac --enable-libfaad
 
 %endif
 
@@ -118,6 +120,14 @@ rm -rf $RPM_BUILD_ROOT
 /usr/share/
 
 %changelog
+* Tue Jul 05 2011 Philip de Nier, 0.5-10
+- Add ffmpeg patch (ffmpeg git commit 1307463d5259a80fdbb43f50434eb9ba37c50d30)
+  to fix decoding of interlaced dnxhd files produced by Avid. Search for
+  DNxHD_Compliance_Issue_To_Licensees-1.doc for more info
+- Disable shared libraries build to avoid linking issue with static codec
+  libraries (codecs-for-ffmpeg) and to limit changes prior to first Ingex
+  release
+
 * Mon Jan 10 2011 Philip de Nier 0.5-9
 - Add ffmpeg patch from 2009-09-02 to check for x264_encoder_encode instead of
   x264_encoder_open because a version suffix has been added to the
