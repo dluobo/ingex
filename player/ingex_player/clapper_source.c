@@ -1,5 +1,5 @@
 /*
- * $Id: clapper_source.c,v 1.9 2011/02/18 16:28:51 john_f Exp $
+ * $Id: clapper_source.c,v 1.10 2011/07/13 10:23:22 philipn Exp $
  *
  *
  *
@@ -555,6 +555,21 @@ static int clp_disable_stream(void* data, int streamIndex)
     return 0;
 }
 
+static void clp_disable_audio(void* data)
+{
+    ClapperSource* source = (ClapperSource*)data;
+
+    source->audioLIsDisabled = 1;
+    source->audioRIsDisabled = 1;
+}
+
+static void clp_disable_video(void* data)
+{
+    ClapperSource* source = (ClapperSource*)data;
+
+    source->videoIsDisabled = 1;
+}
+
 static int clp_stream_is_disabled(void* data, int streamIndex)
 {
     ClapperSource* source = (ClapperSource*)data;
@@ -773,6 +788,8 @@ int clp_create(const StreamInfo* videoStreamInfo, const StreamInfo* audioStreamI
     newSource->mediaSource.get_stream_info = clp_get_stream_info;
     newSource->mediaSource.set_frame_rate_or_disable = clp_set_frame_rate_or_disable;
     newSource->mediaSource.disable_stream = clp_disable_stream;
+    newSource->mediaSource.disable_audio = clp_disable_audio;
+    newSource->mediaSource.disable_video = clp_disable_video;
     newSource->mediaSource.stream_is_disabled = clp_stream_is_disabled;
     newSource->mediaSource.read_frame = clp_read_frame;
     newSource->mediaSource.is_seekable = clp_is_seekable;
