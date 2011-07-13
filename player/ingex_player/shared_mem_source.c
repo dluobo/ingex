@@ -1,5 +1,5 @@
 /*
- * $Id: shared_mem_source.c,v 1.17 2011/07/13 10:24:39 philipn Exp $
+ * $Id: shared_mem_source.c,v 1.18 2011/07/13 14:52:49 john_f Exp $
  *
  *
  *
@@ -62,7 +62,7 @@ int shms_open(const char *channel_name, double timeout, SharedMemSource** source
 
 #define NUM_TIMECODE_TRACKS     (SYSTEM_TC_TRACK + 1)
 
-
+const int VERBOSE = 0;
 
 typedef enum
 {
@@ -264,12 +264,12 @@ static int shm_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceLis
     {
         if (connected)
         {
-            nexus_disconnect_from_shared_mem(&conn);
+            nexus_disconnect_from_shared_mem(VERBOSE, &conn);
             connected = 0;
         }
 
         /* Try to reconnect */
-        if (! nexus_connect_to_shared_mem(100000, 0, 0, &conn))
+        if (! nexus_connect_to_shared_mem(100000, 0, VERBOSE, &conn))
         {
             /* Could not reconnect - time out */
             ml_log_info("Could not re-connect to shared mem - timeout\n");
@@ -563,7 +563,7 @@ int shms_open(const char* channel_name, double timeout, SharedMemSource** source
     /* first disconnect from shared memory if connected */
     if (connected)
     {
-        nexus_disconnect_from_shared_mem(&conn);
+        nexus_disconnect_from_shared_mem(VERBOSE, &conn);
         connected = 0;
     }
 
@@ -574,14 +574,14 @@ int shms_open(const char* channel_name, double timeout, SharedMemSource** source
         ml_log_info("Waiting for shared memory to appear...\n");
         while (1)
         {
-            if (nexus_connect_to_shared_mem(500000, 0, 0, &conn))
+            if (nexus_connect_to_shared_mem(500000, 0, VERBOSE, &conn))
                 break;
         }
     }
     else
     {
         /* try to connect to shared mem within supplied timeout */
-        if (! nexus_connect_to_shared_mem(timeout * 1000000, 0, 1, &conn))    /* convert timeout to microsec */
+        if (! nexus_connect_to_shared_mem(timeout * 1000000, 0, VERBOSE, &conn))    /* convert timeout to microsec */
         {
             ml_log_error("Failed to connect to shared memory\n");
             return 0;
