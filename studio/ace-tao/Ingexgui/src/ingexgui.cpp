@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: ingexgui.cpp,v 1.43 2011/06/13 10:41:05 john_f Exp $           *
+ *   $Id: ingexgui.cpp,v 1.44 2011/07/13 14:48:21 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -1509,6 +1509,9 @@ void IngexguiFrame::OnPlayerCommand(wxCommandEvent & event)
                 break;
             case MENU_PlayerEightLevelMeters:
                 mPlayer->ChangeNumLevelMeters(8);
+                break;
+            case MENU_PlayerSixteenLevelMeters:
+                mPlayer->ChangeNumLevelMeters(16);
                 break;
             case MENU_PlayerAudioFollowsVideo:
                 mPlayer->EnableAudioFollowsVideo(event.IsChecked());

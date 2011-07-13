@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: recordergroup.cpp,v 1.27 2011/06/14 14:12:10 john_f Exp $       *
+ *   $Id: recordergroup.cpp,v 1.28 2011/07/13 14:48:21 john_f Exp $       *
  *                                                                         *
  *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -95,7 +95,7 @@ void RecorderGroupCtrl::OnListRefreshed(wxCommandEvent & WXUNUSED(event))
 {
     //Remove non-connected recorders and request available recording time from connected non-router recorders
     for (int i = 0; i < GetItemCount(); i++) {
-        if (0 == GetItemData(i)) {
+        if (0 == GetItemData(i) || !((Controller *) GetItemData(i))->IsOK()) { //controller may just have been told to destroy itself (if we have been called from Disconnect()) so may still exist
             DeleteItem(i--);
         }
         else {
@@ -110,22 +110,22 @@ void RecorderGroupCtrl::OnListRefreshed(wxCommandEvent & WXUNUSED(event))
             wxArrayString names;
             mComms->GetRecorderList(names);
             names.Sort();
+            int item = -1;
             for (size_t j = 0; j < names.GetCount(); j++) {
-                int k = 0;
-                do {
-                    if (k == GetItemCount() || GetItemText(k).Cmp(names[j]) > 0) { //Item text should always contain the recorder name in this situation; if reached end of list, or gone past this recorder, so recorder not listed
-                        //add to list
-                        InsertItem(k, names[j]);
-                        SetItemTextColour(k, wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT));
-                        SetItemBackgroundColour(k, wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW));
+                //determine position in the list of this recorder
+                while (true) {
+                    if (++item >= GetItemCount() || GetItemText(item).Cmp(names[j]) > 0) { //reached the end of the list or beyond where this recorder should be, so it is not in the list (item text should always contain the recorder name in this situation)
+                        //add to list before current item (or end of list)
+                        InsertItem(item, names[j]);
+                        SetItemTextColour(item, wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT));
+                        SetItemBackgroundColour(item, wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW));
                         SetColumnWidth(0, wxLIST_AUTOSIZE);
+                        break; //original item has moved down by one, so will compare it again with the next recorder in the next iteration (despite it being incremented) in case it needs adding before it
+                    }
+                    else if (GetName(item) == names[j]) { //recorder already in the list
                         break;
                     }
-                    if (GetName(k) == names[j]) { //recorder already listed
-                        break;
-                    }
-                    k++;
-                } while (true);
+                }
             }
         }
         else { //CORBA prob
@@ -181,7 +181,7 @@ bool RecorderGroupCtrl::DisconnectAll()
 }
 
 /// Disconnects a recorder.
-/// If the recorder was fully connected, informs the frame of the disconnection, re-calculates preroll and postroll limits and looks for another recorder to get timecode from if this was the one being used.
+/// If the recorder is fully connected, informs the frame of the disconnection, re-calculates preroll and postroll limits and looks for another recorder to get timecode from if this was the one being used.
 /// @param index The position in the list of the recorder to disconnect from.  Checked to make sure the controller exists.
 /// @return True if the controller exists.
 bool RecorderGroupCtrl::Disconnect(const int index)
@@ -314,8 +314,8 @@ void RecorderGroupCtrl::OnControllerEvent(ControllerThreadEvent & event)
     }
     else if (Controller::CONNECT == event.GetCommand()) {
         //complete connection process if successful, or reset and report failure
-        if (controller && controller->IsOK()) { //sanity check and cope with the event crossing a Destroy() call
-            if (Controller::SUCCESS == event.GetResult()) {
+        if (controller) { //sanity check
+            if (Controller::SUCCESS == event.GetResult() && controller->IsOK()) { //cope with the event crossing a Destroy() call
                 Controller * controller = (Controller *) GetItemData(pos);
                 //check edit rate compatibility
                 if (0 == mTree->GetRecorderCount() || (controller->GetMaxPreroll().edit_rate.numerator == mMaxPreroll.edit_rate.numerator && controller->GetMaxPreroll().edit_rate.denominator == mMaxPreroll.edit_rate.denominator)) { //the only connected recorder, or compatible edit rate (assume MaxPostroll has same edit rate as MaxPreroll)

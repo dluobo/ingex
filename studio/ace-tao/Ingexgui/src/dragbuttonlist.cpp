@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: dragbuttonlist.cpp,v 1.19 2011/04/19 07:04:02 john_f Exp $      *
+ *   $Id: dragbuttonlist.cpp,v 1.20 2011/07/13 14:48:21 john_f Exp $      *
  *                                                                         *
  *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -38,6 +38,7 @@ DragButtonList::DragButtonList(wxWindow* parent, wxEvtHandler* buttonEvtHandler)
 : wxScrolledWindow(parent), mButtonEvtHandler(buttonEvtHandler)
 {
     SetSizer(new wxBoxSizer(wxVERTICAL));
+    SetScrollRate(10, 10); //needed for scrollbars to appear
 }
 
 /// Updates the radio button enable and selected states
