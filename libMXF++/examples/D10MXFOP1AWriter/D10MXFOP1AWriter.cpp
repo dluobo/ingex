@@ -1,5 +1,5 @@
 /*
- * $Id: D10MXFOP1AWriter.cpp,v 1.10 2011/04/19 09:49:19 philipn Exp $
+ * $Id: D10MXFOP1AWriter.cpp,v 1.11 2011/07/13 15:17:40 philipn Exp $
  *
  * D10 MXF OP-1A writer
  *
@@ -883,7 +883,7 @@ uint32_t D10MXFOP1AWriter::WriteSystemItem(const D10ContentPackage *content_pack
     if (mSampleRate == D10_SAMPLE_RATE_625_50I)
         mMXFFile->writeUInt8(0x02 << 1); // 25 fps content package rate
     else
-        mMXFFile->writeUInt8(0x03 << 1); // 30 fps content package rate
+        mMXFFile->writeUInt8((0x03 << 1) | 1); // 30000/1001 fps content package rate
     mMXFFile->writeUInt8(0x00); // content package type
     mMXFFile->writeUInt16(0x0000); // channel handle
     mMXFFile->writeUInt16((uint16_t)(mDuration % 65536)); // continuity count
