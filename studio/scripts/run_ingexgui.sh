@@ -26,7 +26,16 @@ then
 fi
 
 # set corba options
-CORBA_OPTIONS="-ORBDefaultInitRef corbaloc:iiop:$NAMESERVER -ORBDottedDecimalAddresses $DOTTED_DECIMAL"
+OPTIONS="-ORBDefaultInitRef corbaloc:iiop:$NAMESERVER -ORBDottedDecimalAddresses $DOTTED_DECIMAL"
 
-$PRERUN $INGEX_DIR/studio/ace-tao/Ingexgui/src/ingexgui $CORBA_OPTIONS
+# add file server root option
+if [ -n "${INGEXGUI_FILE_SERVER_ROOT}" ] ; then
+  OPTIONS="${OPTIONS} -r '${INGEXGUI_FILE_SERVER_ROOT}'"
+fi
 
+# add snapshot directory option
+if [ -n "${INGEXGUI_SNAPSHOT_DIR}" ] ; then
+  OPTIONS="${OPTIONS} -s '${INGEXGUI_SNAPSHOT_DIR}'"
+fi
+
+$PRERUN $INGEX_DIR/studio/ace-tao/Ingexgui/src/ingexgui $OPTIONS
