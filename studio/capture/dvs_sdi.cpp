@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.cpp,v 1.24 2011/05/20 15:00:18 john_f Exp $
+ * $Id: dvs_sdi.cpp,v 1.25 2011/07/13 14:54:09 john_f Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -136,7 +136,7 @@ int secondary_line_shift = 0;
 
 int verbose = 0;
 int verbose_channel = -1;    // which channel to show when verbose is on
-int audio8ch = 0;
+int naudioch = 4; // possible values 4, 8 or 16
 int test_avsync = 0;
 uint8_t *dma_buffer[MAX_CHANNELS];
 int benchmark = 0;
@@ -194,6 +194,9 @@ uint8_t *no_video_secondary_frame = NULL;    // captioned black frame saying "NO
 #endif
 #ifndef SV_AUDIOAESROUTING_DEFAULT
 #define SV_AUDIOAESROUTING_DEFAULT  0
+#endif
+#ifndef SV_AUDIOAESROUTING_16_0
+#define SV_AUDIOAESROUTING_16_0     1
 #endif
 #ifndef SV_AUDIOAESROUTING_8_8
 #define SV_AUDIOAESROUTING_8_8      2
@@ -804,7 +807,7 @@ int allocate_shared_buffers(int num_channels, long long max_memory)
     p_control->default_tc_type = timecode_type;
     p_control->master_tc_channel = master_channel;
 
-    p_control->num_audio_tracks = (audio8ch ? 8 : 4);
+    p_control->num_audio_tracks = naudioch;
     p_control->audio_offset = primary_audio_offset;
     p_control->audio_size = primary_audio_size;
     p_control->sec_audio_offset = secondary_audio_offset;
@@ -935,16 +938,26 @@ void dvsaudio32_to_2_mono_tracks(uint8_t *src, uint8_t *dst32, uint8_t *dst16, i
     dvsaudio32_deinterleave_16bit(audio12, a16, num_samples);
 }
 
-void dvs_paired_audio_to_mono_audio(uint8_t *src, sv_fifo_buffer * pbuffer, uint8_t *dst32, uint8_t *dst16, int num_samples, int audio8)
+void dvs_paired_audio_to_mono_audio(uint8_t *src, sv_fifo_buffer * pbuffer, uint8_t *dst32, uint8_t *dst16, int num_samples, int naudioch)
 {
-    unsigned int npairs = (audio8 ? 4 : 2);
+    unsigned int npairs = naudioch / 2;
 
     for (unsigned int i = 0; i < npairs; ++i)
     {
-        dvsaudio32_to_2_mono_tracks(src + (pbuffer->audio[0].addr[i] - (char *)0),
-            dst32 + i * 2 *MAX_AUDIO_SAMPLES_PER_FRAME * 4,
-            dst16 + i * 2 *MAX_AUDIO_SAMPLES_PER_FRAME * 2,
-            num_samples);
+        if (i < 4)
+        {
+            dvsaudio32_to_2_mono_tracks(src + (pbuffer->audio[0].addr[i] - (char *)0),
+                dst32 + i * 2 * MAX_AUDIO_SAMPLES_PER_FRAME * 4,
+                dst16 + i * 2 * MAX_AUDIO_SAMPLES_PER_FRAME * 2,
+                num_samples);
+        }
+        else
+        {
+            dvsaudio32_to_2_mono_tracks(src + (pbuffer->audio2[0].addr[i - 4] - (char *)0),
+                dst32 + i * 2 * MAX_AUDIO_SAMPLES_PER_FRAME * 4,
+                dst16 + i * 2 * MAX_AUDIO_SAMPLES_PER_FRAME * 2,
+                num_samples);
+        }
     }
 }
 
@@ -1162,7 +1175,8 @@ int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_from_vi
         if (!done && 0 == chan)
         {
             fprintf(stderr, "chan = %d, video[0].addr = %p, video[0].size = 0x%x,\n"
-                "          audio[0].addr[0-3] = %p %p %p %p, audio[0].size = 0x%x\n",
+                "          audio[0].addr[0-3] =  %p %p %p %p, audio[0].size =  0x%x\n"
+                "          audio2[0].addr[0-3] = %p %p %p %p\n",
                 chan,
                 pbuffer->video[0].addr,
                 pbuffer->video[0].size,
@@ -1170,7 +1184,11 @@ int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_from_vi
                 pbuffer->audio[0].addr[1],
                 pbuffer->audio[0].addr[2],
                 pbuffer->audio[0].addr[3],
-                pbuffer->audio[0].size);
+                pbuffer->audio[0].size,
+                pbuffer->audio2[0].addr[0],
+                pbuffer->audio2[0].addr[1],
+                pbuffer->audio2[0].addr[2],
+                pbuffer->audio2[0].addr[3]);
             done = true;
         }
     }
@@ -1192,7 +1210,19 @@ int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_from_vi
     // Setup DMA parameters
     pbuffer->dma.addr = (char *)dma_dest;
     //fprintf(stderr, "getbuffer offers dma.size 0x%x, our buffer 0x%x\n", pbuffer->dma.size, max_dma_size);
-    pbuffer->dma.size = (audio8ch ? (pbuffer->audio[0].addr[3] - (char *)0) + pbuffer->audio[0].size : (pbuffer->audio[0].addr[1] - (char *)0) + pbuffer->audio[0].size);
+    switch (naudioch)
+    {
+    case 4:
+    default:
+        pbuffer->dma.size = (pbuffer->audio[0].addr[1] - (char *)0) + pbuffer->audio[0].size;
+        break;
+    case 8:
+        pbuffer->dma.size = (pbuffer->audio[0].addr[3] - (char *)0) + pbuffer->audio[0].size;
+        break;
+    case 16:
+        pbuffer->dma.size = (pbuffer->audio2[0].addr[3] - (char *)0) + pbuffer->audio[0].size;
+        break;
+    }
     //fprintf(stderr, "we set dma size to 0x%x\n", pbuffer->dma.size);
     assert(pbuffer->dma.size <= max_dma_size);
 
@@ -1338,7 +1368,7 @@ int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_from_vi
                 vid_dest + primary_audio_offset,      // 32bit dest
                 vid_dest + secondary_audio_offset,    // 16bit dest
                 num_audio_samples,
-                audio8ch);                            // 4 or 8 channels
+                naudioch);                            // 4 or 8 channels
     }
     else
     {
@@ -2002,7 +2032,6 @@ int write_dummy_frames(sv_handle *sv, int chan, int current_frame_tick, int tick
                 ntsc_audio_seq %= 5;
                 break;
             }
-            int naudioch = audio8ch ? 8 : 4;
             // primary audio
             memset(ring[chan] + element_size * ((pc->lastframe+1) % ring_len) + primary_audio_offset, 0, n_audio_samples * 4 * naudioch);
             // secondary audio
@@ -2303,9 +2332,11 @@ void usage_exit(void)
     fprintf(stderr, "    -c <max channels>    maximum number of channels to use for capture\n");
     fprintf(stderr, "    -m <max memory MiB>  maximum memory to use for ring buffers in MiB [default use all available]\n");
     fprintf(stderr, "    -a8                  use 8 audio tracks per video channel\n");
+    fprintf(stderr, "    -a16                 use 16 audio tracks per video channel\n");
     fprintf(stderr, "    -aes                 use AES/EBU audio with default routing\n");
     fprintf(stderr, "    -aes4                use AES/EBU audio with 4,4 routing\n");
     fprintf(stderr, "    -aes8                use AES/EBU audio with 8,8 routing\n");
+    fprintf(stderr, "    -aes16               use AES/EBU audio with 16,0 routing\n");
     //fprintf(stderr, "    -audint              use interleaved audio for capture (not available on SDStation cards)\n");
     fprintf(stderr, "    -avsync              perform avsync analysis - requires clapper-board input video\n");
     fprintf(stderr, "    -b <video_sample>    benchmark using video_sample instead of captured UYVY video frames\n");
@@ -2491,8 +2522,9 @@ int main (int argc, char ** argv)
             }
 
             // Default audio mode is 4 channels per SDI input
-            if (strcmp(audmode, "AUDIO8") == 0) {
-                audio8ch = 1;
+            if (strcmp(audmode, "AUDIO8") == 0)
+            {
+                naudioch = 8;
             }
             n++;
         }
@@ -2597,22 +2629,31 @@ int main (int argc, char ** argv)
         }
         else if (strcmp(argv[n], "-a8") == 0)
         {
-            audio8ch = 1;
+            naudioch = 8;
+        }
+        else if (strcmp(argv[n], "-a16") == 0)
+        {
+            naudioch = 16;
         }
         else if (strcmp(argv[n], "-aes") == 0)
         {
             aes_audio = 1;
-            aes_routing = 0;
+            aes_routing = SV_AUDIOAESROUTING_DEFAULT;
         }
         else if (strcmp(argv[n], "-aes4") == 0)
         {
             aes_audio = 1;
-            aes_routing = 4;
+            aes_routing = SV_AUDIOAESROUTING_4_4;
         }
         else if (strcmp(argv[n], "-aes8") == 0)
         {
             aes_audio = 1;
-            aes_routing = 8;
+            aes_routing = SV_AUDIOAESROUTING_8_8;
+        }
+        else if (strcmp(argv[n], "-aes16") == 0)
+        {
+            aes_audio = 1;
+            aes_routing = SV_AUDIOAESROUTING_16_0;
         }
         else if (strcmp(argv[n], "-audint") == 0)
         {
@@ -2665,7 +2706,7 @@ int main (int argc, char ** argv)
     // Set video mode if requested
     if (VideoRaster::NONE != mode_video_raster)
     {
-        set_videomode_on_all_channels(max_channels, mode_video_raster, audio8ch ? 8 : 4);
+        set_videomode_on_all_channels(max_channels, mode_video_raster, naudioch);
     }
 
     //////////////////////////////////////////////////////
@@ -2795,21 +2836,7 @@ int main (int argc, char ** argv)
                             // Set AES audio routing
                             if (aes_audio)
                             {
-                                int opt_value;
-                                switch (aes_routing)
-                                {
-                                case 4:
-                                    opt_value = SV_AUDIOAESROUTING_4_4;
-                                    break;
-                                case 8:
-                                    opt_value = SV_AUDIOAESROUTING_8_8;
-                                    break;
-                                case 0:
-                                default:
-                                    opt_value = SV_AUDIOAESROUTING_DEFAULT;
-                                    break;
-                                }
-                                res = sv_option_set(a_sv[channel-1], SV_OPTION_AUDIOAESROUTING, opt_value);
+                                res = sv_option_set(a_sv[channel-1], SV_OPTION_AUDIOAESROUTING, aes_routing);
                                 if (SV_OK != res)
                                 {
                                     logTF("card %d: sv_option_set(SV_OPTION_AUDIOAESROUTING) failed: %s\n", card, sv_geterrortext(res));
@@ -3142,9 +3169,14 @@ int main (int argc, char ** argv)
     logTF("Using %s to determine number of frames to recover when video re-aquired\n",
             nexus_timecode_type_name(timecode_type));
 
-    if (audio8ch)
+    switch (naudioch)
     {
+    case 8:
         logTF("Audio 8 channel mode enabled\n");
+        break;
+    case 16:
+        logTF("Audio 16 channel mode enabled\n");
+        break;
     }
 
     if (AUDIO_INTERLEAVED)
@@ -3191,18 +3223,10 @@ int main (int argc, char ** argv)
         }
     }
 
-    // primary and secondary audio
-    if (audio8ch)
-    {
-        // PAL_AUDIO_SAMPLES is maximum of all SDI audio formats
-        primary_audio_size   = 8 * PAL_AUDIO_SAMPLES * 4;
-        secondary_audio_size = 8 * PAL_AUDIO_SAMPLES * 2;
-    }
-    else
-    {
-        primary_audio_size   = 4 * PAL_AUDIO_SAMPLES * 4;
-        secondary_audio_size = 4 * PAL_AUDIO_SAMPLES * 2;
-    }
+    // primary and secondary audio sizes
+    // PAL_AUDIO_SAMPLES is maximum of all SDI audio formats
+    primary_audio_size   = naudioch * PAL_AUDIO_SAMPLES * 4;
+    secondary_audio_size = naudioch * PAL_AUDIO_SAMPLES * 2;
 
     // frame data
     size_t frame_data_size = sizeof(NexusFrameData);
@@ -3231,15 +3255,7 @@ int main (int argc, char ** argv)
     // Work out max DMA size so we can allocate a buffer
 
     // Set up audio sizes for DMA transferred audio and reformatted secondary audio
-    unsigned int max_audio_dma_size;
-    if (audio8ch)
-    {
-        max_audio_dma_size = MAX_AUDIO_DMA_PAIR_SIZE * 4;
-    }
-    else
-    {
-        max_audio_dma_size = MAX_AUDIO_DMA_PAIR_SIZE * 2;
-    }
+    unsigned int max_audio_dma_size = MAX_AUDIO_DMA_PAIR_SIZE * naudioch / 2;
 
     // For interleaved audio capture, audio size is fixed at 16 channels
     if (AUDIO_INTERLEAVED)

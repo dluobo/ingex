@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder_av.cpp,v 1.14 2011/05/11 08:35:15 john_f Exp $
+ * $Id: ffmpeg_encoder_av.cpp,v 1.15 2011/07/13 14:55:25 john_f Exp $
  *
  * Encode AV and write to file.
  *
@@ -56,7 +56,7 @@ extern "C" {
 
 #define MPA_FRAME_SIZE              1152 // taken from ffmpeg's private mpegaudio.h
 #define MAX_VIDEO_FRAME_AUDIO_SIZE  1920
-#define MAX_AUDIO_STREAMS 8
+#define MAX_AUDIO_STREAMS 16
 
 typedef struct
 {
