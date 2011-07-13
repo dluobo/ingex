@@ -1,5 +1,5 @@
 /*
- * $Id: shared_mem_source.c,v 1.16 2011/04/19 10:03:53 philipn Exp $
+ * $Id: shared_mem_source.c,v 1.17 2011/07/13 10:24:39 philipn Exp $
  *
  *
  *
@@ -58,7 +58,7 @@ int shms_open(const char *channel_name, double timeout, SharedMemSource** source
 #undef PTHREAD_MUTEX_UNLOCK
 #include <nexus_control.h>
 
-#define MAX_TRACKS              19
+#define MAX_TRACKS              23
 
 #define NUM_TIMECODE_TRACKS     (SYSTEM_TC_TRACK + 1)
 
@@ -167,6 +167,20 @@ static void shm_disable_audio(void* data)
     for (i = 0; i < source->numTracks; i++)
     {
         if (source->tracks[i].streamInfo.type == SOUND_STREAM_TYPE)
+        {
+            source->tracks[i].isDisabled = 1;
+        }
+    }
+}
+
+static void shm_disable_video(void* data)
+{
+    SharedMemSource* source = (SharedMemSource*)data;
+    int i;
+
+    for (i = 0; i < source->numTracks; i++)
+    {
+        if (source->tracks[i].streamInfo.type == PICTURE_STREAM_TYPE)
         {
             source->tracks[i].isDisabled = 1;
         }
@@ -655,6 +669,7 @@ int shms_open(const char* channel_name, double timeout, SharedMemSource** source
     newSource->mediaSource.set_frame_rate_or_disable = shm_set_frame_rate_or_disable;
     newSource->mediaSource.disable_stream = shm_disable_stream;
     newSource->mediaSource.disable_audio = shm_disable_audio;
+    newSource->mediaSource.disable_video = shm_disable_video;
     newSource->mediaSource.stream_is_disabled = shm_stream_is_disabled;
     newSource->mediaSource.read_frame = shm_read_frame;
     newSource->mediaSource.is_seekable = shm_is_seekable;
