@@ -1,5 +1,5 @@
 /*
- * $Id: buffered_media_source.c,v 1.8 2011/05/11 10:52:32 philipn Exp $
+ * $Id: buffered_media_source.c,v 1.9 2011/07/13 10:22:27 philipn Exp $
  *
  *
  *
@@ -481,6 +481,21 @@ static void* read_thread(void* arg)
 }
 
 
+static void sync_disabled_streams(BufferedMediaSource* bufSource)
+{
+    int i;
+    int numTargetStreams;
+    BufferedStream* stream;
+
+    /* synchronize the local stream disabled to take into account disabled target streams */
+    numTargetStreams = msc_get_num_streams(bufSource->targetSource);
+    for (i = 0; i < numTargetStreams; i++)
+    {
+        stream = get_stream(bufSource, i);
+        stream->isDisabled = msc_stream_is_disabled(bufSource->targetSource, i);
+    }
+}
+
 
 
 static int bmsrc_is_complete(void* data)
@@ -558,19 +573,17 @@ static int bmsrc_disable_stream(void* data, int streamIndex)
 static void bmsrc_disable_audio(void* data)
 {
     BufferedMediaSource* bufSource = (BufferedMediaSource*)data;
-    int i;
-    int numTargetStreams;
-    BufferedStream* stream;
 
     msc_disable_audio(bufSource->targetSource);
+    sync_disabled_streams(bufSource);
+}
 
-    /* synchronize the local stream disabled to take into account disabled target streams */
-    numTargetStreams = msc_get_num_streams(bufSource->targetSource);
-    for (i = 0; i < numTargetStreams; i++)
-    {
-        stream = get_stream(bufSource, i);
-        stream->isDisabled = msc_stream_is_disabled(bufSource->targetSource, i);
-    }
+static void bmsrc_disable_video(void* data)
+{
+    BufferedMediaSource* bufSource = (BufferedMediaSource*)data;
+
+    msc_disable_video(bufSource->targetSource);
+    sync_disabled_streams(bufSource);
 }
 
 static int bmsrc_stream_is_disabled(void* data, int streamIndex)
@@ -1071,6 +1084,7 @@ int bmsrc_create(MediaSource* targetSource, int size, int blocking, float byteRa
     newBufSource->mediaSource.set_frame_rate_or_disable = bmsrc_set_frame_rate_or_disable;
     newBufSource->mediaSource.disable_stream = bmsrc_disable_stream;
     newBufSource->mediaSource.disable_audio = bmsrc_disable_audio;
+    newBufSource->mediaSource.disable_video = bmsrc_disable_video;
     newBufSource->mediaSource.stream_is_disabled = bmsrc_stream_is_disabled;
     newBufSource->mediaSource.read_frame = bmsrc_read_frame;
     newBufSource->mediaSource.is_seekable = bmsrc_is_seekable;

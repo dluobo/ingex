@@ -1,5 +1,5 @@
 /*
- * $Id: multiple_sources.c,v 1.7 2011/05/11 10:52:32 philipn Exp $
+ * $Id: multiple_sources.c,v 1.8 2011/07/13 10:22:27 philipn Exp $
  *
  *
  *
@@ -350,6 +350,19 @@ static void mls_disable_audio(void* data)
     while (ele != NULL && ele->source != NULL)
     {
         msc_disable_audio(ele->source);
+
+        ele = ele->next;
+    }
+}
+
+static void mls_disable_video(void* data)
+{
+    MultipleMediaSources* multSource = (MultipleMediaSources*)data;
+    MediaSourceElement* ele = &multSource->sources;
+
+    while (ele != NULL && ele->source != NULL)
+    {
+        msc_disable_video(ele->source);
 
         ele = ele->next;
     }
@@ -777,6 +790,7 @@ int mls_create(const Rational* aspectRatio, int64_t maxLength, const Rational* m
     newMultSource->collectiveSource.set_frame_rate_or_disable = mls_set_frame_rate_or_disable;
     newMultSource->collectiveSource.disable_stream = mls_disable_stream;
     newMultSource->collectiveSource.disable_audio = mls_disable_audio;
+    newMultSource->collectiveSource.disable_video = mls_disable_video;
     newMultSource->collectiveSource.stream_is_disabled = mls_stream_is_disabled;
     newMultSource->collectiveSource.read_frame = mls_read_frame;
     newMultSource->collectiveSource.is_seekable = mls_is_seekable;

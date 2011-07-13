@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_source.c,v 1.12 2011/06/22 06:30:07 john_f Exp $
+ * $Id: ffmpeg_source.c,v 1.13 2011/07/13 10:22:27 philipn Exp $
  *
  *
  *
@@ -1469,16 +1469,8 @@ static void fms_set_frame_rate_or_disable(void* data, const Rational* frameRate)
         if (frameRate->num != source->frameRate.num ||
             (frameRate->den != source->frameRate.den))
         {
-            for (i = 0; i < source->numVideoStreams; i++)
-            {
-                VideoStream* videoStream = &source->videoStreams[i];
-                OutputStreamData* outputStream = &videoStream->outputStream;
-
-                msc_disable_stream(&source->mediaSource, outputStream->streamIndex);
-            }
-
+            msc_disable_video(&source->mediaSource);
             msc_disable_audio(&source->mediaSource);
-
             msc_disable_stream(&source->mediaSource, source->timecodeStream.outputStream.streamIndex);
         }
 
@@ -1594,6 +1586,17 @@ static void fms_disable_audio(void* data)
         {
             source->audioStreams[i].outputStreams[j].isDisabled = 1;
         }
+    }
+}
+
+static void fms_disable_video(void* data)
+{
+    FFMPEGSource* source = (FFMPEGSource*)data;
+    int i;
+
+    for (i = 0; i < source->numVideoStreams; i++)
+    {
+        source->videoStreams[i].outputStream.isDisabled = 1;
     }
 }
 
@@ -2256,6 +2259,7 @@ int fms_open(const char* filename, int threadCount, int forceUYVYFormat, MediaSo
     newSource->mediaSource.set_frame_rate_or_disable = fms_set_frame_rate_or_disable;
     newSource->mediaSource.disable_stream = fms_disable_stream;
     newSource->mediaSource.disable_audio = fms_disable_audio;
+    newSource->mediaSource.disable_video = fms_disable_video;
     newSource->mediaSource.stream_is_disabled = fms_stream_is_disabled;
     newSource->mediaSource.read_frame = fms_read_frame;
     newSource->mediaSource.is_seekable = fms_is_seekable;

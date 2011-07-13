@@ -1,5 +1,5 @@
 /*
- * $Id: udp_source.c,v 1.9 2011/04/19 10:03:53 philipn Exp $
+ * $Id: udp_source.c,v 1.10 2011/07/13 10:22:27 philipn Exp $
  *
  *
  *
@@ -44,7 +44,7 @@ int udp_open(const char *address, MediaSource** source)
 
 #include "multicast_video.h"
 
-#define MAX_TRACKS      19
+#define MAX_TRACKS      23
 
 
 typedef struct
@@ -134,6 +134,20 @@ static void udp_disable_audio(void* data)
     for (i = 0; i < source->numTracks; i++)
     {
         if (source->tracks[i].streamInfo.type == SOUND_STREAM_TYPE)
+        {
+            source->tracks[i].isDisabled = 1;
+        }
+    }
+}
+
+static void udp_disable_video(void* data)
+{
+    UDPSource* source = (UDPSource*)data;
+    int i;
+
+    for (i = 0; i < source->numTracks; i++)
+    {
+        if (source->tracks[i].streamInfo.type == PICTURE_STREAM_TYPE)
         {
             source->tracks[i].isDisabled = 1;
         }
@@ -484,6 +498,7 @@ int udp_open(const char *address, MediaSource** source)
     newSource->mediaSource.set_frame_rate_or_disable = udp_set_frame_rate_or_disable;
     newSource->mediaSource.disable_stream = udp_disable_stream;
     newSource->mediaSource.disable_audio = udp_disable_audio;
+    newSource->mediaSource.disable_video = udp_disable_video;
     newSource->mediaSource.stream_is_disabled = udp_stream_is_disabled;
     newSource->mediaSource.read_frame = udp_read_frame;
     newSource->mediaSource.is_seekable = udp_is_seekable;

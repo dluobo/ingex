@@ -1,5 +1,5 @@
 /*
- * $Id: raw_dv_source.c,v 1.6 2010/10/13 12:34:32 philipn Exp $
+ * $Id: raw_dv_source.c,v 1.7 2011/07/13 10:22:27 philipn Exp $
  *
  *
  *
@@ -342,6 +342,16 @@ static void rds_disable_audio(void* data)
     }
 }
 
+static void rds_disable_video(void* data)
+{
+    RawDVSource* source = (RawDVSource*)data;
+
+    if (source->streamInfo.type == PICTURE_STREAM_TYPE)
+    {
+        source->isDisabled = 1;
+    }
+}
+
 static int rds_stream_is_disabled(void* data, int streamIndex)
 {
     RawDVSource* source = (RawDVSource*)data;
@@ -556,6 +566,7 @@ int rds_open(const char* filename, MediaSource** source)
     newSource->mediaSource.set_frame_rate_or_disable = rds_set_frame_rate_or_disable;
     newSource->mediaSource.disable_stream = rds_disable_stream;
     newSource->mediaSource.disable_audio = rds_disable_audio;
+    newSource->mediaSource.disable_video = rds_disable_video;
     newSource->mediaSource.stream_is_disabled = rds_stream_is_disabled;
     newSource->mediaSource.read_frame = rds_read_frame;
     newSource->mediaSource.is_seekable = rds_is_seekable;

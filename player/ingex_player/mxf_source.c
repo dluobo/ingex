@@ -1,5 +1,5 @@
 /*
- * $Id: mxf_source.c,v 1.24 2011/06/14 15:43:40 philipn Exp $
+ * $Id: mxf_source.c,v 1.25 2011/07/13 10:22:27 philipn Exp $
  *
  *
  *
@@ -572,6 +572,27 @@ static void mxfs_disable_audio(void* data)
     }
 }
 
+static void mxfs_disable_video(void* data)
+{
+    MXFFileSource* source = (MXFFileSource*)data;
+    OutputStreamData* outputStream;
+    int i;
+    int j;
+
+    for (i = 0; i < source->numInputTracks; i++)
+    {
+        for (j = 0; j < source->trackData[i].numOutputStreams; j++)
+        {
+            outputStream = &source->trackData[i].streamData[j];
+
+            if (outputStream->streamInfo.type == PICTURE_STREAM_TYPE)
+            {
+                outputStream->isDisabled = 1;
+            }
+        }
+    }
+}
+
 static int mxfs_stream_is_disabled(void* data, int streamIndex)
 {
     MXFFileSource* source = (MXFFileSource*)data;
@@ -1130,6 +1151,7 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
     newSource->mediaSource.set_frame_rate_or_disable = mxfs_set_frame_rate_or_disable;
     newSource->mediaSource.disable_stream = mxfs_disable_stream;
     newSource->mediaSource.disable_audio = mxfs_disable_audio;
+    newSource->mediaSource.disable_video = mxfs_disable_video;
     newSource->mediaSource.stream_is_disabled = mxfs_stream_is_disabled;
     newSource->mediaSource.read_frame = mxfs_read_frame;
     newSource->mediaSource.is_seekable = mxfs_is_seekable;

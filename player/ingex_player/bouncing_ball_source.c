@@ -1,5 +1,5 @@
 /*
- * $Id: bouncing_ball_source.c,v 1.8 2011/02/18 16:28:51 john_f Exp $
+ * $Id: bouncing_ball_source.c,v 1.9 2011/07/13 10:22:27 philipn Exp $
  *
  *
  *
@@ -227,6 +227,13 @@ static int bbs_disable_stream(void* data, int streamIndex)
     return 1;
 }
 
+static void bbs_disable_video(void* data)
+{
+    BouncingBallSource* source = (BouncingBallSource*)data;
+
+    source->isDisabled = 1;
+}
+
 static int bbs_stream_is_disabled(void* data, int streamIndex)
 {
     BouncingBallSource* source = (BouncingBallSource*)data;
@@ -432,6 +439,7 @@ int bbs_create(const StreamInfo* videoStreamInfo, int64_t length, int numBalls, 
     newSource->mediaSource.get_stream_info = bbs_get_stream_info;
     newSource->mediaSource.set_frame_rate_or_disable = bbs_set_frame_rate_or_disable;
     newSource->mediaSource.disable_stream = bbs_disable_stream;
+    newSource->mediaSource.disable_video = bbs_disable_video;
     newSource->mediaSource.stream_is_disabled = bbs_stream_is_disabled;
     newSource->mediaSource.read_frame = bbs_read_frame;
     newSource->mediaSource.is_seekable = bbs_is_seekable;

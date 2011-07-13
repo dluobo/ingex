@@ -1,5 +1,5 @@
 /*
- * $Id: blank_source.c,v 1.7 2011/05/11 10:49:17 philipn Exp $
+ * $Id: blank_source.c,v 1.8 2011/07/13 10:22:27 philipn Exp $
  *
  *
  *
@@ -154,6 +154,13 @@ static int bks_disable_stream(void* data, int streamIndex)
     return 1;
 }
 
+static void bks_disable_video(void* data)
+{
+    BlankSource* source = (BlankSource*)data;
+
+    source->isDisabled = 1;
+}
+
 static int bks_stream_is_disabled(void* data, int streamIndex)
 {
     BlankSource* source = (BlankSource*)data;
@@ -304,6 +311,7 @@ int bks_create(const StreamInfo* videoStreamInfo, int64_t length, MediaSource** 
     newSource->mediaSource.get_stream_info = bks_get_stream_info;
     newSource->mediaSource.set_frame_rate_or_disable = bks_set_frame_rate_or_disable;
     newSource->mediaSource.disable_stream = bks_disable_stream;
+    newSource->mediaSource.disable_video = bks_disable_video;
     newSource->mediaSource.stream_is_disabled = bks_stream_is_disabled;
     newSource->mediaSource.read_frame = bks_read_frame;
     newSource->mediaSource.is_seekable = bks_is_seekable;

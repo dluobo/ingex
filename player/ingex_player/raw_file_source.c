@@ -1,5 +1,5 @@
 /*
- * $Id: raw_file_source.c,v 1.7 2009/12/17 15:57:40 john_f Exp $
+ * $Id: raw_file_source.c,v 1.8 2011/07/13 10:22:27 philipn Exp $
  *
  *
  *
@@ -141,6 +141,16 @@ static void rfs_disable_audio(void* data)
     RawFileSource* source = (RawFileSource*)data;
 
     if (source->streamInfo.type == SOUND_STREAM_TYPE)
+    {
+        source->isDisabled = 1;
+    }
+}
+
+static void rfs_disable_video(void* data)
+{
+    RawFileSource* source = (RawFileSource*)data;
+
+    if (source->streamInfo.type == PICTURE_STREAM_TYPE)
     {
         source->isDisabled = 1;
     }
@@ -385,6 +395,7 @@ int rfs_open(const char* filename, const StreamInfo* streamInfo, MediaSource** s
     newSource->mediaSource.set_frame_rate_or_disable = rfs_set_frame_rate_or_disable;
     newSource->mediaSource.disable_stream = rfs_disable_stream;
     newSource->mediaSource.disable_audio = rfs_disable_audio;
+    newSource->mediaSource.disable_video = rfs_disable_video;
     newSource->mediaSource.stream_is_disabled = rfs_stream_is_disabled;
     newSource->mediaSource.read_frame = rfs_read_frame;
     newSource->mediaSource.is_seekable = rfs_is_seekable;

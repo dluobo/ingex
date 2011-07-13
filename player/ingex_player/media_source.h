@@ -1,5 +1,5 @@
 /*
- * $Id: media_source.h,v 1.7 2010/06/02 11:12:14 philipn Exp $
+ * $Id: media_source.h,v 1.8 2011/07/13 10:22:27 philipn Exp $
  *
  *
  *
@@ -75,6 +75,7 @@ typedef struct MediaSource
     /* disabling a stream means data is not sent to the MediaSourceListener in read_frame */
     int (*disable_stream)(void* data, int streamIndex);
     void (*disable_audio)(void* data);
+    void (*disable_video)(void* data);
     int (*stream_is_disabled)(void* data, int streamIndex);
 
     /* read a frame and send stream data to listener */
@@ -129,6 +130,7 @@ int msc_get_stream_info(MediaSource* source, int streamIndex, const StreamInfo**
 void msc_set_frame_rate_or_disable(MediaSource* source, const Rational* frameRate);
 int msc_disable_stream(MediaSource* source, int streamIndex);
 void msc_disable_audio(MediaSource* source);
+void msc_disable_video(MediaSource* source);
 int msc_stream_is_disabled(MediaSource* source, int streamIndex);
 int msc_read_frame(MediaSource* source, const FrameInfo* frameInfo, MediaSourceListener* listener);
 int msc_is_seekable(MediaSource* source);

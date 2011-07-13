@@ -1,5 +1,5 @@
 /*
- * $Id: player.c,v 1.35 2011/06/24 13:01:22 philipn Exp $
+ * $Id: player.c,v 1.36 2011/07/13 10:22:27 philipn Exp $
  *
  *
  *
@@ -131,6 +131,7 @@ typedef struct
     int numBalls;
 
     int disableAudio;
+    int disableVideo;
 
     const char* sourceName;
 
@@ -963,6 +964,7 @@ static void usage(const char* cmd)
     fprintf(stderr, "  --udp-in <address>       UDP network/multicast source (e.g. 239.255.1.1:2000)\n");
 #endif
     fprintf(stderr, "  --disable-audio          Disable audio from the next input\n");
+    fprintf(stderr, "  --disable-video          Disable video from the next input\n");
     fprintf(stderr, "  --src-name <name>        Set the source name (eg. used to label the sources in the split sink)\n");
     fprintf(stderr, "  --clip-id <val>          Set the clip identifier for the source\n");
     fprintf(stderr, "  --fallback-blank         Use a blank video source if fail to open the next input\n");
@@ -2438,6 +2440,11 @@ int main(int argc, const char **argv)
             inputs[numInputs].disableAudio = 1;
             cmdlnIndex++;
         }
+        else if (strcmp(argv[cmdlnIndex], "--disable-video") == 0)
+        {
+            inputs[numInputs].disableVideo = 1;
+            cmdlnIndex++;
+        }
         else if (strcmp(argv[cmdlnIndex], "--src-name") == 0)
         {
             if (cmdlnIndex + 1 >= argc)
@@ -2705,6 +2712,12 @@ int main(int argc, const char **argv)
         if (inputs[i].disableAudio)
         {
             msc_disable_audio(mediaSource);
+        }
+
+        /* disable video */
+        if (inputs[i].disableVideo)
+        {
+            msc_disable_video(mediaSource);
         }
 
         /* set the source name */

@@ -1,5 +1,5 @@
 /*
- * $Id: media_source.c,v 1.8 2011/04/19 10:03:53 philipn Exp $
+ * $Id: media_source.c,v 1.9 2011/07/13 10:22:27 philipn Exp $
  *
  *
  *
@@ -153,6 +153,14 @@ void msc_disable_audio(MediaSource* source)
     if (source && source->disable_audio)
     {
         source->disable_audio(source->data);
+    }
+}
+
+void msc_disable_video(MediaSource* source)
+{
+    if (source && source->disable_video)
+    {
+        source->disable_video(source->data);
     }
 }
 
