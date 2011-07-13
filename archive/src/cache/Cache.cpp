@@ -1,5 +1,5 @@
 /*
- * $Id: Cache.cpp,v 1.2 2010/09/01 16:05:22 philipn Exp $
+ * $Id: Cache.cpp,v 1.3 2011/07/13 17:41:43 philipn Exp $
  *
  * Manages the files in the disk cache
  *
@@ -509,7 +509,7 @@ int64_t Cache::getDiskSpace()
     
     if (statvfs(_directory.c_str(), &statvfsBuf) == 0)
     {
-        return statvfsBuf.f_bfree * statvfsBuf.f_bsize;
+        return statvfsBuf.f_bavail * statvfsBuf.f_bsize;
     }
     return -1; // unknown
 }
