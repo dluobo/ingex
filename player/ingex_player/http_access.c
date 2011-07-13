@@ -1,5 +1,5 @@
 /*
- * $Id: http_access.c,v 1.8 2010/06/02 11:12:14 philipn Exp $
+ * $Id: http_access.c,v 1.9 2011/07/13 10:19:24 philipn Exp $
  *
  *
  *
@@ -236,6 +236,8 @@ static void http_player_control(struct shttpd_arg* arg)
     unsigned int markTypeMask = 0;
     int vtrErrorLevel = 0;
     int selection = 0;
+    int enableAudioSnap = 0;
+    int audioGroupIndex = 0;
 
 
 	requestURI = shttpd_get_env(arg, "REQUEST_URI");
@@ -609,6 +611,59 @@ static void http_player_control(struct shttpd_arg* arg)
     else if (strcmp("/player/control/next-marks-selection", requestURI) == 0)
     {
         mc_next_active_mark_selection(access->control);
+    }
+    else if (strcmp("/player/control/next-audio-group", requestURI) == 0)
+    {
+        mc_switch_next_audio_group(access->control);
+    }
+    else if (strcmp("/player/control/prev-audio-group", requestURI) == 0)
+    {
+        mc_switch_prev_audio_group(access->control);
+    }
+    else if (strcmp("/player/control/set-audio-group", requestURI) == 0)
+    {
+        queryOk = 1;
+        queryValueCount = 0;
+
+        if (get_query_value(arg, "index", queryValue, sizeof(queryValue)))
+        {
+            if (!parse_int(queryValue, &audioGroupIndex))
+            {
+                queryOk = 0;
+            }
+            else
+            {
+                queryValueCount++;
+            }
+        }
+
+        if (queryOk && queryValueCount == 1)
+        {
+            mc_switch_audio_group(access->control, audioGroupIndex);
+        }
+    }
+    else if (strcmp("/player/control/snap-audio-to-video", requestURI) == 0)
+    {
+        queryOk = 1;
+        queryValueCount = 0;
+
+        if (get_query_value(arg, "enable", queryValue, sizeof(queryValue)))
+        {
+            if (!parse_int(queryValue, &enableAudioSnap) ||
+                (enableAudioSnap != -1 && enableAudioSnap != 0 && enableAudioSnap != 1))
+            {
+                queryOk = 0;
+            }
+            else
+            {
+                queryValueCount++;
+            }
+        }
+
+        if (queryOk && queryValueCount == 1)
+        {
+            mc_snap_audio_to_video(access->control, enableAudioSnap);
+        }
     }
 
     shttpd_printf(arg, "HTTP/1.1 200 OK\r\n\r\n");
