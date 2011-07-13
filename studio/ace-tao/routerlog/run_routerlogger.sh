@@ -1,11 +1,28 @@
 #! /bin/sh
 
 # Choose config depending on location
-LOCATION=studio
+LOCATION=ch
+#LOCATION=studio
 #LOCATION=stage
 #LOCATION=lot
 #LOCATION=dummy
+
 case $LOCATION in
+
+  ( ch )
+
+./routerlogger --dbuser bamzooki --dbpass bamzooki \
+  -v -r 172.29.145.164:4098 -s -l \
+  -n Ingex-Router \
+  -m 9 \
+  -d "Cam1" -p 1 \
+  -d "Cam2" -p 2 \
+  -d "Cam3" -p 3 \
+  -d "Cam4" -p 4 \
+  -c "Studio multicam" \
+  -a corbaloc:iiop:172.29.154.23:8888/NameService \
+  -ORBDottedDecimalAddresses 1
+;;
 
   ( studio )
 
