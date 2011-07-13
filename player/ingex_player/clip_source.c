@@ -1,5 +1,5 @@
 /*
- * $Id: clip_source.c,v 1.5 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: clip_source.c,v 1.6 2011/07/13 10:23:56 philipn Exp $
  *
  *
  *
@@ -102,7 +102,14 @@ static void cps_disable_audio(void* data)
 {
     ClipSource* clipSource = (ClipSource*)data;
 
-    return msc_disable_audio(clipSource->targetSource);
+    msc_disable_audio(clipSource->targetSource);
+}
+
+static void cps_disable_video(void* data)
+{
+    ClipSource* clipSource = (ClipSource*)data;
+
+    msc_disable_video(clipSource->targetSource);
 }
 
 static int cps_stream_is_disabled(void* data, int streamIndex)
@@ -427,6 +434,7 @@ int cps_create(MediaSource* targetSource, const Rational* frameRate, int64_t sta
     newClipSource->mediaSource.set_frame_rate_or_disable = cps_set_frame_rate_or_disable;
     newClipSource->mediaSource.disable_stream = cps_disable_stream;
     newClipSource->mediaSource.disable_audio = cps_disable_audio;
+    newClipSource->mediaSource.disable_video = cps_disable_video;
     newClipSource->mediaSource.stream_is_disabled = cps_stream_is_disabled;
     newClipSource->mediaSource.read_frame = cps_read_frame;
     newClipSource->mediaSource.is_seekable = cps_is_seekable;
