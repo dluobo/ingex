@@ -1,5 +1,5 @@
 /*
- * $Id: write_avid_mxf.c,v 1.26 2011/01/10 17:05:15 john_f Exp $
+ * $Id: write_avid_mxf.c,v 1.27 2011/07/13 09:39:49 philipn Exp $
  *
  * Write video and audio to MXF files supported by Avid editing software
  *
@@ -371,21 +371,23 @@ static void free_avid_clip_writer(AvidClipWriter** clipWriter)
     SAFE_FREE(clipWriter);
 }
 
-/* Take a char* string, convert to mxfUTF16Char* in wTmpString member */
-static int convert_string(AvidClipWriter* clipWriter, const char* input)
+/* Take a char *string, convert to mxfUTF16Char *in wTmpString member */
+static int convert_string(AvidClipWriter *clipWriter, const char *input)
 {
-    mxfUTF16Char* newOutput = NULL;
-    size_t len = strlen(input);
-    
+    mxfUTF16Char *newOutput = NULL;
+
+    size_t len = mxf_utf8_to_utf16(NULL, input, 0);
+    CHK_OFAIL(len != (size_t)(-1));
+
     CHK_MALLOC_ARRAY_ORET(newOutput, mxfUTF16Char, len + 1);
     memset(newOutput, 0, sizeof(mxfUTF16Char) * (len + 1));
-    
-    CHK_OFAIL(mbstowcs(newOutput, input, len + 1) != (size_t)(-1));
 
-    SAFE_FREE(&clipWriter->wTmpString);    
+    mxf_utf8_to_utf16(newOutput, input, len + 1);
+
+    SAFE_FREE(&clipWriter->wTmpString);
     clipWriter->wTmpString = newOutput;
     return 1;
-    
+
 fail:
     SAFE_FREE(&newOutput);
     return 0;
