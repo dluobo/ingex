@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorder.h,v 1.15 2010/08/12 16:36:42 john_f Exp $
+ * $Id: IngexRecorder.h,v 1.16 2011/07/13 15:01:18 john_f Exp $
  *
  * Class to manage an individual recording.
  *
@@ -205,7 +205,7 @@ public:
 
 public:
 // MXF filenames
-    std::string mFileNames[MAX_CHANNELS * 5];
+    std::string mFileNames[MAX_CHANNELS * (1 + MAX_AUDIO_TRACKS)];
 
     bool mRecordingOK;
     unsigned int mIndex;
