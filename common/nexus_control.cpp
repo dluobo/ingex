@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_control.cpp,v 1.4 2011/02/18 16:26:54 john_f Exp $
+ * $Id: nexus_control.cpp,v 1.5 2011/07/13 14:51:12 john_f Exp $
  *
  * Module for creating and accessing nexus shared control memory
  *
@@ -281,74 +281,109 @@ extern void nexus_get_source_name(NexusControl *pctl, int channel, char *source_
 
 extern int nexus_connect_to_shared_mem(int timeout_microsec, int read_only, int verbose, NexusConnection *p)
 {
-    int         shm_id, control_id;
-    int         at_flags = 0;           // default 0 means read-write
+    int at_flags = 0;           // default 0 means read-write
 
     if (read_only)
+    {
         at_flags = SHM_RDONLY;
+    }
 
-    if (timeout_microsec > 0 && verbose) {
-        printf("Waiting for shared memory... ");
+    if (timeout_microsec > 0 && verbose)
+    {
+        printf("Waiting for shared memory...\n");
         fflush(stdout);
     }
 
-    // If shared memory not found, sleep and try again
+    // If shared memory not found, sleep and try again, up to timeout.
     int retry_time = 20 * 1000;     // 20ms
     int time_taken = 0;
-    while (1)
+
+    // First attach to control structure
+    void * ptr;
+    int id;
+    for (ptr = 0; ptr == 0;)
     {
-        control_id = shmget(control_shm_key, sizeof(NexusControl), 0444);
-        if (control_id != -1)
-            break;
-
-        if (timeout_microsec == 0)
-            return 0;
-
-        usleep(retry_time);
-        time_taken += retry_time;
-        if (time_taken >= timeout_microsec)
-            return 0;
+        id = shmget(control_shm_key, sizeof(NexusControl), 0444);
+        if (id != -1)
+        {
+            ptr = shmat(id, NULL, at_flags);
+        }
+        if (!ptr)
+        {
+            usleep(retry_time);
+            time_taken += retry_time;
+            if (time_taken >= timeout_microsec)
+            {
+                return 0;
+            }
+        }
+    }
+    // We now have valid pointer to control structure.
+    p->pctl = static_cast<NexusControl *>(ptr);
+    if (verbose)
+    {
+        printf("attached to control struct id %d at %p\n", id, p->pctl);
     }
 
-    p->pctl = (NexusControl*)shmat(control_id, NULL, at_flags);
-    if (verbose)
-        printf("connected to pctl\n");
-
-    int i;
-    for (i = 0; i < p->pctl->channels; i++)
+    // Now attach to the ring buffers.
+    for (int i = 0; i < p->pctl->channels; ++i)
     {
-        while (1)
+        for (ptr = 0; ptr == 0;)
         {
-            shm_id = shmget(channel_shm_key[i], p->pctl->elementsize, 0444);
-            if (shm_id != -1)
-                break;
-            usleep(20 * 1000);
+            id = shmget(channel_shm_key[i], sizeof(NexusControl), 0444);
+            if (id != -1)
+            {
+                ptr = shmat(id, NULL, at_flags);
+            }
+            if (!ptr)
+            {
+                usleep(retry_time);
+                time_taken += retry_time;
+                if (time_taken >= timeout_microsec)
+                {
+                    return 0;
+                }
+            }
         }
-        p->ring[i] = (uint8_t*)shmat(shm_id, NULL, at_flags);
+        // We now have valid pointer to ring buffer [i]
+        p->ring[i] = static_cast<uint8_t *>(ptr);
         if (verbose)
-            printf("  attached to channel[%d]: '%s'\n", i, p->pctl->channel[i].source_name);
+        {
+            printf("attached to channel[%d]: '%s' id %d at %p\n", i, p->pctl->channel[i].source_name, id, p->ring[i]);
+        }
     }
 
     return 1;
 }
 
-extern int nexus_disconnect_from_shared_mem(const NexusConnection *p)
+extern int nexus_disconnect_from_shared_mem(int verbose, const NexusConnection *p)
 {
     int i;
     for (i = 0; i < p->pctl->channels; i++)
     {
-        if (shmdt(p->ring[i]) == -1) {
+        if (shmdt(p->ring[i]) == -1)
+        {
             fprintf(stderr, "p->ring[%d] (0x%p) ", i, p->ring[i]);
             perror("shmdt");
             return 0;
         }
+        else if (verbose)
+        {
+            printf("detached from channel[%d]\n", i);
+        }
     }
 
-    if (shmdt(p->pctl) == -1) {
+    if (shmdt(p->pctl) == -1)
+    {
         fprintf(stderr, "p->pctl (0x%p) ", p->pctl);
         perror("shmdt");
         return 0;
     }
+    else if (verbose)
+    {
+        printf("detached from control\n");
+    }
+
     return 1;
 }
 

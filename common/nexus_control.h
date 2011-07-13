@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_control.h,v 1.8 2010/11/02 16:45:19 john_f Exp $
+ * $Id: nexus_control.h,v 1.9 2011/07/13 14:51:13 john_f Exp $
  *
  * Shared memory interface between SDI capture threads and reader threads.
  *
@@ -26,6 +26,7 @@
 #define NEXUS_CONTROL_H
 
 #define MAX_CHANNELS 8              // number of separate video+audio inputs
+#define MAX_AUDIO_TRACKS 16         // number of audio tracks per input
 #define MAX_RECORDERS 2             // number of Recorders per machine
 #define MAX_ENCODES_PER_CHANNEL 3   // Recorder can make this number of encodes per channel
 
@@ -189,10 +190,10 @@ typedef struct {
     struct timeval  owner_heartbeat;    // heartbeat timestamp of owner of shared memory
 
     // The following describe offsets and sizes within a ring buffer element for accessing data
-    int             num_audio_tracks;   // number of audio tracks captured, either 4 or 8
-    int             audio_offset;       // offset to start of mono 32bit audio tracks (4/8 tracks)
-    int             audio_size;         // size in bytes of all mono 32bit audio data (4/8 tracks)
-    int             sec_audio_offset;   // offset to start of secondary mono audio tracks (4/8 tracks)
+    int             num_audio_tracks;   // number of audio tracks captured
+    int             audio_offset;       // offset to start of mono 32bit audio tracks
+    int             audio_size;         // size in bytes of all mono 32bit audio data
+    int             sec_audio_offset;   // offset to start of secondary mono audio tracks
     int             sec_audio_size;     // size of all secondary mono audio tracks
     int             frame_data_offset;  // offset to struct with timecode and other data
     int             sec_video_offset;   // offset to secondary video buffer
@@ -213,7 +214,7 @@ typedef struct {
 } NexusConnection;
 
 extern int nexus_connect_to_shared_mem(int timeout_microsec, int read_only, int verbose, NexusConnection *p);
-extern int nexus_disconnect_from_shared_mem(const NexusConnection *p);
+extern int nexus_disconnect_from_shared_mem(int verbose, const NexusConnection *p);
 extern int nexus_connection_status(const NexusConnection *p, int *p_heartbeat_stopped, int *p_capture_dead);
 
 
