@@ -1,6 +1,6 @@
 #! /usr/bin/perl -w
 
-#  $Id: import_db_infod.pl,v 1.5 2011/06/22 06:49:05 john_f Exp $
+#  $Id: import_db_infod.pl,v 1.6 2011/07/19 07:29:57 john_f Exp $
 #
 # Copyright (C) 2009-2011 British Broadcasting Corporation.
 # All Rights Reserved.
@@ -51,16 +51,21 @@ use constant WATCH_DIR_MASK => IN_CREATE | IN_MOVED_TO | IN_ONLYDIR;
 openlog 'import_db_infod', 'perror', 'user'; #'perror' echoes output to stderr (if using -n option)
 # check arguments
 my %opts;
-&usage_exit unless getopts('cnv', \%opts);
+&usage_exit unless getopts('cnvh:d:u:p:', \%opts);
 
 sub usage_exit() {
  Die(<<END);
-Usage: $0 [-c] [-n] [-v]
+Usage: $0 [-c] [-n] [-v] [-h <database host>] [-d <database name>] [-u <database username>] [-p <database password>]
  -c to clear stored times (i.e. import all data)
  -n to prevent daemonising
  -v to be more verbose (reporting individual successful file imports)
 END
 }
+my @exeOpts = ();
+push @exeOpts, '--dbhost', $opts{h} if $opts{h};
+push @exeOpts, '--dbname', $opts{d} if $opts{d};
+push @exeOpts, '--dbuser', $opts{u} if $opts{u};
+push @exeOpts, '--dbpw', $opts{p} if $opts{p};
 
 die "$ROOT/ does not exist\n" unless -d $ROOT;
 
@@ -97,14 +102,14 @@ my $importMaterialFile = sub {
  my $imported = 1;
  my $fail = 0;
  if (!-d $_[0] && $_[0] =~ /\.[xX][mM][lL]$/) {
-  $fail = system $importMaterial, $_[0];
+  $fail = system $importMaterial, @exeOpts, $_[0];
  }
  else {
     $imported = 0;
  }
  if ($fail) {
     $_[0] =~ /(.*)\//;
-    Warn("Importing material file $_[0] failed: $!. Will not retry unless daemon is re-run with -c option or after deleting $1/$timestampFile");
+    Warn("Importing material file $_[0] failed. Will not retry unless daemon is re-run with -c option or after deleting $1/$timestampFile");
     $imported = 0;
  }
  return $imported;
@@ -115,14 +120,14 @@ my $importCutsFile = sub {
  my $imported = 1;
  my $fail = 0;
  if (!-d $_[0] && $_[0] =~ /\.[xX][mM][lL]$/) {
-  $fail = system $importCuts, $_[0];
+  $fail = system $importCuts, @exeOpts, $_[0];
  }
  else {
     $imported = 0;
  }
  if ($fail) {
     $_[0] =~ /(.*)\//;
-    Warn("Importing cuts file $_[0] failed: $!. Will not retry unless daemon is re-run with -c option or after deleting $1/$timestampFile");
+    Warn("Importing cuts file $_[0] failed. Will not retry unless daemon is re-run with -c option or after deleting $1/$timestampFile");
     $imported = 0;
  }
  return $imported;

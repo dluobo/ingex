@@ -1,9 +1,9 @@
 COPYING MATERIAL TO A SERVER
 ----------------------------
 
-Each recorder's COPY_COMMAND should point to xferclient.pl, with ENCODE1_DEST, ENCODE2_DEST etc pointing to directories on the server(s).
+Each recorder's ENCODE1_DEST, ENCODE2_DEST etc should point to directories on the server(s).
 
-There should be an instance of xferserver.pl running, which will take commands from xferclient.pl when each recorder runs it.
+There should be an instance of xferserver.pl running, which will take commands from each recorder.
 
 This in turn will call cpfs to copy each file, sending signals to switch rate control on and off as recordings start and stop.
 
@@ -12,6 +12,8 @@ The location of cpfs is defined in xferserver.pl.  After making cpfs, it will ne
 Alternatively, FTP can be used to transfer material - see xferserver.pl for command-line options
 
 (The present scheme does not use media_transfer.pl.)
+
+xferserver.pl maintains a file called paths, which it uses to keep tabs on what it has copied (to prevent re-copying) and to continue copying automatically after restarting.  Its format is described in xferserver.pl.
 
 
 AUTOMATICALLY GENERATING SAMBA EXPORTS FOR AVID
@@ -35,7 +37,7 @@ options in /etc/samba/smb.conf
 	unix extensions = No
 
 
-AUTOMATICALLY IMPORTING MXF AND CUT DATA INTO SERVER DATABASE
+AUTOMATICALLY IMPORTING MATERIAL AND CUT DATA INTO SERVER DATABASE
 -------------------------------------------------------------
 
 import_db_infod.pl needs to be run as a system service:
@@ -48,8 +50,14 @@ import_db_infod.pl needs to be run as a system service:
 ADDITIONAL PERL MODULES
 -----------------------
 
-Both the above need:
+export_for_avidd.pl and import_dv_info need:
   Proc::Daemon
   Linux::Inotify2
+
+xferserver.pl needs:
+  IPC::ShareLite
+  Storable
+  Filesys::DfPortable
+  Term::ANSIColor
 
 
