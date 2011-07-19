@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: recordergroup.cpp,v 1.28 2011/07/13 14:48:21 john_f Exp $       *
+ *   $Id: recordergroup.cpp,v 1.29 2011/07/19 07:27:50 john_f Exp $       *
  *                                                                         *
  *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -202,7 +202,7 @@ bool RecorderGroupCtrl::Disconnect(const int index)
                 //depopulate the source tree
                 mTree->RemoveRecorder(GetName(index));
                 wxCommandEvent event(EVT_RECORDERGROUP_MESSAGE, REMOVE_RECORDER);
-                event.SetString(GetItemText(index));
+                event.SetString(GetName(index));
                 AddPendingEvent(event);
                 //preroll and postroll limits might have been relaxed
                 int i;

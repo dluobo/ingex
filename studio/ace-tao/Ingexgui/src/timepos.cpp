@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: timepos.cpp,v 1.16 2011/04/19 07:04:02 john_f Exp $             *
+ *   $Id: timepos.cpp,v 1.17 2011/07/19 07:27:50 john_f Exp $             *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -90,9 +90,19 @@ void Timepos::UpdateTimecodeAndDuration()
         wxTimeSpan timespan = timecodeTime - timecodeTime.GetDateOnly(); //remove meaningless date component
         ProdAuto::MxfTimecode newTimecode = mLastKnownTimecode; //to set everything except sample value
         newTimecode.samples = timespan.GetMilliseconds().GetValue() * mLastKnownTimecode.edit_rate.numerator / mLastKnownTimecode.edit_rate.denominator / 1000;
-        bool justWrapped = newTimecode.samples < mRunningTimecode.samples; //has crossed midnight forwards
-        if ((newTimecode.samples - mRunningTimecode.samples) * mLastKnownTimecode.edit_rate.denominator / mLastKnownTimecode.edit_rate.numerator > THRESHOLD_SECONDS) //has crossed midnight backwards due to a large change to mTimecodeOffset
+        bool justWrapped = false;
+        if (newTimecode.samples < mRunningTimecode.samples) { //has crossed midnight forwards
+            justWrapped = true;
+            wxCommandEvent loggingEvent(EVT_LOGGING_MESSAGE);
+            loggingEvent.SetString(wxT("Timepos wrap detected at displayed timecode ") + Timepos::FormatTimecode(newTimecode));
+            AddPendingEvent(loggingEvent);
+        }
+        if ((newTimecode.samples - mRunningTimecode.samples) * mLastKnownTimecode.edit_rate.denominator / mLastKnownTimecode.edit_rate.numerator > THRESHOLD_SECONDS) { //has crossed midnight backwards due to a large change to mTimecodeOffset
             mTriggerCarry = true; //if there's a trigger set, prevent it from happening prematurely due to wrapping backwards
+            wxCommandEvent loggingEvent(EVT_LOGGING_MESSAGE);
+            loggingEvent.SetString(wxT("Timepos carry set due to backwards wrap at ") + Timepos::FormatTimecode(newTimecode));
+            AddPendingEvent(loggingEvent);
+        }
         mRunningTimecode = newTimecode;
         //update duration - work out based on previous duration to be able to keep track of number of days reliably
         if (mPositionRunning) { //assumes mStartTimecode is sane
@@ -116,6 +126,9 @@ void Timepos::UpdateTimecodeAndDuration()
           || justWrapped //today is in fact yesterday, when the trigger must have been just before midnight
          )
         ) {
+            wxCommandEvent loggingEvent(EVT_LOGGING_MESSAGE);
+            loggingEvent.SetString(wxT("Timepos trigger at displayed timecode ") + Timepos::FormatTimecode(mRunningTimecode));
+            AddPendingEvent(loggingEvent);
             Trigger();
         }
         if (justWrapped) mTriggerCarry = false; //it's now the day of the trigger
@@ -139,30 +152,43 @@ void Timepos::Trigger()
 /// @return True if trigger was set
 bool Timepos::SetTrigger(const ProdAuto::MxfTimecode * tc, wxEvtHandler * handler, bool alwaysInFuture)
 {
+    wxCommandEvent loggingEvent(EVT_LOGGING_MESSAGE);
     bool ok = true;
     mTriggerTimecode = *tc;
     if (mTriggerTimecode.undefined || !mTriggerTimecode.edit_rate.numerator) { //latter a sanity check
         mTriggerTimecode.undefined = true;
         ok = false;
+        loggingEvent.SetString(wxT("Timepos trigger being cleared."));
     }
     else {
         mTriggerHandler = handler;
         //If it looks like the trigger timecode is earlier in the day or now, set the carry flag which will prevent a trigger until after the displayed timecode wraps at midnight
         mTriggerCarry = mRunningTimecode.samples >= mTriggerTimecode.samples;
+        loggingEvent.SetString(wxT("Timepos trigger set for ") + Timepos::FormatTimecode(*tc) + wxString::Format(wxT(" with alwaysInFuture %s; carry set to %s."), alwaysInFuture ? wxT("true") : wxT("false"), mTriggerCarry ? wxT("true") : wxT("false")));
         //If triggers in the past are allowed, trigger immediately if trigger timecode is up to a minute before the last displayed timecode
         if (!alwaysInFuture) {
             if (mRunningTimecode.samples > mTriggerTimecode.samples) {
                 //assume last displayed timecode hasn't wrapped relative to trigger timecode
-                if ((mRunningTimecode.samples - mTriggerTimecode.samples) / mTriggerTimecode.edit_rate.numerator * mTriggerTimecode.edit_rate.denominator < 60) Trigger(); //trigger if trigger timecode is less than a minute behind last displayed timecode
+                if ((mRunningTimecode.samples - mTriggerTimecode.samples) / mTriggerTimecode.edit_rate.numerator * mTriggerTimecode.edit_rate.denominator < 60) { //trigger timecode is less than a minute behind last displayed timecode
+                    loggingEvent.SetString(loggingEvent.GetString() + wxT("  Immediate trigger due to trigger timecode being up to a minute behind last displayed timecode (no wrap)."));
+                    Trigger();
+                }
             }
             else {
                 //assume last displayed timecode has wrapped relative to trigger timecode
-                if ((mRunningTimecode.samples - mTriggerTimecode.samples) / mTriggerTimecode.edit_rate.numerator * mTriggerTimecode.edit_rate.denominator + 86400 < 60) Trigger(); //trigger if trigger timecode is less than a minute behind last displayed timecode
+                if ((mRunningTimecode.samples - mTriggerTimecode.samples) / mTriggerTimecode.edit_rate.numerator * mTriggerTimecode.edit_rate.denominator + 86400 < 60) { //trigger timecode is less than a minute behind last displayed timecode
+                    loggingEvent.SetString(loggingEvent.GetString() + wxT("  Immediate trigger due to trigger timecode being up to a minute behind last displayed timecode (displayed timecode wrap)."));
+                    Trigger();
+                }
             }
         }
     }
+    AddPendingEvent(loggingEvent);
     return ok;
 }
+
+
+
 
 /// Gets the position display as a frame number, or returns 0 if the position display is not running.
 /// @return The frame count.
