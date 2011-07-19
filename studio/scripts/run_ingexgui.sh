@@ -30,12 +30,12 @@ OPTIONS="-ORBDefaultInitRef corbaloc:iiop:$NAMESERVER -ORBDottedDecimalAddresses
 
 # add file server root option
 if [ -n "${INGEXGUI_FILE_SERVER_ROOT}" ] ; then
-  OPTIONS="${OPTIONS} -r '${INGEXGUI_FILE_SERVER_ROOT}'"
+  OPTIONS="${OPTIONS} -r ${INGEXGUI_FILE_SERVER_ROOT}"
 fi
 
 # add snapshot directory option
 if [ -n "${INGEXGUI_SNAPSHOT_DIR}" ] ; then
-  OPTIONS="${OPTIONS} -s '${INGEXGUI_SNAPSHOT_DIR}'"
+  OPTIONS="${OPTIONS} -s ${INGEXGUI_SNAPSHOT_DIR}"
 fi
 
 $PRERUN $INGEX_DIR/studio/ace-tao/Ingexgui/src/ingexgui $OPTIONS
