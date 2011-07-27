@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: ingexgui.cpp,v 1.44 2011/07/13 14:48:21 john_f Exp $           *
+ *   $Id: ingexgui.cpp,v 1.45 2011/07/27 17:08:36 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -259,7 +259,7 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
     }
     wxSize size = wxDefaultSize;
     size.SetHeight(100); //bodge to show at least four lines
-    mRecorderGroup = new RecorderGroupCtrl(this, wxID_ANY, wxDefaultPosition, size, argc, argv_); //do this here to allow the ORB to remove its options, which would otherwise prevent parsing of the command line.  Unfortunately this means that a warning dialogue will have to be dismissed even if only calling the appplication with --help.
+    mRecorderGroup = new RecorderGroupCtrl(this, wxID_ANY, wxDefaultPosition, size, argc, argv_); //do this here to allow the ORB to remove its options, which would otherwise prevent parsing of the command line.
     wxCmdLineParser parser(argc, argv_);
     parser.AddSwitch(wxT("h"), wxT("help"), wxT("Display this help message"), wxCMD_LINE_OPTION_HELP);
     parser.AddSwitch(wxT("n"), wxEmptyString, wxT("Do not load recording list files"));
@@ -514,7 +514,7 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
     mJogShuttle->addListener(mJSListener);
     mJogShuttle->start();
 
-    //saved state - do this after all controls have been created because it may generate a dialogue which will lead to any events previously issued being processed, which may affect controls (here's looking at you, mRecorderGroup)
+    //saved state - do this after all controls have been created because it may generate a dialogue which will lead to any events previously issued being processed, which may affect controls which hitherto didn't exist (here's looking at you, mRecorderGroup)
     mSavedState = new SavedState(this, SAVED_STATE_FILENAME);
     mTree->SetSavedState(mSavedState);
     mRecorderGroup->SetSavedState(mSavedState);

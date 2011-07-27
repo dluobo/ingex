@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: eventlist.cpp,v 1.20 2011/04/19 07:04:02 john_f Exp $           *
+ *   $Id: eventlist.cpp,v 1.21 2011/07/27 17:08:36 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2009-2011 British Broadcasting Corporation                   *
  *   - all rights reserved.                                                *
@@ -47,7 +47,7 @@ const wxString TypeLabels[] = {wxT(""), wxT("Start"), wxT("Cue"), wxT("Chunk Sta
 
 EventList::EventList(wxWindow * parent, wxWindowID id, const wxPoint & pos, const wxSize & size, bool loadEventFiles) :
 wxListView(parent, id, pos, size, wxLC_REPORT|wxLC_SINGLE_SEL|wxSUNKEN_BORDER|wxLC_EDIT_LABELS/*|wxALWAYS_SHOW_SB*/), //ALWAYS_SHOW_SB results in a disabled scrollbar on GTK (wx 2.8))
-mCanEditAfter(0), mCurrentChunkInfo(-1), mBlockEventItem(-1), mRecordingNodeCount(0), mChunking(false), mRunThread(false), mSyncThread(false), mLoadEventFiles(loadEventFiles), mEditRate(InvalidMxfTimecode), mRecStartTimecode(InvalidMxfTimecode), mConnectedSocket(0)
+mCanEditAfter(0), mCurrentChunkInfo(-1), mBlockEventItem(-1), mRecordingNodeCount(0), mChunking(false), mRunThread(false), mSyncThread(false), mLoadEventFiles(loadEventFiles), mEditRate(InvalidMxfTimecode), mRecStartTimecode(InvalidMxfTimecode)
 {
     //set up the columns
     wxListItem itemCol;
@@ -82,11 +82,18 @@ mCanEditAfter(0), mCurrentChunkInfo(-1), mBlockEventItem(-1), mRecordingNodeCoun
     //socket for accepting cue points from external processes
     wxIPV4address addr;
     addr.Service(2001); //port
-    mCuePointSocket = new wxSocketServer(addr);
-    if (!mCuePointSocket->IsOk()) std::cerr << "socket not ok \n";
-    mCuePointSocket->SetEventHandler(*this);
-    mCuePointSocket->SetNotify(wxSOCKET_CONNECTION_FLAG);
-    mCuePointSocket->Notify(true);
+    wxSocketServer * cuePointSocket = new wxSocketServer(addr, wxSOCKET_REUSEADDR); //make sure socket can be used again if app restarted quickly
+    if (cuePointSocket->IsOk()) {
+        cuePointSocket->SetEventHandler(*this);
+        cuePointSocket->SetNotify(wxSOCKET_CONNECTION_FLAG);
+        cuePointSocket->Notify(true);
+    }
+    else {
+        wxCommandEvent loggingEvent(EVT_LOGGING_MESSAGE);
+        loggingEvent.SetString(wxT("Could not create cue point server socket: will not be able to receive remote cue points."));
+        AddPendingEvent(loggingEvent);
+        cuePointSocket->Destroy();
+    }
 }
 
 /// Responds to the selected item being changed, either by the user or programmatically.
@@ -1009,21 +1016,30 @@ wxThread::ExitCode EventList::Entry()
 /// Responds to events from the cue point server socket or sockets created by connections to it.
 /// If a connection is made, creates a socket to accept that connection.
 /// If a socket is lost, destroys the socket.
-/// If data has arrived on a socket, we are recording, and the data contains a valid timecode string, inserts a cue point with default colour, and description from the data.
-/// @param event The socket event.  Uses this to determine the type of event.
+/// If data has arrived on a socket, read up to a maximum size and destroy the socket.  If we are recording, and the data contains a valid timecode string, insert a cue point with default colour, and description from the data.
+/// @param event The socket event.  Uses this to determine the type of event and to get a handle on the socket involved.
 void EventList::OnSocketEvent(wxSocketEvent& event)
 {
     switch (event.GetSocketEvent()) {
-        case wxSOCKET_CONNECTION:
-            if (mConnectedSocket) mConnectedSocket->Destroy(); //no reason to allow more than one connection; prevents memory leaks
-            mConnectedSocket = mCuePointSocket->Accept();
-            mConnectedSocket->SetEventHandler(*this);
-            mConnectedSocket->SetNotify(wxSOCKET_INPUT_FLAG | wxSOCKET_LOST_FLAG);
-            mConnectedSocket->Notify(true);
+        case wxSOCKET_CONNECTION: {
+            wxSocketBase * connectedSocket = ((wxSocketServer *) event.GetSocket())->Accept();
+            if (connectedSocket->IsOk()) {
+                connectedSocket->SetEventHandler(*this);
+                connectedSocket->SetNotify(wxSOCKET_INPUT_FLAG | wxSOCKET_LOST_FLAG);
+                connectedSocket->Notify(true);
+            }
+            else {
+                wxCommandEvent loggingEvent(EVT_LOGGING_MESSAGE);
+                loggingEvent.SetString(wxT("Accepted cue point socket not OK: remote cue point abandoned."));
+                AddPendingEvent(loggingEvent);
+                connectedSocket->Destroy();
+            }
             break;
+        }
         case wxSOCKET_INPUT: {
-            char buf[1000];
-            mConnectedSocket->Read(buf, sizeof buf);
+            char buf[1000]; //won't accept messages longer than this
+            event.GetSocket()->Read(buf, sizeof buf);
+            event.GetSocket()->Destroy();
             wxString socketMessage = wxString(buf, *wxConvCurrent);
             int64_t frameCount;
             unsigned long value;
@@ -1051,10 +1067,7 @@ void EventList::OnSocketEvent(wxSocketEvent& event)
             break;
         }
         case wxSOCKET_LOST: //this will happen after a successful data transfer as well as under error conditions
-            if (mConnectedSocket) {
-                mConnectedSocket->Destroy(); //prevents memory leaks
-                mConnectedSocket = 0;
-            }
+            event.GetSocket()->Destroy(); //prevents memory leaks
             break;
         default:
             break;

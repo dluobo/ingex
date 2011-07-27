@@ -1,7 +1,7 @@
 /***************************************************************************
- *   $Id: eventlist.h,v 1.13 2010/11/02 15:22:22 john_f Exp $             *
+ *   $Id: eventlist.h,v 1.14 2011/07/27 17:08:36 john_f Exp $             *
  *                                                                         *
- *   Copyright (C) 2009-2010 British Broadcasting Corporation                   *
+ *   Copyright (C) 2009-2011 British Broadcasting Corporation                   *
  *   - all rights reserved.                                                *
  *   Author: Matthew Marks                                                 *
  *                                                                         *
@@ -88,9 +88,7 @@ class ChunkInfo
 WX_DECLARE_OBJARRAY(ChunkInfo, ChunkInfoArray);
 
 class RecorderData;
-class wxSocketServer;
 class wxSocketEvent;
-class wxSocketBase;
 
 /// Class to display and store the list of recording events
 class EventList : public wxListView, wxThread //used wxListCtrl for a while because wxListView crashed when you added an item - seems ok with 2.8
@@ -159,8 +157,6 @@ class EventList : public wxListView, wxThread //used wxListCtrl for a while beca
         wxString mFilename;
         ProdAuto::MxfTimecode mEditRate;
         ProdAuto::MxfTimecode mRecStartTimecode;
-        wxSocketServer * mCuePointSocket;
-        wxSocketBase * mConnectedSocket;
         wxString mSocketData;
     DECLARE_EVENT_TABLE()
 };

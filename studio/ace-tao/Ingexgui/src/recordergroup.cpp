@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: recordergroup.cpp,v 1.29 2011/07/19 07:27:50 john_f Exp $       *
+ *   $Id: recordergroup.cpp,v 1.30 2011/07/27 17:08:36 john_f Exp $       *
  *                                                                         *
  *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -57,6 +57,18 @@ RecorderGroupCtrl::RecorderGroupCtrl(wxWindow * parent, wxWindowID id, const wxP
 RecorderGroupCtrl::~RecorderGroupCtrl()
 {
     delete mComms;
+}
+
+/// Sets the pointer to the saved state, allowing the object to access it.
+/// Also displays any error message that might have been generated when mComms was created.
+void RecorderGroupCtrl::SetSavedState(SavedState * savedState)
+{
+    mSavedState = savedState;
+    wxString msg;
+    if (!mComms->GetStatus(&msg)) { //started properly
+        wxMessageDialog dlg(this, msg, wxT("Comms problem"), wxICON_EXCLAMATION | wxOK);
+        dlg.ShowModal();
+    }
 }
 
 /// Deletes all controllers, and then issues an event indicating that this object is ready for deletion.

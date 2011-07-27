@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
+ *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -32,14 +32,12 @@
 /// @param argc Command line argument count - see argv.
 /// @param argv Command line arguments - the ORB will remove and respond to any it recognises.
 Comms::Comms(wxWindow * parent, int& argc, char** argv)
-: wxThread(wxTHREAD_JOINABLE), mParent(parent), mNameService(CosNaming::NamingContext::_nil()), mOK(true), mErrMsg(wxT("Not Initialised")) //joinable thread means we can terminate it in order to be able to delete mCondition safely
+: wxThread(wxTHREAD_JOINABLE), mParent(parent), mNameService(CosNaming::NamingContext::_nil()) //joinable thread means we can terminate it in order to be able to delete mCondition safely
 {
     if (argc < 3) {
-        wxMessageDialog dlg(mParent, wxT("To connect to recorders requires nameserver details on the command line, such as \"-ORBDefaultInitRef corbaloc:iiop:192.168.1.123:8888\"."), wxT("Comms problem"), wxICON_EXCLAMATION | wxOK);
-        dlg.ShowModal();
-        mOK = false;
+        mErrMsg = wxT("To connect to recorders requires nameserver details on the command line, such as \"-ORBDefaultInitRef corbaloc:iiop:192.168.1.123:8888\".");
     }
-    if (mOK) {
+    if (mErrMsg.IsEmpty()) {
         // Initialise ORB
         try {
             mOrb = CORBA::ORB_init(argc, argv);
@@ -48,37 +46,32 @@ Comms::Comms(wxWindow * parent, int& argc, char** argv)
         }
         catch (const CORBA::Exception & e) {
             wxString msg(e._name(), *wxConvCurrent);
-            msg = wxT("Failed to initialise ORB: ") + msg;
-            wxMessageDialog dlg(mParent, msg, wxT("Comms problem"), wxICON_EXCLAMATION | wxOK);
-            dlg.ShowModal();
-            mOK = false;
+            mErrMsg = wxT("Failed to initialise ORB: ") + msg;
         }
     }
-    if (mOK && !InitNs()) {
-        wxMessageDialog dlg(mParent, wxT("Failed to initialise naming service."), wxT("Comms problem"), wxICON_EXCLAMATION | wxOK);
-        dlg.ShowModal();
+    if (mErrMsg.IsEmpty() && !InitNs()) {
+        mErrMsg = wxT("Failed to initialise naming service.");
         mOK = false;
     }
     mCondition = new wxCondition(mMutex);
-    if (mOK && wxTHREAD_NO_ERROR != Create()) {
-        wxMessageDialog dlg(mParent, wxT("Failed to create comms thread."), wxT("Comms problem"), wxICON_EXCLAMATION | wxOK);
-        dlg.ShowModal();
+    if (mErrMsg.IsEmpty() && wxTHREAD_NO_ERROR != Create()) {
+        mErrMsg = wxT("Failed to create comms thread.");
         Delete(); //free up memory used by the thread
         delete mCondition;
-        mOK = false;
     }
-    if (mOK) {
-        mMutex.Lock(); //to detect that thread is ready to accept signals
+    if (mErrMsg.IsEmpty()) {
+        mMutex.Lock(); //to detect that thread is ready to accept signals (whereupon mCondition->Wait() will unlock the mutex)
+        if (wxTHREAD_NO_ERROR != Run()) {
+            mErrMsg = wxT("Failed to run comms thread.");
+            Delete(); //free up memory used by the thread
+            delete mCondition;
+        }
     }
-    if (mOK && wxTHREAD_NO_ERROR != Run()) {
-        wxMessageDialog dlg(mParent, wxT("Failed to run comms thread."), wxT("Comms problem"), wxICON_EXCLAMATION | wxOK);
-        dlg.ShowModal();
-        Delete(); //free up memory used by the thread
-        delete mCondition;
-        mOK = false;
-    }
+    mOK = mErrMsg.IsEmpty(); //safe to check mErrMsg as thread hasn't been signalled yet
     if (mOK) { //thread is starting
-        mMutex.Lock(); //wait for thread to be ready to accept signals
+        //wait for thread to unlock mutex (i.e. ready to accept signals)
+        mMutex.Lock();
+        //restore previous state
         mMutex.Unlock();
     }
 }

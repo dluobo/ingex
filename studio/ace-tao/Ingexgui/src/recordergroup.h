@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: recordergroup.h,v 1.18 2011/04/19 07:04:02 john_f Exp $         *
+ *   $Id: recordergroup.h,v 1.19 2011/07/27 17:08:36 john_f Exp $         *
  *                                                                         *
  *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -41,7 +41,7 @@ class RecorderGroupCtrl : public wxListView
         ~RecorderGroupCtrl();
         void Shutdown();
         void SetTree(TickTreeCtrl * tree) {mTree = tree;};
-        void SetSavedState(SavedState * savedState) { mSavedState = savedState; };
+        void SetSavedState(SavedState * savedState);
         void StartGettingRecorders();
         void SetPreroll(const ProdAuto::MxfDuration);
         void SetPostroll(const ProdAuto::MxfDuration);
