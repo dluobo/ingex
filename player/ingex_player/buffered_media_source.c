@@ -1,5 +1,5 @@
 /*
- * $Id: buffered_media_source.c,v 1.9 2011/07/13 10:22:27 philipn Exp $
+ * $Id: buffered_media_source.c,v 1.10 2011/08/03 13:25:13 philipn Exp $
  *
  *
  *
@@ -28,6 +28,7 @@
 #include <unistd.h>
 #include <sys/time.h>
 #include <assert.h>
+#include <errno.h>
 
 
 #include "buffered_media_source.h"
@@ -48,15 +49,6 @@
 /* reads and seek will timeout after this number of seconds */
 #define TIMEOUT_SEC                 1
 
-
-/* Linux  */
-#if !defined(ETIMEDOUT)
-    #if defined(__linux__)
-        #define ETIMEDOUT                   110
-    #else
-        #error Unknown value for pthread ETIMEDOUT error value
-    #endif
-#endif
 
 
 typedef struct BufferedStream
