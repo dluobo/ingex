@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.cpp,v 1.25 2011/07/13 14:54:09 john_f Exp $
+ * $Id: dvs_sdi.cpp,v 1.26 2011/08/05 11:03:24 john_f Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -2035,7 +2035,7 @@ int write_dummy_frames(sv_handle *sv, int chan, int current_frame_tick, int tick
             // primary audio
             memset(ring[chan] + element_size * ((pc->lastframe+1) % ring_len) + primary_audio_offset, 0, n_audio_samples * 4 * naudioch);
             // secondary audio
-            memset(ring[chan] + element_size * ((pc->lastframe+1) % ring_len) + secondary_audio_offset, 0, n_audio_samples * 4 * naudioch);
+            memset(ring[chan] + element_size * ((pc->lastframe+1) % ring_len) + secondary_audio_offset, 0, n_audio_samples * 2 * naudioch);
 
             // Write timecodes etc.
             NexusFrameData * last_nfd = (NexusFrameData *)(ring[chan] + element_size * ((pc->lastframe) % ring_len) + frame_data_offset);
