@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: ingexgui.h,v 1.26 2011/05/16 09:37:22 john_f Exp $              *
+ *   $Id: ingexgui.h,v 1.27 2011/08/05 11:05:35 john_f Exp $              *
  *                                                                         *
  *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -64,6 +64,7 @@ class
 IngexguiApp : public wxApp
 {
     public:
+        virtual bool Initialize(int& argc, wxChar **argv);
         virtual bool OnInit();
         int FilterEvent(wxEvent&);
 };

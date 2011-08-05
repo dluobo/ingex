@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: ingexgui.cpp,v 1.45 2011/07/27 17:08:36 john_f Exp $           *
+ *   $Id: ingexgui.cpp,v 1.46 2011/08/05 11:05:35 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -172,11 +172,18 @@ END_EVENT_TABLE()
 
 IMPLEMENT_APP(IngexguiApp)
 
+/// Overridden Initialisation function to allow XInitThreads to be called before gtk_init_check() (which has been known to cause a crash otherwise).
+/// This method is not in the wx documentation but is mentioned in wx/app.h.
+bool IngexguiApp::Initialize(int& argc, wxChar **argv)
+{
+    XInitThreads(); //This must be called before any other X lib functions in order for multithreaded X apps (i.e. the player) to work properly.  Otherwise XLockDisplay sometimes doesn't lock, resulting in the player hanging until its window gets an event such as focus or resize
+    return wxApp::Initialize(argc, argv);
+}
+
 /// Application initialisation: creates and displays the main frame.
 /// @return Always true.
 bool IngexguiApp::OnInit()
 {
-    XInitThreads(); //This must be called before any other X lib functions in order for multithreaded X apps (i.e. the player) to work properly.  Otherwise XLockDisplay sometimes doesn't lock, resulting in the player hanging until its window gets an event such as focus or resize
     IngexguiFrame *frame = new IngexguiFrame(argc, argv);
 
     frame->Show(true);
@@ -266,11 +273,11 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
     parser.AddSwitch(wxT("p"), wxEmptyString, wxT("Disable player"));
     parser.AddOption(wxT("r"), wxEmptyString, wxString::Format(wxT("Root path for recordings playback dialogue (defaults to %s)"), RECORDING_SERVER_ROOT)); //FIXME: not Windows-compatible
     parser.AddOption(wxT("s"), wxEmptyString, wxString::Format(wxT("Path for snapshots (defaults to %s)"), SNAPSHOT_PATH)); //FIXME: not Windows-compatible
-    parser.AddOption(wxEmptyString, wxT("ORB..."), wxT("ORB options, such as \"-ORBDefaultInitRef corbaloc:iiop:192.168.1.123:8888\""), wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_MULTIPLE); //a dummy option simply to augment the usage message
+    parser.AddOption(wxEmptyString, wxT("ORB..."), wxT("ORB options, such as \"-ORBDefaultInitRef corbaloc:iiop:192.168.1.123:8888\" (note: SINGLE dash - not as shown at the start of this line)"), wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_MULTIPLE); //a dummy option simply to augment the usage message
     if (parser.Parse()) {
         Log(wxT("Application closed due to incorrect arguments.")); //this can segfault if done after Destroy()
-            Destroy();
-            exit(1);
+        Destroy();
+        exit(1);
     }
     delete[] argv_;
     wxString recordingServerRoot = RECORDING_SERVER_ROOT;
