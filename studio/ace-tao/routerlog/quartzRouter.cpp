@@ -1,5 +1,5 @@
 /*
- * $Id: quartzRouter.cpp,v 1.6 2009/01/29 07:36:59 stuart_hc Exp $
+ * $Id: quartzRouter.cpp,v 1.7 2011/08/11 14:58:50 john_f Exp $
  *
  * Class to handle communication with Quartz router.
  *
@@ -351,14 +351,23 @@ void Router::QuerySrc(unsigned int dest)
 
 void Router::ProcessMessage(const std::string & message)
 {
-    ACE_DEBUG((LM_DEBUG, ACE_TEXT("Message from router: \"%C\"\n"), message.c_str()));
+    // We expect a message like AV009,001
 
-    unsigned int dest = ACE_OS::atoi(message.substr(2, 3).c_str());
-    unsigned int src  = ACE_OS::atoi(message.substr(6).c_str());
-
-    for (std::vector<RouterObserver *>::iterator
-        it = mObservers.begin(); it != mObservers.end(); ++it)
+    if (9 == message.length())
     {
-        (*it)->Observe(src, dest);
+        ACE_DEBUG((LM_DEBUG, ACE_TEXT("Processing message \"%C\" from router\n"), message.c_str()));
+    
+        unsigned int dest = ACE_OS::atoi(message.substr(2, 3).c_str());
+        unsigned int src  = ACE_OS::atoi(message.substr(6).c_str());
+
+        for (std::vector<RouterObserver *>::iterator
+            it = mObservers.begin(); it != mObservers.end(); ++it)
+        {
+            (*it)->Observe(src, dest);
+        }
+    }
+    else
+    {
+        ACE_DEBUG((LM_WARNING, ACE_TEXT("Unexpected message \"%C\" from router discarded\n"), message.c_str()));
     }
 }
