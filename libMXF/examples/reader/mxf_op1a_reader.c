@@ -1,5 +1,5 @@
 /*
- * $Id: mxf_op1a_reader.c,v 1.8 2010/10/12 17:44:12 john_f Exp $
+ * $Id: mxf_op1a_reader.c,v 1.9 2011/08/19 12:29:25 philipn Exp $
  *
  * MXF OP-1A reader
  *
@@ -682,7 +682,7 @@ static int read_content_package(MXFReader* reader, int skip, MXFReaderListener* 
     cpCount = mxfKey_extlen + llen;
     
     /* process essence elements in content package */
-    while (cpCount < cpLen)
+    while (cpCount <= cpLen)
     {
         if (!skip && mxf_is_gc_essence_element(&key))
         {
@@ -758,7 +758,7 @@ static int ns_read_content_package(MXFReader* reader, int skip, MXFReaderListene
     cpCount = mxfKey_extlen + llen;
     
     /* process essence elements in content package */
-    while (nsIndex->contentPackageLen == 0 || cpCount < nsIndex->contentPackageLen)
+    while (nsIndex->contentPackageLen == 0 || cpCount <= nsIndex->contentPackageLen)
     {
         if (!skip && mxf_is_gc_essence_element(&key))
         {
@@ -1006,32 +1006,33 @@ int op1a_is_supported(MXFPartition* headerPartition)
         {
             continue;
         }
+        else if (is_d10_picture_essence(label))
+        {
+            continue;
+        }
         else if (mxf_equals_ul(label, &MXF_EC_L(IECDV_25_525_60_FrameWrapped)) || 
-            mxf_equals_ul(label, &MXF_EC_L(IECDV_25_625_50_FrameWrapped)) || 
-            mxf_equals_ul(label, &MXF_EC_L(DVBased_25_525_60_FrameWrapped)) || 
-            mxf_equals_ul(label, &MXF_EC_L(DVBased_25_625_50_FrameWrapped)) || 
-            mxf_equals_ul(label, &MXF_EC_L(DVBased_50_525_60_FrameWrapped)) || 
-            mxf_equals_ul(label, &MXF_EC_L(DVBased_50_625_50_FrameWrapped)))
+                 mxf_equals_ul(label, &MXF_EC_L(IECDV_25_625_50_FrameWrapped)) || 
+                 mxf_equals_ul(label, &MXF_EC_L(DVBased_25_525_60_FrameWrapped)) || 
+                 mxf_equals_ul(label, &MXF_EC_L(DVBased_25_625_50_FrameWrapped)) || 
+                 mxf_equals_ul(label, &MXF_EC_L(DVBased_50_525_60_FrameWrapped)) || 
+                 mxf_equals_ul(label, &MXF_EC_L(DVBased_50_625_50_FrameWrapped)) ||
+                 mxf_equals_ul(label, &MXF_EC_L(DVBased_100_1080_50_I_FrameWrapped)) ||
+                 mxf_equals_ul(label, &MXF_EC_L(DVBased_100_720_50_P_FrameWrapped)))
         {
             continue;
         }
         else if (mxf_equals_ul(label, &MXF_EC_L(SD_Unc_625_50i_422_135_FrameWrapped)) ||
-                 mxf_equals_ul(label, &MXF_EC_L(SD_Unc_525_5994i_422_135_FrameWrapped)))
-        {
-            continue;
-        }
-        else if (mxf_equals_ul(label, &MXF_EC_L(HD_Unc_1080_50i_422_FrameWrapped)) ||
-                 mxf_equals_ul(label, &MXF_EC_L(HD_Unc_1080_5994i_422_FrameWrapped)))
-        {
-            continue;
-        }
-        else if (mxf_equals_ul(label, &MXF_EC_L(HD_Unc_720_50p_422_FrameWrapped)) ||
+                 mxf_equals_ul(label, &MXF_EC_L(SD_Unc_525_5994i_422_135_FrameWrapped)) ||
+                 mxf_equals_ul(label, &MXF_EC_L(HD_Unc_1080_50i_422_FrameWrapped)) ||
+                 mxf_equals_ul(label, &MXF_EC_L(HD_Unc_1080_5994i_422_FrameWrapped)) ||
+                 mxf_equals_ul(label, &MXF_EC_L(HD_Unc_1080_25p_422_FrameWrapped)) ||
+                 mxf_equals_ul(label, &MXF_EC_L(HD_Unc_1080_50p_422_FrameWrapped)) ||
+                 mxf_equals_ul(label, &MXF_EC_L(HD_Unc_1080_2997p_422_FrameWrapped)) ||
+                 mxf_equals_ul(label, &MXF_EC_L(HD_Unc_1080_5994p_422_FrameWrapped)) ||
+                 mxf_equals_ul(label, &MXF_EC_L(HD_Unc_720_25p_422_FrameWrapped)) ||
+                 mxf_equals_ul(label, &MXF_EC_L(HD_Unc_720_2997p_422_FrameWrapped)) ||
+                 mxf_equals_ul(label, &MXF_EC_L(HD_Unc_720_50p_422_FrameWrapped)) ||
                  mxf_equals_ul(label, &MXF_EC_L(HD_Unc_720_5994p_422_FrameWrapped)))
-        {
-            continue;
-        }
-        else if (mxf_equals_ul(label, &MXF_EC_L(DVBased_100_1080_50_I_FrameWrapped)) ||
-            mxf_equals_ul(label, &MXF_EC_L(DVBased_100_720_50_P_FrameWrapped)))
         {
             continue;
         }

@@ -1,5 +1,5 @@
 /*
- * $Id: mxf_essence_helper.h,v 1.2 2010/01/12 16:25:04 john_f Exp $
+ * $Id: mxf_essence_helper.h,v 1.3 2011/08/19 12:29:25 philipn Exp $
  *
  * Utilities for processing essence data and associated metadata
  *
@@ -24,6 +24,7 @@
 #define __MXF_ESSENCE_HELPER_H__
 
 
+int is_d10_picture_essence(const mxfUL* label);
 int is_d10_essence(const mxfUL* label);
 
 int process_cdci_descriptor(MXFMetadataSet* descriptorSet, MXFTrack* track, EssenceTrack* essenceTrack);

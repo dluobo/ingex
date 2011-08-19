@@ -1,5 +1,5 @@
 /*
- * $Id: mxf_essence_helper.c,v 1.22 2011/05/20 09:05:28 john_f Exp $
+ * $Id: mxf_essence_helper.c,v 1.23 2011/08/19 12:29:25 philipn Exp $
  *
  * Utilities for processing essence data and associated metadata
  *
@@ -52,30 +52,40 @@ static void convert_12m_to_timecode(uint8_t* t12m, int* isDropFrame,
 
 
 
-int is_d10_essence(const mxfUL* label)
+int is_d10_picture_essence(const mxfUL* label)
 {
-    if (mxf_equals_ul(label, &MXF_EC_L(D10_50_625_50_defined_template)) ||
-        mxf_equals_ul(label, &MXF_EC_L(D10_50_625_50_extended_template)) ||
-        mxf_equals_ul(label, &MXF_EC_L(D10_50_625_50_picture_only)) ||
-        mxf_equals_ul(label, &MXF_EC_L(D10_50_525_60_defined_template)) ||
-        mxf_equals_ul(label, &MXF_EC_L(D10_50_525_60_extended_template)) ||
+    if (mxf_equals_ul(label, &MXF_EC_L(D10_50_625_50_picture_only)) ||
         mxf_equals_ul(label, &MXF_EC_L(D10_50_525_60_picture_only)) ||
-        mxf_equals_ul(label, &MXF_EC_L(D10_40_625_50_defined_template)) ||
-        mxf_equals_ul(label, &MXF_EC_L(D10_40_625_50_extended_template)) ||
         mxf_equals_ul(label, &MXF_EC_L(D10_40_625_50_picture_only)) ||
-        mxf_equals_ul(label, &MXF_EC_L(D10_40_525_60_defined_template)) ||
-        mxf_equals_ul(label, &MXF_EC_L(D10_40_525_60_extended_template)) ||
         mxf_equals_ul(label, &MXF_EC_L(D10_40_525_60_picture_only)) ||
-        mxf_equals_ul(label, &MXF_EC_L(D10_30_625_50_defined_template)) ||
-        mxf_equals_ul(label, &MXF_EC_L(D10_30_625_50_extended_template)) ||
         mxf_equals_ul(label, &MXF_EC_L(D10_30_625_50_picture_only)) ||
-        mxf_equals_ul(label, &MXF_EC_L(D10_30_525_60_defined_template)) ||
-        mxf_equals_ul(label, &MXF_EC_L(D10_30_525_60_extended_template)) ||
         mxf_equals_ul(label, &MXF_EC_L(D10_30_525_60_picture_only)))
     {
         return 1;
     }
-    
+
+    return 0;
+}
+
+int is_d10_essence(const mxfUL* label)
+{
+    if (is_d10_picture_essence(label) ||
+        mxf_equals_ul(label, &MXF_EC_L(D10_50_625_50_defined_template)) ||
+        mxf_equals_ul(label, &MXF_EC_L(D10_50_625_50_extended_template)) ||
+        mxf_equals_ul(label, &MXF_EC_L(D10_50_525_60_defined_template)) ||
+        mxf_equals_ul(label, &MXF_EC_L(D10_50_525_60_extended_template)) ||
+        mxf_equals_ul(label, &MXF_EC_L(D10_40_625_50_defined_template)) ||
+        mxf_equals_ul(label, &MXF_EC_L(D10_40_625_50_extended_template)) ||
+        mxf_equals_ul(label, &MXF_EC_L(D10_40_525_60_defined_template)) ||
+        mxf_equals_ul(label, &MXF_EC_L(D10_40_525_60_extended_template)) ||
+        mxf_equals_ul(label, &MXF_EC_L(D10_30_625_50_defined_template)) ||
+        mxf_equals_ul(label, &MXF_EC_L(D10_30_625_50_extended_template)) ||
+        mxf_equals_ul(label, &MXF_EC_L(D10_30_525_60_defined_template)) ||
+        mxf_equals_ul(label, &MXF_EC_L(D10_30_525_60_extended_template)))
+    {
+        return 1;
+    }
+
     return 0;
 }
 
@@ -496,7 +506,15 @@ int process_cdci_descriptor(MXFMetadataSet* descriptorSet, MXFTrack* track, Esse
     else if (mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(HD_Unc_1080_50i_422_FrameWrapped)) ||
              mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(HD_Unc_1080_50i_422_ClipWrapped)) ||
              mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(HD_Unc_1080_5994i_422_FrameWrapped)) ||
-             mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(HD_Unc_1080_5994i_422_ClipWrapped)))
+             mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(HD_Unc_1080_5994i_422_ClipWrapped)) ||
+             mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(HD_Unc_1080_25p_422_FrameWrapped)) ||
+             mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(HD_Unc_1080_25p_422_ClipWrapped)) ||
+             mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(HD_Unc_1080_2997p_422_FrameWrapped)) ||
+             mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(HD_Unc_1080_2997p_422_ClipWrapped)) ||
+             mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(HD_Unc_1080_50p_422_FrameWrapped)) ||
+             mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(HD_Unc_1080_50p_422_ClipWrapped)) ||
+             mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(HD_Unc_1080_5994p_422_FrameWrapped)) ||
+             mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(HD_Unc_1080_5994p_422_ClipWrapped)))
     {
         CHK_ORET(track->video.componentDepth == 8 || track->video.componentDepth == 10);
 
@@ -546,7 +564,7 @@ int process_cdci_descriptor(MXFMetadataSet* descriptorSet, MXFTrack* track, Esse
         CHK_ORET(mxf_get_uint32_item(descriptorSet, &MXF_ITEM_K(CDCIEssenceDescriptor, HorizontalSubsampling), &track->video.horizSubsampling));
         CHK_ORET(mxf_get_uint32_item(descriptorSet, &MXF_ITEM_K(CDCIEssenceDescriptor, VerticalSubsampling), &track->video.vertSubsampling));
         CHK_ORET(mxf_get_uint8_item(descriptorSet, &MXF_ITEM_K(GenericPictureEssenceDescriptor, FrameLayout), &frameLayout));
-        CHK_ORET(frameLayout == 3); /* TODO: only mixed fields supported for now */
+        CHK_ORET(frameLayout == 3 || frameLayout == 0);
 
         track->video.frameWidth = fieldWidth;
         track->video.frameHeight = fieldHeight;
@@ -579,7 +597,11 @@ int process_cdci_descriptor(MXFMetadataSet* descriptorSet, MXFTrack* track, Esse
             }
         }
     }
-    else if (mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(HD_Unc_720_50p_422_FrameWrapped)) ||
+    else if (mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(HD_Unc_720_25p_422_FrameWrapped)) ||
+             mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(HD_Unc_720_25p_422_ClipWrapped)) ||
+             mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(HD_Unc_720_2997p_422_FrameWrapped)) ||
+             mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(HD_Unc_720_2997p_422_ClipWrapped)) ||
+             mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(HD_Unc_720_50p_422_FrameWrapped)) ||
              mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(HD_Unc_720_50p_422_ClipWrapped)) ||
              mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(HD_Unc_720_5994p_422_FrameWrapped)) ||
              mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(HD_Unc_720_5994p_422_ClipWrapped)))

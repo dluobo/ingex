@@ -1,5 +1,5 @@
 /*
- * $Id: mxf_opatom_reader.c,v 1.14 2010/10/12 17:44:12 john_f Exp $
+ * $Id: mxf_opatom_reader.c,v 1.15 2011/08/19 12:29:25 philipn Exp $
  *
  * MXF OP-Atom reader
  *
@@ -803,16 +803,16 @@ int opa_is_supported(MXFPartition* headerPartition)
         return 1;
     }
     else if (mxf_equals_ul(label, &MXF_EC_L(SD_Unc_625_50i_422_135_ClipWrapped)) ||
-             mxf_equals_ul(label, &MXF_EC_L(SD_Unc_525_5994i_422_135_ClipWrapped)))
-    {
-        return 1;
-    }
-    else if (mxf_equals_ul(label, &MXF_EC_L(HD_Unc_1080_50i_422_ClipWrapped)) ||
-             mxf_equals_ul(label, &MXF_EC_L(HD_Unc_1080_5994i_422_ClipWrapped)))
-    {
-        return 1;
-    }
-    else if (mxf_equals_ul(label, &MXF_EC_L(HD_Unc_720_50p_422_ClipWrapped)) ||
+             mxf_equals_ul(label, &MXF_EC_L(SD_Unc_525_5994i_422_135_ClipWrapped)) ||
+             mxf_equals_ul(label, &MXF_EC_L(HD_Unc_1080_50i_422_ClipWrapped)) ||
+             mxf_equals_ul(label, &MXF_EC_L(HD_Unc_1080_5994i_422_ClipWrapped)) ||
+             mxf_equals_ul(label, &MXF_EC_L(HD_Unc_1080_25p_422_ClipWrapped)) ||
+             mxf_equals_ul(label, &MXF_EC_L(HD_Unc_1080_50p_422_ClipWrapped)) ||
+             mxf_equals_ul(label, &MXF_EC_L(HD_Unc_1080_2997p_422_ClipWrapped)) ||
+             mxf_equals_ul(label, &MXF_EC_L(HD_Unc_1080_5994p_422_ClipWrapped)) ||
+             mxf_equals_ul(label, &MXF_EC_L(HD_Unc_720_25p_422_ClipWrapped)) ||
+             mxf_equals_ul(label, &MXF_EC_L(HD_Unc_720_2997p_422_ClipWrapped)) ||
+             mxf_equals_ul(label, &MXF_EC_L(HD_Unc_720_50p_422_ClipWrapped)) ||
              mxf_equals_ul(label, &MXF_EC_L(HD_Unc_720_5994p_422_ClipWrapped)))
     {
         return 1;
@@ -833,6 +833,10 @@ int opa_is_supported(MXFPartition* headerPartition)
         mxf_equals_ul(label, &MXF_EC_L(DNxHD1080p185ClipWrapped)) ||
         mxf_equals_ul(label, &MXF_EC_L(DNxHD720p120ClipWrapped)) ||
         mxf_equals_ul(label, &MXF_EC_L(DNxHD720p185ClipWrapped)))
+    {
+        return 1;
+    }
+    else if (is_d10_picture_essence(label))
     {
         return 1;
     }
