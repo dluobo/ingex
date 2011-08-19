@@ -1,5 +1,5 @@
 /*
- * $Id: routerloggerApp.cpp,v 1.13 2010/07/14 13:06:36 john_f Exp $
+ * $Id: routerloggerApp.cpp,v 1.14 2011/08/19 10:11:12 john_f Exp $
  *
  * Router recorder application class.
  *
@@ -326,6 +326,9 @@ bool routerloggerApp::Init(int argc, char * argv[])
 
 // Set verbosity of debug messages
     Logfile::DebugLevel(debug_level);
+
+// Log startup details
+    ACE_DEBUG((LM_INFO, ACE_TEXT ("RouterRecorder started %C\n\n"), DateTime::DateTimeWithSeparators().c_str()));
 
     ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("router on   \"%C\"\n"), router_port.c_str() ));
     if (tc_from_shm)
