@@ -1,5 +1,5 @@
 /*
- * $Id: DateTime.cpp,v 1.6 2011/07/27 17:11:38 john_f Exp $
+ * $Id: DateTime.cpp,v 1.7 2011/08/19 10:10:19 john_f Exp $
  *
  * Date/time to text functions.
  *
@@ -47,6 +47,27 @@ std::string DateTime::DateNoSeparators()
         my_tm.tm_year + 1900,
         my_tm.tm_mon + 1,
         my_tm.tm_mday
+        );
+
+    return std::string(s);
+}
+
+/*
+Returns a string in format YYYY-MM-DD HH:MM.
+*/
+std::string DateTime::DateTimeWithSeparators()
+{
+    time_t my_time = ACE_OS::time();
+    tm my_tm;
+    ACE_OS::localtime_r(&my_time, &my_tm);
+
+    char s[13];
+    ACE_OS::sprintf(s, "%04d-%02d-%02d %02d:%02d",
+        my_tm.tm_year + 1900,
+        my_tm.tm_mon + 1,
+        my_tm.tm_mday,
+        my_tm.tm_hour,
+        my_tm.tm_min
         );
 
     return std::string(s);

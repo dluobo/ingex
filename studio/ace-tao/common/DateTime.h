@@ -1,5 +1,5 @@
 /*
- * $Id: DateTime.h,v 1.3 2009/01/29 07:36:58 stuart_hc Exp $
+ * $Id: DateTime.h,v 1.4 2011/08/19 10:10:19 john_f Exp $
  *
  * Date/time to text functions.
  *
@@ -31,6 +31,7 @@ class DateTime
 {
 public:
     static std::string DateNoSeparators();
+    static std::string DateTimeWithSeparators();
     static std::string DateTimeNoSeparators();
     static std::string Timecode();
     static std::string Timecode25();
