@@ -8,6 +8,7 @@ endif
 DATABASELIB_DIR = ../../database/src
 COMMON_DIR = ../../../common
 STUDIOCOMMON_DIR = ../../common
+INSTALL_WEB_DIR = /srv/ingex/deletepkg
 
 CC = g++
 CFLAGS = -g -Wall -Wundef -W -Wno-unused-parameter -Wno-non-virtual-dtor -Werror
@@ -31,7 +32,7 @@ $(DATABASELIB_DIR)/libprodautodb.a:
 deletepkg: $(DATABASELIB_DIR)/libprodautodb.a $(OBJECTS)
 	$(LD) $(OBJECTS) -Xlinker -rpath -Xlinker . -L$(DATABASELIB_DIR) -L$(COMMON_DIR) -L$(STUDIOCOMMON_DIR) -L$(AAFSDKINSTALL)/lib/debug -lprodautodb -lcommon -lstudiocommon -laafiid -lpqxx -luuid -lpthread -lxerces-c -o $@
 
-	
+
 
 %.d : %.cpp
 	@echo Generating dependency file for $<; \
@@ -42,6 +43,14 @@ deletepkg: $(DATABASELIB_DIR)/libprodautodb.a $(OBJECTS)
 %.o: %.cpp
 	$(COMPILE) -c $< -o $@	
 	
+
+.PHONY: install-web
+install-web: create_aaf
+	mkdir -p $(INSTALL_WEB_DIR); cp deletepkg $(INSTALL_WEB_DIR)
+
+.PHONY: uninstall-web
+uninstall-web:
+	@rm -f $(INSTALL_WEB_DIR)/deletepkg
 
 .PHONY: clean
 clean:
