@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.cpp,v 1.26 2011/08/05 11:03:24 john_f Exp $
+ * $Id: dvs_sdi.cpp,v 1.27 2011/08/19 10:31:14 john_f Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -1223,7 +1223,7 @@ int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_from_vi
         pbuffer->dma.size = (pbuffer->audio2[0].addr[3] - (char *)0) + pbuffer->audio[0].size;
         break;
     }
-    //fprintf(stderr, "we set dma size to 0x%x\n", pbuffer->dma.size);
+    //fprintf(stderr, "we set dma size to 0x%x, max 0x%x\n", pbuffer->dma.size, max_dma_size);
     assert(pbuffer->dma.size <= max_dma_size);
 
     /*
