@@ -1,5 +1,5 @@
 /*
- * $Id: RouterRecorderImpl.cpp,v 1.5 2010/10/26 18:41:52 john_f Exp $
+ * $Id: RouterRecorderImpl.cpp,v 1.6 2011/08/22 10:03:01 john_f Exp $
  *
  * Servant class for RouterRecorder.
  *
@@ -205,6 +205,10 @@ bool RouterRecorderImpl::Init(const std::string & name, const std::string & mc_c
                         found = true;
                         vt->selector_index = it->second->index;
                     }
+                }
+                if (!found)
+                {
+                    ACE_DEBUG((LM_ERROR, ACE_TEXT("Failed to find multicamera source \"%C\" !\n"), sc->name.c_str()));
                 }
             }
         }
