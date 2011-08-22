@@ -1,5 +1,5 @@
 /*
- * $Id: YUV_to_rgb.h,v 1.1 2010/09/29 09:01:13 john_f Exp $
+ * $Id: YUV_to_rgb.h,v 1.2 2011/08/22 10:05:23 john_f Exp $
  *
  *
  * Copyright (C) 2009 British Broadcasting Corporation, All Rights Reserved
@@ -41,7 +41,8 @@ extern "C" {
  * a particular alignment in some systems.
  * The minimum size of workSpace is in_frame->Y.w * 2.
  */
-int to_RGB(YUV_frame* in_frame, BYTE* out_R, BYTE* out_G, BYTE* out_B,
+int to_RGB(const YUV_frame* in_frame,
+           BYTE* out_R, BYTE* out_G, BYTE* out_B,
            const int RGBpixelStride, const int RGBlineStride,
            void* workSpace);
 

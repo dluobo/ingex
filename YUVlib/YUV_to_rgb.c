@@ -1,5 +1,5 @@
 /*
- * $Id: YUV_to_rgb.c,v 1.1 2010/09/29 09:01:13 john_f Exp $
+ * $Id: YUV_to_rgb.c,v 1.2 2011/08/22 10:05:23 john_f Exp $
  *
  *
  *
@@ -62,7 +62,8 @@ static void h_up_2_121(BYTE* srcLine, BYTE* dstLine,
     *dstLine = in_0;
 }
 
-int to_RGB(YUV_frame* in_frame, BYTE* out_R, BYTE* out_G, BYTE* out_B,
+int to_RGB(const YUV_frame* in_frame,
+           BYTE* out_R, BYTE* out_G, BYTE* out_B,
            const int RGBpixelStride, const int RGBlineStride,
            void* workSpace)
 {
