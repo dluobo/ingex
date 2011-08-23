@@ -65,9 +65,8 @@ int main(int argc, char* argv[])
 			{
 				pkg_identifier = packages[i];
 				if(debug){printf("Loading package: %li\n", pkg_identifier);}
-				Package* package = (db->loadPackage(pkg_identifier));
+				Package* package = (db->loadPackage(pkg_identifier, transaction));
 				db->deletePackageChain(package, transaction);
-				transaction->commit();
 				if(debug){printf("Deleted package\n");}
 			}
 			catch (const prodauto::DBException & dbe)
@@ -76,6 +75,8 @@ int main(int argc, char* argv[])
 				return 1;
 			}
 		}
+
+        transaction->commit();
 
 		printf("Deleted %i material item(s)\n", noPackages);
 		return 0;
