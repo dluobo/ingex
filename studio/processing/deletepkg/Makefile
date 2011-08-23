@@ -1,10 +1,3 @@
-# AAFSDKINSTALL is path to installed AAF SDK includes and libs (i.e. after an SDK make install)
-ifneq "$(MAKECMDGOALS)" "clean"
-	ifndef AAFSDKINSTALL
-$(error Please set the AAFSDKINSTALL environment variable to the location of your installed AAFSDK files)
-	endif
-endif	
-
 DATABASELIB_DIR = ../../database/src
 COMMON_DIR = ../../../common
 STUDIOCOMMON_DIR = ../../common
@@ -12,7 +5,7 @@ INSTALL_WEB_DIR = /srv/ingex/deletepkg
 
 CC = g++
 CFLAGS = -g -Wall -Wundef -W -Wno-unused-parameter -Wno-non-virtual-dtor -Werror
-INCLUDES = -I. -I$(DATABASELIB_DIR) -I$(COMMON_DIR) -I$(AAFSDKINSTALL)/include
+INCLUDES = -I. -I$(DATABASELIB_DIR) -I$(COMMON_DIR)
 
 COMPILE = $(CC) $(CFLAGS) $(INCLUDES)
 LD = $(CC) -ldl -rdynamic
@@ -30,7 +23,7 @@ $(DATABASELIB_DIR)/libprodautodb.a:
 	@cd $(DATABASELIB_DIR) && $(MAKE) libprodautodb.a
 
 deletepkg: $(DATABASELIB_DIR)/libprodautodb.a $(OBJECTS)
-	$(LD) $(OBJECTS) -Xlinker -rpath -Xlinker . -L$(DATABASELIB_DIR) -L$(COMMON_DIR) -L$(STUDIOCOMMON_DIR) -L$(AAFSDKINSTALL)/lib/debug -lprodautodb -lcommon -lstudiocommon -laafiid -lpqxx -luuid -lpthread -lxerces-c -o $@
+	$(LD) $(OBJECTS) -Xlinker -rpath -Xlinker . -L$(DATABASELIB_DIR) -L$(COMMON_DIR) -L$(STUDIOCOMMON_DIR) -lprodautodb -lcommon -lstudiocommon -lpqxx -luuid -lpthread -lxerces-c -o $@
 
 
 
@@ -45,7 +38,7 @@ deletepkg: $(DATABASELIB_DIR)/libprodautodb.a $(OBJECTS)
 	
 
 .PHONY: install-web
-install-web: create_aaf
+install-web: deletepkg
 	mkdir -p $(INSTALL_WEB_DIR); cp deletepkg $(INSTALL_WEB_DIR)
 
 .PHONY: uninstall-web
