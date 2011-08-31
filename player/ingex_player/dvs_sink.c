@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sink.c,v 1.22 2011/05/11 10:55:24 philipn Exp $
+ * $Id: dvs_sink.c,v 1.23 2011/08/31 09:26:49 philipn Exp $
  *
  *
  *
@@ -266,14 +266,14 @@ static int int_to_dvs_tc(DVSSink *sink, int tc)
     int hr10 = hr / 10;
 
     int result = 0;
-    result &= fr01;
-    result &= (fr10 << 4);
-    result &= (se01 << 8);
-    result &= (se10 << 12);
-    result &= (mi01 << 16);
-    result &= (mi10 << 20);
-    result &= (hr01 << 24);
-    result &= (hr10 << 28);
+    result |= fr01;
+    result |= (fr10 << 4);
+    result |= (se01 << 8);
+    result |= (se10 << 12);
+    result |= (mi01 << 16);
+    result |= (mi10 << 20);
+    result |= (hr01 << 24);
+    result |= (hr10 << 28);
 
     return result;
 }
