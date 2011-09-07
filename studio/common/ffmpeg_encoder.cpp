@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder.cpp,v 1.12 2011/06/14 14:44:32 john_f Exp $
+ * $Id: ffmpeg_encoder.cpp,v 1.13 2011/09/07 15:01:05 john_f Exp $
  *
  * Encode uncompressed video to DV using libavcodec
  *
@@ -305,17 +305,17 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init(MaterialResolution::EnumType res, 
             case Ingex::VideoRaster::PAL_16x9:
             case Ingex::VideoRaster::PAL_592:
             case Ingex::VideoRaster::PAL_608:
-                encoded_frame_size = 150000;
+                buffer_size = 1200000;
                 break;
             case Ingex::VideoRaster::NTSC:
             case Ingex::VideoRaster::NTSC_4x3:
             case Ingex::VideoRaster::NTSC_16x9:
-                encoded_frame_size = 125125;
+                buffer_size = 1001000;
                 break;
             default:
                 break;
             }
-            buffer_size = encoded_frame_size * 8;
+            encoded_frame_size = buffer_size / 8;
             break;
         case MaterialResolution::IMX40_MXF_ATOM:
         case MaterialResolution::IMX40_MXF_1A:
@@ -337,17 +337,17 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init(MaterialResolution::EnumType res, 
             case Ingex::VideoRaster::PAL_16x9:
             case Ingex::VideoRaster::PAL_592:
             case Ingex::VideoRaster::PAL_608:
-                encoded_frame_size = 200000;
+                buffer_size = 1600000;
                 break;
             case Ingex::VideoRaster::NTSC:
             case Ingex::VideoRaster::NTSC_4x3:
             case Ingex::VideoRaster::NTSC_16x9:
-                encoded_frame_size = 166833;
+                buffer_size = 1334667;
                 break;
             default:
                 break;
             }
-            buffer_size = encoded_frame_size * 8;
+            encoded_frame_size = buffer_size / 8;
             break;
         case MaterialResolution::IMX50_MXF_ATOM:
         case MaterialResolution::IMX50_MXF_1A:
@@ -369,17 +369,17 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init(MaterialResolution::EnumType res, 
             case Ingex::VideoRaster::PAL_16x9:
             case Ingex::VideoRaster::PAL_592:
             case Ingex::VideoRaster::PAL_608:
-                encoded_frame_size = 250000;
+                buffer_size = 2000000;
                 break;
             case Ingex::VideoRaster::NTSC:
             case Ingex::VideoRaster::NTSC_4x3:
             case Ingex::VideoRaster::NTSC_16x9:
-                encoded_frame_size = 208541;
+                buffer_size = 1668334;
                 break;
             default:
                 break;
             }
-            buffer_size = encoded_frame_size * 8;
+            encoded_frame_size = buffer_size / 8;
             break;
         case MaterialResolution::DNX36P_MXF_ATOM:
             encoder->codec_context->bit_rate = 36 * 1000000;
