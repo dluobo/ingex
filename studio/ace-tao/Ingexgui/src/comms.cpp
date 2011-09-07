@@ -34,23 +34,17 @@
 Comms::Comms(wxWindow * parent, int& argc, char** argv)
 : wxThread(wxTHREAD_JOINABLE), mParent(parent), mNameService(CosNaming::NamingContext::_nil()) //joinable thread means we can terminate it in order to be able to delete mCondition safely
 {
-    if (argc < 3) {
-        mErrMsg = wxT("To connect to recorders requires nameserver details on the command line, such as \"-ORBDefaultInitRef corbaloc:iiop:192.168.1.123:8888\".");
+    // Initialise ORB
+    try {
+        mOrb = CORBA::ORB_init(argc, argv);
+        SetTimeout(5); //Can lock up for a long time if this isn't set
+    // Initialise naming service, supplied to the orb in the command line args
     }
-    if (mErrMsg.IsEmpty()) {
-        // Initialise ORB
-        try {
-            mOrb = CORBA::ORB_init(argc, argv);
-            SetTimeout(5); //Can lock up for a long time if this isn't set
-        // Initialise naming service, supplied to the orb in the command line args
-        }
-        catch (const CORBA::Exception & e) {
-            wxString msg(e._name(), *wxConvCurrent);
-            mErrMsg = wxT("Failed to initialise ORB: ") + msg;
-        }
+    catch (const CORBA::Exception & e) {
+        wxString msg(e._name(), *wxConvCurrent);
+        mErrMsg = wxT("Failed to initialise ORB: ") + msg;
     }
     if (mErrMsg.IsEmpty() && !InitNs()) {
-        mErrMsg = wxT("Failed to initialise naming service.");
         mOK = false;
     }
     mCondition = new wxCondition(mMutex);
@@ -117,6 +111,7 @@ Comms::~Comms()
 /// If there is no name service initial reference, the orb will try to discover a name service by multicast.
 /// This isn't desirable as it just causes a delay, or possible selection of wrong name service.
 /// Not sure how to disable it, though.
+/// @return True if successful; otherwise, mErrMsg contains a description of the error.
 bool Comms::InitNs()
 {
     bool ok_so_far = true;
@@ -127,10 +122,8 @@ bool Comms::InitNs()
     }
     catch (const CORBA::Exception & e)
     {
-        wxString msg(e._name(), *wxConvCurrent);
-        msg = wxT("No NameService reference available: ") + msg;
-        wxMessageDialog dlg(mParent, msg, wxT("Comms problem"), wxICON_EXCLAMATION | wxOK);
-        dlg.ShowModal();
+        mErrMsg = wxString(e._name(), *wxConvCurrent);
+        mErrMsg = wxT("No NameService reference available: ") + mErrMsg + wxT(". Have you provided nameserver details on the command line, such as \"-ORBDefaultInitRef corbaloc:iiop:192.168.1.123:8888\"?");
         ok_so_far = false;
     }
 
