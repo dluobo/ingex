@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: controller.cpp,v 1.18 2011/05/16 09:37:22 john_f Exp $          *
+ *   $Id: controller.cpp,v 1.19 2011/09/07 15:09:45 john_f Exp $          *
  *                                                                         *
  *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -388,7 +388,7 @@ wxThread::ExitCode Controller::Entry()
         ProdAuto::Recorder::ReturnCode rc = ProdAuto::Recorder::SUCCESS;
         wxString msg;
         CORBA::StringSeq_var strings; //deletes itself
-        ProdAuto::MxfTimecode timecode; //structure so deletes itself
+        ProdAuto::MxfTimecode timecode = InvalidMxfTimecode; //structure so deletes itself
         //send a recorder command, if any
         for (int i = 0; i < 2; i++) { //always good to try things twice with CORBA
             event.SetResult(SUCCESS); //default

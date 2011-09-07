@@ -11,7 +11,7 @@ Summary: FFmpeg library with DNxHD(VC-3) DVCPRO-HD H.264 AAC MP3 A52(AC-3) codec
 Name: ffmpeg-DNxHD-h264-aac
 %endif
 Version: 0.5
-Release: 10
+Release: 11
 License: GPL
 Group: System Environment/Daemons
 Source: ffmpeg-%{version}.tar.bz2
@@ -30,6 +30,7 @@ Patch11: ffmpeg-0.5-imx-frame-too-large-error.patch
 Patch12: ffmpeg-0.5-mpeg2-closed-gop-b-frames.patch
 Patch13: ffmpeg-0.5-x264-require-check.patch
 Patch14: ffmpeg-0.5-dnxhd-fix-interlaced-decoding-issue-1753.patch
+Patch15: ffmpeg-0.5-imx-ntsc-buffer-size.patch
 Url: http://www.ffmpeg.org/download.html
 BuildRoot: %{_tmppath}/%{name}-root
 BuildRequires: autoconf nasm
@@ -76,6 +77,7 @@ rm -rf $RPM_BUILD_ROOT
 %patch12
 %patch13
 %patch14
+%patch15
 
 %build
 %if %{build_swpat_restricted}
@@ -120,6 +122,13 @@ rm -rf $RPM_BUILD_ROOT
 /usr/share/
 
 %changelog
+* Mon Aug 22 2011 Philip de Nier, 0.5-11
+- Add ffmpeg patch (ffmpeg git commit b33451eeacaa31a7b4f15daf3f106763a4093aa0)
+  to check IMX video rc_buffer_size value using integer arithmetic to fix
+  rejection due to rounding errors in the original check
+- Add patch to round down when calculating the stuffing bytes to fix variable
+  IMX40/50 frame sizes at NTSC rate
+
 * Tue Jul 05 2011 Philip de Nier, 0.5-10
 - Add ffmpeg patch (ffmpeg git commit 1307463d5259a80fdbb43f50434eb9ba37c50d30)
   to fix decoding of interlaced dnxhd files produced by Avid. Search for

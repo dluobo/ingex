@@ -1,0 +1,35 @@
+--- ./libavcodec/mpegvideo_enc.c	2009-03-02 05:18:33.000000000 +0000
++++ ../ffmpeg-0.5/libavcodec/mpegvideo_enc.c	2011-08-22 15:24:09.000000000 +0100
+@@ -333,7 +333,7 @@
+         av_log(avctx, AV_LOG_INFO, "impossible bitrate constraints, this will fail\n");
+     }
+ 
+-    if(avctx->rc_buffer_size && avctx->bit_rate*av_q2d(avctx->time_base) > avctx->rc_buffer_size){
++    if(avctx->rc_buffer_size && avctx->bit_rate*(int64_t)avctx->time_base.num > avctx->rc_buffer_size * (int64_t)avctx->time_base.den){
+         av_log(avctx, AV_LOG_ERROR, "VBV buffer too small for bitrate\n");
+         return -1;
+     }
+--- ./libavcodec/ratecontrol.c	2009-02-01 02:00:19.000000000 +0000
++++ ../ffmpeg-0.5/libavcodec/ratecontrol.c	2011-08-22 17:06:02.000000000 +0100
+@@ -287,16 +287,16 @@
+         rcc->buffer_index += av_clip(left, min_rate, max_rate);
+ 
+         if(rcc->buffer_index > buffer_size){
+-            int stuffing= ceil((rcc->buffer_index - buffer_size)/8);
++            int stuffing= rcc->buffer_index - buffer_size;
+ 
+-            if(stuffing < 4 && s->codec_id == CODEC_ID_MPEG4)
+-                stuffing=4;
+-            rcc->buffer_index -= 8*stuffing;
++            if(stuffing < 32 && s->codec_id == CODEC_ID_MPEG4)
++                stuffing=32;
++            rcc->buffer_index -= stuffing;
+ 
+             if(s->avctx->debug & FF_DEBUG_RC)
+                 av_log(s->avctx, AV_LOG_DEBUG, "stuffing %d bytes\n", stuffing);
+ 
+-            return stuffing;
++            return stuffing >> 3;
+         }
+     }
+     return 0;
