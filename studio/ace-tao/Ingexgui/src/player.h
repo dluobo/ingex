@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: player.h,v 1.22 2011/04/19 07:04:02 john_f Exp $                *
+ *   $Id: player.h,v 1.23 2011/09/07 15:07:08 john_f Exp $                *
  *                                                                         *
  *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -289,7 +289,7 @@ class Player : public wxPanel, prodauto::LocalIngexPlayer
         ChunkInfo* mCurrentChunkInfo;
         prodauto::PlayerInputType mInputType;
         bool mDivertKeyPresses;
-        unsigned int mNVideoTracks;
+        int mNVideoTracks;
         bool mRecording;
         bool mPrematureStart;
         bool mUsingDVSCard;

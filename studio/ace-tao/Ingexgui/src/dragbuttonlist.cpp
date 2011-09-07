@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: dragbuttonlist.cpp,v 1.20 2011/07/13 14:48:21 john_f Exp $      *
+ *   $Id: dragbuttonlist.cpp,v 1.21 2011/09/07 15:07:08 john_f Exp $      *
  *                                                                         *
  *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -67,16 +67,17 @@ void DragButtonList::OnRadioButton(wxCommandEvent& event)
 /// @param chunkInfo The file names, the track names and the track types.  Gets all info from here rather than examining the files themselves, because they may not be available yet.  Checks for null pointer.
 /// @param fileNames Returns the file name associated with each video track which has a file, with the audio filenames at the end.
 /// @param trackNames Returns corresponding names of tracks.
-/// @param nVideoTracks Returns the number of video tracks.
+/// @param nVideoTracks Returns the number of video tracks (-1 if not known).
 /// @return The input type.
-prodauto::PlayerInputType DragButtonList::SetTracks(ChunkInfo* chunkInfo, std::vector<std::string> & fileNames, std::vector<std::string> & trackNames, unsigned int & nVideoTracks)
+prodauto::PlayerInputType DragButtonList::SetTracks(ChunkInfo* chunkInfo, std::vector<std::string> & fileNames, std::vector<std::string> & trackNames, int & nVideoTracks)
 {
     Clear();
     fileNames.clear();
     trackNames.clear();
-    nVideoTracks = 0;
+    nVideoTracks = -1; //unknown
     prodauto::PlayerInputType inputType = prodauto::MXF_INPUT;
     if (chunkInfo) {
+        nVideoTracks = 0;
         std::vector<std::string> audioFileNames;
         if (chunkInfo->GetFiles()->GetCount()) { //this chunk has files associated
             wxRadioButton * split = new wxRadioButton(this, wxID_HIGHEST + 1, wxT("Split View")); //the split is always the first video track (id = 0)
@@ -138,7 +139,7 @@ prodauto::PlayerInputType DragButtonList::SetTracks(ChunkInfo* chunkInfo, std::v
 /// @param trackNames Returns corresponding Clip Track Strings.
 /// @param nVideoTracks Returns the number of video tracks.
 /// @return The input type.
-prodauto::PlayerInputType DragButtonList::SetMXFFiles(wxArrayString & paths, std::vector<std::string> & fileNames, std::vector<std::string> & trackNames, unsigned int & nVideoTracks)
+prodauto::PlayerInputType DragButtonList::SetMXFFiles(wxArrayString & paths, std::vector<std::string> & fileNames, std::vector<std::string> & trackNames, int & nVideoTracks)
 {
     Clear();
     fileNames.clear();
@@ -216,12 +217,13 @@ const wxString DragButtonList::GetProjectName()
 /// All buttons are disabled.
 /// @param sources Returns the source name associated with each source.
 /// @param names Returns corresponding displayed names.
+/// @param nVideoTracks Returns the number of video tracks.
 /// @return The input type.
 
 #define N_SOURCES 4
 
 #ifndef DISABLE_SHARED_MEM_SOURCE
-prodauto::PlayerInputType DragButtonList::SetEtoE(std::vector<std::string> & sources, std::vector<std::string> & names, unsigned int & nVideoTracks)
+prodauto::PlayerInputType DragButtonList::SetEtoE(std::vector<std::string> & sources, std::vector<std::string> & names, int & nVideoTracks)
 {
     Clear();
     sources.clear();

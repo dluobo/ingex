@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: player.cpp,v 1.35 2011/05/20 08:41:43 john_f Exp $              *
+ *   $Id: player.cpp,v 1.36 2011/09/07 15:07:08 john_f Exp $              *
  *                                                                         *
  *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -78,6 +78,7 @@ mPrevTrafficControl(true), //so that it can be switched off
 mMode(RECORDINGS), mPreviousMode(RECORDINGS),
 mCurrentChunkInfo(0), //to check before accessing in case it hasn't been set
 mDivertKeyPresses(false),
+mNVideoTracks(-1), //unknown
 mRecording(false),
 mPrematureStart(false),
 mUsingDVSCard(false),
@@ -215,9 +216,8 @@ void Player::OnImageClick(wxCommandEvent& event)
     }
 }
 
-/// Creates track selector if not already created.
-/// @param parent Parent for the track selector (if not already created).
-/// @return The track selector.
+/// Returns ref to track selector, creating if not already present.
+/// @param parent Parent for the track selector (ignored if already created).
 DragButtonList* Player::GetTrackSelector(wxWindow * parent)
 {
     if (!mTrackSelector) {
@@ -659,7 +659,7 @@ bool Player::Start()
 {
 //std::cerr << "Player Start" << std::endl;
     bool allFilesOpen = false;
-    if (mEnabled) {
+    if (mEnabled && -1 != mNVideoTracks) {
         mPrematureStart = !mSavedState; //start once we get the saved state
         if (mSavedState && mFileNames.size()) {
             mOpened.clear();
@@ -670,7 +670,7 @@ bool Player::Start()
                 PlayerInput input;
                 input.name = mFileNames[i];
                 input.type = mInputType;
-                input.options["fallback_blank"] = (i < mNVideoTracks && prodauto::SHM_INPUT != mInputType) ? "true" : "false"; //display a blank source if the file cannot be opened, to avoid pictures rearranging themselves as files appear, but don't with shared memory as this situation won't occur and it only produces a black window and uses unnecessary CPU resources
+                input.options["fallback_blank"] = (i < (size_t) mNVideoTracks && prodauto::SHM_INPUT != mInputType) ? "true" : "false"; //display a blank source if the file cannot be opened, to avoid pictures rearranging themselves as files appear, but don't with shared memory as this situation won't occur and it only produces a black window and uses unnecessary CPU resources
                 inputs.push_back(input);
             }
             int64_t frameOffset;
@@ -1579,7 +1579,7 @@ void Player::SetAudioFollowsVideo()
 void Player::SetVideoSplit(const bool restart)
 {
     bool limited = mSavedState && mSavedState->GetBoolValue(wxT("LimitSplitToQuad"), false);
-    if (mConnected) setVideoSplit((mNVideoTracks > 4 && !limited) ? NONA_SPLIT_VIDEO_SWITCH : QUAD_SPLIT_VIDEO_SWITCH); //this doesn't take effect until the player is reloaded
+    if (mConnected && -1 != mNVideoTracks) setVideoSplit((mNVideoTracks > 4 && !limited) ? NONA_SPLIT_VIDEO_SWITCH : QUAD_SPLIT_VIDEO_SWITCH); //this doesn't take effect until the player is reloaded
     if (mTrackSelector) mTrackSelector->LimitSplitToQuad(limited);
     if (
      mOK
