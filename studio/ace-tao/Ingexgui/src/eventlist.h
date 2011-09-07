@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: eventlist.h,v 1.14 2011/07/27 17:08:36 john_f Exp $             *
+ *   $Id: eventlist.h,v 1.15 2011/09/07 15:05:41 john_f Exp $             *
  *                                                                         *
  *   Copyright (C) 2009-2011 British Broadcasting Corporation                   *
  *   - all rights reserved.                                                *
@@ -94,7 +94,8 @@ class wxSocketEvent;
 class EventList : public wxListView, wxThread //used wxListCtrl for a while because wxListView crashed when you added an item - seems ok with 2.8
 {
     public:
-        EventList(wxWindow *, wxWindowID, const wxPoint & = wxDefaultPosition, const wxSize & = wxDefaultSize, bool = true);
+        EventList(wxWindow *, wxWindowID, const wxPoint & = wxDefaultPosition, const wxSize & = wxDefaultSize, bool = true, const wxString & = wxEmptyString);
+        ~EventList();
         enum EventType //NB order must match TypeLabels[] initialisation
         {
             NONE = 0,
@@ -119,7 +120,6 @@ class EventList : public wxListView, wxThread //used wxListCtrl for a while beca
         bool InLastTake();
         bool AtBottom();
         bool SelectedChunkHasChanged();
-        void Load();
         ProdAuto::MxfTimecode GetEditRate() {return mEditRate;};
         ProdAuto::LocatorSeq GetLocators();
         ChunkInfo * GetCurrentChunkInfo();
@@ -129,6 +129,7 @@ class EventList : public wxListView, wxThread //used wxListCtrl for a while beca
         bool JumpToTimecode(const ProdAuto::MxfTimecode &, int64_t &);
     private:
         ExitCode Entry();
+        void Load();
         void OnEventBeginEdit(wxListEvent&);
         void OnEventEndEdit(wxListEvent&);
         void OnRestoreListLabel(wxCommandEvent&);
@@ -153,7 +154,6 @@ class EventList : public wxListView, wxThread //used wxListCtrl for a while beca
         wxXmlNode * mPrevRecordingNode;
         bool mRunThread;
         bool mSyncThread;
-        bool mLoadEventFiles;
         wxString mFilename;
         ProdAuto::MxfTimecode mEditRate;
         ProdAuto::MxfTimecode mRecStartTimecode;

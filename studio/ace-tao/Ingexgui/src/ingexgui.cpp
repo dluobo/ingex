@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: ingexgui.cpp,v 1.46 2011/08/05 11:05:35 john_f Exp $           *
+ *   $Id: ingexgui.cpp,v 1.47 2011/09/07 15:05:41 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -269,15 +269,19 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
     mRecorderGroup = new RecorderGroupCtrl(this, wxID_ANY, wxDefaultPosition, size, argc, argv_); //do this here to allow the ORB to remove its options, which would otherwise prevent parsing of the command line.
     wxCmdLineParser parser(argc, argv_);
     parser.AddSwitch(wxT("h"), wxT("help"), wxT("Display this help message"), wxCMD_LINE_OPTION_HELP);
-    parser.AddSwitch(wxT("n"), wxEmptyString, wxT("Do not load recording list files"));
+    parser.AddOption(wxT("l"), wxEmptyString, wxT("Use specified recording list filename"));
+    parser.AddSwitch(wxT("n"), wxEmptyString, wxT("Do not load recording list file (causes option -l to be ignored)"));
     parser.AddSwitch(wxT("p"), wxEmptyString, wxT("Disable player"));
-    parser.AddOption(wxT("r"), wxEmptyString, wxString::Format(wxT("Root path for recordings playback dialogue (defaults to %s)"), RECORDING_SERVER_ROOT)); //FIXME: not Windows-compatible
-    parser.AddOption(wxT("s"), wxEmptyString, wxString::Format(wxT("Path for snapshots (defaults to %s)"), SNAPSHOT_PATH)); //FIXME: not Windows-compatible
+    parser.AddOption(wxT("r"), wxEmptyString, wxString::Format(wxT("Use specified path for sources for recordings playback dialogue (defaults to %s)"), RECORDING_SERVER_ROOT)); //FIXME: not Windows-compatible
+    parser.AddOption(wxT("s"), wxEmptyString, wxString::Format(wxT("Use specified path for snapshots (defaults to %s)"), SNAPSHOT_PATH)); //FIXME: not Windows-compatible
     parser.AddOption(wxEmptyString, wxT("ORB..."), wxT("ORB options, such as \"-ORBDefaultInitRef corbaloc:iiop:192.168.1.123:8888\" (note: SINGLE dash - not as shown at the start of this line)"), wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_MULTIPLE); //a dummy option simply to augment the usage message
     if (parser.Parse()) {
         Log(wxT("Application closed due to incorrect arguments.")); //this can segfault if done after Destroy()
         Destroy();
         exit(1);
+    }
+    for (int i = 0; i < argc; i++) {
+        delete[] argv_[i];
     }
     delete[] argv_;
     wxString recordingServerRoot = RECORDING_SERVER_ROOT;
@@ -501,8 +505,9 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
     sizer2dH->Add(new wxButton(eventPanel, BUTTON_DeleteCue, wxT("Delete Cue Point")), 0, wxALL, CONTROL_BORDER);
 
     //event list
-    mEventList = new EventList(eventPanel, -1, wxDefaultPosition, wxSize(splitterWindow->GetClientSize().x, EVENT_LIST_HEIGHT), !parser.Found(wxT("n")));
-    mEventList->Load(); //this should be done in the constructor but causes a segfault
+    wxString recList;
+    parser.Found(wxT("l"), &recList);
+    mEventList = new EventList(eventPanel, -1, wxDefaultPosition, wxSize(splitterWindow->GetClientSize().x, EVENT_LIST_HEIGHT), !parser.Found(wxT("n")), recList);
     eventPanelSizer->Add(mEventList, 1, wxEXPAND + wxALL, CONTROL_BORDER);
 
     //Global window settings
@@ -536,7 +541,6 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
     mRecorderGroup->StartGettingRecorders(); //safe to let it generate events now that everything has been created (events will be processed if any dialogue is visible, such as the saved preferences warnings above)
     SetStatus(STOPPED);
     wxUpdateUIEvent::SetUpdateInterval(50); //update controls frequently but not as often as possible!
-    mMenuShortcuts->UpdateUI(); //otherwise doesn't apply shortcuts on dynamically-generated menu labels until the menu is displayed
 }
 
 /// Responds to an application close event by closing, preventing closure or seeking confirmation, depending on the circumstances.
@@ -1077,7 +1081,8 @@ void IngexguiFrame::OnTimeposEvent(wxCommandEvent& event)
 /// @param event The command event; ExtraLong is set to indicate a forced reload.  Do not use GetItem() to determine the selection as this may not be valid.
 void IngexguiFrame::OnEventSelection(wxListEvent& event)
 {
-    if (mPlayer) mTestModeDlg->SetRecordPaths(mPlayer->SelectRecording(mEventList->GetCurrentChunkInfo(), mEventList->GetCurrentCuePoint(), event.GetExtraLong()));
+    //Use GetEventObject() because this handler is called before mEventList is set
+    if (mPlayer) mTestModeDlg->SetRecordPaths(mPlayer->SelectRecording(((EventList* ) event.GetEventObject())->GetCurrentChunkInfo(), ((EventList* ) event.GetEventObject())->GetCurrentCuePoint(), event.GetExtraLong()));
 }
 
 /// Responds to an event (cue point) being double-clicked.
@@ -1873,6 +1878,9 @@ void IngexguiFrame::OnUpdateUI(wxUpdateUIEvent& event)
                         dynamic_cast<RecordButton*>(event.GetEventObject())->Normal();
                         break;
                 }
+                //Trigger updating of the shortcuts menu to make sure that the enable status of shortcut keys is up to date; otherwise doesn't apply shortcuts on dynamically-generated menu labels until the menu is displayed
+                //This could be done in response to updating any regularly-updated control
+                mMenuShortcuts->UpdateUI();
             }
             else {
                 event.SetText(legend + wxT("\tF1"));

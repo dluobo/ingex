@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: eventlist.cpp,v 1.21 2011/07/27 17:08:36 john_f Exp $           *
+ *   $Id: eventlist.cpp,v 1.22 2011/09/07 15:05:41 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2009-2011 British Broadcasting Corporation                   *
  *   - all rights reserved.                                                *
@@ -45,9 +45,9 @@ END_EVENT_TABLE()
 
 const wxString TypeLabels[] = {wxT(""), wxT("Start"), wxT("Cue"), wxT("Chunk Start"), wxT("Last Frame"), wxT("PROBLEM")}; //must match order of EventType enum
 
-EventList::EventList(wxWindow * parent, wxWindowID id, const wxPoint & pos, const wxSize & size, bool loadEventFiles) :
+EventList::EventList(wxWindow * parent, wxWindowID id, const wxPoint & pos, const wxSize & size, bool loadEventFile, const wxString & eventFilename) :
 wxListView(parent, id, pos, size, wxLC_REPORT|wxLC_SINGLE_SEL|wxSUNKEN_BORDER|wxLC_EDIT_LABELS/*|wxALWAYS_SHOW_SB*/), //ALWAYS_SHOW_SB results in a disabled scrollbar on GTK (wx 2.8))
-mCanEditAfter(0), mCurrentChunkInfo(-1), mBlockEventItem(-1), mRecordingNodeCount(0), mChunking(false), mRunThread(false), mSyncThread(false), mLoadEventFiles(loadEventFiles), mEditRate(InvalidMxfTimecode), mRecStartTimecode(InvalidMxfTimecode)
+mCanEditAfter(0), mCurrentChunkInfo(-1), mBlockEventItem(-1), mRecordingNodeCount(0), mChunking(false), mRunThread(false), mSyncThread(false), mEditRate(InvalidMxfTimecode), mRecStartTimecode(InvalidMxfTimecode)
 {
     //set up the columns
     wxListItem itemCol;
@@ -70,14 +70,19 @@ mCanEditAfter(0), mCurrentChunkInfo(-1), mBlockEventItem(-1), mRecordingNodeCoun
     itemCol.SetText(wxT("Description"));
     InsertColumn(3, itemCol); //will set width of this automatically later
     mRootNode = new wxXmlNode(wxXML_ELEMENT_NODE, ROOT_NODE_NAME);
-//idea for storing in a standard place  mFilename = wxStandardPaths::Get().GetUserConfigDir() + wxFileName::GetPathSeparator() + SAVED_STATE_FILENAME;
-    mFilename = wxDateTime::Now().Format(wxT("ingexgui-%y%m%d.xml"));
+    if (eventFilename.IsEmpty()) {
+//idea for storing in a standard place:  mFilename = wxStandardPaths::Get().GetUserConfigDir() + wxFileName::GetPathSeparator() + SAVED_STATE_FILENAME;
+        mFilename = wxDateTime::Now().Format(wxT("ingexgui-%y%m%d.xml"));
+    }
+    else {
+        mFilename = eventFilename;
+    }
     //start the thread (not checking for errors as not crucial to save; not waiting until thread starts as not crucial either)
     mCondition = new wxCondition(mMutex);
     mMutex.Lock(); //that's how the thread expects it
     wxThread::Create();
     wxThread::Run();
-//    Load(); segfaults if called here, at GetFirstSelected() in GetCurrentChunkInfo()
+    if (loadEventFile) Load();
 
     //socket for accepting cue points from external processes
     wxIPV4address addr;
@@ -94,6 +99,11 @@ mCanEditAfter(0), mCurrentChunkInfo(-1), mBlockEventItem(-1), mRecordingNodeCoun
         AddPendingEvent(loggingEvent);
         cuePointSocket->Destroy();
     }
+}
+
+EventList::~EventList()
+{
+    delete mCondition;
 }
 
 /// Responds to the selected item being changed, either by the user or programmatically.
@@ -193,6 +203,7 @@ void EventList::OnEventEndEdit(wxListEvent& event)
     }
     //tell the frame so that alphanumeric shortcuts can be re-enabled
     wxListEvent frameEvent(wxEVT_COMMAND_LIST_END_LABEL_EDIT);
+    event.SetEventObject(this);
     GetParent()->AddPendingEvent(frameEvent);
 }
 
@@ -271,6 +282,7 @@ void EventList::SelectPrevTake(const bool withinTake)
         else if (withinTake) { //moving position in the recording but not moving position in the list
             //simulate selecting the start of the recording - NB no way I can see of setting the selection value of the event
             wxListEvent event(wxEVT_COMMAND_LIST_ITEM_SELECTED);
+            event.SetEventObject(this);
             GetParent()->AddPendingEvent(event);
         }
     }
@@ -662,6 +674,7 @@ void EventList::AddRecorderData(RecorderData * data, bool reload)
     if (InLastTake() && reload) {
         //simulate selecting the start of the recording - NB no way I can see of setting the selection value of the event
         wxListEvent event(wxEVT_COMMAND_LIST_ITEM_SELECTED);
+        event.SetEventObject(this);
         event.SetExtraLong(1); //signals a forced reload
         GetParent()->AddPendingEvent(event);
     }
