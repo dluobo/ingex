@@ -1,5 +1,5 @@
 /*
- * $Id: mxf_source.c,v 1.26 2011/08/19 12:33:25 philipn Exp $
+ * $Id: mxf_source.c,v 1.27 2011/09/09 11:36:00 philipn Exp $
  *
  *
  *
@@ -317,7 +317,7 @@ static int map_allocate_buffer(MXFReaderListener* mxfListener, int trackIndex, u
         outputBufferSize = bufferSize / source->trackData[trackIndex].numOutputStreams;
 
         /* allocate the input buffer */
-        if (source->trackData[trackIndex].audioBufferSize <= outputBufferSize)
+        if (source->trackData[trackIndex].audioBufferSize <= bufferSize)
         {
             SAFE_FREE(&source->trackData[trackIndex].audioBuffer);
             source->trackData[trackIndex].audioBufferSize = 0;
