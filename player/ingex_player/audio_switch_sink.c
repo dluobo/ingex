@@ -1,5 +1,5 @@
 /*
- * $Id: audio_switch_sink.c,v 1.6 2011/05/11 10:54:41 philipn Exp $
+ * $Id: audio_switch_sink.c,v 1.7 2011/09/09 17:32:27 philipn Exp $
  *
  *
  *
@@ -472,7 +472,7 @@ static int qas_accept_stream_frame(void* data, int streamId, const FrameInfo* fr
     AudioStreamElement* inputStream = NULL;
     AudioStreamElement* outputStream = NULL;
     VideoSwitchSink* videoSwitch = NULL;
-    char clipIds[CLIP_ID_SIZE][MAX_SPLIT_COUNT];
+    char clipIds[MAX_SPLIT_COUNT][CLIP_ID_SIZE];
     int sourceIds[MAX_SPLIT_COUNT];
     int numIds;
     AudioStreamGroup* videoGroup = NULL;
@@ -518,7 +518,7 @@ static int qas_accept_stream_frame(void* data, int streamId, const FrameInfo* fr
                             if (firstVideoGroupWithAudio)
                             {
                                 /* choose first available group */
-                                swtch->currentGroup = videoGroup;
+                                swtch->currentGroup = firstVideoGroupWithAudio;
                             }
                             else
                             {

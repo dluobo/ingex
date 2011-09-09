@@ -1,5 +1,5 @@
 /*
- * $Id: video_switch_sink.c,v 1.14 2011/05/11 10:54:41 philipn Exp $
+ * $Id: video_switch_sink.c,v 1.15 2011/09/09 17:32:27 philipn Exp $
  *
  *
  *
@@ -1861,8 +1861,8 @@ static int qvs_get_video_index(void* data, int imageWidth, int imageHeight, int 
     return 1;
 }
 
-static int qvs_get_active_clip_ids(void *data, char clipIds[][MAX_SPLIT_COUNT], int sourceIds[MAX_SPLIT_COUNT],
-                                   int *numIds)
+static int qvs_get_active_clip_ids(void *data, char clipIds[MAX_SPLIT_COUNT][CLIP_ID_SIZE],
+                                   int sourceIds[MAX_SPLIT_COUNT], int *numIds)
 {
     DefaultVideoSwitch *swtch = (DefaultVideoSwitch*)data;
     int result = 0;
@@ -2073,7 +2073,8 @@ int vsw_get_video_index(VideoSwitchSink* swtch, int width, int height, int xPos,
     return 0;
 }
 
-int vsw_get_active_clip_ids(VideoSwitchSink* swtch, char clipId[][9], int sourceId[9], int* numIds)
+int vsw_get_active_clip_ids(VideoSwitchSink* swtch, char clipId[MAX_SPLIT_COUNT][CLIP_ID_SIZE],
+                            int sourceId[MAX_SPLIT_COUNT], int* numIds)
 {
     if (swtch && swtch->get_active_clip_ids)
     {
