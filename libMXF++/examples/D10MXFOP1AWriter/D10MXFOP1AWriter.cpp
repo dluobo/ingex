@@ -1,5 +1,5 @@
 /*
- * $Id: D10MXFOP1AWriter.cpp,v 1.11 2011/07/13 15:17:40 philipn Exp $
+ * $Id: D10MXFOP1AWriter.cpp,v 1.12 2011/09/09 11:22:41 philipn Exp $
  *
  * D10 MXF OP-1A writer
  *
@@ -32,6 +32,9 @@
 
 using namespace std;
 using namespace mxfpp;
+
+
+#define UNKNOWN_SEQUENCE_OFFSET     255
 
 
 static const char *DEFAULT_COMPANY_NAME = "BBC";
@@ -163,6 +166,7 @@ D10MXFOP1AWriter::D10MXFOP1AWriter()
     SetSampleRate(D10_SAMPLE_RATE_625_50I);
     SetAudioChannelCount(4);
     SetAudioQuantizationBits(24);
+    mAudioSequenceOffset = UNKNOWN_SEQUENCE_OFFSET;
     SetAspectRatio(default_aspect_ratio);
     SetStartTimecode(0, false);
     SetBitRate(D10_BIT_RATE_50, mMaxEncodedImageSize);
@@ -190,6 +194,7 @@ D10MXFOP1AWriter::D10MXFOP1AWriter()
     mMaterialPackageTC = 0;
     mFilePackageTC = 0;
     
+    mContentPackage = new D10ContentPackageInt();
     mAES3Block.allocate(1920 * 4 * 8 + 4); // max size required
     
     mDuration = 0;
@@ -198,6 +203,10 @@ D10MXFOP1AWriter::D10MXFOP1AWriter()
 D10MXFOP1AWriter::~D10MXFOP1AWriter()
 {
     size_t i;
+    for (i = 0; i < mBufferedContentPackages.size(); i++)
+        delete mBufferedContentPackages[i];
+    delete mContentPackage;
+
     for (i = 0; i < mSetsWithDuration.size(); i++)
         delete mSetsWithDuration[i];
     
@@ -226,7 +235,7 @@ void D10MXFOP1AWriter::SetSampleRate(D10SampleRate sample_rate)
         mVideoSampleRate.denominator = 1001;
         mRoundedTimecodeBase = 30;
         mAudioSequenceCount = 5;
-        mAudioSequenceIndex = 0;
+        mAudioSequenceIndex = 0; // will be set later
         mAudioSequence[0] = 1602;
         mAudioSequence[1] = 1601;
         mAudioSequence[2] = 1602;
@@ -246,6 +255,11 @@ void D10MXFOP1AWriter::SetAudioQuantizationBits(uint32_t bits)
     MXFPP_CHECK(bits >= 16 && bits <= 24);
     mAudioQuantizationBits = bits;
     mAudioBytesPerSample = (mAudioQuantizationBits + 7) / 8;
+}
+
+void D10MXFOP1AWriter::SetAudioSequenceOffset(uint8_t offset)
+{
+    mAudioSequenceOffset = offset;
 }
 
 void D10MXFOP1AWriter::SetAspectRatio(mxfRational aspect_ratio)
@@ -639,7 +653,7 @@ void D10MXFOP1AWriter::SetUserTimecode(Timecode user_timecode)
 {
     MXFPP_ASSERT(mMXFFile);
     
-    mContentPackage.mUserTimecode = user_timecode;
+    mContentPackage->mUserTimecode = user_timecode;
 }
 
 Timecode D10MXFOP1AWriter::GenerateUserTimecode()
@@ -685,39 +699,64 @@ void D10MXFOP1AWriter::SetVideo(const unsigned char *data, uint32_t size)
     MXFPP_ASSERT(mMXFFile);
     MXFPP_CHECK(size > 0 && size <= mEncodedImageSize);
     
-    mContentPackage.mVideoBytes.setBytes(data, size);
+    mContentPackage->mVideoBytes.setBytes(data, size);
     
     if (size < mEncodedImageSize)
-        mContentPackage.mVideoBytes.appendZeros(mEncodedImageSize - size);
+        mContentPackage->mVideoBytes.appendZeros(mEncodedImageSize - size);
 }
 
 uint32_t D10MXFOP1AWriter::GetAudioSampleCount()
 {
-    return mAudioSequence[mAudioSequenceIndex];
+    if (mAudioSequenceCount > 1 && mAudioSequenceOffset == UNKNOWN_SEQUENCE_OFFSET)
+        return mAudioSequence[mBufferedContentPackages.size() % mAudioSequenceCount]; // sample count for default sequence
+    else if (mAudioSequenceCount > 1 && mAudioSequenceOffset != UNKNOWN_SEQUENCE_OFFSET && mDuration == 0)
+        return mAudioSequence[mAudioSequenceOffset % mAudioSequenceCount]; // in case CreateFile() hasn't been called yet
+    else
+        return mAudioSequence[mAudioSequenceIndex];
 }
 
 void D10MXFOP1AWriter::SetAudio(uint32_t channel, const unsigned char *data, uint32_t size)
 {
     MXFPP_ASSERT(mMXFFile);
     MXFPP_ASSERT(channel < mChannelCount);
-    MXFPP_CHECK(size == mAudioSequence[mAudioSequenceIndex] * mAudioBytesPerSample);
     
-    mContentPackage.mAudioBytes[channel].setBytes(data, size);
+    mContentPackage->mAudioBytes[channel].setBytes(data, size);
 }
 
 void D10MXFOP1AWriter::WriteContentPackage()
 {
-    MXFPP_CHECK(mContentPackage.IsComplete(mChannelCount));
+    MXFPP_CHECK(mContentPackage->IsComplete(mChannelCount));
 
-    WriteContentPackage(&mContentPackage);
+    WriteContentPackage(mContentPackage);
 
-    mContentPackage.Reset();
+    mContentPackage->Reset();
 }
 
 void D10MXFOP1AWriter::WriteContentPackage(const D10ContentPackage *content_package)
 {
     MXFPP_ASSERT(mMXFFile);
     
+    // determine sequence offset or buffer content package and determine later
+
+    if (mAudioSequenceCount > 1 && mAudioSequenceOffset == UNKNOWN_SEQUENCE_OFFSET) {
+        if (mBufferedContentPackages.size() + 1 <= mAudioSequenceCount) {
+            GetAudioSequenceOffset(content_package); // just a check
+            mBufferedContentPackages.push_back(new D10ContentPackageInt(content_package));
+            return;
+        }
+
+        mAudioSequenceOffset = GetAudioSequenceOffset(content_package);
+        mAudioSequenceIndex = mAudioSequenceOffset;
+
+        size_t i;
+        for (i = 0; i < mBufferedContentPackages.size(); i++) {
+            WriteContentPackage(mBufferedContentPackages[i]);
+            delete mBufferedContentPackages[i];
+        }
+        mBufferedContentPackages.clear();
+    }
+
+
     // write system item
     
     uint32_t element_size = WriteSystemItem(content_package);
@@ -772,6 +811,20 @@ void D10MXFOP1AWriter::CompleteFile()
 {
     MXFPP_ASSERT(mMXFFile);
 
+    // write buffered content packages
+    if (!mBufferedContentPackages.empty()) {
+        mAudioSequenceOffset = GetAudioSequenceOffset(0);
+        mAudioSequenceIndex = mAudioSequenceOffset;
+
+        size_t i;
+        for (i = 0; i < mBufferedContentPackages.size(); i++) {
+            WriteContentPackage(mBufferedContentPackages[i]);
+            delete mBufferedContentPackages[i];
+        }
+        mBufferedContentPackages.clear();
+    }
+
+
     // write the footer partition pack
     Partition &footer_partition = mMXFFile->createPartition();
     footer_partition.setKey(&MXF_PP_K(ClosedComplete, Footer));
@@ -821,6 +874,8 @@ void D10MXFOP1AWriter::CreateFile()
         // check the fill item fits with the smaller audio frame size
         MXFPP_ASSERT(1601 * 4 * 8 + 4 <= mAudioItemSize - mxfKey_extlen - LLEN);
     }
+    if (mAudioSequenceCount > 1 && mAudioSequenceOffset != UNKNOWN_SEQUENCE_OFFSET)
+        mAudioSequenceIndex = mAudioSequenceOffset % mAudioSequenceCount;
     
     
     // set minimum llen
@@ -957,5 +1012,36 @@ uint32_t D10MXFOP1AWriter::WriteAES3AudioElement(const D10ContentPackage *conten
     MXFPP_CHECK(mMXFFile->write(mAES3Block.getBytes(), mAES3Block.getSize()) == mAES3Block.getSize());
     
     return mxfKey_extlen + LLEN + mAES3Block.getSize();
+}
+
+uint8_t D10MXFOP1AWriter::GetAudioSequenceOffset(const D10ContentPackage *next_content_package)
+{
+    uint8_t offset = 0;
+    while (offset < mAudioSequenceCount) {
+        size_t i;
+        for (i = 0; i < mBufferedContentPackages.size(); i++) {
+            if (mBufferedContentPackages[i]->GetAudioSize() / mAudioBytesPerSample !=
+                    mAudioSequence[(i + offset) % mAudioSequenceCount])
+            {
+                break;
+            }
+        }
+        if (i >= mBufferedContentPackages.size() &&
+            (!next_content_package ||
+                next_content_package->GetAudioSize() / mAudioBytesPerSample ==
+                    mAudioSequence[(i + offset) % mAudioSequenceCount]))
+        {
+            break;
+        }
+
+        offset++;
+    }
+
+    if (offset >= mAudioSequenceCount) {
+        mxf_log_error("Invalid audio sample sequence\n");
+        throw MXFException("Invalid audio sample sequence");
+    }
+
+    return offset;
 }
 

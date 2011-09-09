@@ -1,5 +1,5 @@
 /*
- * $Id: D10ContentPackage.h,v 1.3 2011/01/10 17:05:15 john_f Exp $
+ * $Id: D10ContentPackage.h,v 1.4 2011/09/09 11:22:41 philipn Exp $
  *
  * D10 MXF OP-1A content package
  *
@@ -54,6 +54,7 @@ class D10ContentPackageInt : public D10ContentPackage
 {
 public:
     D10ContentPackageInt();
+    D10ContentPackageInt(const D10ContentPackage *from);
     ~D10ContentPackageInt();
 
     void Reset();

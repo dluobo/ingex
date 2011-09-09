@@ -1,5 +1,5 @@
 /*
- * $Id: test_d10mxfop1awriter.cpp,v 1.4 2010/07/27 16:16:18 philipn Exp $
+ * $Id: test_d10mxfop1awriter.cpp,v 1.5 2011/09/09 11:22:41 philipn Exp $
  *
  * Test D10 MXF OP-1A writer
  *
@@ -321,6 +321,7 @@ int main(int argc, const char** argv)
         writer->SetSampleRate(sample_rate);
         writer->SetAudioChannelCount(num_audio_files);
         writer->SetAudioQuantizationBits(audio_bps);
+        writer->SetAudioSequenceOffset(0);
         writer->SetAspectRatio(aspect_ratio);
         writer->SetStartTimecode(start_timecode, drop_frame);
         writer->SetBitRate(video_bit_rate, video_frame_size);

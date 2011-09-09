@@ -1,5 +1,5 @@
 /*
- * $Id: D10MXFOP1AWriter.h,v 1.7 2010/07/27 16:16:18 philipn Exp $
+ * $Id: D10MXFOP1AWriter.h,v 1.8 2011/09/09 11:22:41 philipn Exp $
  *
  * D10 MXF OP-1A writer
  *
@@ -66,6 +66,7 @@ public:
     void SetSampleRate(D10SampleRate sample_rate);                      // default D10_SAMPLE_RATE_625_50I
     void SetAudioChannelCount(uint32_t count);                          // default is 4
     void SetAudioQuantizationBits(uint32_t bits);                       // default is 24; alternative is 16
+    void SetAudioSequenceOffset(uint8_t offset);                        // default determined from input
     void SetAspectRatio(mxfRational aspect_ratio);                      // default is 16:9; alternative is 4:3
     void SetStartTimecode(int64_t count, bool drop_frame);              // default 0, false
     void SetBitRate(D10BitRate rate, uint32_t encoded_picture_size);    // default D10_BIT_RATE_50, 250000
@@ -123,6 +124,8 @@ private:
     uint32_t WriteSystemItem(const D10ContentPackage *content_package);
     uint32_t WriteAES3AudioElement(const D10ContentPackage *content_package);
 
+    uint8_t GetAudioSequenceOffset(const D10ContentPackage *next_content_package);
+
 private:
     D10SampleRate mSampleRate;
     mxfRational mVideoSampleRate;
@@ -130,6 +133,7 @@ private:
     uint32_t mChannelCount;
     uint32_t mAudioQuantizationBits;
     uint32_t mAudioBytesPerSample;
+    uint8_t mAudioSequenceOffset;
     mxfRational mAspectRatio;
     int64_t mStartTimecode;
     bool mDropFrameTimecode;
@@ -162,12 +166,14 @@ private:
     mxfpp::TimecodeComponent *mMaterialPackageTC;
     mxfpp::TimecodeComponent *mFilePackageTC;
     
-    D10ContentPackageInt mContentPackage;
+    D10ContentPackageInt *mContentPackage;
     DynamicByteArray mAES3Block;
     uint32_t mAudioSequence[5];
-    int mAudioSequenceCount;
-    int mAudioSequenceIndex;
+    uint8_t mAudioSequenceCount;
+    uint8_t mAudioSequenceIndex;
     
+    std::vector<D10ContentPackage*> mBufferedContentPackages;
+
     int64_t mDuration;
 };
 

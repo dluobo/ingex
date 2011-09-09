@@ -1,5 +1,5 @@
 /*
- * $Id: D10ContentPackage.cpp,v 1.3 2010/07/26 16:02:37 philipn Exp $
+ * $Id: D10ContentPackage.cpp,v 1.4 2011/09/09 11:22:41 philipn Exp $
  *
  * D10 MXF OP-1A content package
  *
@@ -37,6 +37,16 @@ using namespace mxfpp;
 D10ContentPackageInt::D10ContentPackageInt()
 {
     Reset();
+}
+
+D10ContentPackageInt::D10ContentPackageInt(const D10ContentPackage *from)
+{
+    mUserTimecode = from->GetUserTimecode();
+    mVideoBytes.setBytes(from->GetVideo(), from->GetVideoSize());
+
+    uint32_t i;
+    for (i = 0; i < from->GetNumAudioTracks(); i++)
+        mAudioBytes[i].setBytes(from->GetAudio(i), from->GetAudioSize());
 }
 
 D10ContentPackageInt::~D10ContentPackageInt()
