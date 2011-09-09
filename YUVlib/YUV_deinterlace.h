@@ -1,5 +1,5 @@
 /*
- * $Id: YUV_deinterlace.h,v 1.1 2011/08/19 10:53:38 john_f Exp $
+ * $Id: YUV_deinterlace.h,v 1.2 2011/09/09 08:27:09 john_f Exp $
  *
  *
  *
@@ -31,9 +31,13 @@ extern "C" {
 #endif
 
 /* Extract one field from two adjacent frames using a 'Weston 3 field' filter.
- * Set 'top' to True to extract the top field, False to extract the bottom
- * field. 'adj_frame' should point to the previous or next frame, depending on
- * the field dominance.
+ * To extract the first field, 'adj_frame' should point to the previous frame
+ * (i.e. the frame before 'in_frame'). To extract the second field it should
+ * point to the next frame (i.e. the one after 'in_frame'). Set 'top' to True
+ * to extract the top field, False to extract the bottom field. In most cases
+ * the first field is top, so 'top' should be True when extracting the first
+ * field, and False when extracting the second. However, some video has the
+ * opposite field dominance, requiring the opposite values.
  * 'fil' selects the filter to be used. 0 == 'simple', 1 == 'more complex'.
  * 'work_space' is allocated by the caller and must be large enough to store
  * one line of output as int32_t, i.e. (w * 4) bytes.
