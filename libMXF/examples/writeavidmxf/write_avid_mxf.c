@@ -1,5 +1,5 @@
 /*
- * $Id: write_avid_mxf.c,v 1.27 2011/07/13 09:39:49 philipn Exp $
+ * $Id: write_avid_mxf.c,v 1.28 2011/09/09 11:17:42 philipn Exp $
  *
  * Write video and audio to MXF files supported by Avid editing software
  *
@@ -1693,8 +1693,9 @@ static int create_track_writer(AvidClipWriter* clipWriter, PackageDefinitions* p
                     newTrackWriter->pictureEssenceCoding = MXF_CMDEF_L(DVBased_100_1080_50_I);
                     break;
                 case DV720p50:        /* Standardised in later version of SMPTE 370M */
-                    newTrackWriter->videoLineMapLen = 1;
+                    newTrackWriter->videoLineMapLen = 2;
                     newTrackWriter->videoLineMap[0] = 26;
+                    newTrackWriter->videoLineMap[1] = 0;
                     newTrackWriter->storedHeight = 720;
                     newTrackWriter->storedWidth = 1280; /* this differs from Avid, which sets this to 960 */
                     newTrackWriter->displayHeight = 720;
@@ -2086,7 +2087,8 @@ static int create_track_writer(AvidClipWriter* clipWriter, PackageDefinitions* p
             newTrackWriter->displayYOffset = 0;
             newTrackWriter->displayXOffset = 0;
             newTrackWriter->videoLineMap[0] = 26;
-            newTrackWriter->videoLineMapLen = 1;
+            newTrackWriter->videoLineMap[1] = 0;
+            newTrackWriter->videoLineMapLen = 2;
             newTrackWriter->horizSubsampling = 2;
             newTrackWriter->vertSubsampling = 1;
             newTrackWriter->colorSiting = 4; /* Rec601 */
