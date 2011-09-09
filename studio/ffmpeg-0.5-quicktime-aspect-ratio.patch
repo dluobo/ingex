@@ -6,8 +6,8 @@
      int         audio_vbr;
 +    int         width;  ///< visual width for DVCPRO-HD
      int         height; ///< active picture (w/o VBI) height for D-10/IMX
+     int         tref;
  } MOVTrack;
- 
 @@ -664,6 +665,15 @@
      return updateSize(pb, pos);
  }

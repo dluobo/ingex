@@ -1,11 +1,10 @@
-Index: vhook/imlib2.c
-===================================================================
---- vhook/imlib2.c	(revision 7963)
-+++ vhook/imlib2.c	(working copy)
-@@ -103,6 +103,7 @@
+--- vhook/imlib2.c	2009-02-18 21:32:59.000000000 +0000
++++ vhook/imlib2.c	2011-08-22 17:29:15.000000000 +0100
+@@ -58,6 +58,7 @@
  #undef time
  #include <sys/time.h>
  #include <time.h>
 +#include <X11/Xlib.h>
  #include <Imlib2.h>
- #include "eval.h"
+ #include "libavcodec/eval.h"
+ 
