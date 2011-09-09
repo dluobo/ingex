@@ -50,36 +50,36 @@ function delCall(nodes, count){
 	var message = "Removing " + count + " packages...";
 	show_wait_messagebox("Deleting Packages", message);
 	
-	var opts = new Array();
+	var opts = ''
 	
-	
-	for(var i=0; i<selectedSrcNodes.length; i++)
+	for(var i=0; i<nodes.length; i++)
 	{
-		var node = selectedSrcNodes[i];
+		var node = nodes[i];
 		
-		if(!node.attributes){break;}
+		if(!node){break;}
 		
 		//is a leaf node
-		if(node.attributes.leaf){
+		if(node.get('leaf')){
 			
-			opts.push({"materialId":node.attributes.id}); 
+			opts = opts+node.get('id')+","; 
 		}
 		
 		//is a folder
 		else{
-			if(debug){alert(node.attributes['id']);}
-			var pp = getPathParams(node);
+			if(debug){alert(node.get('id'));}
 			
-			opts.push(	{
-							formatIn: pp['format'],
-				 			tStartIn: pp['fromtime'],
-				 			tEndIn: pp['totime'],
-				 			keywordsIn: pp['searchtext'],
-				 			projectIn: pp['project'],
-				 			dateIn: pp['date'],
-				 			timeIn: pp['time']
-				 			
-						});
+			opts = opts+node.get('materialIds')+",";
+			
+//			opts.push(	{
+//							formatIn: options['format'],
+//				 			tStartIn: node.get('start_data'),
+//				 			tEndIn: node.get('end_data'),
+//				 			keywordsIn: options['searchtext'],
+//				 			projectIn: options['projname'],
+//				 			dateIn: node.get('date_data'),
+//				 			timeIn: node.get('time_data'),
+//				 			
+//						});
 		}
 	}
 
@@ -155,7 +155,7 @@ function countSelCallback(data, dom){
 	 	
 	 	else{
 	 		//show size of selected folder
-		 	$('status_bar_src').innerHTML = '"' + selectedSrcNode.attributes['name'] + '" selected, containing ' + count + ' material items';
+		 	$('status_bar_src').innerHTML = '"' + selectedSrcNode.get('name') + '" selected, containing ' + count + ' material items';
 			noSelectedItems = count;
 	 	}
 	}
@@ -212,7 +212,8 @@ function countCallback(data){
 	 	$('filter_matches').innerHTML = count + " matching material items found";
 		
 		//set root node to count
-		rootNode.attributes['materialCount'] = parseInt(count);
+		rootNode = tree.getRootNode();
+		rootNode.data.materialCount = parseInt(count);
 	}
 }
 
@@ -269,12 +270,11 @@ function createAAFCallback(data){
  * callback for createPDF script
  */
 function createPDFCallback(data){
-
 	//all good
 	if (data.match('^ok~')){
 		try{
 			var json = eval('(' + data.substring(3) + ')'); 
-	
+			
 			var message = '';
 			message += "Download PDF file: " + fileLink(json.filename) + "<BR>";
 			

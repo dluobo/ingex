@@ -21,16 +21,22 @@
 /* High level element types */ 
 
 html {
-	padding: 0px;
+/*	padding: 0px;
 	margin: 0px;
-	font-family: sans-serif;
+	font-family: sans-serif;*/
 }
 
 body {
-	padding: 0px;
-	padding-left:8px;
-	padding-top: 8px;
-	margin: 0px;
+	font-family: Verdana, Arial, Helvetica, sans-serif;
+	font-size:0.75em;
+	padding: 0;
+	margin: 0;
+	height: 100%;
+	
+/*	padding: 0px;*/
+/*	padding-left:8px;*/
+/*	padding-top: 8px;*/
+/*	margin: 0px;*/
 }
 
 /* Apply only to browsers better than IE6 */
@@ -46,7 +52,7 @@ a:link, a:visited, a:active, a:hover{
 }
 
 .links{	
-	font-size: small;
+	font-size: 1.0em;
 }
 
 .links a:hover{
@@ -91,7 +97,7 @@ img {
 }
 
 .small {
-	font-size: 0.6em;
+	font-size: 1em;
 }
 
 .indent {
@@ -147,14 +153,17 @@ img {
 
 #pageHeader {
 	border-bottom: 1px solid #777;
-	height: 50px;
+	height: 56px;
 	top: 0px;
-	left: 8px;
-	right: 8px;
+	left: 0px;
+	right: 0px;
 	margin: 0px;
 	padding: 0px;
 	padding-top: 5px;
-	background-color: #fff;
+	padding-left: 8px;
+	padding-right: 8px;
+	background-image: url('img/header_bg.png');
+	background-repeat: repeat-x;
 	z-index: 1000;
 }
 
@@ -176,14 +185,14 @@ body > #pageHeader {
 	top: 5px;
 	border: 0px;
 	position: absolute;
-	left: 131px;
+	left: 138px;
 }
 
 .numInputs{
 	display: none;
 	top: 5px;
 	position: absolute;
-	left: 259px;
+	left: 266px;
 	width: 81px;
 	height: 46px;
 	color: black;
@@ -205,7 +214,6 @@ body > #pageHeader {
 
 #options{
 	display: none;
-	font-size: 75%;
 	position: absolute;
 	right: 12px;
 	top: 8px;
@@ -215,7 +223,7 @@ body > #pageHeader {
 	position: absolute;
 	height: 22px;
 	line-height:22px;
-	right: 0px;
+	right: 8px;
 	top: 33px;
 }
 
@@ -264,7 +272,8 @@ body > #pageHeader {
 	text-align: left;
 	border: 1px solid #777;
 	background-color: #eee;
-	top:65px;
+	top:75px;
+	left:20px;
 /*	left: 8px;*/
 	display: none;
 }
@@ -299,7 +308,7 @@ html > body #menu {
 }
 
 .contentPane {
-	margin-left: 13px;
+	margin-left: 23px;
 	margin-right: 8px;
 	padding-left: 5px;
 	padding-right: 10px;
@@ -351,7 +360,7 @@ body > div .contentPane {
 }
 
 .displayOptions {
-	font-size: 65%;
+	font-size: 1.0em;
 	border-top: 1px dashed #ccc;
 	margin-top: 40px;
 	padding-top: 8px;
@@ -367,9 +376,22 @@ body > div .contentPane {
 /* Headings */
 
 #contentPane h1 {
-	font-size: 140%;
+	font-size: 1.5em;
+	padding-bottom: 5px;
 }
 
-#contentPane h2 {
-	font-size: 120%;
+#contentPane h2, h3 {
+	font-size: 1.2em;
+	padding-bottom: 5px;
+}
+
+#contentPane h4 {
+	font-size: 1em;
+	padding-bottom: 5px;
+}
+
+/* Text */
+
+#contentPane p {
+	padding-bottom: 5px;
 }

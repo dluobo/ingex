@@ -79,7 +79,7 @@ var onLoad_Logging = function()
 loaderFunctions.Logging = onLoad_Logging;
 
 //set ext spacer image to a local file instead of a remote url
-Ext.BLANK_IMAGE_URL = "../ingex/ext/resources/images/default/tree/s.gif";
+//Ext.BLANK_IMAGE_URL = "../ingex/ext/resources/images/default/tree/s.gif";
 //will be instance of timecode 'class'
 var ILtc = false;
 
@@ -2933,172 +2933,172 @@ function ingexLoggingTimecode ()
 
 // --- Extending Ext library for Logging Module ---
 
-Ext.tree.ColumnTree = Ext.extend(Ext.tree.TreePanel, {
-    lines:false,
-    borderWidth: Ext.isBorderBox ? 0 : 2, // the combined left/right border for each cell
-    cls:'x-column-tree',
-
-    onRender : function(){
-        Ext.tree.ColumnTree.superclass.onRender.apply(this, arguments);
-        this.headers = this.body.createChild(
-            {cls:'x-tree-headers'},this.innerCt.dom);
-
-        var cols = this.columns, c;
-        var totalWidth = 0;
-
-        for(var i = 0, len = cols.length; i < len; i++){
-             c = cols[i];
-             totalWidth += c.width;
-             this.headers.createChild({
-                 cls:'x-tree-hd ' + (c.cls?c.cls+'-hd':''),
-                 cn: {
-                     cls:'x-tree-hd-text',
-                     html: c.header
-                 },
-                 style:'width:'+(c.width-this.borderWidth)+'px;'
-             });
-        }
-        this.headers.createChild({cls:'x-clear'});
-        // prevent floats from wrapping when clipped
-        this.headers.setWidth(totalWidth);
-        this.innerCt.setWidth(totalWidth);
-    }
-});
-
-Ext.tree.TakeNodeUI = Ext.extend(Ext.tree.TreeNodeUI, {
-    focus: Ext.emptyFn, // prevent odd scrolling behavior
-
-    renderElements : function(n, a, targetNode, bulkRender){
-        this.indentMarkup = n.parentNode ? n.parentNode.ui.getChildIndent() : '';
-
-        var t = n.getOwnerTree();
-        var cols = t.columns;
-        var bw = t.borderWidth;
-        var c = cols[0];
-        n.id = n.parentNode.attributes.databaseId +"-"+ n.attributes.databaseId;
-        n.attributes.id = n.id; 
-
-        var buf = [
-             '<li><div ext:tree-node-id="',n.id,'" class="x-tree-node-el x-tree-node-leaf ', a.cls,'">',
-                '<div class="x-tree-col" style="width:',c.width-bw,'px;">',
-                    '<span class="x-tree-node-indent">',this.indentMarkup,"</span>",
-                    '<img src="', this.emptyIcon, '" class="x-tree-ec-icon x-tree-elbow">',
-                    //'<img src="', a.icon || this.emptyIcon, '" class="x-tree-node-icon',(a.icon ? " x-tree-node-inline-icon" : ""),(a.iconCls ? " "+a.iconCls : ""),'" unselectable="on">',
-					'<img src="/ingex/img/take.gif" unselectable="on" class="x-tree-node-icon" style="background-image:none;">',
-                    '<a hidefocus="on" class="x-tree-node-anchor" href="',a.href ? a.href : "#",'" tabIndex="1" ',
-                    a.hrefTarget ? ' target="'+a.hrefTarget+'"' : "", '>',
-                    '<span unselectable="on">', n.text || (c.renderer ? c.renderer(a[c.dataIndex], n, a) : a[c.dataIndex]),"</span></a>",
-                "</div>"];
-         for(var i = 1, len = cols.length; i < len; i++){
-             c = cols[i];
-
-             buf.push('<div class="x-tree-col ',(c.cls?c.cls:''),'" style="width:',c.width-bw,'px;">',
-                        '<div class="x-tree-col-text" dataIndex="',c.dataIndex,'">',(c.renderer ? c.renderer(a[c.dataIndex], n, a) : a[c.dataIndex]),"</div>",
-                      "</div>");
-         }
-         buf.push(
-            '<div class="x-clear"></div></div>',
-            '<ul class="x-tree-node-ct" style="display:none;"></ul>',
-            "</li>");
-
-        if(bulkRender !== true && n.nextSibling && n.nextSibling.ui.getEl()){
-            this.wrap = Ext.DomHelper.insertHtml("beforeBegin",
-                                n.nextSibling.ui.getEl(), buf.join(""));
-        }else{
-            this.wrap = Ext.DomHelper.insertHtml("beforeEnd", targetNode, buf.join(""));
-        }
-
-        this.elNode = this.wrap.childNodes[0];
-        this.ctNode = this.wrap.childNodes[1];
-        var cs = this.elNode.firstChild.childNodes;
-        this.indentNode = cs[0];
-        this.ecNode = cs[1];
-        this.iconNode = cs[2];
-        this.anchor = cs[3];
-        this.textNode = cs[3].firstChild;
-		this.takeelements = new Object();
-		this.takeelements['location'] = this.elNode.childNodes[1].firstChild;
-		this.takeelements['date'] = this.elNode.childNodes[2].firstChild;
-		this.takeelements['inpoint'] = this.elNode.childNodes[3].firstChild;
-		this.takeelements['out'] = this.elNode.childNodes[4].firstChild;
-		this.takeelements['duration'] = this.elNode.childNodes[5].firstChild;
-		this.takeelements['result'] = this.elNode.childNodes[6].firstChild;
-		this.takeelements['comment'] = this.elNode.childNodes[7].firstChild;
-    },
-
-	getTakeElement : function(name) {
-		if(typeof this.takeelements[name] != "undefined") return this.takeelements[name];
-		return false;
-	}
-});
-
-Ext.tree.ItemNodeUI = Ext.extend(Ext.tree.TreeNodeUI, {
-    focus: Ext.emptyFn, // prevent odd scrolling behavior
-
-	getItemNameEl : function(){
-		return this.itemNameNode;
-	},
-	
-	getSequenceEl : function(){
-		return this.sequenceNode;
-	},
-
-    renderElements : function(n, a, targetNode, bulkRender){
-        this.indentMarkup = n.parentNode ? n.parentNode.ui.getChildIndent() : '';
-
-        var t = n.getOwnerTree();
-        var cols = t.columns;
-        var bw = t.borderWidth;
-        var c = cols[0];
-        n.id = n.attributes.databaseId;
-        n.attributes.id = n.id;
-
-        var buf = [
-                   '<li><div ext:tree-node-id="',n.id,'" class="x-tree-node-el x-tree-node-leaf ', a.cls,'">',
-                   '<div class="x-tree-col" style="width:0px',c.width-bw,'px;">',
-                   '<span class="x-tree-node-indent">',this.indentMarkup,"</span>",
-                   '<img src="', this.emptyIcon, '" class="x-tree-ec-icon x-tree-elbow">',
-                   // '<img src="', a.icon || this.emptyIcon, '" class="x-tree-node-icon',(a.icon ? " x-tree-node-inline-icon" : ""),(a.iconCls ? " "+a.iconCls : ""),'" unselectable="on">',
-                   '<img src="/ingex/img/item.gif" unselectable="on">',
-                   '<a hidefocus="on" class="x-tree-node-anchor" href="',a.href ? a.href : "#",'" tabIndex="1" ',
-                           a.hrefTarget ? ' target="'+a.hrefTarget+'"' : "", '>',
-                                   '<span unselectable="on">',/* n.text || (c.renderer ? c.renderer(a[c.dataIndex], n, a) : a[c.dataIndex]),*/"</span></a>",
-                                   "</div>"];
-
-        var seq = "[no sequence]";
-        if (a['sequence'] != "") seq = a['sequence'];
-        buf.push('<div class="x-tree-col" style="width:80px;border-bottom:1px solid #ddd;color: #449;">',
-                '<div class="x-tree-col-text-item" dataIndex="sequence">',seq,"</div>",
-        "</div>");
-
-        buf.push('<div class="x-tree-col" style="width:800px;border-bottom:1px solid #ddd;color: #449;">',
-                '<div class="x-tree-col-text-item" dataIndex="itemName">',a['itemName'],"</div>",
-        "</div>");
-
-        buf.push(
-                '<div class="x-clear"></div></div>',
-                '<ul class="x-tree-node-ct" style="display:none;"></ul>',
-        "</li>");
-
-        if(bulkRender !== true && n.nextSibling && n.nextSibling.ui.getEl()){
-            this.wrap = Ext.DomHelper.insertHtml("beforeBegin",
-                                n.nextSibling.ui.getEl(), buf.join(""));
-        }else{
-            this.wrap = Ext.DomHelper.insertHtml("beforeEnd", targetNode, buf.join(""));
-        }
-
-        this.elNode = this.wrap.childNodes[0];
-        this.ctNode = this.wrap.childNodes[1];
-        var cs = this.elNode.firstChild.childNodes;
-        this.indentNode = cs[0];
-        this.ecNode = cs[1];
-        this.iconNode = cs[2];
-        this.anchor = cs[3];
-        this.textNode = cs[3].firstChild;
-		this.itemNameNode = this.elNode.childNodes[1].firstChild;
-		this.sequenceNode = this.elNode.childNodes[2].firstChild;
-    }
-});
+// Ext.tree.ColumnTree = Ext.extend(Ext.tree.TreePanel, {
+    // lines:false,
+    // borderWidth: Ext.isBorderBox ? 0 : 2, // the combined left/right border for each cell
+    // cls:'x-column-tree',
+// 
+    // onRender : function(){
+        // Ext.tree.ColumnTree.superclass.onRender.apply(this, arguments);
+        // this.headers = this.body.createChild(
+            // {cls:'x-tree-headers'},this.innerCt.dom);
+// 
+        // var cols = this.columns, c;
+        // var totalWidth = 0;
+// 
+        // for(var i = 0, len = cols.length; i < len; i++){
+             // c = cols[i];
+             // totalWidth += c.width;
+             // this.headers.createChild({
+                 // cls:'x-tree-hd ' + (c.cls?c.cls+'-hd':''),
+                 // cn: {
+                     // cls:'x-tree-hd-text',
+                     // html: c.header
+                 // },
+                 // style:'width:'+(c.width-this.borderWidth)+'px;'
+             // });
+        // }
+        // this.headers.createChild({cls:'x-clear'});
+        // // prevent floats from wrapping when clipped
+        // this.headers.setWidth(totalWidth);
+        // this.innerCt.setWidth(totalWidth);
+    // }
+// });
+// 
+// Ext.tree.TakeNodeUI = Ext.extend(Ext.tree.TreeNodeUI, {
+    // focus: Ext.emptyFn, // prevent odd scrolling behavior
+// 
+    // renderElements : function(n, a, targetNode, bulkRender){
+        // this.indentMarkup = n.parentNode ? n.parentNode.ui.getChildIndent() : '';
+// 
+        // var t = n.getOwnerTree();
+        // var cols = t.columns;
+        // var bw = t.borderWidth;
+        // var c = cols[0];
+        // n.id = n.parentNode.attributes.databaseId +"-"+ n.attributes.databaseId;
+        // n.attributes.id = n.id; 
+// 
+        // var buf = [
+             // '<li><div ext:tree-node-id="',n.id,'" class="x-tree-node-el x-tree-node-leaf ', a.cls,'">',
+                // '<div class="x-tree-col" style="width:',c.width-bw,'px;">',
+                    // '<span class="x-tree-node-indent">',this.indentMarkup,"</span>",
+                    // '<img src="', this.emptyIcon, '" class="x-tree-ec-icon x-tree-elbow">',
+                    // //'<img src="', a.icon || this.emptyIcon, '" class="x-tree-node-icon',(a.icon ? " x-tree-node-inline-icon" : ""),(a.iconCls ? " "+a.iconCls : ""),'" unselectable="on">',
+					// '<img src="/ingex/img/take.gif" unselectable="on" class="x-tree-node-icon" style="background-image:none;">',
+                    // '<a hidefocus="on" class="x-tree-node-anchor" href="',a.href ? a.href : "#",'" tabIndex="1" ',
+                    // a.hrefTarget ? ' target="'+a.hrefTarget+'"' : "", '>',
+                    // '<span unselectable="on">', n.text || (c.renderer ? c.renderer(a[c.dataIndex], n, a) : a[c.dataIndex]),"</span></a>",
+                // "</div>"];
+         // for(var i = 1, len = cols.length; i < len; i++){
+             // c = cols[i];
+// 
+             // buf.push('<div class="x-tree-col ',(c.cls?c.cls:''),'" style="width:',c.width-bw,'px;">',
+                        // '<div class="x-tree-col-text" dataIndex="',c.dataIndex,'">',(c.renderer ? c.renderer(a[c.dataIndex], n, a) : a[c.dataIndex]),"</div>",
+                      // "</div>");
+         // }
+         // buf.push(
+            // '<div class="x-clear"></div></div>',
+            // '<ul class="x-tree-node-ct" style="display:none;"></ul>',
+            // "</li>");
+// 
+        // if(bulkRender !== true && n.nextSibling && n.nextSibling.ui.getEl()){
+            // this.wrap = Ext.DomHelper.insertHtml("beforeBegin",
+                                // n.nextSibling.ui.getEl(), buf.join(""));
+        // }else{
+            // this.wrap = Ext.DomHelper.insertHtml("beforeEnd", targetNode, buf.join(""));
+        // }
+// 
+        // this.elNode = this.wrap.childNodes[0];
+        // this.ctNode = this.wrap.childNodes[1];
+        // var cs = this.elNode.firstChild.childNodes;
+        // this.indentNode = cs[0];
+        // this.ecNode = cs[1];
+        // this.iconNode = cs[2];
+        // this.anchor = cs[3];
+        // this.textNode = cs[3].firstChild;
+		// this.takeelements = new Object();
+		// this.takeelements['location'] = this.elNode.childNodes[1].firstChild;
+		// this.takeelements['date'] = this.elNode.childNodes[2].firstChild;
+		// this.takeelements['inpoint'] = this.elNode.childNodes[3].firstChild;
+		// this.takeelements['out'] = this.elNode.childNodes[4].firstChild;
+		// this.takeelements['duration'] = this.elNode.childNodes[5].firstChild;
+		// this.takeelements['result'] = this.elNode.childNodes[6].firstChild;
+		// this.takeelements['comment'] = this.elNode.childNodes[7].firstChild;
+    // },
+// 
+	// getTakeElement : function(name) {
+		// if(typeof this.takeelements[name] != "undefined") return this.takeelements[name];
+		// return false;
+	// }
+// });
+// 
+// Ext.tree.ItemNodeUI = Ext.extend(Ext.tree.TreeNodeUI, {
+    // focus: Ext.emptyFn, // prevent odd scrolling behavior
+// 
+	// getItemNameEl : function(){
+		// return this.itemNameNode;
+	// },
+// 	
+	// getSequenceEl : function(){
+		// return this.sequenceNode;
+	// },
+// 
+    // renderElements : function(n, a, targetNode, bulkRender){
+        // this.indentMarkup = n.parentNode ? n.parentNode.ui.getChildIndent() : '';
+// 
+        // var t = n.getOwnerTree();
+        // var cols = t.columns;
+        // var bw = t.borderWidth;
+        // var c = cols[0];
+        // n.id = n.attributes.databaseId;
+        // n.attributes.id = n.id;
+// 
+        // var buf = [
+                   // '<li><div ext:tree-node-id="',n.id,'" class="x-tree-node-el x-tree-node-leaf ', a.cls,'">',
+                   // '<div class="x-tree-col" style="width:0px',c.width-bw,'px;">',
+                   // '<span class="x-tree-node-indent">',this.indentMarkup,"</span>",
+                   // '<img src="', this.emptyIcon, '" class="x-tree-ec-icon x-tree-elbow">',
+                   // // '<img src="', a.icon || this.emptyIcon, '" class="x-tree-node-icon',(a.icon ? " x-tree-node-inline-icon" : ""),(a.iconCls ? " "+a.iconCls : ""),'" unselectable="on">',
+                   // '<img src="/ingex/img/item.gif" unselectable="on">',
+                   // '<a hidefocus="on" class="x-tree-node-anchor" href="',a.href ? a.href : "#",'" tabIndex="1" ',
+                           // a.hrefTarget ? ' target="'+a.hrefTarget+'"' : "", '>',
+                                   // '<span unselectable="on">',/* n.text || (c.renderer ? c.renderer(a[c.dataIndex], n, a) : a[c.dataIndex]),*/"</span></a>",
+                                   // "</div>"];
+// 
+        // var seq = "[no sequence]";
+        // if (a['sequence'] != "") seq = a['sequence'];
+        // buf.push('<div class="x-tree-col" style="width:80px;border-bottom:1px solid #ddd;color: #449;">',
+                // '<div class="x-tree-col-text-item" dataIndex="sequence">',seq,"</div>",
+        // "</div>");
+// 
+        // buf.push('<div class="x-tree-col" style="width:800px;border-bottom:1px solid #ddd;color: #449;">',
+                // '<div class="x-tree-col-text-item" dataIndex="itemName">',a['itemName'],"</div>",
+        // "</div>");
+// 
+        // buf.push(
+                // '<div class="x-clear"></div></div>',
+                // '<ul class="x-tree-node-ct" style="display:none;"></ul>',
+        // "</li>");
+// 
+        // if(bulkRender !== true && n.nextSibling && n.nextSibling.ui.getEl()){
+            // this.wrap = Ext.DomHelper.insertHtml("beforeBegin",
+                                // n.nextSibling.ui.getEl(), buf.join(""));
+        // }else{
+            // this.wrap = Ext.DomHelper.insertHtml("beforeEnd", targetNode, buf.join(""));
+        // }
+// 
+        // this.elNode = this.wrap.childNodes[0];
+        // this.ctNode = this.wrap.childNodes[1];
+        // var cs = this.elNode.firstChild.childNodes;
+        // this.indentNode = cs[0];
+        // this.ecNode = cs[1];
+        // this.iconNode = cs[2];
+        // this.anchor = cs[3];
+        // this.textNode = cs[3].firstChild;
+		// this.itemNameNode = this.elNode.childNodes[1].firstChild;
+		// this.sequenceNode = this.elNode.childNodes[2].firstChild;
+    // }
+// });
 
 /**
  * @class Ext.tree.ColumnTreeEditor

@@ -28,4 +28,5 @@
 	background-position: 5px 5px;
 	float: right;
 	cursor: pointer; /* ie. a hand */
+	height: 50px;
 }

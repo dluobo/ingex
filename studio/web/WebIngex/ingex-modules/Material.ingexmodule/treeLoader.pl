@@ -63,6 +63,7 @@ my $time        = param("timeIn");
 my $date        = param("dateIn");
 my $projectId   = param("projectIn");
 my $keywords    = param("keywordsIn");    # key search terms
+my $isIngexWeb 	= param("isIngexWeb");
 
 $filterOpts->{'video'}     		= $videoFormat;
 $filterOpts->{'keywords'}  		= $keywords;
@@ -151,18 +152,32 @@ if ( $level == 1 ) {
 					);
 				}
 				else {
+					if ($isIngexWeb) {
+						push(
+							@t_data,
+							{
+								name_data     => $project->{'NAME'},
+								id            => $id,
+								projId        => $project->{'ID'},
+								materialCount => $count,
+								materialIds   => $ids
+							}
+						);
+					}
 					
-					push(
-						@t_data,
-						{
-							name          => $project->{'NAME'},
-							uiProvider    => 'Ext.tree.ColumnNodeUI',
-							id            => $id,
-							projId        => $project->{'ID'},
-							materialCount => $count,
-							materialIds   => $ids
-						}
-					);
+					else {
+						push(
+							@t_data,
+							{
+								name          => $project->{'NAME'},
+								uiProvider    => 'Ext.tree.ColumnNodeUI',
+								id            => $id,
+								projId        => $project->{'ID'},
+								materialCount => $count,
+								materialIds   => $ids
+							}
+						);
+					}
 				}
 
 			}
@@ -172,6 +187,17 @@ if ( $level == 1 ) {
 
 }
 
+#
+#created_data  => '',
+#start_data	  => '',
+#								end_data	  => '',
+#								duration_data => '',
+#								format_data	  => '',
+#								tapeID_data	  => '',
+				
+				
+				
+								
 #
 # 2: date level
 #
@@ -210,17 +236,32 @@ elsif ( $level == 2 ) {
 					);
 				}
 				else {
-					push(
-						@t_data,
-						{
-							name       => $date,
-							uiProvider => 'Ext.tree.ColumnNodeUI',
-							id => $level . "," . $params[1] . "," . $date,
-							preloadChildren => 'true',
-							materialCount   => $count,
-							materialIds     => $ids
-						}
-					);
+					if ($isIngexWeb) {
+						push(
+							@t_data,
+							{
+								name_data       => $date,
+								uiProvider => 'Ext.tree.ColumnNodeUI',
+								id => $level . "," . $params[1] . "," . $date,
+								preloadChildren => 'true',
+								materialCount   => $count,
+								materialIds     => $ids
+							}
+						);
+					}
+					else{
+						push(
+							@t_data,
+							{
+								name       => $date,
+								uiProvider => 'Ext.tree.ColumnNodeUI',
+								id => $level . "," . $params[1] . "," . $date,
+								preloadChildren => 'true',
+								materialCount   => $count,
+								materialIds     => $ids
+							}
+						);
+					}
 				}
 		}
 	}
@@ -262,21 +303,38 @@ elsif ( $level == 3 ) {
 			}
 
 			else {
-				
-				push(
-					@t_data,
-					{
-						name       => $tcStr,
-						uiProvider => 'Ext.tree.ColumnNodeUI',
-						id         => $level . ","
-						  . $params[1] . ","
-						  . $params[2] . ","
-						  . $tc,
-						preloadChildren => 'true',
-						materialCount   => $count,
-						materialIds     => $ids
-					}
-				);
+				if ($isIngexWeb) {
+					push(
+						@t_data,
+						{
+							name_data       => $tcStr,
+							uiProvider => 'Ext.tree.ColumnNodeUI',
+							id         => $level . ","
+							  . $params[1] . ","
+							  . $params[2] . ","
+							  . $tc,
+							preloadChildren => 'true',
+							materialCount   => $count,
+							materialIds     => $ids
+						}
+					);
+				}
+				else{
+					push(
+						@t_data,
+						{
+							name       => $tcStr,
+							uiProvider => 'Ext.tree.ColumnNodeUI',
+							id         => $level . ","
+							  . $params[1] . ","
+							  . $params[2] . ","
+							  . $tc,
+							preloadChildren => 'true',
+							materialCount   => $count,
+							materialIds     => $ids
+						}
+					);
+				}
 			}
 
 		}
@@ -299,7 +357,9 @@ elsif ( $level == 4 ) {
 
 my $json = encode_json [@t_data];
 print "Content-Type: application/json; charset=ISO-8859-1\n\n";
+#print "{\"text\":\".\",\"children\": $json }";
 print $json;
+#print "[{name_data: 'sdfsdf'},{name_data: 'sdfsdf'}]";
 prodautodb::disconnect($dbh);
 
 

@@ -116,19 +116,20 @@ sub get_main_browser {
 	my $content;
 
 	# html content for main page body
-	my $file;
-	if($ingexConfig{"drag_drop"} eq 'true') {
-		$file = 'page_body_dnd.html'
-	}
-	else {
-		$file = 'page_body.html';
-	}
+#	my $file;
+#	if($ingexConfig{"drag_drop"} eq 'true') {
+#		$file = 'page_body_dnd.html'
+#	}
+#	else {
+	my $drag_drop = ($ingexConfig{"drag_drop"} eq 'true') ? 1 : 0;
+	my $file = 'page_body.html';
 	
     my $vars = {
     	proj_opts			=> $proj_opts,
     	fmt_opts			=> $fmt_opts,
     	defaultSendTo		=> $defaultSendTo,
-    	dest_directories	=> $dest_directories
+    	dest_directories	=> $dest_directories,
+    	drag_drop			=> $drag_drop
     };
     
 	my $template = Template->new({

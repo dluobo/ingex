@@ -31,22 +31,26 @@
 
 .container {
 	clear: left;
-	width: 1000px;
-	height: 320px;
-	border:1px solid #777777;
+	width: 990px;
+	height: 100%;
+	border:1px solid #CCCCCC;
 }
 
 .container2 {
 	clear: left;
 	width: 1000px;
 	height: 320px;
-	border:1px solid #777777;
+	border:1px solid #CCCCCC;
+}
+
+.dnd_container{
+	padding-top:10px;
+	display: none;
 }
 
 .tree {
 	left: 0;
 	float: left;
-	width: 800px;
 }
 
 .aafbasket {
@@ -56,13 +60,18 @@
 }
 
 .metadata {
-	background-color: #feffaf;
+	background-color: #ffffff;
 	font-family: Verdana, Arial, Helvetica, sans-serif;
 	font-size: small;
 	top: 0;
 	float: right;
-	width: 200px;
+	width: 190px;
 	height: 298px;
+	border-left: 1px solid #CCCCCC;
+}
+
+#metadata ol {
+    border-top: 1px solid #CCCCCC;
 }
 
 .preview {
@@ -78,8 +87,8 @@
 
 .m_text {
 	position: relative;
-	left: 10px;
-	top: 10px;
+	left: 5px;
+	top: 5px;
 	width: 180px;
 	height: 280px;
 	overflow-y: auto;
@@ -90,7 +99,7 @@
 	font-family: Verdana, Arial, Helvetica, sans-serif;
 	font-size: small;
 	width: 1000px;
-	border:1px solid #777777;
+	border:1px solid #CCCCCC;
 	padding: 5px;
 	background-color: #f6f6f6;
 }
@@ -99,27 +108,36 @@
 	font-family: Verdana, Arial, Helvetica, sans-serif;
 	font-size: small;
 	width: 1000px;
-	border:1px solid #777777;
+	border:1px solid #CCCCCC;
 	padding: 5px;
 	background-color: #f6f6f6;
 }
 
-.status_bar_src {
-	width: 1000px;
-	height: 20px;
+.status_container {
+	width: 100%;
+	height: 25px;
 	clear:left;
 	border: none;
+	padding-left: 3px;
+	padding-right: 3px;
+	padding-top: 1px;
+	background-color: #d9e8fd;
+}
+
+.status_bar_src {
+	height: 25px;
+	float: left;
+	border: none;
 	padding: 0px;
-	background-color: #feffaf;
+	background-color: #d9e8fd;
 }
 
 .status_bar_dest {
-	width: 1000px;
 	height: 20px;
-	clear:left;
+	float:left;
 	border: none;
 	padding: 0px;
-	background-color: #feffaf;
+	background-color: #d9e8fd;
 }
 
 .aaf_log {
@@ -134,7 +152,9 @@
 
 /* tabular style form layout */
 fieldset.table {
-	border:1px solid #777777;
+	border: 0;
+/*	border-top:1px solid #CCCCCC;*/
+/*	background-color: #ffffff;*/
 	float: left;
 	clear: left;
 	width: 100%;
@@ -160,11 +180,14 @@ fieldset.noborder {
 fieldset.table legend {
 	margin-left: 1em;
 	color: #000000;
-	font-weight: bold;
+	font-weight: normal;
 }
 
 fieldset.table ol {
-	padding: 0em 1em 0 1em;
+	border-top:1px solid #CCCCCC;
+/*	padding: 0em 1em 0em 1em;*/
+	margin-bottom: 5px;
+	margin-top: 3px;
 	list-style: none;
 }
 
@@ -172,7 +195,8 @@ fieldset.table li {
 	float: left;
 	clear: left;
 	width: 100%;
-	padding-bottom: 0.5em;
+	padding-top: 0.3em;
+	padding-bottom: 0.3em;
 }
 
 fieldset.table.submit {
@@ -192,6 +216,13 @@ fieldset.table .label_r {
 	margin-right: 1em;
 }
 
+fieldset.table .smllabel_r {
+	float: left;
+	text-align: right;
+	width: 30px;
+	margin-right: 1em;
+}
+
 fieldset.table .item {
 	overflow: hidden;
 	float: left;
@@ -199,30 +230,37 @@ fieldset.table .item {
 }
 
 fieldset.table input.item {
-	border:1px solid #777777;
+	border:1px solid #CCCCCC;
+	width: 250px;
+}
+
+fieldset.table input.smlitem {
+	border:1px solid #CCCCCC;
 	width: 150px;
+	float: left;
+	margin-right: 5px;
 }
 
 fieldset.table select.item {
 	/* fix for misaligned drop down menus - caused by ext? */
-	width: 154px;
+	width: 250px;
 }
 
 fieldset.table .wide_item {
-	border:1px solid #777777;
+	border:1px solid #CCCCCC;
 	float: left;
 	width: 250px;
 }
 
 fieldset.table .short_item {
-	border:1px solid #777777;
+	border:1px solid #CCCCCC;
 	float: left;
 	width: 100px;
 }
 
 fieldset .var_container {
 	float: left;
-	margin-right: 0.5em;
+	margin-right: 5px;
 }
 
 fieldset .centre_container {
@@ -234,19 +272,19 @@ fieldset .centre_container {
 
 /* specific form element formatting */
 .time_in {
-	border:1px solid #777777;
+	border:1px solid #CCCCCC;
 	width: 25px;
 }
 
 .period_in {
-	border:1px solid #777777;
+	border:1px solid #CCCCCC;
 	margin-right: 5px;
 	width: 100px;
 	float: left;
 }
 
 .day_in {
-	border:1px solid #777777;
+	border:1px solid #CCCCCC;
 	width: 100px;
 }
 
@@ -256,35 +294,36 @@ fieldset .centre_container {
 }
 
 .datetime {
-	border:1px solid #777777;
+	border:1px solid #CCCCCC;
 	width: 270px;
 }
 
 /*--- input error notifiers ---*/
 .time_range_err {
-	float: left;
+	float: right;
 	color: red;
 	visibility: hidden;
 }
 
 .filter_matches {
-	
+	float: left;
+	margin-left: 5px;
 }
 
 .track_link_A {
 	background-color: #ff5555;
-	border:1px solid #777777;
+	border:1px solid #CCCCCC;
 	margin-top: 2px;
 	margin-bottom: 2px;
-	width: 150px;
+	width: 100%;
 }
 
 .track_link_V {
 	background-color: #55ff55;
-	border:1px solid #777777;
+	border:1px solid #CCCCCC;
 	margin-top: 2px;
 	margin-bottom: 2px;
-	width: 150px;
+	width: 100%;
 }
 
 /*--- ext multiselect d+d ---*/
@@ -294,13 +333,49 @@ fieldset .centre_container {
 
 /*--- non-drag and drop interface ---*/
 .filter_container {
-	width: 55%;
-	padding-right: 5px;
+	width: 490px;
+	height: 370px;
+	padding-right: 60px;
 	float: left;
+/*	background-color: #/*ffffff*/;*/
 }
 
 .export_container {
-	width: 44%;
-	padding-left: 5px;
+	width: 490px;
+	height: 370px;
+	right: 5px;
+	padding-left: 60px;
 	float:left;
+	border-left:1px solid #CCCCCC;
+/*	background-color: #ffffff;*/
+}
+
+.controls_container {
+	width: 990px;
+	height:50px;
+	clear: left;
+	padding-top: 20px;
+}
+
+.loadclips_but {
+	float: left;
+}
+
+.createpkg_but {
+	padding-right: 362px;
+	float: right;
+}
+
+.floating {
+	float: right;
+}
+
+#title h3 {
+	font-size: 17px;
+	font-weight: normal; 
+	padding-bottom: 10px;
+}
+
+.hidden {
+	display: none;
 }

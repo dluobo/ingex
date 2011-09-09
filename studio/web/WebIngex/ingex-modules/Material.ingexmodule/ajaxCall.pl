@@ -80,44 +80,47 @@ sub deleteMaterials
 	my @toDelete;
 	my $package;
 	
-	# iterate through package items
-	for (my $i=0; $i<@$packages; $i++){	
-	
-		# each package item can either be an individual material package id, or a set of parameters describing multiple packages
-		
-		# individual material id
-		if($packages->[$i]{materialId})
-		{
-			my $id = $packages->[$i]{materialId};
-			push(@toDelete, $id);
-		}
-			
-		# multiple packages
-		else{
-			# filter opts
-			my $videoFormat = $packages->[$i]{"formatIn"};
-			my $startTime = $packages->[$i]{"tStartIn"};
-			my $endTime = $packages->[$i]{"tEndIn"};
-			my $tcStr = $packages->[$i]{"timeIn"};
-			my $date = $packages->[$i]{"dateIn"};
-			my $projectId = $packages->[$i]{"projectIn"};
-			my $keywords = $packages->[$i]{"keywordsIn"};	# key search terms
-			
-			my $tcVal = db::get_timecode_val($tcStr);
-	
-			my $filterOpts;
-			$filterOpts->{'video'} = $videoFormat; 
-			$filterOpts->{'keywords'} = $keywords;
-			$filterOpts->{'startTime'} = $startTime;
-			$filterOpts->{'endTime'} = $endTime;
-			$filterOpts->{'timecode'} = $tcVal;
-			$filterOpts->{'date'} = $date;
-			$filterOpts->{'projectid'} = $projectId;
-			
-			my @ids = db::get_material_ids_a($dbh, $filterOpts);
-			push(@toDelete, @ids);
-		}
-	}
+#	# iterate through package items
+#	for (my $i=0; $i<@$packages; $i++){	
+#	
+#		# each package item can either be an individual material package id, or a set of parameters describing multiple packages
+#		
+#		# individual material id
+#		if($packages->[$i]{materialId})
+#		{
+#			my $id = $packages->[$i]{materialId};
+#			push(@toDelete, $id);
+#		}
+#			
+#		# multiple packages
+#		else{
+#			# filter opts
+#			my $videoFormat = $packages->[$i]{"formatIn"};
+#			my $startTime = $packages->[$i]{"tStartIn"};
+#			my $endTime = $packages->[$i]{"tEndIn"};
+#			my $tcStr = $packages->[$i]{"timeIn"};
+#			my $date = $packages->[$i]{"dateIn"};
+#			my $projectId = $packages->[$i]{"projectIn"};
+#			my $keywords = $packages->[$i]{"keywordsIn"};	# key search terms
+#			
+#			my $tcVal = db::get_timecode_val($tcStr);
+#	
+#			my $filterOpts;
+#			$filterOpts->{'video'} = $videoFormat; 
+#			$filterOpts->{'keywords'} = $keywords;
+#			$filterOpts->{'startTime'} = $startTime;
+#			$filterOpts->{'endTime'} = $endTime;
+#			$filterOpts->{'timecode'} = $tcVal;
+#			$filterOpts->{'date'} = $date;
+#			$filterOpts->{'projectid'} = $projectId;
+#			
+#			my @ids = db::get_material_ids_a($dbh, $filterOpts);
+#			push(@toDelete, @ids);
+#		}
+#	}
+
+	# seperate the ids by csv
+	@toDelete = split(",", $packages);
 
 	#delete them
 	eval{

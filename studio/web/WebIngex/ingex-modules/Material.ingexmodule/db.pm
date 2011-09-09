@@ -982,21 +982,21 @@ sub prepare_exttree_json
 
                 $childNodes[$nodeCount] = (
                     {
-                        name        => $materialRow->{"name"},
-                        created     => $materialRow->{"created"},
-                        start       => $materialRow->{"startTC"} || "",
-                        end         => $materialRow->{"endTC"} || "",
-                        duration    => $materialRow->{"duration"} || "",
-                        video       => $materialRow->{"video"} || "",
-                        tapeid      => $materialRow->{"tapeOrLive"} || "",
-                        url         => { %{ $materialRow->{"file_location"} } },
-                        id          => $materialRow->{"id"} || "",
-                        comments    => $materialRow->{"comments"} || "",
-                        description => $materialRow->{"descript"} || "",
-                        vresid      => $materialRow->{"vresid"} || "",
-                        uiProvider => 'Ext.tree.ColumnNodeUI',
-                        leaf       => 'true',
-                        iconCls    => 'video'
+                        name_data   	=> $materialRow->{"name"},
+                        created_data	=> $materialRow->{"created"},
+                        start_data      => $materialRow->{"startTC"} || "",
+                        end_data        => $materialRow->{"endTC"} || "",
+                        duration_data	=> $materialRow->{"duration"} || "",
+                        format_data     => $materialRow->{"video"} || "",
+                        tapeid_data	    => $materialRow->{"tapeOrLive"} || "",
+                        url         	=> { %{ $materialRow->{"file_location"} } },
+                        id          	=> $materialRow->{"id"} || "",
+                        comments    	=> $materialRow->{"comments"} || "",
+                        description 	=> $materialRow->{"descript"} || "",
+                        vresid      	=> $materialRow->{"vresid"} || "",
+                        uiProvider 		=> 'Ext.tree.ColumnNodeUI',
+                        leaf       		=> 'true',
+                        iconCls    		=> 'video'
                     }
                 );
                 $nodeCount++;
@@ -1155,7 +1155,7 @@ sub get_duration_string
 sub materialCmp 
 {
     if ( $a->{"created"} eq $b->{"created"} ) {
-        return $a->{"name"} cmp $b->{"name"};
+    	return $a->{"name"} cmp $b->{"name"};
     }
     else {
         return $b->{"created"} cmp $a->{"created"};

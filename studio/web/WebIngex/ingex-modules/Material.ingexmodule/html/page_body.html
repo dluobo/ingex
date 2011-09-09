@@ -1,12 +1,16 @@
 <body>
 
+[% IF drag_drop %]
+<div class="hidden" id="drag_drop"></div>
+[% END %]
+
 <h1>Material Browser</h1>
 
 <div class="materials_browser">
 
 <div class="filter_container">
 
-<h3>1) Clip Selection - <i>select required clips</i></h3>
+<div id="title"><h3>Clip Selection - <i>select required clips</i></h3></div>
 
 
 
@@ -25,8 +29,6 @@
 										</li>
 									</ol>
 								</fieldset>	--->
-
-
 
 <fieldset class="table"><legend>Filter Options</legend>
 <ol>
@@ -55,7 +57,7 @@
 
 	<li><label for="dummy2"> <input type="radio"
 		name="time_type" id="time_period_radio" value="range"
-		onclick="dayFilterSet()" /> Time range: </label>
+		onclick="dayFilterSet()" /> Time period </label>
 	<div id="dummy2" class="var_container"></div>
 	</li>
 
@@ -80,14 +82,12 @@
 
 	<li><label for="dummy3"> <input type="radio"
 		name="time_type" id="time_range_radio" value="period"
-		onclick="dateFilterSet()" /> Within the period: </label> <!--- Verification error --->
-	<div id="time_range_err" class="time_range_err">* Timecode must
-	be in the format hh:mm:ss:ff</div>
+		onclick="dateFilterSet()" /> Time range </label> <div id="time_range_err" class="time_range_err">* Bad timecode format hh:mm:ss:ff</div> <!--- Verification error --->
 	<div id="dummy3" class="var_container"></div>
 	</li>
 
 
-	<li><label for="datetime_from" class="label_r"> From </label>
+	<li><label for="datetime_from" class="smllabel_r">From</label>
 	<div id="datetime_from" class="var_container">
 	<div class="var_container">
 	<div id="from_cal"></div>
@@ -104,7 +104,7 @@
 
 	</div>
 	</li>
-	<li><label for="datetime_to" class="label_r"> To </label>
+	<li><label for="datetime_to" class="smllabel_r">To</label>
 	<div id="datetime_to" class="var_container">
 	<div class="var_container">
 	<div id="to_cal"></div>
@@ -123,11 +123,8 @@
 </fieldset>
 
 <fieldset class="noborder"><!--- Submit --->
-<div class="var_container"><input type="button" value="Load Clips"
-	onclick="submitFilter()" /></div>
-<div class="var_container"><!--- Search matches --->
-<div nane='filter_matches' id='filter_matches' class="filter_matches"></div>
-</div>
+
+
 </fieldset>
 
 </div>
@@ -135,7 +132,7 @@
 
 
 <div class="export_container">
-<h3>2) Output - <i>create package</i></h3>
+<div id="title"><h3>Output - <i>create package</i></h3></div>
 <fieldset class="table"><legend>Export Options</legend>
 <ol>
 	<li><label for="format"> Format </label> <select id="format"
@@ -146,7 +143,7 @@
 	</select></li>
 
 	<li><label for="editpath"> Editing directory path </label> <input
-		type="text" id="editpath" class="item" />
+		type="text" id="editpath" class="smlitem" />
 	<div class="var_container">FCP only</div>
 	</li>
 </ol>
@@ -166,7 +163,7 @@
 <fieldset class="table"><legend>Output</legend>
 <ol>
 	<li><label for="fnameprefix"> Filename prefix </label> <input
-		id="fnameprefix" type="text" class="item" />
+		id="fnameprefix" type="text" class="smlitem" />
 	<div class="var_container"><input type="checkbox" id="longsuffix">
 	Long suffix</div>
 	</li>
@@ -179,8 +176,7 @@
 </fieldset>
 
 <fieldset class="noborder">
-<div class="var_container"><input type="button"
-	value="Create Package" onclick="packageAAF()" /></div>
+
 <div class="var_container"><input type="checkbox" id="save" />
 Save these options as local defaults</div>
 
@@ -188,13 +184,40 @@ Save these options as local defaults</div>
 </div>
 
 
+<div class="controls_container">
+	<div id="loadclips_but" class="loadclips_but"></div>
+	<div class="var_container"><!--- Search matches --->
+	<div nane='filter_matches' id='filter_matches' class="filter_matches"></div>
+	</div>
+		
+	
+	<div id="createpkg_but" class="createpkg_but"></div>
+</div>
 
 
+<!-- <input type="button" value="Load Clips" onclick="submitFilter()" /> -->
+<!-- 	<input type="button" value="Create Package" onclick="packageAAF()" /> -->
+	 
+<div id="title"><h3>Source Materials<div id="viewmode_but" class="floating"></div></h3></div>
 <div class="container">
 <div id="tree" class="tree"></div>
 <div id="metadata" class="metadata">[% id = "src" %] [% title =
 "Source Details" %] [% INCLUDE package_details.html %]</div>
-<div id="status_bar_src" class="status_bar_src"></div>
+<div id="status_container" class="status_container">
+	<div id="status_bar_src" class="status_bar_src"></div>
+</div>
+</div>
+
+<div id="dnd_container" class="dnd_container">
+<div id="title"><h3>Materials Selection</h3></div>
+<div class="container">
+<div id="dest_tree" class="tree"></div>
+<div id="metadata" class="metadata">[% id = "dest" %] [% title =
+"Output Package" %] [% INCLUDE package_details.html %]</div>
+<div id="status_container" class="status_container">
+	<div id="status_bar_dest" class="status_bar_dest"></div>
+</div>
+</div>
 </div>
 
 </div>

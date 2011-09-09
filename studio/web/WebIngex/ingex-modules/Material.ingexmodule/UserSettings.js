@@ -41,6 +41,7 @@ function UserSettings(Document){
 
 //load the settings cookie
 UserSettings.prototype.load = function(){
+	settingParams = [];
 	var allcookies = doc.cookie;
 	if(allcookies == ""){return;}
 	
@@ -51,9 +52,12 @@ UserSettings.prototype.load = function(){
 	pos += cookieName.length + 1;
 	myVals = allcookies.substring(pos);
 	var end = myVals.indexOf(";");
+	if(end < 0) {end = myVals.length;}
 	myVals = myVals.substring(0, end);
 	
 	var pairs = myVals.split("&");
+	if(!pairs) {pairs[0] = myVals;}
+	
 	var pair;
 	var val;
 	var key;
@@ -65,6 +69,7 @@ UserSettings.prototype.load = function(){
 		val = pair[1];
 		settingParams[key] = val;
 	}
+	
 }
 
 //save the settings to cookie
@@ -74,7 +79,7 @@ UserSettings.prototype.save = function(){
 	var val;
 	
 	for(var key in settingParams){
-		if(typeof this[key] != 'function' || key != '' || key){
+		if(typeof this[key] != 'function' && key != '' && key){
 			val = settingParams[key];
 			if(cookieVals != ""){
 				cookieVals += "&";

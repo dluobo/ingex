@@ -1,9 +1,9 @@
 <div id="m_text" class="m_text">
-<h2>[% title %]</h2>
-<br />
+<div id="title"><h3>[% title %]</h3></div>
 
-<h4>Material Actions: <!--- TODO: make these pluggable for future expansion - should be loaded from array/refer to functions --->
-</h4>
+<legend>Material Actions <!--- TODO: make these pluggable for future expansion - should be loaded from array/refer to functions --->
+</legend>
+
 <div class="links">
 <ol>
 	<li>> <a href="javascript:deleteClicked('[% id %]')"
@@ -16,13 +16,14 @@
 <br />
 
 <div id='package_[% id %]' style='visibility: hidden;'>
-<h4>Tracks:</h4>
+<legend>Tracks</legend>
+<ol></ol>
 <div id='tracks_[% id %]'></div>
 <br />
-<h4>Description:</h4>
+<legend>Description</legend><ol></ol>
 <div id="meta_description_[% id %]"></div>
 <br />
-<h4>Comments:</h4>
+<legend>Comments</legend><ol></ol>
 <div id="meta_comments_[% id %]"></div>
 </div>
 </div>
