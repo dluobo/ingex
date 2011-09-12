@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: eventlist.cpp,v 1.22 2011/09/07 15:05:41 john_f Exp $           *
+ *   $Id: eventlist.cpp,v 1.23 2011/09/12 09:41:48 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2009-2011 British Broadcasting Corporation                   *
  *   - all rights reserved.                                                *
@@ -47,7 +47,7 @@ const wxString TypeLabels[] = {wxT(""), wxT("Start"), wxT("Cue"), wxT("Chunk Sta
 
 EventList::EventList(wxWindow * parent, wxWindowID id, const wxPoint & pos, const wxSize & size, bool loadEventFile, const wxString & eventFilename) :
 wxListView(parent, id, pos, size, wxLC_REPORT|wxLC_SINGLE_SEL|wxSUNKEN_BORDER|wxLC_EDIT_LABELS/*|wxALWAYS_SHOW_SB*/), //ALWAYS_SHOW_SB results in a disabled scrollbar on GTK (wx 2.8))
-mCanEditAfter(0), mCurrentChunkInfo(-1), mBlockEventItem(-1), mRecordingNodeCount(0), mChunking(false), mRunThread(false), mSyncThread(false), mEditRate(InvalidMxfTimecode), mRecStartTimecode(InvalidMxfTimecode)
+mCanEditAfter(0), mCurrentChunkInfo(-1), mBlockEventItem(-1), mChunking(false), mRunThread(false), mSyncThread(false), mEditRate(InvalidMxfTimecode), mRecStartTimecode(InvalidMxfTimecode)
 {
     //set up the columns
     wxListItem itemCol;
@@ -466,10 +466,7 @@ void EventList::AddEvent(EventType type, ProdAuto::MxfTimecode * timecode, const
                 item.SetBackgroundColour(wxColour(wxT("WHITE")));
                 mCanEditAfter = GetItemCount(); //cue point data will be sent to recorder so don't allow editing of existing cue point descriptions (or the stop/chunk description)
                 mMutex.Lock();
-                mRecordingNode->AddProperty(wxT("Linking"), mChunking ? wxT("Continues") : wxT("Finishes"));
-                if (!description.IsEmpty()) {
-                    new wxXmlNode(new wxXmlNode(mRecordingNode, wxXML_ELEMENT_NODE, wxT("Description")), wxXML_CDATA_SECTION_NODE, wxT(""), description);
-                }
+                if (!description.IsEmpty()) new wxXmlNode(new wxXmlNode(mChunkNode, wxXML_ELEMENT_NODE, wxT("Description")), wxXML_CDATA_SECTION_NODE, wxT(""), description);
                 if (timecode && !timecode->undefined) {
                     //work out the exact duration mod 1 day
                     position = timecode->samples - GetStartTimecode().samples;
@@ -485,10 +482,10 @@ void EventList::AddEvent(EventType type, ProdAuto::MxfTimecode * timecode, const
                         totalMinutes -= 1; //nudge downwards to ensure an extra day is not added if frameCount is a bit high
                     }
                     position += ((int64_t) (totalMinutes / 60 / 24)) * 3600 * 24 * timecode->edit_rate.numerator / timecode->edit_rate.denominator; //add whole days to the fractional day
-                    mRecordingNode->AddProperty(wxT("OutSample"), wxString::Format(wxT("%d"), position - mChunkInfoArray.Item(mChunkInfoArray.GetCount() - 1).GetStartPosition())); //first sample not recorded. Relative to start of chunk
+                    if (!mChunking) mRecordingNode->AddProperty(wxT("OutFrame"), wxString::Format(wxT("%d"), position)); //first sample not recorded. Relative to start of recording.
                 }
                 else if (frameCount) {
-                    mRecordingNode->AddProperty(wxT("OutSample"), wxString::Format(wxT("%d"), frameCount - mChunkInfoArray.Item(mChunkInfoArray.GetCount() - 1).GetStartPosition())); //less accurate than the above. Relative to start of chunk
+                    if (!mChunking) mRecordingNode->AddProperty(wxT("OutFrame"), wxString::Format(wxT("%d"), frameCount)); //less accurate than the above. Relative to start of chunk
                     wxListItem startItem;
                     startItem.SetId(GetItemCount());
                     while (startItem.GetId()) {
@@ -511,14 +508,18 @@ void EventList::AddEvent(EventType type, ProdAuto::MxfTimecode * timecode, const
                 ChunkInfo latestChunkInfo = mChunkInfoArray.Item(mChunkInfoArray.GetCount() - 1);
                 wxListItem item;
                 item.SetColumn(3); //description column
-                for (unsigned int i = 0; i < latestChunkInfo.GetCueColourIndeces().size(); i++) {
-                    item.SetId(latestChunkInfo.GetStartIndex() + i + 1); //the 1 is to jump over the start event
-                    GetItem(item);
-                    wxXmlNode * cuePointNode = new wxXmlNode(mRecordingNode, wxXML_ELEMENT_NODE, wxT("CuePoint"), wxT(""), new wxXmlProperty(wxT("Index"), wxString::Format(wxT("%d"), i)));
-                    cuePointNode->AddProperty(wxT("Sample"), wxString::Format(wxT("%d"), latestChunkInfo.GetCuePointFrames()[i]));
-                    cuePointNode->AddProperty(wxT("Colour"), wxString::Format(wxT("%d"), CuePointsDlg::GetColourCode(latestChunkInfo.GetCueColourIndeces()[i])));
-                    if (item.GetText().length()) {
-                        new wxXmlNode(cuePointNode, wxXML_CDATA_SECTION_NODE, wxT(""), item.GetText());
+                if (latestChunkInfo.GetCueColourIndeces().size()) {
+                    wxXmlNode * cuePointsNode = new wxXmlNode(mChunkNode, wxXML_ELEMENT_NODE, wxT("CuePoints"));
+                    wxXmlNode * cuePointNode = 0; //to prevent compiler warning
+                    for (unsigned int i = 0; i < latestChunkInfo.GetCueColourIndeces().size(); i++) {
+                        item.SetId(latestChunkInfo.GetStartIndex() + i + 1); //the 1 is to jump over the start event
+                        GetItem(item);
+                        cuePointNode = SetNextChild(cuePointsNode, cuePointNode, new wxXmlNode(0, wxXML_ELEMENT_NODE, wxT("CuePoint"), wxT("")));
+                        cuePointNode->AddProperty(wxT("Frame"), wxString::Format(wxT("%d"), latestChunkInfo.GetCuePointFrames()[i]));
+                        cuePointNode->AddProperty(wxT("Colour"), wxString::Format(wxT("%d"), CuePointsDlg::GetColourCode(latestChunkInfo.GetCueColourIndeces()[i])));
+                        if (item.GetText().length()) {
+                            new wxXmlNode(cuePointNode, wxXML_CDATA_SECTION_NODE, wxT(""), item.GetText());
+                        }
                     }
                 }
                 mMutex.Unlock();
@@ -544,7 +545,7 @@ void EventList::AddEvent(EventType type, ProdAuto::MxfTimecode * timecode, const
     if (!mRootNode->GetPropVal(wxT("EditRateNumerator"), &dummy) && timecode && !timecode->undefined) {
         mRootNode->AddProperty(wxT("EditRateNumerator"), wxString::Format(wxT("%d"), timecode->edit_rate.numerator));
         mRootNode->AddProperty(wxT("EditRateDenominator"), wxString::Format(wxT("%d"), timecode->edit_rate.denominator));
-        mRootNode->AddProperty(wxT("DropFrame"), timecode->drop_frame ? wxT("Yes") : wxT("No"));
+        mRootNode->AddProperty(wxT("DropFrame"), timecode->drop_frame ? wxT("yes") : wxT("no"));
     }
     mRunThread = true; //in case thread is busy so misses the signal
     mCondition->Signal();
@@ -613,12 +614,37 @@ void EventList::AddEvent(EventType type, ProdAuto::MxfTimecode * timecode, const
 /// @param projectName If empty, project name is copied from previous chunk and no project name node is generated
 void EventList::NewChunkInfo(ProdAuto::MxfTimecode * timecode, int64_t position, const wxString & projectName)
 {
+    //Add data to XML tree
     mMutex.Lock();
-    mPrevRecordingNode = mRecordingNode; //so that in chunking mode, recorder data can be added to the previous recording
-    mRecordingNode = new wxXmlNode(mRootNode, wxXML_ELEMENT_NODE, wxT("Recording"), wxT(""), new wxXmlProperty(wxT("Index"), wxString::Format(wxT("%d"), mRecordingNodeCount++)));
-    if (!projectName.IsEmpty()) new wxXmlNode(new wxXmlNode(mRecordingNode, wxXML_ELEMENT_NODE, wxT("ProjectName")), wxXML_CDATA_SECTION_NODE, wxT(""), projectName);
-    if (!timecode->undefined) mRecordingNode->AddProperty(wxT("StartTime"), wxString::Format(wxT("%d"), timecode->samples));
+    mPrevChunkNode = mChunkNode; //so that in chunking mode, recorder data can be added to the previous chunk
+    wxXmlNode * newChunkNode = new wxXmlNode(0, wxXML_ELEMENT_NODE, wxT("Chunk"), wxT(""), new wxXmlProperty(wxT("StartFrame"), wxString::Format(wxT("%d"), position))); //will be attached to another node so no worries about deletion
+    if (mChunking) {
+        //New Chunk node is sibling of previous Chunk node
+        mChunkNode->SetNext(newChunkNode);
+    }
+    else { //first chunk in recording
+        //new Recording node
+        mRecordingNode = SetNextChild(mRootNode, mRecordingNode, new wxXmlNode(0, wxXML_ELEMENT_NODE, wxT("Recording"), wxT(""), timecode->undefined ? 0 : new wxXmlProperty(wxT("StartTime"), wxString::Format(wxT("%d"), timecode->samples))));
+        //new Chunks node
+        wxXmlNode * chunksNode = new wxXmlNode(0, wxXML_ELEMENT_NODE, wxT("Chunks"));
+        if (projectName.IsEmpty()) {
+            //new Chunks node is only child of new Recording node
+            mRecordingNode->AddChild(chunksNode);
+        }
+        else {
+            //new ProjectName node, only child of new Recording node (make first child to make XML file more legible)
+            wxXmlNode * projectNameNode = new wxXmlNode(mRecordingNode, wxXML_ELEMENT_NODE, wxT("ProjectName"));
+            projectNameNode->AddChild(new wxXmlNode(0, wxXML_CDATA_SECTION_NODE, wxT(""), projectName));
+            //new Chunks node is sibling of new ProjectName node
+            projectNameNode->SetNext(chunksNode);
+        }
+        //new Chunk node is first child of new Chunks node
+        chunksNode->AddChild(newChunkNode);
+    }
+    mChunkNode = newChunkNode;
     mMutex.Unlock();
+
+    //Add data to chunk info array
     if (mChunking && mChunkInfoArray.GetCount()) mChunkInfoArray.Item(mChunkInfoArray.GetCount() - 1).SetHasChunkAfter(); //latter check a sanity check
     ChunkInfo * info = new ChunkInfo(
      GetItemCount(), //where the start of this chunk appears in the displayed list
@@ -653,14 +679,12 @@ ProdAuto::MxfTimecode EventList::GetStartTimecode()
 void EventList::AddRecorderData(RecorderData * data, bool reload)
 {
     if (mChunkInfoArray.GetCount() > mChunking ? 1 : 0) { //sanity check
-        mChunkInfoArray.Item(mChunkInfoArray.GetCount() - (mChunking ? 2 : 1)).AddRecorder(data->GetTrackList(), data->GetStringSeq());
-        unsigned int index = 0;
+        //add data to XML tree
         mMutex.Lock();
-        wxXmlNode * recorderNode = new wxXmlNode(mChunking ? mPrevRecordingNode : mRecordingNode, wxXML_ELEMENT_NODE, wxT("Recorder"), wxT(""), new wxXmlProperty(wxT("Index"), wxString::Format(wxT("%d"), mChunkInfoArray.Item(mChunkInfoArray.GetCount() - (mChunking ? 2 : 1)).GetTracks().GetCount() - 1)));
+        wxXmlNode * filesNode = FindChildNodeByName(mChunking ? mPrevChunkNode : mChunkNode, wxT("Files"), true); //create if nonexistent
         for (size_t i = 0; i < data->GetTrackList()->length(); i++) {
             if (data->GetTrackList()[i].has_source && strlen(data->GetStringSeq()[i].in())) { //tracks not enabled for record have blank filenames
-                wxXmlNode * fileNode = new wxXmlNode(recorderNode, wxXML_ELEMENT_NODE, wxT("File"), wxT(""), new wxXmlProperty(wxT("Index"), wxString::Format(wxT("%d"), index++)));
-                fileNode->AddProperty(wxT("Type"), ProdAuto::VIDEO == (data->GetTrackList())[i].type ? wxT("Video") : wxT("Audio"));
+                wxXmlNode * fileNode = new wxXmlNode(filesNode, wxXML_ELEMENT_NODE, wxT("File"), wxT(""), new wxXmlProperty(wxT("Type"), ProdAuto::VIDEO == (data->GetTrackList())[i].type ? wxT("video") : wxT("audio"))); //order of files not important
                 new wxXmlNode(new wxXmlNode(fileNode, wxXML_ELEMENT_NODE, wxT("Label")), wxXML_CDATA_SECTION_NODE, wxT(""), wxString((data->GetTrackList())[i].src.package_name, *wxConvCurrent));
                 new wxXmlNode(new wxXmlNode(fileNode, wxXML_ELEMENT_NODE, wxT("Path")), wxXML_CDATA_SECTION_NODE, wxT(""), wxString((data->GetStringSeq())[i].in(), *wxConvCurrent));
             }
@@ -669,6 +693,9 @@ void EventList::AddRecorderData(RecorderData * data, bool reload)
         mRunThread = true; //in case thread is busy so misses the signal
         mCondition->Signal();
         mMutex.Unlock();
+
+        //add data to chunk info array
+        mChunkInfoArray.Item(mChunkInfoArray.GetCount() - (mChunking ? 2 : 1)).AddRecorder(data->GetTrackList(), data->GetStringSeq());
     }
     //Send an event to reload the player if this programme is selected
     if (InLastTake() && reload) {
@@ -747,225 +774,179 @@ bool EventList::JumpToTimecode(const ProdAuto::MxfTimecode & tc, int64_t & offse
 void EventList::Load()
 {
     wxXmlDocument doc;
-    wxXmlNode * loadedRootNode = 0;
-    wxString str;
-    long long1, long2;
+    wxXmlNode * loadedRootNode = 0; //to prevent compiler warning;
     mEditRate = InvalidMxfTimecode;
-    long index;
-    wxXmlNode * node;
-    std::vector<wxXmlNode *> recordingNodes;
     if (wxFile::Exists(mFilename)
      && doc.Load(mFilename)
      && (loadedRootNode = doc.GetRoot())
      && ROOT_NODE_NAME == loadedRootNode->GetName()
     ) {
         //get edit rate (if present; if not, no timecodes will be valid)
-        if (loadedRootNode->GetPropVal(wxT("EditRateNumerator"), &str)
-         && str.ToLong(&long1)
-         && 0 < long1
-         && loadedRootNode->GetPropVal(wxT("EditRateDenominator"), &str)
-         && str.ToLong(&long2)
-         && 0 < long2
+        long numerator, denominator;
+        wxString property;
+        if (loadedRootNode->GetPropVal(wxT("EditRateNumerator"), &property)
+         && property.ToLong(&numerator)
+         && 0 < numerator
+         && loadedRootNode->GetPropVal(wxT("EditRateDenominator"), &property)
+         && property.ToLong(&denominator)
+         && 0 < denominator
         ) {
             mEditRate.undefined = false;
-            mEditRate.edit_rate.numerator = long1;
-            mEditRate.edit_rate.denominator = long2;
-            mEditRate.drop_frame = wxT("Yes") == loadedRootNode->GetPropVal(wxT("DropFrame"), wxT("No"));
+            mEditRate.edit_rate.numerator = numerator;
+            mEditRate.edit_rate.denominator = denominator;
+            mEditRate.drop_frame = wxT("yes") == loadedRootNode->GetPropVal(wxT("DropFrame"), wxT("no"));
         }
-        //make a list of the recording nodes in order
-        node = loadedRootNode->GetChildren();
-        while (node) {
-            if (wxT("Recording") == node->GetName()
-             && node->GetPropVal(wxT("Index"), &str)
-             && str.ToLong(&index)
-             && 0 <= index
-            ) {
-                //extend vector if necessary
-                if (recordingNodes.size() < (unsigned long) index + 1) {
-                    size_t oldSize = recordingNodes.size();
-                    recordingNodes.resize(index + 1);
-                    for (size_t i = oldSize; i <= (unsigned long) index; i++) {
-                        recordingNodes[i] = 0; //to catch missing index values
+        //iterate through recording nodes
+        wxXmlNode * recordingNode = loadedRootNode->GetChildren();
+        while (recordingNode) {
+            if (wxT("Recording") == recordingNode->GetName()) {
+                //iterate through chunk nodes
+                wxXmlNode * chunkNode = FindChildNodeByName(recordingNode, wxT("Chunks"));
+                if (chunkNode) {
+                    chunkNode = chunkNode->GetChildren();
+                    while (chunkNode && wxT("Chunk") != chunkNode->GetName()) {
+                        chunkNode = chunkNode->GetNext();
                     }
-                }
-                recordingNodes[index] = node;
-            }
-            node = node->GetNext();
-        }
-    }
-    else {
-        loadedRootNode = 0;
-    }
-    if (loadedRootNode) {
-        //iterate over the recording nodes, filling in the event list
-        long lastPosition = 0;
-        for (size_t i = 0; i < recordingNodes.size(); i++) {
-            wxString projectName, description;
-            if (recordingNodes[i]) {
-                //make a list of the cue points and recorders in this recording, in order, and obtain project name and description
-                std::vector<wxXmlNode *> recorderNodes;
-                std::vector<wxXmlNode *> cuePointNodes;
-                node = recordingNodes[i]->GetChildren();
-                ProdAuto::MxfTimecode timecode = mEditRate; //for edit rate and defined values
-                while (node) {
-                    if (wxT("CuePoint") == node->GetName()
-                        && node->GetPropVal(wxT("Index"), &str)
-                        && str.ToLong(&index)
-                        && 0 <= index
-                    ) {
-                        //extend vector if necessary
-                        if (cuePointNodes.size() < (unsigned long) index + 1) {
-                            size_t oldSize = cuePointNodes.size();
-                            cuePointNodes.resize(index + 1);
-                            for (size_t i = oldSize; i <= (unsigned long) index; i++) {
-                                cuePointNodes[i] = 0; //to catch missing index values
-                            }
-                        }
-                        cuePointNodes[index] = node;
-                    }
-                    else if (wxT("Recorder") == node->GetName()
-                        && node->GetPropVal(wxT("Index"), &str)
-                        && str.ToLong(&index)
-                        && 0 <= index
-                    ) {
-                        //extend vector if necessary
-                        if (recorderNodes.size() < (unsigned long) index + 1) {
-                            size_t oldSize = recorderNodes.size();
-                            recorderNodes.resize(index + 1);
-                            for (size_t i = oldSize; i <= (unsigned long) index; i++) {
-                                recorderNodes[i] = 0; //to catch missing index values
-                            }
-                        }
-                        recorderNodes[index] = node;
-                    }
-                    else if (wxT("ProjectName") == node->GetName()) {
-                        projectName = GetCdata(node);
-                    }
-                    else if (wxT("Description") == node->GetName()) {
-                        description = GetCdata(node);
-                    }
-                    node = node->GetNext();
-                }
-                //add recording start to the event list
-                if (!timecode.undefined) { //have edit rate
-                    if (recordingNodes[i]->GetPropVal(wxT("StartTime"), &str)
-                    && str.ToLong(&long1)
-                    && 0 <= long1
-                    ) {
-                        timecode.samples = long1;
-                    }
-                    else {
-                        timecode.undefined = true;
-                    }
-                }
-                AddEvent(START, &timecode, projectName);
-                //add cue points to the event list
-                for (size_t j = 0; j < cuePointNodes.size(); j++) {
-                    if (cuePointNodes[j]
-                        && cuePointNodes[j]->GetPropVal(wxT("Sample"), &str)
-                        && str.ToLong(&long1)
-                        && 0 <= long1
-                    ) {
-                        if (!cuePointNodes[j]->GetPropVal(wxT("Colour"), &str)
-                        || !str.ToLong(&long2)
-                        || 0 > long1
-                        || N_CUE_POINT_COLOURS <= long2
+                    if (chunkNode) {
+                        //issue START event
+                        ProdAuto::MxfTimecode startTimecode = mEditRate;
+                        long samples;
+                        if (recordingNode->GetPropVal(wxT("StartTime"), &property)
+                         && property.ToLong(&samples)
+                         && 0 <= startTimecode.samples
                         ) {
-                            long2 = 0; //default colour
+                            startTimecode.samples = samples;
                         }
-                        AddEvent(CUE, 0, GetCdata(cuePointNodes[j]), long1, (size_t) long2);
-                    }
-                }
-                //add chunk stop to the event list
-                long1 = 0; //indicates unknown
-                if (!recordingNodes[i]->GetPropVal(wxT("OutSample"), &str)
-                    || !str.ToLong(&long1)
-                    || 0 > long1
-                ) {
-                    long1 = 0;
-                }
-                if (long1) { //valid position
-                    lastPosition += long1; //OutSample is relative to start of chunk; make it relative to start of recording
-                }
-                else {
-                    lastPosition = 0; //indicates unknown
-                }
-                str = recordingNodes[i]->GetPropVal(wxT("Linking"), wxT("Finishes"));
-                AddEvent(wxT("Continues") == str ? CHUNK : STOP, 0, description, lastPosition, 0, false); //don't select as will look messy and could take ages if loading lots of recordings
-                if (wxT("Continues") != str) {
-                    lastPosition = 0;
-                }
-                //iterate over the recorder nodes, adding file/track details to the recording
-                for (size_t i = 0; i < recorderNodes.size(); i++) {
-                    if (recorderNodes[i]) {
-                        std::vector<wxXmlNode *> fileNodes;
-                        node = recorderNodes[i]->GetChildren();
-                        while (node) {
-                            if (wxT("File") == node->GetName()
-                                && node->GetPropVal(wxT("Index"), &str)
-                                && str.ToLong(&index)
-                                && 0 <= index
-                            ) {
-                                //extend vector if necessary
-                                if (fileNodes.size() < (unsigned long) index + 1) {
-                                    size_t oldSize = fileNodes.size();
-                                    fileNodes.resize(index + 1);
-                                    for (size_t i = oldSize; i <= (unsigned long) index; i++) {
-                                        fileNodes[i] = 0; //to catch missing index values
-                                    }
-                                }
-                                fileNodes[index] = node;
-                            }
-                            node = node->GetNext();
+                        else {
+                            startTimecode.undefined = true;
                         }
-                        if (fileNodes.size()) {
-                            //add tracks/files to the chunk info
-                            ProdAuto::TrackList_var trackList = new ProdAuto::TrackList;
-                            CORBA::StringSeq_var fileList = new CORBA::StringSeq;
-                            trackList->length(fileNodes.size());
-                            fileList->length(fileNodes.size());
-                            for (size_t j = 0; j < fileNodes.size(); j++) {
-                                trackList[j].type = ProdAuto::VIDEO;
-                                trackList[j].name = "";
-                                trackList[j].has_source = false;
-                                fileList[j] = "";
-                                if (fileNodes[j]) {
-                                    if (fileNodes[j]->GetPropVal(wxT("Type"), &str) && wxT("Audio") == str) {
-                                        trackList[j].type = ProdAuto::AUDIO;
-                                    }
-                                    node = fileNodes[j]->GetChildren();
-                                    while (node) {
-                                        if (wxT("Path") == node->GetName()) {
-                                            fileList[j] = GetCdata(node).mb_str(*wxConvCurrent);
-                                            trackList[j].has_source = true;
+                        AddEvent(START, &startTimecode, GetCdata(FindChildNodeByName(recordingNode, wxT("ProjectName"))));
+                        do {
+                            //add cue points
+                            wxXmlNode * cuePointNode = FindChildNodeByName(chunkNode, wxT("CuePoints"));
+                            long frame;
+                            if (cuePointNode) {
+                                cuePointNode = cuePointNode->GetChildren();
+                                while (cuePointNode) {
+                                    if (wxT("CuePoint") == cuePointNode->GetName()
+                                     && cuePointNode->GetPropVal(wxT("Frame"), &property)
+                                     && property.ToLong(&frame)
+                                     && 0 <= frame
+                                    ) {
+                                        long colour;
+                                        if (!cuePointNode->GetPropVal(wxT("Colour"), &property)
+                                         || !property.ToLong(&colour)
+                                         || 0 > colour
+                                         || N_CUE_POINT_COLOURS <= colour
+                                        ) {
+                                            colour = 0; //default colour
                                         }
-                                        else if (wxT("Label") == node->GetName()) {
-                                            trackList[j].src.package_name = GetCdata(node).mb_str(*wxConvCurrent);
-                                        }
-                                        node = node->GetNext();
+                                        AddEvent(CUE, 0, GetCdata(cuePointNode), frame, (size_t) colour);
                                     }
+                                    cuePointNode = cuePointNode->GetNext();
                                 }
                             }
-                            RecorderData data(trackList, fileList);
-                            AddRecorderData(&data, false);
-                        } //there are file nodes
-                    } //recorder node present
-                } //recorder node loop
-            } //recording node present
+                            //find out if last chunk
+                            wxXmlNode * nextChunkNode = chunkNode->GetNext();
+                            while (nextChunkNode && wxT("Chunk") != nextChunkNode->GetName()) {
+                                nextChunkNode = nextChunkNode->GetNext();
+                            }
+                            //issue CHUNK event or STOP event as appropriate
+                            frame = 0; //indicates unknown
+                            if (nextChunkNode) {
+                                if (!nextChunkNode->GetPropVal(wxT("StartFrame"), &property)
+                                 || !property.ToLong(&frame)
+                                 || 0 > frame
+                                ) {
+                                    frame = 0;
+                                }
+                            }
+                            else {
+                                if (!recordingNode->GetPropVal(wxT("OutFrame"), &property)
+                                 || !property.ToLong(&frame)
+                                 || 0 > frame
+                                ) {
+                                    frame = 0;
+                                }
+                            }
+                            AddEvent(nextChunkNode ? CHUNK : STOP, 0, GetCdata(FindChildNodeByName(chunkNode, wxT("Description"))), frame, 0, false); //don't select as will look messy and could take ages if loading lots of recordings
+                            //add file data
+                            wxXmlNode * fileNode = FindChildNodeByName(chunkNode, wxT("Files"));
+                            if (fileNode) {
+                                fileNode = fileNode->GetChildren();
+                                ProdAuto::TrackList_var trackList = new ProdAuto::TrackList;
+                                CORBA::StringSeq_var fileList = new CORBA::StringSeq;
+                                while (fileNode) {
+                                    if (wxT("File") == fileNode->GetName()
+                                     && fileNode->GetPropVal(wxT("Type"), &property)
+                                    ) {
+                                        trackList->length(trackList->length() + 1);
+                                        fileList->length(fileList->length() + 1);
+                                        trackList[trackList->length() - 1].type = wxT("video") == property ? ProdAuto::VIDEO : ProdAuto::AUDIO;
+                                        trackList[trackList->length() - 1].name = "";
+                                        fileList[fileList->length() - 1] = GetCdata(FindChildNodeByName(fileNode, wxT("Path"))).mb_str(wxConvISO8859_1);
+                                        trackList[trackList->length() - 1].has_source = strlen(fileList[fileList->length() - 1]);
+                                        trackList[trackList->length() - 1].src.package_name = GetCdata(FindChildNodeByName(fileNode, wxT("Label"))).mb_str(wxConvISO8859_1);
+                                    }
+                                    fileNode = fileNode->GetNext();
+                                }
+                                RecorderData data(trackList, fileList);
+                                AddRecorderData(&data, false);
+                            }
+                            chunkNode = nextChunkNode;
+                        } while (chunkNode);
+                    } //some chunk nodes
+                } //Chunks node present
+            } //Recording node present
+            recordingNode = recordingNode->GetNext();
         } //recording node loop
         SelectLastTake(); //not done earlier while recordings were being added
     } //root node
 }
 
-/// If the given node has a CDATA node as a child, returns the value of this; empty string otherwise
+/// Return a child node with the given name
+/// @param node The parent node to search; returns zero if this is zero.
+/// @param name Name of the child node to search for.
+/// @param create If child node does not exist, create it; otherwise, return zero.
+wxXmlNode * EventList::FindChildNodeByName(wxXmlNode * node, const wxString & name, bool create)
+{
+    wxXmlNode * childNode = 0;
+    if (node) {
+        childNode = node->GetChildren();
+        while (childNode) {
+            if (name == childNode->GetName()) break;
+            childNode = childNode->GetNext();
+        }
+        if (!childNode && create) childNode = new wxXmlNode(node, wxXML_ELEMENT_NODE, name);
+    }
+    return childNode;
+}
+
+/// If the given node exists and has a CDATA node has a first/only child, returns the value of this; empty string otherwise
 /// Assumes mutex is locked or doesn't have to be
-const wxString EventList::GetCdata(wxXmlNode * node)
+const wxString EventList::GetCdata(const wxXmlNode * node)
 {
     wxString content;
-    if (node->GetChildren() && wxXML_CDATA_SECTION_NODE == node->GetChildren()->GetType()) {
+    if (node && node->GetChildren() && wxXML_CDATA_SECTION_NODE == node->GetChildren()->GetType()) {
         content = node->GetChildren()->GetContent().Trim(); //seems to have appended newline and space!
     }
     return content;
+}
+
+/// Sets a node to be the only child of a parent node, or the next sibling of a child node
+/// @param parent If this has no children, newChild becomes its child
+/// @param child If parent has children, newChild becomes this parameter's next sibling
+/// @param newChild The node to be added as a sibling or a child
+/// @return The same as parameter "newChild".
+wxXmlNode * EventList::SetNextChild(wxXmlNode * parent, wxXmlNode * child, wxXmlNode * newChild)
+{
+    if (parent->GetChildren()) {
+        child->SetNext(newChild);
+    }
+    else {
+        parent->AddChild(newChild);
+    }
+    return newChild;
 }
 
 /// Clears the XML tree which is used to generate the saved data file.
@@ -981,7 +962,6 @@ void EventList::ClearSavedData()
     mCondition->Signal();
     mCondition->Wait(); //until not saving
     mMutex.Unlock();
-    mRecordingNodeCount = 0;
 }
 
 /// Thread entry point, called by wxWidgets.

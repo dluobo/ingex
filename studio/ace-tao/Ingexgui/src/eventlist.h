@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: eventlist.h,v 1.15 2011/09/07 15:05:41 john_f Exp $             *
+ *   $Id: eventlist.h,v 1.16 2011/09/12 09:41:48 john_f Exp $             *
  *                                                                         *
  *   Copyright (C) 2009-2011 British Broadcasting Corporation                   *
  *   - all rights reserved.                                                *
@@ -136,7 +136,9 @@ class EventList : public wxListView, wxThread //used wxListCtrl for a while beca
         void OnEventSelection(wxListEvent&);
         void OnSocketEvent(wxSocketEvent&);
         void ClearSavedData();
-        const wxString GetCdata(wxXmlNode *);
+        wxXmlNode * FindChildNodeByName(wxXmlNode *, const wxString &, bool = false);
+        const wxString GetCdata(const wxXmlNode *);
+        wxXmlNode * SetNextChild(wxXmlNode *, wxXmlNode *, wxXmlNode *);
         void NewChunkInfo(ProdAuto::MxfTimecode *, int64_t, const wxString & = wxEmptyString);
         ProdAuto::MxfTimecode GetStartTimecode();
 
@@ -145,13 +147,13 @@ class EventList : public wxListView, wxThread //used wxListCtrl for a while beca
         long mCurrentChunkInfo;
         long mBlockEventItem;
         wxMutex mMutex;
-        unsigned int mRecordingNodeCount;
         bool mChunking;
         //vbls which need mutex protection to access
         wxCondition * mCondition;
         wxXmlNode * mRootNode;
         wxXmlNode * mRecordingNode;
-        wxXmlNode * mPrevRecordingNode;
+        wxXmlNode * mChunkNode;
+        wxXmlNode * mPrevChunkNode;
         bool mRunThread;
         bool mSyncThread;
         wxString mFilename;
