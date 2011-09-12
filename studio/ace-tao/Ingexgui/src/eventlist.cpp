@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: eventlist.cpp,v 1.23 2011/09/12 09:41:48 john_f Exp $           *
+ *   $Id: eventlist.cpp,v 1.24 2011/09/12 13:39:51 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2009-2011 British Broadcasting Corporation                   *
  *   - all rights reserved.                                                *
@@ -682,9 +682,10 @@ void EventList::AddRecorderData(RecorderData * data, bool reload)
         //add data to XML tree
         mMutex.Lock();
         wxXmlNode * filesNode = FindChildNodeByName(mChunking ? mPrevChunkNode : mChunkNode, wxT("Files"), true); //create if nonexistent
+        wxXmlNode * fileNode = 0; //iterate to find last file node
         for (size_t i = 0; i < data->GetTrackList()->length(); i++) {
             if (data->GetTrackList()[i].has_source && strlen(data->GetStringSeq()[i].in())) { //tracks not enabled for record have blank filenames
-                wxXmlNode * fileNode = new wxXmlNode(filesNode, wxXML_ELEMENT_NODE, wxT("File"), wxT(""), new wxXmlProperty(wxT("Type"), ProdAuto::VIDEO == (data->GetTrackList())[i].type ? wxT("video") : wxT("audio"))); //order of files not important
+                fileNode = SetNextChild(filesNode, fileNode, new wxXmlNode(0, wxXML_ELEMENT_NODE, wxT("File"), wxT(""), new wxXmlProperty(wxT("Type"), ProdAuto::VIDEO == (data->GetTrackList())[i].type ? wxT("video") : wxT("audio"))));
                 new wxXmlNode(new wxXmlNode(fileNode, wxXML_ELEMENT_NODE, wxT("Label")), wxXML_CDATA_SECTION_NODE, wxT(""), wxString((data->GetTrackList())[i].src.package_name, *wxConvCurrent));
                 new wxXmlNode(new wxXmlNode(fileNode, wxXML_ELEMENT_NODE, wxT("Path")), wxXML_CDATA_SECTION_NODE, wxT(""), wxString((data->GetStringSeq())[i].in(), *wxConvCurrent));
             }
@@ -933,14 +934,24 @@ const wxString EventList::GetCdata(const wxXmlNode * node)
     return content;
 }
 
-/// Sets a node to be the only child of a parent node, or the next sibling of a child node
-/// @param parent If this has no children, newChild becomes its child
-/// @param child If parent has children, newChild becomes this parameter's next sibling
-/// @param newChild The node to be added as a sibling or a child
-/// @return The same as parameter "newChild".
+/// Adds a node as the last in a list of children.
+/// If the parent node has no children, sets the new node to be its only child, ignoring the child parameter.
+/// If the parent node has children and an existing child node is supplied, assumes this is the current last child and sets the new node to be its next sibling, thus avoiding iterating through the list of children.
+/// If the parent node has children and the supplied child node is zero, iterates through the children to find the last, and sets the new node to be its next sibling.
+/// @param parent Must not be zero.
+/// @param child Optional previous last sibling, to avoid iteration.
+/// @param newChild The node to be added as a sibling or a child.
+/// @return The new child, which is now the last sibling (and can be passed as the child parameter on subsequent calls).
 wxXmlNode * EventList::SetNextChild(wxXmlNode * parent, wxXmlNode * child, wxXmlNode * newChild)
 {
     if (parent->GetChildren()) {
+        if (!child) {
+            //find last child
+            child = parent->GetChildren();
+            while (child->GetNext()) {
+                child = child->GetNext();
+            }
+        }
         child->SetNext(newChild);
     }
     else {
