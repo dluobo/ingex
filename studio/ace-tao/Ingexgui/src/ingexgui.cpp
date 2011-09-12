@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: ingexgui.cpp,v 1.47 2011/09/07 15:05:41 john_f Exp $           *
+ *   $Id: ingexgui.cpp,v 1.48 2011/09/12 09:42:42 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -2168,6 +2168,7 @@ bool IngexguiFrame::OperationAllowed(const int operation, bool* found)
             break;
         default:
             if (found) *found = false;
+            enabled = true; //for shortcuts that are always enabled
             break;
     }
     return enabled;
