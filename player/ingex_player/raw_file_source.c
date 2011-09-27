@@ -1,5 +1,5 @@
 /*
- * $Id: raw_file_source.c,v 1.8 2011/07/13 10:22:27 philipn Exp $
+ * $Id: raw_file_source.c,v 1.9 2011/09/27 10:14:29 philipn Exp $
  *
  *
  *
@@ -372,7 +372,13 @@ int rfs_open(const char* filename, const StreamInfo* streamInfo, MediaSource** s
             frameSize = streamInfo->width * streamInfo->height * 3;
             break;
         case UYVY_10BIT_FORMAT:
-            frameSize = (streamInfo->width + 5) / 6 * 16 * streamInfo->height;
+            frameSize = (streamInfo->width + 47) / 48 * 128 * streamInfo->height;
+            break;
+        case YUV422_10BIT_FORMAT:
+            frameSize = streamInfo->width * streamInfo->height * 2 * 2;
+            break;
+        case YUV420_10BIT_FORMAT:
+            frameSize = streamInfo->width * streamInfo->height * 3 / 2 * 2;
             break;
         case PCM_FORMAT:
             frameSize = streamInfo->numChannels *

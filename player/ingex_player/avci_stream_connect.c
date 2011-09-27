@@ -1,9 +1,7 @@
 /*
- * $Id: mjpeg_stream_connect.c,v 1.7 2011/09/27 10:14:29 philipn Exp $
+ * Copyright (C) 2011 British Broadcasting Corporation.
+ * All Rights Reserved
  *
- *
- *
- * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
@@ -28,7 +26,8 @@
 #include <assert.h>
 
 
-#include "mjpeg_stream_connect.h"
+#include "avci_stream_connect.h"
+#include "video_conversion_10bits.h"
 #include "video_conversion.h"
 #include "utils.h"
 #include "logging.h"
@@ -37,24 +36,24 @@
 
 #if !defined(HAVE_FFMPEG)
 
-int mjpeg_connect_accept(MediaSink* sink, const StreamInfo* streamInfo, StreamInfo* decodedStreamInfo)
+int avci_connect_accept(MediaSink* sink, const StreamInfo* streamInfo, StreamInfo* decodedStreamInfo)
 {
     return 0;
 }
 
-int create_mjpeg_connect(MediaSink* sink, int sinkStreamId, int sourceStreamId,
-    const StreamInfo* streamInfo, int numFFMPEGThreads, int useWorkerThread,
-    StreamConnect** connect)
+int create_avci_connect(MediaSink* sink, int sinkStreamId, int sourceStreamId,
+                        const StreamInfo* streamInfo, int numFFMPEGThreads, int useWorkerThread,
+                        StreamConnect** connect)
 {
     return 0;
 }
 
-int init_mjpeg_decoder_resources()
+int init_avci_decoder_resources()
 {
     return 0;
 }
 
-void free_mjpeg_decoder_resources()
+void free_avci_decoder_resources()
 {
 }
 
@@ -65,20 +64,16 @@ void free_mjpeg_decoder_resources()
 extern "C" {
 #endif
 
-#ifdef FFMPEG_OLD_INCLUDE_PATHS
-#include <ffmpeg/avcodec.h>
-#include <ffmpeg/avformat.h>
-#else
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
-#endif
 
 #ifdef __cplusplus
 }
 #endif
 
+
 /* some large number that we would not exceed */
-#define MAX_STATIC_MJPEG_DECODERS          32
+#define MAX_STATIC_AVCI_DECODERS          32
 
 
 typedef struct
@@ -93,15 +88,15 @@ typedef struct
     int isThreaded;
     int openedDecoder; /* only close if decoder opened */
     AVFrame *decFrame;
-} MJPEGDecoder;
+} AVCIDecoder;
 
 typedef struct
 {
     pthread_mutex_t resourceMutex;
-    MJPEGDecoder* decoder[MAX_STATIC_MJPEG_DECODERS];
+    AVCIDecoder* decoder[MAX_STATIC_AVCI_DECODERS];
     int numDecoders;
     int numDecodersInUse;
-} MJPEGDecoderResource;
+} AVCIDecoderResource;
 
 typedef struct
 {
@@ -116,13 +111,13 @@ typedef struct
     MediaSink* sink;
 
     StreamInfo streamInfo;
-    StreamFormat decodedFormat;
+    StreamInfo decodedStreamInfo;
 
-    MJPEGDecoder* decoder;
+    AVCIDecoder* decoder;
 
-    unsigned char* mjpegData;
-    unsigned int mjpegDataSize;
-    unsigned int mjpegDataAllocSize;
+    unsigned char* avciData;
+    unsigned int avciDataSize;
+    unsigned int allocAVCIDataSize;
 
     unsigned char* sinkBuffer;
     unsigned int sinkBufferSize;
@@ -138,15 +133,15 @@ typedef struct
     int workerResult;
 
     int stopped; /* set when the worker thread is stopped */
-} MJPEGDecodeStreamConnect;
+} AVCIDecodeStreamConnect;
 
 
-static MJPEGDecoderResource g_decoderResource;
+static AVCIDecoderResource g_decoderResource;
 static int g_decoderResourceRefCount = 0;
 
 
 
-static void free_mjpeg_decoder(MJPEGDecoder** decoder)
+static void free_avci_decoder(AVCIDecoder** decoder)
 {
     int decoderResourceRefCount = g_decoderResourceRefCount;
     int i;
@@ -191,11 +186,11 @@ static void free_mjpeg_decoder(MJPEGDecoder** decoder)
     SAFE_FREE(decoder);
 }
 
-static int create_mjpeg_decoder(StreamFormat format, int width, int height, int numFFMPEGThreads, MJPEGDecoder** decoder)
+static int create_avci_decoder(StreamFormat format, int width, int height, int numFFMPEGThreads, AVCIDecoder** decoder)
 {
     int decoderResourceRefCount = g_decoderResourceRefCount;
     int i;
-    MJPEGDecoder* newDecoder = NULL;
+    AVCIDecoder* newDecoder = NULL;
     int numDecoders = g_decoderResource.numDecoders;
     AVCodec* avDecoder = NULL;
 
@@ -220,7 +215,7 @@ static int create_mjpeg_decoder(StreamFormat format, int width, int height, int 
 
     /* create a new one */
 
-    CALLOC_ORET(newDecoder, MJPEGDecoder, 1);
+    CALLOC_ORET(newDecoder, AVCIDecoder, 1);
 
     newDecoder->inUse = 1;
     newDecoder->format = format;
@@ -228,17 +223,17 @@ static int create_mjpeg_decoder(StreamFormat format, int width, int height, int 
     newDecoder->height = height;
 
 
-    avDecoder = avcodec_find_decoder(CODEC_ID_MJPEG);
+    avDecoder = avcodec_find_decoder(CODEC_ID_H264);
     if (!avDecoder)
     {
-        ml_log_error("Could not find the MJPEG decoder\n");
+        ml_log_error("Could not find the AVC-Intra decoder\n");
         goto fail;
     }
 
     newDecoder->dec = avcodec_alloc_context();
     if (!newDecoder->dec)
     {
-        ml_log_error("Could not allocate MJPEG decoder context\n");
+        ml_log_error("Could not allocate AVC-Intra decoder context\n");
         goto fail;
     }
 
@@ -250,7 +245,8 @@ static int create_mjpeg_decoder(StreamFormat format, int width, int height, int 
 
 
     avcodec_set_dimensions(newDecoder->dec, width, height);
-    newDecoder->dec->pix_fmt = PIX_FMT_YUV422P;
+
+    newDecoder->dec->flags |= CODEC_FLAG_LOW_DELAY; /* no decode delay for intra-frame encoding */
 
     if (avcodec_open(newDecoder->dec, avDecoder) < 0)
     {
@@ -271,11 +267,11 @@ static int create_mjpeg_decoder(StreamFormat format, int width, int height, int 
 
     if (decoderResourceRefCount > 0)
     {
-        if ((size_t)g_decoderResource.numDecoders >= sizeof(g_decoderResource.decoder) / sizeof(MJPEGDecoder*))
+        if ((size_t)g_decoderResource.numDecoders >= sizeof(g_decoderResource.decoder) / sizeof(AVCIDecoder*))
         {
             /* more than x decoders? what are you doing? */
-            ml_log_error("Number of MJPEG decoders exceeded hard coded limit %d\n",
-                sizeof(g_decoderResource.decoder) / sizeof(MJPEGDecoder));
+            ml_log_error("Number of AVC-Intra decoders exceeded hard coded limit %d\n",
+                sizeof(g_decoderResource.decoder) / sizeof(AVCIDecoder));
             goto fail;
         }
 
@@ -289,12 +285,12 @@ static int create_mjpeg_decoder(StreamFormat format, int width, int height, int 
     return 1;
 
 fail:
-    free_mjpeg_decoder(&newDecoder);
+    free_avci_decoder(&newDecoder);
     return 0;
 }
 
 
-static int decode_and_send_const(MJPEGDecodeStreamConnect* connect, const unsigned char* buffer,
+static int decode_and_send_const(AVCIDecodeStreamConnect* connect, const unsigned char* buffer,
     unsigned int bufferSize)
 {
     int got_picture;
@@ -311,26 +307,96 @@ static int decode_and_send_const(MJPEGDecodeStreamConnect* connect, const unsign
 #endif
     if (result < 0)
     {
-        ml_log_error("error decoding MJPEG video\n");
+        ml_log_error("error decoding AVC-Intra video\n");
         return 0;
     }
     else if (!got_picture)
     {
-        ml_log_error("no output from MJPEG decoder\n");
+        ml_log_error("no output from AVC-Intra decoder\n");
         return 0;
     }
 
-    /* reformat decoded frame to UYVY */
-    if (connect->decodedFormat == UYVY_FORMAT)
+
+    /* convert to output format */
+
+    if (connect->decodedStreamInfo.format == YUV422_FORMAT)
     {
-        yuv422_to_uyvy(connect->streamInfo.width, connect->streamInfo.height, 0,
-            connect->decoder->decFrame, connect->sinkBuffer);
+        ConvertFrameYUV10to8(connect->sinkBuffer,
+                             (const uint16_t*)connect->decoder->decFrame->data[0],
+                             (const uint16_t*)connect->decoder->decFrame->data[1],
+                             (const uint16_t*)connect->decoder->decFrame->data[2],
+                             connect->decoder->decFrame->linesize[0],
+                             connect->decoder->decFrame->linesize[1],
+                             connect->decoder->decFrame->linesize[2],
+                             connect->decodedStreamInfo.width, connect->decodedStreamInfo.height,
+                             2, 1);
     }
-    else /* YUV422 */
+    else if (connect->decodedStreamInfo.format == YUV420_FORMAT)
     {
-        yuv422_to_yuv422(connect->streamInfo.width, connect->streamInfo.height, 0,
-            connect->decoder->decFrame, connect->sinkBuffer);
+        ConvertFrameYUV10to8(connect->sinkBuffer,
+                             (const uint16_t*)connect->decoder->decFrame->data[0],
+                             (const uint16_t*)connect->decoder->decFrame->data[1],
+                             (const uint16_t*)connect->decoder->decFrame->data[2],
+                             connect->decoder->decFrame->linesize[0],
+                             connect->decoder->decFrame->linesize[1],
+                             connect->decoder->decFrame->linesize[2],
+                             connect->decodedStreamInfo.width, connect->decodedStreamInfo.height,
+                             2, 2);
     }
+    else if (connect->decodedStreamInfo.format == YUV422_10BIT_FORMAT)
+    {
+        /* get rid of ffmpeg padding */
+        uint16_t *outY = (uint16_t*)connect->sinkBuffer;
+        uint16_t *outU = outY + connect->decodedStreamInfo.width * connect->decodedStreamInfo.height;
+        uint16_t *outV = outU + connect->decodedStreamInfo.width * connect->decodedStreamInfo.height / 2;
+        const uint8_t *inY = connect->decoder->decFrame->data[0];
+        const uint8_t *inU = connect->decoder->decFrame->data[1];
+        const uint8_t *inV = connect->decoder->decFrame->data[2];
+        int y;
+        for (y = 0; y < connect->decodedStreamInfo.height; y++)
+        {
+            memcpy((uint8_t*)outY, inY, connect->decodedStreamInfo.width * 2);
+            outY += connect->decodedStreamInfo.width;
+            inY += connect->decoder->decFrame->linesize[0];
+
+            memcpy((uint8_t*)outU, inU, connect->decodedStreamInfo.width);
+            outU += connect->decodedStreamInfo.width / 2;
+            inU += connect->decoder->decFrame->linesize[1];
+
+            memcpy((uint8_t*)outV, inV, connect->decodedStreamInfo.width);
+            outV += connect->decodedStreamInfo.width / 2;
+            inV += connect->decoder->decFrame->linesize[2];
+        }
+    }
+    else /* connect->decodedStreamInfo.format == YUV420_10BIT_FORMAT */
+    {
+        /* get rid of ffmpeg padding */
+        uint16_t *outY = (uint16_t*)connect->sinkBuffer;
+        uint16_t *outU = outY + connect->decodedStreamInfo.width * connect->decodedStreamInfo.height;
+        uint16_t *outV = outU + connect->decodedStreamInfo.width * connect->decodedStreamInfo.height / 4;
+        const uint8_t *inY = connect->decoder->decFrame->data[0];
+        const uint8_t *inU = connect->decoder->decFrame->data[1];
+        const uint8_t *inV = connect->decoder->decFrame->data[2];
+        int y;
+        for (y = 0; y < connect->decodedStreamInfo.height; y++)
+        {
+            memcpy((uint8_t*)outY, inY, connect->decodedStreamInfo.width * 2);
+            outY += connect->decodedStreamInfo.width;
+            inY += connect->decoder->decFrame->linesize[0];
+
+            if (y % 2 == 0)
+            {
+                memcpy((uint8_t*)outU, inU, connect->decodedStreamInfo.width);
+                outU += connect->decodedStreamInfo.width / 2;
+                inU += connect->decoder->decFrame->linesize[1];
+
+                memcpy((uint8_t*)outV, inV, connect->decodedStreamInfo.width);
+                outV += connect->decodedStreamInfo.width / 2;
+                inV += connect->decoder->decFrame->linesize[2];
+            }
+        }
+    }
+
 
     /* send decoded frame to sink */
     if (!msk_receive_stream_frame(connect->sink, connect->sinkStreamId, connect->sinkBuffer,
@@ -343,14 +409,14 @@ static int decode_and_send_const(MJPEGDecodeStreamConnect* connect, const unsign
     return 1;
 }
 
-static int decode_and_send(MJPEGDecodeStreamConnect* connect)
+static int decode_and_send(AVCIDecodeStreamConnect* connect)
 {
-    return decode_and_send_const(connect, connect->mjpegData, connect->mjpegDataSize);
+    return decode_and_send_const(connect, connect->avciData, connect->avciDataSize);
 }
 
 static void* worker_thread(void* arg)
 {
-    MJPEGDecodeStreamConnect* connect = (MJPEGDecodeStreamConnect*)arg;
+    AVCIDecodeStreamConnect* connect = (AVCIDecodeStreamConnect*)arg;
     int status;
     int workerResult;
     int doneWaiting;
@@ -368,7 +434,7 @@ static void* worker_thread(void* arg)
                 status = pthread_cond_wait(&connect->frameIsReadyCond, &connect->workerMutex);
                 if (status != 0)
                 {
-                    ml_log_error("MJPEG connect worker thread failed to wait for condition\n");
+                    ml_log_error("AVC-Intra connect worker thread failed to wait for condition\n");
                     /* TODO: don't try again? */
                 }
             }
@@ -404,7 +470,7 @@ static void* worker_thread(void* arg)
         status = pthread_cond_signal(&connect->workerIsBusyCond);
         if (status != 0)
         {
-            ml_log_error("MJPEG connect worker thread failed to send worker busy condition signal\n");
+            ml_log_error("AVC-Intra connect worker thread failed to send worker busy condition signal\n");
         }
         PTHREAD_MUTEX_UNLOCK(&connect->workerMutex);
     }
@@ -418,14 +484,14 @@ static void* worker_thread(void* arg)
 
 static MediaSourceListener* ddc_get_source_listener(void* data)
 {
-    MJPEGDecodeStreamConnect* connect = (MJPEGDecodeStreamConnect*)data;
+    AVCIDecodeStreamConnect* connect = (AVCIDecodeStreamConnect*)data;
 
     return &connect->sourceListener;
 }
 
 static int ddc_sync(void* data)
 {
-    MJPEGDecodeStreamConnect* connect = (MJPEGDecodeStreamConnect*)data;
+    AVCIDecodeStreamConnect* connect = (AVCIDecodeStreamConnect*)data;
     int status;
     int workerResult = 0;
     int doneWaiting;
@@ -458,7 +524,7 @@ static int ddc_sync(void* data)
             status = pthread_cond_wait(&connect->workerIsBusyCond, &connect->workerMutex);
             if (status != 0)
             {
-                ml_log_error("MJPEG connect worker thread failed to wait for condition\n");
+                ml_log_error("AVC-Intra connect worker thread failed to wait for condition\n");
                 /* TODO: don't try again? */
             }
         }
@@ -477,7 +543,7 @@ static int ddc_sync(void* data)
 
 static void ddc_close(void* data)
 {
-    MJPEGDecodeStreamConnect* connect = (MJPEGDecodeStreamConnect*)data;
+    AVCIDecodeStreamConnect* connect = (AVCIDecodeStreamConnect*)data;
 
     if (data == NULL)
     {
@@ -498,10 +564,10 @@ static void ddc_close(void* data)
         join_thread(&connect->workerThreadId, NULL, NULL);
     }
 
-    free_mjpeg_decoder(&connect->decoder);
-    free_mjpeg_decoder_resources();
+    free_avci_decoder(&connect->decoder);
+    free_avci_decoder_resources();
 
-    SAFE_FREE(&connect->mjpegData);
+    SAFE_FREE(&connect->avciData);
 
     if (connect->useWorkerThread)
     {
@@ -518,7 +584,7 @@ static void ddc_close(void* data)
 
 static int ddc_accept_frame(void* data, int streamId, const FrameInfo* frameInfo)
 {
-    MJPEGDecodeStreamConnect* connect = (MJPEGDecodeStreamConnect*)data;
+    AVCIDecodeStreamConnect* connect = (AVCIDecodeStreamConnect*)data;
 
     connect->frameWasReceived = 0;
 
@@ -527,7 +593,7 @@ static int ddc_accept_frame(void* data, int streamId, const FrameInfo* frameInfo
 
 static int ddc_allocate_buffer(void* data, int streamId, unsigned char** buffer, unsigned int bufferSize)
 {
-    MJPEGDecodeStreamConnect* connect = (MJPEGDecodeStreamConnect*)data;
+    AVCIDecodeStreamConnect* connect = (AVCIDecodeStreamConnect*)data;
     int result;
 
     if (connect->sourceStreamId != streamId)
@@ -536,26 +602,32 @@ static int ddc_allocate_buffer(void* data, int streamId, unsigned char** buffer,
         return 0;
     }
 
-    if (connect->mjpegDataAllocSize < bufferSize + FF_INPUT_BUFFER_PADDING_SIZE)
+    if (connect->avciDataSize < bufferSize)
     {
-        /* re-allocate buffer */
-        SAFE_FREE(&connect->mjpegData);
-        connect->mjpegDataSize = 0;
-        connect->mjpegDataAllocSize = 0;
-        CALLOC_ORET(connect->mjpegData, unsigned char, bufferSize + FF_INPUT_BUFFER_PADDING_SIZE);
-        connect->mjpegDataAllocSize = bufferSize + FF_INPUT_BUFFER_PADDING_SIZE;
+        /* allocate buffer if neccessary and set size */
+        if (connect->allocAVCIDataSize < bufferSize)
+        {
+            SAFE_FREE(&connect->avciData);
+            connect->avciDataSize = 0;
+            connect->allocAVCIDataSize = 0;
+
+            CALLOC_ORET(connect->avciData, unsigned char,
+                bufferSize + FF_INPUT_BUFFER_PADDING_SIZE /* FFMPEG for some reason needs the extra space */);
+            connect->allocAVCIDataSize = bufferSize; /* we lie and don't include the FFMPEG extra space */
+        }
+        connect->avciDataSize = bufferSize;
     }
-    connect->mjpegDataSize = bufferSize;
 
     /* ask sink to allocate buffer for decoded frame */
-    result = msk_get_stream_buffer(connect->sink, connect->sinkStreamId, connect->sinkBufferSize, &connect->sinkBuffer);
+    result = msk_get_stream_buffer(connect->sink, connect->sinkStreamId, connect->sinkBufferSize,
+        &connect->sinkBuffer);
     if (!result)
     {
-        ml_log_error("Sink failed to allocate buffer for stream %d for MJPEG decoder connector\n", streamId);
+        ml_log_error("Sink failed to allocate buffer for stream %d for AVC-Intra decoder connector\n", streamId);
         return 0;
     }
 
-    *buffer = connect->mjpegData;
+    *buffer = connect->avciData;
     return 1;
 }
 
@@ -566,7 +638,7 @@ static void ddc_deallocate_buffer(void* data, int streamId, unsigned char** buff
 
 static int ddc_receive_frame(void* data, int streamId, unsigned char* buffer, unsigned int bufferSize)
 {
-    MJPEGDecodeStreamConnect* connect = (MJPEGDecodeStreamConnect*)data;
+    AVCIDecodeStreamConnect* connect = (AVCIDecodeStreamConnect*)data;
     int status;
     int result = 1;
 
@@ -592,7 +664,7 @@ static int ddc_receive_frame(void* data, int streamId, unsigned char* buffer, un
         PTHREAD_MUTEX_LOCK(&connect->workerMutex);
         if (connect->workerIsBusy)
         {
-            ml_log_error("MJPEG connect worker thread is still busy, and therefore cannot receive a new frame\n");
+            ml_log_error("AVC-Intra connect worker thread is still busy, and therefore cannot receive a new frame\n");
             result = 0;
         }
         PTHREAD_MUTEX_UNLOCK(&connect->workerMutex);
@@ -610,7 +682,7 @@ static int ddc_receive_frame(void* data, int streamId, unsigned char* buffer, un
         status = pthread_cond_signal(&connect->frameIsReadyCond);
         if (status != 0)
         {
-            ml_log_error("MJPEG connect worker thread failed to send frame is ready condition signal\n");
+            ml_log_error("AVC-Intra connect worker thread failed to send frame is ready condition signal\n");
             result = 0;
         }
         PTHREAD_MUTEX_UNLOCK(&connect->workerMutex);
@@ -621,14 +693,14 @@ static int ddc_receive_frame(void* data, int streamId, unsigned char* buffer, un
 
 static int ddc_receive_frame_const(void* data, int streamId, const unsigned char* buffer, unsigned int bufferSize)
 {
-    MJPEGDecodeStreamConnect* connect = (MJPEGDecodeStreamConnect*)data;
+    AVCIDecodeStreamConnect* connect = (AVCIDecodeStreamConnect*)data;
     int status;
     int result;
     unsigned char* nonconstBuffer;
 
     if (connect->useWorkerThread)
     {
-        /* the worker thread requires the data to be copied into connect->mjpegData */
+        /* the worker thread requires the data to be copied into connect->avciData */
         result = ddc_allocate_buffer(data, streamId, &nonconstBuffer, bufferSize);
         if (result)
         {
@@ -650,7 +722,7 @@ static int ddc_receive_frame_const(void* data, int streamId, const unsigned char
         &connect->sinkBuffer);
     if (!result)
     {
-        ml_log_error("Sink failed to allocate buffer for stream %d for MJPEG decoder connector\n", streamId);
+        ml_log_error("Sink failed to allocate buffer for stream %d for AVC-Intra decoder connector\n", streamId);
         return 0;
     }
 
@@ -671,7 +743,7 @@ static int ddc_receive_frame_const(void* data, int streamId, const unsigned char
         PTHREAD_MUTEX_LOCK(&connect->workerMutex);
         if (connect->workerIsBusy)
         {
-            ml_log_error("MJPEG connect worker thread is still busy, and therefore cannot receive a new frame\n");
+            ml_log_error("AVC-Intra connect worker thread is still busy, and therefore cannot receive a new frame\n");
             result = 0;
         }
         PTHREAD_MUTEX_UNLOCK(&connect->workerMutex);
@@ -689,7 +761,7 @@ static int ddc_receive_frame_const(void* data, int streamId, const unsigned char
         status = pthread_cond_signal(&connect->frameIsReadyCond);
         if (status != 0)
         {
-            ml_log_error("MJPEG connect worker thread failed to send frame is ready condition signal\n");
+            ml_log_error("AVC-Intra connect worker thread failed to send frame is ready condition signal\n");
             result = 0;
         }
         PTHREAD_MUTEX_UNLOCK(&connect->workerMutex);
@@ -700,26 +772,57 @@ static int ddc_receive_frame_const(void* data, int streamId, const unsigned char
 
 
 
-int mjpeg_connect_accept(MediaSink* sink, const StreamInfo* streamInfo, StreamInfo* decodedStreamInfoOut)
+int avci_connect_accept(MediaSink* sink, const StreamInfo* streamInfo, StreamInfo* decodedStreamInfoOut)
 {
     StreamInfo decodedStreamInfo;
     int result;
 
     if (streamInfo->type != PICTURE_STREAM_TYPE ||
-        streamInfo->format != AVID_MJPEG_FORMAT)
+        !(streamInfo->format == AVCI_100_FORMAT || streamInfo->format == AVCI_50_FORMAT))
     {
         return 0;
     }
 
+
     decodedStreamInfo = *streamInfo;
-    decodedStreamInfo.format = YUV422_FORMAT;
+
+    /* the extra lines used for macro block alignment are skipped */
+    if (decodedStreamInfo.height == 1088)
+        decodedStreamInfo.height = 1080;
+
+    if (streamInfo->format == AVCI_100_FORMAT)
+    {
+        decodedStreamInfo.format = YUV422_10BIT_FORMAT;
+    }
+    else
+    {
+        decodedStreamInfo.format = YUV420_10BIT_FORMAT;
+        /* the FFmpeg decoder outputs 1440x1080 or 960x720, i.e. it doesn't undo the 1920->1440 or 1280->960 scaling */
+        if (decodedStreamInfo.width == 1920)
+            decodedStreamInfo.width = 1440;
+        else if (decodedStreamInfo.width == 1280)
+            decodedStreamInfo.width = 960;
+        /* set aspect ratio to 4/3 to reverse the scaling from 1920->1440 and 1280->960 */
+        decodedStreamInfo.aspectRatio.num = 4;
+        decodedStreamInfo.aspectRatio.den = 3;
+    }
 
     result = msk_accept_stream(sink, &decodedStreamInfo);
 
     if (!result)
     {
-        decodedStreamInfo = *streamInfo;
-        decodedStreamInfo.format = UYVY_FORMAT;
+        if (streamInfo->format == AVCI_100_FORMAT)
+        {
+            decodedStreamInfo.format = YUV422_FORMAT;
+            if (decodedStreamInfo.componentDepth > 8)
+                decodedStreamInfo.componentDepth = 8;
+        }
+        else
+        {
+            decodedStreamInfo.format = YUV420_FORMAT;
+            if (decodedStreamInfo.componentDepth > 8)
+                decodedStreamInfo.componentDepth = 8;
+        }
 
         result = msk_accept_stream(sink, &decodedStreamInfo);
     }
@@ -732,21 +835,51 @@ int mjpeg_connect_accept(MediaSink* sink, const StreamInfo* streamInfo, StreamIn
     return result;
 }
 
-int create_mjpeg_connect(MediaSink* sink, int sinkStreamId, int sourceStreamId,
+int create_avci_connect(MediaSink* sink, int sinkStreamId, int sourceStreamId,
     const StreamInfo* streamInfo, int numFFMPEGThreads, int useWorkerThread, StreamConnect** connect)
 {
-    MJPEGDecodeStreamConnect* newConnect;
+    AVCIDecodeStreamConnect* newConnect;
     StreamInfo decodedStreamInfo;
     int result;
 
     decodedStreamInfo = *streamInfo;
-    decodedStreamInfo.format = YUV422_FORMAT;
+
+    /* the extra lines used for macro block alignment are skipped */
+    if (decodedStreamInfo.height == 1088)
+        decodedStreamInfo.height = 1080;
+
+    if (streamInfo->format == AVCI_100_FORMAT)
+    {
+        decodedStreamInfo.format = YUV422_10BIT_FORMAT;
+    }
+    else
+    {
+        decodedStreamInfo.format = YUV420_10BIT_FORMAT;
+        /* the FFmpeg decoder outputs 1440x1080 or 960x720, i.e. it doesn't undo the 1920->1440 or 1280->960 scaling */
+        if (decodedStreamInfo.width == 1920)
+            decodedStreamInfo.width = 1440;
+        else if (decodedStreamInfo.width == 1280)
+            decodedStreamInfo.width = 960;
+        /* set aspect ratio to 4/3 to reverse the scaling from 1920->1440 and 1280->960 */
+        decodedStreamInfo.aspectRatio.num = 4;
+        decodedStreamInfo.aspectRatio.den = 3;
+    }
 
     result = msk_accept_stream(sink, &decodedStreamInfo);
     if (!result)
     {
-        decodedStreamInfo = *streamInfo;
-        decodedStreamInfo.format = UYVY_FORMAT;
+        if (streamInfo->format == AVCI_100_FORMAT)
+        {
+            decodedStreamInfo.format = YUV422_FORMAT;
+            if (decodedStreamInfo.componentDepth > 8)
+                decodedStreamInfo.componentDepth = 8;
+        }
+        else
+        {
+            decodedStreamInfo.format = YUV420_FORMAT;
+            if (decodedStreamInfo.componentDepth > 8)
+                decodedStreamInfo.componentDepth = 8;
+        }
 
         result = msk_accept_stream(sink, &decodedStreamInfo);
     }
@@ -758,22 +891,26 @@ int create_mjpeg_connect(MediaSink* sink, int sinkStreamId, int sourceStreamId,
     }
 
 
-    CALLOC_ORET(newConnect, MJPEGDecodeStreamConnect, 1);
+    CALLOC_ORET(newConnect, AVCIDecodeStreamConnect, 1);
 
     newConnect->useWorkerThread = useWorkerThread;
-    newConnect->decodedFormat = decodedStreamInfo.format;
-
     newConnect->sink = sink;
     newConnect->sourceStreamId = sourceStreamId;
     newConnect->sinkStreamId = sinkStreamId;
     newConnect->streamInfo = *streamInfo;
-    if (decodedStreamInfo.format == UYVY_FORMAT)
+    newConnect->decodedStreamInfo = decodedStreamInfo;
+    if (streamInfo->format == AVCI_100_FORMAT)
     {
-        newConnect->sinkBufferSize = streamInfo->width * streamInfo->height * 2;
+        newConnect->sinkBufferSize = decodedStreamInfo.width * decodedStreamInfo.height * 2;
     }
-    else /* (decodedStreamInfo.format == YUV422_FORMAT) */
+    else
     {
-        newConnect->sinkBufferSize = streamInfo->width * streamInfo->height * 2;
+        newConnect->sinkBufferSize = decodedStreamInfo.width * decodedStreamInfo.height * 3 / 2;
+    }
+    if (decodedStreamInfo.format == YUV422_10BIT_FORMAT || decodedStreamInfo.format == YUV420_10BIT_FORMAT)
+    {
+        /* 16-bit coded bit depth */
+        newConnect->sinkBufferSize *= 2;
     }
 
     newConnect->streamConnect.data = newConnect;
@@ -790,11 +927,11 @@ int create_mjpeg_connect(MediaSink* sink, int sinkStreamId, int sourceStreamId,
 
 
 
-    /* create MJPEG decoder */
+    /* create AVC-Intra decoder */
 
-    CHK_OFAIL(init_mjpeg_decoder_resources());
+    CHK_OFAIL(init_avci_decoder_resources());
 
-    CHK_OFAIL(create_mjpeg_decoder(streamInfo->format, streamInfo->width, streamInfo->height,
+    CHK_OFAIL(create_avci_decoder(decodedStreamInfo.format, decodedStreamInfo.width, decodedStreamInfo.height,
         numFFMPEGThreads, &newConnect->decoder));
 
 
@@ -820,13 +957,13 @@ fail:
 
 
 
-int init_mjpeg_decoder_resources()
+int init_avci_decoder_resources()
 {
     if (g_decoderResourceRefCount == 0)
     {
         av_register_all();
 
-        memset(&g_decoderResource, 0, sizeof(MJPEGDecoderResource));
+        memset(&g_decoderResource, 0, sizeof(AVCIDecoderResource));
         CHK_ORET(init_mutex(&g_decoderResource.resourceMutex));
         g_decoderResourceRefCount = 1;
     }
@@ -838,10 +975,10 @@ int init_mjpeg_decoder_resources()
     return 1;
 }
 
-void free_mjpeg_decoder_resources()
+void free_avci_decoder_resources()
 {
     int i;
-    MJPEGDecoder* decoder = NULL;
+    AVCIDecoder* decoder = NULL;
     int refCount;
 
     if (g_decoderResourceRefCount <= 0)
@@ -858,7 +995,7 @@ void free_mjpeg_decoder_resources()
     {
         if (g_decoderResource.numDecodersInUse > 0)
         {
-            ml_log_warn("There are %d MJPEG decoder resources still in use - please fix the source code\n",
+            ml_log_warn("There are %d AVC-Intra decoder resources still in use - please fix the source code\n",
                 g_decoderResource.numDecodersInUse);
         }
 
@@ -868,16 +1005,15 @@ void free_mjpeg_decoder_resources()
             decoder = g_decoderResource.decoder[i];
             g_decoderResource.decoder[i] = NULL;
 
-            free_mjpeg_decoder(&decoder);
+            free_avci_decoder(&decoder);
         }
 
         destroy_mutex(&g_decoderResource.resourceMutex);
 
-        memset(&g_decoderResource, 0, sizeof(MJPEGDecoderResource));
+        memset(&g_decoderResource, 0, sizeof(AVCIDecoderResource));
     }
 }
 
 
 #endif /* HAVE_FFMPEG */
-
 

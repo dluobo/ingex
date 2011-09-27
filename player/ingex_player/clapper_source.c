@@ -1,5 +1,5 @@
 /*
- * $Id: clapper_source.c,v 1.10 2011/07/13 10:23:22 philipn Exp $
+ * $Id: clapper_source.c,v 1.11 2011/09/27 10:14:29 philipn Exp $
  *
  *
  *
@@ -771,7 +771,7 @@ int clp_create(const StreamInfo* videoStreamInfo, const StreamInfo* audioStreamI
     else if (videoStreamInfo->format == YUV422_FORMAT)
     {
         newSource->imageSize = videoStreamInfo->width * videoStreamInfo->height * 2;
-        newSource->yuvFormat = YV16;
+        newSource->yuvFormat = Y42B;
     }
     else /* videoStreamInfo->format == YUV420_FORMAT */
     {

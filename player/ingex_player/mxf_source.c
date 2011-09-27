@@ -1,5 +1,5 @@
 /*
- * $Id: mxf_source.c,v 1.27 2011/09/09 11:36:00 philipn Exp $
+ * $Id: mxf_source.c,v 1.28 2011/09/27 10:14:29 philipn Exp $
  *
  *
  *
@@ -1274,6 +1274,9 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
             outputStream->streamInfo.frameRate.den = track->video.frameRate.denominator;
             outputStream->streamInfo.width = track->video.frameWidth;
             outputStream->streamInfo.height = track->video.frameHeight;
+            outputStream->streamInfo.horizSubsampling = track->video.horizSubsampling;
+            outputStream->streamInfo.vertSubsampling = track->video.vertSubsampling;
+            outputStream->streamInfo.componentDepth = track->video.componentDepth;
             outputStream->streamInfo.aspectRatio.num = track->video.aspectRatio.numerator;
             outputStream->streamInfo.aspectRatio.den = track->video.aspectRatio.denominator;
             if (outputStream->streamInfo.aspectRatio.num < 1 || outputStream->streamInfo.aspectRatio.den < 1)
@@ -1398,6 +1401,19 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
                 mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(DNxHD720p185ClipWrapped)))
             {
                 outputStream->streamInfo.format = AVID_DNxHD_FORMAT;
+            }
+            else if (mxf_equals_ul_mod_regver(&track->essenceContainerLabel, &MXF_EC_L(AVCIFrameWrapped)) ||
+                     mxf_equals_ul_mod_regver(&track->essenceContainerLabel, &MXF_EC_L(AVCIClipWrapped)))
+            {
+                if (track->pictureEssenceCodingLabel.octet14 == 0x21)
+                {
+                    outputStream->streamInfo.format = AVCI_50_FORMAT;
+                }
+                else
+                {
+                    CHK_OFAIL(track->pictureEssenceCodingLabel.octet14 == 0x31);
+                    outputStream->streamInfo.format = AVCI_100_FORMAT;
+                }
             }
             else
             {

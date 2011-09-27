@@ -1,5 +1,5 @@
 /*
- * $Id: frame_info.c,v 1.11 2010/12/03 14:27:35 john_f Exp $
+ * $Id: frame_info.c,v 1.12 2011/09/27 10:14:29 philipn Exp $
  *
  *
  *
@@ -46,10 +46,12 @@ static const char* g_streamFormatStrings[] =
 {
     "unknown",
     "uyvy",
-    "uyvy10bit",
+    "uyvy_10bit",
     "yuv420",
+    "yuv420_10bit",
     "yuv411",
     "yuv422",
+    "yuv422_10bit",
     "yuv444",
     "dv25_420",
     "dv25_411",
@@ -59,6 +61,8 @@ static const char* g_streamFormatStrings[] =
     "d10_picture",
     "avid_mjpeg",
     "avid_dnxhd",
+    "avci 50",
+    "avci 100",
     "pcm",
     "timecode",
     "source_event"

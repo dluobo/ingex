@@ -1,5 +1,5 @@
 /*
- * $Id: connection_matrix.c,v 1.5 2011/05/11 10:52:32 philipn Exp $
+ * $Id: connection_matrix.c,v 1.6 2011/09/27 10:14:29 philipn Exp $
  *
  *
  *
@@ -31,6 +31,7 @@
 #include "mpegi_stream_connect.h"
 #include "mjpeg_stream_connect.h"
 #include "dnxhd_stream_connect.h"
+#include "avci_stream_connect.h"
 #include "logging.h"
 #include "macros.h"
 
@@ -209,6 +210,10 @@ int stm_create_connection_matrix(MediaSource* source, MediaSink* sink, int numFF
         {
             newMatrix->numStreams++;
         }
+        else if (avci_connect_accept(sink, streamInfo, &decodedStreamInfo))
+        {
+            newMatrix->numStreams++;
+        }
         else
         {
             ml_log_info("Failed to find stream connector for stream %d (%s, %s)\n",
@@ -322,6 +327,24 @@ int stm_create_connection_matrix(MediaSource* source, MediaSink* sink, int numFF
                 else
                 {
                     ml_log_info("Failed to DNxHD connect stream %d (%s, %s)\n",
+                        i, get_stream_type_string(streamInfo->type), get_stream_format_string(streamInfo->format));
+                    CHK_OFAIL(msc_disable_stream(source, i));
+                }
+
+                streamIndex++;
+            }
+            else if (avci_connect_accept(sink, streamInfo, &decodedStreamInfo))
+            {
+                if (create_avci_connect(sink, i, i, streamInfo, numFFMPEGThreads, useWorkerThreads,
+                        &newMatrix->entries[streamIndex].connect))
+                {
+                    newMatrix->entries[streamIndex].sourceStreamId = i;
+                    newMatrix->entries[streamIndex].sinkStreamId = i;
+                }
+                /* failure is possible (eg. max streams exceeded) and so we ignore the stream */
+                else
+                {
+                    ml_log_info("Failed to AVC-Intra connect stream %d (%s, %s)\n",
                         i, get_stream_type_string(streamInfo->type), get_stream_format_string(streamInfo->format));
                     CHK_OFAIL(msc_disable_stream(source, i));
                 }

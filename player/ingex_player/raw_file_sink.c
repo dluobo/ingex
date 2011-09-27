@@ -1,5 +1,5 @@
 /*
- * $Id: raw_file_sink.c,v 1.10 2011/05/11 10:57:57 philipn Exp $
+ * $Id: raw_file_sink.c,v 1.11 2011/09/27 10:14:29 philipn Exp $
  *
  *
  *
@@ -142,12 +142,14 @@ static int rms_accept_stream(void* data, const StreamInfo* streamInfo)
     }
     else
     {
-        /* make sure the picture is UYVY/UYVY-10bit/YUV422/YUV420/YUV411/YUV444 */
+        /* make sure the picture is an uncompressed format */
         if (streamInfo->type == PICTURE_STREAM_TYPE &&
             streamInfo->format != UYVY_FORMAT &&
             streamInfo->format != UYVY_10BIT_FORMAT &&
             streamInfo->format != YUV422_FORMAT &&
+            streamInfo->format != YUV422_10BIT_FORMAT &&
             streamInfo->format != YUV420_FORMAT &&
+            streamInfo->format != YUV420_10BIT_FORMAT &&
             streamInfo->format != YUV411_FORMAT &&
             streamInfo->format != YUV444_FORMAT)
         {

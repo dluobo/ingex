@@ -1,5 +1,5 @@
 /*
- * $Id: on_screen_display.c,v 1.22 2011/04/26 13:42:15 philipn Exp $
+ * $Id: on_screen_display.c,v 1.23 2011/09/27 10:14:29 philipn Exp $
  *
  *
  *
@@ -413,17 +413,13 @@ static int initialise_audio_level_overlay(DefaultOnScreenDisplay* osdd, int widt
         (osdd->maxAudioLevels - 1) * AUDIO_LEVEL_BAR_SEP; /* in-between bars */
     osdd->audioLevelOverlay.h = height * AUDIO_LEVEL_RELATIVE_HEIGHT;
 
-    if (osdd->videoFormat == UYVY_FORMAT || osdd->videoFormat == UYVY_10BIT_FORMAT)
+    if (osdd->videoFormat == UYVY_FORMAT || osdd->videoFormat == UYVY_10BIT_FORMAT ||
+        osdd->videoFormat == YUV422_FORMAT || osdd->videoFormat == YUV422_10BIT_FORMAT)
     {
         osdd->audioLevelOverlay.ssx = 2;
         osdd->audioLevelOverlay.ssy = 1;
     }
-    else if (osdd->videoFormat == YUV422_FORMAT)
-    {
-        osdd->audioLevelOverlay.ssx = 2;
-        osdd->audioLevelOverlay.ssy = 1;
-    }
-    else /* YUV420 */
+    else /* YUV420_FORMAT || YUV420_10BIT_FORMAT */
     {
         osdd->audioLevelOverlay.ssx = 2;
         osdd->audioLevelOverlay.ssy = 2;
@@ -1857,7 +1853,9 @@ static int osdd_initialise(void* data, const StreamInfo* streamInfo, const Ratio
     if (streamInfo->format != UYVY_FORMAT &&
         streamInfo->format != UYVY_10BIT_FORMAT &&
         streamInfo->format != YUV422_FORMAT &&
-        streamInfo->format != YUV420_FORMAT)
+        streamInfo->format != YUV422_10BIT_FORMAT &&
+        streamInfo->format != YUV420_FORMAT &&
+        streamInfo->format != YUV420_10BIT_FORMAT)
     {
         ml_log_error("Picture format not (yet) supported for OSD\n");
         return 0;
@@ -1907,17 +1905,13 @@ static int osdd_initialise(void* data, const StreamInfo* streamInfo, const Ratio
     osdd->markOverlay.Cbuff = NULL;
     osdd->markOverlay.w = MARK_OVERLAY_WIDTH;
     osdd->markOverlay.h = MARK_OVERLAY_HEIGHT;
-    if (osdd->videoFormat == UYVY_FORMAT || osdd->videoFormat == UYVY_10BIT_FORMAT)
+    if (osdd->videoFormat == UYVY_FORMAT || osdd->videoFormat == UYVY_10BIT_FORMAT ||
+        osdd->videoFormat == YUV422_FORMAT || osdd->videoFormat == YUV422_10BIT_FORMAT)
     {
         osdd->markOverlay.ssx = 2;
         osdd->markOverlay.ssy = 1;
     }
-    else if (osdd->videoFormat == YUV422_FORMAT)
-    {
-        osdd->markOverlay.ssx = 2;
-        osdd->markOverlay.ssy = 1;
-    }
-    else /* YUV420 */
+    else /* YUV420_FORMAT || YUV420_10BIT_FORMAT */
     {
         osdd->markOverlay.ssx = 2;
         osdd->markOverlay.ssy = 2;
@@ -2005,7 +1999,8 @@ static int osdd_initialise(void* data, const StreamInfo* streamInfo, const Ratio
     osdd->userMarksOverlay.h = PROGRESS_BAR_MARK_HEIGHT;
     osdd->secondUserMarksOverlay.w = osdd->progressBarMarkOverlay.w - 2 * PROGRESS_BAR_ENDS_WIDTH + PROGRESS_BAR_MARK_WIDTH;
     osdd->secondUserMarksOverlay.h = PROGRESS_BAR_MARK_HEIGHT;
-    if (osdd->videoFormat == UYVY_FORMAT || osdd->videoFormat == UYVY_10BIT_FORMAT)
+    if (osdd->videoFormat == UYVY_FORMAT || osdd->videoFormat == UYVY_10BIT_FORMAT ||
+        osdd->videoFormat == YUV422_FORMAT || osdd->videoFormat == YUV422_10BIT_FORMAT)
     {
         osdd->progressBarOverlay.ssx = 2;
         osdd->progressBarOverlay.ssy = 1;
@@ -2016,18 +2011,7 @@ static int osdd_initialise(void* data, const StreamInfo* streamInfo, const Ratio
         osdd->secondUserMarksOverlay.ssx = 2;
         osdd->secondUserMarksOverlay.ssy = 1;
     }
-    else if (osdd->videoFormat == YUV422_FORMAT)
-    {
-        osdd->progressBarOverlay.ssx = 2;
-        osdd->progressBarOverlay.ssy = 1;
-        osdd->progressBarMarkOverlay.ssx = 2;
-        osdd->progressBarMarkOverlay.ssy = 1;
-        osdd->userMarksOverlay.ssx = 2;
-        osdd->userMarksOverlay.ssy = 1;
-        osdd->secondUserMarksOverlay.ssx = 2;
-        osdd->secondUserMarksOverlay.ssy = 1;
-    }
-    else /* YUV420 */
+    else /* YUV420_FORMAT || YUV420_10BIT_FORMAT */
     {
         osdd->progressBarOverlay.ssx = 2;
         osdd->progressBarOverlay.ssy = 2;

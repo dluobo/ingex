@@ -1,5 +1,5 @@
 /*
- * $Id: player.c,v 1.36 2011/07/13 10:22:27 philipn Exp $
+ * $Id: player.c,v 1.37 2011/09/27 10:14:29 philipn Exp $
  *
  *
  *
@@ -938,9 +938,10 @@ static void usage(const char* cmd)
     fprintf(stderr, "\n");
     fprintf(stderr, "Inputs:\n");
     fprintf(stderr, "  -m, --mxf  <file>        MXF file input\n");
+    fprintf(stderr, "  --mm <file>+             Multiple MXF file inputs. The list is terminated by an argument starting with '-' or end of input\n");
     fprintf(stderr, "  --system-tc <timecode>   Add a system timecode with given start timecode (hh:mm:ss:ff or 'now', replace : with ; for NTSC)\n");
     fprintf(stderr, "  --max-length <dur>       Limit the source length played (hh:mm:ss:ff, replace : with ; for NTSC)\n");
-    fprintf(stderr, "  --src-format <format>    Source video format: uyvy, yuv420, yuv422, yuv444, uyvy10b, pcm, timecode (default uyvy)\n");
+    fprintf(stderr, "  --src-format <format>    Source video format: uyvy, yuv420, yuv422, yuv444, uyvy10b, yuv42210b, yuv42010b, pcm, timecode (default uyvy)\n");
     fprintf(stderr, "  --src-size <WxH>         Width and height for source video input (default is 720x576)\n");
     fprintf(stderr, "  --src-bps <num>          Audio bits per sample (default 16)\n");
     fprintf(stderr, "  --src-fps <num>          Video frame rate for the source. Valid values are 25 (PAL) or 30 (NTSC)\n");
@@ -1106,6 +1107,7 @@ int main(int argc, const char **argv)
     OSDPlayStatePosition osdPlayStatePosition = OSD_PS_POSITION_BOTTOM;
     int openInputFailed = 0;
     const char *windowTitle = DEFAULT_WINDOW_TITLE;
+    int multipleMXFInputs = 0;
 
     memset(inputs, 0, sizeof(inputs));
     memset(&markConfigs, 0, sizeof(markConfigs));
@@ -1114,8 +1116,22 @@ int main(int argc, const char **argv)
 
     while (cmdlnIndex < argc)
     {
-        if (strcmp(argv[cmdlnIndex], "-h") == 0 ||
-            strcmp(argv[cmdlnIndex], "--help") == 0)
+        if (multipleMXFInputs)
+        {
+            if (argv[cmdlnIndex][0] == '-')
+            {
+                multipleMXFInputs = 0;
+            }
+            else
+            {
+                inputs[numInputs].type = MXF_INPUT;
+                inputs[numInputs].filename = argv[cmdlnIndex];
+                numInputs++;
+                cmdlnIndex++;
+            }
+        }
+        else if (strcmp(argv[cmdlnIndex], "-h") == 0 ||
+                 strcmp(argv[cmdlnIndex], "--help") == 0)
         {
             usage(argv[0]);
             return 0;
@@ -2133,6 +2149,17 @@ int main(int argc, const char **argv)
             numInputs++;
             cmdlnIndex += 2;
         }
+        else if (strcmp(argv[cmdlnIndex], "--mm") == 0)
+        {
+            if (cmdlnIndex + 1 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            multipleMXFInputs = 1;
+            cmdlnIndex++;
+        }
         else if (strcmp(argv[cmdlnIndex], "--audio-lineup") == 0)
         {
             if (cmdlnIndex + 1 >= argc)
@@ -2253,6 +2280,16 @@ int main(int argc, const char **argv)
             {
                 inputs[numInputs].streamInfo.type = PICTURE_STREAM_TYPE;
                 inputs[numInputs].streamInfo.format = UYVY_10BIT_FORMAT;
+            }
+            else if (strcmp(argv[cmdlnIndex + 1], "yuv42210b") == 0)
+            {
+                inputs[numInputs].streamInfo.type = PICTURE_STREAM_TYPE;
+                inputs[numInputs].streamInfo.format = YUV422_10BIT_FORMAT;
+            }
+            else if (strcmp(argv[cmdlnIndex + 1], "yuv42010b") == 0)
+            {
+                inputs[numInputs].streamInfo.type = PICTURE_STREAM_TYPE;
+                inputs[numInputs].streamInfo.format = YUV420_10BIT_FORMAT;
             }
             else if (strcmp(argv[cmdlnIndex + 1], "pcm") == 0)
             {

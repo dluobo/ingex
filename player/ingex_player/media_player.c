@@ -1,5 +1,5 @@
 /*
- * $Id: media_player.c,v 1.18 2011/05/11 10:47:39 philipn Exp $
+ * $Id: media_player.c,v 1.19 2011/09/27 10:14:29 philipn Exp $
  *
  *
  *
@@ -27,7 +27,6 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/time.h>
-#include <malloc.h>
 #include <inttypes.h>
 #include <sys/types.h>
 #include <signal.h>
@@ -3014,11 +3013,17 @@ void ply_print_source_info(MediaPlayer* player)
             case YUV420_FORMAT:
                 printf("YUV420");
                 break;
+            case YUV420_10BIT_FORMAT:
+                printf("YUV420 10 bit");
+                break;
             case YUV411_FORMAT:
                 printf("YUV411");
                 break;
             case YUV422_FORMAT:
                 printf("YUV422");
+                break;
+            case YUV422_10BIT_FORMAT:
+                printf("YUV422 10 bit");
                 break;
             case YUV444_FORMAT:
                 printf("YUV444");
@@ -3046,6 +3051,12 @@ void ply_print_source_info(MediaPlayer* player)
                 break;
             case AVID_DNxHD_FORMAT:
                 printf("AVID DNxHD");
+                break;
+            case AVCI_50_FORMAT:
+                printf("AVC-Intra 50");
+                break;
+            case AVCI_100_FORMAT:
+                printf("AVC-Intra 100");
                 break;
             case PCM_FORMAT:
                 printf("PCM");

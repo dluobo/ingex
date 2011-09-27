@@ -1,5 +1,5 @@
 /*
- * $Id: bouncing_ball_source.c,v 1.9 2011/07/13 10:22:27 philipn Exp $
+ * $Id: bouncing_ball_source.c,v 1.10 2011/09/27 10:14:29 philipn Exp $
  *
  *
  *
@@ -27,8 +27,7 @@
 #include <math.h>
 
 #include "bouncing_ball_source.h"
-#include "yuvlib/YUV_frame.h"
-#include "yuvlib/YUV_text_overlay.h"
+#include "overlay.h"
 #include "video_conversion.h"
 #include "utils.h"
 #include "types.h"
@@ -52,7 +51,6 @@ typedef struct
 {
     MediaSource mediaSource;
     StreamInfo streamInfo;
-    formats yuvFormat;
 
     int isDisabled;
 
@@ -63,6 +61,8 @@ typedef struct
     unsigned int imageSize;
 
     overlay blackOverlay;
+
+    OverlayWorkspace overlayWorkspace;
 
     BallInfo* balls;
     int numBalls;
@@ -113,11 +113,7 @@ static void add_balls(BouncingBallSource* source)
     int i;
     int xPos;
     int yPos;
-    YUV_frame yuvFrame;
     char txtY, txtU, txtV, box;
-
-    CHK_OFAIL(YUV_frame_from_buffer(&yuvFrame, source->image, source->streamInfo.width, source->streamInfo.height, source->yuvFormat) == 1);
-
 
     /* remove existing balls */
     for (i = 0; i < source->numBalls; i++)
@@ -135,11 +131,15 @@ static void add_balls(BouncingBallSource* source)
 
         /* field 1 */
         get_ball_pos(source, source->balls[i].angle, source->balls[i].position, source->balls[i].speed, 0, &xPos, &yPos);
-        CHK_OFAIL(add_overlay(&source->blackOverlay, &yuvFrame, xPos, yPos, txtY, txtU, txtV, box) == 0);
+        CHK_OFAIL(apply_overlay(&source->blackOverlay, source->image, source->streamInfo.format,
+                                source->streamInfo.width, source->streamInfo.height,
+                                xPos, yPos, txtY, txtU, txtV, box, &source->overlayWorkspace));
 
         /* field 2 */
         get_ball_pos(source, source->balls[i].angle, source->balls[i].position, source->balls[i].speed, 1, &xPos, &yPos);
-        CHK_OFAIL(add_overlay(&source->blackOverlay, &yuvFrame, xPos, yPos, txtY, txtU, txtV, box) == 0);
+        CHK_OFAIL(apply_overlay(&source->blackOverlay, source->image, source->streamInfo.format,
+                                source->streamInfo.width, source->streamInfo.height,
+                                xPos, yPos, txtY, txtU, txtV, box, &source->overlayWorkspace));
     }
 
 
@@ -155,22 +155,30 @@ static void add_balls(BouncingBallSource* source)
         get_ball_pos(source, source->balls[i].angle, source->position, source->balls[i].speed, 0, &xPos, &yPos);
         if (yPos % 2 == 0)
         {
-            CHK_OFAIL(add_overlay(&g_ballOverlay0, &yuvFrame, xPos, yPos, txtY, txtU, txtV, box) == 0);
+            CHK_OFAIL(apply_overlay(&g_ballOverlay0, source->image, source->streamInfo.format,
+                                    source->streamInfo.width, source->streamInfo.height,
+                                    xPos, yPos, txtY, txtU, txtV, box, &source->overlayWorkspace));
         }
         else
         {
-            CHK_OFAIL(add_overlay(&g_ballOverlay1, &yuvFrame, xPos, yPos, txtY, txtU, txtV, box) == 0);
+            CHK_OFAIL(apply_overlay(&g_ballOverlay1, source->image, source->streamInfo.format,
+                                    source->streamInfo.width, source->streamInfo.height,
+                                    xPos, yPos, txtY, txtU, txtV, box, &source->overlayWorkspace));
         }
 
         /* field 2 */
         get_ball_pos(source, source->balls[i].angle, source->position, source->balls[i].speed, 1, &xPos, &yPos);
         if (yPos % 2 == 0)
         {
-            CHK_OFAIL(add_overlay(&g_ballOverlay1, &yuvFrame, xPos, yPos, txtY, txtU, txtV, box) == 0);
+            CHK_OFAIL(apply_overlay(&g_ballOverlay1, source->image, source->streamInfo.format,
+                                    source->streamInfo.width, source->streamInfo.height,
+                                    xPos, yPos, txtY, txtU, txtV, box, &source->overlayWorkspace));
         }
         else
         {
-            CHK_OFAIL(add_overlay(&g_ballOverlay0, &yuvFrame, xPos, yPos, txtY, txtU, txtV, box) == 0);
+            CHK_OFAIL(apply_overlay(&g_ballOverlay0, source->image, source->streamInfo.format,
+                                    source->streamInfo.width, source->streamInfo.height,
+                                    xPos, yPos, txtY, txtU, txtV, box, &source->overlayWorkspace));
         }
 
         source->balls[i].position = source->position;
@@ -362,6 +370,8 @@ static void bbs_close(void* data)
 
     free_overlay(&source->blackOverlay);
 
+    clear_overlay_workspace(&source->overlayWorkspace);
+
     SAFE_FREE(&source->image);
 
     SAFE_FREE(&source);
@@ -382,8 +392,11 @@ int bbs_create(const StreamInfo* videoStreamInfo, int64_t length, int numBalls, 
 
     if (videoStreamInfo->type != PICTURE_STREAM_TYPE ||
         (videoStreamInfo->format != UYVY_FORMAT &&
+            videoStreamInfo->format != UYVY_10BIT_FORMAT &&
             videoStreamInfo->format != YUV422_FORMAT &&
-            videoStreamInfo->format != YUV420_FORMAT))
+            videoStreamInfo->format != YUV422_10BIT_FORMAT &&
+            videoStreamInfo->format != YUV420_FORMAT &&
+            videoStreamInfo->format != YUV420_10BIT_FORMAT))
     {
         ml_log_error("Invalid stream for bouncing ball source\n");
         return 0;
@@ -409,20 +422,25 @@ int bbs_create(const StreamInfo* videoStreamInfo, int64_t length, int numBalls, 
         newSource->balls[i].speed = videoStreamInfo->width / 100;
     }
 
-    if (videoStreamInfo->format == UYVY_FORMAT)
+    if (videoStreamInfo->format == UYVY_FORMAT || videoStreamInfo->format == YUV422_FORMAT)
     {
-        newSource->yuvFormat = UYVY;
         newSource->imageSize = videoStreamInfo->width * videoStreamInfo->height * 2;
     }
-    else if (videoStreamInfo->format == YUV422_FORMAT)
+    else if (videoStreamInfo->format == UYVY_10BIT_FORMAT)
     {
-        newSource->yuvFormat = YV16;
-        newSource->imageSize = videoStreamInfo->width * videoStreamInfo->height * 2;
+        newSource->imageSize = (videoStreamInfo->width + 47) / 48 * 128 * videoStreamInfo->height;
     }
-    else /* videoStreamInfo->format == YUV420_FORMAT */
+    else if (videoStreamInfo->format == YUV422_10BIT_FORMAT)
     {
-        newSource->yuvFormat = I420;
+        newSource->imageSize = videoStreamInfo->width * videoStreamInfo->height * 2 * 2;
+    }
+    else if (videoStreamInfo->format == YUV420_FORMAT)
+    {
         newSource->imageSize = videoStreamInfo->width * videoStreamInfo->height * 3 / 2;
+    }
+    else // videoStreamInfo->format == YUV420_10BIT_FORMAT
+    {
+        newSource->imageSize = videoStreamInfo->width * videoStreamInfo->height * 3 / 2 * 2;
     }
     MALLOC_OFAIL(newSource->image, unsigned char, newSource->imageSize);
     fill_black(videoStreamInfo->format, videoStreamInfo->width, videoStreamInfo->height, newSource->image);
@@ -433,6 +451,7 @@ int bbs_create(const StreamInfo* videoStreamInfo, int64_t length, int numBalls, 
     newSource->blackOverlay.Cbuff = NULL;
     memset(newSource->blackOverlay.buff, 255, g_ballOverlay0.w * g_ballOverlay0.h * 2);
 
+    init_overlay_workspace(&newSource->overlayWorkspace);
 
     newSource->mediaSource.data = newSource;
     newSource->mediaSource.get_num_streams = bbs_get_num_streams;

@@ -102,7 +102,7 @@ endif
 
 ifdef FFMPEG_INCLUDE_PATH
 
-	CFLAGS += -DHAVE_FFMPEG
+	CFLAGS += -DHAVE_FFMPEG -D__STDC_CONSTANT_MACROS
 
 	# Check for old-style FFMPEG header locations and if needed add -DFFMPEG_OLD_INCLUDE_PATHS
 	FFMPEG_OLDSTYLE_INCLUDE := $(shell for f in /usr/local/include /usr/include; do test -e $$f/ffmpeg/avcodec.h && echo $$f && break; done)
@@ -197,6 +197,7 @@ AR = ar cr
 SOURCES = audio_level_sink.c \
 	audio_sink.c \
 	audio_switch_sink.c \
+	avci_stream_connect.c \
 	blank_source.c \
 	bouncing_ball_source.c \
 	buffered_media_sink.c \

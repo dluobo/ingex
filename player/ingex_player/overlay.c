@@ -1,5 +1,5 @@
 /*
- * $Id: overlay.c,v 1.3 2011/04/19 10:03:53 philipn Exp $
+ * $Id: overlay.c,v 1.4 2011/09/27 10:14:29 philipn Exp $
  *
  * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
@@ -191,9 +191,9 @@ void pack_10bit_image(uint8_t* pOutFrame, unsigned short* pInFrame,
     }
 }
 
-static int apply_overlay_10bit(overlay *ovly, unsigned char *image, int width, int height,
-                               int x, int y, unsigned char colour_y, unsigned char colour_u, unsigned char colour_v,
-                               int box, OverlayWorkspace *workspace)
+static int apply_overlay_v210(overlay *ovly, unsigned char *image, int width, int height,
+                              int x, int y, unsigned char colour_y, unsigned char colour_u, unsigned char colour_v,
+                              int box, OverlayWorkspace *workspace)
 {
     int i, j;
     int x0, y0, x1, y1;
@@ -249,10 +249,10 @@ static int apply_overlay_10bit(overlay *ovly, unsigned char *image, int width, i
     if (!alloc_overlay_workspace(workspace, target_width, target_height))
         return 0;
 
-    source_image = image + (target_y0 * ((width + 5) / 6 * 16)) +
-                           ((target_x0 + 5) / 6 * 16);
+    source_image = image + (target_y0 * ((width + 47) / 48 * 128)) +
+                           ((target_x0 + 47) / 48 * 128);
 
-    unpack_10bit_image(workspace->image, source_image, target_width * 2, (width + 5) / 6 * 16,
+    unpack_10bit_image(workspace->image, source_image, target_width * 2, (width + 47) / 48 * 128,
                        target_width, target_height);
     image_upack_u = workspace->image;
     image_upack_y = workspace->image + 1;
@@ -336,8 +336,99 @@ static int apply_overlay_10bit(overlay *ovly, unsigned char *image, int width, i
 
     // pack target area back to source
 
-    pack_10bit_image(source_image, workspace->image, (width + 5) / 6 * 16, target_width * 2,
+    pack_10bit_image(source_image, workspace->image, (width + 47) / 48 * 128, target_width * 2,
                      target_width, target_height);
+
+    return 1;
+}
+
+static int apply_overlay_yuv10(overlay *ovly, unsigned char *image, int width, int height, int ssx, int ssy,
+                              int x, int y, unsigned char colour_y, unsigned char colour_u, unsigned char colour_v,
+                              int box)
+{
+    int i, j;
+    int x0, y0, x1, y1;
+    int box_key;
+    int txt_key;
+    int bg;
+    unsigned short colour_10bit_y = colour_y << 2;
+    unsigned short colour_10bit_u = colour_u << 2;
+    unsigned short colour_10bit_v = colour_v << 2;
+    unsigned short *image_y = (unsigned short*)image;
+    unsigned short *image_u = image_y + width * height;
+    unsigned short *image_v = image_u + (width / ssx) * (height / ssy);
+    BYTE *srcLine;
+    BYTE *srcPtr;
+    unsigned short *dstLine;
+    unsigned short *dstLine2;
+    unsigned short *dstPtr;
+    unsigned short *dstPtr2;
+    int linestride_y, linestride_uv;
+
+
+    // set clipped start and end points
+    x0 = max(x, 0);
+    y0 = max(y, 0);
+    x1 = min(x + ovly->w, width);
+    y1 = min(y + ovly->h, height);
+    linestride_y  = width;
+    linestride_uv = width / ssx;
+    if (ovly->Cbuff == NULL || ovly->ssx != ssx || ovly->ssy != ssy)
+        // make UV image by filtering Y image
+        filterUV(ovly, ssx, ssy);
+    // normalise colour
+    box_key = 1024 - (1024 * box / 100);
+    // do Y
+    srcLine = ovly->buff + ((y0 - y) * ovly->w)      + (x0 - x);
+    dstLine = image_y    +  (y0      * linestride_y) +  x0;
+    for (j = y0; j < y1; j++)
+    {
+        srcPtr = srcLine;
+        dstPtr = dstLine;
+        for (i = x0; i < x1; i++)
+        {
+            txt_key = *srcPtr++ << 2;
+            // dim background level over entire box
+            bg = 64 + ((box_key * (*dstPtr - 64)) / 1024);
+            // key in foreground level
+            *dstPtr++ = bg + ((txt_key * (colour_10bit_y - bg)) / 1024);
+        }
+        srcLine += ovly->w;
+        dstLine += linestride_y;
+    }
+    // do UV
+    // adjust start position to cosited YUV samples
+    i = x0 % ssx;
+    if (i != 0)
+        x0 += ssx - i;
+    j = y0 % ssy;
+    if (j != 0)
+        y0 += ssy - j;
+    srcLine  = ovly->Cbuff + ((y0 - y)   * ovly->w)       +  x0 - x;
+    dstLine  = image_u     + ((y0 / ssy) * linestride_uv) + (x0 / ssx);
+    dstLine2 = image_v     + ((y0 / ssy) * linestride_uv) + (x0 / ssx);
+    for (j = y0; j < y1; j += ssy)
+    {
+        srcPtr = srcLine;
+        dstPtr = dstLine;
+        dstPtr2 = dstLine2;
+        for (i = x0; i < x1; i += ssx)
+        {
+            txt_key = *srcPtr << 2;
+            srcPtr += ssx;
+            // dim background level over entire box
+            bg = 512 + ((box_key * (*dstPtr - 512)) / 1024);
+            // key in foreground level
+            *dstPtr++ = bg + ((txt_key * (colour_10bit_u - bg)) / 1024);
+            // and again for V
+            bg = 512 + ((box_key * (*dstPtr2 - 512)) / 1024);
+            *dstPtr2++ = bg + ((txt_key * (colour_10bit_v - bg)) / 1024);
+        }
+        srcLine += (ssy * ovly->w);
+        dstLine += linestride_uv;
+        dstLine2 += linestride_uv;
+    }
+
 
     return 1;
 }
@@ -362,7 +453,11 @@ int apply_overlay(overlay *ovly, unsigned char *image, StreamFormat format, int 
                   OverlayWorkspace *workspace)
 {
     if (format == UYVY_10BIT_FORMAT)
-        return apply_overlay_10bit(ovly, image, width, height, x, y, colour_y, colour_u, colour_v, box, workspace);
+        return apply_overlay_v210(ovly, image, width, height, x, y, colour_y, colour_u, colour_v, box, workspace);
+    else if (format == YUV422_10BIT_FORMAT)
+        return apply_overlay_yuv10(ovly, image, width, height, 2, 1, x, y, colour_y, colour_u, colour_v, box);
+    else if (format == YUV420_10BIT_FORMAT)
+        return apply_overlay_yuv10(ovly, image, width, height, 2, 2, x, y, colour_y, colour_u, colour_v, box);
 
 
     YUV_frame frame;
@@ -373,7 +468,7 @@ int apply_overlay(overlay *ovly, unsigned char *image, StreamFormat format, int 
             CHK_ORET(YUV_frame_from_buffer(&frame, image, width, height, UYVY) == 1);
             break;
         case YUV422_FORMAT:
-            CHK_ORET(YUV_frame_from_buffer(&frame, image, width, height, YV16) == 1);
+            CHK_ORET(YUV_frame_from_buffer(&frame, image, width, height, Y42B) == 1);
             break;
         case YUV420_FORMAT:
             CHK_ORET(YUV_frame_from_buffer(&frame, image, width, height, I420) == 1);

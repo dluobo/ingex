@@ -1,5 +1,5 @@
 /*
- * $Id: x11_display_sink.c,v 1.16 2011/04/19 10:03:53 philipn Exp $
+ * $Id: x11_display_sink.c,v 1.17 2011/09/27 10:14:29 philipn Exp $
  *
  *
  *
@@ -384,11 +384,12 @@ static int init_display(X11DisplaySink* sink, const StreamInfo* streamInfo)
     {
         sink->yuvFormat = UYVY;
     }
-    else if (streamInfo->format == YUV422_FORMAT)
+    else if (streamInfo->format == YUV422_FORMAT ||
+             streamInfo->format == YUV422_10BIT_FORMAT)
     {
-        sink->yuvFormat = YV16;
+        sink->yuvFormat = Y42B;
     }
-    else /* streamInfo->format == YUV420_FORMAT */
+    else /* streamInfo->format == YUV420_FORMAT || YUV420_10BIT_FORMAT */
     {
         sink->yuvFormat = I420;
     }
@@ -429,10 +430,24 @@ static int display_frame(X11DisplaySink* sink, X11DisplayFrame* frame, const Fra
     {
         if (frame->videoFormat == UYVY_10BIT_FORMAT)
         {
-            DitherFrame(frame->convertBuffer, frame->inputBuffer, sink->inputWidth * 2, (sink->inputWidth + 5) / 6 * 16,
-                sink->inputWidth, sink->inputHeight);
+            ConvertFrameV210to8(frame->convertBuffer, frame->inputBuffer, sink->inputWidth * 2,
+                                (sink->inputWidth + 47) / 48 * 128, sink->inputWidth, sink->inputHeight);
             inputBuffer = frame->convertBuffer;
             rgbInputFormat = UYVY_FORMAT;
+        }
+        else if (frame->videoFormat == YUV422_10BIT_FORMAT)
+        {
+            ConvertFrameYUV10to8_2(frame->convertBuffer, (const uint16_t*)frame->inputBuffer, sink->inputWidth,
+                                   sink->inputHeight, 2, 1);
+            inputBuffer = frame->convertBuffer;
+            rgbInputFormat = YUV422_FORMAT;
+        }
+        else if (frame->videoFormat == YUV420_10BIT_FORMAT)
+        {
+            ConvertFrameYUV10to8_2(frame->convertBuffer, (const uint16_t*)frame->inputBuffer, sink->inputWidth,
+                                   sink->inputHeight, 2, 2);
+            inputBuffer = frame->convertBuffer;
+            rgbInputFormat = YUV420_FORMAT;
         }
         else
         {
@@ -572,20 +587,37 @@ static int init_frame(X11DisplayFrame* frame)
 
     if (sink->videoFormat == UYVY_10BIT_FORMAT)
     {
-        frame->inputBufferSize = (sink->inputWidth + 5) / 6 * 16 * sink->inputHeight;
+        frame->inputBufferSize = (sink->inputWidth + 47) / 48 * 128 * sink->inputHeight;
         frame->convertBufferSize = sink->inputWidth * sink->inputHeight * 2;
         if (sink->swScale != 1)
         {
             frame->scaleBufferSize = sink->width * sink->height * 2;
         }
     }
-    else if (frame->videoFormat == UYVY_FORMAT ||
-        frame->videoFormat == YUV422_FORMAT)
+    else if (frame->videoFormat == UYVY_FORMAT || frame->videoFormat == YUV422_FORMAT)
     {
         frame->inputBufferSize = sink->inputWidth * sink->inputHeight * 2;
         if (sink->swScale != 1)
         {
             frame->scaleBufferSize = sink->width * sink->height * 2;
+        }
+    }
+    else if (frame->videoFormat == YUV422_10BIT_FORMAT)
+    {
+        frame->inputBufferSize = sink->inputWidth * sink->inputHeight * 2 * 2;
+        frame->convertBufferSize = sink->inputWidth * sink->inputHeight * 2;
+        if (sink->swScale != 1)
+        {
+            frame->scaleBufferSize = sink->width * sink->height * 2;
+        }
+    }
+    else if (frame->videoFormat == YUV420_10BIT_FORMAT)
+    {
+        frame->inputBufferSize = sink->inputWidth * sink->inputHeight * 3 / 2 * 2;
+        frame->convertBufferSize = sink->inputWidth * sink->inputHeight * 3 / 2;
+        if (sink->swScale != 1)
+        {
+            frame->scaleBufferSize = sink->width * sink->height * 3 / 2;
         }
     }
     else /* YUV420_FORMAT */
@@ -772,10 +804,18 @@ static int xskf_register_stream(void* data, int streamId, const StreamInfo* stre
             /* sw scale changes the output dimensions */
             outputStreamInfo.width = sink->width;
             outputStreamInfo.height = sink->height;
-            /* UYVY_10BIT to UYVY conversion */
+            /* 10 to 8-bit conversion */
             if (outputStreamInfo.format == UYVY_10BIT_FORMAT)
             {
                 outputStreamInfo.format = UYVY_FORMAT;
+            }
+            else if (outputStreamInfo.format == YUV422_10BIT_FORMAT)
+            {
+                outputStreamInfo.format = YUV422_FORMAT;
+            }
+            else if (outputStreamInfo.format == YUV420_10BIT_FORMAT)
+            {
+                outputStreamInfo.format = YUV420_FORMAT;
             }
 
             CHK_ORET(osd_initialise(sink->osd, &outputStreamInfo, &sink->aspectRatio));
@@ -963,7 +1003,9 @@ static int xsk_accept_stream(void* data, const StreamInfo* streamInfo)
         (streamInfo->format == UYVY_FORMAT ||
             streamInfo->format == UYVY_10BIT_FORMAT ||
             streamInfo->format == YUV422_FORMAT ||
-            streamInfo->format == YUV420_FORMAT))
+            streamInfo->format == YUV422_10BIT_FORMAT ||
+            streamInfo->format == YUV420_FORMAT ||
+            streamInfo->format == YUV420_10BIT_FORMAT))
     {
         return 1;
     }

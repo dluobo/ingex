@@ -1,5 +1,5 @@
 /*
- * $Id: frame_info.h,v 1.17 2010/10/13 12:34:32 philipn Exp $
+ * $Id: frame_info.h,v 1.18 2011/09/27 10:14:29 philipn Exp $
  *
  *
  *
@@ -72,8 +72,10 @@ typedef enum
     UYVY_FORMAT,
     UYVY_10BIT_FORMAT,
     YUV420_FORMAT,
+    YUV420_10BIT_FORMAT,
     YUV411_FORMAT,
     YUV422_FORMAT,
+    YUV422_10BIT_FORMAT,
     YUV444_FORMAT,
     DV25_YUV420_FORMAT,
     DV25_YUV411_FORMAT,
@@ -83,6 +85,8 @@ typedef enum
     D10_PICTURE_FORMAT,
     AVID_MJPEG_FORMAT,
     AVID_DNxHD_FORMAT,
+    AVCI_50_FORMAT,
+    AVCI_100_FORMAT,
 
     /* Sound */
     PCM_FORMAT,
@@ -161,6 +165,9 @@ typedef struct
     int height;
     Rational aspectRatio;
     int singleField;
+    uint32_t horizSubsampling;
+    uint32_t vertSubsampling;
+    uint32_t componentDepth;
 
     /* detailed sound parameters */
     Rational samplingRate;

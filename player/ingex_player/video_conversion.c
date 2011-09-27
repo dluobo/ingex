@@ -1,5 +1,5 @@
 /*
- * $Id: video_conversion.c,v 1.11 2011/06/22 06:30:07 john_f Exp $
+ * $Id: video_conversion.c,v 1.12 2011/09/27 10:14:29 philipn Exp $
  *
  *
  *
@@ -792,7 +792,7 @@ void fill_black(StreamFormat format, int width, int height, unsigned char* image
     else if (format == UYVY_10BIT_FORMAT)
     {
         int i;
-        int size = (width + 5) / 6 * 16 * height;
+        int size = (width + 47) / 48 * 128 * height;
 
         for (i = 0; i < size; i += 16)
         {
@@ -835,6 +835,24 @@ void fill_black(StreamFormat format, int width, int height, unsigned char* image
             }
         }
     }
+    else if (format == YUV422_10BIT_FORMAT)
+    {
+        int i;
+        int size = width * height;
+        uint16_t* y = (uint16_t*)image;
+        uint16_t* u = y + width * height;
+        uint16_t* v = u + width * height / 2;
+
+        for (i = 0; i < size; i ++)
+        {
+            *y++ = 0x40;
+            if (i % 2 == 0)
+            {
+                *u++ = 0x200;
+                *v++ = 0x200;
+            }
+        }
+    }
     else if (format == YUV420_FORMAT || format == YUV411_FORMAT)
     {
         int i;
@@ -850,6 +868,24 @@ void fill_black(StreamFormat format, int width, int height, unsigned char* image
             {
                 *u++ = 0x80;
                 *v++ = 0x80;
+            }
+        }
+    }
+    else if (format == YUV420_10BIT_FORMAT)
+    {
+        int i;
+        int size = width * height;
+        uint16_t* y = (uint16_t*)image;
+        uint16_t* u = y + width * height;
+        uint16_t* v = u + width * height / 4;
+
+        for (i = 0; i < size; i ++)
+        {
+            *y++ = 0x40;
+            if (i % 4 == 0)
+            {
+                *u++ = 0x200;
+                *v++ = 0x200;
             }
         }
     }

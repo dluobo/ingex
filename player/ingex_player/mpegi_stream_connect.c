@@ -1,5 +1,5 @@
 /*
- * $Id: mpegi_stream_connect.c,v 1.6 2011/05/11 10:52:32 philipn Exp $
+ * $Id: mpegi_stream_connect.c,v 1.7 2011/09/27 10:14:29 philipn Exp $
  *
  *
  *
@@ -297,13 +297,26 @@ fail:
 static int decode_and_send_const(MPEGIDecodeStreamConnect* connect, const unsigned char* buffer,
     unsigned int bufferSize)
 {
-    int finished;
+    int got_picture;
+    int result;
 
-    /* We know that avcodec_decode_video will not modify the input data, so we can cast buffer to non-const */
-    avcodec_decode_video(connect->decoder->dec, connect->decoder->decFrame, &finished, (unsigned char*)buffer, bufferSize);
-    if (!finished)
+#if LIBAVCODEC_VERSION_MAJOR < 53
+    result = avcodec_decode_video(connect->decoder->dec, connect->decoder->decFrame, &got_picture, (uint8_t*)buffer, bufferSize);
+#else
+    AVPacket packet;
+    av_init_packet(&packet);
+    packet.data = (uint8_t*)buffer;
+    packet.size = bufferSize;
+    result = avcodec_decode_video2(connect->decoder->dec, connect->decoder->decFrame, &got_picture, &packet);
+#endif
+    if (result < 0)
     {
-        ml_log_error("error decoding MPEG I-frame only video\n");
+        ml_log_error("error decoding MPEG-I video\n");
+        return 0;
+    }
+    else if (!got_picture)
+    {
+        ml_log_error("no output from MPEG-I decoder\n");
         return 0;
     }
 

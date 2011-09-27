@@ -1,5 +1,5 @@
 /*
- * $Id: http_access.c,v 1.9 2011/07/13 10:19:24 philipn Exp $
+ * $Id: http_access.c,v 1.10 2011/09/27 10:14:29 philipn Exp $
  *
  *
  *
@@ -28,7 +28,6 @@
 #include <sys/time.h>
 #include <unistd.h>
 #define __STDC_FORMAT_MACROS
-#define __STDC_CONSTANT_MACROS
 #include <inttypes.h>
 
 #include "http_access.h"

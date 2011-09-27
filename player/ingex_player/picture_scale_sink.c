@@ -1,5 +1,5 @@
 /*
- * $Id: picture_scale_sink.c,v 1.4 2011/05/11 10:48:31 philipn Exp $
+ * $Id: picture_scale_sink.c,v 1.5 2011/09/27 10:14:29 philipn Exp $
  *
  * Copyright (C) 2010 British Broadcasting Corporation, All Rights Reserved
  *
@@ -739,7 +739,7 @@ static int scale_picture(PictureScaleSink *sink, ScaledStreamGroup *group, Scale
                                            format));
             break;
         case YUV422_FORMAT:
-            format = YV16;
+            format = Y42B;
             CHK_ORET(YUV_frame_from_buffer(&in_frame, (void*)group->const_input_buffer,
                                            INPUT_STREAM->output_stream_info.width,
                                            INPUT_STREAM->output_stream_info.height,

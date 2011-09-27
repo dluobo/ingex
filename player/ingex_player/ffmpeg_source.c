@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_source.c,v 1.13 2011/07/13 10:22:27 philipn Exp $
+ * $Id: ffmpeg_source.c,v 1.14 2011/09/27 10:14:29 philipn Exp $
  *
  *
  *
@@ -29,7 +29,6 @@
 #include <errno.h>
 #include <assert.h>
 #define __STDC_FORMAT_MACROS
-#define __STDC_CONSTANT_MACROS
 #include <inttypes.h>
 
 
@@ -981,7 +980,11 @@ static int process_video_packets(FFMPEGSource* source, VideoStream* videoStream)
        which could be in a different order than the packets */
     g_videoPacketPTS = packet.pts;
 
+#if LIBAVCODEC_VERSION_MAJOR < 53
     result = avcodec_decode_video(codecContext, videoStream->frame, &havePicture, packet.data, packet.size);
+#else
+    result = avcodec_decode_video2(codecContext, videoStream->frame, &havePicture, &packet);
+#endif
     if (result < 0)
     {
         ml_log_error("Failed to decode video frame\n");
@@ -1331,9 +1334,18 @@ static int process_audio_packets(FFMPEGSource* source, AudioStream* audioStream)
 
     while (audioStream->packetNextSize > 0)
     {
+#if LIBAVCODEC_VERSION_MAJOR < 53
         dataSize = audioStream->decodeBufferSize;
         result = avcodec_decode_audio2(codecContext, (int16_t*)audioStream->decodeBuffer, &dataSize,
             audioStream->packetNextData, audioStream->packetNextSize);
+#else
+        AVPacket packet;
+        av_init_packet(&packet);
+        packet.data = audioStream->packetNextData;
+        packet.size = audioStream->packetNextSize;
+        dataSize = audioStream->decodeBufferSize;
+        result = avcodec_decode_audio3(codecContext, (int16_t*)audioStream->decodeBuffer, &dataSize, &packet);
+#endif
         if (result < 0)
         {
             ml_log_error("Failed to decode audio packet data\n");
@@ -1411,10 +1423,20 @@ static int add_source_infos(FFMPEGSource* source, StreamInfo* streamInfo, const 
         CHK_ORET(add_known_source_info(streamInfo, SRC_INFO_FILE_TYPE, source->formatContext->iformat->name));
     }
     CHK_ORET(add_timecode_source_info(streamInfo, SRC_INFO_FILE_DURATION, source->length, timecodeBase));
+#if LIBAVCODEC_VERSION_MAJOR < 53
     if (source->formatContext->title[0] != '\0')
     {
         CHK_ORET(add_known_source_info(streamInfo, SRC_INFO_TITLE, source->formatContext->title));
     }
+#else
+    {
+        AVDictionaryEntry *tag = av_dict_get(source->formatContext->metadata, "title", NULL, 0);
+        if (tag)
+        {
+            CHK_ORET(add_known_source_info(streamInfo, SRC_INFO_TITLE, tag->value));
+        }
+    }
+#endif
 
     return 1;
 }
@@ -2141,6 +2163,7 @@ int fms_open(const char* filename, int threadCount, int forceUYVYFormat, MediaSo
     {
         switch (result)
         {
+#if LIBAVCODEC_VERSION_MAJOR < 53
             case AVERROR_NUMEXPECTED:
                 ml_log_error("%s: Incorrect image filename syntax.\n", filename);
                 break;
@@ -2150,6 +2173,14 @@ int fms_open(const char* filename, int threadCount, int forceUYVYFormat, MediaSo
             case AVERROR_NOFMT:
                 ml_log_error("%s: Unknown format\n", filename);
                 break;
+#else
+            case AVERROR(EINVAL):
+                ml_log_error("%s: Invalid data\n", filename);
+                break;
+            case AVERROR(EILSEQ):
+                ml_log_error("%s: Unknown format\n", filename);
+                break;
+#endif
             case AVERROR(EIO):
                 ml_log_error("%s: I/O error occured\n", filename);
                 break;
@@ -2193,12 +2224,20 @@ int fms_open(const char* filename, int threadCount, int forceUYVYFormat, MediaSo
 
         switch (codecContext->codec_type)
         {
+#if LIBAVCODEC_VERSION_MAJOR < 53
             case CODEC_TYPE_AUDIO:
+#else
+            case AVMEDIA_TYPE_AUDIO:
+#endif
                 DEBUG("AV stream %d is audio\n", i);
                 CHK_OFAIL(open_audio_stream(newSource, sourceId, i, &outputStreamIndex));
                 break;
 
+#if LIBAVCODEC_VERSION_MAJOR < 53
             case CODEC_TYPE_VIDEO:
+#else
+            case AVMEDIA_TYPE_VIDEO:
+#endif
                 DEBUG("AV stream %d is video\n", i);
                 CHK_OFAIL(open_video_stream(newSource, sourceId, i, &outputStreamIndex));
                 break;
