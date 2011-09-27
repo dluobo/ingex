@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorderImpl.cpp,v 1.26 2011/06/13 15:30:33 john_f Exp $
+ * $Id: IngexRecorderImpl.cpp,v 1.27 2011/09/27 08:14:37 john_f Exp $
  *
  * Servant class for Recorder.
  *
@@ -772,17 +772,17 @@ void IngexRecorderImpl::InitCopying()
     {
         std::string src = it->dir;
         std::string dest = it->copy_dest;
-        if (!dest.empty())
+        if (!settings->project_subdir.empty())
         {
-            if (!settings->project_subdir.empty())
+            src += PATH_SEPARATOR;
+            src += settings->project_subdir;
+            if (!dest.empty())
             {
-                src += PATH_SEPARATOR;
-                src += settings->project_subdir;
                 dest += PATH_SEPARATOR;
                 dest += settings->project_subdir;
             }
-            mCopyManager.AddSrcDest(src, dest, it->copy_priority);
         }
+        mCopyManager.AddSrcDest(src, dest, it->copy_priority);
     }
 }
 

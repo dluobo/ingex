@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorder.cpp,v 1.22 2011/02/18 16:31:15 john_f Exp $
+ * $Id: IngexRecorder.cpp,v 1.23 2011/09/27 08:14:37 john_f Exp $
  *
  * Class to manage an individual recording.
  *
@@ -444,6 +444,11 @@ void IngexRecorder::Setup(Ingex::Timecode start_timecode)
             tp.p_opt->resolution = it->resolution;
             tp.p_opt->bitc = it->bitc;
             tp.p_opt->dir = it->dir;
+            if (!project_subdir.empty())
+            {
+                tp.p_opt->dir += PATH_SEPARATOR;
+                tp.p_opt->dir += settings->project_subdir;
+            }
 
             mThreadParams.push_back(tp);
         }

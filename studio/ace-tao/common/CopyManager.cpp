@@ -1,5 +1,5 @@
 /*
- * $Id: CopyManager.cpp,v 1.9 2011/06/13 15:57:51 john_f Exp $
+ * $Id: CopyManager.cpp,v 1.10 2011/09/27 08:14:37 john_f Exp $
  *
  * Class to manage file copying in a separate process.
  *
@@ -64,22 +64,19 @@ void CopyManager::ClearSrcDest()
 
 void CopyManager::AddSrcDest(const std::string & src, const std::string & dest, int priority)
 {
-    if (!src.empty() && !dest.empty())
+    std::ostringstream ss;
+    switch (mMode)
     {
-        std::ostringstream ss;
-        switch (mMode)
-        {
-        case CopyMode::OLD:
-            ss << " " << priority << " \"" << src << "\" \"" << dest << "\"";
-            mArgs += ss.str();
-            break;
-        case CopyMode::NEW:
-            ss << priority << "\n"
-                << src << "\n"
-                << dest << "\n";
-            mArgs += ss.str();
-            break;
-        }
+    case CopyMode::OLD:
+        ss << " " << priority << " \"" << src << "\" \"" << dest << "\"";
+        mArgs += ss.str();
+        break;
+    case CopyMode::NEW:
+        ss << priority << "\n"
+            << src << "\n"
+            << dest << "\n";
+        mArgs += ss.str();
+        break;
     }
 }
 
@@ -105,11 +102,12 @@ void CopyManager::StartCopying(unsigned int index)
         break;
 
     case CopyMode::NEW:
-        //if (!mArgs.empty())
+        if (!mArgs.empty())
         {
             // Create command
             std::ostringstream ss;
             ss << mRecorderName << "\n" << index << "\n" << mArgs;
+            ACE_DEBUG((LM_DEBUG, ACE_TEXT("CopyManager Start command \"%C\"\n"), ss.str().c_str()));
             // Send it
             TcpPort port;
             if (port.Connect("127.0.0.1:2000"))
@@ -145,11 +143,12 @@ void CopyManager::StopCopying(unsigned int index)
         break;
 
     case CopyMode::NEW:
-        //if (!mArgs.empty())
+        if (!mArgs.empty())
         {
             // Create command
             std::ostringstream ss;
             ss << mRecorderName << "\n" << index << "\n";
+            ACE_DEBUG((LM_DEBUG, ACE_TEXT("CopyManager Stop command \"%C\"\n"), ss.str().c_str()));
             // Send it
             TcpPort port;
             if (port.Connect("127.0.0.1:2000"))
