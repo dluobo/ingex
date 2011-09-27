@@ -1,5 +1,5 @@
 /*
- * $Id: mxf_reader.c,v 1.8 2010/10/13 12:31:33 philipn Exp $
+ * $Id: mxf_reader.c,v 1.9 2011/09/27 09:55:57 philipn Exp $
  *
  * Main functions for reading MXF files
  *
@@ -327,13 +327,7 @@ static int convert_position_to_timecode(TimecodeIndex* index, mxfPosition positi
     while (mxf_next_list_iter_element(&iter))
     {
         segment = (TimecodeSegment*)mxf_get_iter_element(&iter);
-        if (segment->duration == -1) /* timecode segment with unknown duration */
-        {
-            frameCount = position - segmentStartPosition;
-            foundTimecodeSegment = 1;
-            break;
-        }
-        else if (position < segmentStartPosition + segment->duration)
+        if (segment->duration < 0 || position < segmentStartPosition + segment->duration)
         {
             frameCount = segment->startTimecode + (position - segmentStartPosition);
             foundTimecodeSegment = 1;
