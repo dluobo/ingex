@@ -1,5 +1,5 @@
 /*
- * $Id: mxf_essence_helper.c,v 1.23 2011/08/19 12:29:25 philipn Exp $
+ * $Id: mxf_essence_helper.c,v 1.24 2011/09/27 09:57:20 philipn Exp $
  *
  * Utilities for processing essence data and associated metadata
  *
@@ -716,6 +716,73 @@ int process_cdci_descriptor(MXFMetadataSet* descriptorSet, MXFTrack* track, Esse
         track->video.displayYOffset = displayYOffset * 2;
 
         essenceTrack->frameSize = -1; /* variable */
+    }
+    else if (mxf_equals_ul_mod_regver(&track->essenceContainerLabel, &MXF_EC_L(AVCIFrameWrapped)) ||
+             mxf_equals_ul_mod_regver(&track->essenceContainerLabel, &MXF_EC_L(AVCIClipWrapped)))
+    {
+        CHK_ORET(mxf_get_uint32_item(descriptorSet, &MXF_ITEM_K(GenericPictureEssenceDescriptor, StoredHeight), &fieldHeight));
+        CHK_ORET(mxf_get_uint32_item(descriptorSet, &MXF_ITEM_K(GenericPictureEssenceDescriptor, StoredWidth), &fieldWidth));
+        if (mxf_have_item(descriptorSet, &MXF_ITEM_K(GenericPictureEssenceDescriptor, DisplayHeight)))
+        {
+            CHK_ORET(mxf_get_uint32_item(descriptorSet, &MXF_ITEM_K(GenericPictureEssenceDescriptor, DisplayHeight), &displayHeight));
+        }
+        else
+        {
+            displayHeight = fieldHeight;
+        }
+        if (mxf_have_item(descriptorSet, &MXF_ITEM_K(GenericPictureEssenceDescriptor, DisplayWidth)))
+        {
+            CHK_ORET(mxf_get_uint32_item(descriptorSet, &MXF_ITEM_K(GenericPictureEssenceDescriptor, DisplayWidth), &displayWidth));
+        }
+        else
+        {
+            displayWidth = fieldWidth;
+        }
+        if (mxf_have_item(descriptorSet, &MXF_ITEM_K(GenericPictureEssenceDescriptor, DisplayYOffset)))
+        {
+            CHK_ORET(mxf_get_uint32_item(descriptorSet, &MXF_ITEM_K(GenericPictureEssenceDescriptor, DisplayYOffset), &displayYOffset));
+        }
+        else
+        {
+            displayYOffset = 0;
+        }
+        if (mxf_have_item(descriptorSet, &MXF_ITEM_K(GenericPictureEssenceDescriptor, DisplayXOffset)))
+        {
+            CHK_ORET(mxf_get_uint32_item(descriptorSet, &MXF_ITEM_K(GenericPictureEssenceDescriptor, DisplayXOffset), &displayXOffset));
+        }
+        else
+        {
+            displayXOffset = 0;
+        }
+        CHK_ORET(mxf_get_uint32_item(descriptorSet, &MXF_ITEM_K(CDCIEssenceDescriptor, HorizontalSubsampling), &track->video.horizSubsampling));
+        CHK_ORET(mxf_get_uint32_item(descriptorSet, &MXF_ITEM_K(CDCIEssenceDescriptor, VerticalSubsampling), &track->video.vertSubsampling));
+        CHK_ORET(mxf_get_uint8_item(descriptorSet, &MXF_ITEM_K(GenericPictureEssenceDescriptor, FrameLayout), &frameLayout));
+
+        int factor;
+        if (frameLayout == 1)  /* SeparateFields */
+            factor = 2;
+        else
+            factor = 1;
+
+        track->video.frameWidth = fieldWidth;
+        track->video.frameHeight = fieldHeight * factor;
+        track->video.displayWidth = displayWidth;
+        track->video.displayHeight = displayHeight * factor;
+        track->video.displayXOffset = displayXOffset;
+        track->video.displayYOffset = displayYOffset * factor;
+
+        if (mxf_have_item(descriptorSet, &MXF_ITEM_K(GenericPictureEssenceDescriptor, FrameSampleSize)))
+        {
+            CHK_ORET(mxf_get_int32_item(descriptorSet, &MXF_ITEM_K(GenericPictureEssenceDescriptor, FrameSampleSize), &avidFrameSize));
+            CHK_ORET(avidFrameSize > 0);
+            essenceTrack->frameSize = avidFrameSize;
+            CHK_ORET(mxf_get_uint32_item(descriptorSet, &MXF_ITEM_K(GenericPictureEssenceDescriptor, ImageStartOffset), &essenceTrack->imageStartOffset));
+        }
+        else
+        {
+            /* frame size could be fixed or the first frame could be larger than the other frames */
+            essenceTrack->frameSize = -1;
+        }
     }
     else
     {

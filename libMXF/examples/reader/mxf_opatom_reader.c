@@ -1,5 +1,5 @@
 /*
- * $Id: mxf_opatom_reader.c,v 1.15 2011/08/19 12:29:25 philipn Exp $
+ * $Id: mxf_opatom_reader.c,v 1.16 2011/09/27 09:57:20 philipn Exp $
  *
  * MXF OP-Atom reader
  *
@@ -846,6 +846,10 @@ int opa_is_supported(MXFPartition* headerPartition)
         mxf_equals_ul(label, &MXF_EC_L(AvidIMX30_525_60)) ||
         mxf_equals_ul(label, &MXF_EC_L(AvidIMX40_525_60)) ||
         mxf_equals_ul(label, &MXF_EC_L(AvidIMX50_525_60)))
+    {
+        return 1;
+    }
+    else if (mxf_equals_ul_mod_regver(label, &MXF_EC_L(AVCIClipWrapped)))
     {
         return 1;
     }
