@@ -1,7 +1,7 @@
 #! /usr/bin/perl -w
 
 #/***************************************************************************
-# * $Id: xferserver.pl,v 1.20 2010/11/02 15:20:51 john_f Exp $             *
+# * $Id: xferserver.pl,v 1.21 2011/09/27 08:16:43 john_f Exp $             *
 # *                                                                         *
 # *   Copyright (C) 2008-2010 British Broadcasting Corporation              *
 # *   - all rights reserved.                                                *
@@ -37,7 +37,7 @@
 # Identifier values are arbitrary (most likely an incrementing number) except for the special case '0' (zero), which is interpreted as covering all events belonging to the associated client.  This value should be sent when a client is started, so that the event list is cleared of any previous events belonging to this client.  This ensures that traffic control does not remain on permanently due to a client crashing and hence not indicating the end of an event.  It should not be used as an event identifier if the client can have more than one event in action simultaneously.
 # A further special case is to provide the client name on its own.  This is also interpreted as clearing the list of events belonging to this client (as if '0' followed by more arguments had been supplied), and is useful for clients such as players which do not provide copying path information.  (Players typically only play one file set at once, which means that they can always supply the same identifier value to switch traffic control on.)
 
-# Arguments after the client name and identifier should be supplied in groups of three: priority (a positive number), source path and destination path.  The script will attempt to copy all the files in all the path pairs at the highest priority (the smallest priority argument value) before moving on to the next, and so on.  (Offline files would normally be given higher priority [smaller argument value] than online files, because they are likely to be needed sooner and are smaller so will be copied more quickly.)  The script saves paths in file PATHS_FILE (unless overridden with the -a option) to allow copying to commence without client intervention when the script is (re)started.  When a client supplies paths, the copying cycle starts or restarts from the highest priority, letting any pending file copy finish first.  This minimises the delay in copying high-priority files without wasting any bandwidth by re-copying.
+# Arguments after the client name and identifier should be supplied in groups of three: priority (a positive number), source path and destination path.  If the destination path is an empty string, the group will be ignored.  Otherwise, the script will attempt to copy all the files in all the path pairs at the highest priority (the smallest priority argument value) before moving on to the next, and so on.  (Offline files would normally be given higher priority [smaller argument value] than online files, because they are likely to be needed sooner and are smaller so will be copied more quickly.)  The script saves paths in file PATHS_FILE (unless overridden with the -a option) to allow copying to commence without client intervention when the script is (re)started.  When a client supplies paths, the copying cycle starts or restarts from the highest priority, letting any pending file copy finish first.  This minimises the delay in copying high-priority files without wasting any bandwidth by re-copying.
 
 # In each source directory and any subdirectories whose names match SUBDIRS, every file whose name begins with 8 digits and an underscore* and ends in one of the EXTNS (case-insensitive) is examined.  If it does not exist in a subdirectory of the corresponding destination path, named after the first 8 digits of the filename*, it is copied using the COPY executable or curl (FTP mode), into <destination path>/<first 8 digits of filename>*/<source subdirectory if present>/<DEST_INCOMING>, creating directories if necessary.  After a successful copy, the file is moved up one directory level.  This prevents anything looking at the destination directories from seeing partial files.  At the end of each copying cycle, the (empty) DEST_INCOMING subdirectories are removed.  (* If option -d is provided, 8-digit subdirectories are not used and files do not have to start with 8 digits and an underscore.)
 
@@ -62,7 +62,7 @@ use IO::Socket;
 use IO::Select;
 use IO::File;
 use Getopt::Std;
-our $VERSION = '$Revision: 1.20 $'; #used by Getopt in the case of --version or --help
+our $VERSION = '$Revision: 1.21 $'; #used by Getopt in the case of --version or --help
 $VERSION =~ s/\s*\$Revision:\s*//;
 $VERSION =~ s/\s*\$\s*$//;
 $Getopt::Std::STANDARD_HELP_VERSION = 1; #so it stops after version message
@@ -343,7 +343,7 @@ sub serveClient {
 	if (@commands) {
 		Report("Client '$client' says copy:\n", 1, $transfers, CLIENT_COLOUR);
 		do {
-			$added = 1 if 2 == addPair($transfers, \@commands, shift @commands, 0, 2); #printing during this will not be interspersed with printing from the thread as the share is locked
+			$added = 1 if 3 == addPair($transfers, \@commands, shift @commands, 0, 2); #printing during this will not be interspersed with printing from the thread as the share is locked
 		} while (@commands);
 	}
 	if (!keys %events && $transfers->{limit}) {
@@ -496,7 +496,7 @@ sub SaveConfig { #should be locked before doing this to prevent concurrent file 
 # add a source/dest directory pair to the transfers
 # if $ctimeMode = 0 or 1, read ctimeCleared (and extraCtimeCleared if priority is 1) from @$args and if 1, clear it/them; if 2, read from existing pair or clear if not present
 # @$args can be large and only the needed values will be shifted off it
-# return 2 if OK, 1 if problem with dirs and 0 if problem with args
+# return 3 if OK, 2 if destination dir blank so no pair added, 1 if problem with dirs and 0 if problem with args
 # assumes share is locked
 sub addPair {
  #check args
@@ -517,6 +517,10 @@ sub addPair {
 	return 0;
  }
  $dest =~ s|/*$||;
+ if ($dest eq '') {
+	Report("\rPriority $priority: '$source/*' -> blank destination: no copying will occur\n", 1, $transfers, CLIENT_COLOUR);
+	return 2;
+ }
  Report("\rPriority $priority: '$source/*' -> '$dest/*'\n", 1, $transfers, CLIENT_COLOUR);
  my ($ctimeCleared, $extraCtimeCleared);
  unless (2 == $ctimeMode) {
@@ -575,7 +579,7 @@ sub addPair {
  if (!exists $transfers->{staleFrom} || $transfers->{staleFrom} > $priority) { #not pending rescan or re-scanning from a lower priority than this pair
 	$transfers->{staleFrom} = $priority; #rescan from this priority at the end of the current copy
  }
- return 2;
+ return 3;
 }
 
 # scan a source/destination directory pair, make a list of files that need to be copied, and delete unneeded source files
@@ -1337,3 +1341,4 @@ sub FtpTrafficControl { #Non-zero in first parameter switches traffic control on
 	return `sudo /usr/sbin/tc qdisc del dev $interface root 2>&1`;
  }
 }
+
