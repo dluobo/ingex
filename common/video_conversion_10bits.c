@@ -46,7 +46,7 @@ line of video with a different error value. Rather than use a random number
 generator, which could produce moving patterns, a small static array of random
 numbers is used.
 
-The routine "DitherFrame" converts from 10 bits to 8 bits, with error
+The routine "DitherFrameV210" converts from 10 bits to 8 bits, with error
 feedback. It processes each input line in groups of 6 pixels, i.e. 12 YUV
 samples. Firstly the 12 10-bit values are unpacked to 16-bit unsigned short
 ints by the routine "unpack12". Then these numbers are quantised to 8 bits
@@ -57,29 +57,29 @@ but without any error feedback. The routine "ConvertFrame8to10" repacks 8-bit
 YUV data into 10-bit v210 format.
 */
 
-#define Q_LOSE	0x0003
-#define Q_KEEP	(~Q_LOSE)
-#define MAX_10	0x03ff
+#define Q_LOSE  0x0003
+#define Q_KEEP  (~Q_LOSE)
+#define MAX_10  0x03ff
 
 // Routine to unpack 16 bytes of 10-bit input to 12 unsigned shorts
 static void unpack12(const uint8_t* pIn, unsigned short* pOut)
 {
-	int		i;
+    int     i;
 
-	for (i = 0; i < 4; i++)
-	{
-		*pOut = *pIn++;
-		*pOut++ += (*pIn & 0x03) << 8;
-		*pOut = *pIn++ >> 2;
-		*pOut++ += (*pIn & 0x0f) << 6;
-		*pOut = *pIn++ >> 4;
-		*pOut++ += (*pIn++ & 0x3f) << 4;
-	}
+    for (i = 0; i < 4; i++)
+    {
+        *pOut = *pIn++;
+        *pOut++ += (*pIn & 0x03) << 8;
+        *pOut = *pIn++ >> 2;
+        *pOut++ += (*pIn & 0x0f) << 6;
+        *pOut = *pIn++ >> 4;
+        *pOut++ += (*pIn++ & 0x3f) << 4;
+    }
 }
 
 typedef struct
 {
-	unsigned short	U0, Y0, V0, Y1;
+    unsigned short  U0, Y0, V0, Y1;
 } pixels10;
 
 // Random array of error values to seed each line of Y, U & V
@@ -88,155 +88,314 @@ typedef struct
 // final 10 to 8-bit version
 static unsigned short Err0[] =
 {
-	2, 3, 0, 0, 3, 1, 2, 3,
-	1, 1, 1, 1, 0, 1, 0, 3,
-	0, 2, 3, 0, 0, 3, 1, 1,
-	0, 3, 3, 1, 2, 2, 3, 2
+    2, 3, 0, 0, 3, 1, 2, 3,
+    1, 1, 1, 1, 0, 1, 0, 3,
+    0, 2, 3, 0, 0, 3, 1, 1,
+    0, 3, 3, 1, 2, 2, 3, 2
 };
 #else
 // temporary 10 to 5-bit version
 static unsigned short Err0[] =
 {
-	1,  29, 29, 7,  23, 24, 9,  17,
-	31, 5,  30, 18, 1,  1,  2,  20,
-	0,  7,  30, 1,  9,  5,  4,  15,
-	14, 23, 17, 12, 25, 14, 11, 23
+    1,  29, 29, 7,  23, 24, 9,  17,
+    31, 5,  30, 18, 1,  1,  2,  20,
+    0,  7,  30, 1,  9,  5,  4,  15,
+    14, 23, 17, 12, 25, 14, 11, 23
 };
 #endif
 #define Err0Len (sizeof(Err0) / sizeof(Err0[0]))
 
-void DitherFrame(uint8_t* pOutFrame, const uint8_t* pInFrame,
-				 const int StrideOut, const int StrideIn,
-				 const int xLen, const int yLen)
+void DitherFrameV210(uint8_t* pOutFrame, const uint8_t* pInFrame,
+                     const int StrideOut, const int StrideIn,
+                     const int xLen, const int yLen)
 {
-	int				Err0Idx;
-	const uint8_t*	pIn;
-	uint8_t*		pOut;
-	pixels10		in10[3];
-	unsigned short	Yerr, Uerr, Verr;
-	int				i, x, y;
+    int             Err0Idx;
+    const uint8_t*  pIn;
+    uint8_t*        pOut;
+    pixels10        in10[3];
+    unsigned short  Yerr, Uerr, Verr;
+    int             i, x, y;
 
-	Err0Idx = 0;
-	for (y = 0; y < yLen; y++)
-	{
-		pIn = pInFrame;
-		pOut = pOutFrame;
-		Yerr = Err0[Err0Idx];
-		Err0Idx = (Err0Idx + 1) % Err0Len;
-		Uerr = Err0[Err0Idx];
-		Err0Idx = (Err0Idx + 1) % Err0Len;
-		Verr = Err0[Err0Idx];
-		Err0Idx = (Err0Idx + 1) % Err0Len;
-		for (x = 0; x < xLen; x += 6)
-		{
-			// decode input
-			unpack12(pIn, (unsigned short*)&in10);
-			pIn += 16;
-			// quantise with error feedback
-			for (i = 0; i < 3; i++)
-			{
-				in10[i].U0 += Uerr;
-				if (in10[i].U0 > MAX_10) in10[i].U0 = MAX_10;
-				Uerr = in10[i].U0 & Q_LOSE;
-				*pOut++ = (in10[i].U0 & Q_KEEP) >> 2;
+    Err0Idx = 0;
+    for (y = 0; y < yLen; y++)
+    {
+        pIn = pInFrame;
+        pOut = pOutFrame;
+        Yerr = Err0[Err0Idx];
+        Err0Idx = (Err0Idx + 1) % Err0Len;
+        Uerr = Err0[Err0Idx];
+        Err0Idx = (Err0Idx + 1) % Err0Len;
+        Verr = Err0[Err0Idx];
+        Err0Idx = (Err0Idx + 1) % Err0Len;
+        for (x = 0; x < xLen; x += 6)
+        {
+            // decode input
+            unpack12(pIn, (unsigned short*)&in10);
+            pIn += 16;
+            // quantise with error feedback
+            for (i = 0; i < 3; i++)
+            {
+                in10[i].U0 += Uerr;
+                if (in10[i].U0 > MAX_10) in10[i].U0 = MAX_10;
+                Uerr = in10[i].U0 & Q_LOSE;
+                *pOut++ = (in10[i].U0 & Q_KEEP) >> 2;
 
-				in10[i].Y0 += Yerr;
-				if (in10[i].Y0 > MAX_10) in10[i].Y0 = MAX_10;
-				Yerr = in10[i].Y0 & Q_LOSE;
-				*pOut++ = (in10[i].Y0 & Q_KEEP) >> 2;
+                in10[i].Y0 += Yerr;
+                if (in10[i].Y0 > MAX_10) in10[i].Y0 = MAX_10;
+                Yerr = in10[i].Y0 & Q_LOSE;
+                *pOut++ = (in10[i].Y0 & Q_KEEP) >> 2;
 
-				in10[i].V0 += Verr;
-				if (in10[i].V0 > MAX_10) in10[i].V0 = MAX_10;
-				Verr = in10[i].V0 & Q_LOSE;
-				*pOut++ = (in10[i].V0 & Q_KEEP) >> 2;
+                in10[i].V0 += Verr;
+                if (in10[i].V0 > MAX_10) in10[i].V0 = MAX_10;
+                Verr = in10[i].V0 & Q_LOSE;
+                *pOut++ = (in10[i].V0 & Q_KEEP) >> 2;
 
-				in10[i].Y1 += Yerr;
-				if (in10[i].Y1 > MAX_10) in10[i].Y1 = MAX_10;
-				Yerr = in10[i].Y1 & Q_LOSE;
-				*pOut++ = (in10[i].Y1 & Q_KEEP) >> 2;
-			}
-		}
-		pInFrame += StrideIn;
-		pOutFrame += StrideOut;
-	}
+                in10[i].Y1 += Yerr;
+                if (in10[i].Y1 > MAX_10) in10[i].Y1 = MAX_10;
+                Yerr = in10[i].Y1 & Q_LOSE;
+                *pOut++ = (in10[i].Y1 & Q_KEEP) >> 2;
+            }
+        }
+        pInFrame += StrideIn;
+        pOutFrame += StrideOut;
+    }
+}
+
+void DitherFrameYUV10(uint8_t* pOutFrame,
+                      const uint16_t *pYIn, const uint16_t *pUIn, const uint16_t *pVIn,
+                      const int yStrideIn, int uStrideIn, int vStrideIn,
+                      const int xLen, const int yLen,
+                      const int ssx, const int ssy)
+{
+    int             Err0Idx;
+    const uint16_t* yIn = pYIn;
+    const uint16_t* uIn = pUIn;
+    const uint16_t* vIn = pVIn;
+    uint8_t*        yOut = pOutFrame;
+    uint8_t*        uOut = yOut + xLen * yLen;
+    uint8_t*        vOut = uOut + (xLen / ssx) * (yLen / ssy);
+    uint16_t        Y, U, V;
+    uint16_t        Yerr, Uerr, Verr;
+    int             x, y;
+
+    Err0Idx = 0;
+    for (y = 0; y < yLen; y++)
+    {
+        // Y plane
+        Yerr = Err0[Err0Idx];
+        Err0Idx = (Err0Idx + 1) % Err0Len;
+        for (x = 0; x < xLen; x++)
+        {
+            Y = *yIn++ + Yerr;
+            if (Y > MAX_10) Y = MAX_10;
+            Yerr = Y & Q_LOSE;
+            *yOut++ = Y >> 2;
+        }
+        yIn += yStrideIn - xLen; // skip padding
+
+        // U/V planes
+        if (y % ssy == 0)
+        {
+            Uerr = Err0[Err0Idx];
+            Err0Idx = (Err0Idx + 1) % Err0Len;
+            Verr = Err0[Err0Idx];
+            Err0Idx = (Err0Idx + 1) % Err0Len;
+            for (x = 0; x < xLen; x += ssx)
+            {
+                U = *uIn++ + Uerr;
+                if (U > MAX_10) U = MAX_10;
+                Uerr = U & Q_LOSE;
+                *uOut++ = U >> 2;
+
+                V = *vIn++ + Verr;
+                if (V > MAX_10) V = MAX_10;
+                Verr = V & Q_LOSE;
+                *vOut++ = V >> 2;
+            }
+            uIn += uStrideIn - xLen / ssx; // skip padding
+            vIn += vStrideIn - xLen / ssx; // skip padding
+        }
+    }
+}
+
+void DitherFrameYUV10_2(uint8_t* pOutFrame, const uint16_t* pInFrame,
+                        const int xLen, const int yLen,
+                        const int ssx, const int ssy)
+{
+    DitherFrameYUV10(pOutFrame,
+                     pInFrame, pInFrame + xLen * yLen, pInFrame + xLen * yLen + (xLen / ssx) * (yLen / ssy),
+                     xLen, xLen / ssx, xLen / ssx, xLen, yLen, ssx, ssy);
 }
 
 // Routine to pack 12 unsigned shorts into 16 bytes of 10-bit output
 static void pack12(unsigned short* pIn, uint8_t* pOut)
 {
-	int		i;
+    int     i;
 
-	for (i = 0; i < 4; i++)
-	{
-		*pOut++ = *pIn & 0xff;
-		*pOut = (*pIn++ >> 8) & 0x03;
-		*pOut++ += (*pIn & 0x3f) << 2;
-		*pOut = (*pIn++ >> 6) & 0x0f;
-		*pOut++ += (*pIn & 0x0f) << 4;
-		*pOut++ = (*pIn++ >> 4) & 0x3f;
-	}
+    for (i = 0; i < 4; i++)
+    {
+        *pOut++ = *pIn & 0xff;
+        *pOut = (*pIn++ >> 8) & 0x03;
+        *pOut++ += (*pIn & 0x3f) << 2;
+        *pOut = (*pIn++ >> 6) & 0x0f;
+        *pOut++ += (*pIn & 0x0f) << 4;
+        *pOut++ = (*pIn++ >> 4) & 0x3f;
+    }
 }
 
-void ConvertFrame10to8(uint8_t* pOutFrame, const uint8_t* pInFrame,
-                       const int StrideOut, const int StrideIn,
-                       const int xLen, const int yLen)
+void ConvertFrameV210to8(uint8_t* pOutFrame, const uint8_t* pInFrame,
+                         const int StrideOut, const int StrideIn,
+                         const int xLen, const int yLen)
 {
-	const uint8_t*		pIn;
-	uint8_t*			pOut;
-	pixels10		in10[3];
-	int				i, x, y;
+    const uint8_t*  pIn;
+    uint8_t*        pOut;
+    pixels10        in10[3];
+    int             i, x, y;
 
-	for (y = 0; y < yLen; y++)
-	{
-		pIn = pInFrame;
-		pOut = pOutFrame;
-		for (x = 0; x < xLen; x += 6)
-		{
-			// decode input
-			unpack12(pIn, (unsigned short*)&in10);
-			pIn += 16;
-			// quantise, discarding lsbs
-			for (i = 0; i < 3; i++)
-			{
-				*pOut++ = (in10[i].U0 & Q_KEEP) >> 2;
-				*pOut++ = (in10[i].Y0 & Q_KEEP) >> 2;
-				*pOut++ = (in10[i].V0 & Q_KEEP) >> 2;
-				*pOut++ = (in10[i].Y1 & Q_KEEP) >> 2;
-			}
-		}
-		pInFrame += StrideIn;
-		pOutFrame += StrideOut;
-	}
+    for (y = 0; y < yLen; y++)
+    {
+        pIn = pInFrame;
+        pOut = pOutFrame;
+        for (x = 0; x < xLen; x += 6)
+        {
+            // decode input
+            unpack12(pIn, (unsigned short*)&in10);
+            pIn += 16;
+            // quantise, discarding lsbs
+            for (i = 0; i < 3; i++)
+            {
+                *pOut++ = (in10[i].U0 & Q_KEEP) >> 2;
+                *pOut++ = (in10[i].Y0 & Q_KEEP) >> 2;
+                *pOut++ = (in10[i].V0 & Q_KEEP) >> 2;
+                *pOut++ = (in10[i].Y1 & Q_KEEP) >> 2;
+            }
+        }
+        pInFrame += StrideIn;
+        pOutFrame += StrideOut;
+    }
 }
 
-void ConvertFrame8to10(uint8_t* pOutFrame, const uint8_t* pInFrame,
-                       const int StrideOut, const int StrideIn,
-                       const int xLen, const int yLen)
+void ConvertFrameYUV10to8(uint8_t* pOutFrame,
+                          const uint16_t *pYIn, const uint16_t *pUIn, const uint16_t *pVIn,
+                          const int yStrideIn, int uStrideIn, int vStrideIn,
+                          const int xLen, const int yLen,
+                          const int ssx, const int ssy)
 {
-	const uint8_t*		pIn;
-	uint8_t*			pOut;
-	pixels10		out10[3];
-	int				i, x, y;
+    const uint16_t* yIn = pYIn;
+    const uint16_t* uIn = pUIn;
+    const uint16_t* vIn = pVIn;
+    uint8_t*        yOut = pOutFrame;
+    uint8_t*        uOut = yOut + xLen * yLen;
+    uint8_t*        vOut = uOut + (xLen / ssx) * (yLen / ssy);
+    int             x, y;
 
-	for (y = 0; y < yLen; y++)
-	{
-		pIn = pInFrame;
-		pOut = pOutFrame;
-		for (x = 0; x < xLen; x += 6)
-		{
-			// copy input to array of 10-bit values
-			for (i = 0; i != 3; i++)
-			{
-				out10[i].U0 = *pIn++ << 2;
-				out10[i].Y0 = *pIn++ << 2;
-				out10[i].V0 = *pIn++ << 2;
-				out10[i].Y1 = *pIn++ << 2;
-			}
-			// encode output
-			pack12((unsigned short*)&out10, pOut);
-			pOut += 16;
-		}
-		pInFrame += StrideIn;
-		pOutFrame += StrideOut;
-	}
+    for (y = 0; y < yLen; y++)
+    {
+        // Y plane
+        for (x = 0; x < xLen; x++)
+        {
+            *yOut++ = *yIn++ >> 2;
+        }
+        yIn += yStrideIn - xLen; // skip padding
+
+        // U/V planes
+        if (y % ssy == 0)
+        {
+            for (x = 0; x < xLen; x += ssx)
+            {
+                *uOut++ = *uIn++ >> 2;
+                *vOut++ = *vIn++ >> 2;
+            }
+            uIn += uStrideIn - xLen / ssx; // skip padding
+            vIn += vStrideIn - xLen / ssx; // skip padding
+        }
+    }
 }
+
+void ConvertFrameYUV10to8_2(uint8_t* pOutFrame, const uint16_t* pInFrame,
+                            const int xLen, const int yLen,
+                            const int ssx, const int ssy)
+{
+    ConvertFrameYUV10to8(pOutFrame,
+                         pInFrame, pInFrame + xLen * yLen, pInFrame + xLen * yLen + (xLen / ssx) * (yLen / ssy),
+                         xLen, xLen / ssx, xLen / ssx, xLen, yLen, ssx, ssy);
+}
+
+void ConvertFrame8toV210(uint8_t* pOutFrame, const uint8_t* pInFrame,
+                         const int StrideOut, const int StrideIn,
+                         const int xLen, const int yLen)
+{
+    const uint8_t*      pIn;
+    uint8_t*            pOut;
+    pixels10        out10[3];
+    int             i, x, y;
+
+    for (y = 0; y < yLen; y++)
+    {
+        pIn = pInFrame;
+        pOut = pOutFrame;
+        for (x = 0; x < xLen; x += 6)
+        {
+            // copy input to array of 10-bit values
+            for (i = 0; i != 3; i++)
+            {
+                out10[i].U0 = *pIn++ << 2;
+                out10[i].Y0 = *pIn++ << 2;
+                out10[i].V0 = *pIn++ << 2;
+                out10[i].Y1 = *pIn++ << 2;
+            }
+            // encode output
+            pack12((unsigned short*)&out10, pOut);
+            pOut += 16;
+        }
+        pInFrame += StrideIn;
+        pOutFrame += StrideOut;
+    }
+}
+
+void ConvertFrame8toYUV10(uint16_t* pOutFrame,
+                          const uint8_t *pYIn, const uint8_t *pUIn, const uint8_t *pVIn,
+                          const int yStrideIn, int uStrideIn, int vStrideIn,
+                          const int xLen, const int yLen,
+                          const int ssx, const int ssy)
+{
+    const uint8_t*  yIn = pYIn;
+    const uint8_t*  uIn = pUIn;
+    const uint8_t*  vIn = pVIn;
+    uint16_t*       yOut = pOutFrame;
+    uint16_t*       uOut = yOut + xLen * yLen;
+    uint16_t*       vOut = uOut + (xLen / ssx) * (yLen / ssy);
+    int             x, y;
+
+    for (y = 0; y < yLen; y++)
+    {
+        // Y plane
+        for (x = 0; x < xLen; x++)
+        {
+            *yOut++ = *yIn++ << 2;
+        }
+        yIn += yStrideIn - xLen; // skip padding
+
+        // U/V planes
+        if (y % ssy == 0)
+        {
+            for (x = 0; x < xLen; x += ssx)
+            {
+                *uOut++ = *uIn++ << 2;
+                *vOut++ = *vIn++ << 2;
+            }
+            uIn += uStrideIn - xLen / ssx; // skip padding
+            vIn += vStrideIn - xLen / ssx; // skip padding
+        }
+    }
+}
+
+void ConvertFrame8toYUV10_2(uint16_t* pOutFrame, const uint8_t* pInFrame,
+                            const int xLen, const int yLen,
+                            const int ssx, const int ssy)
+{
+    ConvertFrame8toYUV10(pOutFrame,
+                         pInFrame, pInFrame + xLen * yLen, pInFrame + xLen * yLen + (xLen / ssx) * (yLen / ssy),
+                         xLen, xLen / ssx, xLen / ssx, xLen, yLen, ssx, ssy);
+}
+

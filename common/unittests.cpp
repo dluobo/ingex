@@ -102,16 +102,16 @@ int main(int argc, char *argv[])
 	// Test 10bit conversions
 	read_sample(input_name, frame_size_10bit, frame10bit);
 
-	ConvertFrame10to8(frame, frame10bit, width*2, width*2*4/3, width, height);
-	DitherFrame(frame2, frame10bit, width*2, width*2*4/3, width, height);
+	ConvertFrameV210to8(frame, frame10bit, width*2, width*2*4/3, width, height);
+	DitherFrameV210(frame2, frame10bit, width*2, width*2*4/3, width, height);
 	double y, u, v;
 	psnr_uyvy(frame, frame2, width, height, &y, &u, &v);
 	printf("frame(10to8) frame2(Dither 10to8) PSNR: y=%.2f u=%.2f v=%.2f\n", y,u,v);
 
 	write_sample(output_name, frame_size, frame);
 
-	ConvertFrame8to10(frame10bit2, frame, width*2*4/3, width*2, width, height);
-	ConvertFrame10to8(frame2, frame10bit2, width*2, width*2*4/3, width, height);
+	ConvertFrame8toV210(frame10bit2, frame, width*2*4/3, width*2, width, height);
+	ConvertFrameV210to8(frame2, frame10bit2, width*2, width*2*4/3, width, height);
 
 	write_sample("frame2.uyvy", frame_size, frame2);
 

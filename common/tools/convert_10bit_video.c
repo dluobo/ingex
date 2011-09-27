@@ -1,5 +1,5 @@
 /*
- * $Id: convert_10bit_video.c,v 1.2 2010/06/02 10:52:38 philipn Exp $
+ * $Id: convert_10bit_video.c,v 1.3 2011/09/27 10:18:30 philipn Exp $
  *
  * Utility to convert 10-bit UYVY to 8-bit UYVY and vice versa
  *
@@ -191,9 +191,9 @@ int main(int argc, const char **argv)
             }
             
             if (nodither)
-                ConvertFrame10to8(output_buffer, input_buffer, width * 2, (width + 5) / 6 * 16, width, height);
+                ConvertFrameV210to8(output_buffer, input_buffer, width * 2, (width + 5) / 6 * 16, width, height);
             else
-                DitherFrame(output_buffer, input_buffer, width * 2, (width + 5) / 6 * 16, width, height);
+                DitherFrameV210(output_buffer, input_buffer, width * 2, (width + 5) / 6 * 16, width, height);
             
             num_write = fwrite(output_buffer, output_buffer_size, 1, output);
             if (num_write != 1) {
@@ -217,7 +217,7 @@ int main(int argc, const char **argv)
                 break;
             }
             
-            ConvertFrame8to10(output_buffer, input_buffer, (width + 5) / 6 * 16, width * 2, width, height);
+            ConvertFrame8toV210(output_buffer, input_buffer, (width + 5) / 6 * 16, width * 2, width, height);
             if (inject > 0)
                 inject_bits(output_buffer, width, height, inject);
             

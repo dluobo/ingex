@@ -1,5 +1,5 @@
 /*
- * $Id: detect_digibeta_dropouts.c,v 1.3 2011/02/18 16:26:54 john_f Exp $
+ * $Id: detect_digibeta_dropouts.c,v 1.4 2011/09/27 10:18:30 philipn Exp $
  *
  * Utility to detect digibeta dropouts
  *
@@ -239,7 +239,7 @@ int main(int argc, const char **argv)
         }
         
         if (is10Bit)
-            DitherFrame(input_buffer_8bit, input_buffer, width * 2, (width + 5) / 6 * 16, width, height);
+            DitherFrameV210(input_buffer_8bit, input_buffer, width * 2, (width + 5) / 6 * 16, width, height);
 
         dropout_result result[2];
         result[0] = digibeta_dropout(&frame, x_offset[0], 0 + (y_offset[0] * 2), workspace);
