@@ -61,7 +61,7 @@ static void scale_copy_line(const int32_t* in_line, BYTE* out_line,
 
     for (i = 0; i < w; i++)
     {
-        *out_line = *in_line++ / (256 * 256);
+        *out_line = min(max(*in_line++ / (256 * 256), 0), 255);
         out_line += out_stride;
     }
 }
@@ -161,7 +161,6 @@ int deinterlace_component(const component* in_frame,
     return YUV_OK;
 }
 
-
 int deinterlace_pic(const YUV_frame* in_frame,
                     const YUV_frame* adj_frame,
                     const YUV_frame* out_frame,
@@ -181,4 +180,3 @@ int deinterlace_pic(const YUV_frame* in_frame,
                                    &out_frame->V, top, fil, work_space);
     return result;
 }
-
