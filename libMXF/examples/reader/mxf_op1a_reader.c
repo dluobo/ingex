@@ -1,5 +1,5 @@
 /*
- * $Id: mxf_op1a_reader.c,v 1.9 2011/08/19 12:29:25 philipn Exp $
+ * $Id: mxf_op1a_reader.c,v 1.10 2011/09/27 09:58:51 philipn Exp $
  *
  * MXF OP-1A reader
  *
@@ -317,6 +317,7 @@ static int process_metadata(MXFReader* reader, MXFPartition* partition)
     WrappedTrack* wrappedTrack;
     WrappedTrack* sortedWrappedTrack;
     WrappedTrack* prevSortedWrappedTrack;
+    WrappedTrack* firstSortedWrappedTrack;
     MXFListIterator listIter;
     MXFListIterator sortedListIter;
     int wasInserted;
@@ -451,18 +452,31 @@ static int process_metadata(MXFReader* reader, MXFPartition* partition)
     }
     /* set the MXFTracks to the same order */
     prevSortedWrappedTrack = NULL;
+    firstSortedWrappedTrack = NULL;
     mxf_initialise_list_iter(&sortedListIter, &sortedWrappedTracks);
     while (mxf_next_list_iter_element(&sortedListIter))
     {
-        sortedWrappedTrack = (WrappedTrack*)mxf_get_iter_element(&listIter);
+        sortedWrappedTrack = (WrappedTrack*)mxf_get_iter_element(&sortedListIter);
+        if (firstSortedWrappedTrack == NULL)
+        {
+            firstSortedWrappedTrack = sortedWrappedTrack;
+        }
         if (prevSortedWrappedTrack != NULL)
         {
             prevSortedWrappedTrack->track->next = sortedWrappedTrack->track;
         }
         prevSortedWrappedTrack = sortedWrappedTrack;
-    }    
-       
-    
+    }
+    if (prevSortedWrappedTrack != NULL)
+    {
+        prevSortedWrappedTrack->track->next = NULL;
+    }
+    if (firstSortedWrappedTrack != NULL)
+    {
+        reader->clip.tracks = firstSortedWrappedTrack->track;
+    }
+
+
     /* process source package tracks and linked descriptors */
     
     mxf_initialise_list_iter(&sortedListIter, &sortedWrappedTracks);
@@ -975,6 +989,7 @@ int op1a_is_supported(MXFPartition* headerPartition)
 {
     MXFListIterator iter;
     mxfUL* label;
+    int supportCount = 0;
     
     if (!is_op_1a(&headerPartition->operationalPattern))
     {
@@ -1004,11 +1019,11 @@ int op1a_is_supported(MXFPartition* headerPartition)
         
         if (mxf_equals_ul(label, &MXF_EC_L(MultipleWrappings)))
         {
-            continue;
+            supportCount++;
         }
         else if (is_d10_picture_essence(label))
         {
-            continue;
+            supportCount++;
         }
         else if (mxf_equals_ul(label, &MXF_EC_L(IECDV_25_525_60_FrameWrapped)) || 
                  mxf_equals_ul(label, &MXF_EC_L(IECDV_25_625_50_FrameWrapped)) || 
@@ -1019,7 +1034,7 @@ int op1a_is_supported(MXFPartition* headerPartition)
                  mxf_equals_ul(label, &MXF_EC_L(DVBased_100_1080_50_I_FrameWrapped)) ||
                  mxf_equals_ul(label, &MXF_EC_L(DVBased_100_720_50_P_FrameWrapped)))
         {
-            continue;
+            supportCount++;
         }
         else if (mxf_equals_ul(label, &MXF_EC_L(SD_Unc_625_50i_422_135_FrameWrapped)) ||
                  mxf_equals_ul(label, &MXF_EC_L(SD_Unc_525_5994i_422_135_FrameWrapped)) ||
@@ -1034,20 +1049,20 @@ int op1a_is_supported(MXFPartition* headerPartition)
                  mxf_equals_ul(label, &MXF_EC_L(HD_Unc_720_50p_422_FrameWrapped)) ||
                  mxf_equals_ul(label, &MXF_EC_L(HD_Unc_720_5994p_422_FrameWrapped)))
         {
-            continue;
+            supportCount++;
         }
         else if (mxf_equals_ul(label, &MXF_EC_L(BWFFrameWrapped)) ||
             mxf_equals_ul(label, &MXF_EC_L(AES3FrameWrapped)))
         {
-            continue;
+            supportCount++;
         }
-        else
+        else if (mxf_equals_ul_mod_regver(label, &MXF_EC_L(AVCIFrameWrapped)))
         {
-            return 0;
+            supportCount++;
         }
     }
-    
-    return 1;
+
+    return supportCount > 0;
 }
 
 int op1a_initialise_reader(MXFReader* reader, MXFPartition** headerPartition)
