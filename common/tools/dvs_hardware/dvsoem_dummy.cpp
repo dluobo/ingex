@@ -1,5 +1,5 @@
 /*
- * $Id: dvsoem_dummy.cpp,v 1.11 2011/04/20 13:52:35 john_f Exp $
+ * $Id: dvsoem_dummy.cpp,v 1.12 2011/10/04 09:32:39 john_f Exp $
  *
  * Implement a debug-only DVS hardware library for testing.
  *
@@ -600,10 +600,13 @@ int sv_query(sv_handle * sv, int cmd, int par, int * val)
         *val = dvs->videomode;
         break;
     case SV_QUERY_DMAALIGNMENT:
-        *val = 16;
+        *val = 1;
         break;
     case SV_QUERY_SERIALNUMBER:
         *val = 0;
+        break;
+    case SV_QUERY_FEATURE_AUDIOCHANNELS:
+        *val = 16;
         break;
     default:
         *val = 0;
