@@ -118,6 +118,11 @@ typedef struct {
 #define SV_FIFO_FLAG_AUDIOINTERLEAVED     0x010000
 #define SV_FIFO_FLAG_NO_LIVE              0x800000
 
+#define SV_FIFO_DMA_ON                     0x01
+#define SV_FIFO_DMA_OFF                    0x02
+#define SV_FIFO_DMA_VIDEO                  0x04
+#define SV_FIFO_DMA_AUDIO                  0x08
+
 int sv_fifo_init(sv_handle * sv, sv_fifo ** ppfifo, int bInput, int bShared, int bDMA, int flagbase, int nframes);
 int sv_fifo_free(sv_handle * sv, sv_fifo * pfifo);
 int sv_fifo_start(sv_handle * sv, sv_fifo * pfifo);
