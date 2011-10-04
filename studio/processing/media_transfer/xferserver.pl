@@ -1,7 +1,7 @@
 #! /usr/bin/perl -w
 
 #/***************************************************************************
-# * $Id: xferserver.pl,v 1.21 2011/09/27 08:16:43 john_f Exp $             *
+# * $Id: xferserver.pl,v 1.22 2011/10/04 09:10:37 john_f Exp $             *
 # *                                                                         *
 # *   Copyright (C) 2008-2010 British Broadcasting Corporation              *
 # *   - all rights reserved.                                                *
@@ -62,7 +62,7 @@ use IO::Socket;
 use IO::Select;
 use IO::File;
 use Getopt::Std;
-our $VERSION = '$Revision: 1.21 $'; #used by Getopt in the case of --version or --help
+our $VERSION = '$Revision: 1.22 $'; #used by Getopt in the case of --version or --help
 $VERSION =~ s/\s*\$Revision:\s*//;
 $VERSION =~ s/\s*\$\s*$//;
 $Getopt::Std::STANDARD_HELP_VERSION = 1; #so it stops after version message
@@ -322,7 +322,8 @@ sub serveClient {
 	Report("WARNING: Client connection made but no parameters passed: ignoring.\n", 0, $share, WARNING_COLOUR);
 	return;
  }
- my @commands = split /\n/, $data;
+ my @commands = split /\n/, $data, -1; #-1 needed to preserve trailing blank fields (i.e. more than one \n in a row at the end when a blank destination path is specified)
+ pop @commands; #remove the extra blank field after the last \n, put in as a result of the -1 arg to split above
  $client = shift @commands;
  my $identifier = shift @commands;
  $share->lock(LOCK_EX);
