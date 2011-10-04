@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.cpp,v 1.27 2011/08/19 10:31:14 john_f Exp $
+ * $Id: dvs_sdi.cpp,v 1.28 2011/10/04 09:45:47 john_f Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -75,7 +75,6 @@ using namespace Ingex;
 
 const bool DEBUG_OFFSETS = false;
 const size_t DMA_ALIGN = 256;
-const bool CHECK_ALIGNMENT = false;
 const int MAX_AUDIO_DMA_PAIR_SIZE = 0x6000; // Size of audio DMA block can vary with SDK version
 const int MAX_VIDEO_DMA_SIZE = 0x3F6000; // Size varies with raster and card type
 
@@ -136,6 +135,7 @@ int secondary_line_shift = 0;
 
 int verbose = 0;
 int verbose_channel = -1;    // which channel to show when verbose is on
+bool show_card_info = false;
 int naudioch = 4; // possible values 4, 8 or 16
 int test_avsync = 0;
 uint8_t *dma_buffer[MAX_CHANNELS];
@@ -203,6 +203,15 @@ uint8_t *no_video_secondary_frame = NULL;    // captioned black frame saying "NO
 #endif
 #ifndef SV_AUDIOAESROUTING_4_4
 #define SV_AUDIOAESROUTING_4_4      3
+#endif
+#ifndef SV_FIFO_DMA_ON
+#define SV_FIFO_DMA_ON 0x01
+#endif
+#ifndef SV_DEVTYPE_ATOMIX
+#define SV_DEVTYPE_ATOMIX 22
+#endif
+#ifndef SV_DEVTYPE_ATOMIXLT
+#define SV_DEVTYPE_ATOMIXLT 25
 #endif
 
 // Functions in local context
@@ -399,6 +408,147 @@ int check_sdk_version3(void)
 
     return result;
 }
+
+/**
+Show features of installed DVS cards.
+Thanks to guhlda for contributed code.
+*/
+void print_dvs_card_features(int card)
+{
+    char card_str[64] = {0};
+    sv_handle * sv = NULL;
+    int audiochannels = 0;
+    int devtype = 0;
+    int sn = 0;
+    int ret;
+    int val;
+
+    snprintf(card_str, sizeof(card_str)-1, "PCI,card=%d", card);
+    ret = sv_openex(& sv,
+                    card_str,
+                    SV_OPENPROGRAM_DEMOPROGRAM,
+                    SV_OPENTYPE_INPUT,      // Open V+A input
+                    0,
+                    0);
+    if (ret != SV_OK)
+    {
+        logTF("card %d: could not open.\n", card);
+        return;
+    }
+
+    ret = sv_query(sv, SV_QUERY_DEVTYPE, 0, & devtype);
+    if (ret != SV_OK)
+    {
+        logTF("card %d: sv_query(SV_QUERY_DEVTYPE) returned %s\n", card, sv_geterrortext(ret));
+    }
+
+    // DVSserial number is decimal  MMxxxxxx where MM is the model number
+    ret = sv_query(sv, SV_QUERY_SERIALNUMBER, 0, & sn);
+    if (ret != SV_OK)
+    {
+        logTF("(query serial number error %s)\n", sv_geterrortext(ret));
+    }
+    else
+    {
+        char const * model = "";
+        switch (sn / 1000000)
+        {
+        case  0: model = "Dummy"; break;
+        case 11: model = "SDStationOEM"; break;
+        case 19: model = "SDStationOEMII"; break;
+        case 13: model = "Centaurus"; break;
+        case 20: model = "CentaurusII PCI-X"; break;
+        case 23: model = "CentaurusII PCIe"; break;
+        case 24: model = "CentaurusII LT"; break;
+        case 27: model = "Atomix"; break;
+        case 41: model = "Atomix LT 5-BNC"; break;
+        case 42: model = "Atomix LT 4-BNC"; break;
+        case 43: model = "Atomix HDMI"; break;
+        default: model = ((devtype == SV_DEVTYPE_ATOMIX) ? "generic Atomix" : 
+                          (devtype == SV_DEVTYPE_ATOMIXLT) ? "generic Atomix LT" :
+                          (devtype == SV_DEVTYPE_CENTAURUS) ? "generic Centaurus" :
+                          "UNKNOWN MODEL"); break;
+        }
+        
+        logTF("card %d: %s #%08u\n", card, model, sn);
+    }
+
+    ret = sv_query(sv, SV_QUERY_FEATURE_AUDIOCHANNELS, 0, & audiochannels);
+    if (ret != SV_OK)
+    {
+        logTF("card %d: sv_query(SV_QUERY_FEATURE_AUDIOCHANNELS) returned %s\n", card, sv_geterrortext(ret));
+    }
+    else
+    {
+        logTF("card %d: %d audio channels\n", card, audiochannels);
+    }
+
+    int multichannel_mode = 0;
+    ret = sv_option_get(sv, SV_OPTION_MULTICHANNEL, &multichannel_mode);
+    if (ret != SV_OK)
+    {
+        logTF("card %d: sv_option_get(SV_OPTION_MULTICHANNEL) returned %s\n", card, sv_geterrortext(ret));
+    }
+    else
+    {
+        logTF("card %d: MULTICHANNEL    %s (support of multichannel functionality).\n", card, multichannel_mode ? "on " : "off");
+    }
+
+    ret = sv_query(sv, SV_QUERY_FEATURE, 0, & val);
+    if (ret != SV_OK)
+    {
+        logTF("card %d: sv_query(SV_QUERY_FEATURE) returned %s\n", card, sv_geterrortext(ret));
+    }
+    else
+    {
+        logTF("card %d: CAPTURE         %s (support of sv_capture() functionality).\n",
+              card, (val & SV_FEATURE_CAPTURE) ? "on " : "off");
+        logTF("card %d: DUALLINK        %s (support of dual-link operation).\n",
+              card, (val & SV_FEATURE_DUALLINK) ? "on " : "off");
+        logTF("card %d: INDEPENDENT_IO  %s (support of IO different rasters and storage formats).\n",
+              card, (val & SV_FEATURE_INDEPENDENT_IO) ? "on " : "off");
+        logTF("card %d: KEYCHANNEL      %s (support of key channel operation).\n",
+              card, (val & SV_FEATURE_KEYCHANNEL) ? "on " : "off");
+        logTF("card %d: LUTSUPPORT      %s (support of loadable LUTs).\n",
+              card, (val & SV_FEATURE_LUTSUPPORT) ? "on " : "off");
+        logTF("card %d: MIXERPROCESSING %s (support of mixing of channels coming from memory).\n",
+              card, (val & SV_FEATURE_MIXERPROCESSING) ? "on " : "off");
+        logTF("card %d: MULTIJACK       %s (support of more than two default jacks.).\n",
+              card, (val & SV_FEATURE_MULTIJACK) ? "on " : "off");
+        logTF("card %d: RASTERLIST      %s (support of a raster list generation).\n",
+              card, (val & SV_FEATURE_RASTERLIST) ? "on " : "off");
+        logTF("card %d: ZOOMSUPPORT     %s (support of zooming and panning).\n",
+              card, (val & SV_FEATURE_ZOOMSUPPORT) ? "on " : "off");
+    }
+
+#if 0
+    int expire = 0;
+    int features [100];
+    int keys [4 * 8];
+    memset (features,0, sizeof(features));
+    memset (keys,0, sizeof(keys));
+
+    ret = sv_licenceinfo(sv, & devtype, & sn, & expire, (unsigned char*)features, sizeof(features), (unsigned char*)keys, sizeof(keys));
+    if (ret != SV_OK)
+        logTF("card %d: get licence info: %s\n", card, sv_geterrortext(ret));
+    else
+    {
+        for (unsigned i = 0; i < (sizeof(features) / sizeof(features[0])); i++)
+            if (features[i] != 0)
+                logTF("card %d: feature[%d]=%d '%s'\n", card, i, features[i], sv_licencebit2string(sv, features[i]));
+
+        logTF("card %d: keys=%X %X %X %X %X %X %X %X\n", card, keys[0], keys[1], keys[2], keys[3], keys[4], keys[5], keys[6], keys[7]);
+        for (unsigned i = 8; i < (sizeof(keys) / sizeof(keys[0])); i+= 8)
+            logTF("              %X %X %X %X %X %X %X %X\n",  keys[i+0], keys[i+1], keys[i+2], keys[i+3], keys[i+4], keys[i+5], keys[i+6], keys[i+7]);
+    }
+#endif
+
+    if (sv)
+    {
+        sv_close(sv);
+    }
+}
+
 
 /*
 void framerate_for_videomode(int videomode, int *p_numer, int *p_denom)
@@ -2231,12 +2381,12 @@ void * sdi_monitor(void *arg)
 #endif
 
     SV_CHECK( sv_fifo_init( sv,
-                            &poutput,   // Returned FIFO handle
-                            1,          // Input
+                            &poutput,       // Returned FIFO handle
+                            1,              // Input
                             0,          // bShared (obsolete, must be zero)
-                            1,          // DMA FIFO
-                            flagbase,   // Base SV_FIFO_FLAG_xxxx flags
-                            0) );       // nFrames (0 means use maximum)
+                            SV_FIFO_DMA_ON, // bDMA ON
+                            flagbase,       // Base SV_FIFO_FLAG_xxxx flags
+                            0) );           // nFrames (0 means use maximum)
 
     SV_CHECK( sv_fifo_start(sv, poutput) );
 
@@ -2331,12 +2481,16 @@ void usage_exit(void)
     fprintf(stderr, "    -mc <master ch>      channel to use as timecode master: 0..7 [default -1 i.e. no master]\n");
     fprintf(stderr, "    -c <max channels>    maximum number of channels to use for capture\n");
     fprintf(stderr, "    -m <max memory MiB>  maximum memory to use for ring buffers in MiB [default use all available]\n");
-    fprintf(stderr, "    -a8                  use 8 audio tracks per video channel\n");
-    fprintf(stderr, "    -a16                 use 16 audio tracks per video channel\n");
-    fprintf(stderr, "    -aes                 use AES/EBU audio with default routing\n");
-    fprintf(stderr, "    -aes4                use AES/EBU audio with 4,4 routing\n");
-    fprintf(stderr, "    -aes8                use AES/EBU audio with 8,8 routing\n");
-    fprintf(stderr, "    -aes16               use AES/EBU audio with 16,0 routing\n");
+    fprintf(stderr, "    -a8                  use 8 audio tracks per video channel (default 4)\n");
+    fprintf(stderr, "    -a16                 use 16 audio tracks per video channel (default 4)\n");
+    fprintf(stderr, "    -aes                 use AES/EBU audio with default routing (8:8 if multichannel, else 16:0)\n");
+    fprintf(stderr, "    -aes4:4              (-aes4) use AES/EBU audio with 4:4 routing (AES1..4 & 9..12 -> 1st chan, AES5..8 & 13..16 -> 2nd vchan)\n");
+    fprintf(stderr, "    -aes8:8              (-aes8) use AES/EBU audio with 8:8 routing (AES1..8 -> 1st vchan, AES9..16 -> 2nd vchan)\n");
+    fprintf(stderr, "    -aes16:0             (-aes16) use AES/EBU audio with 16:0 routing (all AES channels to 1st video channel)\n");
+#ifdef SV_AUDIOAESROUTING_8_0
+    fprintf(stderr, "    -aes8:0              use AES/EBU audio with 8:0 routing (AES8..16 -> 1st video channel) Atomix LT 4-BNC only!\n");
+    fprintf(stderr, "    -aes0:8              use AES/EBU audio with 0:8 routing (AES8..16 -> 2nd video channel) Atomix LT 4-BNC only!\n");
+#endif
     //fprintf(stderr, "    -audint              use interleaved audio for capture (not available on SDStation cards)\n");
     fprintf(stderr, "    -avsync              perform avsync analysis - requires clapper-board input video\n");
     fprintf(stderr, "    -b <video_sample>    benchmark using video_sample instead of captured UYVY video frames\n");
@@ -2346,6 +2500,7 @@ void usage_exit(void)
     fprintf(stderr, "    -d <channel>         channel number to print verbose debug messages for\n");
     fprintf(stderr, "    -h2s_ffmpeg          use ffmpeg swscale to convert HD to SD [default use YUVlib]\n");
     fprintf(stderr, "    -h2s_filter          use filter when converting HD to SD using YUVlib\n");
+    fprintf(stderr, "    -info                show info on installed DVS cards\n");
     fprintf(stderr, "    -h                   usage\n");
     fprintf(stderr, "\n");
     exit(1);
@@ -2386,6 +2541,10 @@ int main (int argc, char ** argv)
         else if (strcmp(argv[n], "-q") == 0)
         {
             verbose = 0;
+        }
+        else if (strcmp(argv[n], "-info") == 0)
+        {
+            show_card_info = true;
         }
         else if (strcmp(argv[n], "-h") == 0)
         {
@@ -2640,21 +2799,33 @@ int main (int argc, char ** argv)
             aes_audio = 1;
             aes_routing = SV_AUDIOAESROUTING_DEFAULT;
         }
-        else if (strcmp(argv[n], "-aes4") == 0)
+        else if (strcmp(argv[n], "-aes4") == 0 || strcmp(argv[n], "-aes4:4") == 0)
         {
             aes_audio = 1;
             aes_routing = SV_AUDIOAESROUTING_4_4;
         }
-        else if (strcmp(argv[n], "-aes8") == 0)
+        else if (strcmp(argv[n], "-aes8") == 0 || strcmp(argv[n], "-aes8:8") == 0)
         {
             aes_audio = 1;
             aes_routing = SV_AUDIOAESROUTING_8_8;
         }
-        else if (strcmp(argv[n], "-aes16") == 0)
+        else if (strcmp(argv[n], "-aes16") == 0 || strcmp(argv[n], "-aes16:0") == 0)
         {
             aes_audio = 1;
             aes_routing = SV_AUDIOAESROUTING_16_0;
         }
+#ifdef SV_AUDIOAESROUTING_8_0
+        else if (strcmp(argv[n], "-aes8:0") == 0)
+        {
+            aes_audio = 1;
+            aes_routing = SV_AUDIOAESROUTING_8_0;
+        }
+        else if (strcmp(argv[n], "-aes0:8") == 0)
+        {
+            aes_audio = 1;
+            aes_routing = SV_AUDIOAESROUTING_0_8;
+        }
+#endif
         else if (strcmp(argv[n], "-audint") == 0)
         {
             AUDIO_INTERLEAVED = true;
@@ -2726,6 +2897,11 @@ int main (int argc, char ** argv)
         int channel = 0;
         for (card = 0; card < max_channels && channel < max_channels; card++)
         {
+            if (show_card_info)
+            {
+                print_dvs_card_features(card);
+            }
+
             char card_str[64] = {0};
 
             snprintf(card_str, sizeof(card_str)-1, "PCI,card=%d,channel=0", card);
@@ -2750,12 +2926,12 @@ int main (int argc, char ** argv)
             }
             if (res == SV_OK)
             {
-                if (CHECK_ALIGNMENT)
+                if (show_card_info)
                 {
                     // Check required memory alignment for DMA
                     int alignment = 0;
                     sv_query(a_sv[channel], SV_QUERY_DMAALIGNMENT, 0, &alignment);
-                    fprintf(stderr, "Minimum memory alignment for DMA transfers is %d; we are using %zu.\n", alignment, DMA_ALIGN);
+                    logTF("card %d: Minimum memory alignment for DMA transfers is %d; we are using %zu.\n", card, alignment, DMA_ALIGN);
                 }
 
                 //sv_status(a_sv[channel], &status_info);
@@ -2885,6 +3061,11 @@ int main (int argc, char ** argv)
         int card;
         for (card = 0; card < max_channels; card++)
         {
+            if (show_card_info)
+            {
+                print_dvs_card_features(card);
+            }
+
             char card_str[20] = {0};
     
             snprintf(card_str, sizeof(card_str)-1, "PCI,card=%d", card);
