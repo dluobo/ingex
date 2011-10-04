@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sink.c,v 1.24 2011/09/27 10:14:29 philipn Exp $
+ * $Id: dvs_sink.c,v 1.25 2011/10/04 09:47:59 john_f Exp $
  *
  *
  *
@@ -75,6 +75,10 @@ int dvs_card_is_available(int card, int channel)
 #include "dvs_clib.h"
 #include "dvs_fifo.h"
 
+// Define missing macros for older SDKs
+#ifndef SV_FIFO_DMA_ON
+#define SV_FIFO_DMA_ON 1
+#endif
 
 /* use a hack to try correct for AV sync issues found with the DVS SDK version 2.57 */
 #if (DVS_VERSION_MAJOR < 3)
@@ -1919,12 +1923,12 @@ int dvs_open(int dvsCard, int dvsChannel, SDIVITCSource sdiVITCSource, SDIVITCSo
 
 
     SV_CHK_OFAIL( sv_fifo_init( newSink->sv,
-                            &newSink->svfifo,       // FIFO handle
-                            FALSE,          // bInput (FALSE for playback)
-                            FALSE,          // bShared (TRUE for input/output share memory)
-                            TRUE,           // bDMA
-                            FALSE,          // reserved
-                            numBuffers) );           // nFrames (0 means use maximum)
+                            &newSink->svfifo,   // FIFO handle
+                            0,                  // jack (0 for default output fifo)
+                            0,                  // bShared (obsolete, must be 0)
+                            SV_FIFO_DMA_ON,     // dma
+                            0,                  // flagbase
+                            numBuffers) );      // nFrames (0 means use maximum)
 
 
     SV_CHK_OFAIL(sv_fifo_status(newSink->sv, newSink->svfifo, &fifo_info));
@@ -1943,7 +1947,14 @@ int dvs_open(int dvsCard, int dvsChannel, SDIVITCSource sdiVITCSource, SDIVITCSo
        the fifo has to be started */
     for (i = 0; i < fifo_info.nbuffers - 2; i++)
     {
+#if 1
         display_on_sv_fifo(newSink, &newSink->fifoBuffer[0]);
+#else
+        // Since SDK v4.0.2.x, some FIFO synchronisation must be achieved before calling sv_fifo_get_buffer,
+        // by calling either sv_stop(), sv_black() or sv_videomode().
+        // So advantageously use sv_black() instead of display_on_sv_fifo().
+        sv_black(newSink->sv);
+#endif
     }
 
     PTHREAD_MUTEX_UNLOCK(&newSink->frameInfosMutex);
