@@ -1,5 +1,5 @@
 /*
- * $Id: Timecode.cpp,v 1.12 2011/02/18 16:26:54 john_f Exp $
+ * $Id: Timecode.cpp,v 1.13 2011/10/11 11:02:26 john_f Exp $
  *
  * Class to hold a Timecode
  *
@@ -309,8 +309,15 @@ void Timecode::UpdateHoursMinsEtc()
 
         frames -= 2;
 
-        unit_minute = frames / DF_FRAMES_PER_MINUTE;
-        frames %= DF_FRAMES_PER_MINUTE;
+        if (frames < 0)
+        {
+            unit_minute = 0;
+        }
+        else
+        {
+            unit_minute = frames / DF_FRAMES_PER_MINUTE;
+            frames %= DF_FRAMES_PER_MINUTE;
+        }
         mMinutes = ten_minute * 10 + unit_minute;
 
         // frames now contains frame in minute @ 1798 frames per minute
