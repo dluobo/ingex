@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder.cpp,v 1.13 2011/09/07 15:01:05 john_f Exp $
+ * $Id: ffmpeg_encoder.cpp,v 1.14 2011/10/14 09:49:56 john_f Exp $
  *
  * Encode uncompressed video to DV using libavcodec
  *
@@ -248,12 +248,10 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init(MaterialResolution::EnumType res, 
         case MaterialResolution::DV25_MOV:
             switch (raster)
             {
-            case Ingex::VideoRaster::PAL_B:
-            case Ingex::VideoRaster::PAL_B_4x3:
-            case Ingex::VideoRaster::PAL_B_16x9:
+            case Ingex::VideoRaster::PAL_4x3_B:
+            case Ingex::VideoRaster::PAL_16x9_B:
                 encoded_frame_size = 144000;
                 break;
-            case Ingex::VideoRaster::NTSC:
             case Ingex::VideoRaster::NTSC_4x3:
             case Ingex::VideoRaster::NTSC_16x9:
                 height = 480;
@@ -269,12 +267,10 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init(MaterialResolution::EnumType res, 
         case MaterialResolution::DV50_MOV:
             switch (raster)
             {
-            case Ingex::VideoRaster::PAL_B:
-            case Ingex::VideoRaster::PAL_B_4x3:
-            case Ingex::VideoRaster::PAL_B_16x9:
+            case Ingex::VideoRaster::PAL_4x3_B:
+            case Ingex::VideoRaster::PAL_16x9_B:
                 encoded_frame_size = 288000;
                 break;
-            case Ingex::VideoRaster::NTSC:
             case Ingex::VideoRaster::NTSC_4x3:
             case Ingex::VideoRaster::NTSC_16x9:
                 height = 480;
@@ -300,16 +296,18 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init(MaterialResolution::EnumType res, 
             //encoded_frame_size = (bit_rate / 8) * fps_den / fps_num;
             switch (raster)
             {
-            case Ingex::VideoRaster::PAL:
             case Ingex::VideoRaster::PAL_4x3:
             case Ingex::VideoRaster::PAL_16x9:
-            case Ingex::VideoRaster::PAL_592:
-            case Ingex::VideoRaster::PAL_608:
+            case Ingex::VideoRaster::PAL_592_4x3:
+            case Ingex::VideoRaster::PAL_592_16x9:
+            case Ingex::VideoRaster::PAL_608_4x3:
+            case Ingex::VideoRaster::PAL_608_16x9:
                 buffer_size = 1200000;
                 break;
-            case Ingex::VideoRaster::NTSC:
             case Ingex::VideoRaster::NTSC_4x3:
             case Ingex::VideoRaster::NTSC_16x9:
+            case Ingex::VideoRaster::NTSC_502_4x3:
+            case Ingex::VideoRaster::NTSC_502_16x9:
                 buffer_size = 1001000;
                 break;
             default:
@@ -332,16 +330,18 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init(MaterialResolution::EnumType res, 
             //encoded_frame_size = (bit_rate / 8) * fps_den / fps_num;
             switch (raster)
             {
-            case Ingex::VideoRaster::PAL:
             case Ingex::VideoRaster::PAL_4x3:
             case Ingex::VideoRaster::PAL_16x9:
-            case Ingex::VideoRaster::PAL_592:
-            case Ingex::VideoRaster::PAL_608:
+            case Ingex::VideoRaster::PAL_592_4x3:
+            case Ingex::VideoRaster::PAL_592_16x9:
+            case Ingex::VideoRaster::PAL_608_4x3:
+            case Ingex::VideoRaster::PAL_608_16x9:
                 buffer_size = 1600000;
                 break;
-            case Ingex::VideoRaster::NTSC:
             case Ingex::VideoRaster::NTSC_4x3:
             case Ingex::VideoRaster::NTSC_16x9:
+            case Ingex::VideoRaster::NTSC_502_4x3:
+            case Ingex::VideoRaster::NTSC_502_16x9:
                 buffer_size = 1334667;
                 break;
             default:
@@ -364,16 +364,18 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init(MaterialResolution::EnumType res, 
             //encoded_frame_size = (bit_rate / 8) * fps_den / fps_num;
             switch (raster)
             {
-            case Ingex::VideoRaster::PAL:
             case Ingex::VideoRaster::PAL_4x3:
             case Ingex::VideoRaster::PAL_16x9:
-            case Ingex::VideoRaster::PAL_592:
-            case Ingex::VideoRaster::PAL_608:
+            case Ingex::VideoRaster::PAL_592_4x3:
+            case Ingex::VideoRaster::PAL_592_16x9:
+            case Ingex::VideoRaster::PAL_608_4x3:
+            case Ingex::VideoRaster::PAL_608_16x9:
                 buffer_size = 2000000;
                 break;
-            case Ingex::VideoRaster::NTSC:
             case Ingex::VideoRaster::NTSC_4x3:
             case Ingex::VideoRaster::NTSC_16x9:
+            case Ingex::VideoRaster::NTSC_502_4x3:
+            case Ingex::VideoRaster::NTSC_502_16x9:
                 buffer_size = 1668334;
                 break;
             default:
@@ -526,16 +528,18 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init(MaterialResolution::EnumType res, 
             // stored image height is 608 for PAL and 512 for NTSC
             switch (raster)
             {
-            case Ingex::VideoRaster::PAL:
             case Ingex::VideoRaster::PAL_4x3:
             case Ingex::VideoRaster::PAL_16x9:
-            case Ingex::VideoRaster::PAL_592:
-            case Ingex::VideoRaster::PAL_608:
+            case Ingex::VideoRaster::PAL_592_4x3:
+            case Ingex::VideoRaster::PAL_592_16x9:
+            case Ingex::VideoRaster::PAL_608_4x3:
+            case Ingex::VideoRaster::PAL_608_16x9:
                 encoder->padtop = 608 - height;
                 break;
-            case Ingex::VideoRaster::NTSC:
             case Ingex::VideoRaster::NTSC_4x3:
             case Ingex::VideoRaster::NTSC_16x9:
+            case Ingex::VideoRaster::NTSC_502_4x3:
+            case Ingex::VideoRaster::NTSC_502_16x9:
                 encoder->padtop = 512 - height;
                 break;
             default:

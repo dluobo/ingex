@@ -1,5 +1,5 @@
 /*
- * $Id: write_avid_mxf.c,v 1.28 2011/09/09 11:17:42 philipn Exp $
+ * $Id: write_avid_mxf.c,v 1.29 2011/10/14 09:49:55 john_f Exp $
  *
  * Write video and audio to MXF files supported by Avid editing software
  *
@@ -136,6 +136,7 @@ typedef struct
     
     /* Avid uncompressed static essence data */
     uint8_t* vbiData;
+    int64_t vbiSize;
     uint8_t* startOffsetData;
     
     /* these are references and should not be free'd */
@@ -1975,17 +1976,9 @@ static int create_track_writer(AvidClipWriter* clipWriter, PackageDefinitions* p
                 newTrackWriter->frameLayout = 3; /* MixedFields */
                 newTrackWriter->imageAlignmentOffset = g_uncImageAlignmentOffset;
                 newTrackWriter->imageStartOffset = g_uncPALStartOffsetSize;
-                
-                CHK_MALLOC_ARRAY_OFAIL(newTrackWriter->vbiData, uint8_t, g_uncPALVBISize);
-                for (i = 0; i < g_uncPALVBISize / 4; i++)
-                {
-                    newTrackWriter->vbiData[i * 4] = 0x80; // U
-                    newTrackWriter->vbiData[i * 4 + 1] = 0x10; // Y
-                    newTrackWriter->vbiData[i * 4 + 2] = 0x80; // V
-                    newTrackWriter->vbiData[i * 4 + 3] = 0x10; // Y 
-                }
-                CHK_MALLOC_ARRAY_OFAIL(newTrackWriter->startOffsetData, uint8_t, g_uncPALStartOffsetSize);
-                memset(newTrackWriter->startOffsetData, 0, g_uncPALStartOffsetSize);
+
+                /* vbiSize is modified below if input height > display height */
+                newTrackWriter->vbiSize = g_uncPALVBISize;
             }
             else
             {
@@ -2006,18 +1999,34 @@ static int create_track_writer(AvidClipWriter* clipWriter, PackageDefinitions* p
                 newTrackWriter->frameLayout = 3; /* MixedFields */
                 newTrackWriter->imageAlignmentOffset = g_uncImageAlignmentOffset;
                 newTrackWriter->imageStartOffset = g_uncNTSCStartOffsetSize;
-                
-                CHK_MALLOC_ARRAY_OFAIL(newTrackWriter->vbiData, uint8_t, g_uncNTSCVBISize);
-                for (i = 0; i < g_uncNTSCVBISize / 4; i++)
+
+                /* vbiSize is modified below if input height > display height */
+                newTrackWriter->vbiSize = g_uncNTSCVBISize;
+            }
+
+            CHK_ORET(filePackage->essenceInfo.inputHeight == 0 ||
+                     filePackage->essenceInfo.inputHeight >= newTrackWriter->displayHeight);
+            if (filePackage->essenceInfo.inputHeight > newTrackWriter->displayHeight)
+            {
+                newTrackWriter->vbiSize = newTrackWriter->storedWidth *
+                    ((int64_t)newTrackWriter->storedHeight - filePackage->essenceInfo.inputHeight) * 2;
+                /* note that vbiSize can be negative */
+            }
+            if (newTrackWriter->vbiSize > 0)
+            {
+                CHK_MALLOC_ARRAY_OFAIL(newTrackWriter->vbiData, uint8_t, newTrackWriter->vbiSize);
+                for (i = 0; i < newTrackWriter->vbiSize / 4; i++)
                 {
-                    newTrackWriter->vbiData[i * 4] = 0x80; // U
+                    newTrackWriter->vbiData[i * 4    ] = 0x80; // U
                     newTrackWriter->vbiData[i * 4 + 1] = 0x10; // Y
                     newTrackWriter->vbiData[i * 4 + 2] = 0x80; // V
                     newTrackWriter->vbiData[i * 4 + 3] = 0x10; // Y 
                 }
-                CHK_MALLOC_ARRAY_OFAIL(newTrackWriter->startOffsetData, uint8_t, g_uncNTSCStartOffsetSize);
-                memset(newTrackWriter->startOffsetData, 0, g_uncNTSCStartOffsetSize);
             }
+
+            CHK_MALLOC_ARRAY_OFAIL(newTrackWriter->startOffsetData, uint8_t, newTrackWriter->imageStartOffset);
+            memset(newTrackWriter->startOffsetData, 0, newTrackWriter->imageStartOffset);
+
             newTrackWriter->imageAspectRatio = filePackage->essenceInfo.imageAspectRatio;
             newTrackWriter->essenceElementKey = MXF_EE_K(UncClipWrapped);
             newTrackWriter->sourceTrackNumber = MXF_UNC_TRACK_NUM(0x01, MXF_UNC_CLIP_WRAPPED_EE_TYPE, 0x01);
@@ -2056,8 +2065,8 @@ static int create_track_writer(AvidClipWriter* clipWriter, PackageDefinitions* p
             newTrackWriter->imageAlignmentOffset = g_uncImageAlignmentOffset;
             newTrackWriter->imageStartOffset = g_unc1080iStartOffsetSize;
 
-            CHK_MALLOC_ARRAY_OFAIL(newTrackWriter->startOffsetData, uint8_t, g_unc1080iStartOffsetSize);
-            memset(newTrackWriter->startOffsetData, 0, g_unc1080iStartOffsetSize);
+            CHK_MALLOC_ARRAY_OFAIL(newTrackWriter->startOffsetData, uint8_t, newTrackWriter->imageStartOffset);
+            memset(newTrackWriter->startOffsetData, 0, newTrackWriter->imageStartOffset);
 
             newTrackWriter->imageAspectRatio = filePackage->essenceInfo.imageAspectRatio;
             newTrackWriter->essenceElementKey = MXF_EE_K(UncClipWrapped);
@@ -2323,59 +2332,28 @@ int write_samples(AvidClipWriter* clipWriter, uint32_t materialTrackID, uint32_t
             writer->duration += numSamples;
             break;
         case UncUYVY:
+        case Unc1080iUYVY:
             CHK_ORET(numSamples == 1);
-            if (clipWriter->projectFormat == PAL_25i)
+            CHK_ORET(size + writer->imageStartOffset + writer->vbiSize == writer->editUnitByteCount);
+            CHK_ORET(mxf_write_essence_element_data(writer->mxfFile, writer->essenceElement, writer->startOffsetData,
+                                                    writer->imageStartOffset));
+            if (writer->vbiSize >= 0)
             {
-                if (size != numSamples * writer->editUnitByteCount)
+                if (writer->vbiSize > 0)
                 {
-                    if (size + g_uncPALStartOffsetSize == numSamples * writer->editUnitByteCount)
-                    {
-                        /* sample includes VBI - write start offset for alignment */
-                        CHK_ORET(mxf_write_essence_element_data(writer->mxfFile, writer->essenceElement, writer->startOffsetData, g_uncPALStartOffsetSize));
-                    }
-                    else
-                    {
-                        CHK_ORET((size + g_uncPALStartOffsetSize + g_uncPALVBISize) == numSamples * writer->editUnitByteCount);
-                        /* write start offset for alignment */
-                        CHK_ORET(mxf_write_essence_element_data(writer->mxfFile, writer->essenceElement, writer->startOffsetData, g_uncPALStartOffsetSize));
-                        /* write VBI */
-                        CHK_ORET(mxf_write_essence_element_data(writer->mxfFile, writer->essenceElement, writer->vbiData, g_uncPALVBISize));
-                    }
+                    /* black VBI lines */
+                    CHK_ORET(mxf_write_essence_element_data(writer->mxfFile, writer->essenceElement, writer->vbiData,
+                                                            writer->vbiSize));
                 }
+                CHK_ORET(mxf_write_essence_element_data(writer->mxfFile, writer->essenceElement, data, size));
             }
             else
             {
-                if (size != numSamples * writer->editUnitByteCount)
-                {
-                    if (size + g_uncNTSCStartOffsetSize == numSamples * writer->editUnitByteCount)
-                    {
-                        /* sample includes VBI - write start offset for alignment */
-                        CHK_ORET(mxf_write_essence_element_data(writer->mxfFile, writer->essenceElement, writer->startOffsetData, g_uncNTSCStartOffsetSize));
-                    }
-                    else
-                    {
-                        CHK_ORET((size + g_uncNTSCStartOffsetSize + g_uncNTSCVBISize) == numSamples * writer->editUnitByteCount);
-                        /* write start offset for alignment */
-                        CHK_ORET(mxf_write_essence_element_data(writer->mxfFile, writer->essenceElement, writer->startOffsetData, g_uncNTSCStartOffsetSize));
-                        /* write VBI */
-                        CHK_ORET(mxf_write_essence_element_data(writer->mxfFile, writer->essenceElement, writer->vbiData, g_uncNTSCVBISize));
-                    }
-                }
+                /* write input data, but skip extra (-writer->vbiSize) input VBI data */
+                CHK_ORET(mxf_write_essence_element_data(writer->mxfFile, writer->essenceElement,
+                                                        data - writer->vbiSize, size + writer->vbiSize));
             }
-            CHK_ORET(mxf_write_essence_element_data(writer->mxfFile, writer->essenceElement, data, size));
-            writer->duration += numSamples;
-            break;
-        case Unc1080iUYVY:
-            CHK_ORET(numSamples == 1);
-            if (size != numSamples * writer->editUnitByteCount)
-            {
-                CHK_ORET((size + g_unc1080iStartOffsetSize) == numSamples * writer->editUnitByteCount);
-                /* write start offset for alignment */
-                CHK_ORET(mxf_write_essence_element_data(writer->mxfFile, writer->essenceElement, writer->startOffsetData, 
-                    g_unc1080iStartOffsetSize));
-            }
-            CHK_ORET(mxf_write_essence_element_data(writer->mxfFile, writer->essenceElement, data, size));
-            writer->duration += numSamples;
+            writer->duration++;
             break;
         default:
             assert(0);
@@ -2400,26 +2378,31 @@ int write_sample_data(AvidClipWriter* clipWriter, uint32_t materialTrackID, cons
     TrackWriter* writer;
     CHK_ORET(get_track_writer(clipWriter, materialTrackID, &writer));
 
-    if (writer->essenceType == UncUYVY && writer->sampleDataSize == 0)
+    /* Uncompressed video data has a start offset and SD also has VBI data */
+    if ((writer->essenceType == UncUYVY || writer->essenceType == Unc1080iUYVY) &&
+        writer->sampleDataSize == 0)
     {
-        /* write start offset for alignment */
-        CHK_ORET(mxf_write_essence_element_data(writer->mxfFile, writer->essenceElement, writer->startOffsetData, 
-            g_uncPALStartOffsetSize));
-        /* write VBI */
-        CHK_ORET(mxf_write_essence_element_data(writer->mxfFile, writer->essenceElement, writer->vbiData, 
-            g_uncPALVBISize));
+        CHK_ORET(mxf_write_essence_element_data(writer->mxfFile, writer->essenceElement, writer->startOffsetData,
+                                                writer->imageStartOffset));
+        if (writer->vbiSize > 0)
+        {
+            CHK_ORET(mxf_write_essence_element_data(writer->mxfFile, writer->essenceElement, writer->vbiData,
+                                                    writer->vbiSize));
+        }
     }
-    else if (writer->essenceType == Unc1080iUYVY && writer->sampleDataSize == 0)
-    {
-        /* write start offset for alignment */
-        CHK_ORET(mxf_write_essence_element_data(writer->mxfFile, writer->essenceElement, writer->startOffsetData, 
-            g_uncPALStartOffsetSize));
-    }
-    else
+
+    if (writer->sampleDataSize + writer->vbiSize >= 0)
     {
         CHK_ORET(mxf_write_essence_element_data(writer->mxfFile, writer->essenceElement, data, size));
     }
-    
+    else if (writer->sampleDataSize + writer->vbiSize + size > 0)
+    {
+        /* write data, skipping extra VBI data */
+        uint32_t writeSize = (uint32_t)(size - (writer->sampleDataSize + writer->vbiSize));
+        CHK_ORET(mxf_write_essence_element_data(writer->mxfFile, writer->essenceElement,
+                                                data + (size - writeSize), writeSize));
+    }
+
     writer->sampleDataSize += size;
     return 1;
 }
@@ -2460,17 +2443,11 @@ int end_write_samples(AvidClipWriter* clipWriter, uint32_t materialTrackID, uint
             writer->duration += numSamples;
             break;
         case UncUYVY:
-            /* Avid uncompressed SD video requires padding and VBI and currently only accepts 1 sample at a time */
-            CHK_ORET(numSamples == 1);
-            CHK_ORET((writer->sampleDataSize + g_uncPALStartOffsetSize + g_uncPALVBISize) == 
-                numSamples * writer->editUnitByteCount);
-            writer->duration += numSamples;
-            break;
         case Unc1080iUYVY:
-            /* Avid uncompressed HD 1080i video requires padding and currently only accepts 1 sample at a time */
+            /* Avid uncompressed video requires padding and VBI and currently only accepts 1 sample at a time */
             CHK_ORET(numSamples == 1);
-            CHK_ORET((writer->sampleDataSize + g_unc1080iStartOffsetSize) == numSamples * writer->editUnitByteCount);
-            writer->duration += numSamples;
+            CHK_ORET((writer->sampleDataSize + writer->imageStartOffset + writer->vbiSize) == writer->editUnitByteCount);
+            writer->duration++;
             break;
         default:
             assert(0);

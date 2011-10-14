@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder_av.cpp,v 1.15 2011/07/13 14:55:25 john_f Exp $
+ * $Id: ffmpeg_encoder_av.cpp,v 1.16 2011/10/14 09:49:56 john_f Exp $
  *
  * Encode AV and write to file.
  *
@@ -249,12 +249,10 @@ int init_video_dvd(internal_ffmpeg_encoder_t * enc, Ingex::VideoRaster::EnumType
     int top_field_first;
     switch (raster)
     {
-    case Ingex::VideoRaster::PAL:
     case Ingex::VideoRaster::PAL_4x3:
     case Ingex::VideoRaster::PAL_16x9:
         top_field_first = 1;
         break;
-    case Ingex::VideoRaster::NTSC:
     case Ingex::VideoRaster::NTSC_4x3:
     case Ingex::VideoRaster::NTSC_16x9:
         top_field_first = 0;
@@ -335,12 +333,10 @@ int init_video_mpeg4(internal_ffmpeg_encoder_t * enc, Ingex::VideoRaster::EnumTy
     int top_field_first;
     switch (raster)
     {
-    case Ingex::VideoRaster::PAL:
     case Ingex::VideoRaster::PAL_4x3:
     case Ingex::VideoRaster::PAL_16x9:
         top_field_first = 1;
         break;
-    case Ingex::VideoRaster::NTSC:
     case Ingex::VideoRaster::NTSC_4x3:
     case Ingex::VideoRaster::NTSC_16x9:
         top_field_first = 0;
@@ -443,13 +439,11 @@ int init_video_dv(internal_ffmpeg_encoder_t * enc, MaterialResolution::EnumType 
     case MaterialResolution::DV25_MOV:
         switch (raster)
         {
-        case Ingex::VideoRaster::PAL_B:
-        case Ingex::VideoRaster::PAL_B_4x3:
-        case Ingex::VideoRaster::PAL_B_16x9:
+        case Ingex::VideoRaster::PAL_4x3_B:
+        case Ingex::VideoRaster::PAL_16x9_B:
             codec_context->pix_fmt = PIX_FMT_YUV420P;
             encoded_frame_size = 144000;
             break;
-        case Ingex::VideoRaster::NTSC:
         case Ingex::VideoRaster::NTSC_4x3:
         case Ingex::VideoRaster::NTSC_16x9:
             codec_context->pix_fmt = PIX_FMT_YUV411P;
@@ -466,13 +460,11 @@ int init_video_dv(internal_ffmpeg_encoder_t * enc, MaterialResolution::EnumType 
     case MaterialResolution::DV50_MOV:
         switch (raster)
         {
-        case Ingex::VideoRaster::PAL_B:
-        case Ingex::VideoRaster::PAL_B_4x3:
-        case Ingex::VideoRaster::PAL_B_16x9:
+        case Ingex::VideoRaster::PAL_4x3_B:
+        case Ingex::VideoRaster::PAL_16x9_B:
             codec_context->pix_fmt = PIX_FMT_YUV422P;
             encoded_frame_size = 288000;
             break;
-        case Ingex::VideoRaster::NTSC:
         case Ingex::VideoRaster::NTSC_4x3:
         case Ingex::VideoRaster::NTSC_16x9:
             codec_context->pix_fmt = PIX_FMT_YUV422P;

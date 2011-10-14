@@ -34,7 +34,7 @@ extern int main(int argc, char *argv[])
     FILE            *input_fp = NULL;
     FILE            *output_fp = NULL;
     uint8_t            *in, *out;
-    Ingex::VideoRaster::EnumType raster = Ingex::VideoRaster::PAL;
+    Ingex::VideoRaster::EnumType raster = Ingex::VideoRaster::PAL_16x9;
     int                benchmark_encode = 0;
     int                n;
     MaterialResolution::EnumType res = MaterialResolution::NONE;
@@ -58,12 +58,12 @@ extern int main(int argc, char *argv[])
             if (strcmp(argv[n+1], "DV25") == 0)
             {
                 res = MaterialResolution::DV25_RAW;
-                raster = Ingex::VideoRaster::PAL_B;
+                raster = Ingex::VideoRaster::PAL_16x9_B;
             }
             else if (strcmp(argv[n+1], "DV50") == 0)
             {
                 res = MaterialResolution::DV50_RAW;
-                raster = Ingex::VideoRaster::PAL_B;
+                raster = Ingex::VideoRaster::PAL_16x9_B;
             }
             else if (strcmp(argv[n+1], "IMX30") == 0)
             {

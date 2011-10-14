@@ -1,5 +1,5 @@
 /*
- * $Id: test_ffmpeg_encoder_av.cpp,v 1.5 2010/09/06 15:11:11 john_f Exp $
+ * $Id: test_ffmpeg_encoder_av.cpp,v 1.6 2011/10/14 09:49:56 john_f Exp $
  *
  * Test ffmpeg encoder av
  *
@@ -434,13 +434,13 @@ int main(int argc, const char **argv)
         case MaterialResolution::MPEG4_MOV:
             output_width = 720;
             output_height = 576;
-            raster = Ingex::VideoRaster::PAL;
+            raster = notwide ? Ingex::VideoRaster::PAL_4x3 : Ingex::VideoRaster::PAL_16x9;
             break;
         case MaterialResolution::DV25_MOV:
         case MaterialResolution::DV50_MOV:
             output_width = 720;
             output_height = 576;
-            raster = Ingex::VideoRaster::PAL_B;
+            raster = notwide ? Ingex::VideoRaster::PAL_4x3_B : Ingex::VideoRaster::PAL_16x9_B;
             break;
         case MaterialResolution::DV100_MOV:
         case MaterialResolution::XDCAMHD422_MOV:
@@ -449,13 +449,10 @@ int main(int argc, const char **argv)
             raster = Ingex::VideoRaster::SMPTE274_25I;
             break;
         default:
-            raster = Ingex::VideoRaster::PAL;
+            raster = notwide ? Ingex::VideoRaster::PAL_4x3 : Ingex::VideoRaster::PAL_16x9;
             break;
     }
 
-    Ingex::Rational image_aspect = notwide ? Ingex::RATIONAL_4_3 : Ingex::RATIONAL_16_9;
-    Ingex::VideoRaster::ModifyAspect(raster, image_aspect);
-    
     output_filename = argv[cmdln_index];
     
     

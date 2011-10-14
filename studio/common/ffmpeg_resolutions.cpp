@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_resolutions.cpp,v 1.5 2010/09/29 16:55:08 john_f Exp $
+ * $Id: ffmpeg_resolutions.cpp,v 1.6 2011/10/14 09:49:56 john_f Exp $
  *
  * Info on ffmpeg parameters for a particular MaterialResolution
  *
@@ -33,14 +33,12 @@ void get_ffmpeg_params(MaterialResolution::EnumType res, Ingex::VideoRaster::Enu
     case MaterialResolution::DV25_MXF_ATOM:
         switch (raster)
         {
-        case Ingex::VideoRaster::PAL_B:
-        case Ingex::VideoRaster::PAL_B_4x3:
-        case Ingex::VideoRaster::PAL_B_16x9:
+        case Ingex::VideoRaster::PAL_4x3_B:
+        case Ingex::VideoRaster::PAL_16x9_B:
             codec_id = CODEC_ID_DVVIDEO;
             codec_type = CODEC_TYPE_VIDEO;
             pix_fmt = PIX_FMT_YUV420P;
             break;
-        case Ingex::VideoRaster::NTSC:
         case Ingex::VideoRaster::NTSC_4x3:
         case Ingex::VideoRaster::NTSC_16x9:
             codec_id = CODEC_ID_DVVIDEO;
@@ -58,10 +56,8 @@ void get_ffmpeg_params(MaterialResolution::EnumType res, Ingex::VideoRaster::Enu
     case MaterialResolution::DV50_MXF_ATOM:
         switch (raster)
         {
-        case Ingex::VideoRaster::PAL_B:
-        case Ingex::VideoRaster::PAL_B_4x3:
-        case Ingex::VideoRaster::PAL_B_16x9:
-        case Ingex::VideoRaster::NTSC:
+        case Ingex::VideoRaster::PAL_4x3_B:
+        case Ingex::VideoRaster::PAL_16x9_B:
         case Ingex::VideoRaster::NTSC_4x3:
         case Ingex::VideoRaster::NTSC_16x9:
             codec_id = CODEC_ID_DVVIDEO;
@@ -89,14 +85,16 @@ void get_ffmpeg_params(MaterialResolution::EnumType res, Ingex::VideoRaster::Enu
     case MaterialResolution::IMX50_MXF_1A:
         switch (raster)
         {
-        case Ingex::VideoRaster::PAL:
         case Ingex::VideoRaster::PAL_4x3:
         case Ingex::VideoRaster::PAL_16x9:
-        case Ingex::VideoRaster::PAL_592:
-        case Ingex::VideoRaster::PAL_608:
-        case Ingex::VideoRaster::NTSC:
+        case Ingex::VideoRaster::PAL_592_4x3:
+        case Ingex::VideoRaster::PAL_592_16x9:
+        case Ingex::VideoRaster::PAL_608_4x3:
+        case Ingex::VideoRaster::PAL_608_16x9:
         case Ingex::VideoRaster::NTSC_4x3:
         case Ingex::VideoRaster::NTSC_16x9:
+        case Ingex::VideoRaster::NTSC_502_4x3:
+        case Ingex::VideoRaster::NTSC_502_16x9:
             codec_id = CODEC_ID_MPEG2VIDEO;
             codec_type = CODEC_TYPE_VIDEO;
             pix_fmt = PIX_FMT_YUV422P;

@@ -1,5 +1,5 @@
 /*
- * $Id: MaterialResolution.cpp,v 1.10 2011/05/20 08:28:24 john_f Exp $
+ * $Id: MaterialResolution.cpp,v 1.11 2011/10/14 09:49:56 john_f Exp $
  *
  * Material resolution codes and details
  *
@@ -353,16 +353,14 @@ bool MaterialResolution::CheckVideoFormat(MaterialResolution::EnumType res,
     case MaterialResolution::DV25_MOV:
         switch (raster)
         {
-        case Ingex::VideoRaster::PAL_B:
-        case Ingex::VideoRaster::PAL_B_4x3:
-        case Ingex::VideoRaster::PAL_B_16x9:
+        case Ingex::VideoRaster::PAL_4x3_B:
+        case Ingex::VideoRaster::PAL_16x9_B:
             if (Ingex::PixelFormat::YUV_PLANAR_420_DV == format)
             {
                 result = true;
                 kbyte_per_minute = 187500;
             }
             break;
-        case Ingex::VideoRaster::NTSC:
         case Ingex::VideoRaster::NTSC_4x3:
         case Ingex::VideoRaster::NTSC_16x9:
             if (Ingex::PixelFormat::YUV_PLANAR_411 == format)
@@ -380,10 +378,8 @@ bool MaterialResolution::CheckVideoFormat(MaterialResolution::EnumType res,
     case MaterialResolution::DV50_MOV:
         switch (raster)
         {
-        case Ingex::VideoRaster::PAL_B:
-        case Ingex::VideoRaster::PAL_B_4x3:
-        case Ingex::VideoRaster::PAL_B_16x9:
-        case Ingex::VideoRaster::NTSC:
+        case Ingex::VideoRaster::PAL_4x3_B:
+        case Ingex::VideoRaster::PAL_16x9_B:
         case Ingex::VideoRaster::NTSC_4x3:
         case Ingex::VideoRaster::NTSC_16x9:
             if (Ingex::PixelFormat::YUV_PLANAR_422 == format)
@@ -427,14 +423,16 @@ bool MaterialResolution::CheckVideoFormat(MaterialResolution::EnumType res,
     case MaterialResolution::IMX50_MXF_1A:
         switch (raster)
         {
-        case Ingex::VideoRaster::PAL:
         case Ingex::VideoRaster::PAL_4x3:
         case Ingex::VideoRaster::PAL_16x9:
-        case Ingex::VideoRaster::PAL_592:
-        case Ingex::VideoRaster::PAL_608:
-        case Ingex::VideoRaster::NTSC:
+        case Ingex::VideoRaster::PAL_592_4x3:
+        case Ingex::VideoRaster::PAL_592_16x9:
+        case Ingex::VideoRaster::PAL_608_4x3:
+        case Ingex::VideoRaster::PAL_608_16x9:
         case Ingex::VideoRaster::NTSC_4x3:
         case Ingex::VideoRaster::NTSC_16x9:
+        case Ingex::VideoRaster::NTSC_502_4x3:
+        case Ingex::VideoRaster::NTSC_502_16x9:
             if (Ingex::PixelFormat::YUV_PLANAR_422 == format)
             {
                 result = true;
@@ -448,10 +446,8 @@ bool MaterialResolution::CheckVideoFormat(MaterialResolution::EnumType res,
     case MaterialResolution::MJPEG21_MXF_ATOM:
         switch (raster)
         {
-        case Ingex::VideoRaster::PAL:
         case Ingex::VideoRaster::PAL_4x3:
         case Ingex::VideoRaster::PAL_16x9:
-        case Ingex::VideoRaster::NTSC:
         case Ingex::VideoRaster::NTSC_4x3:
         case Ingex::VideoRaster::NTSC_16x9:
             if (Ingex::PixelFormat::YUV_PLANAR_422 == format)
@@ -467,10 +463,8 @@ bool MaterialResolution::CheckVideoFormat(MaterialResolution::EnumType res,
     case MaterialResolution::MJPEG31_MXF_ATOM:
         switch (raster)
         {
-        case Ingex::VideoRaster::PAL:
         case Ingex::VideoRaster::PAL_4x3:
         case Ingex::VideoRaster::PAL_16x9:
-        case Ingex::VideoRaster::NTSC:
         case Ingex::VideoRaster::NTSC_4x3:
         case Ingex::VideoRaster::NTSC_16x9:
             if (Ingex::PixelFormat::YUV_PLANAR_422 == format)
@@ -486,10 +480,8 @@ bool MaterialResolution::CheckVideoFormat(MaterialResolution::EnumType res,
     case MaterialResolution::MJPEG101_MXF_ATOM:
         switch (raster)
         {
-        case Ingex::VideoRaster::PAL:
         case Ingex::VideoRaster::PAL_4x3:
         case Ingex::VideoRaster::PAL_16x9:
-        case Ingex::VideoRaster::NTSC:
         case Ingex::VideoRaster::NTSC_4x3:
         case Ingex::VideoRaster::NTSC_16x9:
             if (Ingex::PixelFormat::YUV_PLANAR_422 == format)
@@ -507,10 +499,8 @@ bool MaterialResolution::CheckVideoFormat(MaterialResolution::EnumType res,
     case MaterialResolution::MJPEG201_MXF_ATOM:
         switch (raster)
         {
-        case Ingex::VideoRaster::PAL:
         case Ingex::VideoRaster::PAL_4x3:
         case Ingex::VideoRaster::PAL_16x9:
-        case Ingex::VideoRaster::NTSC:
         case Ingex::VideoRaster::NTSC_4x3:
         case Ingex::VideoRaster::NTSC_16x9:
             if (Ingex::PixelFormat::YUV_PLANAR_422 == format)
@@ -599,10 +589,8 @@ bool MaterialResolution::CheckVideoFormat(MaterialResolution::EnumType res,
     case MaterialResolution::MPEG4_MOV:
         switch (raster)
         {
-        case Ingex::VideoRaster::PAL:
         case Ingex::VideoRaster::PAL_4x3:
         case Ingex::VideoRaster::PAL_16x9:
-        case Ingex::VideoRaster::NTSC:
         case Ingex::VideoRaster::NTSC_4x3:
         case Ingex::VideoRaster::NTSC_16x9:
             if (Ingex::PixelFormat::YUV_PLANAR_420_MPEG == format)
@@ -619,12 +607,16 @@ bool MaterialResolution::CheckVideoFormat(MaterialResolution::EnumType res,
     case MaterialResolution::UNC_MXF_ATOM:
         switch (raster)
         {
-        case Ingex::VideoRaster::PAL:
         case Ingex::VideoRaster::PAL_4x3:
         case Ingex::VideoRaster::PAL_16x9:
-        case Ingex::VideoRaster::NTSC:
+        case Ingex::VideoRaster::PAL_592_4x3:
+        case Ingex::VideoRaster::PAL_592_16x9:
+        case Ingex::VideoRaster::PAL_608_4x3:
+        case Ingex::VideoRaster::PAL_608_16x9:
         case Ingex::VideoRaster::NTSC_4x3:
         case Ingex::VideoRaster::NTSC_16x9:
+        case Ingex::VideoRaster::NTSC_502_4x3:
+        case Ingex::VideoRaster::NTSC_502_16x9:
             if (Ingex::PixelFormat::UYVY_422 == format)
             {
                 result = true;

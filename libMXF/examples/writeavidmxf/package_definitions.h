@@ -1,5 +1,5 @@
 /*
- * $Id: package_definitions.h,v 1.13 2010/10/12 17:44:12 john_f Exp $
+ * $Id: package_definitions.h,v 1.14 2011/10/14 09:49:55 john_f Exp $
  *
  * Defines MXF package data structures and functions to create them
  *
@@ -103,6 +103,9 @@ typedef struct
     int audioRefLevel; /* value < -128 or value > 127 means not set */
     int dialNorm; /* value < -128 or value > 127 means not set */
     int sequenceOffset; /* value < 0 or value >= 5 means not set */
+
+    /* used for UncUYVY to determine how many lines of VBI the input image contains */
+    uint32_t inputHeight;
 } EssenceInfo;
 
 

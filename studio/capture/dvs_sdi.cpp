@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.cpp,v 1.28 2011/10/04 09:45:47 john_f Exp $
+ * $Id: dvs_sdi.cpp,v 1.29 2011/10/14 09:49:56 john_f Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -83,7 +83,13 @@ const int MAX_VIDEO_DMA_SIZE = 0x3F6000; // Size varies with raster and card typ
 bool AUDIO_INTERLEAVED = false;
 
 const int PAL_AUDIO_SAMPLES = 1920;
-const int NTSC_AUDIO_SAMPLES[5] = { 1602, 1601, 1602, 1601, 1602 };
+#if 0
+// This is the sequence required in D10 MXF OP1A
+const unsigned int NTSC_AUDIO_SAMPLES[5] = { 1602, 1601, 1602, 1601, 1602 };
+#else
+// This is the sequence you get from a DVS card
+const unsigned int NTSC_AUDIO_SAMPLES[5] = { 1602, 1602, 1602, 1602, 1600 };
+#endif
 static int ntsc_audio_seq = 0;
 
 const int64_t microseconds_per_day = 24 * 60 * 60 * INT64_C(1000000);
@@ -119,7 +125,7 @@ VideoRaster::EnumType primary_video_raster = VideoRaster::NONE;
 VideoRaster::EnumType secondary_video_raster = VideoRaster::NONE;
 Interlace::EnumType interlace = Interlace::NONE;
 Ingex::Rational image_aspect = Ingex::RATIONAL_16_9;
-int element_size = 0, video_dma_size = 0, max_dma_size = 0;
+int element_size = 0, max_dma_size = 0;
 int      primary_audio_offset = 0, primary_audio_size = 0;
 int      secondary_audio_offset = 0, secondary_audio_size = 0;
 int      secondary_video_offset = 0;
@@ -549,35 +555,6 @@ void print_dvs_card_features(int card)
     }
 }
 
-
-/*
-void framerate_for_videomode(int videomode, int *p_numer, int *p_denom)
-{
-    int video = videomode & SV_MODE_MASK;       // mask off everything except video
-
-    if (video == SV_MODE_PAL || video == SV_MODE_SMPTE274_25I) {
-        *p_numer = 25;
-        *p_denom = 1;
-    }
-    else if (video == SV_MODE_NTSC || video == SV_MODE_SMPTE274_30I) {
-        *p_numer = 30000;
-        *p_denom = 1001;
-    }
-    else if (video == SV_MODE_SMPTE296_50P) {
-        *p_numer = 50;
-        *p_denom = 1;
-    }
-    else if (video == SV_MODE_SMPTE296_60P) {
-        *p_numer = 60000;
-        *p_denom = 1001;
-    }
-    else {
-        *p_numer = 25;
-        *p_denom = 1;
-    }
-}
-*/
-
 int get_video_raster(int channel, VideoRaster::EnumType & video_raster)
 {
     int dvs_mode;
@@ -588,10 +565,54 @@ int get_video_raster(int channel, VideoRaster::EnumType & video_raster)
     switch (dvs_mode & SV_MODE_MASK)
     {
     case SV_MODE_PAL:
-        video_raster = VideoRaster::PAL;
+        if (Ingex::RATIONAL_4_3 == image_aspect)
+        {
+            video_raster = VideoRaster::PAL_4x3;
+        }
+        else
+        {
+            video_raster = VideoRaster::PAL_16x9;
+        }
+        break;
+    case SV_MODE_PALFF:
+        if (Ingex::RATIONAL_4_3 == image_aspect)
+        {
+            video_raster = VideoRaster::PAL_592_4x3;
+        }
+        else
+        {
+            video_raster = VideoRaster::PAL_592_16x9;
+        }
+        break;
+    case SV_MODE_PAL608:
+        if (Ingex::RATIONAL_4_3 == image_aspect)
+        {
+            video_raster = VideoRaster::PAL_608_4x3;
+        }
+        else
+        {
+            video_raster = VideoRaster::PAL_608_16x9;
+        }
         break;
     case SV_MODE_NTSC:
-        video_raster = VideoRaster::NTSC;
+        if (Ingex::RATIONAL_4_3 == image_aspect)
+        {
+            video_raster = VideoRaster::NTSC_4x3;
+        }
+        else
+        {
+            video_raster = VideoRaster::NTSC_16x9;
+        }
+        break;
+    case SV_MODE_NTSCFF:
+        if (Ingex::RATIONAL_4_3 == image_aspect)
+        {
+            video_raster = VideoRaster::NTSC_502_4x3;
+        }
+        else
+        {
+            video_raster = VideoRaster::NTSC_502_16x9;
+        }
         break;
     case SV_MODE_SMPTE274_25I:
         video_raster = VideoRaster::SMPTE274_25I;
@@ -622,27 +643,36 @@ int get_video_raster(int channel, VideoRaster::EnumType & video_raster)
 VideoRaster::EnumType sd_raster(VideoRaster::EnumType raster)
 {
     VideoRaster::EnumType sd_raster;
+
     switch (raster)
     {
     case VideoRaster::PAL_4x3:
-        sd_raster = VideoRaster::PAL_4x3;
-        break;
-    case VideoRaster::PAL:
+    case VideoRaster::PAL_4x3_B:
     case VideoRaster::PAL_16x9:
+    case VideoRaster::PAL_16x9_B:
+    case VideoRaster::PAL_592_4x3:
+    case VideoRaster::PAL_592_4x3_B:
+    case VideoRaster::PAL_592_16x9:
+    case VideoRaster::PAL_592_16x9_B:
+    case VideoRaster::PAL_608_4x3:
+    case VideoRaster::PAL_608_4x3_B:
+    case VideoRaster::PAL_608_16x9:
+    case VideoRaster::PAL_608_16x9_B:
+    case VideoRaster::NTSC_4x3:
+    case VideoRaster::NTSC_16x9:
+    case VideoRaster::NTSC_502_4x3:
+    case VideoRaster::NTSC_502_16x9:
+        sd_raster = raster;
+        break;
     case VideoRaster::SMPTE274_25I:
     case VideoRaster::SMPTE274_25PSF:
     case VideoRaster::SMPTE296_50P:
         sd_raster = VideoRaster::PAL_16x9;
         break;
-    case VideoRaster::NTSC_4x3:
-        sd_raster = VideoRaster::NTSC_4x3;
-        break;
-    case VideoRaster::NTSC:
-    case VideoRaster::NTSC_16x9:
     case VideoRaster::SMPTE274_29I:
     case VideoRaster::SMPTE274_29PSF:
     case VideoRaster::SMPTE296_59P:
-        sd_raster = VideoRaster::NTSC;
+        sd_raster = VideoRaster::NTSC_16x9;
         break;
     default:
         sd_raster = VideoRaster::NONE;
@@ -672,12 +702,31 @@ int set_videomode_on_all_channels(int max_channels, VideoRaster::EnumType video_
 
     switch (video_raster)
     {
-    case VideoRaster::PAL:
-    case VideoRaster::PAL_B:
+    case VideoRaster::PAL_4x3:
+    case VideoRaster::PAL_16x9:
+    case VideoRaster::PAL_4x3_B:
+    case VideoRaster::PAL_16x9_B:
         dvs_mode |= SV_MODE_PAL;
         break;
-    case VideoRaster::NTSC:
+    case VideoRaster::PAL_592_4x3:
+    case VideoRaster::PAL_592_16x9:
+    case VideoRaster::PAL_592_4x3_B:
+    case VideoRaster::PAL_592_16x9_B:
+        dvs_mode |= SV_MODE_PALFF;
+        break;
+    case VideoRaster::PAL_608_4x3:
+    case VideoRaster::PAL_608_16x9:
+    case VideoRaster::PAL_608_4x3_B:
+    case VideoRaster::PAL_608_16x9_B:
+        dvs_mode |= SV_MODE_PAL608;
+        break;
+    case VideoRaster::NTSC_4x3:
+    case VideoRaster::NTSC_16x9:
         dvs_mode |= SV_MODE_NTSC;
+        break;
+    case VideoRaster::NTSC_502_4x3:
+    case VideoRaster::NTSC_502_16x9:
+        dvs_mode |= SV_MODE_NTSCFF;
         break;
     case VideoRaster::SMPTE274_25I:
         dvs_mode |= SV_MODE_SMPTE274_25I;
@@ -2161,19 +2210,28 @@ int write_dummy_frames(sv_handle *sv, int chan, int current_frame_tick, int tick
             int n_audio_samples;
             switch (primary_video_raster)
             {
-            case Ingex::VideoRaster::PAL:
             case Ingex::VideoRaster::PAL_4x3:
+            case Ingex::VideoRaster::PAL_4x3_B:
             case Ingex::VideoRaster::PAL_16x9:
-            case Ingex::VideoRaster::PAL_B:
+            case Ingex::VideoRaster::PAL_16x9_B:
+            case Ingex::VideoRaster::PAL_592_4x3:
+            case Ingex::VideoRaster::PAL_592_4x3_B:
+            case Ingex::VideoRaster::PAL_592_16x9:
+            case Ingex::VideoRaster::PAL_592_16x9_B:
+            case Ingex::VideoRaster::PAL_608_4x3:
+            case Ingex::VideoRaster::PAL_608_4x3_B:
+            case Ingex::VideoRaster::PAL_608_16x9:
+            case Ingex::VideoRaster::PAL_608_16x9_B:
             case Ingex::VideoRaster::SMPTE274_25I:
             case Ingex::VideoRaster::SMPTE274_25PSF:
             case Ingex::VideoRaster::SMPTE274_25P:
             default:
                 n_audio_samples = PAL_AUDIO_SAMPLES;
                 break;
-            case Ingex::VideoRaster::NTSC:
             case Ingex::VideoRaster::NTSC_4x3:
             case Ingex::VideoRaster::NTSC_16x9:
+            case Ingex::VideoRaster::NTSC_502_4x3:
+            case Ingex::VideoRaster::NTSC_502_16x9:
             case Ingex::VideoRaster::SMPTE274_29I:
             case Ingex::VideoRaster::SMPTE274_29PSF:
             case Ingex::VideoRaster::SMPTE274_29P:
@@ -2465,7 +2523,7 @@ void usage_exit(void)
     fprintf(stderr, "                         MPEG   - secondary buffer is planar YUV 4:2:0\n");
     fprintf(stderr, "                         DV25   - secondary buffer is planar YUV 4:2:0 suitable for DV25\n");
     fprintf(stderr, "    -mode vid[:AUDIO8]   set input mode on all DVS cards, vid is one of:\n");
-    fprintf(stderr, "                         PAL, NTSC,\n");
+    fprintf(stderr, "                         PAL, NTSC, PAL_592, PAL_608, NTSC_502\n");
     fprintf(stderr, "                         1920x1080i25, 1920x1080p25sf, 1920x1080i29, 1920x1080p29sf,\n");
     fprintf(stderr, "                         1280x720p50, 1280x720p59\n");
     fprintf(stderr, "                         AUDIO8 enables 8 audio channels per SDI input\n");
@@ -2516,6 +2574,7 @@ int main (int argc, char ** argv)
     //int             opt_video_mode = -1;
     //int             current_video_mode = -1;
     int             opt_sync_type = -1;
+    const char * mode_string = 0;
     VideoRaster::EnumType mode_video_raster = VideoRaster::NONE;
 
     enum CaptureFmt { NONE, UYVY, YUV422, DV50, MPEG, DV25 };
@@ -2634,58 +2693,10 @@ int main (int argc, char ** argv)
         }
         else if (strcmp(argv[n], "-mode") == 0)
         {
-            char vidmode[256] = "", audmode[256] = "";
-            if (sscanf(argv[n+1], "%[^:]:%s", vidmode, audmode) != 2) {
-                if (sscanf(argv[n+1], "%s", vidmode) != 1) {
-                    fprintf(stderr, "-mode requires option of the form videomode[:audiomode]\n");
-                    return 1;
-                }
-            }
-
-            if (strcmp(vidmode, "PAL") == 0)
+            if (++n < argc)
             {
-                mode_video_raster = VideoRaster::PAL;
+                mode_string = argv[n];
             }
-            else if (strcmp(vidmode, "NTSC") == 0)
-            {
-                mode_video_raster = VideoRaster::NTSC;
-            }
-            else if (strcmp(vidmode, "1920x1080i25") == 0)
-            {
-                mode_video_raster = VideoRaster::SMPTE274_25I;
-            }
-            else if (strcmp(vidmode, "1920x1080p25sf") == 0)
-            {
-                mode_video_raster = VideoRaster::SMPTE274_25PSF;
-            }
-            else if (strcmp(vidmode, "1920x1080i29") == 0)
-            {
-                mode_video_raster = VideoRaster::SMPTE274_29I;
-            }
-            else if (strcmp(vidmode, "1920x1080p29sf") == 0)
-            {
-                mode_video_raster = VideoRaster::SMPTE274_29PSF;
-            }
-            else if (strcmp(vidmode, "1280x720p50") == 0)
-            {
-                mode_video_raster = VideoRaster::SMPTE296_50P;
-            }
-            else if (strcmp(vidmode, "1280x720p59") == 0)
-            {
-                mode_video_raster = VideoRaster::SMPTE296_59P;
-            }
-            else
-            {
-                fprintf(stderr, "video mode \"%s\" not supported\n", vidmode);
-                return 1;
-            }
-
-            // Default audio mode is 4 channels per SDI input
-            if (strcmp(audmode, "AUDIO8") == 0)
-            {
-                naudioch = 8;
-            }
-            n++;
         }
         else if (strcmp(argv[n], "-16x9") == 0)
         {
@@ -2843,6 +2854,111 @@ int main (int argc, char ** argv)
         {
             fprintf(stderr, "unknown argument \"%s\"\n", argv[n]);
             return 1;
+        }
+    }
+
+    // Process mode argument now image aspect is confirmed
+    if (mode_string)
+    {
+        char vidmode[256] = "", audmode[256] = "";
+        if (sscanf(mode_string, "%[^:]:%s", vidmode, audmode) != 2)
+        {
+            if (sscanf(mode_string, "%s", vidmode) != 1)
+            {
+                fprintf(stderr, "-mode requires option of the form videomode[:audiomode]\n");
+                return 1;
+            }
+        }
+
+        if (strcmp(vidmode, "PAL") == 0)
+        {
+            if (Ingex::RATIONAL_4_3 == image_aspect)
+            {
+                mode_video_raster = VideoRaster::PAL_4x3;
+            }
+            else
+            {
+                mode_video_raster = VideoRaster::PAL_16x9;
+            }
+        }
+        else if (strcmp(vidmode, "NTSC") == 0)
+        {
+            if (Ingex::RATIONAL_4_3 == image_aspect)
+            {
+                mode_video_raster = VideoRaster::NTSC_4x3;
+            }
+            else
+            {
+                mode_video_raster = VideoRaster::NTSC_16x9;
+            }
+        }
+        else if (strcmp(vidmode, "PAL_592") == 0)
+        {
+            if (Ingex::RATIONAL_4_3 == image_aspect)
+            {
+                mode_video_raster = VideoRaster::PAL_592_4x3;
+            }
+            else
+            {
+                mode_video_raster = VideoRaster::PAL_592_16x9;
+            }
+        }
+        else if (strcmp(vidmode, "PAL_608") == 0)
+        {
+            if (Ingex::RATIONAL_4_3 == image_aspect)
+            {
+                mode_video_raster = VideoRaster::PAL_608_4x3;
+            }
+            else
+            {
+                mode_video_raster = VideoRaster::PAL_608_16x9;
+            }
+        }
+        else if (strcmp(vidmode, "NTSC_502") == 0)
+        {
+            if (Ingex::RATIONAL_4_3 == image_aspect)
+            {
+                mode_video_raster = VideoRaster::NTSC_502_4x3;
+            }
+            else
+            {
+                mode_video_raster = VideoRaster::NTSC_502_16x9;
+            }
+        }
+        else if (strcmp(vidmode, "1920x1080i25") == 0)
+        {
+            mode_video_raster = VideoRaster::SMPTE274_25I;
+        }
+        else if (strcmp(vidmode, "1920x1080p25sf") == 0)
+        {
+            mode_video_raster = VideoRaster::SMPTE274_25PSF;
+        }
+        else if (strcmp(vidmode, "1920x1080i29") == 0)
+        {
+            mode_video_raster = VideoRaster::SMPTE274_29I;
+        }
+        else if (strcmp(vidmode, "1920x1080p29sf") == 0)
+        {
+            mode_video_raster = VideoRaster::SMPTE274_29PSF;
+        }
+        else if (strcmp(vidmode, "1280x720p50") == 0)
+        {
+            mode_video_raster = VideoRaster::SMPTE296_50P;
+        }
+        else if (strcmp(vidmode, "1280x720p59") == 0)
+        {
+            mode_video_raster = VideoRaster::SMPTE296_59P;
+        }
+        else
+        {
+            fprintf(stderr, "video mode \"%s\" not supported\n", vidmode);
+            return 1;
+        }
+
+        // Default audio mode is 4 channels per SDI input
+        if (strcmp(audmode, "AUDIO8") == 0)
+        {
+            naudioch = 8;
         }
     }
 
@@ -3128,9 +3244,6 @@ int main (int argc, char ** argv)
 
     // We now know primary_video_raster, width, height, frame_rate and interlace (from card).
 
-    // Modify primary raster to include aspect ratio.
-    Ingex::VideoRaster::ModifyAspect(primary_video_raster, image_aspect);
-    
     // Set secondary_video_raster
     if (NONE != secondary_capture_format)
     {
@@ -3164,13 +3277,11 @@ int main (int argc, char ** argv)
     case DV50:
         switch (primary_video_raster)
         {
-        case Ingex::VideoRaster::PAL_B:
-        case Ingex::VideoRaster::PAL_B_4x3:
-        case Ingex::VideoRaster::PAL_B_16x9:
+        case Ingex::VideoRaster::PAL_4x3_B:
+        case Ingex::VideoRaster::PAL_16x9_B:
             primary_pixel_format = Ingex::PixelFormat::YUV_PLANAR_422;
             primary_video_format = Format422PlanarYUVShifted;
             break;
-        case Ingex::VideoRaster::NTSC:
         case Ingex::VideoRaster::NTSC_4x3:
         case Ingex::VideoRaster::NTSC_16x9:
             primary_pixel_format = Ingex::PixelFormat::YUV_PLANAR_422;
@@ -3196,13 +3307,11 @@ int main (int argc, char ** argv)
     case DV50:
         switch (secondary_video_raster)
         {
-        case Ingex::VideoRaster::PAL_B:
-        case Ingex::VideoRaster::PAL_B_4x3:
-        case Ingex::VideoRaster::PAL_B_16x9:
+        case Ingex::VideoRaster::PAL_4x3_B:
+        case Ingex::VideoRaster::PAL_16x9_B:
             secondary_pixel_format = Ingex::PixelFormat::YUV_PLANAR_422;
             secondary_video_format = Format422PlanarYUVShifted;
             break;
-        case Ingex::VideoRaster::NTSC:
         case Ingex::VideoRaster::NTSC_4x3:
         case Ingex::VideoRaster::NTSC_16x9:
             secondary_pixel_format = Ingex::PixelFormat::YUV_PLANAR_422;
@@ -3219,13 +3328,11 @@ int main (int argc, char ** argv)
     case DV25:
         switch (secondary_video_raster)
         {
-        case Ingex::VideoRaster::PAL_B:
-        case Ingex::VideoRaster::PAL_B_4x3:
-        case Ingex::VideoRaster::PAL_B_16x9:
+        case Ingex::VideoRaster::PAL_4x3_B:
+        case Ingex::VideoRaster::PAL_16x9_B:
             secondary_pixel_format = Ingex::PixelFormat::YUV_PLANAR_420_DV;
             secondary_video_format = Format420PlanarYUVShifted;
             break;
-        case Ingex::VideoRaster::NTSC:
         case Ingex::VideoRaster::NTSC_4x3:
         case Ingex::VideoRaster::NTSC_16x9:
             secondary_pixel_format = Ingex::PixelFormat::YUV_PLANAR_411;
@@ -3252,69 +3359,11 @@ int main (int argc, char ** argv)
     }
 
 
-    // Ideally we would get the DMA size parameters
-    // from a fifo's pbuffer structure.  But you must complete a
-    // successful sv_fifo_getbuffer() before those parameters are known.
-    // Instead use the following values found experimentally since we need
-    // to allocate buffers before successful dma transfers occur.
-
-    // Actually, we no longer use the empirical value of video_dma_size.
-
-    // Video size for 422
-    video_size = width * height * 2;
-
-    // Need to know card type. (We assume all the same type.)
-    bool dvs_dummy = false;
+    // Find out if real DVS card(s) or dummy
     int sn = 0;
     sv_query(a_sv[0], SV_QUERY_SERIALNUMBER, 0, &sn);
     sn /= 1000000;
-    switch (sn)
-    {
-    case 0:  // dvs_dummy
-        dvs_dummy = true;
-        video_dma_size = video_size;
-        break;
-    case 11: // SDStationOEM
-    case 19: // SDStationOEMII
-        video_dma_size = video_size;
-        break;
-    case 13: // Centaurus
-    case 20: // CentaurusII PCI-X
-    case 23: // CentaurusII PCIe
-    default:
-        switch (primary_video_raster)
-        {
-        case Ingex::VideoRaster::PAL:
-        case Ingex::VideoRaster::PAL_B:
-        case Ingex::VideoRaster::PAL_4x3:
-        case Ingex::VideoRaster::PAL_B_4x3:
-        case Ingex::VideoRaster::PAL_16x9:
-        case Ingex::VideoRaster::PAL_B_16x9:
-            video_dma_size = 0xCC000;
-            break;
-        case Ingex::VideoRaster::NTSC:
-        case Ingex::VideoRaster::NTSC_4x3:
-        case Ingex::VideoRaster::NTSC_16x9:
-            video_dma_size = 0xAC000;
-            break;
-        case Ingex::VideoRaster::SMPTE274_25I:
-        case Ingex::VideoRaster::SMPTE274_25PSF:
-        case Ingex::VideoRaster::SMPTE274_25P:
-        case Ingex::VideoRaster::SMPTE274_29I:
-        case Ingex::VideoRaster::SMPTE274_29PSF:
-        case Ingex::VideoRaster::SMPTE274_29P:
-            video_dma_size = 0x3F6000;
-            break;
-        case Ingex::VideoRaster::SMPTE296_50P:
-        case Ingex::VideoRaster::SMPTE296_59P:
-            video_dma_size = 0x1C3000;
-            break;
-        default:
-            video_dma_size = video_size;
-            break;
-        }
-        break;
-    }
+    bool dvs_dummy = (0 == sn);
 
     // Report on capture formats
     logTF("Primary capture   %s, %s\n", Ingex::VideoRaster::Name(primary_video_raster).c_str(), Ingex::PixelFormat::Name(primary_pixel_format).c_str());
@@ -3347,6 +3396,13 @@ int main (int argc, char ** argv)
         master_channel = -1;
     }
 
+    // Dummy only supports 8 audio channels at present
+    if (dvs_dummy && naudioch > 8)
+    {
+        logTF("Audio channels limited to 8 in dvs_dummy mode\n");
+        naudioch = 8;
+    }
+
     logTF("Using %s to determine number of frames to recover when video re-aquired\n",
             nexus_timecode_type_name(timecode_type));
 
@@ -3375,6 +3431,8 @@ int main (int argc, char ** argv)
     //   frame data
 
     // Compute size...
+    // Video size for 422
+    video_size = width * height * 2;
 
     // primary video
     size_t primary_video_size = video_size;

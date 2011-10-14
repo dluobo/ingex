@@ -1,5 +1,5 @@
 /*
- * $Id: main.c,v 1.27 2011/07/05 13:59:40 philipn Exp $
+ * $Id: main.c,v 1.28 2011/10/14 09:49:55 john_f Exp $
  *
  * Test writing video and audio to MXF files supported by Avid editing software
  *
@@ -951,6 +951,7 @@ static void usage(const char* cmd)
     fprintf(stderr, "  --DNxHD1080p175 <filename> DNxHD 1920x1080p24/23.976 175 Mbps (requires film frame rate)\n");
     fprintf(stderr, "  --DNxHD1080p175X <filenam> DNxHD 1920x1080p24/23.976 175 Mbps 10bit (requires film frame rate)\n");
     fprintf(stderr, "  --unc <filename>           Uncompressed 8-bit UYVY SD\n");
+    fprintf(stderr, "       --height <value>           image height. Default is 576 for PAL or 486 for NTSC\n");
     fprintf(stderr, "  --unc1080i <filename>      Uncompressed 8-bit UYVY HD 1920x1080i\n");
     fprintf(stderr, "  --unc720p <filename>       Uncompressed 8-bit UYVY HD 1280x720p\n");
     fprintf(stderr, "  --pcm <filename>           raw 48kHz PCM audio\n");
@@ -1636,6 +1637,32 @@ int main(int argc, const char* argv[])
             inputIndex++;
             cmdlnIndex += 2;
         }
+        else if (strcmp(argv[cmdlnIndex], "--height") == 0)
+        {
+            int result;
+            unsigned int height;
+            if (cmdlnIndex + 1 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            if (inputIndex == 0 || inputs[inputIndex - 1].essenceType != UncUYVY)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "The --height must follow a --unc input\n");
+                return 1;
+            }
+            if ((result = sscanf(argv[cmdlnIndex + 1], "%u", &height)) != 1)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Failed to read --height unsigned integer value '%s'\n", argv[cmdlnIndex + 1]);
+                return 1;
+            }
+
+            inputs[inputIndex - 1].essenceInfo.inputHeight = height;
+            cmdlnIndex += 2;
+        }
         else if (strcmp(argv[cmdlnIndex], "--unc1080i") == 0)
         {
             if (cmdlnIndex + 1 >= argc)
@@ -2135,14 +2162,18 @@ int main(int argc, const char* argv[])
         }
         else if (inputs[i].essenceType == UncUYVY)
         {
-            if (isPAL)
+            if (inputs[i].essenceInfo.inputHeight == 0)
             {
-                inputs[i].frameSize = 720 * 576 * 2;
+                if (isPAL)
+                {
+                    inputs[i].essenceInfo.inputHeight = 576;
+                }
+                else
+                {
+                    inputs[i].essenceInfo.inputHeight = 486;
+                }
             }
-            else
-            {
-                inputs[i].frameSize = 720 * 486 * 2;
-            }
+            inputs[i].frameSize = 720 * inputs[i].essenceInfo.inputHeight * 2;
             CHK_MALLOC_ARRAY_OFAIL(inputs[i].buffer, unsigned char, inputs[i].frameSize);
         }
         else if (inputs[i].essenceType == Unc1080iUYVY)

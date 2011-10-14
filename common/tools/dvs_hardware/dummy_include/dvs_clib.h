@@ -219,6 +219,9 @@ typedef struct {
 #define SV_MODE_MASK 0x00001FFF
 #define SV_MODE_PAL 0x00
 #define SV_MODE_NTSC 0x01
+#define SV_MODE_PALFF 0x04
+#define SV_MODE_NTSCFF 0x05
+#define SV_MODE_PAL608 0x06
 #define SV_MODE_SMPTE274_25I 0x28
 #define SV_MODE_SMPTE274_29I 0x25
 #define SV_MODE_SMPTE274_30I 0x22

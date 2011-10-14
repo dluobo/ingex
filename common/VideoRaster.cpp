@@ -1,5 +1,5 @@
 /*
- * $Id: VideoRaster.cpp,v 1.6 2011/05/23 16:27:05 philipn Exp $
+ * $Id: VideoRaster.cpp,v 1.7 2011/10/14 09:54:18 john_f Exp $
  *
  * Video raster codes and details
  *
@@ -74,44 +74,55 @@ std::string Ingex::VideoRaster::Name(Ingex::VideoRaster::EnumType e)
     std::string name;
     switch (e)
     {
-    case PAL:
-        name = "PAL";
-        break;
     case PAL_4x3:
         name = "PAL 4x3";
         break;
     case PAL_16x9:
         name = "PAL 16x9";
         break;
-    case PAL_592:
-        name = "PAL 592";
+    case PAL_592_4x3:
+        name = "PAL 592 4x3";
         break;
-    case PAL_608:
-        name = "PAL 608";
+    case PAL_608_4x3:
+        name = "PAL 608 4x3";
         break;
-    case PAL_B:
-        name = "PAL (reversed field order)";
+    case PAL_592_16x9:
+        name = "PAL 592 16x9";
         break;
-    case PAL_B_4x3:
+    case PAL_608_16x9:
+        name = "PAL 608 16x9";
+        break;
+
+    case PAL_4x3_B:
         name = "PAL 4x3 (reversed field order)";
         break;
-    case PAL_B_16x9:
+    case PAL_16x9_B:
         name = "PAL 16x9 (reversed field order)";
         break;
-    case PAL_592_B:
-        name = "PAL 592 (reversed field order)";
+    case PAL_592_4x3_B:
+        name = "PAL 592 4x3 (reversed field order)";
         break;
-    case PAL_608_B:
-        name = "PAL 608 (reversed field order)";
+    case PAL_608_4x3_B:
+        name = "PAL 608 4x3 (reversed field order)";
         break;
-    case NTSC:
-        name = "NTSC";
+    case PAL_592_16x9_B:
+        name = "PAL 592 16x9 (reversed field order)";
         break;
+    case PAL_608_16x9_B:
+        name = "PAL 608 16x9 (reversed field order)";
+        break;
+
     case NTSC_4x3:
         name = "NTSC 4x3";
         break;
     case NTSC_16x9:
         name = "NTSC 16x9";
+        break;
+    case NTSC_502_4x3:
+        name = "NTSC 502 4x3";
+        break;
+    case NTSC_502_16x9:
+        name = "NTSC 502 16x9";
         break;
     case SMPTE274_25I:
         name = "1920x1080 25i";
@@ -149,7 +160,6 @@ void Ingex::VideoRaster::GetInfo(Ingex::VideoRaster::EnumType raster,
 {
     switch (raster)
     {
-    case PAL:
     case PAL_4x3:
     case PAL_16x9:
         width = 720;
@@ -158,48 +168,58 @@ void Ingex::VideoRaster::GetInfo(Ingex::VideoRaster::EnumType raster,
         fps_den = 1;
         interlace = Ingex::Interlace::TOP_FIELD_FIRST;
         break;
-    case PAL_592:
+    case PAL_592_4x3:
+    case PAL_592_16x9:
         width = 720;
         height = 592;
         fps_num = 25;
         fps_den = 1;
         interlace = Ingex::Interlace::TOP_FIELD_FIRST;
         break;
-    case PAL_608:
+    case PAL_608_4x3:
+    case PAL_608_16x9:
         width = 720;
         height = 608;
         fps_num = 25;
         fps_den = 1;
         interlace = Ingex::Interlace::TOP_FIELD_FIRST;
         break;
-    case PAL_B:
-    case PAL_B_4x3:
-    case PAL_B_16x9:
+    case PAL_4x3_B:
+    case PAL_16x9_B:
         width = 720;
         height = 576;
         fps_num = 25;
         fps_den = 1;
         interlace = Ingex::Interlace::BOTTOM_FIELD_FIRST;
         break;
-    case PAL_592_B:
+    case PAL_592_4x3_B:
+    case PAL_592_16x9_B:
         width = 720;
         height = 592;
         fps_num = 25;
         fps_den = 1;
         interlace = Ingex::Interlace::BOTTOM_FIELD_FIRST;
         break;
-    case PAL_608_B:
+    case PAL_608_4x3_B:
+    case PAL_608_16x9_B:
         width = 720;
         height = 608;
         fps_num = 25;
         fps_den = 1;
         interlace = Ingex::Interlace::BOTTOM_FIELD_FIRST;
         break;
-    case NTSC:
     case NTSC_4x3:
     case NTSC_16x9:
         width = 720;
         height = 486;
+        fps_num = 30000;
+        fps_den = 1001;
+        interlace = Ingex::Interlace::BOTTOM_FIELD_FIRST;
+        break;
+    case NTSC_502_4x3:
+    case NTSC_502_16x9:
+        width = 720;
+        height = 502;
         fps_num = 30000;
         fps_den = 1001;
         interlace = Ingex::Interlace::BOTTOM_FIELD_FIRST;
@@ -264,19 +284,22 @@ bool Ingex::VideoRaster::IsRec601(VideoRaster::EnumType raster)
 
     switch (raster)
     {
-    case PAL:
     case PAL_4x3:
+    case PAL_4x3_B:
     case PAL_16x9:
-    case PAL_592:
-    case PAL_608:
-    case PAL_B:
-    case PAL_B_4x3:
-    case PAL_B_16x9:
-    case PAL_592_B:
-    case PAL_608_B:
-    case NTSC:
+    case PAL_16x9_B:
+    case PAL_592_4x3:
+    case PAL_592_4x3_B:
+    case PAL_592_16x9:
+    case PAL_592_16x9_B:
+    case PAL_608_4x3:
+    case PAL_608_4x3_B:
+    case PAL_608_16x9:
+    case PAL_608_16x9_B:
     case NTSC_4x3:
     case NTSC_16x9:
+    case NTSC_502_4x3:
+    case NTSC_502_16x9:
         is_rec_601 = true;
         break;
     default:
@@ -294,8 +317,13 @@ bool Ingex::VideoRaster::Is4x3(VideoRaster::EnumType raster)
     switch (raster)
     {
     case PAL_4x3:
-    case PAL_B_4x3:
+    case PAL_4x3_B:
+    case PAL_592_4x3:
+    case PAL_592_4x3_B:
+    case PAL_608_4x3:
+    case PAL_608_4x3_B:
     case NTSC_4x3:
+    case NTSC_502_4x3:
         is_4x3 = true;
         break;
     default:
@@ -310,25 +338,29 @@ void Ingex::VideoRaster::ModifyLineShift(VideoRaster::EnumType & raster, bool sh
 {
     switch (raster)
     {
-    case PAL:
-    case PAL_B:
-        raster = shifted ? PAL_B : PAL;
-        break;
     case PAL_4x3:
-    case PAL_B_4x3:
-        raster = shifted ? PAL_B_4x3 : PAL_4x3;
+    case PAL_4x3_B:
+        raster = shifted ? PAL_4x3_B : PAL_4x3;
         break;
     case PAL_16x9:
-    case PAL_B_16x9:
-        raster = shifted ? PAL_B_16x9 : PAL_16x9;
+    case PAL_16x9_B:
+        raster = shifted ? PAL_16x9_B : PAL_16x9;
         break;
-    case PAL_592:
-    case PAL_592_B:
-        raster = shifted ? PAL_592_B : PAL_592;
+    case PAL_592_4x3:
+    case PAL_592_4x3_B:
+        raster = shifted ? PAL_592_4x3_B : PAL_592_4x3;
         break;
-    case PAL_608:
-    case PAL_608_B:
-        raster = shifted ? PAL_608_B : PAL_608;
+    case PAL_592_16x9:
+    case PAL_592_16x9_B:
+        raster = shifted ? PAL_592_16x9_B : PAL_592_16x9;
+        break;
+    case PAL_608_4x3:
+    case PAL_608_4x3_B:
+        raster = shifted ? PAL_608_4x3_B : PAL_608_4x3;
+        break;
+    case PAL_608_16x9:
+    case PAL_608_16x9_B:
+        raster = shifted ? PAL_608_16x9_B : PAL_608_16x9;
         break;
     default:
         break;
@@ -340,11 +372,12 @@ int Ingex::VideoRaster::LineShift(VideoRaster::EnumType raster)
     int shift;
     switch (raster)
     {
-    case PAL_B:
-    case PAL_B_4x3:
-    case PAL_B_16x9:
-    case PAL_592_B:
-    case PAL_608_B:
+    case PAL_4x3_B:
+    case PAL_16x9_B:
+    case PAL_592_4x3_B:
+    case PAL_592_16x9_B:
+    case PAL_608_4x3_B:
+    case PAL_608_16x9_B:
         shift = 1;
         break;
     default:
@@ -355,30 +388,6 @@ int Ingex::VideoRaster::LineShift(VideoRaster::EnumType raster)
     return shift;
 }
 
-void Ingex::VideoRaster::ModifyAspect(VideoRaster::EnumType & raster, const Ingex::Rational & aspect)
-{
-    switch (raster)
-    {
-    case PAL:
-    case PAL_4x3:
-    case PAL_16x9:
-        raster = Ingex::RATIONAL_4_3 == aspect ? PAL_4x3 : PAL_16x9;
-        break;
-    case PAL_B:
-    case PAL_B_4x3:
-    case PAL_B_16x9:
-        raster = Ingex::RATIONAL_4_3 == aspect ? PAL_B_4x3 : PAL_B_16x9;
-        break;
-    case NTSC:
-    case NTSC_4x3:
-    case NTSC_16x9:
-        raster = Ingex::RATIONAL_4_3 == aspect ? NTSC_4x3 : NTSC_16x9;
-        break;
-    default:
-        break;
-    }
-}
-
 Ingex::Rational Ingex::VideoRaster::SampleAspectRatio(VideoRaster::EnumType raster)
 {
     Ingex::Rational sar;
@@ -386,23 +395,30 @@ Ingex::Rational Ingex::VideoRaster::SampleAspectRatio(VideoRaster::EnumType rast
     switch (raster)
     {
     case PAL_4x3:
-    case PAL_B_4x3:
+    case PAL_592_4x3:
+    case PAL_608_4x3:
+    case PAL_4x3_B:
+    case PAL_592_4x3_B:
+    case PAL_608_4x3_B:
         sar.numerator = 59;
         sar.denominator = 54;
         break;
-    case PAL:
-    case PAL_B:
     case PAL_16x9:
-    case PAL_B_16x9:
+    case PAL_592_16x9:
+    case PAL_608_16x9:
+    case PAL_16x9_B:
+    case PAL_592_16x9_B:
+    case PAL_608_16x9_B:
         sar.numerator = 118;
         sar.denominator = 81;
         break;
     case NTSC_4x3:
+    case NTSC_502_4x3:
         sar.numerator = 10;
         sar.denominator = 11;
         break;
-    case NTSC:
     case NTSC_16x9:
+    case NTSC_502_16x9:
         sar.numerator = 40;
         sar.denominator = 33;
         break;
@@ -414,3 +430,4 @@ Ingex::Rational Ingex::VideoRaster::SampleAspectRatio(VideoRaster::EnumType rast
 
     return sar;
 }
+

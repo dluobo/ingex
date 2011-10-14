@@ -1,5 +1,5 @@
 /*
- * $Id: MXFOPAtomWriter.cpp,v 1.6 2010/10/12 17:44:12 john_f Exp $
+ * $Id: MXFOPAtomWriter.cpp,v 1.7 2011/10/14 09:49:56 john_f Exp $
  *
  * MXF OP-Atom writer
  *
@@ -370,6 +370,7 @@ void MXFOPAtomWriter::CreatePackageDefinitions()
                 case MaterialResolution::UNC_MXF_ATOM:
                     if (descriptor->storedWidth == 720) {
                         essence_type = UncUYVY;
+                        essence_info.inputHeight = descriptor->storedHeight;
                     } else if (descriptor->storedWidth == 1280) {
                         essence_type = Unc720pUYVY;
                     } else {

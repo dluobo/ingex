@@ -1,5 +1,5 @@
 /*
- * $Id: dvsoem_dummy.cpp,v 1.12 2011/10/04 09:32:39 john_f Exp $
+ * $Id: dvsoem_dummy.cpp,v 1.13 2011/10/14 09:49:55 john_f Exp $
  *
  * Implement a debug-only DVS hardware library for testing.
  *
@@ -88,6 +88,14 @@ typedef struct {
 #endif
 } DvsCard;
 
+#if 1
+// This is the sequence required in D10 MXF OP1A
+const unsigned int NTSC_AUDIO_SAMPLES[5] = { 1602, 1601, 1602, 1601, 1602 };
+#else
+// This is the sequence you get from a DVS card
+const unsigned int NTSC_AUDIO_SAMPLES[5] = { 1602, 1602, 1602, 1602, 1600 };
+#endif
+
 static DvsCard * dvs_channel[] = { 0, 0, 0, 0, 0, 0, 0, 0 };
 
 static inline uint8_t write_bcd(int val)
@@ -121,6 +129,9 @@ static int is_rec601(int videomode)
     {
     case SV_MODE_PAL:
     case SV_MODE_NTSC:
+    case SV_MODE_PALFF:
+    case SV_MODE_NTSCFF:
+    case SV_MODE_PAL608:
         is_601 = 1;
         break;
     default:
@@ -180,7 +191,8 @@ static void convert_audio_to_interleaved(DvsCard *dvs)
     uint32_t tmp[1920 * 16];        // maximum audio size for 1 frame, 16 channels, 32bit
     memset(tmp, 0, sizeof(tmp));
 
-    for (int i = 0; i < 1920; i++) {
+    for (int i = 0; i < 1920; i++)
+    {
         uint32_t ch1 = audio12[i*2 + 0];
         uint32_t ch2 = audio12[i*2 + 1];
         uint32_t ch3 = audio34[i*2 + 0];
@@ -191,7 +203,8 @@ static void convert_audio_to_interleaved(DvsCard *dvs)
         tmp[i * 16 + 2] = ch3;
         tmp[i * 16 + 3] = ch4;
 
-        if (dvs->audio_channels == 8) {
+        if (dvs->audio_channels == 8)
+        {
             uint32_t ch5 = audio56[i*2 + 0];
             uint32_t ch6 = audio56[i*2 + 1];
             uint32_t ch7 = audio78[i*2 + 0];
@@ -209,6 +222,8 @@ static void convert_audio_to_interleaved(DvsCard *dvs)
 
 static void setup_source_buf(DvsCard * dvs)
 {
+    //fprintf(stderr, "DUMMY: setup_source_buf()\n");
+
     // A ring buffer can be used for sample video and audio loaded from files
     FILE *fp_video = NULL, *fp_audio = NULL;
     int64_t vidfile_size = 0;
@@ -254,7 +269,8 @@ static void setup_source_buf(DvsCard * dvs)
                 printf("audfile=audio12.pcm (16bit 48kHz stereo audio)\n");
                 printf("good_tc=A/L/V (A=All (default), L=LTC, V=VITC)\n");
             }
-            else if (strncmp(param, "video=", strlen("video=")) == 0) {
+            else if (strncmp(param, "video=", strlen("video=")) == 0)
+            {
                 int tmpw, tmph, rate;
                 char ff;
                 if (strcmp(param, "video=PAL") == 0) {
@@ -337,7 +353,8 @@ static void setup_source_buf(DvsCard * dvs)
     // <video (UYVY)><audio ch 1+2 with fill to 0x4000><audio ch 3+4 with fill>
     // (if SV_MODE_AUDIO_8CHANNEL)<audio ch 5+6><audio ch 7+8>
     dvs->frame_size = video_size + 0x4000 + 0x4000;
-    if (dvs->audio_channels == 8) {
+    if (dvs->audio_channels == 8)
+    {
         dvs->frame_size += 0x4000 + 0x4000;    // 4 extra audio channels
     }
 
@@ -357,7 +374,9 @@ static void setup_source_buf(DvsCard * dvs)
 
     // (Re)allocate buffer for the source video/audio.
     if (dvs->source_dmabuf)
+    {
         free(dvs->source_dmabuf);
+    }
     dvs->source_dmabuf = (unsigned char *)malloc(dvs->frame_size * dvs->source_input_frames);
 
     if (!fp_video) {
@@ -388,7 +407,8 @@ static void setup_source_buf(DvsCard * dvs)
             audio4[i * 2] = sample500;
         }
 
-        if (dvs->audio_channels == 8) {
+        if (dvs->audio_channels == 8)
+        {
             // The 4 extra channels are arranged after the first 4 (size 0x8000)
             int32_t * audio5 = (int32_t *)(audio12 + 0x8000);
             int32_t * audio6 = audio5 + 1;
@@ -439,6 +459,31 @@ static void setup_source_buf(DvsCard * dvs)
     dvs->fifo_buffer.audio[0].size = 0x3c00;
 }
 
+void initialise_timecode(DvsCard * dvs)
+{
+    //fprintf(stderr, "DUMMY: initialise timecode\n");
+
+    // Use drop-frame for NTSC frame rate
+    bool df = dvs->frame_rate_numer % dvs->frame_rate_denom;
+    
+    if (1)
+    {
+        // Set initial timecode from time-of-day
+        struct timeval tod_tv;
+        gettimeofday(&tod_tv, NULL);
+        time_t tod_time = tod_tv.tv_sec;
+        struct tm tod_tm;
+        localtime_r(&tod_time, &tod_tm);
+        dvs->timecode = Ingex::Timecode(tod_tm.tm_hour, tod_tm.tm_min, tod_tm.tm_sec, 0, 0, dvs->frame_rate_numer, dvs->frame_rate_denom, df);
+    }
+    else
+    {
+        // Set initial timecode to 10:00:00:00
+        dvs->timecode = Ingex::Timecode(10, 0, 0, 0, 0, dvs->frame_rate_numer, dvs->frame_rate_denom, df);
+    }
+}
+
+
 // SV implementations
 int sv_fifo_init(sv_handle * sv, sv_fifo ** ppfifo, int bInput, int bShared, int bDMA, int flagbase, int nframes)
 {
@@ -479,27 +524,23 @@ int sv_fifo_putbuffer(sv_handle * sv, sv_fifo * pfifo, sv_fifo_buffer * pbuffer,
     pbuffer->anctimecode.dvitc_tc[1] = (dvs->tc_quality == DvsTcLTC) ? 0 : dvs_tc;
     pbuffer->anctimecode.dltc_tc = (dvs->tc_quality == DvsTcVITC) ? 0 : dvs_tc;
 
-    // For NTSC audio, vary the number of samples in a 5 frame sequence of:
+    // For non-integer frame rate, vary the number of audio samples per frame.
     // 1602, 1602, 1602, 1602, 1600 (found by experiment using DVS cards)
-    //
-    // Other formats:
-    // 1920 fixed                   - PAL and SMPTE274/25I (1920x1080i50)
-    //  960 fixed                   - SMPTE296/50P (1280x720p50)
-    // 1600 fixed                   - SMPTE274/30I (60Hz interlaced)
-    // 1602, 1602, 1602, 1602, 1600 - SMPTE274/29I (59.94Hz interlaced)
-    //  800 fixed                   - SMPTE296/60P (1280x720p60)
-    //  802, 800, 802, 800, 800     - SMPTE296/59P (1280x720p59.94)
     int num_samples = 1920;
-    switch (dvs->videomode & SV_MODE_MASK) {
+    switch (dvs->videomode & SV_MODE_MASK)
+    {
         case SV_MODE_PAL:
+        case SV_MODE_PALFF:
+        case SV_MODE_PAL608:
         case SV_MODE_SMPTE274_25I:
         case SV_MODE_SMPTE274_25sF:
             num_samples = 1920;
             break;
         case SV_MODE_NTSC:
+        case SV_MODE_NTSCFF:
         case SV_MODE_SMPTE274_29I:
         case SV_MODE_SMPTE274_29sF:
-            num_samples = (dvs->frame_count % 5 == 0) ? 1600 : 1602;
+            num_samples = NTSC_AUDIO_SAMPLES[dvs->frame_count % 5];
             break;
         case SV_MODE_SMPTE274_30I:
             num_samples = 1600;
@@ -606,7 +647,7 @@ int sv_query(sv_handle * sv, int cmd, int par, int * val)
         *val = 0;
         break;
     case SV_QUERY_FEATURE_AUDIOCHANNELS:
-        *val = 16;
+        *val = 8;
         break;
     default:
         *val = 0;
@@ -658,9 +699,27 @@ int sv_videomode(sv_handle * sv, int videomode)
         dvs->frame_rate_numer = 25;
         dvs->frame_rate_denom = 1;
         break;
+    case SV_MODE_PALFF:
+        dvs->width = 720;
+        dvs->height = 592;
+        dvs->frame_rate_numer = 25;
+        dvs->frame_rate_denom = 1;
+        break;
+    case SV_MODE_PAL608:
+        dvs->width = 720;
+        dvs->height = 608;
+        dvs->frame_rate_numer = 25;
+        dvs->frame_rate_denom = 1;
+        break;
     case SV_MODE_NTSC:
         dvs->width = 720;
         dvs->height = 486;
+        dvs->frame_rate_numer = 30000;
+        dvs->frame_rate_denom = 1001;
+        break;
+    case SV_MODE_NTSCFF:
+        dvs->width = 720;
+        dvs->height = 502;
         dvs->frame_rate_numer = 30000;
         dvs->frame_rate_denom = 1001;
         break;
@@ -691,6 +750,8 @@ int sv_videomode(sv_handle * sv, int videomode)
         dvs->frame_rate_denom = 1001;
         break;
     }
+
+    initialise_timecode(dvs);
 
     // Only 4 and 8 channel audio implemented (more audio modes are possible)
     switch (videomode & SV_MODE_AUDIO_MASK)
@@ -750,28 +811,18 @@ int sv_openex(sv_handle ** psv, char * setup, int openprogram, int opentype, int
         dvs->start_time.tv_usec = 0;
         dvs->dropped = 0;
         dvs->tc_quality = DvsTcAll;
-        // Default is PAL width & height
+        // Default is PAL
         dvs->width = 720;
         dvs->height = 576;
         dvs->frame_rate_numer = 25;
         dvs->frame_rate_denom = 1;
         dvs->videomode = SV_MODE_PAL;
 
-        if (1)
-        {
-            // Set initial timecode from time-of-day
-            struct timeval tod_tv;
-            gettimeofday(&tod_tv, NULL);
-            time_t tod_time = tod_tv.tv_sec;
-            struct tm tod_tm;
-            localtime_r(&tod_time, &tod_tm);
-            dvs->timecode = Ingex::Timecode(tod_tm.tm_hour, tod_tm.tm_min, tod_tm.tm_sec, 0, 0, dvs->frame_rate_numer, dvs->frame_rate_denom, false);
-        }
-        else
-        {
-            // Set initial timecode to 10:00:00:00
-            dvs->timecode = Ingex::Timecode(10, 0, 0, 0, 0, dvs->frame_rate_numer, dvs->frame_rate_denom, false);
-        }
+        // Default to 4 audio channels
+        dvs->audio_channels = 4;
+
+        // Initialise timecode
+        initialise_timecode(dvs);
 
         // Setup source audio/video
         setup_source_buf(dvs);

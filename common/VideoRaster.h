@@ -1,5 +1,5 @@
 /*
- * $Id: VideoRaster.h,v 1.5 2010/09/23 17:17:58 john_f Exp $
+ * $Id: VideoRaster.h,v 1.6 2011/10/14 09:54:18 john_f Exp $
  *
  * Video raster codes and details
  *
@@ -51,20 +51,30 @@ public:
     {
         NONE,
 
-        PAL,
+        // PAL formats
         PAL_4x3,
         PAL_16x9,
-        PAL_592,
-        PAL_608,
-        PAL_B,     ///< PAL modified to be bottom field first
-        PAL_B_4x3,
-        PAL_B_16x9,
-        PAL_592_B, ///< PAL_592 modified to be bottom field first
-        PAL_608_B, ///< PAL_608 modified to be bottom field first
-        NTSC,
+        // extended VBI variants
+        PAL_592_4x3,
+        PAL_592_16x9,
+        PAL_608_4x3,
+        PAL_608_16x9,
+        // bottom-field-first variants
+        PAL_4x3_B,
+        PAL_16x9_B,
+        PAL_592_4x3_B,
+        PAL_592_16x9_B,
+        PAL_608_4x3_B,
+        PAL_608_16x9_B,
+
+        // NTSC formats
         NTSC_4x3,
         NTSC_16x9,
+        // extended VBI variants
+        NTSC_502_4x3,
+        NTSC_502_16x9,
 
+        // HD formats
         SMPTE274_25I,
         SMPTE274_29I,
         SMPTE274_25PSF,
@@ -88,8 +98,6 @@ public:
     static void ModifyLineShift(VideoRaster::EnumType & raster, bool shifted);
 
     static int LineShift(VideoRaster::EnumType raster);
-
-    static void ModifyAspect(VideoRaster::EnumType & raster, const Ingex::Rational & aspect);
 
     static Ingex::Rational SampleAspectRatio(VideoRaster::EnumType raster);
 };
