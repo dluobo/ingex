@@ -1,5 +1,5 @@
 /*
- * $Id: YUV_to_rgb.h,v 1.2 2011/08/22 10:05:23 john_f Exp $
+ * $Id: YUV_to_rgb.h,v 1.3 2011/10/14 09:57:48 john_f Exp $
  *
  *
  * Copyright (C) 2009 British Broadcasting Corporation, All Rights Reserved
@@ -40,11 +40,30 @@ extern "C" {
  * image width multiplied by RGBpixelStride, but might be rounded up to get
  * a particular alignment in some systems.
  * The minimum size of workSpace is in_frame->Y.w * 2.
+ * This routine uses Rec.601 matrix coefficients and signal ranges of
+ * 16..235 for R,G,B,Y and -112..112 for U,V
  */
 int to_RGB(const YUV_frame* in_frame,
            BYTE* out_R, BYTE* out_G, BYTE* out_B,
            const int RGBpixelStride, const int RGBlineStride,
            void* workSpace);
+
+// recognised colour matrices
+typedef enum
+{
+    Rec601,
+    Rec709
+} matrices;
+
+/* Convert YUV to RGB.
+ * This routine uses Rec.601 (standard def) or Rec.709 (HD) matrix.
+ * It can also use a better quality UV interpolation filter, selected by
+ * setting 'fil' to any number greater than zero.
+ */
+int to_RGBex(const YUV_frame* in_frame,
+             BYTE* out_R, BYTE* out_G, BYTE* out_B,
+             const int RGBpixelStride, const int RGBlineStride,
+             const matrices matrix, const int fil, void* workSpace);
 
 #ifdef __cplusplus
 }

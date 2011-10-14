@@ -1,5 +1,5 @@
 /*
- * $Id: YUV_to_rgb.c,v 1.2 2011/08/22 10:05:23 john_f Exp $
+ * $Id: YUV_to_rgb.c,v 1.3 2011/10/14 09:57:48 john_f Exp $
  *
  *
  *
@@ -62,27 +62,76 @@ static void h_up_2_121(BYTE* srcLine, BYTE* dstLine,
     *dstLine = in_0;
 }
 
-int to_RGB(const YUV_frame* in_frame,
-           BYTE* out_R, BYTE* out_G, BYTE* out_B,
-           const int RGBpixelStride, const int RGBlineStride,
-           void* workSpace)
+// Super sample a line with high quality filtering
+// See http://www.bbc.co.uk/rd/publications/rdreport_1984_04.shtml
+static int coefs[] = {-382, 1331, -2930, 5889, -12303, 41163,
+                      41163, -12303, 5889, -2930, 1331, -382};
+static void h_up_2_HQ(BYTE* srcLine, BYTE* dstLine,
+                      const int inStride, const int w)
 {
-    int     ssx, ssy;
-    BYTE*   Y_line;
-    BYTE*   U_line;
-    BYTE*   V_line;
-    BYTE*   Y_p;
-    BYTE*   U_p;
-    BYTE*   V_p;
-    BYTE*   R_line;
-    BYTE*   G_line;
-    BYTE*   B_line;
-    BYTE*   R_p;
-    BYTE*   G_p;
-    BYTE*   B_p;
-    int     i, j;
-    int     U_inc, V_inc;
-    int     Y, U, V, R, G, B;
+    int     acc;
+    int     i, j, k;
+    int     x_max;
+    BYTE*   copy_ptr;
+    int     in_buff[12];
+
+    x_max = (w/2) - 1;
+    copy_ptr = srcLine;
+    // preload input buffer with edge value
+    for (k = 0; k < 6; k++)
+        in_buff[k] = *srcLine;
+    // load rest of input buffer
+    for (k = 6; k < 12; k++)
+    {
+        srcLine += inStride;
+        in_buff[k] = *srcLine;
+    }
+    k = 0;
+    // main interpolation loop
+    for (i = 0; i <= x_max; i++)
+    {
+        // copy even sample
+        *dstLine++ = in_buff[(k + 5) % 12];
+        // interpolate odd sample
+        acc = 0;
+        for (j = 0; j < 12; j++)
+        {
+            acc += in_buff[(j + k) % 12] * coefs[j];
+        }
+        *dstLine++ = min(max(acc / 65536, 0), 255);
+        // read next input sample
+        if (i < x_max - 6)
+            srcLine += inStride;
+        in_buff[k] = *srcLine;
+        k = (k + 1) % 12;
+    }
+}
+
+typedef void up_2_proc(BYTE*, BYTE*, const int, const int);
+
+int to_RGBex(const YUV_frame* in_frame,
+             BYTE* out_R, BYTE* out_G, BYTE* out_B,
+             const int RGBpixelStride, const int RGBlineStride,
+             const matrices matrix, const int fil, void* workSpace)
+{
+    int         ssx, ssy;
+    BYTE*       Y_line;
+    BYTE*       U_line;
+    BYTE*       V_line;
+    BYTE*       Y_p;
+    BYTE*       U_p;
+    BYTE*       V_p;
+    BYTE*       R_line;
+    BYTE*       G_line;
+    BYTE*       B_line;
+    BYTE*       R_p;
+    BYTE*       G_p;
+    BYTE*       B_p;
+    int         i, j;
+    int         U_inc, V_inc;
+    int         Y, U, V, R, G, B;
+    int         VtoR, VtoG, UtoG, UtoB;
+    up_2_proc*  up_conv;
 
     // check in_frame format
     ssx = in_frame->Y.w / in_frame->U.w;
@@ -100,6 +149,30 @@ int to_RGB(const YUV_frame* in_frame,
         U_inc = in_frame->U.pixelStride;
         V_inc = in_frame->V.pixelStride;
     }
+    // set matrix coefficients
+    if (matrix == Rec601)
+    {
+        VtoR = 89831;
+        VtoG = 45757;
+        UtoG = 22050;
+        UtoB = 113538;
+    }
+    else
+    {
+        VtoR = 100902;
+        VtoG = 29994;
+        UtoG = 12002;
+        UtoB = 118894;
+    }
+    // select filter
+    if (fil > 0)
+    {
+        up_conv = &h_up_2_HQ;
+    }
+    else
+    {
+        up_conv = &h_up_2_121;
+    }
     // do it
     Y_line = in_frame->Y.buff;
     U_line = in_frame->U.buff;
@@ -115,8 +188,8 @@ int to_RGB(const YUV_frame* in_frame,
             U_p = workSpace;
             V_p = U_p + in_frame->Y.w;
             // up convert chrominance
-            h_up_2_121(U_line, U_p, in_frame->U.pixelStride, in_frame->Y.w);
-            h_up_2_121(V_line, V_p, in_frame->V.pixelStride, in_frame->Y.w);
+            up_conv(U_line, U_p, in_frame->U.pixelStride, in_frame->Y.w);
+            up_conv(V_line, V_p, in_frame->V.pixelStride, in_frame->Y.w);
         }
         else
         {
@@ -133,9 +206,9 @@ int to_RGB(const YUV_frame* in_frame,
             V = *V_p;   V_p += V_inc;
             U = U - 128;
             V = V - 128;
-            R = Y + (V * 89831 / 65536);
-            G = Y - (((V * 45757) + (U * 22050)) / 65536);
-            B = Y + (U * 113538 / 65536);
+            R = Y + (V * VtoR / 65536);
+            G = Y - (((V * VtoG) + (U * UtoG)) / 65536);
+            B = Y + (U * UtoB / 65536);
             *R_p = min(max(R, 0), 255);
             *G_p = min(max(G, 0), 255);
             *B_p = min(max(B, 0), 255);
@@ -151,4 +224,13 @@ int to_RGB(const YUV_frame* in_frame,
         B_line += RGBlineStride;
     }
     return YUV_OK;
+}
+
+int to_RGB(const YUV_frame* in_frame,
+           BYTE* out_R, BYTE* out_G, BYTE* out_B,
+           const int RGBpixelStride, const int RGBlineStride,
+           void* workSpace)
+{
+    return to_RGBex(in_frame, out_R, out_G, out_B,
+                    RGBpixelStride, RGBlineStride, Rec601, 0, workSpace);
 }
