@@ -1,7 +1,7 @@
 #! /usr/bin/perl -w
 
 #/***************************************************************************
-# * $Id: xferserver.pl,v 1.22 2011/10/04 09:10:37 john_f Exp $             *
+# * $Id: xferserver.pl,v 1.23 2011/10/14 09:59:16 john_f Exp $             *
 # *                                                                         *
 # *   Copyright (C) 2008-2010 British Broadcasting Corporation              *
 # *   - all rights reserved.                                                *
@@ -62,7 +62,7 @@ use IO::Socket;
 use IO::Select;
 use IO::File;
 use Getopt::Std;
-our $VERSION = '$Revision: 1.22 $'; #used by Getopt in the case of --version or --help
+our $VERSION = '$Revision: 1.23 $'; #used by Getopt in the case of --version or --help
 $VERSION =~ s/\s*\$Revision:\s*//;
 $VERSION =~ s/\s*\$\s*$//;
 $Getopt::Std::STANDARD_HELP_VERSION = 1; #so it stops after version message
@@ -83,7 +83,7 @@ use constant PERMISSIONS => '0775'; #for directory creation
 #use constant COPY => '/home/ingex/bin/cpfs'; #for copying at different speeds
 use constant COPY => './cpfs'; #for copying at different speeds
 use constant SLOW_LIMIT => 10000;  #bandwidth limit kByte/s as supplied to COPY
-use constant FAST_LIMIT => 50000; #bandwidth limit kByte/s as supplied to COPY (0 = unlimited)
+use constant FAST_LIMIT => 100000; #bandwidth limit kByte/s as supplied to COPY (0 = unlimited)
 use constant RECHECK_INTERVAL => 10; #time (seconds) between rechecks if something failed
 use constant PATHS_FILE => 'paths'; #name of file the script generates to save copying details for automatic resumption of copying after restarting
 use constant SUBDIRS => qw(xml); #list of subdirectories of each source directory to scan if found (can be empty); equivalent subdirectories are generated at the destination
