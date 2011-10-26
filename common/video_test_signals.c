@@ -1,5 +1,5 @@
 /*
- * $Id: video_test_signals.c,v 1.4 2010/08/13 15:17:08 john_f Exp $
+ * $Id: video_test_signals.c,v 1.5 2011/10/26 17:11:32 john_f Exp $
  *
  * Video test frames
  *
@@ -96,13 +96,13 @@ static int rand_y(void)
 	return rand() % 220 + 16;
 }
 
-// Random number between 0 and 255 inclusive
+// Random number between 16 and 240 inclusive (range of 225)
 static int rand_uv(void)
 {
-	return rand() % 256;
+	return rand() % 225 + 16;
 }
 
-// Generate a random video frame, adhering to 16-235 legal range
+// Generate a random video frame, adhering to 16-235 legal range for Y and 16-240 for UV
 // Useful for stress-testing video encoders
 void uyvy_random_frame(int width, int height, unsigned char *video_buffer)
 {
