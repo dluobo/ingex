@@ -1,4 +1,4 @@
-# $Id: dvs_sdk_paths.mk,v 1.6 2009/01/29 07:02:25 stuart_hc Exp $
+# $Id: dvs_sdk_paths.mk,v 1.7 2011/10/26 17:00:54 john_f Exp $
 #
 # Setup DVS_INCLUDE and DVS_LIB paths
 #
@@ -28,7 +28,3 @@ else
   endif
 endif
 
-# Set the dummy include and library paths
-TMP_INGEX_ROOT=$(shell echo $(CURDIR) | sed -e 's,/studio/.*,,' -e 's,/common/.*,,')
-DUMMY_HARDWARE_INCLUDE=-I$(TMP_INGEX_ROOT)/common/tools/dvs_hardware/dummy_include
-DUMMY_HARDWARE_LIB=-L$(TMP_INGEX_ROOT)/common/tools/dvs_hardware -ldvsoem_dummy

@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.18 2011/02/18 16:32:26 john_f Exp $
+# $Id: Makefile,v 1.19 2011/10/26 17:00:54 john_f Exp $
 #
 # Makefile for building ingex server and utilities.
 #
@@ -42,22 +42,28 @@ LIBPATHS = -L../common -L../../common
 
 FFMPEG_LIBS = -lavformat -lavcodec -lswscale -lavutil -lz -lbz2 -lmp3lame -lx264 -lfaac -lfaad -lm -lpthread
 
+DVS_DUMMY_INCLUDE = -I../../common/tools/dvs_hardware/dummy_include
+DVS_DUMMY_LIB = ../../common/tools/dvs_hardware/libdvsoem_dummy.a
+
 PROGS = $(SDI_PROGS) nexus_save nexus_xv nexus_stats nexus_web system_info_web nexus_multicast nexus_set_source 
 
 .PHONY: all
 all: $(PROGS)
 
 dvs_sdi: dvs_sdi.cpp
-	$(CXX) $(CXXFLAGS) $(CPPFLAGS) $(TARGET_ARCH) $(DVS_HARDWARE_INCLUDE) $< $(DVS_HARDWARE_LIB) $(LIBS) $(LIBPATHS) -lpthread $(FFMPEG_LIBS) -o dvs_sdi
+	$(CXX) $(CXXFLAGS) $(CPPFLAGS) $(TARGET_ARCH) $(DVS_HARDWARE_INCLUDE) $< $(DVS_HARDWARE_LIB) $(LIBS) $(LIBPATHS) -lpthread $(FFMPEG_LIBS) -o $@
 
-dvs_dummy: dvs_sdi.cpp
-	$(CXX) $(CXXFLAGS) $(CPPFLAGS) $(TARGET_ARCH) $(DUMMY_HARDWARE_INCLUDE) $< $(DUMMY_HARDWARE_LIB) $(LIBS) $(LIBPATHS) -lpthread $(FFMPEG_LIBS) -o dvs_dummy
+dvs_dummy.o: dvs_sdi.cpp
+	$(COMPILE.cpp) $(DVS_DUMMY_INCLUDE) $< -o $@
+
+dvs_dummy: dvs_dummy.o $(DVS_DUMMY_LIB)
+	$(CXX) $(LDFLAGS) $(TARGET_ARCH) $^ $(LIBPATHS) $(LIBS) -lpthread  $(FFMPEG_LIBS) -o $@
 
 testgen: testgen.o
-	$(CXX) $(TARGET_ARCH) $< $(LIBPATHS) $(LIBS) -lpthread -o $@
+	$(CXX) $(LDFLAGS) $(TARGET_ARCH) $< $(LIBPATHS) $(LIBS) -lpthread -o $@
 
 nexus_stats: nexus_stats.o
-	$(CXX) $(TARGET_ARCH) $< $(LIBPATHS) $(LIBS) -lpthread -o $@
+	$(CXX) $(LDFLAGS) $(TARGET_ARCH) $< $(LIBPATHS) $(LIBS) -lpthread -o $@
 
 nexus_web: nexus_web.cpp
 	@if [ -r /usr/include/shttpd.h -o -r /usr/local/include/shttpd.h ] ; then set -x ; g++ $(CPPFLAGS) nexus_web.cpp $(LIBS) $(LIBPATHS) -lpthread -o nexus_web -lshttpd -ldl ; else echo "shttpd.h not found - nexus_web will not be built"; echo ; fi
