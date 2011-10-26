@@ -1,5 +1,5 @@
 /*
- * $Id: RouterRecorderImpl.cpp,v 1.6 2011/08/22 10:03:01 john_f Exp $
+ * $Id: RouterRecorderImpl.cpp,v 1.7 2011/10/26 17:14:44 john_f Exp $
  *
  * Servant class for RouterRecorder.
  *
@@ -528,9 +528,13 @@ void RouterRecorderImpl::StartSaving(const Ingex::Timecode & tc)
     pathname += mFilename;
     mpFile = ACE_OS::fopen (pathname.c_str(), ACE_TEXT ("w+"));
 
-    if (mpFile == 0)
+    if (0 == mpFile)
     {
         ACE_DEBUG((LM_ERROR, ACE_TEXT ("problem opening filename %p\n"), ACE_TEXT (mFilename.c_str()) ));
+    }
+    else if (0 == mMcClipDef.get())
+    {
+        ACE_DEBUG((LM_ERROR, ACE_TEXT ("No multi-camera clip definition!\n")));
     }
     else
     {
