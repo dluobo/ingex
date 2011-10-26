@@ -1,5 +1,5 @@
 /*
- * $Id: dvsoem_dummy.cpp,v 1.13 2011/10/14 09:49:55 john_f Exp $
+ * $Id: dvsoem_dummy.cpp,v 1.14 2011/10/26 16:57:16 john_f Exp $
  *
  * Implement a debug-only DVS hardware library for testing.
  *
@@ -379,13 +379,21 @@ static void setup_source_buf(DvsCard * dvs)
     }
     dvs->source_dmabuf = (unsigned char *)malloc(dvs->frame_size * dvs->source_input_frames);
 
-    if (!fp_video) {
+    if (!fp_video)
+    {
         unsigned char *video = dvs->source_dmabuf;
         unsigned char *audio12 = video + video_size;
         unsigned char *audio34 = audio12 + 0x4000;
     
-        // setup colorbars
-        uyvy_color_bars(dvs->width, dvs->height, is_rec601(dvs->videomode), video);
+        // setup video frame
+        if (1)
+        {
+            uyvy_color_bars(dvs->width, dvs->height, is_rec601(dvs->videomode), video);
+        }
+        else
+        {
+            uyvy_random_frame(dvs->width, dvs->height, video);
+        }
     
         // Create audio
         int32_t * audio1 = (int32_t *)audio12;
