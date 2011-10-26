@@ -266,7 +266,8 @@ int main(int argc, char *argv[])
             if (title[n].valid)
             {
                 if (text_to_overlay(&at_info, &title[n].ovly, title[n].text,
-                                    width / 2, "Helvetica", 32, 16, 9) < 0)
+                                    width / 2, "Helvetica", 32,
+                                    guess_par(width, height, 16, 9)) < 0)
                     exit(1);
             }
         }
@@ -277,7 +278,8 @@ int main(int argc, char *argv[])
         if (text_to_4box(&at_info, &title[0].ovly,
                          title[0].text, title[1].text,
                          title[2].text, title[3].text,
-                         width / 2, "Helvetica", 32, 16, 9) != 0)
+                         width / 2, "Helvetica", 32,
+                         guess_par(width, height, 16, 9)) != 0)
             exit(1);
         title[0].x = (width - title[0].ovly.w) * (all_quadrant % 2);
         title[0].y = (height - title[0].ovly.h) * (all_quadrant / 2);
@@ -306,7 +308,7 @@ int main(int argc, char *argv[])
     // Init time code generator
     if (tc_quadrant >= 0)
     {
-        init_timecode(&at_info, &tc_data, "Helvetica", 48, 16, 9);
+        init_timecode(&at_info, &tc_data, "Helvetica", 48, guess_par(width, height, 16, 9));
         if (input[tc_quadrant].valid)
         {
             tc_x = (width / 4) - (tc_data.width / 2);
@@ -351,7 +353,8 @@ int main(int argc, char *argv[])
             label[i].y += 72 + (i * 32);
             label[i].valid = 1;
             count = text_to_overlay(&at_info, &label[i].ovly, sub_str,
-                                    (width / 2) - 40, "Helvetica", 32, 16, 9);
+                                    (width / 2) - 40, "Helvetica", 32,
+                                    guess_par(width, height, 16, 9));
             if (count < 0)
                 exit(1);
             sub_str += count;
@@ -361,7 +364,8 @@ int main(int argc, char *argv[])
         }
 */
         count = ml_text_to_ovly(&at_info, &label[0].ovly, label_string,
-                                (width / 2) - 40, "Helvetica", 32, 16, 9);
+                                (width / 2) - 40, "Helvetica", 32,
+                                guess_par(width, height, 16, 9));
         if (count < 0)
             exit(1);
         add_overlay(&label[0].ovly, &out_frame, label[0].x, label[0].y,

@@ -1,5 +1,5 @@
 /*
- * $Id: YUV_text_overlay.h,v 1.1 2010/09/29 09:01:13 john_f Exp $
+ * $Id: YUV_text_overlay.h,v 1.2 2011/10/26 17:46:06 john_f Exp $
  *
  *
  *
@@ -61,13 +61,18 @@ void free_info_rec(p_info_rec* p_info);
 
 void free_overlay(overlay* ovly);
 
+
+// Guess the pixel aspect ratio based on the image dimensions and aspect ratio
+// Defaults to 1.0 for unknown values
+float guess_par(int width, int height, int aspect_ratio_num, int aspect_ratio_den);
+
+
 // Create a text overlay. If the width exceeds max_width the text will
 // be truncated (at a word break) to fit.
 // A positive return value indicates the number of characters actually used.
 int text_to_overlay(p_info_rec* info, overlay* ovly, const char* text,
                     int max_width, const char* font, const int size,
-                    const int aspect_ratio_num,
-                    const int aspect_ratio_den);
+                    float pixel_aspect_ratio);
 
 // Create a text overlay. If the width exceeds max_width the text will
 // be wrapped (at a word break) to fit.
@@ -78,24 +83,21 @@ YUV_error text_to_overlay_player(p_info_rec* info, overlay* ovly, const char* te
                           int tab_width,
                           int enable_align_right,
                           const char* font, const int size,
-                          const int aspect_ratio_num,
-                          const int aspect_ratio_den);
+                          float pixel_aspect_ratio);
 
 
 // Create a multi line text overlay. Line breaks occur either when the max
 // width is reached, or when a \n character occurs.
 int ml_text_to_ovly(p_info_rec* info, overlay* ovly, const char* text,
                     int max_width, const char* font, const int size,
-                    const int aspect_ratio_num,
-                    const int aspect_ratio_den);
+                    float pixel_aspect_ratio);
 
 // Create a multi line text overlay. Line breaks occur either when the max
 // width is reached, or when a \n character occurs.
 YUV_error ml_text_to_ovly_player(p_info_rec* info, overlay* ovly, const char* text,
                           int max_width, const char* font, const int size,
                           int margin,
-                          const int aspect_ratio_num,
-                          const int aspect_ratio_den);
+                          float pixel_aspect_ratio);
 
 
 // Create a 2x2 grid with a short text string in each space.
@@ -103,7 +105,7 @@ YUV_error ml_text_to_ovly_player(p_info_rec* info, overlay* ovly, const char* te
 int text_to_4box(p_info_rec* info, overlay* ovly,
                  char* txt_0, char* txt_1, char* txt_2, char* txt_3,
                  int max_width, char* font, const int size,
-                 const int aspect_ratio_num, const int aspect_ratio_den);
+                 float pixel_aspect_ratio);
 
 // Superimpose a text overlay on a video frame at position (x, y).
 // The text colour is set by txtY (16..235), txtU & txtV (128-112..128+112).
@@ -117,7 +119,7 @@ void free_timecode(timecode_data* tc_data);
 // Render a set of characters to use when overlaying a timecode.
 int init_timecode(p_info_rec* info, timecode_data* tc_data,
                   const char* font, const int size,
-                  const int aspect_ratio_num, const int aspect_ratio_den);
+                  float pixel_aspect_ratio);
 
 // Superimpose a timecode on a video frame at position (x, y).
 // The timecode is computed from the frame number, assuming 25 frames/second.
@@ -134,15 +136,13 @@ YUV_error add_timecode_player(timecode_data* tc_data, int hr, int mn, int sc, in
 
 YUV_error char_to_overlay(p_info_rec* info, overlay* ovly, char character,
                           char* font, const int size,
-                          const int aspect_ratio_num,
-                          const int aspect_ratio_den);
+                          float pixel_aspect_ratio);
 
 void free_char_set(char_set_data* cs_data);
 
 YUV_error char_set_to_overlay(p_info_rec* info, char_set_data* cs_data,
                           const char* cset, const char* font, const int size,
-                          const int aspect_ratio_num,
-                          const int aspect_ratio_den);
+                          float pixel_aspect_ratio);
 
 
 #ifdef __cplusplus

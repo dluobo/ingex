@@ -1,5 +1,5 @@
 /*
- * $Id: YUV_text_overlay.c,v 1.1 2010/09/29 09:01:13 john_f Exp $
+ * $Id: YUV_text_overlay.c,v 1.2 2011/10/26 17:46:06 john_f Exp $
  *
  *
  *
@@ -123,7 +123,7 @@ static int find_font(info_rec* info, const char* family, char* path)
 }
 
 static int set_font(info_rec* info, const char* family, int size,
-                    int aspect_ratio_num, int aspect_ratio_den)
+                    float pixel_aspect_ratio)
 {
     char	fontPath[1024];
     int		width, height;
@@ -158,7 +158,7 @@ static int set_font(info_rec* info, const char* family, int size,
     }
     // set char size
     height = size * 64 * 72;
-    width = (height * aspect_ratio_den * 702) / (aspect_ratio_num * 575);
+    width = height / pixel_aspect_ratio;
     if (FT_Set_Char_Size(info->face, width, height, 1, 1))
         return YUV_freetype;
     return YUV_OK;
@@ -254,10 +254,44 @@ static void filterUV(overlay* ovly, const int ssx, const int ssy)
     ovly->ssy = ssy;
 }
 
+float guess_par(int width, int height, int aspect_ratio_num, int aspect_ratio_den)
+{
+    if (width <= 0 || height <= 0)
+        return 1.0;
+
+    if (width <= 720)
+    {
+        // assume rec 601
+        if (width / (float)height <= 720 / 576.0)
+        {
+            // assume 625 line
+            if (aspect_ratio_num == 4 && aspect_ratio_den == 3)
+                return 59 / 54.0;
+            else if (aspect_ratio_num == 16 && aspect_ratio_den == 9)
+                return 118 / 81.0;
+        }
+        else
+        {
+            // assume 525 line
+            if (aspect_ratio_num == 4 && aspect_ratio_den == 3)
+                return 10 / 11.0;
+            else if (aspect_ratio_num == 16 && aspect_ratio_den == 9)
+                return 40 / 33.0;
+        }
+    }
+    else if (((height == 1080 || height == 1088) && width == 1440) ||
+             (height == 720 && width == 960))
+    {
+        // assume horizontally sub-sampled HD SMPTE 274 / 296
+        return 4 / 3.0;
+    }
+
+    return 1.0;
+}
+
 int text_to_overlay(p_info_rec* p_info, overlay* ovly, const char* text,
                     int max_width, const char* font, const int size, 
-                    const int aspect_ratio_num,
-                    const int aspect_ratio_den)
+                    float pixel_aspect_ratio)
 {
     info_rec*	info;
     BYTE*	srcLine;
@@ -274,7 +308,7 @@ int text_to_overlay(p_info_rec* p_info, overlay* ovly, const char* text,
             return result;
     }
     info = *p_info;
-    result = set_font(info, font, size, aspect_ratio_num, aspect_ratio_den);
+    result = set_font(info, font, size, pixel_aspect_ratio);
     if (result < 0)
         return result;
     // render text using freetype2
@@ -412,8 +446,7 @@ YUV_error text_to_overlay_player(p_info_rec* p_info, overlay* ovly, const char* 
                           int tab_width,
                           int enable_align_right,
                           const char* font, const int size,
-                          const int aspect_ratio_num,
-                          const int aspect_ratio_den)
+                          float pixel_aspect_ratio)
 {
     info_rec*   info;
     BYTE*   srcLine;
@@ -430,7 +463,7 @@ YUV_error text_to_overlay_player(p_info_rec* p_info, overlay* ovly, const char* 
             return result;
     }
     info = *p_info;
-    result = set_font(info, font, size, aspect_ratio_num, aspect_ratio_den);
+    result = set_font(info, font, size, pixel_aspect_ratio);
     if (result < 0)
         return result;
     // render text using freetype2
@@ -573,8 +606,8 @@ YUV_error text_to_overlay_player(p_info_rec* p_info, overlay* ovly, const char* 
 //        fprintf(stderr, "Area of '%s' = (%d x %d)\n", text, ovly->w, ovly->h);
         ovly->ssx = -1;
         ovly->ssy = -1;
-        // alloc memory
-        ovly->buff = malloc(ovly->w * ovly->h * 2);
+        // alloc memory (1 line padding to avoid possibility of seg fault resulting from (pos[n].y + 1) in loop below)
+        ovly->buff = malloc(ovly->w * (ovly->h + 1) * 2);
         if (ovly->buff == NULL)
             return YUV_no_memory;
         memset(ovly->buff, 0, ovly->w * ovly->h * 2);
@@ -588,7 +621,7 @@ YUV_error text_to_overlay_player(p_info_rec* p_info, overlay* ovly, const char* 
             {
                 FT_BitmapGlyph  bit = (FT_BitmapGlyph)glyphs[n];
                 srcLine = bit->bitmap.buffer;
-                dstLine = ovly->buff + ((pos[n].y - bit->top) * ovly->w) +
+                dstLine = ovly->buff + (((pos[n].y + 1) - bit->top) * ovly->w) +
                                         pos[n].x + bit->left +
                                         x_margin +
                                         y_margin * ovly->w +
@@ -616,7 +649,7 @@ YUV_error text_to_overlay_player(p_info_rec* p_info, overlay* ovly, const char* 
 
 int ml_text_to_ovly(p_info_rec* info, overlay* ovly, const char* text,
                     int max_width, const char* font, const int size,
-                    const int aspect_ratio_num, const int aspect_ratio_den)
+                    float pixel_aspect_ratio)
 {
     #define MAX_LINES 100
     overlay	    line_ovly[MAX_LINES];
@@ -635,7 +668,7 @@ int ml_text_to_ovly(p_info_rec* info, overlay* ovly, const char* text,
     while (length > 0 && no_lines < MAX_LINES)
     {
         count = text_to_overlay(info, &line_ovly[no_lines], sub_str, max_width,
-                                font, size, aspect_ratio_num, aspect_ratio_den);
+                                font, size, pixel_aspect_ratio);
         if (count < 0)
             return count;
         sub_str += count;
@@ -672,7 +705,7 @@ int ml_text_to_ovly(p_info_rec* info, overlay* ovly, const char* text,
 
 YUV_error ml_text_to_ovly_player(p_info_rec* info, overlay* ovly, const char* text,
                           int max_width, const char* font, const int size, int margin,
-                          const int aspect_ratio_num, const int aspect_ratio_den)
+                          float pixel_aspect_ratio)
 {
     #define MAX_LINES 100
     overlay     line_ovly[MAX_LINES];
@@ -691,7 +724,7 @@ YUV_error ml_text_to_ovly_player(p_info_rec* info, overlay* ovly, const char* te
     while (length > 0 && no_lines < MAX_LINES)
     {
         count = text_to_overlay_player(info, &line_ovly[no_lines], sub_str, max_width, 0,
-                                0, 0, 0, 0, 0, font, size, aspect_ratio_num, aspect_ratio_den);
+                                0, 0, 0, 0, 0, font, size, pixel_aspect_ratio);
         if (count < 0)
             return count;
         sub_str += count;
@@ -732,7 +765,7 @@ YUV_error ml_text_to_ovly_player(p_info_rec* info, overlay* ovly, const char* te
 int text_to_4box(p_info_rec* info, overlay* ovly,
                  char* txt_0, char* txt_1, char* txt_2, char* txt_3,
                  int max_width, char* font, const int size,
-                 const int aspect_ratio_num, const int aspect_ratio_den)
+                 float pixel_aspect_ratio)
 {
     int		n, w, h, j, x, y;
     BYTE*	ptr;
@@ -747,7 +780,7 @@ int text_to_4box(p_info_rec* info, overlay* ovly,
     {
         result = text_to_overlay(info, &txt_ovly[n], title[n],
                                  (max_width / 2) - 3, font, size,
-                                 aspect_ratio_num, aspect_ratio_den);
+                                 pixel_aspect_ratio);
         if (result < 0)
             return result;
     }
@@ -920,7 +953,7 @@ void free_timecode(timecode_data* tc_data)
 
 int init_timecode(p_info_rec* p_info, timecode_data* tc_data,
                   const char* font, const int size,
-                  const int aspect_ratio_num, const int aspect_ratio_den)
+                  float pixel_aspect_ratio)
 {
     info_rec*		info;
     FT_GlyphSlot	slot;
@@ -941,7 +974,7 @@ int init_timecode(p_info_rec* p_info, timecode_data* tc_data,
     }
     info = *p_info;
     // create a suitable text image
-    result = set_font(info, font, size, aspect_ratio_num, aspect_ratio_den);
+    result = set_font(info, font, size, pixel_aspect_ratio);
     if (result < 0)
         return result;
     // get bounding box for characters
@@ -1086,8 +1119,7 @@ YUV_error add_timecode_player(timecode_data* tc_data, int hr, int mn, int sc, in
 
 YUV_error char_to_overlay(p_info_rec* p_info, overlay* ovly, char character,
                           char* font, const int size,
-                          const int aspect_ratio_num,
-                          const int aspect_ratio_den)
+                          float pixel_aspect_ratio)
 {
     info_rec*       info;
     FT_GlyphSlot    slot;
@@ -1107,7 +1139,7 @@ YUV_error char_to_overlay(p_info_rec* p_info, overlay* ovly, char character,
     }
     info = *p_info;
     // create a suitable text image
-    result = set_font(info, font, size, aspect_ratio_num, aspect_ratio_den);
+    result = set_font(info, font, size, pixel_aspect_ratio);
     if (result < 0)
         return result;
     // get bounding box for character
@@ -1181,8 +1213,7 @@ void free_char_set(char_set_data* cs_data)
 
 YUV_error char_set_to_overlay(p_info_rec* p_info, char_set_data* cs_data,
                           const char* cset, const char* font, const int size,
-                          const int aspect_ratio_num,
-                          const int aspect_ratio_den)
+                          float pixel_aspect_ratio)
 {
     info_rec*       info;
     FT_GlyphSlot    slot;
@@ -1209,7 +1240,7 @@ YUV_error char_set_to_overlay(p_info_rec* p_info, char_set_data* cs_data,
     }
     info = *p_info;
     // create a suitable text image
-    result = set_font(info, font, size, aspect_ratio_num, aspect_ratio_den);
+    result = set_font(info, font, size, pixel_aspect_ratio);
     if (result < 0)
         return result;
     // get bounding box for characters
