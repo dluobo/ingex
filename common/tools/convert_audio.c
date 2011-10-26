@@ -1,5 +1,5 @@
 /*
- * $Id: convert_audio.c,v 1.2 2010/06/02 10:52:38 philipn Exp $
+ * $Id: convert_audio.c,v 1.3 2011/10/26 17:12:39 john_f Exp $
  *
  * Utility to store video frames from dvs_sdi ring buffer to disk files
  *
@@ -186,13 +186,17 @@ extern int main(int argc, char *argv[])
         // and writing 16-bit output
         if (input_bps == 16 && output_bps == 16)
         {
-            fwrite(&buf[0][0], 2, 1, outfp);
-            fwrite(&buf[1][0], 2, 1, outfp);
+            for (i = 0; i < num_channels; i++)
+            {
+                fwrite(&buf[i][0], 2, 1, outfp);
+            }
         }
         else if (input_bps == 24 && output_bps == 16)
         {
-            fwrite(&buf[0][1], 2, 1, outfp);
-            fwrite(&buf[1][1], 2, 1, outfp);
+            for (i = 0; i < num_channels; i++)
+            {
+                fwrite(&buf[i][1], 2, 1, outfp);
+            }
         }
     }
 
