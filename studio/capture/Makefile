@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.19 2011/10/26 17:00:54 john_f Exp $
+# $Id: Makefile,v 1.20 2011/10/26 17:18:20 john_f Exp $
 #
 # Makefile for building ingex server and utilities.
 #
@@ -33,6 +33,9 @@ else
   SDI_PROGS=dvs_dummy testgen
 endif
 
+# Set environment variable BMD_HARDWARE_INCLUDE if building bmd_sdi
+# e.g. export BMD_HARDWARE_INCLUDE='/home/ingex/DeckLink/Blackmagic DeckLink SDK 8.6/Linux/include'
+
 CPPFLAGS = -DDEBUG -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE -DUSE_FFMPEG -I../../common -I../common -I../database/src
 CXXFLAGS = -Wall -g -O3
 TARGET_ARCH = -mmmx -msse2
@@ -58,6 +61,9 @@ dvs_dummy.o: dvs_sdi.cpp
 
 dvs_dummy: dvs_dummy.o $(DVS_DUMMY_LIB)
 	$(CXX) $(LDFLAGS) $(TARGET_ARCH) $^ $(LIBPATHS) $(LIBS) -lpthread  $(FFMPEG_LIBS) -o $@
+
+bmd_sdi: bmd_sdi.cpp
+	$(LINK.cpp) -I "$(BMD_HARDWARE_INCLUDE)" $<  $(LIBS) $(LIBPATHS) -lpthread $(FFMPEG_LIBS) -lDeckLinkAPI -o bmd_sdi
 
 testgen: testgen.o
 	$(CXX) $(LDFLAGS) $(TARGET_ARCH) $< $(LIBPATHS) $(LIBS) -lpthread -o $@
