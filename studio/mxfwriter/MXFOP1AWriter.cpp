@@ -1,5 +1,5 @@
 /*
- * $Id: MXFOP1AWriter.cpp,v 1.5 2011/10/27 13:47:22 philipn Exp $
+ * $Id: MXFOP1AWriter.cpp,v 1.6 2011/10/27 13:48:20 philipn Exp $
  *
  * MXF OP-1A writer
  *
@@ -353,7 +353,7 @@ void MXFOP1AWriter::WriteSamples(uint32_t mp_track_id, uint32_t num_samples, con
         int audio_index = mContentPackage->GetAudioTrackIndex(mp_track_id);
         if (audio_index >= 0) {
             PA_ASSERT((mPackageGroup->Is25FPSProject() && num_samples == 1920) ||
-                      (!mPackageGroup->Is25FPSProject() && (num_samples == 1602 || num_samples == 1601)));
+                      (!mPackageGroup->Is25FPSProject() && (num_samples <= 1602)));
             PA_ASSERT(data_size <= mContentPackage->mAudioAllocatedSize);
             PA_ASSERT(!mContentPackage->mAudioSet[audio_index]);
     
@@ -420,7 +420,7 @@ void MXFOP1AWriter::EndSampleData(uint32_t mp_track_id, uint32_t num_samples)
         int audio_index = mContentPackage->GetAudioTrackIndex(mp_track_id);
         if (audio_index >= 0) {
             PA_ASSERT((mPackageGroup->Is25FPSProject() && num_samples == 1920) ||
-                      (!mPackageGroup->Is25FPSProject() && (num_samples == 1602 || num_samples == 1601)));
+                      (!mPackageGroup->Is25FPSProject() && (num_samples <= 1602)));
             PA_ASSERT(!mContentPackage->mAudioSet[audio_index]);
             PA_ASSERT(mContentPackage->mGrowingAudioSize[audio_index] > 0);
     
