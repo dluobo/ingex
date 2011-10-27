@@ -1,5 +1,5 @@
 /*
- * $Id: MXFOP1AWriter.cpp,v 1.4 2010/10/12 17:44:12 john_f Exp $
+ * $Id: MXFOP1AWriter.cpp,v 1.5 2011/10/27 13:47:22 philipn Exp $
  *
  * MXF OP-1A writer
  *
@@ -264,6 +264,7 @@ void MXFOP1AWriter::PrepareToWrite(PackageGroup *package_group, bool take_owners
         mD10Writer->SetSampleRate(D10MXFOP1AWriter::D10_SAMPLE_RATE_525_60I);
     mD10Writer->SetAudioChannelCount(mContentPackage->mNumAudioTracks);
     mD10Writer->SetAudioQuantizationBits(file_descriptor->audioQuantizationBits);
+    mD10Writer->SetAudioSequenceOffset(0); // force start of sequence (60i)
     mD10Writer->SetAspectRatio(convert_rational(file_descriptor->imageAspectRatio));
     mD10Writer->SetStartTimecode(start_timecode, false);
     switch (file_descriptor->videoResolutionID)
