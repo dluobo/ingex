@@ -1,5 +1,5 @@
 /*
- * $Id: raw_file_source.c,v 1.9 2011/09/27 10:14:29 philipn Exp $
+ * $Id: raw_file_source.c,v 1.10 2011/10/27 13:45:37 philipn Exp $
  *
  *
  *
@@ -372,7 +372,7 @@ int rfs_open(const char* filename, const StreamInfo* streamInfo, MediaSource** s
             frameSize = streamInfo->width * streamInfo->height * 3;
             break;
         case UYVY_10BIT_FORMAT:
-            frameSize = (streamInfo->width + 47) / 48 * 128 * streamInfo->height;
+            frameSize = (streamInfo->width + 5) / 6 * 16 * streamInfo->height;
             break;
         case YUV422_10BIT_FORMAT:
             frameSize = streamInfo->width * streamInfo->height * 2 * 2;
@@ -421,32 +421,9 @@ int rfs_open(const char* filename, const StreamInfo* streamInfo, MediaSource** s
     newSource->streamInfo.sourceId = msc_create_id();
 
     CHK_OFAIL(add_filename_source_info(&newSource->streamInfo, SRC_INFO_FILE_NAME, filename));
-    switch (streamInfo->format)
-    {
-        case UYVY_FORMAT:
-            CHK_OFAIL(add_known_source_info(&newSource->streamInfo, SRC_INFO_FILE_TYPE, "Raw UYVY"));
-            break;
-        case YUV422_FORMAT:
-            CHK_OFAIL(add_known_source_info(&newSource->streamInfo, SRC_INFO_FILE_TYPE, "Raw YUV422"));
-            break;
-        case YUV420_FORMAT:
-            CHK_OFAIL(add_known_source_info(&newSource->streamInfo, SRC_INFO_FILE_TYPE, "Raw YUV420"));
-            break;
-        case YUV444_FORMAT:
-            CHK_OFAIL(add_known_source_info(&newSource->streamInfo, SRC_INFO_FILE_TYPE, "Raw YUV444"));
-            break;
-        case UYVY_10BIT_FORMAT:
-            CHK_OFAIL(add_known_source_info(&newSource->streamInfo, SRC_INFO_FILE_TYPE, "Raw 10 bit UYVY"));
-            break;
-        case PCM_FORMAT:
-            CHK_OFAIL(add_known_source_info(&newSource->streamInfo, SRC_INFO_FILE_TYPE, "Raw PCM"));
-            break;
-        case TIMECODE_FORMAT:
-            CHK_OFAIL(add_known_source_info(&newSource->streamInfo, SRC_INFO_FILE_TYPE, "Raw Timecode"));
-            break;
-        default:
-            goto fail;
-    }
+    CHK_OFAIL(add_known_source_info(&newSource->streamInfo, SRC_INFO_FILE_TYPE, "Raw uncompressed"));
+    CHK_OFAIL(add_known_source_info(&newSource->streamInfo, SRC_INFO_ORIGINAL_STREAM_FORMAT,
+                                    get_stream_format_string(newSource->streamInfo.format)));
     CHK_OFAIL(add_timecode_source_info(&newSource->streamInfo, SRC_INFO_FILE_DURATION, duration, get_rounded_frame_rate(&newSource->streamInfo.frameRate)));
 
 

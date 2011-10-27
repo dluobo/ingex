@@ -325,9 +325,9 @@ static int decode_and_send_const(AVCIDecodeStreamConnect* connect, const unsigne
                              (const uint16_t*)connect->decoder->decFrame->data[0],
                              (const uint16_t*)connect->decoder->decFrame->data[1],
                              (const uint16_t*)connect->decoder->decFrame->data[2],
-                             connect->decoder->decFrame->linesize[0],
-                             connect->decoder->decFrame->linesize[1],
-                             connect->decoder->decFrame->linesize[2],
+                             connect->decoder->decFrame->linesize[0] / 2,
+                             connect->decoder->decFrame->linesize[1] / 2,
+                             connect->decoder->decFrame->linesize[2] / 2,
                              connect->decodedStreamInfo.width, connect->decodedStreamInfo.height,
                              2, 1);
     }
@@ -337,9 +337,9 @@ static int decode_and_send_const(AVCIDecodeStreamConnect* connect, const unsigne
                              (const uint16_t*)connect->decoder->decFrame->data[0],
                              (const uint16_t*)connect->decoder->decFrame->data[1],
                              (const uint16_t*)connect->decoder->decFrame->data[2],
-                             connect->decoder->decFrame->linesize[0],
-                             connect->decoder->decFrame->linesize[1],
-                             connect->decoder->decFrame->linesize[2],
+                             connect->decoder->decFrame->linesize[0] / 2,
+                             connect->decoder->decFrame->linesize[1] / 2,
+                             connect->decoder->decFrame->linesize[2] / 2,
                              connect->decodedStreamInfo.width, connect->decodedStreamInfo.height,
                              2, 2);
     }

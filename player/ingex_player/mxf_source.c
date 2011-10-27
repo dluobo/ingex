@@ -1,5 +1,5 @@
 /*
- * $Id: mxf_source.c,v 1.28 2011/09/27 10:14:29 philipn Exp $
+ * $Id: mxf_source.c,v 1.29 2011/10/27 13:45:37 philipn Exp $
  *
  *
  *
@@ -1198,14 +1198,7 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
     set_stream_clip_id(&commonStreamInfo, clipUMIDStr);
 
     CHK_OFAIL(add_filename_source_info(&commonStreamInfo, SRC_INFO_FILE_NAME, filename));
-    if (newSource->isArchiveMXF)
-    {
-        CHK_OFAIL(add_known_source_info(&commonStreamInfo, SRC_INFO_FILE_TYPE, "Archive-MXF"));
-    }
-    else
-    {
-        CHK_OFAIL(add_known_source_info(&commonStreamInfo, SRC_INFO_FILE_TYPE, "MXF"));
-    }
+    CHK_OFAIL(add_known_source_info(&commonStreamInfo, SRC_INFO_FILE_TYPE, "MXF"));
     CHK_OFAIL(add_timecode_source_info(&commonStreamInfo, SRC_INFO_FILE_DURATION, duration, get_rounded_frame_rate(&commonStreamInfo.frameRate)));
 
     if (newSource->isArchiveMXF)
@@ -1419,6 +1412,9 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
             {
                 outputStream->streamInfo.format = UNKNOWN_FORMAT;
             }
+
+            CHK_OFAIL(add_known_source_info(&outputStream->streamInfo, SRC_INFO_ORIGINAL_STREAM_FORMAT,
+                                            get_stream_format_string(outputStream->streamInfo.format)));
         }
         else /* audio */
         {
@@ -1437,6 +1433,9 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
                     outputStream->streamInfo.samplingRate.den = track->audio.samplingRate.denominator;
                     outputStream->streamInfo.numChannels = 1;
                     outputStream->streamInfo.bitsPerSample = track->audio.bitsPerSample;
+
+                    CHK_OFAIL(add_known_source_info(&outputStream->streamInfo, SRC_INFO_ORIGINAL_STREAM_FORMAT,
+                                                    get_stream_format_string(outputStream->streamInfo.format)));
                 }
             }
         }

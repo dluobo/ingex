@@ -1,5 +1,5 @@
 /*
- * $Id: udp_source.c,v 1.10 2011/07/13 10:22:27 philipn Exp $
+ * $Id: udp_source.c,v 1.11 2011/10/27 13:45:37 philipn Exp $
  *
  *
  *
@@ -527,6 +527,8 @@ int udp_open(const char *address, MediaSource** source)
     newSource->tracks[newSource->numTracks].frameSize = header.width * header.height * 3/2;
     newSource->tracks[newSource->numTracks].streamInfo.format = YUV420_FORMAT;
     CHK_OFAIL(add_known_source_info(&newSource->tracks[newSource->numTracks].streamInfo, SRC_INFO_TITLE, title));
+    CHK_OFAIL(add_known_source_info(&newSource->tracks[newSource->numTracks].streamInfo, SRC_INFO_ORIGINAL_STREAM_FORMAT,
+                                    get_stream_format_string(newSource->tracks[newSource->numTracks].streamInfo.format)));
     newSource->numTracks++;
 
     /* audio track 1 */
@@ -540,6 +542,8 @@ int udp_open(const char *address, MediaSource** source)
     newSource->tracks[newSource->numTracks].streamInfo.numChannels = 1;
     newSource->tracks[newSource->numTracks].streamInfo.bitsPerSample = 16;
     CHK_OFAIL(add_known_source_info(&newSource->tracks[newSource->numTracks].streamInfo, SRC_INFO_TITLE, "UDP Audio 1"));
+    CHK_OFAIL(add_known_source_info(&newSource->tracks[newSource->numTracks].streamInfo, SRC_INFO_ORIGINAL_STREAM_FORMAT,
+                                    get_stream_format_string(newSource->tracks[newSource->numTracks].streamInfo.format)));
     newSource->tracks[newSource->numTracks].frameSize = 2 * 48000 / 25; // TODO: varying for NTSC frame rates
     newSource->numTracks++;
 
@@ -554,6 +558,8 @@ int udp_open(const char *address, MediaSource** source)
     newSource->tracks[newSource->numTracks].streamInfo.numChannels = 1;
     newSource->tracks[newSource->numTracks].streamInfo.bitsPerSample = 16;
     CHK_OFAIL(add_known_source_info(&newSource->tracks[newSource->numTracks].streamInfo, SRC_INFO_TITLE, "UDP Audio 2"));
+    CHK_OFAIL(add_known_source_info(&newSource->tracks[newSource->numTracks].streamInfo, SRC_INFO_ORIGINAL_STREAM_FORMAT,
+                                    get_stream_format_string(newSource->tracks[newSource->numTracks].streamInfo.format)));
     newSource->tracks[newSource->numTracks].frameSize = 2 * 48000 / 25; // TODO: varying for NTSC frame rates
     newSource->numTracks++;
 
@@ -567,6 +573,8 @@ int udp_open(const char *address, MediaSource** source)
     newSource->tracks[newSource->numTracks].streamInfo.timecodeType = SOURCE_TIMECODE_TYPE;
     newSource->tracks[newSource->numTracks].streamInfo.timecodeSubType = VITC_SOURCE_TIMECODE_SUBTYPE;
     CHK_OFAIL(add_known_source_info(&newSource->tracks[newSource->numTracks].streamInfo, SRC_INFO_TITLE, "UDP Timecode 1"));
+    CHK_OFAIL(add_known_source_info(&newSource->tracks[newSource->numTracks].streamInfo, SRC_INFO_ORIGINAL_STREAM_FORMAT,
+                                    get_stream_format_string(newSource->tracks[newSource->numTracks].streamInfo.format)));
     newSource->tracks[newSource->numTracks].frameSize = sizeof(Timecode);
     newSource->numTracks++;
 
@@ -580,6 +588,8 @@ int udp_open(const char *address, MediaSource** source)
     newSource->tracks[newSource->numTracks].streamInfo.timecodeType = SOURCE_TIMECODE_TYPE;
     newSource->tracks[newSource->numTracks].streamInfo.timecodeSubType = LTC_SOURCE_TIMECODE_SUBTYPE;
     CHK_OFAIL(add_known_source_info(&newSource->tracks[newSource->numTracks].streamInfo, SRC_INFO_TITLE, "UDP Timecode 2"));
+    CHK_OFAIL(add_known_source_info(&newSource->tracks[newSource->numTracks].streamInfo, SRC_INFO_ORIGINAL_STREAM_FORMAT,
+                                    get_stream_format_string(newSource->tracks[newSource->numTracks].streamInfo.format)));
     newSource->tracks[newSource->numTracks].frameSize = sizeof(Timecode);
     newSource->numTracks++;
 
@@ -591,6 +601,8 @@ int udp_open(const char *address, MediaSource** source)
     newSource->tracks[newSource->numTracks].streamInfo.frameRate = newSource->frameRate;
     newSource->tracks[newSource->numTracks].streamInfo.isHardFrameRate = 1;
     CHK_OFAIL(add_known_source_info(&newSource->tracks[newSource->numTracks].streamInfo, SRC_INFO_TITLE, "UDP Event"));
+    CHK_OFAIL(add_known_source_info(&newSource->tracks[newSource->numTracks].streamInfo, SRC_INFO_ORIGINAL_STREAM_FORMAT,
+                                    get_stream_format_string(newSource->tracks[newSource->numTracks].streamInfo.format)));
     newSource->numTracks++;
 
 

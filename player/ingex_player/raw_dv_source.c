@@ -1,5 +1,5 @@
 /*
- * $Id: raw_dv_source.c,v 1.7 2011/07/13 10:22:27 philipn Exp $
+ * $Id: raw_dv_source.c,v 1.8 2011/10/27 13:45:37 philipn Exp $
  *
  *
  *
@@ -585,26 +585,9 @@ int rds_open(const char* filename, MediaSource** source)
     timecodeBase = (int)(newSource->streamInfo.frameRate.num / (double)newSource->streamInfo.frameRate.den + 0.5);
 
     CHK_OFAIL(add_filename_source_info(&newSource->streamInfo, SRC_INFO_FILE_NAME, filename));
-    switch (newSource->streamInfo.format)
-    {
-        case DV25_YUV420_FORMAT:
-            CHK_OFAIL(add_known_source_info(&newSource->streamInfo, SRC_INFO_FILE_TYPE, "DV 25 4:2:0"));
-            break;
-        case DV25_YUV411_FORMAT:
-            CHK_OFAIL(add_known_source_info(&newSource->streamInfo, SRC_INFO_FILE_TYPE, "DV 25 4:1:1"));
-            break;
-        case DV50_FORMAT:
-            CHK_OFAIL(add_known_source_info(&newSource->streamInfo, SRC_INFO_FILE_TYPE, "DV 50"));
-            break;
-        case DV100_1080I_FORMAT:
-            CHK_OFAIL(add_known_source_info(&newSource->streamInfo, SRC_INFO_FILE_TYPE, "DV 100 1080i"));
-            break;
-        case DV100_720P_FORMAT:
-            CHK_OFAIL(add_known_source_info(&newSource->streamInfo, SRC_INFO_FILE_TYPE, "DV 100 720p"));
-            break;
-        default:
-            goto fail;
-    }
+    CHK_OFAIL(add_known_source_info(&newSource->streamInfo, SRC_INFO_FILE_TYPE, "Raw DV"));
+    CHK_OFAIL(add_known_source_info(&newSource->streamInfo, SRC_INFO_ORIGINAL_STREAM_FORMAT,
+                                    get_stream_format_string(newSource->streamInfo.format)));
     CHK_OFAIL(add_timecode_source_info(&newSource->streamInfo, SRC_INFO_FILE_DURATION, duration, timecodeBase));
 
 

@@ -1,5 +1,5 @@
 /*
- * $Id: bouncing_ball_source.c,v 1.10 2011/09/27 10:14:29 philipn Exp $
+ * $Id: bouncing_ball_source.c,v 1.11 2011/10/27 13:45:37 philipn Exp $
  *
  *
  *
@@ -428,7 +428,7 @@ int bbs_create(const StreamInfo* videoStreamInfo, int64_t length, int numBalls, 
     }
     else if (videoStreamInfo->format == UYVY_10BIT_FORMAT)
     {
-        newSource->imageSize = (videoStreamInfo->width + 47) / 48 * 128 * videoStreamInfo->height;
+        newSource->imageSize = (videoStreamInfo->width + 5) / 6 * 16 * videoStreamInfo->height;
     }
     else if (videoStreamInfo->format == YUV422_10BIT_FORMAT)
     {
@@ -475,6 +475,8 @@ int bbs_create(const StreamInfo* videoStreamInfo, int64_t length, int numBalls, 
     newSource->streamInfo.sourceId = msc_create_id();
 
     CHK_OFAIL(add_known_source_info(&newSource->streamInfo, SRC_INFO_TITLE, "Bouncing balls"));
+    CHK_OFAIL(add_known_source_info(&newSource->streamInfo, SRC_INFO_ORIGINAL_STREAM_FORMAT,
+                                    get_stream_format_string(newSource->streamInfo.format)));
 
 
     *source = &newSource->mediaSource;

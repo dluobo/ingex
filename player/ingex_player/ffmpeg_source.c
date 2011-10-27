@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_source.c,v 1.14 2011/09/27 10:14:29 philipn Exp $
+ * $Id: ffmpeg_source.c,v 1.15 2011/10/27 13:45:37 philipn Exp $
  *
  *
  *
@@ -1437,6 +1437,9 @@ static int add_source_infos(FFMPEGSource* source, StreamInfo* streamInfo, const 
         }
     }
 #endif
+
+    CHK_ORET(add_known_source_info(streamInfo, SRC_INFO_ORIGINAL_STREAM_FORMAT,
+                                   get_stream_format_string(streamInfo->format)));
 
     return 1;
 }

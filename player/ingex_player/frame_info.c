@@ -1,5 +1,5 @@
 /*
- * $Id: frame_info.c,v 1.12 2011/09/27 10:14:29 philipn Exp $
+ * $Id: frame_info.c,v 1.13 2011/10/27 13:45:37 philipn Exp $
  *
  *
  *
@@ -46,26 +46,26 @@ static const char* g_streamFormatStrings[] =
 {
     "unknown",
     "uyvy",
-    "uyvy_10bit",
+    "uyvy 10bit",
     "yuv420",
-    "yuv420_10bit",
+    "yuv420 10bit",
     "yuv411",
     "yuv422",
-    "yuv422_10bit",
+    "yuv422 10bit",
     "yuv444",
-    "dv25_420",
-    "dv25_411",
+    "dv25 420",
+    "dv25 411",
     "dv50",
-    "dv100_1080i",
-    "dv100_720p",
-    "d10_picture",
-    "avid_mjpeg",
-    "avid_dnxhd",
+    "dv100 1080i",
+    "dv100 720p",
+    "d10 picture",
+    "avid mjpeg",
+    "avid dnxhd",
     "avci 50",
     "avci 100",
     "pcm",
     "timecode",
-    "source_event"
+    "source event"
 };
 
 /* keep length <= MAX_SOURCE_INFO_NAME_LEN */
@@ -74,7 +74,6 @@ static const char* g_sourceInfoNames[] =
     "Filename",
     "File type",
     "File duration",
-
     "Orig filename",
     "Creation date",
     "LTO spool no",
@@ -85,11 +84,9 @@ static const char* g_sourceInfoNames[] =
     "Tx date",
     "Prog number",
     "Prog duration",
-
     "Title",
-
     "Name",
-
+    "Stream format",
     "Unknown"
 };
 

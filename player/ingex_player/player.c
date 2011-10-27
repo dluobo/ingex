@@ -1,5 +1,5 @@
 /*
- * $Id: player.c,v 1.37 2011/09/27 10:14:29 philipn Exp $
+ * $Id: player.c,v 1.38 2011/10/27 13:45:37 philipn Exp $
  *
  *
  *
@@ -945,6 +945,7 @@ static void usage(const char* cmd)
     fprintf(stderr, "  --src-size <WxH>         Width and height for source video input (default is 720x576)\n");
     fprintf(stderr, "  --src-bps <num>          Audio bits per sample (default 16)\n");
     fprintf(stderr, "  --src-fps <num>          Video frame rate for the source. Valid values are 25 (PAL) or 30 (NTSC)\n");
+    fprintf(stderr, "  --src-aspect <num:den>   Video aspect ratio for raw input or generated sources\n");
     fprintf(stderr, "  --raw-in  <file>         Raw file input\n");
 #if defined(HAVE_FFMPEG)
     fprintf(stderr, "  --dv <file>              Raw DV-DIF input (currently video only)\n");
@@ -2367,6 +2368,26 @@ int main(int argc, const char **argv)
             {
                 inputs[numInputs].streamInfo.frameRate = g_ntscFrameRate;
                 inputs[numInputs].streamInfo.isHardFrameRate = 1;
+            }
+            cmdlnIndex += 2;
+        }
+        else if (strcmp(argv[cmdlnIndex], "--src-aspect") == 0)
+        {
+            if (cmdlnIndex + 1 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            if (sscanf(argv[cmdlnIndex + 1], "%d:%d",
+                       &inputs[numInputs].streamInfo.aspectRatio.num,
+                       &inputs[numInputs].streamInfo.aspectRatio.den) != 2 ||
+                inputs[numInputs].streamInfo.aspectRatio.num == 0 ||
+                inputs[numInputs].streamInfo.aspectRatio.den == 0)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Invalid argument for %s\n", argv[cmdlnIndex]);
+                return 1;
             }
             cmdlnIndex += 2;
         }

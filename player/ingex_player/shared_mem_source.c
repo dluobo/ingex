@@ -1,5 +1,5 @@
 /*
- * $Id: shared_mem_source.c,v 1.18 2011/07/13 14:52:49 john_f Exp $
+ * $Id: shared_mem_source.c,v 1.19 2011/10/27 13:45:37 philipn Exp $
  *
  *
  *
@@ -726,6 +726,8 @@ int shms_open(const char* channel_name, double timeout, SharedMemSource** source
             break;
     }
     CHK_OFAIL(add_known_source_info(&newSource->tracks[newSource->numTracks].streamInfo, SRC_INFO_TITLE, title));
+    CHK_OFAIL(add_known_source_info(&newSource->tracks[newSource->numTracks].streamInfo, SRC_INFO_ORIGINAL_STREAM_FORMAT,
+                                    get_stream_format_string(newSource->tracks[newSource->numTracks].streamInfo.format)));
     newSource->numTracks++;
 
     /* audio tracks */
@@ -743,6 +745,8 @@ int shms_open(const char* channel_name, double timeout, SharedMemSource** source
         newSource->tracks[newSource->numTracks].streamInfo.numChannels = 1;
         newSource->tracks[newSource->numTracks].streamInfo.bitsPerSample = 16;
         CHK_OFAIL(add_known_source_info(&newSource->tracks[newSource->numTracks].streamInfo, SRC_INFO_TITLE, nameBuf));
+        CHK_OFAIL(add_known_source_info(&newSource->tracks[newSource->numTracks].streamInfo, SRC_INFO_ORIGINAL_STREAM_FORMAT,
+                                        get_stream_format_string(newSource->tracks[newSource->numTracks].streamInfo.format)));
         newSource->tracks[newSource->numTracks].frameSize = 0;  /* zero indicates variable size */
         newSource->numTracks++;
     }
@@ -791,6 +795,8 @@ int shms_open(const char* channel_name, double timeout, SharedMemSource** source
                     "Shared Memory SYSTEM TC"));
                 break;
         }
+        CHK_OFAIL(add_known_source_info(&newSource->tracks[newSource->numTracks].streamInfo, SRC_INFO_ORIGINAL_STREAM_FORMAT,
+                                        get_stream_format_string(newSource->tracks[newSource->numTracks].streamInfo.format)));
 
         newSource->numTracks++;
     }

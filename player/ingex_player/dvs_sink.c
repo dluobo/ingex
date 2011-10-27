@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sink.c,v 1.25 2011/10/04 09:47:59 john_f Exp $
+ * $Id: dvs_sink.c,v 1.26 2011/10/27 13:45:37 philipn Exp $
  *
  *
  *
@@ -1006,11 +1006,11 @@ static int dvs_register_stream(void* data, int streamId, const StreamInfo* strea
         }
         else // UYVY_10BIT_FORMAT
         {
-            dvsStream->dataSize[0] = (streamInfo->width + 47) / 48 * 128 * streamInfo->height;
+            dvsStream->dataSize[0] = (streamInfo->width + 5) / 6 * 16 * streamInfo->height;
         }
         dvsStream->dataSize[1] = dvsStream->dataSize[0];
 
-        sink->workBuffer1Size = (sink->rasterWidth + 47) / 48 * 128 * sink->rasterHeight;
+        sink->workBuffer1Size = (sink->rasterWidth + 5) / 6 * 16 * sink->rasterHeight;
         CALLOC_ORET(sink->workBuffer1, unsigned char, sink->workBuffer1Size);
         sink->workBuffer2Size = sink->workBuffer1Size;
         CALLOC_ORET(sink->workBuffer2, unsigned char, sink->workBuffer2Size);
@@ -1034,8 +1034,8 @@ static int dvs_register_stream(void* data, int streamId, const StreamInfo* strea
                 }
                 else
                 {
-                    dvsStream->data[0] = &sink->fifoBuffer[0].buffer[(sink->rasterWidth + 47) / 48 * 128 * 16];
-                    dvsStream->data[1] = &sink->fifoBuffer[1].buffer[(sink->rasterWidth + 47) / 48 * 128 * 16];
+                    dvsStream->data[0] = &sink->fifoBuffer[0].buffer[(sink->rasterWidth + 5) / 6 * 16 * 16];
+                    dvsStream->data[1] = &sink->fifoBuffer[1].buffer[(sink->rasterWidth + 5) / 6 * 16 * 16];
                 }
             }
             else if (sink->rasterHeight == 486 && streamInfo->height == 480)
@@ -1048,8 +1048,8 @@ static int dvs_register_stream(void* data, int streamId, const StreamInfo* strea
                 }
                 else
                 {
-                    dvsStream->data[0] = &sink->fifoBuffer[0].buffer[(sink->rasterWidth + 47) / 48 * 128 * 4];
-                    dvsStream->data[1] = &sink->fifoBuffer[1].buffer[(sink->rasterWidth + 47) / 48 * 128 * 4];
+                    dvsStream->data[0] = &sink->fifoBuffer[0].buffer[(sink->rasterWidth + 5) / 6 * 16 * 4];
+                    dvsStream->data[1] = &sink->fifoBuffer[1].buffer[(sink->rasterWidth + 5) / 6 * 16 * 4];
                 }
             }
             else
@@ -1269,6 +1269,11 @@ static int dvs_complete_frame(void* data, const FrameInfo* frameInfo)
             }
             activeBuffer = sink->videoStream.data[sink->currentFifoBuffer];
         }
+        else
+        {
+            activeBuffer = fifoBuffer->buffer;
+            activeBufferDepth8Bit = sink->depth8Bit;
+        }
     }
     else if (sink->videoStream.streamInfo.format == YUV422_FORMAT)
     {
@@ -1300,7 +1305,7 @@ static int dvs_complete_frame(void* data, const FrameInfo* frameInfo)
             activeBuffer = sink->workBuffer1;
         }
         DitherFrameV210(activeBuffer, sink->videoStream.data[sink->currentFifoBuffer],
-            sink->width * 2, (sink->width + 47) / 48 * 128,
+            sink->width * 2, (sink->width + 5) / 6 * 16,
             sink->width, sink->height);
         activeBufferDepth8Bit = 1;
     }
@@ -1321,7 +1326,7 @@ static int dvs_complete_frame(void* data, const FrameInfo* frameInfo)
         }
         else
         {
-            memmove(activeBuffer + (sink->width + 47) / 48 * 128,  activeBuffer, (sink->width + 47) / 48 * 128 * (sink->height - 1));
+            memmove(activeBuffer + (sink->width + 5) / 6 * 16,  activeBuffer, (sink->width + 5) / 6 * 16 * (sink->height - 1));
         }
     }
 
@@ -1552,7 +1557,7 @@ static int dvs_complete_frame(void* data, const FrameInfo* frameInfo)
     {
         /* convert 8-bit UYVY to 10-bit */
         ConvertFrame8toV210(fifoBuffer->buffer, activeBuffer,
-            (sink->rasterWidth + 47) / 48 * 128, sink->rasterWidth * 2,
+            (sink->rasterWidth + 5) / 6 * 16, sink->rasterWidth * 2,
             sink->rasterWidth, sink->rasterHeight);
     }
 
@@ -1879,7 +1884,7 @@ int dvs_open(int dvsCard, int dvsChannel, SDIVITCSource sdiVITCSource, SDIVITCSo
     }
     else
     {
-        newSink->videoDataSize = (newSink->rasterWidth + 47) / 48 * 128 * newSink->rasterHeight;
+        newSink->videoDataSize = (newSink->rasterWidth + 5) / 6 * 16 * newSink->rasterHeight;
     }
     newSink->maxAudioDataSize = 1920 * 2 * 4; /* 48k Hz for 25 fps, 2 channels, 32 bit; more than 29.97fps */
 
@@ -1917,7 +1922,7 @@ int dvs_open(int dvsCard, int dvsChannel, SDIVITCSource sdiVITCSource, SDIVITCSo
         }
         else
         {
-            newSink->videoOffset = (newSink->rasterWidth + 47) / 48 * 128 * 16;
+            newSink->videoOffset = (newSink->rasterWidth + 5) / 6 * 16 * 16;
         }
     }
 

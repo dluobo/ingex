@@ -1,5 +1,5 @@
 /*
- * $Id: clapper_source.c,v 1.11 2011/09/27 10:14:29 philipn Exp $
+ * $Id: clapper_source.c,v 1.12 2011/10/27 13:45:37 philipn Exp $
  *
  *
  *
@@ -156,6 +156,8 @@ static int add_static_image_uyvy(ClapperSource* source)
     int xMargin;
     int firstNumber;
     int lastNumber;
+    float pixelAspectRatio = guess_par(source->videoStreamInfo.width, source->videoStreamInfo.height,
+                                       source->videoStreamInfo.aspectRatio.num, source->videoStreamInfo.aspectRatio.den);
 
     memset(&p_info, 0, sizeof(p_info));
     CHK_ORET(YUV_frame_from_buffer(&yuvFrame, source->image, source->videoStreamInfo.width, source->videoStreamInfo.height, source->yuvFormat) == 1);
@@ -266,7 +268,7 @@ static int add_static_image_uyvy(ClapperSource* source)
             0,
             0,
             0,
-            "Ariel", fontScale * 12, source->videoStreamInfo.aspectRatio.num, source->videoStreamInfo.aspectRatio.den) < 0)
+            "Ariel", fontScale * 12, pixelAspectRatio) < 0)
         {
             ml_log_error("Failed to create text overlay\n");
             return 1;
@@ -288,7 +290,7 @@ static int add_static_image_uyvy(ClapperSource* source)
         0,
         0,
         0,
-        "Ariel", fontScale * 14, source->videoStreamInfo.aspectRatio.num, source->videoStreamInfo.aspectRatio.den) < 0)
+        "Ariel", fontScale * 14, pixelAspectRatio) < 0)
     {
         ml_log_error("Failed to create text overlay\n");
         return 1;
@@ -309,7 +311,7 @@ static int add_static_image_uyvy(ClapperSource* source)
         0,
         0,
         0,
-        "Ariel", fontScale * 24, source->videoStreamInfo.aspectRatio.num, source->videoStreamInfo.aspectRatio.den) < 0)
+        "Ariel", fontScale * 24, pixelAspectRatio) < 0)
     {
         ml_log_error("Failed to create text overlay\n");
         return 1;
@@ -327,7 +329,7 @@ static int add_static_image_uyvy(ClapperSource* source)
         0,
         0,
         0,
-        "Ariel", fontScale * 24, source->videoStreamInfo.aspectRatio.num, source->videoStreamInfo.aspectRatio.den) < 0)
+        "Ariel", fontScale * 24, pixelAspectRatio) < 0)
     {
         ml_log_error("Failed to create text overlay\n");
         return 1;
@@ -810,7 +812,11 @@ int clp_create(const StreamInfo* videoStreamInfo, const StreamInfo* audioStreamI
     newSource->audioStreamInfo.sourceId = newSource->videoStreamInfo.sourceId;
 
     CHK_OFAIL(add_known_source_info(&newSource->videoStreamInfo, SRC_INFO_TITLE, "Clapper test sequence"));
+    CHK_OFAIL(add_known_source_info(&newSource->videoStreamInfo, SRC_INFO_ORIGINAL_STREAM_FORMAT,
+                                    get_stream_format_string(newSource->videoStreamInfo.format)));
     CHK_OFAIL(add_known_source_info(&newSource->audioStreamInfo, SRC_INFO_TITLE, "Clapper test sequence"));
+    CHK_OFAIL(add_known_source_info(&newSource->audioStreamInfo, SRC_INFO_ORIGINAL_STREAM_FORMAT,
+                                    get_stream_format_string(newSource->audioStreamInfo.format)));
 
     CHK_OFAIL(add_static_image_uyvy(newSource));
 

@@ -1,5 +1,5 @@
 /*
- * $Id: blank_source.c,v 1.9 2011/09/27 10:14:29 philipn Exp $
+ * $Id: blank_source.c,v 1.10 2011/10/27 13:45:37 philipn Exp $
  *
  *
  *
@@ -84,7 +84,7 @@ static int bks_finalise_blank_source(void* data, const StreamInfo* streamInfo)
     }
     else if (source->streamInfo.format == UYVY_10BIT_FORMAT)
     {
-        source->imageSize = (source->streamInfo.width + 47) / 48 * 128 * source->streamInfo.height;
+        source->imageSize = (source->streamInfo.width + 5) / 6 * 16 * source->streamInfo.height;
     }
     else if (source->streamInfo.format == YUV422_10BIT_FORMAT)
     {
@@ -336,6 +336,8 @@ int bks_create(const StreamInfo* videoStreamInfo, int64_t length, MediaSource** 
     newSource->streamInfo.sourceId = msc_create_id();
 
     CHK_OFAIL(add_known_source_info(&newSource->streamInfo, SRC_INFO_TITLE, "Blank Source"));
+    CHK_OFAIL(add_known_source_info(&newSource->streamInfo, SRC_INFO_ORIGINAL_STREAM_FORMAT,
+                                    get_stream_format_string(newSource->streamInfo.format)));
 
 
     *source = &newSource->mediaSource;

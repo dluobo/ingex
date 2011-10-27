@@ -1,5 +1,5 @@
 /*
- * $Id: video_switch_sink.h,v 1.11 2011/09/09 17:32:27 philipn Exp $
+ * $Id: video_switch_sink.h,v 1.12 2011/10/27 13:45:37 philipn Exp $
  *
  *
  *
@@ -45,7 +45,8 @@ struct VideoSwitchSink
     int (*switch_video)(void* data, int index);
     void (*show_source_name)(void* data, int enable);
     void (*toggle_show_source_name)(void* data);
-    int (*get_video_index)(void* data, int imageWidth, int imageHeight, int xPos, int yPos, int* index);
+    int (*get_video_index)(void* data, int* index);
+    int (*get_video_index_at_pos)(void* data, int imageWidth, int imageHeight, int xPos, int yPos, int* index);
     int (*get_active_clip_ids)(void *data, char clipIds[MAX_SPLIT_COUNT][CLIP_ID_SIZE], int sourceIds[MAX_SPLIT_COUNT],
                                int *numIds);
 };
@@ -58,7 +59,8 @@ int vsw_switch_prev_video(VideoSwitchSink* swtch);
 int vsw_switch_video(VideoSwitchSink* swtch, int index);
 void vsw_show_source_name(VideoSwitchSink* swtch, int enable);
 void vsw_toggle_show_source_name(VideoSwitchSink* swtch);
-int vsw_get_video_index(VideoSwitchSink* swtch, int imageWidth, int imageHeight, int xPos, int yPos, int* index);
+int vsw_get_video_index(VideoSwitchSink* swtch, int* index);
+int vsw_get_video_index_at_pos(VideoSwitchSink* swtch, int imageWidth, int imageHeight, int xPos, int yPos, int* index);
 int vsw_get_active_clip_ids(VideoSwitchSink *swtch, char clipId[MAX_SPLIT_COUNT][CLIP_ID_SIZE],
                             int sourceId[MAX_SPLIT_COUNT], int *numIds);
 

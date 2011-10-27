@@ -1,5 +1,5 @@
 /*
- * $Id: mouse_input_connect.c,v 1.3 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: mouse_input_connect.c,v 1.4 2011/10/27 13:45:37 philipn Exp $
  *
  *
  *
@@ -42,11 +42,18 @@ struct MouseConnect
 static void mic_click(void* data, int imageWidth, int imageHeight, int xPos, int yPos)
 {
     MouseConnect* connect = (MouseConnect*)data;
-    int index;
+    int indexAtClickPos, index;
 
-    if (vsw_get_video_index(connect->videoSwitch, imageWidth, imageHeight, xPos, yPos, &index))
+    if (vsw_get_video_index_at_pos(connect->videoSwitch, imageWidth, imageHeight, xPos, yPos, &indexAtClickPos))
     {
-        mc_switch_video(connect->control, index);
+        if (!vsw_get_video_index(connect->videoSwitch, &index) || indexAtClickPos != index)
+        {
+            mc_switch_video(connect->control, indexAtClickPos);
+        }
+        else
+        {
+            mc_switch_video(connect->control, 0);
+        }
     }
 }
 

@@ -1,5 +1,5 @@
 /*
- * $Id: x11_xv_display_sink.c,v 1.20 2011/09/27 10:14:30 philipn Exp $
+ * $Id: x11_xv_display_sink.c,v 1.21 2011/10/27 13:45:37 philipn Exp $
  *
  *
  *
@@ -511,7 +511,7 @@ static int display_frame(X11XVDisplaySink* sink, X11DisplayFrame* frame, const F
                 activeBuffer = (unsigned char*)frame->yuv_image->data;
             }
 
-            ConvertFrameV210to8(activeBuffer, frame->inputBuffer, sink->inputWidth * 2, (sink->inputWidth + 47) / 48 * 128,
+            ConvertFrameV210to8(activeBuffer, frame->inputBuffer, sink->inputWidth * 2, (sink->inputWidth + 5) / 6 * 16,
                 sink->inputWidth, sink->inputHeight);
         }
         else if (sink->inputVideoFormat == YUV444_FORMAT)
@@ -708,7 +708,7 @@ static int init_frame(X11DisplayFrame* frame)
     if (sink->inputVideoFormat == UYVY_10BIT_FORMAT)
     {
         /* Conversion required for UYVY 10-bit input */
-        frame->inputBufferSize = (sink->inputWidth + 47) / 48 * 128 * sink->inputHeight;
+        frame->inputBufferSize = (sink->inputWidth + 5) / 6 * 16 * sink->inputHeight;
         MALLOC_ORET(frame->inputBuffer, unsigned char, frame->inputBufferSize);
 
         /* buffer for software scaling (after 10- to 8-bit conversion) */

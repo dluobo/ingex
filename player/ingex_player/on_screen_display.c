@@ -1,5 +1,5 @@
 /*
- * $Id: on_screen_display.c,v 1.23 2011/09/27 10:14:29 philipn Exp $
+ * $Id: on_screen_display.c,v 1.24 2011/10/27 13:45:37 philipn Exp $
  *
  *
  *
@@ -142,6 +142,7 @@ struct DefaultOnScreenDisplay
     int imageWidth;
     int imageHeight;
     Rational aspectRatio;
+    float pixelAspectRatio;
 
     OnScreenDisplayState* state;
     OnScreenDisplayState prevState; /* NOTE: does not include mark colours */
@@ -391,7 +392,7 @@ static void complete_labels(DefaultOnScreenDisplay* osdd)
                     0,
                     "Ariel",
                     osdd->cachedLabels[j].label.fontSize * osdd->imageHeight / osdd->state->labels[i].imageHeight,
-                    osdd->aspectRatio.num, osdd->aspectRatio.den) < 0)
+                    osdd->pixelAspectRatio) < 0)
                 {
                     ml_log_error("Failed to create text overlay for label\n");
                     return;
@@ -438,7 +439,7 @@ static int initialise_audio_level_overlay(DefaultOnScreenDisplay* osdd, int widt
         0,
         0,
         0,
-        "Ariel", 10, osdd->aspectRatio.num, osdd->aspectRatio.den) < 0)
+        "Ariel", 10, osdd->pixelAspectRatio) < 0)
     {
         ml_log_error("Failed to create text overlay\n");
         goto fail;
@@ -454,7 +455,7 @@ static int initialise_audio_level_overlay(DefaultOnScreenDisplay* osdd, int widt
         0,
         0,
         0,
-        "Ariel", 10, osdd->aspectRatio.num, osdd->aspectRatio.den) < 0)
+        "Ariel", 10, osdd->pixelAspectRatio) < 0)
     {
         ml_log_error("Failed to create text overlay\n");
         goto fail;
@@ -468,7 +469,7 @@ static int initialise_audio_level_overlay(DefaultOnScreenDisplay* osdd, int widt
         0,
         0,
         0,
-        "Ariel", 10, osdd->aspectRatio.num, osdd->aspectRatio.den) < 0)
+        "Ariel", 10, osdd->pixelAspectRatio) < 0)
     {
         ml_log_error("Failed to create text overlay\n");
         goto fail;
@@ -482,7 +483,7 @@ static int initialise_audio_level_overlay(DefaultOnScreenDisplay* osdd, int widt
         0,
         0,
         0,
-        "Ariel", 10, osdd->aspectRatio.num, osdd->aspectRatio.den) < 0)
+        "Ariel", 10, osdd->pixelAspectRatio) < 0)
     {
         ml_log_error("Failed to create text overlay\n");
         goto fail;
@@ -496,7 +497,7 @@ static int initialise_audio_level_overlay(DefaultOnScreenDisplay* osdd, int widt
         0,
         0,
         0,
-        "Ariel", 10, osdd->aspectRatio.num, osdd->aspectRatio.den) < 0)
+        "Ariel", 10, osdd->pixelAspectRatio) < 0)
     {
         ml_log_error("Failed to create text overlay\n");
         goto fail;
@@ -1430,7 +1431,7 @@ static int source_info_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* fra
             0,
             0,
             0,
-            "Ariel", 28 * fontScale, osdd->aspectRatio.num, osdd->aspectRatio.den) < 0)
+            "Ariel", 28 * fontScale, osdd->pixelAspectRatio) < 0)
         {
             /* don't say anything if fails */
             SAFE_FREE(&osdd->sourceInfoOverlay);
@@ -1511,7 +1512,7 @@ static int add_menu_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* frameI
             1,
             0,
             0,
-            "Ariel", 32 * fontScale, osdd->aspectRatio.num, osdd->aspectRatio.den) < 0)
+            "Ariel", 32 * fontScale, osdd->pixelAspectRatio) < 0)
         {
             ml_log_error("Failed to create text overlay\n");
             goto fail;
@@ -1551,7 +1552,7 @@ static int add_menu_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* frameI
             0,
             0,
             1,
-            "Ariel", 28 * fontScale, osdd->aspectRatio.num, osdd->aspectRatio.den) < 0)
+            "Ariel", 28 * fontScale, osdd->pixelAspectRatio) < 0)
         {
             ml_log_error("Failed to create text overlay\n");
             goto fail;
@@ -1592,7 +1593,7 @@ static int add_menu_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* frameI
                 0,
                 30,
                 1,
-                "Ariel", 28 * fontScale, osdd->aspectRatio.num, osdd->aspectRatio.den) < 0)
+                "Ariel", 28 * fontScale, osdd->pixelAspectRatio) < 0)
             {
                 ml_log_error("Failed to create text overlay\n");
                 goto fail;
@@ -1687,7 +1688,7 @@ static int add_menu_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* frameI
                     0,
                     30,
                     1,
-                    "Ariel", 28 * fontScale, osdd->aspectRatio.num, osdd->aspectRatio.den) < 0)
+                    "Ariel", 28 * fontScale, osdd->pixelAspectRatio) < 0)
                 {
                     ml_log_error("Failed to create text overlay\n");
                     goto fail;
@@ -1867,6 +1868,7 @@ static int osdd_initialise(void* data, const StreamInfo* streamInfo, const Ratio
     osdd->imageWidth = streamInfo->width;
     osdd->imageHeight = streamInfo->height;
     osdd->aspectRatio = *aspectRatio;
+    osdd->pixelAspectRatio = guess_par(streamInfo->width, streamInfo->height, aspectRatio->num, aspectRatio->den);
 
 
     /* initialise the play state screen overlay */
@@ -1883,22 +1885,22 @@ static int osdd_initialise(void* data, const StreamInfo* streamInfo, const Ratio
 
     /* note: the order must match UNKNOWN_TC_OVLY_IDX, ... */
     CHK_ORET(char_set_to_overlay(&osdd->p_info, &osdd->timecodeTypeData, "?CSVLvlX",
-        "Ariel", 48 * fontScale, aspectRatio->num, aspectRatio->den) >= 0);
+        "Ariel", 48 * fontScale, osdd->pixelAspectRatio) >= 0);
 
     CHK_ORET(init_timecode(&osdd->p_info, &osdd->timecodeTextData, "Ariel",
-        48 * fontScale, aspectRatio->num, aspectRatio->den) == YUV_OK);
+        48 * fontScale, osdd->pixelAspectRatio) == YUV_OK);
 
     CHK_ORET(char_set_to_overlay(&osdd->p_info, &osdd->numberData, "0123456789",
-        "Ariel", 34 * fontScale, aspectRatio->num, aspectRatio->den) >= 0);
+        "Ariel", 34 * fontScale, osdd->pixelAspectRatio) >= 0);
 
     CHK_ORET(char_set_to_overlay(&osdd->p_info, &osdd->vtrErrorCodeData, "0123456789+",
-        "Ariel", 34 * fontScale, aspectRatio->num, aspectRatio->den) >= 0);
+        "Ariel", 34 * fontScale, osdd->pixelAspectRatio) >= 0);
 
     /* the message if "FRAME REPEAT" instead of "FRAME DROPPED" because the DVS card repeats the last frame
     if the next frame misses the time slot for output */
     CHK_ORET(text_to_overlay_player(&osdd->p_info, &osdd->droppedFrameOverlay, "FRAME REPEAT!",
         osdd->imageWidth, 0, 0, 0, 0, 0, 0,
-        "Ariel", 32 * fontScale, aspectRatio->num, aspectRatio->den) >= 0);
+        "Ariel", 32 * fontScale, osdd->pixelAspectRatio) >= 0);
 
 
     CALLOC_ORET(osdd->markOverlay.buff, unsigned char, MARK_OVERLAY_WIDTH * MARK_OVERLAY_HEIGHT * 2);
@@ -1973,7 +1975,7 @@ static int osdd_initialise(void* data, const StreamInfo* streamInfo, const Ratio
 
     CALLOC_ORET(osdd->sourceInfoOverlay, overlay, 1);
     if (ml_text_to_ovly_player(&osdd->p_info, osdd->sourceInfoOverlay, text,
-        streamInfo->width - (2 * 24), "Ariel", 28 * fontScale, 10, aspectRatio->num, aspectRatio->den) < 0)
+        streamInfo->width - (2 * 24), "Ariel", 28 * fontScale, 10, osdd->pixelAspectRatio) < 0)
     {
         ml_log_error("Failed to create OSD source info screen overlay\n");
         SAFE_FREE(&osdd->sourceInfoOverlay);

@@ -1,5 +1,5 @@
 /*
- * $Id: video_switch_sink.c,v 1.16 2011/09/27 10:14:29 philipn Exp $
+ * $Id: video_switch_sink.c,v 1.17 2011/10/27 13:45:37 philipn Exp $
  *
  *
  *
@@ -1816,7 +1816,15 @@ static void qvs_toggle_show_source_name(void* data)
         vsw_toggle_show_source_name(swtch->slave_swtch);
 }
 
-static int qvs_get_video_index(void* data, int imageWidth, int imageHeight, int xPos, int yPos, int* index)
+static int qvs_get_video_index(void* data, int* index)
+{
+    DefaultVideoSwitch *swtch = (DefaultVideoSwitch*)data;
+
+    *index = swtch->currentStream->index;
+    return 1;
+}
+
+static int qvs_get_video_index_at_pos(void* data, int imageWidth, int imageHeight, int xPos, int yPos, int* index)
 {
     DefaultVideoSwitch *swtch = (DefaultVideoSwitch*)data;
     int subImageWidth;
@@ -1966,6 +1974,7 @@ int qvs_create_video_switch(MediaSink* sink, VideoSwitchSplit split, int splitSe
     newSwitch->switchSink.show_source_name = qvs_show_source_name;
     newSwitch->switchSink.toggle_show_source_name = qvs_toggle_show_source_name;
     newSwitch->switchSink.get_video_index = qvs_get_video_index;
+    newSwitch->switchSink.get_video_index_at_pos = qvs_get_video_index_at_pos;
     newSwitch->switchSink.get_active_clip_ids = qvs_get_active_clip_ids;
 
     newSwitch->targetSinkListener.data = newSwitch;
@@ -2064,11 +2073,20 @@ void vsw_toggle_show_source_name(VideoSwitchSink* swtch)
     }
 }
 
-int vsw_get_video_index(VideoSwitchSink* swtch, int width, int height, int xPos, int yPos, int* index)
+int vsw_get_video_index(VideoSwitchSink* swtch, int* index)
 {
     if (swtch && swtch->get_video_index)
     {
-        return swtch->get_video_index(swtch->data, width, height, xPos, yPos, index);
+        return swtch->get_video_index(swtch->data, index);
+    }
+    return 0;
+}
+
+int vsw_get_video_index_at_pos(VideoSwitchSink* swtch, int width, int height, int xPos, int yPos, int* index)
+{
+    if (swtch && swtch->get_video_index_at_pos)
+    {
+        return swtch->get_video_index_at_pos(swtch->data, width, height, xPos, yPos, index);
     }
     return 0;
 }
