@@ -1023,11 +1023,11 @@ INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (74, 'IMX50 MXF OP
 INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (80, 'IMX30 MXF OP-1A');
 INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (82, 'IMX40 MXF OP-1A');
 INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (84, 'IMX50 MXF OP-1A');
-INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (100, 'VC3-36p MXF OP-ATOM');
-INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (102, 'VC3-120i MXF OP-ATOM');
-INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (104, 'VC3-185i MXF OP-ATOM');
-INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (106, 'VC3-120p MXF OP-ATOM');
-INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (108, 'VC3-185p MXF OP-ATOM');
+INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (100, 'VC3-36/45p MXF OP-ATOM');
+INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (102, 'VC3-120/145i MXF OP-ATOM');
+INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (104, 'VC3-185/220i MXF OP-ATOM');
+INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (106, 'VC3-120/145p MXF OP-ATOM');
+INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (108, 'VC3-185/220p MXF OP-ATOM');
 INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (120, 'XDCAMHD422 Raw');
 INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (124, 'XDCAMHD422 Quicktime');
 INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (200, 'MPEG2 for DVD');

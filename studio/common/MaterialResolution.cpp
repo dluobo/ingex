@@ -1,5 +1,5 @@
 /*
- * $Id: MaterialResolution.cpp,v 1.11 2011/10/14 09:49:56 john_f Exp $
+ * $Id: MaterialResolution.cpp,v 1.12 2011/11/08 14:23:36 john_f Exp $
  *
  * Material resolution codes and details
  *
@@ -169,23 +169,23 @@ std::string MaterialResolution::Name(MaterialResolution::EnumType res)
         break;
 
     case DNX36P_MXF_ATOM:
-        name = "VC3-36p MXF OP-ATOM";
+        name = "VC3-36/45p MXF OP-ATOM";
         break;
 
     case DNX120I_MXF_ATOM:
-        name = "VC3-120i MXF OP-ATOM";
+        name = "VC3-120/145i MXF OP-ATOM";
         break;
 
     case DNX185I_MXF_ATOM:
-        name = "VC3-185i MXF OP-ATOM";
+        name = "VC3-185/220i MXF OP-ATOM";
         break;
 
     case DNX120P_MXF_ATOM:
-        name = "VC3-120p MXF OP-ATOM";
+        name = "VC3-120/145p MXF OP-ATOM";
         break;
 
     case DNX185P_MXF_ATOM:
-        name = "VC3-185p MXF OP-ATOM";
+        name = "VC3-185/220p MXF OP-ATOM";
         break;
 
     case DVD:
