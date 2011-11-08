@@ -25,8 +25,8 @@
 // Show debug alerts?
 var debug = false;
 
-// ajax timeout period
-var timeout_period = 240000;	// 4 mins	
+// ajax timeout period in milliseconds
+var timeout_period = 600000;	// 10 mins	
 
 var destRootNode = '';
 var rootNode;
