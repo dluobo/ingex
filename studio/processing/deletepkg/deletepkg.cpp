@@ -60,6 +60,7 @@ int main(int argc, char* argv[])
 			return 1;
 		}
 
+        unsigned int deleted = 0;
 		for (i = 0; i < noPackages; i++){
 			try
 			{
@@ -67,18 +68,19 @@ int main(int argc, char* argv[])
 				if(debug){printf("Loading package: %li\n", pkg_identifier);}
 				Package* package = (db->loadPackage(pkg_identifier, transaction));
 				db->deletePackageChain(package, transaction);
+                ++deleted;
 				if(debug){printf("Deleted package\n");}
 			}
 			catch (const prodauto::DBException & dbe)
 			{
-				printf("Error deleting packages\n");
-				return 1;
+				printf("Error deleting package %li\n", pkg_identifier );
+				//return 1;
 			}
 		}
 
         transaction->commit();
 
-		printf("Deleted %i material item(s)\n", noPackages);
+		printf("Deleted %u material item(s)\n", deleted);
 		return 0;
 
 		//TODO: Check for unreferenced isolated packages
@@ -89,3 +91,4 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 }
+
