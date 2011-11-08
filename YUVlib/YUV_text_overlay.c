@@ -1,5 +1,5 @@
 /*
- * $Id: YUV_text_overlay.c,v 1.2 2011/10/26 17:46:06 john_f Exp $
+ * $Id: YUV_text_overlay.c,v 1.3 2011/11/08 14:25:42 john_f Exp $
  *
  *
  *
@@ -284,6 +284,11 @@ float guess_par(int width, int height, int aspect_ratio_num, int aspect_ratio_de
     {
         // assume horizontally sub-sampled HD SMPTE 274 / 296
         return 4 / 3.0;
+    }
+    else if (height == 1080 && width == 1280)
+    {
+        // assume horizontally sub-sampled DVCProHD 1080i2997
+        return 3 / 2.0;
     }
 
     return 1.0;
