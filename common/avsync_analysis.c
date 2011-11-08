@@ -1,5 +1,5 @@
 /*
- * $Id: avsync_analysis.c,v 1.2 2008/02/06 16:58:50 john_f Exp $
+ * $Id: avsync_analysis.c,v 1.3 2011/11/08 14:27:53 john_f Exp $
  *
  * Functions to find click and flash in clapper board video and audio
  *
@@ -179,7 +179,7 @@ extern void find_audio_click_mono(const unsigned char *p_audio, int bitsPerSampl
 
 		// Compare against start-of-click threshold
 		if (abs(samp) > mod_threshold && moderate_off == -1)
-			moderate_off = i / 4;
+			moderate_off = i / bytesPerSample;
 
 		// Compare against peak-of-click threshold
 		if (abs(samp) > threshold) {
