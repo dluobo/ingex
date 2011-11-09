@@ -1,5 +1,5 @@
 /*
- * $Id: Database.cpp,v 1.17 2010/08/20 16:12:51 john_f Exp $
+ * $Id: Database.cpp,v 1.18 2011/11/09 15:56:11 john_f Exp $
  *
  * Provides access to the data in the database
  *
@@ -1232,6 +1232,7 @@ const char* const LOAD_SOURCE_UID_SQL =
     FROM SourceClip \
     WHERE \
         scp_source_package_uid = $1 \
+    LIMIT 1 \
 ";
 
 const char* const DELETE_PACKAGE_STMT = "delete package";
@@ -3938,54 +3939,89 @@ void Database::savePackage(Package *package, Transaction *transaction)
     END_WORK("SavePackage")
 }
 
-// delete multiple packages from ids in supplied array
-void Database::deletePackageChain(Package *top_package, Transaction *transaction)
+void Database::deleteMaterialPackageChains(vector<long> material_package_ids, Transaction *transaction)
 {
     Transaction *ts = transaction;
     auto_ptr<Transaction> local_ts;
     if (!ts) {
-        local_ts = auto_ptr<Transaction>(getTransaction("DeletePackageChain"));
+        local_ts = auto_ptr<Transaction>(getTransaction("DeleteMaterialPackageChains"));
         ts = local_ts.get();
     }
 
     START_WORK
     {
-        if (!packageRefsExist(top_package, ts)) {
-            // safe to delete
+        // load package chains for each material package id
+        PackageSet delete_packages;
+        size_t i;
+        for (i = 0; i < material_package_ids.size(); i++) {
+            PackageSet package_chain;
+            try
+            {
+                // load the material package
+                Package *material_package = loadPackage(material_package_ids[i], ts);
+                if (material_package->getType() != MATERIAL_PACKAGE) {
+                    // if it isn't a material package then the assumption that references to file
+                    // source packages do not need to be checked is invalid
+                    delete material_package;
+                    continue;
+                }
+                if (!delete_packages.insert(material_package).second) {
+                    // duplicate id
+                    delete material_package;
+                    continue;
+                }
 
-            deletePackage(top_package, ts);
-
-            PackageSet packages;
-            loadPackageChain(top_package, &packages);
-
-            prodauto::PackageSet::iterator iter;
-            for (iter = packages.begin(); iter != packages.end(); iter++)
-                deletePackageChain(*iter, ts);
-            
-            if (!transaction)
-                ts->commit();
+                // load referenced packages recursively
+                loadPackageChain(material_package, &delete_packages, ts);
+            }
+            catch (...)
+            {
+                Logging::warning("Failed to load package %ld for deletion\n", material_package_ids[i]);
+                continue;
+            }
         }
-    }
-    END_WORK("DeletePackageChain")
-}
 
-// are there any references from source package to this package?
-bool Database::packageRefsExist(Package *package, Transaction *transaction)
-{
-    Transaction *ts = transaction;
-    auto_ptr<Transaction> local_ts;
-    if (!ts) {
-        local_ts = auto_ptr<Transaction>(getTransaction("PackageRefsExist"));
-        ts = local_ts.get();
-    }
+        // delete non-physical packages first and then delete physical packages that aren't referenced
 
-    START_WORK
-    {
-        result res = ts->prepared(LOAD_SOURCE_UID_STMT)(writeUMID(package->uid)).exec();
+        // only need to check physical source packages for references from source clips because
+        // material packages cannot be referenced (by material or source packages) and file source
+        // packages are only referenced by a single material package and the material package is in the
+        // deletion set
 
-        return !res.empty();
+        bool delete_physical = true;
+        while (delete_physical) {
+            delete_physical = !delete_physical;
+
+            PackageSet::const_iterator iter;
+            for (iter = delete_packages.begin(); iter != delete_packages.end(); iter++) {
+                bool is_physical = false;
+                if ((*iter)->getType() == SOURCE_PACKAGE) {
+                    SourcePackage *sp = dynamic_cast<SourcePackage*>(*iter);
+                    if (sp->descriptor && sp->descriptor->getType() != FILE_ESSENCE_DESC_TYPE)
+                        is_physical = true;
+                }
+
+                if (is_physical) {
+                    if (delete_physical &&
+                        ts->prepared(LOAD_SOURCE_UID_STMT)(writeUMID((*iter)->uid)).exec().empty())
+                    {
+                        ts->prepared(DELETE_PACKAGE_STMT)((*iter)->getDatabaseID()).exec();
+                    }
+                } else if (!delete_physical) {
+                    ts->prepared(DELETE_PACKAGE_STMT)((*iter)->getDatabaseID()).exec();
+                }
+            }
+        }
+
+        PackageSet::const_iterator iter;
+        for (iter = delete_packages.begin(); iter != delete_packages.end(); iter++)
+            delete *iter;
+
+
+        if (!transaction)
+            ts->commit();
     }
-    END_WORK("PackageRefsExist")
+    END_WORK("DeleteMaterialPackageChains")
 }
 
 void Database::deletePackage(Package *package, Transaction *transaction)
@@ -4078,20 +4114,10 @@ void Database::loadPackageChain(Package *top_package, PackageSet *packages, Tran
             Package *referenced_package;
             Track *referenced_track;
 
-            // check that we don't already have the package before
-            // loading it from the database
-            bool have_package = false;
-            PackageSet::const_iterator iter2;
-            for (iter2 = packages->begin(); iter2 != packages->end(); iter2++) {
-                Package *package = *iter2;
-
-                if (track->sourceClip->sourcePackageUID == package->uid) {
-                    have_package = true;
-                    break;
-                }
-            }
-            if (have_package)
-                // have package so skip to next track
+            // check that we don't already have the package
+            SourcePackage dummy;
+            dummy.uid = track->sourceClip->sourcePackageUID;
+            if (packages->find(&dummy) != packages->end())
                 continue;
 
             // load referenced package

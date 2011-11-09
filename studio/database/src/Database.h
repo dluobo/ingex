@@ -1,5 +1,5 @@
 /*
- * $Id: Database.h,v 1.14 2010/08/20 16:12:51 john_f Exp $
+ * $Id: Database.h,v 1.15 2011/11/09 15:56:11 john_f Exp $
  *
  * Provides access to the data in the database
  *
@@ -173,12 +173,9 @@ public:
     Package* loadPackage(UMID packageUID, bool assume_exists = true, Transaction *transaction = 0);
     void savePackage(Package *package, Transaction *transaction = 0);
     void deletePackage(Package *package, Transaction *transaction = 0);
-    
-    //delete every package id in supplied array
-    void deletePackageChain(Package *package, Transaction *transaction = 0);
 
-    //do package references exist?
-    bool packageRefsExist(Package *package, Transaction *transaction = 0);
+    // delete material package chains
+    void deleteMaterialPackageChains(std::vector<long> material_package_ids, Transaction *transaction = 0);
 
 
     // returns 1 on success and sets both sourcePackage and sourceTrack, else

@@ -28,11 +28,7 @@ using namespace prodauto;
 
 int main(int argc, char* argv[])
 {
-	bool debug = false;
 	char *inStr = argv[1];
-	long pkg_identifier;
-	long packages[100000];
-
 
 	// Delete packages from database
 	try
@@ -43,44 +39,33 @@ int main(int argc, char* argv[])
 		Database* db = Database::getInstance();
 		Transaction* transaction = (db->getTransaction("DeletePackages"));
 
-		// String to array
 		char *nextTok = strtok(inStr, ",");
-		int i=0;
-
-		while(nextTok != NULL){
-			packages[i] = atol(nextTok);
-			i++;
-			nextTok = strtok(NULL, ",");
-		}
-
-		int noPackages = i;
-
-		if(noPackages == 0){
+		if (!nextTok) {
 			printf("Error! No package IDs supplied.\n");
 			return 1;
 		}
 
-        unsigned int deleted = 0;
-		for (i = 0; i < noPackages; i++){
-			try
-			{
-				pkg_identifier = packages[i];
-				if(debug){printf("Loading package: %li\n", pkg_identifier);}
-				Package* package = (db->loadPackage(pkg_identifier, transaction));
-				db->deletePackageChain(package, transaction);
-                ++deleted;
-				if(debug){printf("Deleted package\n");}
+		size_t total_packages = 0;
+        vector<long> packages;
+		while (nextTok){
+			packages.push_back(atol(nextTok));
+			total_packages++;
+
+			// limit number of packages to limit memory usage
+			if (packages.size() > 500) {
+			    db->deleteMaterialPackageChains(packages, transaction);
+			    packages.clear();
 			}
-			catch (const prodauto::DBException & dbe)
-			{
-				printf("Error deleting package %li\n", pkg_identifier );
-				//return 1;
-			}
+
+			nextTok = strtok(NULL, ",");
 		}
+        if (!packages.empty())
+            db->deleteMaterialPackageChains(packages, transaction);
+
 
         transaction->commit();
 
-		printf("Deleted %u material item(s)\n", deleted);
+		printf("Deleted %zu material item(s)\n", total_packages);
 		return 0;
 
 		//TODO: Check for unreferenced isolated packages
