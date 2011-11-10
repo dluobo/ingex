@@ -1,5 +1,5 @@
 /*
- * $Id: mxf_labels_and_keys.h,v 1.18 2011/01/10 17:05:15 john_f Exp $
+ * $Id: mxf_labels_and_keys.h,v 1.19 2011/11/10 10:22:28 philipn Exp $
  *
  * MXF labels, keys, track numbers, etc
  *
@@ -871,7 +871,7 @@ static const mxfKey MXF_EE_K(SDTI_CP_System_Pack) =
 /* VC-3 mappings */
 
 #define MXF_VC3_EE_K(elecount, eletype, elenum) \
-    MXF_GENERIC_CONTAINER_ELEMENT_KEY(0x0a, 0x15, elecount, eletype, elenum)
+    MXF_GENERIC_CONTAINER_ELEMENT_KEY(0x01, 0x15, elecount, eletype, elenum)
 
 #define MXF_VC3_TRACK_NUM(elecount, eletype, elenum) \
     MXF_TRACK_NUM(0x15, elecount, eletype, elenum)
