@@ -1,5 +1,5 @@
 /*
- * $Id: main.c,v 1.28 2011/10/14 09:49:55 john_f Exp $
+ * $Id: main.c,v 1.29 2011/11/10 10:27:37 philipn Exp $
  *
  * Test writing video and audio to MXF files supported by Avid editing software
  *
@@ -295,21 +295,11 @@ static int get_dv_stream_info(const char* filename, Input* input)
     }
     else if (byte == 0x14)
     {
-        if (!input->isPAL)
-        {
-            fprintf(stderr, "%s: DV 100 1080i 60 not yet supported\n", filename);     
-            return 0;
-        }
-        input->essenceType = DV1080i50;
+        input->essenceType = DV1080i;
     }
     else if (byte == 0x18)
     {
-        if (!input->isPAL)
-        {
-            fprintf(stderr, "%s: DV 100 720p 60 not yet supported\n", filename);     
-            return 0;
-        }
-        input->essenceType = DV720p50;
+        input->essenceType = DV720p;
     }
     else
     {
@@ -931,7 +921,7 @@ static void usage(const char* cmd)
     fprintf(stderr, "Inputs:\n");
     fprintf(stderr, "  --mjpeg <filename>         Avid MJPEG\n");
     fprintf(stderr, "       --res <resolution>    Resolution '2:1' (default), '3:1', '10:1', '4:1m', '10:1m', '15:1s' or '20:1'\n");
-    fprintf(stderr, "  --dv <filename>            IEC DV 25, DV-based 25 / 50, DV 100 1080i50 / 720p50 (SMPTE 370M)\n");
+    fprintf(stderr, "  --dv <filename>            IEC DV 25, DV-based 25 / 50, DV 100 1080i / 720p (SMPTE 370M)\n");
     fprintf(stderr, "  --IMX30 <filename>         IMX 30 Mbps MPEG-2 video (D-10, SMPTE 356M)\n");
     fprintf(stderr, "  --IMX40 <filename>         IMX 40 Mbps MPEG-2 video (D-10, SMPTE 356M)\n");
     fprintf(stderr, "  --IMX50 <filename>         IMX 50 Mbps MPEG-2 video (D-10, SMPTE 356M)\n");
@@ -1375,6 +1365,10 @@ int main(int argc, const char* argv[])
             if (!get_dv_stream_info(argv[cmdlnIndex + 1], &inputs[inputIndex]))
             {
                 return 1;
+            }
+            if (inputs[inputIndex].essenceType == DV720p)
+            {
+                haveProgressive2Video = 1;
             }
             inputs[inputIndex].filename = argv[cmdlnIndex + 1];
             inputs[inputIndex].trackNumber = ++videoTrackNumber;
@@ -2109,14 +2103,28 @@ int main(int argc, const char* argv[])
             }
             CHK_MALLOC_ARRAY_OFAIL(inputs[i].buffer, unsigned char, inputs[i].frameSize);
         }
-        else if (inputs[i].essenceType == DV1080i50)
+        else if (inputs[i].essenceType == DV1080i)
         {
-            inputs[i].frameSize = 576000;
+            if (isPAL)
+            {
+                inputs[i].frameSize = 576000;
+            }
+            else
+            {
+                inputs[i].frameSize = 480000;
+            }
             CHK_MALLOC_ARRAY_OFAIL(inputs[i].buffer, unsigned char, inputs[i].frameSize);
         }
-        else if (inputs[i].essenceType == DV720p50)
+        else if (inputs[i].essenceType == DV720p)
         {
-            inputs[i].frameSize = 288000;
+            if (isPAL)
+            {
+                inputs[i].frameSize = 288000;
+            }
+            else
+            {
+                inputs[i].frameSize = 240000;
+            }
             CHK_MALLOC_ARRAY_OFAIL(inputs[i].buffer, unsigned char, inputs[i].frameSize);
         }
         else if (inputs[i].essenceType == IMX30)
@@ -2188,7 +2196,21 @@ int main(int argc, const char* argv[])
         }
         else if (inputs[i].essenceType == PCM)
         {
-            if (isPAL)
+            if (isFilm24)
+            {
+                inputs[i].frameSize = 2000 * inputs[i].bytesPerSample;
+                inputs[i].minFrameSize = inputs[i].frameSize;
+                inputs[i].frameSizeSeq[0] = inputs[i].frameSize;
+                inputs[i].frameSeqLen = 1;
+            }
+            else if (isFilm23_976)
+            {
+                inputs[i].frameSize = 2002 * inputs[i].bytesPerSample;
+                inputs[i].minFrameSize = inputs[i].frameSize;
+                inputs[i].frameSizeSeq[0] = inputs[i].frameSize;
+                inputs[i].frameSeqLen = 1;
+            }
+            else if (isPAL)
             {
                 if (haveProgressive2Video)
                 {
@@ -2481,7 +2503,7 @@ int main(int argc, const char* argv[])
                     goto fail;
                 }
             }
-            else if (inputs[i].essenceType == DV1080i50 || inputs[i].essenceType == DV720p50)
+            else if (inputs[i].essenceType == DV1080i || inputs[i].essenceType == DV720p)
             {
                 if (rf_read(inputs[i].file, inputs[i].buffer, inputs[i].frameSize) != inputs[i].frameSize)
                 {

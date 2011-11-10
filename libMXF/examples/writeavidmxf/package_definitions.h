@@ -1,5 +1,5 @@
 /*
- * $Id: package_definitions.h,v 1.14 2011/10/14 09:49:55 john_f Exp $
+ * $Id: package_definitions.h,v 1.15 2011/11/10 10:27:37 philipn Exp $
  *
  * Defines MXF package data structures and functions to create them
  *
@@ -45,10 +45,8 @@ typedef enum
     IECDV25,
     DVBased25,
     DVBased50,
-    DV1080i50,
-    /* DV1080i60, not yet supported */
-    DV720p50,
-    /* DV720p60, not yet supported */
+    DV1080i,
+    DV720p,
     IMX30,
     IMX40,
     IMX50,

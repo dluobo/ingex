@@ -1,5 +1,5 @@
 /*
- * $Id: write_avid_mxf.c,v 1.29 2011/10/14 09:49:55 john_f Exp $
+ * $Id: write_avid_mxf.c,v 1.30 2011/11/10 10:27:37 philipn Exp $
  *
  * Write video and audio to MXF files supported by Avid editing software
  *
@@ -1665,8 +1665,8 @@ static int create_track_writer(AvidClipWriter* clipWriter, PackageDefinitions* p
             newTrackWriter->editUnitByteCount = newTrackWriter->frameSize;
             break;
             
-        case DV1080i50:
-        case DV720p50:
+        case DV1080i:
+        case DV720p:
             newTrackWriter->cdciEssenceContainerLabel = MXF_EC_L(AvidAAFKLVEssenceContainer);
             newTrackWriter->displayYOffset = 0;
             newTrackWriter->displayXOffset = 0;
@@ -1677,37 +1677,57 @@ static int create_track_writer(AvidClipWriter* clipWriter, PackageDefinitions* p
 
             switch (filePackage->essenceType)
             {
-                case DV1080i50:        /* SMPTE 370M */
+                case DV1080i:        /* SMPTE 370M */
                     newTrackWriter->videoLineMapLen = 2;
                     newTrackWriter->videoLineMap[0] = 21;
                     newTrackWriter->videoLineMap[1] = 584;
-                    newTrackWriter->storedHeight = 540;
-                    newTrackWriter->storedWidth = 1920; /* this differs from Avid, which sets this to 1440 */
                     newTrackWriter->displayHeight = 540;
                     newTrackWriter->displayWidth = 1920;
                     newTrackWriter->sampledHeight = 540;
                     newTrackWriter->sampledWidth = 1920;
-                    newTrackWriter->frameSize = 576000;
                     newTrackWriter->frameLayout = 1; /* SeparateFields */
                     newTrackWriter->essenceElementKey = MXF_EE_K(DVClipWrapped);
-                    newTrackWriter->essenceContainerLabel = MXF_EC_L(DVBased_100_1080_50_I_ClipWrapped);
-                    newTrackWriter->pictureEssenceCoding = MXF_CMDEF_L(DVBased_100_1080_50_I);
+                    if (clipWriter->projectFormat == PAL_25i)
+                    {
+                        newTrackWriter->storedHeight = 540;
+                        newTrackWriter->storedWidth = 1440;
+                        newTrackWriter->frameSize = 576000;
+                        newTrackWriter->essenceContainerLabel = MXF_EC_L(DVBased_100_1080_50_I_ClipWrapped);
+                        newTrackWriter->pictureEssenceCoding = MXF_CMDEF_L(DVBased_100_1080_50_I);
+                    }
+                    else
+                    {
+                        newTrackWriter->storedHeight = 540;
+                        newTrackWriter->storedWidth = 1280;
+                        newTrackWriter->frameSize = 480000;
+                        newTrackWriter->essenceContainerLabel = MXF_EC_L(DVBased_100_1080_60_I_ClipWrapped);
+                        newTrackWriter->pictureEssenceCoding = MXF_CMDEF_L(DVBased_100_1080_60_I);
+                    }
                     break;
-                case DV720p50:        /* Standardised in later version of SMPTE 370M */
+                case DV720p:        /* Standardised in later version of SMPTE 370M */
                     newTrackWriter->videoLineMapLen = 2;
                     newTrackWriter->videoLineMap[0] = 26;
                     newTrackWriter->videoLineMap[1] = 0;
                     newTrackWriter->storedHeight = 720;
-                    newTrackWriter->storedWidth = 1280; /* this differs from Avid, which sets this to 960 */
+                    newTrackWriter->storedWidth = 960;
                     newTrackWriter->displayHeight = 720;
                     newTrackWriter->displayWidth = 1280;
                     newTrackWriter->sampledHeight = 720;
                     newTrackWriter->sampledWidth = 1280;
-                    newTrackWriter->frameSize = 288000;
                     newTrackWriter->frameLayout = 0; /* FullFrame */
                     newTrackWriter->essenceElementKey = MXF_EE_K(DVClipWrapped);
-                    newTrackWriter->essenceContainerLabel = MXF_EC_L(DVBased_100_720_50_P_ClipWrapped);
-                    newTrackWriter->pictureEssenceCoding = MXF_CMDEF_L(DVBased_100_720_50_P);
+                    if (clipWriter->projectFormat == PAL_25i)
+                    {
+                        newTrackWriter->frameSize = 288000;
+                        newTrackWriter->essenceContainerLabel = MXF_EC_L(DVBased_100_720_50_P_ClipWrapped);
+                        newTrackWriter->pictureEssenceCoding = MXF_CMDEF_L(DVBased_100_720_50_P);
+                    }
+                    else
+                    {
+                        newTrackWriter->frameSize = 240000;
+                        newTrackWriter->essenceContainerLabel = MXF_EC_L(DVBased_100_720_60_P_ClipWrapped);
+                        newTrackWriter->pictureEssenceCoding = MXF_CMDEF_L(DVBased_100_720_60_P);
+                    }
                     break;
                 default:
                     assert(0);
@@ -2311,8 +2331,8 @@ int write_samples(AvidClipWriter* clipWriter, uint32_t materialTrackID, uint32_t
         case IECDV25:
         case DVBased25:
         case DVBased50:
-        case DV1080i50:
-        case DV720p50:
+        case DV1080i:
+        case DV720p:
         case IMX30:
         case IMX40:
         case IMX50:
@@ -2426,8 +2446,8 @@ int end_write_samples(AvidClipWriter* clipWriter, uint32_t materialTrackID, uint
         case IECDV25:
         case DVBased25:
         case DVBased50:
-        case DV1080i50:
-        case DV720p50:
+        case DV1080i:
+        case DV720p:
         case IMX30:
         case IMX40:
         case IMX50:
