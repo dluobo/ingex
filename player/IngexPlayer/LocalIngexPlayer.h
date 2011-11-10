@@ -1,5 +1,5 @@
 /*
- * $Id: LocalIngexPlayer.h,v 1.22 2011/04/27 10:59:06 john_f Exp $
+ * $Id: LocalIngexPlayer.h,v 1.23 2011/11/10 10:56:18 philipn Exp $
  *
  * Copyright (C) 2008-2010 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
@@ -135,9 +135,21 @@ public:
     bool close();
 
 
-    /* opens the files/sources and start playing. The opened parameter indicates for each file/source whether
-    it was successfully opened or not */
+    /* prepares files/sources and start playing.
+       inputs:         input files / sources
+       opened:         indicates for each input whether it was successfully opened or not
+       startPaused:    if true the player will start in paused state
+       startPosition:  first frame to play. A negative value is equivalent to seeking to
+                       (last frame + (startPosition + 1)), i.e. startPosition = -1 means the player seeks to
+                       the last frame
+    */
     virtual bool start(std::vector<PlayerInput> inputs, std::vector<bool>& opened, bool startPaused, int64_t startPosition);
+
+    // same as start above, except it allows setting player settings after calling prepare() and before start()
+    // e.g. start above calls seek() after prepare() to seek to startPosition 
+    bool prepare(std::vector<PlayerInput> inputs, std::vector<bool>& opened);
+    void start(bool startPaused);
+
 
     /* returns the output type used */
     PlayerOutputType getOutputType();

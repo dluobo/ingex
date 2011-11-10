@@ -1,5 +1,5 @@
 /*
- * $Id: LocalIngexPlayer.cpp,v 1.30 2011/07/13 10:26:05 philipn Exp $
+ * $Id: LocalIngexPlayer.cpp,v 1.31 2011/11/10 10:56:18 philipn Exp $
  *
  * Copyright (C) 2008-2010 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
@@ -935,7 +935,7 @@ bool LocalIngexPlayer::close()
     return true;
 }
 
-bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, bool startPaused, int64_t startPosition)
+bool LocalIngexPlayer::prepare(vector<PlayerInput> inputs, vector<bool>& opened)
 {
     auto_ptr<LocalIngexPlayerState> newPlayState;
     MultipleMediaSources* multipleSource = 0;
@@ -1731,12 +1731,6 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
         mc_set_osd_play_state_position(ply_get_media_control(newPlayState->mediaPlayer), _osdPlayStatePosition);
 
 
-        // seek to the start position
-        if (startPosition > 0)
-        {
-            mc_seek(ply_get_media_control(newPlayState->mediaPlayer), startPosition, SEEK_SET, FRAME_PLAY_UNIT);
-        }
-
         // set timecode type to display if shared memory present
         if (_shmDefaultTCType != UNKNOWN_TIMECODE_TYPE)
         {
@@ -1751,17 +1745,13 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
             _sourceIdToIndex = newSourceIdToIndex;
         }
 
-        // start play thread
-
-        newPlayState->playThreadArgs.startPaused = startPaused;
-        newPlayState->playThreadArgs.playState = newPlayState.get();
-        CHK_OTHROW(create_joinable_thread(&newPlayState->playThreadId, player_thread, &newPlayState->playThreadArgs));
-
-
         _config = nextConfig;
         {
             ReadWriteLockGuard guard(&_playStateRWLock, true);
             _playState = newPlayState.release();
+
+            // enable start(bool startPaused)
+            _playState->playThreadArgs.playState = 0;
         }
 
         setX11WindowName(_x11WindowName);
@@ -1774,6 +1764,36 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
         }
         return false;
     }
+    return true;
+}
+
+void LocalIngexPlayer::start(bool startPaused)
+{
+    ReadWriteLockGuard guard(&_playStateRWLock, true);
+
+    if (_playState && !_playState->playThreadArgs.playState) {
+        _playState->playThreadArgs.startPaused = startPaused;
+        _playState->playThreadArgs.playState = _playState;
+        CHK_OTHROW(create_joinable_thread(&_playState->playThreadId, player_thread, &_playState->playThreadArgs));
+    }
+}
+
+bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, bool startPaused, int64_t startPosition)
+{
+    if (!prepare(inputs, opened))
+        return false;
+
+    // seek to the start position
+    if (startPosition > 0)
+    {
+        seek(startPosition, SEEK_SET, FRAME_PLAY_UNIT);
+    }
+    else if (startPosition < 0)
+    {
+        seek(-startPosition + 1, SEEK_END, FRAME_PLAY_UNIT);
+    }
+
+    start(startPaused);
     return true;
 }
 
