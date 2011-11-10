@@ -1,5 +1,5 @@
 /*
- * $Id: MXFOPAtomWriter.cpp,v 1.7 2011/10/14 09:49:56 john_f Exp $
+ * $Id: MXFOPAtomWriter.cpp,v 1.8 2011/11/10 13:48:16 philipn Exp $
  *
  * MXF OP-Atom writer
  *
@@ -385,7 +385,7 @@ void MXFOPAtomWriter::CreatePackageDefinitions()
                     essence_type = DVBased50;
                     break;
                 case MaterialResolution::DV100_MXF_ATOM:
-                    essence_type = DV1080i50;
+                    essence_type = DV1080i;
                     break;
                 case MaterialResolution::MJPEG21_MXF_ATOM:
                     essence_info.mjpegResolution = Res21;
