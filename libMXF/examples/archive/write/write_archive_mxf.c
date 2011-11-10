@@ -1,5 +1,5 @@
 /*
- * $Id: write_archive_mxf.c,v 1.13 2011/01/10 17:05:15 john_f Exp $
+ * $Id: write_archive_mxf.c,v 1.14 2011/11/10 10:33:27 philipn Exp $
  *
  * 
  *
@@ -192,7 +192,7 @@ static const int32_t g_videoLineMap[2] = {23, 336};
 static const uint32_t g_videoHorizontalSubSampling = 2;
 static const uint32_t g_videoVerticalSubSampling = 1;
 static const uint32_t g_videoFrameSize8Bit = 720 * 576 * 2;
-static const uint32_t g_videoFrameSize10Bit = (720 + 5) / 6 * 16 * 576;
+static const uint32_t g_videoFrameSize10Bit = (720 + 47) / 48 * 128 * 576;
 
 static const int64_t g_tapeLen = 120 * 25 * 60 * 60;
 

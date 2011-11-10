@@ -1,5 +1,5 @@
 /*
- * $Id: test_write_archive_mxf.c,v 1.10 2010/07/26 16:02:37 philipn Exp $
+ * $Id: test_write_archive_mxf.c,v 1.11 2011/11/10 10:33:27 philipn Exp $
  *
  * 
  *
@@ -38,7 +38,7 @@
 #define VIDEO_FRAME_WIDTH           720
 #define VIDEO_FRAME_HEIGHT          576
 #define VIDEO_FRAME_SIZE_8BIT       (VIDEO_FRAME_WIDTH * VIDEO_FRAME_HEIGHT * 2)
-#define VIDEO_FRAME_SIZE_10BIT      ((VIDEO_FRAME_WIDTH + 5) / 6 * 16 * VIDEO_FRAME_HEIGHT)
+#define VIDEO_FRAME_SIZE_10BIT      ((VIDEO_FRAME_WIDTH + 47) / 48 * 128 * VIDEO_FRAME_HEIGHT)
 #define AUDIO_FRAME_SIZE            5760
 
 #define MXF_PAGE_SIZE               (2 * 60 * 25 * 852628LL)
@@ -120,24 +120,28 @@ static void create_colour_bars(unsigned char *video_buffer, int depth_8Bit, int 
         };
                 
         unsigned short uyvy_group[12];
-        int line_stride = (width + 5) / 6 * 16;
-        
+        int line_stride = (width + 47) / 48 * 128;
+
         for (j = 0; j < height; j++)
         {
             for (i = 0; i < width; i+=6)
             {
                 for (b = 0; b < 9; b++)
                 {
-                    if ((i / ((double)width)) < UYVY_table[b].position)
+                    if ((int)(1000 * (i / ((double)width))) < (int)(1000 * UYVY_table[b].position))
                     {
                         memcpy(uyvy_group, UYVY_table[b].colour, sizeof(unsigned short) * 4);
                         memcpy(&uyvy_group[4], UYVY_table[b].colour, sizeof(unsigned short) * 4);
                         memcpy(&uyvy_group[8], UYVY_table[b].colour, sizeof(unsigned short) * 4);
-                        
+
                         pack4(uyvy_group, &video_buffer[j*line_stride + i/6*16]);
                         break;
                     }
                 }
+            }
+            if (line_stride > width/6*16)
+            {
+                memset(&video_buffer[j*line_stride + width/6*16], 0, line_stride - width/6*16);
             }
         }
     }

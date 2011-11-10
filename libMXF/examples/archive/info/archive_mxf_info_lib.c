@@ -1,5 +1,5 @@
 /*
- * $Id: archive_mxf_info_lib.c,v 1.4 2010/06/18 09:29:34 philipn Exp $
+ * $Id: archive_mxf_info_lib.c,v 1.5 2011/11/10 10:33:27 philipn Exp $
  *
  * 
  *
@@ -212,6 +212,72 @@ static int is_metadata_only_file(MXFHeaderMetadata* headerMetadata, MXFMetadataS
     }
     
     return 0;
+}
+
+static int archive_mxf_get_package_infax_data(MXFHeaderMetadata *headerMetadata, MXFMetadataSet *packageSet,
+                                              InfaxData *infaxData)
+{
+    MXFArrayItemIterator arrayIter;
+    uint8_t *arrayElement;
+    mxfUL dataDef;
+    uint32_t count;
+    MXFMetadataSet *trackSet;
+    MXFMetadataSet *sequenceSet;
+    MXFMetadataSet *dmSet;
+    MXFMetadataSet *dmFrameworkSet;
+    int haveInfaxData = 0;
+
+    /* go through the tracks and find the DM track */
+    CHK_ORET(mxf_uu_get_package_tracks(packageSet, &arrayIter));
+    while (mxf_uu_next_track(headerMetadata, &arrayIter, &trackSet))
+    {
+        CHK_ORET(mxf_uu_get_track_datadef(trackSet, &dataDef));
+        if (!mxf_is_descriptive_metadata(&dataDef))
+        {
+            continue;
+        }
+
+        /* get to the single DMSegment */
+        CHK_ORET(mxf_get_strongref_item(trackSet, &MXF_ITEM_K(GenericTrack, Sequence), &sequenceSet));
+        if (mxf_is_subclass_of(headerMetadata->dataModel, &sequenceSet->key, &MXF_SET_K(Sequence)))
+        {
+            CHK_ORET(mxf_get_array_item_count(sequenceSet, &MXF_ITEM_K(Sequence, StructuralComponents), &count));
+            if (count != 1)
+            {
+                /* more than one segment */
+                continue;
+            }
+
+            CHK_ORET(mxf_get_array_item_element(sequenceSet, &MXF_ITEM_K(Sequence, StructuralComponents), 0, &arrayElement));
+            if (!mxf_get_strongref(headerMetadata, arrayElement, &dmSet))
+            {
+                /* unknown DMSegment sub-class */
+                continue;
+            }
+        }
+        else
+        {
+            dmSet = sequenceSet;
+        }
+
+        /* if it is a DMSegment with a DMFramework reference then we have the DMS track */
+        if (mxf_is_subclass_of(headerMetadata->dataModel, &dmSet->key, &MXF_SET_K(DMSegment)))
+        {
+            if (mxf_have_item(dmSet, &MXF_ITEM_K(DMSegment, DMFramework)))
+            {
+                /* if it is an APP_InfaxFramework then it is the Infax data */
+                if (mxf_get_strongref_item(dmSet, &MXF_ITEM_K(DMSegment, DMFramework), &dmFrameworkSet) &&
+                    mxf_is_subclass_of(headerMetadata->dataModel, &dmFrameworkSet->key, &MXF_SET_K(APP_InfaxFramework)))
+                {
+                    CHK_ORET(get_infax_data(dmFrameworkSet, infaxData));
+                    haveInfaxData = 1;
+                    break;
+                }
+            }
+        }
+    }
+
+    return haveInfaxData;
 }
 
 static int archive_mxf_get_package_pse_failures(MXFHeaderMetadata* headerMetadata, MXFMetadataSet* packageSet,
@@ -658,8 +724,6 @@ int archive_mxf_get_info(MXFHeaderMetadata* headerMetadata, ArchiveMXFInfo* info
     MXFArrayItemIterator arrayIter;
     uint8_t* arrayElement;
     uint32_t arrayElementLen;
-    mxfUL dataDef;
-    uint32_t count;
     mxfUTF16Char* tempWString = NULL;
     int haveSourceInfaxData = 0;
     MXFList* nameList = NULL;
@@ -667,10 +731,6 @@ int archive_mxf_get_info(MXFHeaderMetadata* headerMetadata, ArchiveMXFInfo* info
     MXFMetadataSet* identSet;
     MXFMetadataSet* fileSourcePackageSet;
     MXFMetadataSet* sourcePackageSet;
-    MXFMetadataSet* sourcePackageTrackSet;
-    MXFMetadataSet* sequenceSet;
-    MXFMetadataSet* dmSet;
-    MXFMetadataSet* dmFrameworkSet;
     MXFMetadataSet* descriptorSet;
     MXFMetadataSet* locatorSet;
     MXFMetadataSet* materialPackageSet;
@@ -707,49 +767,7 @@ int archive_mxf_get_info(MXFHeaderMetadata* headerMetadata, ArchiveMXFInfo* info
     /* LTO Infax data */    
     
     CHK_OFAIL(mxf_uu_get_top_file_package(headerMetadata, &fileSourcePackageSet));
-    CHK_OFAIL(mxf_uu_get_package_tracks(fileSourcePackageSet, &arrayIter));
-    while (mxf_uu_next_track(headerMetadata, &arrayIter, &sourcePackageTrackSet))
-    {
-        CHK_OFAIL(mxf_uu_get_track_datadef(sourcePackageTrackSet, &dataDef));
-
-        if (mxf_is_descriptive_metadata(&dataDef))
-        {
-            /* get to the single DMSegment */
-            CHK_OFAIL(mxf_get_strongref_item(sourcePackageTrackSet, &MXF_ITEM_K(GenericTrack, Sequence), &sequenceSet));
-            if (mxf_is_subclass_of(headerMetadata->dataModel, &sequenceSet->key, &MXF_SET_K(Sequence)))
-            {
-                CHK_OFAIL(mxf_get_array_item_count(sequenceSet, &MXF_ITEM_K(Sequence, StructuralComponents), &count));
-                if (count != 1)
-                {
-                    /* Sequence of length 1 is expected for the DMS track */
-                    continue;
-                }
-                
-                CHK_OFAIL(mxf_get_array_item_element(sequenceSet, &MXF_ITEM_K(Sequence, StructuralComponents), 0, &arrayElement));
-                CHK_OFAIL(mxf_get_strongref(headerMetadata, arrayElement, &dmSet));
-            }
-            else
-            {
-                dmSet = sequenceSet;
-            }
-            
-            /* if it is a DMSegment with a DMFramework reference then we have the DMS track */
-            if (mxf_is_subclass_of(headerMetadata->dataModel, &dmSet->key, &MXF_SET_K(DMSegment)))
-            {
-                if (mxf_have_item(dmSet, &MXF_ITEM_K(DMSegment, DMFramework)))
-                {
-                    CHK_OFAIL(mxf_get_strongref_item(dmSet, &MXF_ITEM_K(DMSegment, DMFramework), &dmFrameworkSet));
-                    
-                    /* if it is a APP_InfaxFramework then it is the Infax data */
-                    if (mxf_is_subclass_of(headerMetadata->dataModel, &dmFrameworkSet->key, &MXF_SET_K(APP_InfaxFramework)))
-                    {
-                        CHK_OFAIL(get_infax_data(dmFrameworkSet, &info->ltoInfaxData));
-                        break;
-                    }
-                }
-            }
-        }
-    }
+    archive_mxf_get_package_infax_data(headerMetadata, fileSourcePackageSet, &info->ltoInfaxData);
 
 
     /* original filename */
@@ -786,68 +804,31 @@ int archive_mxf_get_info(MXFHeaderMetadata* headerMetadata, ArchiveMXFInfo* info
         CHK_OFAIL(mxf_get_strongref_item(sourcePackageSet, &MXF_ITEM_K(SourcePackage, Descriptor), &descriptorSet));
         if (mxf_is_subclass_of(headerMetadata->dataModel, &descriptorSet->key, &MXF_SET_K(TapeDescriptor)))
         {
-            /* go through the tracks and find the DMS track */
-            CHK_OFAIL(mxf_uu_get_package_tracks(sourcePackageSet, &arrayIter));
-            while (mxf_uu_next_track(headerMetadata, &arrayIter, &sourcePackageTrackSet))
-            {
-                CHK_OFAIL(mxf_uu_get_track_datadef(sourcePackageTrackSet, &dataDef));
-        
-                if (mxf_is_descriptive_metadata(&dataDef))
-                {
-                    /* get to the single DMSegment */
-                    CHK_OFAIL(mxf_get_strongref_item(sourcePackageTrackSet, &MXF_ITEM_K(GenericTrack, Sequence), &sequenceSet));
-                    if (mxf_is_subclass_of(headerMetadata->dataModel, &sequenceSet->key, &MXF_SET_K(Sequence)))
-                    {
-                        CHK_OFAIL(mxf_get_array_item_count(sequenceSet, &MXF_ITEM_K(Sequence, StructuralComponents), &count));
-                        if (count != 1)
-                        {
-                            /* Sequence of length 1 is expected for the DMS track */
-                            continue;
-                        }
-                        
-                        CHK_OFAIL(mxf_get_array_item_element(sequenceSet, &MXF_ITEM_K(Sequence, StructuralComponents), 0, &arrayElement));
-                        CHK_OFAIL(mxf_get_strongref(headerMetadata, arrayElement, &dmSet));
-                    }
-                    else
-                    {
-                        dmSet = sequenceSet;
-                    }
-                    
-                    /* if it is a DMSegment with a DMFramework reference then we have the DMS track */
-                    if (mxf_is_subclass_of(headerMetadata->dataModel, &dmSet->key, &MXF_SET_K(DMSegment)))
-                    {
-                        if (mxf_have_item(dmSet, &MXF_ITEM_K(DMSegment, DMFramework)))
-                        {
-                            CHK_OFAIL(mxf_get_strongref_item(dmSet, &MXF_ITEM_K(DMSegment, DMFramework), &dmFrameworkSet));
-                            
-                            /* if it is a APP_InfaxFramework then it is the Infax data */
-                            if (mxf_is_subclass_of(headerMetadata->dataModel, &dmFrameworkSet->key, &MXF_SET_K(APP_InfaxFramework)))
-                            {
-                                CHK_OFAIL(get_infax_data(dmFrameworkSet, &info->sourceInfaxData));
-                                haveSourceInfaxData = 1;
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-                    
+            haveSourceInfaxData = archive_mxf_get_package_infax_data(headerMetadata, sourcePackageSet,
+                                                                     &info->sourceInfaxData);
             break;
         }
     }
     mxf_free_list(&list);
-    
-    
-    /* try reading Infax data from UserComments attached to the MaterialPackage if no data was found elsewhere */
+
+    /* try alternative locations for source Infax data */
     if (!haveSourceInfaxData)
     {
+        /* framework in the material package */
         CHK_OFAIL(mxf_find_singular_set_by_key(headerMetadata, &MXF_SET_K(MaterialPackage), &materialPackageSet));
-        if (mxf_avid_read_string_user_comments(materialPackageSet, &nameList, &valueList))
-        {
-            haveSourceInfaxData = parse_infax_user_comments(nameList, valueList, &info->sourceInfaxData);
+        haveSourceInfaxData = archive_mxf_get_package_infax_data(headerMetadata, materialPackageSet,
+                                                                 &info->sourceInfaxData);
 
-            mxf_free_list(&nameList);
-            mxf_free_list(&valueList);
+        /* UserComments in the MaterialPackage */
+        if (!haveSourceInfaxData)
+        {
+            if (mxf_avid_read_string_user_comments(materialPackageSet, &nameList, &valueList))
+            {
+                haveSourceInfaxData = parse_infax_user_comments(nameList, valueList, &info->sourceInfaxData);
+
+                mxf_free_list(&nameList);
+                mxf_free_list(&valueList);
+            }
         }
     }
 
