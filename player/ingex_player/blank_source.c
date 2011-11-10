@@ -1,5 +1,5 @@
 /*
- * $Id: blank_source.c,v 1.10 2011/10/27 13:45:37 philipn Exp $
+ * $Id: blank_source.c,v 1.11 2011/11/10 10:53:35 philipn Exp $
  *
  *
  *
@@ -84,7 +84,7 @@ static int bks_finalise_blank_source(void* data, const StreamInfo* streamInfo)
     }
     else if (source->streamInfo.format == UYVY_10BIT_FORMAT)
     {
-        source->imageSize = (source->streamInfo.width + 5) / 6 * 16 * source->streamInfo.height;
+        source->imageSize = (source->streamInfo.width + 47) / 48 * 128 * source->streamInfo.height;
     }
     else if (source->streamInfo.format == YUV422_10BIT_FORMAT)
     {

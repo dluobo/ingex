@@ -1,5 +1,5 @@
 /*
- * $Id: x11_display_sink.c,v 1.18 2011/10/27 13:45:37 philipn Exp $
+ * $Id: x11_display_sink.c,v 1.19 2011/11/10 10:53:35 philipn Exp $
  *
  *
  *
@@ -431,7 +431,7 @@ static int display_frame(X11DisplaySink* sink, X11DisplayFrame* frame, const Fra
         if (frame->videoFormat == UYVY_10BIT_FORMAT)
         {
             ConvertFrameV210to8(frame->convertBuffer, frame->inputBuffer, sink->inputWidth * 2,
-                                (sink->inputWidth + 5) / 6 * 16, sink->inputWidth, sink->inputHeight);
+                                (sink->inputWidth + 47) / 48 * 128, sink->inputWidth, sink->inputHeight);
             inputBuffer = frame->convertBuffer;
             rgbInputFormat = UYVY_FORMAT;
         }
@@ -587,7 +587,7 @@ static int init_frame(X11DisplayFrame* frame)
 
     if (sink->videoFormat == UYVY_10BIT_FORMAT)
     {
-        frame->inputBufferSize = (sink->inputWidth + 5) / 6 * 16 * sink->inputHeight;
+        frame->inputBufferSize = (sink->inputWidth + 47) / 48 * 128 * sink->inputHeight;
         frame->convertBufferSize = sink->inputWidth * sink->inputHeight * 2;
         if (sink->swScale != 1)
         {

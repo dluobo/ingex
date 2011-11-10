@@ -1,5 +1,5 @@
 /*
- * $Id: bouncing_ball_source.c,v 1.11 2011/10/27 13:45:37 philipn Exp $
+ * $Id: bouncing_ball_source.c,v 1.12 2011/11/10 10:53:35 philipn Exp $
  *
  *
  *
@@ -428,7 +428,7 @@ int bbs_create(const StreamInfo* videoStreamInfo, int64_t length, int numBalls, 
     }
     else if (videoStreamInfo->format == UYVY_10BIT_FORMAT)
     {
-        newSource->imageSize = (videoStreamInfo->width + 5) / 6 * 16 * videoStreamInfo->height;
+        newSource->imageSize = (videoStreamInfo->width + 47) / 48 * 128 * videoStreamInfo->height;
     }
     else if (videoStreamInfo->format == YUV422_10BIT_FORMAT)
     {

@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sink.c,v 1.26 2011/10/27 13:45:37 philipn Exp $
+ * $Id: dvs_sink.c,v 1.27 2011/11/10 10:53:35 philipn Exp $
  *
  *
  *
@@ -962,6 +962,15 @@ static int dvs_register_stream(void* data, int streamId, const StreamInfo* strea
         if (sink->videoStream.data[0] != NULL)
         {
             /* already have video stream */
+            return 0;
+        }
+
+        /* TODO: support 10-bit 720p input where the DVS alignment of 6 pixels doesn't match the
+           48 pixel alignment required by v210 */
+        if (streamInfo->format == UYVY_10BIT_FORMAT &&
+            streamInfo->width % 6 != streamInfo->width % 48)
+        {
+            fprintf(stderr, "The width for 10-bit UYVY in stream %d is not yet supported in DVS sink\n", streamId);
             return 0;
         }
 

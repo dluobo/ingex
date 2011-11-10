@@ -1,5 +1,5 @@
 /*
- * $Id: raw_dv_source.c,v 1.8 2011/10/27 13:45:37 philipn Exp $
+ * $Id: raw_dv_source.c,v 1.9 2011/11/10 10:53:35 philipn Exp $
  *
  *
  *
@@ -229,7 +229,7 @@ static int get_dv_stream_info(RawDVSource* source)
         if (info.is1080i)
         {
             source->streamInfo.format = DV100_1080I_FORMAT;
-            source->streamInfo.width = 1440;
+            source->streamInfo.width = (info.is50Hz ? 1440 : 1280);
             source->streamInfo.height = 1080;
             source->streamInfo.aspectRatio.num = 16;
             source->streamInfo.aspectRatio.den = 9;

@@ -1,5 +1,5 @@
 /*
- * $Id: picture_scale_sink.c,v 1.5 2011/09/27 10:14:29 philipn Exp $
+ * $Id: picture_scale_sink.c,v 1.6 2011/11/10 10:53:35 philipn Exp $
  *
  * Copyright (C) 2010 British Broadcasting Corporation, All Rights Reserved
  *
@@ -127,6 +127,13 @@ static const RasterScaleTable RASTER_SCALE_TABLE[] =
     /* 1440x1080 -> 1920x1080 */
     {PSS_HD_1080_RASTER,
         {0, 0},     1440,   1080, {0, 0}, 0,
+                    1920,   1080, {16, 9},
+                    960,    540,
+                    640,    360,
+    },
+    /* 1280x1080 -> 1920x1080 */
+    {PSS_HD_1080_RASTER,
+        {0, 0},     1280,   1080, {0, 0}, 0,
                     1920,   1080, {16, 9},
                     960,    540,
                     640,    360,
@@ -301,6 +308,13 @@ static const RasterScaleTable RASTER_SCALE_TABLE[] =
     /* 1440x1080 -> 720x486 */
     {PSS_SD_525_RASTER,
         {30000, 1001},  1440,   1080, {0, 0}, 0,        /* pixel aspect 1/1 */
+                        708,    480, {16, 9},           /* pixel aspect 40/33 */
+                        354,    240,
+                        236,    160,
+    },
+    /* 1280x1080 -> 720x486 */
+    {PSS_SD_525_RASTER,
+        {30000, 1001},  1280,   1080, {0, 0}, 0,        /* pixel aspect 1/1 */
                         708,    480, {16, 9},           /* pixel aspect 40/33 */
                         354,    240,
                         236,    160,

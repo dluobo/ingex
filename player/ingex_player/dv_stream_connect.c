@@ -1,5 +1,5 @@
 /*
- * $Id: dv_stream_connect.c,v 1.13 2011/09/27 10:14:29 philipn Exp $
+ * $Id: dv_stream_connect.c,v 1.14 2011/11/10 10:53:35 philipn Exp $
  *
  *
  *
@@ -831,9 +831,18 @@ int create_dv_connect(MediaSink* sink, int sinkStreamId, int sourceStreamId,
     {
         decodedStreamInfo = *streamInfo;
         decodedStreamInfo.format = YUV422_FORMAT;
-        /* set aspect ratio to 4/3 to reverse the scaling from 1920->1440 and 1280->960 */
-        decodedStreamInfo.aspectRatio.num = 4;
-        decodedStreamInfo.aspectRatio.den = 3;
+        if (streamInfo->format == DV100_1080I_FORMAT && !stream_is_pal_frame_rate(streamInfo))
+        {
+            /* set aspect ratio to 3/2 to reverse the scaling from 1920->1280 for 1080i60 */
+            decodedStreamInfo.aspectRatio.num = 3;
+            decodedStreamInfo.aspectRatio.den = 2;
+        }
+        else
+        {
+            /* set aspect ratio to 4/3 to reverse the scaling from 1920->1440 and 1280->960 */
+            decodedStreamInfo.aspectRatio.num = 4;
+            decodedStreamInfo.aspectRatio.den = 3;
+        }
 
         result = msk_accept_stream(sink, &decodedStreamInfo);
     }

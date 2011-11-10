@@ -1,5 +1,5 @@
 /*
- * $Id: overlay.c,v 1.5 2011/10/27 13:45:37 philipn Exp $
+ * $Id: overlay.c,v 1.6 2011/11/10 10:53:35 philipn Exp $
  *
  * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
@@ -249,10 +249,10 @@ static int apply_overlay_v210(overlay *ovly, unsigned char *image, int width, in
     if (!alloc_overlay_workspace(workspace, target_width, target_height))
         return 0;
 
-    source_image = image + (target_y0 * ((width + 5) / 6 * 16)) +
-                           ((target_x0 + 5) / 6 * 16);
+    source_image = image + (target_y0 * ((width + 47) / 48 * 128)) +
+                           ((target_x0 + 47) / 48 * 128);
 
-    unpack_10bit_image(workspace->image, source_image, target_width * 2, (width + 5) / 6 * 16,
+    unpack_10bit_image(workspace->image, source_image, target_width * 2, (width + 47) / 48 * 128,
                        target_width, target_height);
     image_upack_u = workspace->image;
     image_upack_y = workspace->image + 1;
@@ -336,7 +336,7 @@ static int apply_overlay_v210(overlay *ovly, unsigned char *image, int width, in
 
     // pack target area back to source
 
-    pack_10bit_image(source_image, workspace->image, (width + 5) / 6 * 16, target_width * 2,
+    pack_10bit_image(source_image, workspace->image, (width + 47) / 48 * 128, target_width * 2,
                      target_width, target_height);
 
     return 1;

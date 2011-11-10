@@ -142,7 +142,7 @@ ifdef FFMPEG_INCLUDE_PATH
 	endif
 	
 	# Add additional libraries and set flag if ffmpeg supports DNxHD
-	FFMPEG_HAS_DNXHD := $(shell test `ffmpeg -formats 2>/dev/null | grep DNxHD | wc -l` -gt 1 && echo YES)
+	FFMPEG_HAS_DNXHD := $(shell test `ffmpeg -formats 2>/dev/null | grep DNxHD | wc -l` -gt 0 && echo YES)
 	ifeq "$(FFMPEG_HAS_DNXHD)" "YES"
 		CFLAGS += -DHAVE_DNXHD
 	endif

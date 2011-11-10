@@ -1,5 +1,5 @@
 /*
- * $Id: video_conversion.c,v 1.13 2011/10/27 13:45:37 philipn Exp $
+ * $Id: video_conversion.c,v 1.14 2011/11/10 10:53:35 philipn Exp $
  *
  *
  *
@@ -792,7 +792,7 @@ void fill_black(StreamFormat format, int width, int height, unsigned char* image
     else if (format == UYVY_10BIT_FORMAT)
     {
         int i;
-        int size = (width + 5) / 6 * 16 * height;
+        int size = (width + 47) / 48 * 128 * height;
 
         for (i = 0; i < size; i += 16)
         {
