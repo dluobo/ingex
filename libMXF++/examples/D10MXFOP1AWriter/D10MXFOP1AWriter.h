@@ -1,5 +1,5 @@
 /*
- * $Id: D10MXFOP1AWriter.h,v 1.8 2011/09/09 11:22:41 philipn Exp $
+ * $Id: D10MXFOP1AWriter.h,v 1.9 2011/11/10 10:44:17 philipn Exp $
  *
  * D10 MXF OP-1A writer
  *
@@ -30,6 +30,7 @@
 
 #include <string>
 #include <vector>
+#include <queue>
 
 #include <libMXF++/MXF.h>
 
@@ -122,7 +123,10 @@ public:
 private:
     void CreateFile();
     uint32_t WriteSystemItem(const D10ContentPackage *content_package);
-    uint32_t WriteAES3AudioElement(const D10ContentPackage *content_package);
+
+    void InitAES3Block(DynamicByteArray *aes3_block, uint8_t sequence_index);
+    void UpdateAES3Blocks(const D10ContentPackage *content_package);
+    void FinalUpdateAES3Blocks();
 
     uint8_t GetAudioSequenceOffset(const D10ContentPackage *next_content_package);
 
@@ -167,11 +171,14 @@ private:
     mxfpp::TimecodeComponent *mFilePackageTC;
     
     D10ContentPackageInt *mContentPackage;
-    DynamicByteArray mAES3Block;
+    std::queue<DynamicByteArray*> mAES3Blocks;
     uint32_t mAudioSequence[5];
     uint8_t mAudioSequenceCount;
     uint8_t mAudioSequenceIndex;
-    
+    uint32_t mMinAudioSamples;
+    uint32_t mMaxAudioSamples;
+    uint32_t mMaxFinalPaddingSamples;
+
     std::vector<D10ContentPackage*> mBufferedContentPackages;
 
     int64_t mDuration;

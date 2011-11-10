@@ -1,5 +1,5 @@
 /*
- * $Id: test_d10mxfop1awriter.cpp,v 1.5 2011/09/09 11:22:41 philipn Exp $
+ * $Id: test_d10mxfop1awriter.cpp,v 1.6 2011/11/10 10:44:17 philipn Exp $
  *
  * Test D10 MXF OP-1A writer
  *
@@ -332,7 +332,6 @@ int main(int argc, const char** argv)
         unsigned char audio[1920*3];
         uint32_t audio_sample_count;
         
-        int64_t frame_count = 0;
         while (true) {
             writer->SetUserTimecode(writer->GenerateUserTimecode());
             
@@ -357,13 +356,11 @@ int main(int argc, const char** argv)
                 break;
 
             writer->WriteContentPackage();
-            
-            frame_count++;
         }
         
         writer->CompleteFile();
         
-        printf("Total frames written: %"PRId64"\n", frame_count);
+        printf("Total frames written: %"PRId64"\n", writer->GetDuration());
     }
     catch (MXFException &ex)
     {
