@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: dialogues.cpp,v 1.28 2011/07/27 17:08:36 john_f Exp $           *
+ *   $Id: dialogues.cpp,v 1.29 2011/11/11 11:21:23 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -1307,16 +1307,14 @@ void TestModeDlg::OnTimer(wxTimerEvent & WXUNUSED(event))
 }
 
 /// Sets the path(s) to be scanned for erasing files to stop the disk(s) filling up.
-/// @param fullPaths The full path and filename of paths to be scanned; duplicates allowed; no action taken if zero.
-void TestModeDlg::SetRecordPaths(std::vector<std::string>* filenames)
+/// @param fullPaths The full path and filename of paths to be scanned; duplicates allowed;
+void TestModeDlg::SetRecordPaths(const wxArrayString & filenames)
 {
-    if (filenames) {
-        mRecordPaths.clear();
-        wxString path;
-        for (size_t i = 0; i < filenames->size(); i++) {
-            wxFileName::SplitPath(wxString((*filenames)[i].c_str(), *wxConvCurrent), &path, NULL, NULL);
-            if (!path.IsEmpty()) mRecordPaths.insert(path); //it's a set so avoids duplicates; no particular reason why the path should be empty I guess
-        }
+    mRecordPaths.clear();
+    wxString path;
+    for (size_t i = 0; i < filenames.GetCount(); i++) {
+        wxFileName::SplitPath(filenames[i], &path, NULL, NULL);
+        if (!path.IsEmpty()) mRecordPaths.insert(path); //it's a set so avoids duplicates; no particular reason why the path should be empty I guess
     }
 }
 
@@ -2452,4 +2450,22 @@ void SelectRecDlg::GetPaths(wxArrayString & paths, bool selectOnline)
         }
     }
     paths.Sort();
+}
+
+SetMaxChunksDlg::SetMaxChunksDlg(wxWindow * parent, unsigned int currentValue) : wxDialog(parent, wxID_ANY, wxT("Maximum number of chunks to display"))
+{
+    wxBoxSizer * mainSizer = new wxBoxSizer(wxVERTICAL);
+    SetSizer(mainSizer);
+    wxBoxSizer * hSizer = new wxBoxSizer(wxHORIZONTAL);
+    mainSizer->Add(hSizer);
+    hSizer->Add(new wxStaticText(this, wxID_ANY, wxT("Maximum chunks remembered:")), 0, wxALIGN_CENTRE_VERTICAL | wxALL, CONTROL_BORDER);
+    mSpinCtrl = new wxSpinCtrl(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, 0, 10, INT_MAX, currentValue);
+    hSizer->Add(mSpinCtrl, 0, wxALIGN_CENTRE | wxALL, CONTROL_BORDER);
+    mainSizer->Add(CreateButtonSizer(wxOK | wxCANCEL), 0, wxALIGN_CENTRE | wxALL, CONTROL_BORDER);
+    Fit();
+}
+
+unsigned int SetMaxChunksDlg::GetMaxChunks()
+{
+    return mSpinCtrl->GetValue();
 }

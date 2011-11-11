@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: ingexgui.h,v 1.27 2011/08/05 11:05:35 john_f Exp $              *
+ *   $Id: ingexgui.h,v 1.28 2011/11/11 11:21:23 john_f Exp $              *
  *                                                                         *
  *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -126,6 +126,7 @@ class IngexguiFrame : public wxFrame
         MENU_PlayPause,
         MENU_UseTapeIds,
         MENU_AutoClear,
+        MENU_MaxChunks,
         MENU_ClearLog,
         MENU_PlayerDisable,
         MENU_PlayerOpen,
@@ -207,6 +208,7 @@ class IngexguiFrame : public wxFrame
         void OnRecord(wxCommandEvent&);
         void OnRecorderListRefresh(wxCommandEvent&);
         void OnUseTapeIds(wxCommandEvent&);
+        void OnSetMaxChunks(wxCommandEvent&);
         void OnSetTapeIds(wxCommandEvent&);
         void OnStop(wxCommandEvent&);
         void OnCue(wxCommandEvent&);

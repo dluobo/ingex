@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: player.cpp,v 1.36 2011/09/07 15:07:08 john_f Exp $              *
+ *   $Id: player.cpp,v 1.37 2011/11/11 11:21:23 john_f Exp $              *
  *                                                                         *
  *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -59,7 +59,9 @@ END_EVENT_TABLE()
 /// @param parent Parent object.
 /// @param enabled True to enable player.
 /// @param recServerRoot Root directory for recordings from server.
-Player::Player(wxWindow* parent, const wxWindowID id, const bool enabled, const wxString & recServerRoot) :
+/// @param eventList Event list from which to obtain recording details.
+/// @param audioDevice PC audio device to use.
+Player::Player(wxWindow* parent, const wxWindowID id, const bool enabled, const wxString & recServerRoot, EventList* eventList, int audioDevice) :
 wxPanel(parent, id),
 #ifndef USE_HTTP_PLAYER
 LocalIngexPlayer(&mListenerRegistry),
@@ -76,14 +78,15 @@ mConnected(true), //built-in so always connected
 mSpeed(0), mMuted(false), mOpeningSocket(false),
 mPrevTrafficControl(true), //so that it can be switched off
 mMode(RECORDINGS), mPreviousMode(RECORDINGS),
-mCurrentChunkInfo(0), //to check before accessing in case it hasn't been set
+mEventList(eventList),
 mDivertKeyPresses(false),
 mNVideoTracks(-1), //unknown
-mRecording(false),
 mPrematureStart(false),
+mRecording(false),
 mUsingDVSCard(false),
 mSavedState(0), //must call SetSavedState to use this
-mRecServerRoot(recServerRoot)
+mRecServerRoot(recServerRoot),
+mAudioDevice(audioDevice)
 {
     //Controls
     wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
@@ -141,6 +144,7 @@ void Player::Setup()
         SetAudioFollowsVideo();
         Rational unity = {1, 1};
         setPixelAspectRatio(&unity);
+        setAudioDevice(mAudioDevice);
         if (mPrematureStart) Start();
     }
 }
@@ -223,7 +227,7 @@ DragButtonList* Player::GetTrackSelector(wxWindow * parent)
     if (!mTrackSelector) {
         mTrackSelector = new DragButtonList(parent, this);
         SetVideoSplit(); //updates track selector
-        SetMode(mMode, true); //SetMode will now work
+        SelectCurrentRecording();
     }
     return mTrackSelector;
 }
@@ -361,8 +365,8 @@ const wxString Player::GetPlaybackName()
         name = wxT("E to E");
     }
 #endif
-    else if (mCurrentChunkInfo) {
-        name = mCurrentChunkInfo->GetProjectName();
+    else {
+        name = mEventList->GetSelectedProjectName();
     }
     return name;
 }
@@ -385,32 +389,13 @@ const wxString Player::GetPlaybackType()
 }
 
 /// Updates the details for recordings mode. If player is enabled, responds to the changes, switching to recording mode if possible.
-/// @param chunkInfo Recording details - can be zero which will cause player to be reset if in recordings mode.  Player reloads if this has changed.
-/// @param cuePoint A cue point to jump to (0 is the start of the recording; > number of cue points is the end), if this value has changed.
-/// @param forceReload Reload the recording even if the chunk info hasn't changed
-/// @return File names if in recordings mode, or 0 otherwise
-std::vector<std::string>* Player::SelectRecording(ChunkInfo * chunkInfo, const int cuePoint, const bool forceReload)
+void Player::SelectCurrentRecording()
 {
-    bool reload  = forceReload || mCurrentChunkInfo != chunkInfo;
-    mCurrentChunkInfo = chunkInfo;
     mLastPlayingBackwards = false; //no point continuing the default play direction of the previous set of files
-    if (mCurrentChunkInfo) {
-        if (cuePoint > (int) mCurrentChunkInfo->GetCuePointFrames().size()) {
-            //the end
-            mRecordingModeFrameOffset = -1;
-        }
-        else if (cuePoint) {
-            //somewhere in the middle
-            mRecordingModeFrameOffset = mCurrentChunkInfo->GetCuePointFrames()[cuePoint - 1] - mCurrentChunkInfo->GetStartPosition();
-        }
-        else {
-            //the beginning
-            mRecordingModeFrameOffset = 0;
-        }
-    }
+    mRecordingModeFrameOffset = mEventList->GetSelectedCuePointOffset();
     if (mEnabled) {
         if (RECORDINGS == mMode) {
-            if (reload) {
+            if (mEventList->FilesHaveChanged()) {
                 LoadRecording();
             }
             else {
@@ -421,16 +406,14 @@ std::vector<std::string>* Player::SelectRecording(ChunkInfo * chunkInfo, const i
             SetMode(RECORDINGS);
         }
     }
-    std::vector<std::string>* fileNames = 0;
-    if (RECORDINGS == mMode) fileNames = &mFileNames;
-    return fileNames;
 }
 
-/// Loads the player with the current recording details, or resets if these are absent
+/// Loads the player with the current recording details, or resets if these are absent.
+/// This doesn't clear mRecordingModeFrameOffset, so can be used to restore recordings mode after a mode change.
 void Player::LoadRecording()
 {
     mFileNames.clear();
-    if (mCurrentChunkInfo && mTrackSelector) mInputType = mTrackSelector->SetTracks(mCurrentChunkInfo, mFileNames, mTrackNames, mNVideoTracks);
+    if (mTrackSelector) mInputType = mTrackSelector->SetTracks(mEventList, mFileNames, mTrackNames, mNVideoTracks);
     if (mFileNames.size()) {
         Load();
     }
@@ -693,17 +676,17 @@ bool Player::Start()
             prodauto::PlayerOutputType OutputType = GetOutputType(); //before starting, so mUsingDVSCard can be set correctly later
             //mOpened below should be considered tainted if using HTTP player
 #ifndef DISABLE_SHARED_MEM_SOURCE
-            mOK = start(inputs, mOpened, SHM_INPUT != mInputType && LOAD_FIRST_CHUNK != mChunkLinking && (PlayerState::PAUSED == mState || PlayerState::STOPPED == mState), frameOffset > -1 ? frameOffset : 0); //play forwards or paused
+            mOK = start(inputs, mOpened, SHM_INPUT != mInputType && LOAD_FIRST_CHUNK != mChunkLinking && (PlayerState::PAUSED == mState || PlayerState::STOPPED == mState), frameOffset); //play forwards or paused
 #else
-            mOK = start(inputs, mOpened, LOAD_FIRST_CHUNK != mChunkLinking && (PlayerState::PAUSED == mState || PlayerState::STOPPED == mState), frameOffset > -1 ? frameOffset : 0); //play forwards or paused
+            mOK = start(inputs, mOpened, LOAD_FIRST_CHUNK != mChunkLinking && (PlayerState::PAUSED == mState || PlayerState::STOPPED == mState), frameOffset); //play forwards or paused
 #endif
-            if (-1 == frameOffset) seek(0, SEEK_END, FRAME_PLAY_UNIT);
             int trackToSelect = (1 == mFileNames.size() ? 1 : 0); //display split view by default unless only one file
             if (mOK) { //at least one source opened
                 mUsingDVSCard = (DVS_OUTPUT == OutputType) || (DUAL_DVS_AUTO_OUTPUT == OutputType) || (DUAL_DVS_X11_OUTPUT == OutputType) || (DUAL_DVS_X11_XV_OUTPUT == OutputType);
-                if (RECORDINGS == mMode && mCurrentChunkInfo) {
-                    for (size_t i = 0; i < mCurrentChunkInfo->GetCuePointFrames().size(); i++) {
-                        markPosition(mCurrentChunkInfo->GetCuePointFrames()[i] - mCurrentChunkInfo->GetStartPosition(), 0); //so that the pointer changes colour at each cue point
+                if (RECORDINGS == mMode) {
+                    std::vector<unsigned long long> offsets = mEventList->GetSelectedChunkCuePointOffsets();
+                    for (size_t i = 0; i < offsets.size(); i++) {
+                        markPosition(offsets[i], 0); //so that the pointer changes colour at each cue point
                     }
                 }
 #ifndef DISABLE_SHARED_MEM_SOURCE
@@ -849,9 +832,7 @@ void Player::Play(const bool setDirection, bool backwards)
             if (AtRecordingEnd() && HasChunkBefore()) {
                 //replay from first chunk
                 mChunkLinking = LOAD_FIRST_CHUNK; //so we know what to do when the player is reloaded
-                //ask for the first chunk
-                wxCommandEvent guiFrameEvent(EVT_PLAYER_MESSAGE, mChunkLinking);
-                AddPendingEvent(guiFrameEvent);
+                mEventList->SelectPrevTake(true);
             }
             else if (AtRecordingEnd()) {
                 //replay this chunk
@@ -939,17 +920,13 @@ void Player::Step(bool direction)
         && mAtChunkEnd //already displayed the last frame
         && HasChunkAfter()) { //another chunk follows this one
             mChunkLinking = LOAD_NEXT_CHUNK; //so we know what to do when the player is reloaded
-            //ask for the next chunk
-            wxCommandEvent guiFrameEvent(EVT_PLAYER_MESSAGE, mChunkLinking);
-            AddPendingEvent(guiFrameEvent);
+            mEventList->SelectAdjacentEvent(true);
         }
         else if (!direction //backwards!
         && mAtChunkStart //already displayed the first frame
         && HasChunkBefore()) { //another chunk precedes this one
             mChunkLinking = LOAD_PREV_CHUNK; //so we know what to do when the player is reloaded
-            //ask for the previous chunk
-            wxCommandEvent guiFrameEvent(EVT_PLAYER_MESSAGE, mChunkLinking);
-            AddPendingEvent(guiFrameEvent);
+            mEventList->SelectAdjacentEvent(false);
         }
         else {
             step(direction);
@@ -1090,20 +1067,16 @@ void Player::OnFrameDisplayed(wxCommandEvent& event) {
             mPreviousFrameDisplayed = event.GetExtraLong();
             if (!event.GetExtraLong() && 0 > mSpeed && HasChunkBefore()) { //just reached the start of a chunk, playing backwards (this may disrupt the first frame playing but academic as there will be a disturbance anyway as new files are loaded)
                 mChunkLinking = LOAD_PREV_CHUNK; //so we know what to do when the player is reloaded
-                //ask for the previous chunk
-                wxCommandEvent guiFrameEvent(EVT_PLAYER_MESSAGE, mChunkLinking);
-                AddPendingEvent(guiFrameEvent);
+                mEventList->SelectAdjacentEvent(false);
             }
             else if (mAtChunkEnd && 0 < mSpeed && HasChunkAfter()) { //just reached the end of a chunk, playing forwards (this may disrupt the last frame playing but academic as there will be a disturbance anyway as new files are loaded)
                 mChunkLinking = LOAD_NEXT_CHUNK; //so we know what to do when the player is reloaded
-                //ask for the next chunk
-                wxCommandEvent guiFrameEvent(EVT_PLAYER_MESSAGE, mChunkLinking);
-                AddPendingEvent(guiFrameEvent);
+                mEventList->SelectAdjacentEvent(true);
             }
             else if (!event.GetExtraLong() && !HasChunkBefore()) { //at the start of a recording
                 wxCommandEvent guiFrameEvent(EVT_PLAYER_MESSAGE, AT_START);
                 AddPendingEvent(guiFrameEvent);
-                if (0 > mSpeed) { //playing forwards
+                if (0 > mSpeed) { //playing backwards
                     Pause();
                 }
             }
@@ -1121,21 +1094,22 @@ void Player::OnFrameDisplayed(wxCommandEvent& event) {
             if (FILES == mMode) {
                 mFileModeFrameOffset = mPreviousFrameDisplayed; //so that we can reinstate the correct position if we come out of file mode
             }
-            else if (RECORDINGS == mMode && mCurrentChunkInfo) {
+            else if (RECORDINGS == mMode && !mEventList->ListIsEmpty()) {
                 mRecordingModeFrameOffset = mPreviousFrameDisplayed; //so that we can reinstate the correct position if we come out of take mode
                 //work out which cue point area we're in
-                unsigned int mark = 0; //assume before first cue point/end of file
+                std::vector<unsigned long long> offsets = mEventList->GetSelectedChunkCuePointOffsets();
+                size_t mark = 0;
                 if (mAtChunkEnd) {
-                    mark = mCurrentChunkInfo->GetCuePointFrames().size() + 1;
+                    mark = offsets.size() + 1;
                 }
                 else {
-                    for (mark = 0; mark < mCurrentChunkInfo->GetCuePointFrames().size(); mark++) {
-                        if (mCurrentChunkInfo->GetCuePointFrames()[mark] > event.GetExtraLong()) { //not reached this mark yet
+                    for (mark = 0; mark < offsets.size(); mark++) {
+                        if (offsets[mark] > (unsigned long long) event.GetExtraLong()) { //not reached this mark yet
                             break;
                         }
                     }
                 }
-                mark += mCurrentChunkInfo->GetStartIndex();
+                mark += mEventList->GetSelectedChunkStartIndex();
                 //Tell gui if we've moved into a new area
                 if (mLastCuePointNotified != mark) {
                     if (!mAtChunkEnd || !HasChunkAfter()) { //not at the last frame with a chunk following, where there is no stop event
@@ -1341,13 +1315,13 @@ void Player::TrafficControl(const bool state, const bool synchronous)
 /// Returns true if there is another chunk before the currently loaded clip
 bool Player::HasChunkBefore()
 {
-    return RECORDINGS == mMode && mCurrentChunkInfo && mCurrentChunkInfo->HasChunkBefore();
+    return RECORDINGS == mMode && mEventList->ChunkBeforeSelectedChunk();
 }
 
 /// Returns true if there is another chunk after the currently loaded clip
 bool Player::HasChunkAfter()
 {
-    return RECORDINGS == mMode && mCurrentChunkInfo && mCurrentChunkInfo->HasChunkAfter();
+    return RECORDINGS == mMode && mEventList->ChunkAfterSelectedChunk();
 }
 
 /// Returns true if there is a selectable track earlier in the list than the current one

@@ -27,7 +27,7 @@
 #include "RecorderC.h"
 #include "LocalIngexPlayer.h" //for prodauto
 
-class ChunkInfo;
+class EventList;
 
 WX_DEFINE_ARRAY_INT(int, ArrayOfInts);
 
@@ -36,7 +36,7 @@ class DragButtonList : public wxScrolledWindow
 {
     public:
         DragButtonList(wxWindow *, wxEvtHandler *);
-        prodauto::PlayerInputType SetTracks(ChunkInfo*, std::vector<std::string> &, std::vector<std::string> &, int &);
+        prodauto::PlayerInputType SetTracks(EventList*, std::vector<std::string> &, std::vector<std::string> &, int &);
         prodauto::PlayerInputType SetMXFFiles(wxArrayString &, std::vector<std::string> &, std::vector<std::string> &, int &);
 #ifndef DISABLE_SHARED_MEM_SOURCE
         prodauto::PlayerInputType SetEtoE(std::vector<std::string> &, std::vector<std::string> &, int &);

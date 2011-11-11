@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: player.h,v 1.23 2011/09/07 15:07:08 john_f Exp $                *
+ *   $Id: player.h,v 1.24 2011/11/11 11:21:23 john_f Exp $                *
  *                                                                         *
  *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -110,7 +110,7 @@ enum PlayerOpenType {
 class Player;
 class SelectRecDlg;
 class DragButtonList;
-class ChunkInfo;
+class EventList;
 
 
 /// Class with methods that are called by the player.
@@ -159,7 +159,7 @@ class Player : public wxPanel, prodauto::LocalIngexPlayer
 #endif //NOT USE_HTTP_PLAYER
 {
     public:
-        Player(wxWindow*, const wxWindowID, const bool, const wxString &);
+        Player(wxWindow*, const wxWindowID, const bool, const wxString &, EventList*, const int = 0);
         ~Player();
         void SetSavedState(SavedState * savedState);
         void OnPlaybackTrackSelect(wxCommandEvent&);
@@ -169,7 +169,7 @@ class Player : public wxPanel, prodauto::LocalIngexPlayer
         bool Enable(bool = true);
         bool IsEnabled() { return mEnabled; };
         void Open(const PlayerOpenType);
-        std::vector<std::string>* SelectRecording(ChunkInfo*, const int = 0, const bool = false);
+        void SelectCurrentRecording();
         bool EarlierTrack(const bool);
         bool LaterTrack(const bool);
         void SelectTrack(const int, const bool);
@@ -286,15 +286,16 @@ class Player : public wxPanel, prodauto::LocalIngexPlayer
         int64_t mRecordingModeFrameOffset;
         SelectRecDlg * mSelectRecDlg;
         BoolHash mModesAllowed;
-        ChunkInfo* mCurrentChunkInfo;
+        EventList * mEventList;
         prodauto::PlayerInputType mInputType;
         bool mDivertKeyPresses;
         int mNVideoTracks;
-        bool mRecording;
         bool mPrematureStart;
+        bool mRecording;
         bool mUsingDVSCard;
         SavedState * mSavedState;
         const wxString mRecServerRoot;
+        const int mAudioDevice;
     DECLARE_EVENT_TABLE()
 };
 

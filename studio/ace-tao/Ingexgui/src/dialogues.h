@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: dialogues.h,v 1.18 2011/04/19 07:04:02 john_f Exp $             *
+ *   $Id: dialogues.h,v 1.19 2011/11/11 11:21:23 john_f Exp $             *
  *                                                                         *
  *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -226,7 +226,7 @@ class TestModeDlg : public wxDialog
         TestModeDlg(wxWindow *, const int, const int);
         int ShowModal();
         ~TestModeDlg();
-        void SetRecordPaths(std::vector<std::string>*);
+        void SetRecordPaths(const wxArrayString &);
         enum
         {
             RECORD,
@@ -390,6 +390,15 @@ class SelectRecDlg : public wxDialog
             PREFER_ONLINE
         };
     DECLARE_EVENT_TABLE()
+};
+
+class SetMaxChunksDlg : public wxDialog
+{
+    public:
+        SetMaxChunksDlg(wxWindow *, unsigned int);
+        unsigned int GetMaxChunks();
+    private:
+        wxSpinCtrl * mSpinCtrl;
 };
 
 /// Class storing a constant string, to be attached to each entry in a choice control.

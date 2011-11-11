@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: dragbuttonlist.cpp,v 1.21 2011/09/07 15:07:08 john_f Exp $      *
+ *   $Id: dragbuttonlist.cpp,v 1.22 2011/11/11 11:21:23 john_f Exp $      *
  *                                                                         *
  *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -64,66 +64,63 @@ void DragButtonList::OnRadioButton(wxCommandEvent& event)
 /// Returns information about the new state.
 /// Single track buttons are labelled with the track name and have a tool tip showing the associated filename.
 /// All buttons are disabled.
-/// @param chunkInfo The file names, the track names and the track types.  Gets all info from here rather than examining the files themselves, because they may not be available yet.  Checks for null pointer.
+/// @param eventList Object from which to retrieve the file names, the track names and the track types.  Gets all info from here rather than examining the files themselves, because they may not be available yet.
 /// @param fileNames Returns the file name associated with each video track which has a file, with the audio filenames at the end.
 /// @param trackNames Returns corresponding names of tracks.
 /// @param nVideoTracks Returns the number of video tracks (-1 if not known).
 /// @return The input type.
-prodauto::PlayerInputType DragButtonList::SetTracks(ChunkInfo* chunkInfo, std::vector<std::string> & fileNames, std::vector<std::string> & trackNames, int & nVideoTracks)
+prodauto::PlayerInputType DragButtonList::SetTracks(EventList* eventList, std::vector<std::string> & fileNames, std::vector<std::string> & trackNames, int & nVideoTracks)
 {
     Clear();
     fileNames.clear();
     trackNames.clear();
     nVideoTracks = -1; //unknown
     prodauto::PlayerInputType inputType = prodauto::MXF_INPUT;
-    if (chunkInfo) {
+    if (!eventList->ListIsEmpty()) {
+        ArrayOfTrackTypes types;
+        wxArrayString labels;
+        wxArrayString files = eventList->GetSelectedFiles(&types, &labels);
         nVideoTracks = 0;
-        std::vector<std::string> audioFileNames;
-        if (chunkInfo->GetFiles()->GetCount()) { //this chunk has files associated
+        if (files.GetCount()) { //this chunk has files associated
             wxRadioButton * split = new wxRadioButton(this, wxID_HIGHEST + 1, wxT("Split View")); //the split is always the first video track (id = 0)
             split->SetToolTip(wxT("Up to the first nine successfully opened files"));
             GetSizer()->Add(split, -1, wxEXPAND);
             mEnableStates.Add(false); //enable later if any files successfully loaded
-            wxString name;
-            for (size_t i = 0; i < chunkInfo->GetFiles()->GetCount(); i++) { //recorder loop
-                wxArrayString uniqueNames;
-                for (size_t j = 0; j < (*chunkInfo->GetFiles())[i]->length(); j++) { //file loop
-                    name = wxString((*chunkInfo->GetFiles())[i][j].in(), *wxConvCurrent);
-                    bool duplicated = (wxNOT_FOUND != uniqueNames.Index(name));
+            std::vector<std::string> audioFileNames;
+            wxArrayString uniqueNames;
+            for (size_t i = 0; i < files.GetCount(); i++) {
+                bool duplicated = (wxNOT_FOUND != uniqueNames.Index(files[i]));
+                if (!duplicated) {
+                    uniqueNames.Add(files[i]);
+                }
+                if (ProdAuto::VIDEO == types[i] && !files[i].IsEmpty()) {
                     if (!duplicated) {
-                        uniqueNames.Add(name);
+                        fileNames.push_back((const char *) files[i].mb_str(wxConvISO8859_1));
+                        nVideoTracks++;
                     }
-                    if (ProdAuto::VIDEO == chunkInfo->GetTracks()[i][j].type && !name.IsEmpty()) {
-                        if (!duplicated) {
-                            fileNames.push_back((*chunkInfo->GetFiles())[i][j].in());
-                            nVideoTracks++;
-                        }
-                        wxRadioButton * rb = new wxRadioButton(this, fileNames.size() + wxID_HIGHEST + 1, wxString(chunkInfo->GetTracks()[i][j].src.package_name, *wxConvCurrent)); //ID corresponds to file index
-                        rb->SetToolTip(name);
-                        GetSizer()->Add(rb, -1, wxEXPAND);
-                        mEnableStates.Add(false); //we don't know whether the player can open this file yet
-                        trackNames.push_back(chunkInfo->GetTracks()[i][j].src.package_name.in());
-                    }
-                    else if (ProdAuto::AUDIO == chunkInfo->GetTracks()[i][j].type && !name.IsEmpty() && !duplicated) {
-                        audioFileNames.push_back((*chunkInfo->GetFiles())[i][j].in());
-                    }
+                    wxRadioButton * rb = new wxRadioButton(this, fileNames.size() + wxID_HIGHEST + 1, labels[i]); //ID corresponds to file index
+                    rb->SetToolTip(files[i]);
+                    GetSizer()->Add(rb, -1, wxEXPAND);
+                    mEnableStates.Add(false); //we don't know whether the player can open this file yet
+                    trackNames.push_back((const char *) labels[i].mb_str(wxConvISO8859_1));
+                }
+                else if (ProdAuto::AUDIO == types[i] && !files[i].IsEmpty() && !duplicated) {
+                   audioFileNames.push_back((const char *) files[i].mb_str(wxConvISO8859_1));
                 }
             }
             if (fileNames.size()) {
-                wxString extn = wxString(fileNames[0].c_str(), *wxConvCurrent).Right(4);
-                if (!extn.CmpNoCase(wxT(".mov"))) {
+                if (!files[0].Right(4).CmpNoCase(wxT(".mov"))) {
                     inputType = prodauto::FFMPEG_INPUT;
                 }
-                else if (!extn.CmpNoCase(wxT(".dv"))) {
+                else if (!files[0].Right(3).CmpNoCase(wxT(".dv"))) {
                     inputType = prodauto::DV_INPUT;
                 }
             }
-
-        }
-        Layout();
-        //add audio files at the end
-        for (size_t i = 0; i < audioFileNames.size(); i++) {
-            fileNames.push_back(audioFileNames.at(i));
+            Layout();
+            //add audio files at the end
+            for (size_t i = 0; i < audioFileNames.size(); i++) {
+                fileNames.push_back(audioFileNames.at(i));
+            }
         }
     }
     return inputType;

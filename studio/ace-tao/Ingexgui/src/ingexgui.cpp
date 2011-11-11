@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: ingexgui.cpp,v 1.48 2011/09/12 09:42:42 john_f Exp $           *
+ *   $Id: ingexgui.cpp,v 1.49 2011/11/11 11:21:23 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -69,7 +69,6 @@
 
 #include <wx/arrimpl.cpp>
 #include <fstream>
-WX_DEFINE_OBJARRAY(ChunkInfoArray);
 WX_DEFINE_OBJARRAY(ArrayOfTrackList_var);
 WX_DEFINE_OBJARRAY(ArrayOfStringSeq_var);
 
@@ -155,6 +154,7 @@ BEGIN_EVENT_TABLE( IngexguiFrame, wxFrame )
     EVT_BUTTON( BUTTON_TakeSnapshot, IngexguiFrame::OnTakeSnapshot )
     EVT_BUTTON( BUTTON_DeleteCue, IngexguiFrame::OnDeleteCue )
     EVT_MENU( MENU_UseTapeIds, IngexguiFrame::OnUseTapeIds )
+    EVT_MENU( MENU_MaxChunks, IngexguiFrame::OnSetMaxChunks )
     EVT_COMMAND( wxID_ANY, EVT_PLAYER_MESSAGE, IngexguiFrame::OnPlayerEvent )
     EVT_COMMAND( wxID_ANY, EVT_TREE_MESSAGE, IngexguiFrame::OnTreeEvent )
     EVT_COMMAND( wxID_ANY, EVT_RECORDERGROUP_MESSAGE, IngexguiFrame::OnRecorderGroupEvent )
@@ -268,6 +268,7 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
     size.SetHeight(100); //bodge to show at least four lines
     mRecorderGroup = new RecorderGroupCtrl(this, wxID_ANY, wxDefaultPosition, size, argc, argv_); //do this here to allow the ORB to remove its options, which would otherwise prevent parsing of the command line.
     wxCmdLineParser parser(argc, argv_);
+    parser.AddOption(wxT("a"), wxEmptyString, wxT("Use specified device (0+) for audio playback (defaults to 0)"), wxCMD_LINE_VAL_NUMBER);
     parser.AddSwitch(wxT("h"), wxT("help"), wxT("Display this help message"), wxCMD_LINE_OPTION_HELP);
     parser.AddOption(wxT("l"), wxEmptyString, wxT("Use specified recording list filename"));
     parser.AddSwitch(wxT("n"), wxEmptyString, wxT("Do not load recording list file (causes option -l to be ignored)"));
@@ -284,6 +285,14 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
         delete[] argv_[i];
     }
     delete[] argv_;
+    long audioDevice = 0;
+    parser.Found(wxT("a"), &audioDevice);
+    if (audioDevice < 0 || audioDevice > INT_MAX) {
+        parser.Usage();
+        Log(wxT("Application closed due to unsuitable audio device option.")); //this can segfault if done after Destroy()
+        Destroy();
+        exit(1);
+    }
     wxString recordingServerRoot = RECORDING_SERVER_ROOT;
     parser.Found(wxT("r"), &recordingServerRoot);
     parser.Found(wxT("s"), &mSnapshotPath);
@@ -299,10 +308,11 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
     menuMisc->Append(MENU_SetRolls, wxT("Set pre- and post-roll..."));
     menuMisc->Append(MENU_SetCues, wxT("Cue points..."));
     menuMisc->Append(MENU_Chunking, wxT("Chunking..."));
-    wxMenuItem * clearLogItem = menuMisc->Append(MENU_ClearLog, wxT("Clear recording log"));
+    wxMenuItem * clearLogItem = menuMisc->Append(MENU_ClearLog, wxT("Clear recording log..."));
     clearLogItem->Enable(false);
     menuMisc->AppendCheckItem(MENU_UseTapeIds, wxT("Use tape IDs"));
     menuMisc->AppendCheckItem(MENU_AutoClear, wxT("Don't log multiple recordings"));
+    menuMisc->Append(MENU_MaxChunks, wxT("Maximum number of chunks to display..."));
     menuMisc->Append(MENU_TestMode, wxT("Test mode..."));
     menuMisc->Append(wxID_CLOSE, wxT("Quit"));
     menuBar->Append(menuMisc, wxT("&Misc"));
@@ -427,10 +437,6 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
     positionDisplay->SetToolTip(wxT("Current recording's position"));
     positionBox->Add(positionDisplay, 0, wxALIGN_CENTRE);
 
-    if (!parser.Found(wxT("p"))) {
-        mPlayer = new Player(this, wxID_ANY, true, recordingServerRoot);
-        sizer2bH->Add(mPlayer, 0, wxEXPAND | wxALL, CONTROL_BORDER);
-    }
     //transport controls
     wxBoxSizer* sizer2cH = new wxBoxSizer(wxHORIZONTAL);
     sizer1V->Add(sizer2cH);
@@ -476,17 +482,18 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
     splitterWindow->SetMinimumPaneSize(notebookPanel->GetBestSize().y);
 
     //notebook playback page
+    wxStaticBoxSizer * playbackTracksBox = 0;
+    wxPanel * playbackPage = 0;
     if (!parser.Found(wxT("p"))) {
-        wxPanel * playbackPage = new wxPanel(notebook); //need this as can't add a sizer directly to a notebook
+        playbackPage = new wxPanel(notebook); //need this as can't add a sizer directly to a notebook
         notebook->AddPage(playbackPage, wxT("Playback"));
         mPlaybackPageSizer = new wxBoxSizer(wxVERTICAL);
         playbackPage->SetSizer(mPlaybackPageSizer);
         mPlayProjectNameBox = new wxStaticBoxSizer(wxHORIZONTAL, playbackPage); //updated when project name static text within is updated
         mPlaybackPageSizer->Add(mPlayProjectNameBox, 0, wxEXPAND | wxALL, CONTROL_BORDER);
         mPlayProjectNameBox->Add(new wxStaticText(playbackPage, PLAY_PROJECT_NAME, wxEmptyString), 1, wxEXPAND);
-        wxStaticBoxSizer * playbackTracksBox = new wxStaticBoxSizer(wxHORIZONTAL, playbackPage, wxT("Tracks"));
+        playbackTracksBox = new wxStaticBoxSizer(wxHORIZONTAL, playbackPage, wxT("Tracks"));
         mPlaybackPageSizer->Add(playbackTracksBox, 1, wxEXPAND | wxALL, CONTROL_BORDER);
-        playbackTracksBox->Add((wxWindow*) mPlayer->GetTrackSelector(playbackPage), 1, wxEXPAND);
     }
     //event panel
     wxPanel * eventPanel = new wxPanel(splitterWindow);
@@ -510,6 +517,13 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
     mEventList = new EventList(eventPanel, -1, wxDefaultPosition, wxSize(splitterWindow->GetClientSize().x, EVENT_LIST_HEIGHT), !parser.Found(wxT("n")), recList);
     eventPanelSizer->Add(mEventList, 1, wxEXPAND + wxALL, CONTROL_BORDER);
 
+    //player
+    if (!parser.Found(wxT("p"))) {
+        mPlayer = new Player(this, wxID_ANY, true, recordingServerRoot, mEventList, (int) audioDevice);
+        sizer2bH->Add(mPlayer, 0, wxEXPAND | wxALL, CONTROL_BORDER);
+        playbackTracksBox->Add((wxWindow*) mPlayer->GetTrackSelector(playbackPage), 1, wxEXPAND);
+    }
+
     //Global window settings
     Fit();
     splitterWindow->SetMinimumPaneSize(1); //to allow it to be almost but not quite closed.  Do this after Fit() or the earlier value will not be reflected in the window layout.
@@ -530,6 +544,7 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
     mSavedState = new SavedState(this, SAVED_STATE_FILENAME);
     mTree->SetSavedState(mSavedState);
     mRecorderGroup->SetSavedState(mSavedState);
+    mEventList->SetSavedState(mSavedState);
     if (mPlayer) mPlayer->SetSavedState(mSavedState);
 
     //Various persistent dialogues
@@ -649,6 +664,13 @@ void IngexguiFrame::OnUseTapeIds( wxCommandEvent& event )
     mTree->UpdateTapeIds(); //will issue an event to update the record and tape ID buttons
 }
 
+/// Brings up a dialogue to allow the maximum number of displayed chunks to be set
+void IngexguiFrame::OnSetMaxChunks( wxCommandEvent& WXUNUSED(event) )
+{
+    SetMaxChunksDlg dlg(this, mEventList->GetMaxChunks());
+    if (wxID_OK == dlg.ShowModal()) mEventList->SetMaxChunks(dlg.GetMaxChunks());
+}
+
 /// Responds to the tape IDs button being pressed by showing the appropriate dialogue and updating state if user makes changes.
 /// @param event The button event.
 void IngexguiFrame::OnSetTapeIds( wxCommandEvent& WXUNUSED( event ) )
@@ -666,7 +688,8 @@ void IngexguiFrame::OnSetTapeIds( wxCommandEvent& WXUNUSED( event ) )
 /// @param event The command event.
 void IngexguiFrame::OnClearLog( wxCommandEvent& WXUNUSED(event) )
 {
-    ClearLog();
+    wxMessageDialog dlg(this, wxT("Are you sure you want to clear the recording log?"), wxT("Confirmation"), wxICON_QUESTION | wxYES_NO | wxYES_DEFAULT);
+    if (wxID_YES == dlg.ShowModal()) ClearLog();
 }
 
 /// Responds to a menu quit event by attempting to close the app.
@@ -807,7 +830,7 @@ void IngexguiFrame::OnPlayerEvent(wxCommandEvent& event) {
         case FRAME_DISPLAYED:
             if (event.GetClientData()) {
                 //valid position
-                mTimepos->SetPosition(event.GetExtraLong() + mEventList->GetCurrentChunkStartPosition(), (ProdAuto::MxfTimecode *) event.GetClientData());
+                mTimepos->SetPosition(event.GetExtraLong() + mEventList->GetSelectedChunkStartPosition(), (ProdAuto::MxfTimecode *) event.GetClientData());
                 delete (ProdAuto::MxfTimecode *) event.GetClientData();
             }
             else {
@@ -817,15 +840,6 @@ void IngexguiFrame::OnPlayerEvent(wxCommandEvent& event) {
         case AT_START:
         case WITHIN:
         case AT_END:
-            break;
-        case LOAD_PREV_CHUNK: //player has not paused
-            mEventList->SelectAdjacentEvent(false);
-            break;
-        case LOAD_NEXT_CHUNK: //player has not paused
-            mEventList->SelectAdjacentEvent(true);
-            break;
-        case LOAD_FIRST_CHUNK: //player has not paused
-            mEventList->SelectPrevTake(true);
             break;
         case CLOSE_REQ:
             if (prodauto::DUAL_DVS_AUTO_OUTPUT == mPlayer->GetOutputType() || prodauto::DUAL_DVS_X11_OUTPUT == mPlayer->GetOutputType()) { //external output is active
@@ -1033,7 +1047,7 @@ void IngexguiFrame::OnCue( wxCommandEvent& WXUNUSED( event ) )
                 timecode.samples += frameCount; //will wrap automatically on display
                 if (mPlayer) mPlayer->DivertKeyPresses(); //so that key presses in the player window are sent to the dialogue
                 if (wxID_OK == mCuePointsDlg->ShowModal(Timepos::FormatTimecode(timecode))) {
-                    if (mCuePointsDlg->ValidCuePointSelected()) mEventList->AddEvent(EventList::CUE, 0, mCuePointsDlg->GetDescription(), frameCount, mCuePointsDlg->GetColourIndex());
+                    if (mCuePointsDlg->ValidCuePointSelected()) mEventList->AddEvent(EventList::CUE, 0, frameCount, mCuePointsDlg->GetDescription(), mCuePointsDlg->GetColourIndex());
                 }
                 if (mPlayer) mPlayer->DivertKeyPresses(false);
                 break;
@@ -1078,11 +1092,12 @@ void IngexguiFrame::OnTimeposEvent(wxCommandEvent& event)
 
 /// Responds to an event (cue point, start, chunk start or stop point) being selected by the user or by new recordings arriving
 /// Informs the player and supplies paths to the test mode dialogue so it knows where to erase files from.
-/// @param event The command event; ExtraLong is set to indicate a forced reload.  Do not use GetItem() to determine the selection as this may not be valid.
+/// @param event The command event.  Do not use GetItem() to determine the selection as this may not be valid.
 void IngexguiFrame::OnEventSelection(wxListEvent& event)
 {
+    if (mPlayer) mPlayer->SelectCurrentRecording();
     //Use GetEventObject() because this handler is called before mEventList is set
-    if (mPlayer) mTestModeDlg->SetRecordPaths(mPlayer->SelectRecording(((EventList* ) event.GetEventObject())->GetCurrentChunkInfo(), ((EventList* ) event.GetEventObject())->GetCurrentCuePoint(), event.GetExtraLong()));
+    mTestModeDlg->SetRecordPaths(((EventList* ) event.GetEventObject())->GetSelectedFiles());
 }
 
 /// Responds to an event (cue point) being double-clicked.
@@ -1091,7 +1106,7 @@ void IngexguiFrame::OnEventSelection(wxListEvent& event)
 void IngexguiFrame::OnEventActivated(wxListEvent& WXUNUSED(event))
 {
     if (mPlayer) {
-        mPlayer->SelectRecording(mEventList->GetCurrentChunkInfo(), mEventList->GetCurrentCuePoint());;
+        mPlayer->SelectCurrentRecording();
         if (PAUSED == mStatus) mPlayer->Play();
     }
 }
@@ -1207,7 +1222,7 @@ void IngexguiFrame::OnRecorderGroupEvent(wxCommandEvent& event) {
                 SetStatus(RECORDING); //will prevent any more recorders being added
                 ProdAuto::MxfTimecode startTimecode;
                 mTimepos->GetStartTimecode(&startTimecode);
-                mEventList->AddEvent(EventList::START, &startTimecode, mRecorderGroup->GetCurrentProjectName()); //didn't start now - started before the preroll period
+                mEventList->AddEvent(EventList::START, &startTimecode); //didn't start now - started before the preroll period
                 mTimepos->SetPositionUnknown(); //don't know when recording started
             }
             break;
@@ -1216,7 +1231,7 @@ void IngexguiFrame::OnRecorderGroupEvent(wxCommandEvent& event) {
                 //start the position display counting
                 mTimepos->Record(*tc);
                 //add a start event
-                mEventList->AddEvent(EventList::START, tc, mRecorderGroup->GetCurrentProjectName());
+                mEventList->AddEvent(EventList::START, tc);
                 delete tc;
                 break;
             }
@@ -1241,13 +1256,13 @@ void IngexguiFrame::OnRecorderGroupEvent(wxCommandEvent& event) {
         case RecorderGroupCtrl::STOP : {
                 ProdAuto::MxfTimecode* tc = (ProdAuto::MxfTimecode *) event.GetClientData();
                 mTimepos->Stop(*tc);
-                mEventList->AddEvent(EventList::STOP, tc, mRecorderGroup->GetCurrentDescription(), mTimepos->GetFrameCount());
+                mEventList->AddEvent(EventList::STOP, tc, mTimepos->GetFrameCount(), mRecorderGroup->GetCurrentDescription(), 0, true, mRecorderGroup->GetCurrentProjectName());
                 delete tc;
                 break;
             }
         case RecorderGroupCtrl::CHUNK_END : {
                 ProdAuto::MxfTimecode* tc = (ProdAuto::MxfTimecode *) event.GetClientData();
-                mEventList->AddEvent(EventList::CHUNK, tc, mRecorderGroup->GetCurrentDescription(), mTimepos->GetFrameCount());
+                mEventList->AddEvent(EventList::CHUNK, tc, mTimepos->GetFrameCount(), mRecorderGroup->GetCurrentDescription());
                 delete tc;
                 break;
             }
@@ -1265,7 +1280,7 @@ void IngexguiFrame::OnRecorderGroupEvent(wxCommandEvent& event) {
                         //Add the recorded files to the take info (assumes a STOPPED or CHUNK_END event has already been received, so mEventList knows if it's a chunk or not and therefore which ChunkInfo to add it to)
                         mEventList->AddRecorderData((RecorderData *) event.GetClientData());
                         //need to reload the player as more files have appeared
-                        if (mPlayer) mPlayer->SelectRecording(mEventList->GetCurrentChunkInfo(), 0, true);
+                        if (mPlayer) mPlayer->SelectCurrentRecording();
                     }
                     //logging
                     CORBA::StringSeq_var fileList = ((RecorderData *) event.GetClientData())->GetStringSeq();
@@ -1542,7 +1557,7 @@ void IngexguiFrame::OnPlayerCommand(wxCommandEvent & event)
 void IngexguiFrame::ClearLog()
 {
     mEventList->Clear();
-    if (mPlayer) mPlayer->SelectRecording(0); //clears any recording shown and prevents non-existent recording being accessed
+    if (mPlayer) mPlayer->SelectCurrentRecording(); //clears any recording shown and prevents non-existent recording being accessed
 }
 
 /// Responds to Clear Description button being pressed.
@@ -1592,7 +1607,7 @@ void IngexguiFrame::OnJumpToTimecodeEvent(wxCommandEvent & WXUNUSED(event))
 {
     int64_t offset;
     if (mEventList->JumpToTimecode(mJumpToTimecodeDlg->GetTimecode(), offset)) { //timecode found, chunk selected and offset set
-        mPlayer->SelectRecording(mEventList->GetCurrentChunkInfo());
+        mPlayer->SelectCurrentRecording();
         mPlayer->JumpToFrame(offset);
     }
     else {
@@ -2111,11 +2126,11 @@ bool IngexguiFrame::OperationAllowed(const int operation, bool* found)
             enabled = mPlayer && mPlayer->IsOK() && !IsRecording() && (PLAYING == mStatus || PLAYING_BACKWARDS == mStatus || (PAUSED == mStatus && (!mPlayer->LastPlayingBackwards() || mPlayer->WithinRecording())));
             break;
         case MENU_ClearLog:
-            enabled = mEventList->GetCurrentChunkInfo();
+            enabled = !mEventList->ListIsEmpty();
             break;
         case BUTTON_JumpToTimecode:
         case MENU_JumpToTimecode:
-            enabled = mPlayer && RECORDINGS == mPlayer->GetMode() && !IsRecording() && mEventList->GetCurrentChunkInfo();
+            enabled = mPlayer && RECORDINGS == mPlayer->GetMode() && !IsRecording() && !mEventList->ListIsEmpty();
             break;
         case BUTTON_RecorderListRefresh:
             enabled = mRecorderGroup->IsEnabledForInput();
