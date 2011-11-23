@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: dragbuttonlist.cpp,v 1.22 2011/11/11 11:21:23 john_f Exp $      *
+ *   $Id: dragbuttonlist.cpp,v 1.23 2011/11/23 13:47:34 john_f Exp $      *
  *                                                                         *
  *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -95,17 +95,17 @@ prodauto::PlayerInputType DragButtonList::SetTracks(EventList* eventList, std::v
                 }
                 if (ProdAuto::VIDEO == types[i] && !files[i].IsEmpty()) {
                     if (!duplicated) {
-                        fileNames.push_back((const char *) files[i].mb_str(wxConvISO8859_1));
+                        fileNames.push_back((const char *) files[i].mb_str(wxConvLibc));
                         nVideoTracks++;
                     }
                     wxRadioButton * rb = new wxRadioButton(this, fileNames.size() + wxID_HIGHEST + 1, labels[i]); //ID corresponds to file index
                     rb->SetToolTip(files[i]);
                     GetSizer()->Add(rb, -1, wxEXPAND);
                     mEnableStates.Add(false); //we don't know whether the player can open this file yet
-                    trackNames.push_back((const char *) labels[i].mb_str(wxConvISO8859_1));
+                    trackNames.push_back((const char *) labels[i].mb_str(wxConvLibc));
                 }
                 else if (ProdAuto::AUDIO == types[i] && !files[i].IsEmpty() && !duplicated) {
-                   audioFileNames.push_back((const char *) files[i].mb_str(wxConvISO8859_1));
+                   audioFileNames.push_back((const char *) files[i].mb_str(wxConvLibc));
                 }
             }
             if (fileNames.size()) {
@@ -401,3 +401,4 @@ void DragButtonList::SelectSource(unsigned int source) {
 //drag drop experiment
 
     } */
+

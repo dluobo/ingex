@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: eventlist.cpp,v 1.25 2011/11/11 11:21:23 john_f Exp $           *
+ *   $Id: eventlist.cpp,v 1.26 2011/11/23 13:47:34 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2009-2011 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -832,8 +832,8 @@ void EventList::AddRecorderData(RecorderData * data, bool reload)
     for (size_t i = 0; i < data->GetTrackList()->length(); i++) {
         if (data->GetTrackList()[i].has_source && strlen(data->GetStringSeq()[i].in())) { //tracks not enabled for record have blank filenames
             fileNode = SetNextChild(filesNode, fileNode, new wxXmlNode(0, wxXML_ELEMENT_NODE, wxT("File"), wxT(""), new wxXmlProperty(wxT("Type"), ProdAuto::VIDEO == (data->GetTrackList())[i].type ? wxT("video") : wxT("audio"))));
-            new wxXmlNode(new wxXmlNode(fileNode, wxXML_ELEMENT_NODE, wxT("Label")), wxXML_CDATA_SECTION_NODE, wxT(""), wxString((data->GetTrackList())[i].src.package_name, wxConvISO8859_1));
-            new wxXmlNode(new wxXmlNode(fileNode, wxXML_ELEMENT_NODE, wxT("Path")), wxXML_CDATA_SECTION_NODE, wxT(""), wxString((data->GetStringSeq())[i].in(), wxConvISO8859_1));
+            new wxXmlNode(new wxXmlNode(fileNode, wxXML_ELEMENT_NODE, wxT("Label")), wxXML_CDATA_SECTION_NODE, wxT(""), wxString((data->GetTrackList())[i].src.package_name, wxConvLibc));
+            new wxXmlNode(new wxXmlNode(fileNode, wxXML_ELEMENT_NODE, wxT("Path")), wxXML_CDATA_SECTION_NODE, wxT(""), wxString((data->GetStringSeq())[i].in(), wxConvLibc));
         }
     }
     SaveDocument();
@@ -896,7 +896,7 @@ ProdAuto::LocatorSeq EventList::GetLocators()
         node = node->GetChildren(); //first cue point
         while (node) {
             locators.length(locators.length() + 1);
-            locators[locators.length() - 1].comment = GetCdata(node).mb_str(wxConvISO8859_1);
+            locators[locators.length() - 1].comment = GetCdata(node).mb_str(wxConvLibc);
             locators[locators.length() - 1].colour = CuePointsDlg::GetColourCode(GetNumericalPropVal(node, wxT("Colour"), 0));
             locators[locators.length() - 1].timecode = startTimecode;
             locators[locators.length() - 1].timecode.samples += GetNumericalPropVal(node, wxT("Frame"), 0);
@@ -1024,9 +1024,9 @@ void EventList::LoadDocument()
                                         fileList->length(fileList->length() + 1);
                                         trackList[trackList->length() - 1].type = wxT("video") == type ? ProdAuto::VIDEO : ProdAuto::AUDIO;
                                         trackList[trackList->length() - 1].name = "";
-                                        fileList[fileList->length() - 1] = GetCdata(FindChildNodeByName(fileNode, wxT("Path"))).mb_str(wxConvISO8859_1);
+                                        fileList[fileList->length() - 1] = GetCdata(FindChildNodeByName(fileNode, wxT("Path"))).mb_str(wxConvLibc);
                                         trackList[trackList->length() - 1].has_source = strlen(fileList[fileList->length() - 1]);
-                                        trackList[trackList->length() - 1].src.package_name = GetCdata(FindChildNodeByName(fileNode, wxT("Label"))).mb_str(wxConvISO8859_1);
+                                        trackList[trackList->length() - 1].src.package_name = GetCdata(FindChildNodeByName(fileNode, wxT("Label"))).mb_str(wxConvLibc);
                                     }
                                     fileNode = fileNode->GetNext();
                                 }
@@ -1295,3 +1295,4 @@ void EventList::LimitListSize()
         }
     }
 }
+

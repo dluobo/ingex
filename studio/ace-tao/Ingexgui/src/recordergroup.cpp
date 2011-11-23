@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: recordergroup.cpp,v 1.30 2011/07/27 17:08:36 john_f Exp $       *
+ *   $Id: recordergroup.cpp,v 1.31 2011/11/23 13:47:34 john_f Exp $       *
  *                                                                         *
  *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -360,7 +360,7 @@ void RecorderGroupCtrl::OnControllerEvent(ControllerThreadEvent & event)
                         CORBA::StringSeq_var strings = event.GetStrings();
                         size_t i;
                         for (i = 0; i < strings->length(); i++) {
-                            if (wxString((*strings)[i], wxConvISO8859_1) == currentProjectName) break;
+                            if (wxString((*strings)[i], wxConvLibc) == currentProjectName) break;
                         }
                         if (strings->length() == i) { //project names may have been removed from the database and so the current project name may not be relevant any more
                             wxMessageDialog dlg(this, wxT("The current project name, ") + currentProjectName + wxT(", is not known to this recorder.  Do you wish to keep it?"), wxT("Current project name not found"), wxYES_NO | wxNO_DEFAULT | wxICON_QUESTION);
@@ -368,7 +368,7 @@ void RecorderGroupCtrl::OnControllerEvent(ControllerThreadEvent & event)
                                 //Send current project name to the recorder
                                 CORBA::StringSeq newName;
                                 newName.length(1);
-                                newName[0] = (const char *) currentProjectName.mb_str(wxConvISO8859_1);
+                                newName[0] = (const char *) currentProjectName.mb_str(wxConvLibc);
                                 AddProjectNames(newName, controller);
                             }
                             else {
@@ -770,3 +770,4 @@ void RecorderGroupCtrl::AddProjectNames(const CORBA::StringSeq & names, Controll
         if (controller) controller->AddProjectNames(names);
     }
 }
+

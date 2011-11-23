@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: dialogues.cpp,v 1.29 2011/11/11 11:21:23 john_f Exp $           *
+ *   $Id: dialogues.cpp,v 1.30 2011/11/23 13:47:34 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -197,7 +197,7 @@ void SetProjectDlg::SetProjectNames(CORBA::StringSeq_var projectNames, const wxS
         mProjectList->Enable();
         mProjectList->Clear(); //remove holding message
         for (size_t i = 0; i < projectNames->length(); i++) {
-            mProjectNames.Add(wxString((*projectNames)[i], wxConvISO8859_1));
+            mProjectNames.Add(wxString((*projectNames)[i], wxConvLibc));
         }
         mProjectNames.Sort();
         mProjectList->Append(mProjectNames);
@@ -319,7 +319,7 @@ const CORBA::StringSeq SetProjectDlg::GetNewProjectNames()
             corbaNames.length(corbaNames.length() + 1);
             // Assignment to the CORBA::StringSeq element must be from a const char *
             // and should use ISO Latin-1 character set.
-            corbaNames[corbaNames.length() - 1] = (const char *) mNewProjectNames[i].mb_str(wxConvISO8859_1);
+            corbaNames[corbaNames.length() - 1] = (const char *) mNewProjectNames[i].mb_str(wxConvLibc);
     }
     return corbaNames;
 }
@@ -2469,3 +2469,4 @@ unsigned int SetMaxChunksDlg::GetMaxChunks()
 {
     return mSpinCtrl->GetValue();
 }
+

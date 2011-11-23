@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: controller.cpp,v 1.19 2011/09/07 15:09:45 john_f Exp $          *
+ *   $Id: controller.cpp,v 1.20 2011/11/23 13:47:34 john_f Exp $          *
  *                                                                         *
  *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -413,12 +413,12 @@ wxThread::ExitCode Controller::Entry()
                             maxPreroll = mRecorder->MaxPreRoll();
                             maxPostroll = mRecorder->MaxPostRoll();
                             event.SetTrackStatusList(mRecorder->TracksStatus());
-                            routerRecorder = wxString(mRecorder->RecordingFormat(), wxConvISO8859_1).MakeUpper().Matches(wxT("*ROUTER*"));
+                            routerRecorder = wxString(mRecorder->RecordingFormat(), wxConvLibc).MakeUpper().Matches(wxT("*ROUTER*"));
                             strings = mRecorder->ProjectNames();
                         }
                         catch (const CORBA::Exception & e) {
 //std::cerr << "connect/reconnect exception: " << e._name() << std::endl;
-                            msg = wxT("Error communicating with this recorder: ") + wxString(e._name(), wxConvISO8859_1) + wxT(".  Is it operational and connected to the network?  The problem may resolve itself if you try again.");
+                            msg = wxT("Error communicating with this recorder: ") + wxString(e._name(), wxConvLibc) + wxT(".  Is it operational and connected to the network?  The problem may resolve itself if you try again.");
                         }
                     }
                     if (!msg.IsEmpty()) { //failed to select
@@ -504,7 +504,7 @@ wxThread::ExitCode Controller::Entry()
                                         msg = wxT("track name");
                                     }
                                     if (msg.Length()) {
-                                        msg = wxT("track \"") + wxString(mTrackList[i].name, wxConvISO8859_1) + wxT("\" has changed ") + msg;
+                                        msg = wxT("track \"") + wxString(mTrackList[i].name, wxConvLibc) + wxT("\" has changed ") + msg;
                                         break;
                                     }
                                 }
@@ -590,7 +590,7 @@ wxThread::ExitCode Controller::Entry()
                     timecode = mStartTimecode;
                     ProdAuto::MxfDuration preroll = mPreroll;
                     CORBA::BooleanSeq rec_enable = mEnableList;
-                    std::string project = (const char *) mProject.mb_str(wxConvISO8859_1);
+                    std::string project =  (const char *) mProject.mb_str(wxConvLibc);
                     loggingEvent.SetString(wxT("Start() being called for ") + mName + wxT(" @ ") + Timepos::FormatTimecode(timecode));
                     mMutex.Unlock();
                     AddPendingEvent(loggingEvent);
@@ -609,7 +609,7 @@ wxThread::ExitCode Controller::Entry()
                     mMutex.Lock();
                     timecode = mStopTimecode;
                     ProdAuto::MxfDuration postroll = mPostroll;
-                    char * description = CORBA::string_dup(mDescription.mb_str(wxConvISO8859_1));
+                    char * description = CORBA::string_dup(mDescription.mb_str(wxConvLibc));
                     ProdAuto::LocatorSeq locators = mLocators; 
                     loggingEvent.SetString(wxT("Stop() being called for ") + mName + wxT(" @ ") + Timepos::FormatTimecode(timecode));
                     mMutex.Unlock();
@@ -837,3 +837,4 @@ long ControllerThreadEvent::GetRecordTimeAvailable()
 {
     return mRecordTimeAvailable;
 }
+

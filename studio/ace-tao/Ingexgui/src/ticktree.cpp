@@ -548,9 +548,9 @@ void TickTreeCtrl::GetRecorderTapeIds(const wxString & recorderName, CORBA::Stri
             // Assignment to the CORBA::StringSeq element must be from a const char *
             // and should use ISO Latin-1 character set.
             packageNames.length(packageNames.length() + 1);
-            packageNames[packageNames.length() - 1] = (const char *) dynamic_cast<ItemData *>(GetItemData(package))->GetString().mb_str(wxConvISO8859_1);
+            packageNames[packageNames.length() - 1] = (const char *) dynamic_cast<ItemData *>(GetItemData(package))->GetString().mb_str(wxConvLibc);
             tapeIds.length(tapeIds.length() + 1);
-            tapeIds[tapeIds.length() - 1] = (const char *) RetrieveMessage(package).mb_str(wxConvISO8859_1);
+            tapeIds[tapeIds.length() - 1] = (const char *) RetrieveMessage(package).mb_str(wxConvLibc);
             package = GetNextChild(recorder, packageCookie);
         }
     }
@@ -819,3 +819,4 @@ void TickTreeCtrl::SetNodeState(const wxTreeItemId id, const TickTreeCtrl::state
         }
     }
 }
+
