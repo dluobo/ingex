@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderApp.cpp,v 1.11 2011/11/08 14:31:40 john_f Exp $
+ * $Id: RecorderApp.cpp,v 1.12 2011/11/23 13:48:40 john_f Exp $
  *
  * Encapsulation of the recorder application.
  *
@@ -185,7 +185,12 @@ bool RecorderApp::Init(int argc, char * argv[])
 // Set verbosity of debug messages
     Logfile::DebugLevel(debug_level);
 
-	ACE_DEBUG(( LM_NOTICE, ACE_TEXT("Recorder name \"%C\" started %C\n\n"), recorder_name.c_str(), DateTime::DateTimeWithSeparators().c_str() ));
+    char host[256];
+    if (0 != ACE_OS::hostname(host, 256))
+    {
+        host[0] = 0;
+    }
+    ACE_DEBUG(( LM_NOTICE, ACE_TEXT("Recorder name \"%C\" on \"%C\" started %C\n\n"), recorder_name.c_str(), host, DateTime::DateTimeWithSeparators().c_str() ));
 
     // Initialise database connection
     try
