@@ -1,5 +1,5 @@
 /*
- * $Id: logF.h,v 1.4 2010/01/12 16:03:05 john_f Exp $
+ * $Id: logF.h,v 1.5 2011/11/24 15:48:20 john_f Exp $
  *
  * Logging and debugging utility functions.
  *
@@ -33,6 +33,8 @@ extern "C" {
 // Utilities
 extern int openLogFileWithDate(const char *logfile);
 extern int reopenLogFileWithDate(const char *logfile);
+extern int openLogDirFileWithDate(const char * dir, const char * logfile);
+extern int reopenLogDirFileWithDate(const char * dir, const char * logfile);
 extern int openLogFile(const char *logfile);
 extern int reopenLogFile(const char *logfile);
 extern void flushLogFile();

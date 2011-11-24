@@ -1,5 +1,5 @@
 /*
- * $Id: logF.c,v 1.5 2010/01/12 16:03:05 john_f Exp $
+ * $Id: logF.c,v 1.6 2011/11/24 15:48:20 john_f Exp $
  *
  * Logging and debugging utility functions.
  *
@@ -80,6 +80,71 @@ extern int reopenLogFileWithDate(const char *logfile)
 
     // Re-open the log file once for lifetime of program
     if (freopen(new_log_filename, log_overwrite ? "w" : "a", pLogFile) == NULL) {
+        // try reopening the original file
+        freopen(log_filename, "a", pLogFile);
+        return 0;
+    }
+    
+    strcpy(log_filename, new_log_filename);
+    return 1;
+}
+
+extern int openLogDirFileWithDate(const char * dir, const char * logfile)
+{
+    time_t now = time(NULL);
+    struct tm l;
+    localtime_r(&now, &l);
+
+    sprintf(log_filename, "%s/%02d%02d%02d%02d%02d%02d_%s.log",
+                    dir,
+                    l.tm_year + 1900, l.tm_mon + 1, l.tm_mday,
+                    l.tm_hour, l.tm_min, l.tm_sec,
+                    logfile);
+
+    // Open the log file once for lifetime of program
+    if (! pLogFile)
+    {
+        pLogFile = fopen(log_filename, log_overwrite ? "w" : "a");
+    }
+
+    return pLogFile != NULL;
+}
+
+extern int reopenLogDirFileWithDate(const char * dir, const char * logfile)
+{
+    if (! pLogFile)
+    {
+        return openLogFileWithDate(logfile);
+    }
+    
+    time_t now = time(NULL);
+    struct tm l;
+    localtime_r(&now, &l);
+    char new_log_filename[FILENAME_MAX];
+
+    sprintf(new_log_filename, "%s/%02d%02d%02d_%02d%02d%02d_%s.log",
+                    dir,
+                    l.tm_year % 100, l.tm_mon + 1, l.tm_mday,
+                    l.tm_hour, l.tm_min, l.tm_sec,
+                    logfile);
+
+    // Check the new log filename if different
+    if (strcmp(log_filename, new_log_filename) == 0)
+    {
+        return 1;
+    }
+
+    // test the new file can be opened because freopen modifies original when it fails
+    FILE * test_file;
+    if ((test_file = fopen(logfile, log_overwrite ? "w" : "a")) == NULL)
+    {
+        return 0;
+    }
+    fclose(test_file);
+
+    // Re-open the log file once for lifetime of program
+    if (freopen(new_log_filename, log_overwrite ? "w" : "a", pLogFile) == NULL)
+    {
         // try reopening the original file
         freopen(log_filename, "a", pLogFile);
         return 0;
