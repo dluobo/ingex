@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.cpp,v 1.29 2011/10/14 09:49:56 john_f Exp $
+ * $Id: dvs_sdi.cpp,v 1.30 2011/11/24 15:47:02 john_f Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -2570,7 +2570,7 @@ int main (int argc, char ** argv)
 {
     int             n, max_channels = MAX_CHANNELS;
     long long       opt_max_memory = 0;
-    const char      *logfiledir = ".";
+    const char      *logfiledir = "/var/tmp/IngexLogs";
     //int             opt_video_mode = -1;
     //int             current_video_mode = -1;
     int             opt_sync_type = -1;
@@ -2963,10 +2963,15 @@ int main (int argc, char ** argv)
     }
 
 
-    char logfile[FILENAME_MAX];
-    strcpy(logfile, logfiledir);
-    strcat(logfile, "/dvs_sdi");
-    openLogFileWithDate(logfile);
+    openLogDirFileWithDate(logfiledir, "dvs_sdi");
+
+    char host[256];
+    if (0 != gethostname(host, 256))
+    {
+        host[0] = 0;
+    }
+    logTF("dvs_sdi started on host \"%s\"\n", host);
+
 
     // Install signal handlers to do clean exit
     if (signal(SIGINT, catch_sigint) == SIG_ERR)
