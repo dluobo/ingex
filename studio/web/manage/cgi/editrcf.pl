@@ -1,7 +1,7 @@
 #!/usr/bin/perl -wT
 
 #
-# $Id: editrcf.pl,v 1.3 2010/07/14 13:06:37 john_f Exp $
+# $Id: editrcf.pl,v 1.4 2011/11/28 16:43:42 john_f Exp $
 #
 # 
 #
@@ -127,7 +127,7 @@ sub return_edit_page
     my $page = construct_page(get_edit_content($rcf, $vrs, $errorMessage)) or
         return_error_page("failed to fill in content for edit recorder config page");
        
-    print header;
+    print header('text/html; charset=utf-8');
     print $page;
     
     exit(0);

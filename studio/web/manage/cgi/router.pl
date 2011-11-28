@@ -1,7 +1,7 @@
 #!/usr/bin/perl -wT
 
 #
-# $Id: router.pl,v 1.1 2007/09/11 14:08:46 stuart_hc Exp $
+# $Id: router.pl,v 1.2 2011/11/28 16:43:42 john_f Exp $
 #
 # 
 #
@@ -50,7 +50,7 @@ my $rocfs = load_router_configs($dbh)
 my $page = construct_page(get_page_content($rocfs)) 
     or return_error_page("failed to fill in content for router page");
    
-print header;
+print header('text/html; charset=utf-8');
 print $page;
 
 exit(0);

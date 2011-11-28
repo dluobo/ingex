@@ -25,7 +25,7 @@ use lib ".";
 use lib "..";
 use ingexhtmlutil;
 
-print header;
+print header('text/html; charset=utf-8');
 
 my @menu;
 my $line;

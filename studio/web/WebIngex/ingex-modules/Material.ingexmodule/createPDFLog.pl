@@ -63,7 +63,7 @@ my $dbh = prodautodb::connect(
 		$ingexConfig{"db_password"})
  	or die("DB Unavailable");
 
-print header;
+print header('text/html; charset=utf-8');
 
 # get parameters from json
 my $jsonStr = param('jsonIn');

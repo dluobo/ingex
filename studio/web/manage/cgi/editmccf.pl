@@ -1,7 +1,7 @@
 #!/usr/bin/perl -wT
 
 #
-# $Id: editmccf.pl,v 1.1 2007/09/11 14:08:46 stuart_hc Exp $
+# $Id: editmccf.pl,v 1.2 2011/11/28 16:43:42 john_f Exp $
 #
 # 
 #
@@ -153,7 +153,7 @@ sub return_edit_page
     my $page = construct_page(get_edit_content($mccf, $errorMessage)) or
         return_error_page("failed to fill in content for edit multi-camera config page");
        
-    print header;
+    print header('text/html; charset=utf-8');
     print $page;
     
     exit(0);

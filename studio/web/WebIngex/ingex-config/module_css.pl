@@ -36,7 +36,7 @@ if (param('tab')){
 	$retval = buildCSS();
 }
 
-print "Content-Type: text/css; charset=ISO-8859-1\n\n";
+print "Content-Type: text/css; charset=utf-8\n\n";
 print $retval;
 exit(0);
 

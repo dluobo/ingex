@@ -1,7 +1,7 @@
 #!/usr/bin/perl -wT
 
 #
-# $Id: generalcf.pl,v 1.1 2007/09/11 14:08:46 stuart_hc Exp $
+# $Id: generalcf.pl,v 1.2 2011/11/28 16:43:42 john_f Exp $
 #
 # 
 #
@@ -49,7 +49,7 @@ my $rcls = prodautodb::load_recording_locations($dbh) or
 my $page = construct_page(get_page_content($rcls)) or
     return_error_page("failed to fill in content for general configuration page");
    
-print header;
+print header('text/html; charset=utf-8');
 print $page;
 
 exit(0);

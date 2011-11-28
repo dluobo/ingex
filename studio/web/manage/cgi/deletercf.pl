@@ -1,7 +1,7 @@
 #!/usr/bin/perl -wT
 
 #
-# $Id: deletercf.pl,v 1.3 2010/07/14 13:06:37 john_f Exp $
+# $Id: deletercf.pl,v 1.4 2011/11/28 16:43:42 john_f Exp $
 #
 # 
 #
@@ -76,7 +76,7 @@ my $vrs = load_video_resolutions($dbh)
 my $page = construct_page(get_delete_content($rcf, $vrs)) or
     return_error_page("failed to fill in content for delete recorder config page");
    
-print header;
+print header('text/html; charset=utf-8');
 print $page;
 
 exit(0);

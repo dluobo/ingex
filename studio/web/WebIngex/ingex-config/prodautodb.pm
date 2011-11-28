@@ -106,7 +106,8 @@ sub connect
     
     $dbh->{RaiseError} = 1;
     $dbh->{AutoCommit} = 0;
-    $dbh->{FetchHashKeyName} = "NAME_uc"; 
+    $dbh->{FetchHashKeyName} = "NAME_uc";
+    $dbh->{pg_enable_utf8} = 1;
     
 	return $dbh;
 }

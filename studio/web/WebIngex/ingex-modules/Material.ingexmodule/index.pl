@@ -40,6 +40,7 @@ use ingexconfig;
 use materialconfig;
 
 use CGI::Pretty qw(:standard);
+use Encode;
 
 my $dbh = prodautodb::connect(
 		$ingexConfig{"db_host"}, 
@@ -50,8 +51,8 @@ my $dbh = prodautodb::connect(
 
 my $main_browser = get_main_browser();
 
-print header;
-print $main_browser;
+print header('text/html; charset=utf-8');
+print encode_utf8($main_browser);
 
 exit(0);
 

@@ -21,6 +21,7 @@
 use strict;
 
 use CGI::Pretty qw(:standard);
+use Encode;
 
 use lib ".";
 use lib "../../ingex-config";
@@ -48,8 +49,8 @@ my $rcls = prodautodb::load_recording_locations($dbh) or
 my $page = get_page_content($rcls) or
     return_error_page("failed to fill in content for general configuration page");
    
-print header;
-print $page;
+print header('text/html; charset=utf-8');
+print encode_utf8($page);
 
 exit(0);
 

@@ -32,7 +32,7 @@ if (param('tab')){
 	$retval  = build_tabs();
 }
 
-print header;
+print header('text/html; charset=utf-8');
 print $retval;
 exit(0);
 

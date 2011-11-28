@@ -21,6 +21,7 @@
 use strict;
 
 use CGI::Pretty qw(:standard);
+use Encode;
 
 use lib ".";
 use lib "../../ingex-config";
@@ -80,8 +81,8 @@ my $ops = load_ops($dbh)
 my $page = get_delete_content($rcf, $vrs, $fmts, $ops) or
     return_error_page("failed to fill in content for delete recorder config page");
    
-print header;
-print $page;
+print header('text/html; charset=utf-8');
+print encode_utf8($page);
 
 exit(0);
 

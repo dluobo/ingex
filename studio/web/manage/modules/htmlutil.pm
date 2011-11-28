@@ -1,5 +1,5 @@
 #
-# $Id: htmlutil.pm,v 1.4 2010/08/12 16:39:51 john_f Exp $
+# $Id: htmlutil.pm,v 1.5 2011/11/28 16:43:42 john_f Exp $
 #
 # 
 #
@@ -158,7 +158,7 @@ sub return_error_page
     my $page = construct_page(join("", @pageContent)) or
         return_template_error_page($message);
 
-    print header;
+    print header('text/html; charset=utf-8');
     print $page;
 
     exit(0);    
@@ -175,7 +175,7 @@ sub return_template_error_page
 {
     my ($message) = @_;
 
-    print header;
+    print header('text/html; charset=utf-8');
     print start_html,
     
     print h1("HTML Template Error");

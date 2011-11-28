@@ -33,10 +33,11 @@ use ingexhtmlutil;
 
 
 use CGI::Pretty qw(:standard);
+use Encode;
 
-print header;
+print header('text/html; charset=utf-8');
 my $content = get_content();
-print $content;
+print encode_utf8($content);
 exit(0);
 
 sub get_content{

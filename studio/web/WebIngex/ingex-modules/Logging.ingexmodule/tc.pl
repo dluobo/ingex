@@ -23,7 +23,7 @@ use LWP::UserAgent;
 use HTTP::Request;
 use strict;
 
-print header;
+print header('text/html; charset=utf-8');
 print getData();
 exit(0);
 

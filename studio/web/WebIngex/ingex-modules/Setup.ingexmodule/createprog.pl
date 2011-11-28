@@ -22,6 +22,7 @@
 use strict;
 
 use CGI::Pretty qw(:standard);
+use Encode;
 
 use lib ".";
 use lib "../../ingex-config";
@@ -86,8 +87,8 @@ sub return_page_content
     my $page = get_content($series,$errorMessage) or
         return_error_page("failed to fill in content for create programme page");
        
-    print header;
-    print $page;
+    print header('text/html; charset=utf-8');
+    print encode_utf8($page);
     
     exit(0);
 }

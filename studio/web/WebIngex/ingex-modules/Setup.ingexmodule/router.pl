@@ -21,6 +21,7 @@
 use strict;
 
 use CGI::Pretty qw(:standard);
+use Encode;
 
 use lib ".";
 use lib "../../ingex-config";
@@ -48,8 +49,8 @@ my $rocfs = load_router_configs($dbh)
 my $page = get_page_content($rocfs)
     or return_error_page("failed to fill in content for router page");
    
-print header;
-print $page;
+print header('text/html; charset=utf-8');
+print encode_utf8($page);
 
 exit(0);
 

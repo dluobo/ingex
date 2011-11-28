@@ -46,7 +46,7 @@ if(defined param('progid')) {
 #convert the database to JSON object
 my $encodedJson = encode_json($allItems);
 
-print header;
+print header('text/html; charset=utf-8');
 print $encodedJson;
 prodautodb::disconnect($dbh) if ($dbh);
 exit(0);

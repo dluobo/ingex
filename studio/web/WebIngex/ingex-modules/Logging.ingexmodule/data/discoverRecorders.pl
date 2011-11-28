@@ -29,7 +29,7 @@ use ingexhtmlutil;
 use prodautodb;
 use JSON::XS;
 
-print header;
+print header('text/html; charset=utf-8');
 
 my $dbh = prodautodb::connect(
         $ingexConfig{"db_host"},

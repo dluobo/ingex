@@ -36,7 +36,7 @@ my $dbh = prodautodb::connect(
         $ingexConfig{"db_password"}) 
     or $message = 'ERROR: Database connection unavailable.';
 
-print header;
+print header('text/html; charset=utf-8');
 print "<h1>Database Test</h1><p>$message</p><p><a href='/ingex/test'>Click here</a> to return to the test page.</p>";
 
 exit(0);

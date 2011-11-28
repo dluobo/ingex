@@ -1,7 +1,7 @@
 #!/usr/bin/perl -wT
 
 #
-# $Id: createmccf.pl,v 1.3 2009/01/29 07:36:59 stuart_hc Exp $
+# $Id: createmccf.pl,v 1.4 2011/11/28 16:43:42 john_f Exp $
 #
 # 
 #
@@ -101,7 +101,7 @@ sub return_create_page
     my $page = construct_page(get_create_content($errorMessage)) or
         return_error_page("failed to fill in content for create multi-camera config page");
        
-    print header;
+    print header('text/html; charset=utf-8');
     print $page;
     
     exit(0);

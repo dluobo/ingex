@@ -22,7 +22,7 @@ use strict;
 
 use CGI::Pretty qw(:standard);
 
-print header;
+print header('text/html; charset=utf-8');
 print "<h1>Web Server Test</h1><p>Success! Your web server is executing Perl documents correctly.</p><p><a href='/ingex/test'>Click here</a> to return to the test page.</p>";
 
 exit(0);

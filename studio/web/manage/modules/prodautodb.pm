@@ -1,5 +1,5 @@
 #
-# $Id: prodautodb.pm,v 1.5 2010/07/14 13:06:37 john_f Exp $
+# $Id: prodautodb.pm,v 1.6 2011/11/28 16:43:42 john_f Exp $
 #
 # 
 #
@@ -149,6 +149,7 @@ sub connect
     $dbh->{RaiseError} = 1;
     $dbh->{AutoCommit} = 0;
     $dbh->{FetchHashKeyName} = "NAME_uc"; 
+    $dbh->{pg_enable_utf8} = 1;
     
     return $dbh;
 }

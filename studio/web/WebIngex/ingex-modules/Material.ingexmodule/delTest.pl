@@ -46,7 +46,7 @@ my $dbh = prodautodb::connect(
    	
 my $pkgid = '1';
 
-print header;
+print header('text/html; charset=utf-8');
 my $result = delete_pkg($pkgid, $dbh);
 
 print "ok";

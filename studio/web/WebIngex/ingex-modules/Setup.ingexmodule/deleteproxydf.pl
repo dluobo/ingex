@@ -21,6 +21,7 @@
 use strict;
 
 use CGI::Pretty qw(:standard);
+use Encode;
 
 use lib ".";
 use lib "../../ingex-config";
@@ -71,8 +72,8 @@ else
 my $page = get_delete_content($pxdf) or
     return_error_page("failed to fill in content for delete proxy definition page");
    
-print header;
-print $page;
+print header('text/html; charset=utf-8');
+print encode_utf8($page);
 
 exit(0);
 

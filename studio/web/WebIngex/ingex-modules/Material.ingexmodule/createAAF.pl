@@ -66,7 +66,7 @@ my $xml = XMLout( $json, RootName => undef );
 my ( $fh, $filename ) = tempfile( DIR => $tempdir );	# create unique temp file
 print $fh $xml;		# write xml to temp file
 
-print header;
+print header('text/html; charset=utf-8');
 
 # run create_aaf using xml config
 eval{	

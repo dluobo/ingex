@@ -31,7 +31,7 @@ use prodautodb;
 use JSON::XS;
 use ILutil;
 
-print header;
+print header('text/html; charset=utf-8');
 
 my $dbh = prodautodb::connect(
 	$ingexConfig{"db_host"},

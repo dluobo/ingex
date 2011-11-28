@@ -1,7 +1,7 @@
 #!/usr/bin/perl -wT
 
 #
-# $Id: avidaaf.pl,v 1.5 2009/10/12 18:35:09 john_f Exp $
+# $Id: avidaaf.pl,v 1.6 2011/11/28 16:43:42 john_f Exp $
 #
 # 
 #
@@ -282,7 +282,7 @@ elsif (defined param("Send1") || defined param("Send2"))
 my $page = construct_page(get_page_content($vresIds, $errorMessage)) 
     or return_error_page("failed to fill in content for Avid AAF export page");
        
-print header;
+print header('text/html; charset=utf-8');
 print $page;
 
 exit(0);
@@ -358,7 +358,7 @@ sub return_success_page
     my $page = construct_page(get_success_content($totalClips, $totalMulticamGroups, $totalDirectorsCutSequences, $filenames)) or
         return_error_page("failed to fill in content for successful export of aaf file page");
        
-    print header;
+    print header('text/html; charset=utf-8');
     print $page;
     
     exit(0);
@@ -369,7 +369,7 @@ sub return_no_material_page
     my $page = construct_page(get_no_material_content()) or
         return_error_page("failed to fill in content for no material exported page");
        
-    print header;
+    print header('text/html; charset=utf-8');
     print $page;
     
     exit(0);

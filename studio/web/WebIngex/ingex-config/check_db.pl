@@ -36,7 +36,7 @@ my $dbh = prodautodb::connect(
         $ingexConfig{"db_password"}) 
     or $error = 'true';
 
-print header;
+print header('text/html; charset=utf-8');
 print "{\"dbError\":".$error."}";
 
 exit(0);

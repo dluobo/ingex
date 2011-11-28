@@ -355,8 +355,8 @@ elsif ( $level == 4 ) {
 
 }
 
-my $json = encode_json [@t_data];
-print "Content-Type: application/json; charset=ISO-8859-1\n\n";
+my $json = encode_json([@t_data]);
+print "Content-Type: application/json; charset=utf-8\n\n";
 #print "{\"text\":\".\",\"children\": $json }";
 print $json;
 #print "[{name_data: 'sdfsdf'},{name_data: 'sdfsdf'}]";

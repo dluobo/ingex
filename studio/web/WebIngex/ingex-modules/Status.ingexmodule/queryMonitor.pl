@@ -31,7 +31,7 @@ use LWP::UserAgent;
 use HTTP::Request;
 
 
-print header;
+print header('text/html; charset=utf-8');
 
 my $dirtoget='./monitors/';
 opendir(MONITORS, $dirtoget) or returnError();

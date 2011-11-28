@@ -24,6 +24,7 @@ use warnings;
 use ingexconfig;
 
 use CGI::Pretty qw(:standard);
+use Encode;
 
 ####################################
 #
@@ -109,8 +110,8 @@ sub return_error_page
     
     my $page = join("", @pageContent);
 
-    print header;
-    print $page;
+    print header('text/html; charset=utf-8');
+    print encode_utf8($page);
 
     exit(0);    
 }

@@ -21,6 +21,7 @@
 use strict;
 
 use CGI::Pretty qw(:standard);
+use Encode;
 
 use lib ".";
 use lib "..";
@@ -115,8 +116,8 @@ sub return_edit_page
     my $page = get_content($node, $nodeTypes, $errorMessage) or
         return_error_page("failed to fill in content for edit node page");
        
-    print header;
-    print $page;
+    print header('text/html; charset=utf-8');
+    print encode_utf8($page);
     
     exit(0);
 }

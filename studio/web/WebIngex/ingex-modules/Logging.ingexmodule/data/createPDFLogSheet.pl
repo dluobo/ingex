@@ -40,7 +40,7 @@ use prodautodb;
 # unix tmp directory
 my $tempdir = '/tmp';
 
-print header;
+print header('text/html; charset=utf-8');
 
 # ingex db
 my $dbh = prodautodb::connect(

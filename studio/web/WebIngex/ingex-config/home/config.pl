@@ -21,6 +21,7 @@
 use strict;
 
 use CGI::Pretty qw(:standard);
+use Encode;
 
 use lib ".";
 use lib "..";
@@ -41,8 +42,8 @@ my $nodes = load_nodes($dbh)
 my $page = get_page_content(\$nodes)
     or return_error_page("failed to fill in content for page");
 
-print header;
-print $page;
+print header('text/html; charset=utf-8');
+print encode_utf8($page);
 
 exit(0);
 

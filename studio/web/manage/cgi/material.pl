@@ -1,7 +1,7 @@
 #!/usr/bin/perl -wT
 
 #
-# $Id: material.pl,v 1.3 2009/10/12 18:35:40 john_f Exp $
+# $Id: material.pl,v 1.4 2011/11/28 16:43:42 john_f Exp $
 #
 # 
 #
@@ -70,7 +70,7 @@ else
         or return_error_page("failed to fill in content for material page");
 }
    
-print header;
+print header('text/html; charset=utf-8');
 print $page;
 
 exit(0);

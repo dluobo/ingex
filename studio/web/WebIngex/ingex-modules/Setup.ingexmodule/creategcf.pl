@@ -22,6 +22,7 @@
 use strict;
 
 use CGI::Pretty qw(:standard);
+use Encode;
 
 use lib ".";
 use lib "../../ingex-config";
@@ -88,8 +89,8 @@ sub return_create_recloc_page
     my $page = get_create_recloc_content($errorMessage) or
         return_error_page("failed to fill in content for create recording location config page");
        
-   	print header;
-    print $page;
+   	print header('text/html; charset=utf-8');
+    print encode_utf8($page);
     
     exit(0);
 }

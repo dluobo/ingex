@@ -21,6 +21,7 @@
 use strict;
 
 use CGI::Pretty qw(:standard);
+use Encode;
 
 use lib ".";
 use lib "../../ingex-config";
@@ -96,8 +97,8 @@ my $series = db::load_series($dbh)
 my $page = get_content($prog, $series, $errorMessage) or
     return_error_page("failed to fill in content for programme page");
    
-print header;
-print $page;
+print header('text/html; charset=utf-8');
+print encode_utf8($page);
 
 exit(0);
 

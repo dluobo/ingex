@@ -46,7 +46,7 @@ elsif (defined param('file'))
 	return_error_page("No config file specified.");
 }
 
-print "Content-Type: text/plain; charset=ISO-8859-1\n\n";
+print "Content-Type: text/plain; charset=utf-8\n\n";
 print $retval;
 exit(0);
 

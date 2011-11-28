@@ -58,7 +58,7 @@ my $jsonStr = param('jsonIn');
 my $json = decode_json($jsonStr);
 my $call_type = $json->{"typeIn"}; 
 
-print header;
+print header('text/html; charset=utf-8');
 
 if($call_type eq "get_aff_config"){
 	$response = getAAFConfig();

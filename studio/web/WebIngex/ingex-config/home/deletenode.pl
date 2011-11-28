@@ -21,6 +21,7 @@
 use strict;
 
 use CGI::Pretty qw(:standard);
+use Encode;
 
 use lib ".";
 use lib "..";
@@ -68,8 +69,8 @@ else
 my $page = get_delete_content($node) or
     return_error_page("failed to fill in content for delete source config page");
    
-print header;
-print $page;
+print header('text/html; charset=utf-8');
+print encode_utf8($page);
 
 exit(0);
 

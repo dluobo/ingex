@@ -22,6 +22,7 @@ use strict;
 
 use CGI::Pretty qw(:standard);
 use File::Temp qw(mktemp);
+use Encode;
 
 
 use lib ".";
@@ -309,8 +310,8 @@ elsif (defined param("Send1") || defined param("Send2"))
 my $page = get_page_content($vresIds, $errorMessage)
     or return_error_page("failed to fill in content for edit file export page");
        
-print header;
-print $page;
+print header('text/html; charset=utf-8');
+print encode_utf8($page);
 
 exit(0);
 
@@ -385,8 +386,8 @@ sub return_success_page
     my $page = get_success_content($totalClips, $totalMulticamGroups, $totalDirectorsCutSequences, $filenames) or
         return_error_page("failed to fill in content for successful export of aaf file page");
        
-    print header;
-    print $page;
+    print header('text/html; charset=utf-8');
+    print encode_utf8($page);
     
     exit(0);
 }
@@ -396,8 +397,8 @@ sub return_no_material_page
     my $page = get_no_material_content() or
         return_error_page("failed to fill in content for no material exported page");
        
-    print header;
-    print $page;
+    print header('text/html; charset=utf-8');
+    print encode_utf8($page);
     
     exit(0);
 }

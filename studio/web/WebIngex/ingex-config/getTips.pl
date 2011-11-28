@@ -21,7 +21,7 @@
 use strict;
 use CGI::Pretty qw(:standard);
 
-print header;
+print header('text/html; charset=utf-8');
 
 my @menu;
 my $line;

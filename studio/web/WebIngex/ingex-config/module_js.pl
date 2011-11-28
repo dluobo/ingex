@@ -36,7 +36,7 @@ if (param('tab')){
 	$retval = build_javascript();
 }
 
-print "Content-Type: text/javascript; charset=ISO-8859-1\n\n";
+print "Content-Type: text/javascript; charset=utf-8\n\n";
 print $retval;
 exit(0);
 
