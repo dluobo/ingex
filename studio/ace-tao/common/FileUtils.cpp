@@ -1,5 +1,5 @@
 /*
- * $Id: FileUtils.cpp,v 1.3 2011/02/18 16:31:15 john_f Exp $
+ * $Id: FileUtils.cpp,v 1.4 2011/11/28 16:45:19 john_f Exp $
  *
  * File utilities.
  *
@@ -31,6 +31,7 @@
 
 #include <vector>
 #include <iostream>
+#include <iconv.h>
 
 const char * const delim_set = "\\/";
 #if defined(WIN32)
@@ -47,6 +48,43 @@ void FileUtils::CleanFilename(std::string & filename)
     const std::string allowed_chars = "0123456789abcdefghijklmnopqrstuvwxyz_-ABCDEFGHIJKLMNOPQRSTUVWXYZ";
     const char replacement_char = '_';
 
+    // First convert from UTF8 to ASCII
+    iconv_t conv = iconv_open("ASCII//TRANSLIT", "UTF-8");
+
+    size_t inbytesleft = filename.length() + 1; // Include null termination
+    char * const inbuf = new char[inbytesleft];
+    char * inptr = inbuf; // iconv will change this pointer
+    strcpy(inbuf, filename.c_str());
+
+    size_t outbytesleft = inbytesleft; // output length will be <= input length
+    char * const outbuf = new char[outbytesleft];
+    char * outptr = outbuf; // iconv will change this pointer
+
+    size_t result = iconv(conv, &inptr, &inbytesleft, &outptr, &outbytesleft);
+    if (size_t(-1) != result)
+    {
+        filename = outbuf;
+    }
+    else
+    {
+        switch(errno)
+        {
+        case EILSEQ:
+            fprintf (stderr, "FileUtils::CleanFilename() - Invalid multibyte sequence.\n");
+            break;
+        case EINVAL:
+            fprintf (stderr, "FileUtils::CleanFilename() - Incomplete multibyte sequence.\n");
+            break;
+        case E2BIG:
+            fprintf (stderr, "FileUtils::CleanFilename() - No more room.\n");
+            break;
+        default:
+            fprintf (stderr, "FileUtils::CleanFilename() - %s.\n", strerror (errno));
+            break;
+        }
+    }
+
+    // Now replace non-allowed characters
     size_t pos;
     while (std::string::npos != (pos = filename.find_first_not_of(allowed_chars)))
     {
