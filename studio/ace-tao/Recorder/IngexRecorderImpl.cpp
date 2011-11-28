@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorderImpl.cpp,v 1.27 2011/09/27 08:14:37 john_f Exp $
+ * $Id: IngexRecorderImpl.cpp,v 1.28 2011/11/28 16:46:33 john_f Exp $
  *
  * Servant class for Recorder.
  *
@@ -278,6 +278,9 @@ public:
 
     // Get current capture buffer and database settings
     this->UpdateConfig();
+
+    // Set source names in shared memory
+    this->UpdateShmSourceNames();
 
     return RecorderImpl::Tracks();
 }
