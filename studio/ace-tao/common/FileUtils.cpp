@@ -1,5 +1,5 @@
 /*
- * $Id: FileUtils.cpp,v 1.4 2011/11/28 16:45:19 john_f Exp $
+ * $Id: FileUtils.cpp,v 1.5 2011/11/29 15:53:06 john_f Exp $
  *
  * File utilities.
  *
@@ -83,6 +83,9 @@ void FileUtils::CleanFilename(std::string & filename)
             break;
         }
     }
+    iconv_close(conv);
+    delete [] inbuf;
+    delete [] outbuf;
 
     // Now replace non-allowed characters
     size_t pos;
