@@ -58,7 +58,8 @@ int main (int argc, char * argv[])
     //print_vr(MaterialResolution::XDCAMHD422_MXF_1A);
     print_vr(MaterialResolution::XDCAMHD422_MOV);
     print_vr(MaterialResolution::DVD);
-    print_vr(MaterialResolution::MPEG4_MOV);
+    print_vr(MaterialResolution::MPEG4_MP3_MOV);
+    print_vr(MaterialResolution::MPEG4_PCM_MOV);
     print_vr(MaterialResolution::MP3);
     print_vr(MaterialResolution::CUTS);
     fprintf(stdout, "\n");

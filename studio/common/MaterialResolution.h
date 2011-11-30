@@ -1,5 +1,5 @@
 /*
- * $Id: MaterialResolution.h,v 1.7 2011/03/15 16:20:32 philipn Exp $
+ * $Id: MaterialResolution.h,v 1.8 2011/11/30 12:10:28 john_f Exp $
  *
  * Material resolution codes and details
  *
@@ -104,7 +104,8 @@ public:
         XDCAMHD422_MOV = 124,
 
         DVD = 200,
-        MPEG4_MOV = 210,
+        MPEG4_MP3_MOV = 210,
+        MPEG4_PCM_MOV = 212,
 
         MP3 = 300,
 

@@ -1,5 +1,5 @@
 /*
- * $Id: test_ffmpeg_encoder_av.cpp,v 1.6 2011/10/14 09:49:56 john_f Exp $
+ * $Id: test_ffmpeg_encoder_av.cpp,v 1.7 2011/11/30 12:10:28 john_f Exp $
  *
  * Test ffmpeg encoder av
  *
@@ -102,7 +102,8 @@ static int require_conversion(VideoFormat input_video_format, int input_width, i
     {
         case MaterialResolution::DVD:
             return input_video_format != YUV420_VIDEO_FORMAT || input_width != 720 || input_height != 576;
-        case MaterialResolution::MPEG4_MOV:
+        case MaterialResolution::MPEG4_MP3_MOV:
+        case MaterialResolution::MPEG4_PCM_MOV:
             return input_video_format != YUV420_VIDEO_FORMAT || input_width != 720 || input_height != 576;
         case MaterialResolution::DV25_MOV:
             return input_video_format != YUV420_VIDEO_FORMAT || input_width != 720 || input_height != 576;
@@ -145,7 +146,8 @@ static void convert_video(struct SwsContext **convert_context,
         case MaterialResolution::DVD:
             output_pix_fmt = PIX_FMT_YUV420P;
             break;
-        case MaterialResolution::MPEG4_MOV:
+        case MaterialResolution::MPEG4_MP3_MOV:
+        case MaterialResolution::MPEG4_PCM_MOV:
             output_pix_fmt = PIX_FMT_YUV420P;
             break;
         case MaterialResolution::DV25_MOV:
@@ -241,7 +243,7 @@ int main(int argc, const char **argv)
             if (strcmp(argv[cmdln_index + 1], "DVD") == 0) {
                 output_format = MaterialResolution::DVD;
             } else if (strcmp(argv[cmdln_index + 1], "MPEG4MOV") == 0) {
-                output_format = MaterialResolution::MPEG4_MOV;
+                output_format = MaterialResolution::MPEG4_MP3_MOV;
             } else if (strcmp(argv[cmdln_index + 1], "DV25MOV") == 0) {
                 output_format = MaterialResolution::DV25_MOV;
             } else if (strcmp(argv[cmdln_index + 1], "DV50MOV") == 0) {
@@ -400,7 +402,8 @@ int main(int argc, const char **argv)
         switch (output_format)
         {
             case MaterialResolution::DVD:
-            case MaterialResolution::MPEG4_MOV:
+            case MaterialResolution::MPEG4_MP3_MOV:
+            case MaterialResolution::MPEG4_PCM_MOV:
             case MaterialResolution::DV25_MOV:
             case MaterialResolution::DV50_MOV:
                 input_width = 720;
@@ -431,7 +434,8 @@ int main(int argc, const char **argv)
     switch (output_format)
     {
         case MaterialResolution::DVD:
-        case MaterialResolution::MPEG4_MOV:
+        case MaterialResolution::MPEG4_MP3_MOV:
+        case MaterialResolution::MPEG4_PCM_MOV:
             output_width = 720;
             output_height = 576;
             raster = notwide ? Ingex::VideoRaster::PAL_4x3 : Ingex::VideoRaster::PAL_16x9;

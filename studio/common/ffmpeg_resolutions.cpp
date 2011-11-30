@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_resolutions.cpp,v 1.6 2011/10/14 09:49:56 john_f Exp $
+ * $Id: ffmpeg_resolutions.cpp,v 1.7 2011/11/30 12:10:28 john_f Exp $
  *
  * Info on ffmpeg parameters for a particular MaterialResolution
  *
@@ -148,7 +148,8 @@ void get_ffmpeg_params(MaterialResolution::EnumType res, Ingex::VideoRaster::Enu
         codec_type = CODEC_TYPE_VIDEO;
         pix_fmt = PIX_FMT_YUV420P;
         break;
-    case MaterialResolution::MPEG4_MOV:
+    case MaterialResolution::MPEG4_MP3_MOV:
+    case MaterialResolution::MPEG4_PCM_MOV:
         codec_id = CODEC_ID_MPEG4;
         codec_type = CODEC_TYPE_VIDEO;
         pix_fmt = PIX_FMT_YUV420P;

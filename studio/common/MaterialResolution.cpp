@@ -1,5 +1,5 @@
 /*
- * $Id: MaterialResolution.cpp,v 1.12 2011/11/08 14:23:36 john_f Exp $
+ * $Id: MaterialResolution.cpp,v 1.13 2011/11/30 12:10:28 john_f Exp $
  *
  * Material resolution codes and details
  *
@@ -192,8 +192,12 @@ std::string MaterialResolution::Name(MaterialResolution::EnumType res)
         name = "MPEG2 for DVD";
         break;
 
-    case MPEG4_MOV:
-        name = "MPEG4 Quicktime";
+    case MPEG4_MP3_MOV:
+        name = "MPEG4/MP3 Quicktime";
+        break;
+
+    case MPEG4_PCM_MOV:
+        name = "MPEG4/PCM Quicktime";
         break;
 
     case MP3:
@@ -295,7 +299,8 @@ void MaterialResolution::GetInfo(MaterialResolution::EnumType res, FileFormat::E
         op = OperationalPattern::OP_1A;
         break;
 
-    case MPEG4_MOV:
+    case MPEG4_MP3_MOV:
+    case MPEG4_PCM_MOV:
         format = FileFormat::MOV;
         op = OperationalPattern::OP_1A;
         break;
@@ -344,13 +349,13 @@ bool MaterialResolution::CheckVideoFormat(MaterialResolution::EnumType res,
     kbyte_per_minute = 0;
     switch (res)
     {
-    case MaterialResolution::NONE:
+    case NONE:
         result = true;
         kbyte_per_minute = 0;
         break;
-    case MaterialResolution::DV25_RAW:
-    case MaterialResolution::DV25_MXF_ATOM:
-    case MaterialResolution::DV25_MOV:
+    case DV25_RAW:
+    case DV25_MXF_ATOM:
+    case DV25_MOV:
         switch (raster)
         {
         case Ingex::VideoRaster::PAL_4x3_B:
@@ -373,9 +378,9 @@ bool MaterialResolution::CheckVideoFormat(MaterialResolution::EnumType res,
             break;
         }
         break;
-    case MaterialResolution::DV50_RAW:
-    case MaterialResolution::DV50_MXF_ATOM:
-    case MaterialResolution::DV50_MOV:
+    case DV50_RAW:
+    case DV50_MXF_ATOM:
+    case DV50_MOV:
         switch (raster)
         {
         case Ingex::VideoRaster::PAL_4x3_B:
@@ -392,9 +397,9 @@ bool MaterialResolution::CheckVideoFormat(MaterialResolution::EnumType res,
             break;
         }
         break;
-    case MaterialResolution::DV100_RAW:
-    case MaterialResolution::DV100_MXF_ATOM:
-    case MaterialResolution::DV100_MOV:
+    case DV100_RAW:
+    case DV100_MXF_ATOM:
+    case DV100_MOV:
         switch (raster)
         {
         case Ingex::VideoRaster::SMPTE274_25I:
@@ -415,12 +420,12 @@ bool MaterialResolution::CheckVideoFormat(MaterialResolution::EnumType res,
             break;
         }
         break;
-    case MaterialResolution::IMX30_MXF_ATOM:
-    case MaterialResolution::IMX40_MXF_ATOM:
-    case MaterialResolution::IMX50_MXF_ATOM:
-    case MaterialResolution::IMX30_MXF_1A:
-    case MaterialResolution::IMX40_MXF_1A:
-    case MaterialResolution::IMX50_MXF_1A:
+    case IMX30_MXF_ATOM:
+    case IMX40_MXF_ATOM:
+    case IMX50_MXF_ATOM:
+    case IMX30_MXF_1A:
+    case IMX40_MXF_1A:
+    case IMX50_MXF_1A:
         switch (raster)
         {
         case Ingex::VideoRaster::PAL_4x3:
@@ -443,7 +448,7 @@ bool MaterialResolution::CheckVideoFormat(MaterialResolution::EnumType res,
             break;
         }
         break;
-    case MaterialResolution::MJPEG21_MXF_ATOM:
+    case MJPEG21_MXF_ATOM:
         switch (raster)
         {
         case Ingex::VideoRaster::PAL_4x3:
@@ -460,7 +465,7 @@ bool MaterialResolution::CheckVideoFormat(MaterialResolution::EnumType res,
             break;
         }
         break;
-    case MaterialResolution::MJPEG31_MXF_ATOM:
+    case MJPEG31_MXF_ATOM:
         switch (raster)
         {
         case Ingex::VideoRaster::PAL_4x3:
@@ -477,7 +482,7 @@ bool MaterialResolution::CheckVideoFormat(MaterialResolution::EnumType res,
             break;
         }
         break;
-    case MaterialResolution::MJPEG101_MXF_ATOM:
+    case MJPEG101_MXF_ATOM:
         switch (raster)
         {
         case Ingex::VideoRaster::PAL_4x3:
@@ -494,9 +499,9 @@ bool MaterialResolution::CheckVideoFormat(MaterialResolution::EnumType res,
             break;
         }
         break;
-    case MaterialResolution::MJPEG101M_MXF_ATOM:
-    case MaterialResolution::MJPEG151S_MXF_ATOM:
-    case MaterialResolution::MJPEG201_MXF_ATOM:
+    case MJPEG101M_MXF_ATOM:
+    case MJPEG151S_MXF_ATOM:
+    case MJPEG201_MXF_ATOM:
         switch (raster)
         {
         case Ingex::VideoRaster::PAL_4x3:
@@ -513,8 +518,8 @@ bool MaterialResolution::CheckVideoFormat(MaterialResolution::EnumType res,
             break;
         }
         break;
-    case MaterialResolution::DNX120I_MXF_ATOM:
-    case MaterialResolution::DNX185I_MXF_ATOM:
+    case DNX120I_MXF_ATOM:
+    case DNX185I_MXF_ATOM:
         switch (raster)
         {
         case Ingex::VideoRaster::SMPTE274_25I:
@@ -529,7 +534,7 @@ bool MaterialResolution::CheckVideoFormat(MaterialResolution::EnumType res,
             break;
         }
         break;
-    case MaterialResolution::DNX36P_MXF_ATOM:
+    case DNX36P_MXF_ATOM:
         switch (raster)
         {
         case Ingex::VideoRaster::SMPTE274_25PSF:
@@ -546,8 +551,8 @@ bool MaterialResolution::CheckVideoFormat(MaterialResolution::EnumType res,
             break;
         }
         break;
-    case MaterialResolution::DNX120P_MXF_ATOM:
-    case MaterialResolution::DNX185P_MXF_ATOM:
+    case DNX120P_MXF_ATOM:
+    case DNX185P_MXF_ATOM:
         switch (raster)
         {
         case Ingex::VideoRaster::SMPTE274_25PSF:
@@ -564,9 +569,9 @@ bool MaterialResolution::CheckVideoFormat(MaterialResolution::EnumType res,
             break;
         }
         break;
-    case MaterialResolution::XDCAMHD422_RAW:
-    case MaterialResolution::XDCAMHD422_MOV:
-    case MaterialResolution::XDCAMHD422_MXF_1A:
+    case XDCAMHD422_RAW:
+    case XDCAMHD422_MOV:
+    case XDCAMHD422_MXF_1A:
         switch (raster)
         {
         case Ingex::VideoRaster::SMPTE274_25I:
@@ -585,8 +590,9 @@ bool MaterialResolution::CheckVideoFormat(MaterialResolution::EnumType res,
             break;
         }
         break;
-    case MaterialResolution::DVD:
-    case MaterialResolution::MPEG4_MOV:
+    case DVD:
+    case MPEG4_MP3_MOV:
+    case MPEG4_PCM_MOV:
         switch (raster)
         {
         case Ingex::VideoRaster::PAL_4x3:
@@ -603,8 +609,8 @@ bool MaterialResolution::CheckVideoFormat(MaterialResolution::EnumType res,
             break;
         }
         break;
-    case MaterialResolution::UNC_RAW:
-    case MaterialResolution::UNC_MXF_ATOM:
+    case UNC_RAW:
+    case UNC_MXF_ATOM:
         switch (raster)
         {
         case Ingex::VideoRaster::PAL_4x3:
@@ -637,11 +643,11 @@ bool MaterialResolution::CheckVideoFormat(MaterialResolution::EnumType res,
             break;
         }
         break;
-    case MaterialResolution::MP3:
+    case MP3:
         result = true;
         kbyte_per_minute = 960; // 128 kbit/s
         break;
-    case MaterialResolution::CUTS:
+    case CUTS:
         result = true;
         kbyte_per_minute = 1;
         break;

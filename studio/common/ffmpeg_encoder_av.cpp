@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder_av.cpp,v 1.16 2011/10/14 09:49:56 john_f Exp $
+ * $Id: ffmpeg_encoder_av.cpp,v 1.17 2011/11/30 12:10:28 john_f Exp $
  *
  * Encode AV and write to file.
  *
@@ -926,7 +926,8 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename,
     case MaterialResolution::DVD:
         fmt_name = "dvd";
         break;
-    case MaterialResolution::MPEG4_MOV:
+    case MaterialResolution::MPEG4_MP3_MOV:
+    case MaterialResolution::MPEG4_PCM_MOV:
         fmt_name = "mov";
         break;
     case MaterialResolution::DV25_MOV:
@@ -1088,7 +1089,8 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename,
     case MaterialResolution::DVD:
         init_video_dvd(enc, raster);
         break;
-    case MaterialResolution::MPEG4_MOV:
+    case MaterialResolution::MPEG4_MP3_MOV:
+    case MaterialResolution::MPEG4_PCM_MOV:
         init_video_mpeg4(enc, raster, start_tc);
         break;
     case MaterialResolution::DV25_MOV:
@@ -1127,13 +1129,14 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename,
         case MaterialResolution::DVD:
             init_audio_dvd(aenc);
             break;
-        case MaterialResolution::MPEG4_MOV:
+        case MaterialResolution::MPEG4_MP3_MOV:
             init_audio_mp3(aenc);
             break;
         case MaterialResolution::DV25_MOV:
         case MaterialResolution::DV50_MOV:
         case MaterialResolution::DV100_MOV:
         case MaterialResolution::XDCAMHD422_MOV:
+        case MaterialResolution::MPEG4_PCM_MOV:
             init_audio_pcm(aenc);
             break;
         default:
