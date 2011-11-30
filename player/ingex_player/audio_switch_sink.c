@@ -1,5 +1,5 @@
 /*
- * $Id: audio_switch_sink.c,v 1.7 2011/09/09 17:32:27 philipn Exp $
+ * $Id: audio_switch_sink.c,v 1.8 2011/11/30 13:27:05 philipn Exp $
  *
  *
  *
@@ -475,9 +475,7 @@ static int qas_accept_stream_frame(void* data, int streamId, const FrameInfo* fr
     char clipIds[MAX_SPLIT_COUNT][CLIP_ID_SIZE];
     int sourceIds[MAX_SPLIT_COUNT];
     int numIds;
-    AudioStreamGroup* videoGroup = NULL;
-    AudioStreamGroup* firstVideoGroupWithAudio = NULL;
-    int i;
+    AudioStreamGroup* videoGroup;
 
     if (!swtch->disableSwitching)
     {
@@ -492,43 +490,9 @@ static int qas_accept_stream_frame(void* data, int streamId, const FrameInfo* fr
             {
                 if (vsw_get_active_clip_ids(videoSwitch, clipIds, sourceIds, &numIds))
                 {
-                    if (numIds > 1)
+                    if (numIds >= 1)
                     {
-                        /* if there is a choice then keep the current selected audio group if possible,
-                           otherwise choose the first available group with audio */
-                        for (i = 0; i < numIds; i++)
-                        {
-                            videoGroup = get_stream_group_with_id(&swtch->groups, clipIds[i], sourceIds[i]);
-                            if (videoGroup)
-                            {
-                                if (videoGroup == swtch->currentGroup)
-                                {
-                                    /* choose current selected group */
-                                    swtch->currentGroup = videoGroup;
-                                    break;
-                                }
-                                else if (!firstVideoGroupWithAudio)
-                                {
-                                    firstVideoGroupWithAudio = videoGroup;
-                                }
-                            }
-                        }
-                        if (i >= numIds)
-                        {
-                            if (firstVideoGroupWithAudio)
-                            {
-                                /* choose first available group */
-                                swtch->currentGroup = firstVideoGroupWithAudio;
-                            }
-                            else
-                            {
-                                swtch->noAudioGroup = 1;
-                            }
-                        }
-                    }
-                    else if (numIds == 1)
-                    {
-                        /* no choice - either have audio or not */
+                        /* choose the audio that is associated with the first group */
                         videoGroup = get_stream_group_with_id(&swtch->groups, clipIds[0], sourceIds[0]);
                         if (videoGroup)
                         {
