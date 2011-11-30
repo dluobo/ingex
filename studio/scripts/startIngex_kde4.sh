@@ -258,13 +258,13 @@ function SetupTab { # arg: name of tab
   echo "title: $HOSTNAME $1;; command: bash --rcfile $RC_FILE" >> $KONSOLE_TABS_FILE
   HISTORY=~/.ingex-$1-bash-history # don't put in /tmp as this won't be read until capture process finishes?
   rm $HISTORY 2>/dev/null
-  echo "HISTFILE=$HISTORY" > $RC_FILE
+  echo "HISTFILE=$HISTORY" > $RC_FILE #separate history for each tab so that we can easily repeat commands
 }
 
 function WriteCommand { #arg: command
-  echo "echo $1" >> $RC_FILE
-  echo $1 >> $RC_FILE
-  echo $1 >> $HISTORY
+  echo "echo \"$1\"" >> $RC_FILE #so that we can see what the command is; quotes allow semicolons
+  echo $1 >> $RC_FILE #exectute the command on startup
+  echo $1 >> $HISTORY #allow the command to be manually re-issued
 }  
 
 KONSOLE_TABS_FILE=/tmp/ingex-tabs # the file given to the konsole command, containing tab names and a command to be executed for each tab, which only seems to work as a single word, so each points to an executable file
