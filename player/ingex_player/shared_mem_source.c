@@ -1,5 +1,5 @@
 /*
- * $Id: shared_mem_source.c,v 1.19 2011/10/27 13:45:37 philipn Exp $
+ * $Id: shared_mem_source.c,v 1.20 2011/11/30 13:28:29 philipn Exp $
  *
  *
  *
@@ -437,8 +437,8 @@ static int shm_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceLis
 
         sdl_receive_frame(listener, i, buffer, track->frameSize);
     }
-    source->position += 1;
 
+    source->position++;
     return 0;
 }
 
@@ -448,11 +448,13 @@ static int shm_is_seekable(void* data)
     return 0;
 }
 
-/* returns 0 when successfull, -2 if timed out, otherwise -1 */
 static int shm_seek(void* data, int64_t position)
 {
-    /* cannot seek and shouldn't have called this function */
-    return -1;
+    SharedMemSource* source = (SharedMemSource*)data;
+
+    /* this is a live source so every position is equivalent. The next available frame is always read */
+    source->position = position;
+    return 0;
 }
 
 static int shm_get_length(void* data, int64_t* length)
