@@ -1,5 +1,5 @@
 /*
- * $Id: player.c,v 1.38 2011/10/27 13:45:37 philipn Exp $
+ * $Id: player.c,v 1.39 2011/11/30 13:27:41 philipn Exp $
  *
  *
  *
@@ -935,6 +935,7 @@ static void usage(const char* cmd)
     fprintf(stderr, "  --mxf-linux-10b-pload <value>  Data (bytes) to pre-load for an MXF file containing 10-bit video (default 1150000 bytes)\n");    
     fprintf(stderr, "                           Note: for both pload options, only component depth of final video track in MXF file is considered\n");
     fprintf(stderr, "  --osd-pos <pos>          Set the position of the player state OSD. Valid values are 'top', 'middle' and 'bottom'. Default is 'bottom'\n");
+    fprintf(stderr, "  --show-src-names         Show the source names in the OSD\n");
     fprintf(stderr, "\n");
     fprintf(stderr, "Inputs:\n");
     fprintf(stderr, "  -m, --mxf  <file>        MXF file input\n");
@@ -1109,6 +1110,7 @@ int main(int argc, const char **argv)
     int openInputFailed = 0;
     const char *windowTitle = DEFAULT_WINDOW_TITLE;
     int multipleMXFInputs = 0;
+    int showSourceNames = 0;
 
     memset(inputs, 0, sizeof(inputs));
     memset(&markConfigs, 0, sizeof(markConfigs));
@@ -2135,6 +2137,11 @@ int main(int argc, const char **argv)
                 return 1;
             }
             cmdlnIndex += 2;
+        }
+        else if (strcmp(argv[cmdlnIndex], "--show-src-names") == 0)
+        {
+            showSourceNames = 1;
+            cmdlnIndex++;
         }
         else if (strcmp(argv[cmdlnIndex], "-m") == 0 ||
             strcmp(argv[cmdlnIndex], "--mxf") == 0)
@@ -3455,6 +3462,9 @@ int main(int argc, const char **argv)
         ply_print_source_info(g_player.mediaPlayer);
     }
 
+
+    /* show the source names in the OSD */
+    mc_show_source_name(ply_get_media_control(g_player.mediaPlayer), showSourceNames);
 
 
     /* start playing... */
