@@ -1,5 +1,5 @@
 /*
- * $Id: MaterialResolution.h,v 1.8 2011/11/30 12:10:28 john_f Exp $
+ * $Id: MaterialResolution.h,v 1.9 2011/12/19 16:20:54 john_f Exp $
  *
  * Material resolution codes and details
  *
@@ -39,7 +39,8 @@ public:
         RAW,
         MXF,
         MOV,
-        MPG
+        MPG,
+        MP4
     };
 
     static std::string Name(FileFormat::EnumType format);
@@ -106,6 +107,8 @@ public:
         DVD = 200,
         MPEG4_MP3_MOV = 210,
         MPEG4_PCM_MOV = 212,
+        MPEG4BP_AAC_MP4 = 220,
+        MPEG4MP_AAC_MP4 = 221,
 
         MP3 = 300,
 

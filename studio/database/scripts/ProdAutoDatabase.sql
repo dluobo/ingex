@@ -1034,6 +1034,8 @@ INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (124, 'MPEG2 422 L
 INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (200, 'MPEG2 for DVD');
 INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (210, 'MPEG4/MP3 Quicktime');
 INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (212, 'MPEG4/PCM Quicktime');
+INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (220, 'H264 Baseline Profile 512 kbit/s and AAC');
+INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (221, 'H264 Main Profile 1024 kbit/s and AAC');
 INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (300, 'MP3 Audio only');
 INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (400, 'Vision Cuts');
 
@@ -1041,6 +1043,7 @@ INSERT INTO FileFormat (fft_identifier, fft_name) VALUES (1, 'Raw');
 INSERT INTO FileFormat (fft_identifier, fft_name) VALUES (2, 'MXF');
 INSERT INTO FileFormat (fft_identifier, fft_name) VALUES (3, 'Quicktime');
 INSERT INTO FileFormat (fft_identifier, fft_name) VALUES (4, 'MPEG programme stream');
+INSERT INTO FileFormat (fft_identifier, fft_name) VALUES (5, 'MPEG-4 Part 14');
 
 INSERT INTO OperationalPattern (opp_identifier, opp_name) VALUES (1, 'OP-Atom');
 INSERT INTO OperationalPattern (opp_identifier, opp_name) VALUES (2, 'OP-1A');

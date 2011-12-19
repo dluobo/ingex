@@ -1,5 +1,5 @@
 /*
- * $Id: test_ffmpeg_encoder_av.cpp,v 1.7 2011/11/30 12:10:28 john_f Exp $
+ * $Id: test_ffmpeg_encoder_av.cpp,v 1.8 2011/12/19 16:20:54 john_f Exp $
  *
  * Test ffmpeg encoder av
  *
@@ -105,6 +105,9 @@ static int require_conversion(VideoFormat input_video_format, int input_width, i
         case MaterialResolution::MPEG4_MP3_MOV:
         case MaterialResolution::MPEG4_PCM_MOV:
             return input_video_format != YUV420_VIDEO_FORMAT || input_width != 720 || input_height != 576;
+        case MaterialResolution::MPEG4BP_AAC_MP4:
+        case MaterialResolution::MPEG4MP_AAC_MP4:
+            return input_video_format != YUV420_VIDEO_FORMAT || input_width != 720 || input_height != 576;
         case MaterialResolution::DV25_MOV:
             return input_video_format != YUV420_VIDEO_FORMAT || input_width != 720 || input_height != 576;
         case MaterialResolution::DV50_MOV:
@@ -150,6 +153,11 @@ static void convert_video(struct SwsContext **convert_context,
         case MaterialResolution::MPEG4_PCM_MOV:
             output_pix_fmt = PIX_FMT_YUV420P;
             break;
+        case MaterialResolution::MPEG4BP_AAC_MP4:
+        case MaterialResolution::MPEG4MP_AAC_MP4:
+            output_pix_fmt = PIX_FMT_YUV420P;
+            break;
+
         case MaterialResolution::DV25_MOV:
             output_pix_fmt = PIX_FMT_YUV420P;
             break;
@@ -184,7 +192,7 @@ static void usage(const char *cmd)
 {
     fprintf(stderr, "Usage: %s <<options>> <<inputs>> <av output>\n", cmd);
     fprintf(stderr, "Options:\n");
-    fprintf(stderr, "  --format <name>    Output format: DVD, MPEG4MOV, DV25MOV, DV50MOV, DV100MOV, XDCAMHDMOV. Default is DV25MOV\n");
+    fprintf(stderr, "  --format <name>    Output format: DVD, MPEG4MOV, MPEG4MP4, DV25MOV, DV50MOV, DV100MOV, XDCAMHDMOV. Default is DV25MOV\n");
     fprintf(stderr, "  --start <tc>       Start timecode; frame count or hh:mm:ss:ff. Default is 0\n");
     fprintf(stderr, "  --size <WxH>       Picture dimensions. Default is 720x576, except DV100MOV and XDCAMHDMOV which are 1920x1080\n");
     fprintf(stderr, "  --notwide          4:3 aspect ratio. Default is wide aspect ratio 16:9\n");
@@ -244,6 +252,8 @@ int main(int argc, const char **argv)
                 output_format = MaterialResolution::DVD;
             } else if (strcmp(argv[cmdln_index + 1], "MPEG4MOV") == 0) {
                 output_format = MaterialResolution::MPEG4_MP3_MOV;
+            } else if (strcmp(argv[cmdln_index + 1], "MPEG4MP4") == 0) {
+                output_format = MaterialResolution::MPEG4BP_AAC_MP4;
             } else if (strcmp(argv[cmdln_index + 1], "DV25MOV") == 0) {
                 output_format = MaterialResolution::DV25_MOV;
             } else if (strcmp(argv[cmdln_index + 1], "DV50MOV") == 0) {
@@ -404,6 +414,8 @@ int main(int argc, const char **argv)
             case MaterialResolution::DVD:
             case MaterialResolution::MPEG4_MP3_MOV:
             case MaterialResolution::MPEG4_PCM_MOV:
+            case MaterialResolution::MPEG4BP_AAC_MP4:
+            case MaterialResolution::MPEG4MP_AAC_MP4:
             case MaterialResolution::DV25_MOV:
             case MaterialResolution::DV50_MOV:
                 input_width = 720;
@@ -440,6 +452,13 @@ int main(int argc, const char **argv)
             output_height = 576;
             raster = notwide ? Ingex::VideoRaster::PAL_4x3 : Ingex::VideoRaster::PAL_16x9;
             break;
+        case MaterialResolution::MPEG4BP_AAC_MP4:
+        case MaterialResolution::MPEG4MP_AAC_MP4:
+            output_width = 720;
+            output_height = 576;
+            raster = notwide ? Ingex::VideoRaster::PAL_4x3 : Ingex::VideoRaster::PAL_16x9;
+            break;
+
         case MaterialResolution::DV25_MOV:
         case MaterialResolution::DV50_MOV:
             output_width = 720;

@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_resolutions.cpp,v 1.7 2011/11/30 12:10:28 john_f Exp $
+ * $Id: ffmpeg_resolutions.cpp,v 1.8 2011/12/19 16:20:54 john_f Exp $
  *
  * Info on ffmpeg parameters for a particular MaterialResolution
  *
@@ -154,6 +154,14 @@ void get_ffmpeg_params(MaterialResolution::EnumType res, Ingex::VideoRaster::Enu
         codec_type = CODEC_TYPE_VIDEO;
         pix_fmt = PIX_FMT_YUV420P;
         break;
+        
+    case MaterialResolution::MPEG4BP_AAC_MP4:
+    case MaterialResolution::MPEG4MP_AAC_MP4:
+        codec_id = CODEC_ID_H264;
+        codec_type = CODEC_TYPE_VIDEO;
+        pix_fmt = PIX_FMT_YUV420P;
+        break;
+
     case MaterialResolution::MP3:
         codec_id = CODEC_ID_MP3;
         codec_type = CODEC_TYPE_AUDIO;

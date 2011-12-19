@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderPackageCreator.cpp,v 1.6 2010/10/08 17:02:34 john_f Exp $
+ * $Id: RecorderPackageCreator.cpp,v 1.7 2011/12/19 16:20:54 john_f Exp $
  *
  * Recorder package group creator
  *
@@ -171,6 +171,8 @@ string RecorderPackageCreator::GetFileLocationSuffix()
             return ".mov";
         case FileFormat::MPG:
             return ".mpg";
+        case FileFormat::MP4:
+    	    return ".mp4";
         case FileFormat::RAW:
         default:
             return ".raw";

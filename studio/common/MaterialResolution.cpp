@@ -1,5 +1,5 @@
 /*
- * $Id: MaterialResolution.cpp,v 1.13 2011/11/30 12:10:28 john_f Exp $
+ * $Id: MaterialResolution.cpp,v 1.14 2011/12/19 16:20:54 john_f Exp $
  *
  * Material resolution codes and details
  *
@@ -43,6 +43,9 @@ std::string FileFormat::Name(FileFormat::EnumType format)
     case MPG:
         name = "MPEG programme stream";
         break;
+    case MP4:
+	name = "MPEG-4 Part 14";
+	break;
     }
     return name;
 }
@@ -199,6 +202,14 @@ std::string MaterialResolution::Name(MaterialResolution::EnumType res)
     case MPEG4_PCM_MOV:
         name = "MPEG4/PCM Quicktime";
         break;
+    
+    case MPEG4BP_AAC_MP4:
+        name = "H264 Baseline Profile 512 kbit/s and AAC";
+        break;
+
+    case MPEG4MP_AAC_MP4:
+        name = "H264 Main Profile 1024 kbit/s and AAC";
+        break;
 
     case MP3:
         name = "MP3 Audio only";
@@ -302,6 +313,12 @@ void MaterialResolution::GetInfo(MaterialResolution::EnumType res, FileFormat::E
     case MPEG4_MP3_MOV:
     case MPEG4_PCM_MOV:
         format = FileFormat::MOV;
+        op = OperationalPattern::OP_1A;
+        break;
+
+    case MPEG4BP_AAC_MP4:
+    case MPEG4MP_AAC_MP4:
+        format = FileFormat::MP4;
         op = OperationalPattern::OP_1A;
         break;
 
@@ -609,6 +626,42 @@ bool MaterialResolution::CheckVideoFormat(MaterialResolution::EnumType res,
             break;
         }
         break;
+    case MPEG4BP_AAC_MP4:
+        switch (raster)
+        {
+        case Ingex::VideoRaster::PAL_4x3:
+        case Ingex::VideoRaster::PAL_16x9:
+        case Ingex::VideoRaster::NTSC_4x3:
+        case Ingex::VideoRaster::NTSC_16x9:
+            if (Ingex::PixelFormat::YUV_PLANAR_420_MPEG == format)
+            {
+                result = true;
+                kbyte_per_minute = 3750; // 512 kbit/s
+            }
+            break;
+        default:
+            break;
+        }
+        break;
+
+    case MPEG4MP_AAC_MP4:
+        switch (raster)
+        {
+        case Ingex::VideoRaster::PAL_4x3:
+        case Ingex::VideoRaster::PAL_16x9:
+        case Ingex::VideoRaster::NTSC_4x3:
+        case Ingex::VideoRaster::NTSC_16x9:
+            if (Ingex::PixelFormat::YUV_PLANAR_420_MPEG == format)
+            {
+                result = true;
+                kbyte_per_minute = 7500; // 1 Mbit/s
+            }
+            break;
+        default:
+            break;
+        }
+        break;
+
     case UNC_RAW:
     case UNC_MXF_ATOM:
         switch (raster)

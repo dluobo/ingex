@@ -1,5 +1,5 @@
 /*
- * $Id: recorder_functions.cpp,v 1.55 2011/11/30 12:10:27 john_f Exp $
+ * $Id: recorder_functions.cpp,v 1.56 2011/12/19 16:20:54 john_f Exp $
  *
  * Functions which execute in recording threads.
  *
@@ -442,6 +442,13 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         raw = false;
         filename_extension = ".mov";
         break;
+    case MaterialResolution::MPEG4BP_AAC_MP4:
+    case MaterialResolution::MPEG4MP_AAC_MP4:
+        encoder = ENCODER_FFMPEG_AV;
+        mxf = false;
+        raw = false;
+        filename_extension = ".mp4";
+        break;
     case MaterialResolution::MP3:
         mxf = false;
         raw = false;
@@ -574,6 +581,12 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         filename_extension = ".mov";
         raw = false;
         break;
+    case FileFormat::MP4:
+        encoder = ENCODER_FFMPEG_AV;
+        filename_extension = ".mp4";
+        raw = false;
+        break;
+
     default:
         break;
     }

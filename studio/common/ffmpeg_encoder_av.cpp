@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder_av.cpp,v 1.17 2011/11/30 12:10:28 john_f Exp $
+ * $Id: ffmpeg_encoder_av.cpp,v 1.18 2011/12/19 16:20:54 john_f Exp $
  *
  * Encode AV and write to file.
  *
@@ -54,9 +54,12 @@ extern "C" {
 #include "VideoRaster.h"
 #include "ffmpeg_encoder_av.h"
 
-#define MPA_FRAME_SIZE              1152 // taken from ffmpeg's private mpegaudio.h
-#define MAX_VIDEO_FRAME_AUDIO_SIZE  1920
-#define MAX_AUDIO_STREAMS 16
+const unsigned int MPA_FRAME_SIZE = 1152;
+const unsigned int AAC_FRAME_SIZE = 1024;
+const unsigned int MAX_VIDEO_FRAME_AUDIO_SIZE = 1920;
+const unsigned int MAX_AUDIO_STREAMS = 16;
+
+const bool H264_IMAGE_SCALE = false;
 
 typedef struct
 {
@@ -91,7 +94,7 @@ typedef struct
     int64_t video_pts;
 
     // audio
-    int num_audio_streams;
+    unsigned int num_audio_streams;
     audio_encoder_t * audio_encoder[MAX_AUDIO_STREAMS];
 
     // following needed for video scaling
@@ -150,6 +153,7 @@ int init_video_xdcam(internal_ffmpeg_encoder_t * enc, Ingex::VideoRaster::EnumTy
     default:
         enc->inputFrame->interlaced_frame = 0;
         enc->inputFrame->top_field_first = 0;
+        break;
     }
 
     codec_context->gop_size = 12;
@@ -387,6 +391,244 @@ int init_video_mpeg4(internal_ffmpeg_encoder_t * enc, Ingex::VideoRaster::EnumTy
     return 0;
 }
 
+/* initialise video stream for h264 encoding */
+int init_video_h264(internal_ffmpeg_encoder_t * enc, MaterialResolution::EnumType res, Ingex::VideoRaster::EnumType raster, int64_t start_tc)
+{
+    AVCodecContext * codec_context = enc->video_st->codec;
+
+    codec_context->codec_id = CODEC_ID_H264;
+    codec_context->codec_type = CODEC_TYPE_VIDEO;
+    codec_context->pix_fmt = PIX_FMT_YUV420P;
+    codec_context->codec_tag = MKTAG('a', 'v', 'c', '1');
+
+    /* allocate input video frame */
+    enc->inputFrame = avcodec_alloc_frame();
+    if (!enc->inputFrame)
+    {
+        fprintf(stderr, "Could not allocate input frame\n");
+        return 0;
+    }
+
+    /* set interlace parameters */
+    int width;
+    int height;
+    int fps_num;
+    int fps_den;
+    Ingex::Interlace::EnumType interlace;
+    Ingex::VideoRaster::GetInfo(raster, width, height, fps_num, fps_den, interlace);
+    switch (interlace)
+    {
+    case Ingex::Interlace::TOP_FIELD_FIRST:
+        enc->inputFrame->interlaced_frame = 1;
+        enc->inputFrame->top_field_first = 1;
+        codec_context->flags |= CODEC_FLAG_INTERLACED_DCT;
+        break;
+    case Ingex::Interlace::BOTTOM_FIELD_FIRST:
+        enc->inputFrame->interlaced_frame = 1;
+        enc->inputFrame->top_field_first = 0;
+        codec_context->flags |= CODEC_FLAG_INTERLACED_DCT;
+        break;
+    case Ingex::Interlace::NONE:
+        enc->inputFrame->interlaced_frame = 0;
+        enc->inputFrame->top_field_first = 0;
+        break;
+    }
+
+
+    /* Setting this non-zero gives us a timecode track in MOV format */
+    codec_context->timecode_frame_start = start_tc;
+
+    // some formats want stream headers to be seperate
+    if (!strcmp(enc->oc->oformat->name, "mp4")
+        || !strcmp(enc->oc->oformat->name, "mov")
+        || !strcmp(enc->oc->oformat->name, "3gp"))
+    {
+        codec_context->flags |= CODEC_FLAG_GLOBAL_HEADER;
+
+    }
+
+    /* Set coding parameters */
+    int encoded_frame_size = 0;
+    switch (res)
+    {
+    // Baseline Profile
+    case MaterialResolution::MPEG4BP_AAC_MP4:
+        codec_context->bit_rate = 512000;
+        codec_context->rc_max_rate = 512000;
+        codec_context->rc_min_rate = 0;
+        codec_context->rc_buffer_size = 512000; 
+        codec_context->coder_type = 0;
+        codec_context->flags |= CODEC_FLAG_LOOP_FILTER;
+        codec_context->me_cmp = FF_CMP_CHROMA;
+        codec_context->partitions = X264_PART_I4X4 | X264_PART_P8X8;
+        codec_context->me_method = ME_HEX;
+        codec_context->me_subpel_quality = 3;
+        codec_context->me_range = 16;
+        codec_context->gop_size = 250;
+        codec_context->keyint_min = 25;
+        codec_context->scenechange_threshold = 40;
+        codec_context->i_quant_factor = 0.71;
+        codec_context->b_frame_strategy = 0;
+        codec_context->qcompress=0.6;
+        codec_context->qmin = 10;
+        codec_context->qmax = 51;
+        codec_context->max_qdiff = 4;
+        codec_context->max_b_frames = 0;
+        codec_context->directpred = 1;
+        //codec_context->flags2 |= CODEC_FLAG2_MBTREE | CODEC_FLAG2_WPRED;
+        codec_context->flags2 |= CODEC_FLAG2_WPRED;
+        //codec_context->weighted_p_pred = 0;
+        encoded_frame_size = 512000; // ??
+        switch (raster)
+        {
+        case Ingex::VideoRaster::PAL_4x3:
+        case Ingex::VideoRaster::PAL_16x9:
+            if (H264_IMAGE_SCALE)
+            {
+                enc->scale_image = 1;
+                enc->input_width = 720;
+                enc->input_height = 576;
+                int width = 320;
+                int height = 184;
+                enc->inputBuffer = (uint8_t *)av_mallocz(width * height * 2);
+                avcodec_set_dimensions(codec_context, width, height);
+                enc->tmpFrame = (AVPicture *)av_mallocz(sizeof(AVPicture));
+            }
+            break;
+        case Ingex::VideoRaster::NTSC_4x3:
+        case Ingex::VideoRaster::NTSC_16x9:
+            enc->input_width = 720;
+            enc->input_height = 486;
+            avcodec_set_dimensions(codec_context, 720, 480);
+            enc->crop_480_ntsc_mpeg = 1;
+            if (H264_IMAGE_SCALE)
+            {
+                int width = 320;
+                int height = 184;
+                enc->inputBuffer = (uint8_t *)av_mallocz(width * height * 2);
+                avcodec_set_dimensions(codec_context, width, height);
+            }
+            break;
+        default:
+            break;
+        }
+        break;
+
+    // Main Profile
+    case MaterialResolution::MPEG4MP_AAC_MP4:
+        codec_context->bit_rate = 1024000;
+        codec_context->rc_max_rate = 1024000;
+        codec_context->rc_min_rate = 0;
+        codec_context->rc_buffer_size = 1024000; 
+        codec_context->coder_type = 1;
+        codec_context->flags |= CODEC_FLAG_LOOP_FILTER;
+        codec_context->me_cmp = FF_CMP_CHROMA;
+        codec_context->partitions = X264_PART_I4X4 | X264_PART_P8X8;
+        codec_context->me_method = ME_HEX;
+        // more than 3 in my machine and there will be frame drops
+        codec_context->me_subpel_quality = 3;
+        codec_context->me_range = 16;
+        codec_context->gop_size = 250;
+        codec_context->keyint_min = 25;
+        codec_context->scenechange_threshold = 40;
+        codec_context->i_quant_factor = 0.71;
+        codec_context->b_frame_strategy = 1;
+        codec_context->qcompress=0.6;
+        codec_context->qmin = 10;
+        codec_context->qmax = 51;
+        codec_context->max_qdiff = 4;
+        codec_context->max_b_frames = 0;
+        codec_context->directpred = 1;
+        // gives vbv buffer under run
+        // codec_context->crf = 1;
+        //codec_context->flags2 |= CODEC_FLAG2_FASTPSKIP | CODEC_FLAG2_MBTREE | CODEC_FLAG2_MIXED_REFS | CODEC_FLAG2_WPRED;
+        codec_context->flags2 |= CODEC_FLAG2_FASTPSKIP | CODEC_FLAG2_MIXED_REFS | CODEC_FLAG2_WPRED;
+        //codec_context->weighted_p_pred = 0;
+        encoded_frame_size = 1024000; // ??
+        switch (raster)
+        {
+        case Ingex::VideoRaster::PAL_4x3:
+        case Ingex::VideoRaster::PAL_16x9:
+            if (H264_IMAGE_SCALE)
+            {
+                enc->scale_image = 1;
+                enc->input_width = 720;
+                enc->input_height = 576;
+                int width = 640;
+                int height = 480;
+                enc->inputBuffer = (uint8_t *)av_mallocz(width * height * 2);
+                avcodec_set_dimensions(codec_context, width, height);
+                enc->tmpFrame = (AVPicture *)av_mallocz(sizeof(AVPicture));
+            }
+            break;
+        case Ingex::VideoRaster::NTSC_4x3:
+        case Ingex::VideoRaster::NTSC_16x9:
+            enc->input_width = 720;
+            enc->input_height = 486;
+            avcodec_set_dimensions(codec_context, 720, 480);
+            enc->crop_480_ntsc_mpeg = 1;
+            if (H264_IMAGE_SCALE)
+            {
+                int width = 640;
+                int height = 480;
+                enc->inputBuffer = (uint8_t *)av_mallocz(width * height * 2);
+                avcodec_set_dimensions(codec_context, width, height);
+                enc->tmpFrame = (AVPicture *)av_mallocz(sizeof(AVPicture));
+            }
+            break;
+        default:
+            break;
+        }
+        break;
+    default:
+        break;
+    }
+
+#if 0
+    /* set coding parameters which depend on video raster */
+    // int top_field_first;
+    switch (raster)
+    {
+    case Ingex::VideoRaster::PAL_4x3:
+    case Ingex::VideoRaster::PAL_16x9:
+        break;
+    case Ingex::VideoRaster::NTSC_4x3:
+    case Ingex::VideoRaster::NTSC_16x9:
+        enc->input_width = 720;
+        enc->input_height = 486;
+        avcodec_set_dimensions(codec_context, 720, 480);
+        enc->crop_480_ntsc_mpeg = 1;
+        break;
+    default:
+        break;
+    }
+#endif
+
+    /* find the video encoder */
+    AVCodec * codec = avcodec_find_encoder(codec_context->codec_id);
+    if (!codec)
+    {
+        fprintf(stderr, "video codec id=%d not found\n",
+            codec_context->codec_id);
+        return -1;
+    }
+
+    /* open the codec */
+    if (avcodec_open(codec_context, codec) < 0)
+    {
+        fprintf(stderr, "could not open video codec\n");
+        return -1;
+    }
+
+    /* allocate output buffer */
+    // not sure what size is appropriate for mp4
+    //enc->video_outbuf_size = 550000;
+    enc->video_outbuf_size = encoded_frame_size;
+    enc->video_outbuf = (uint8_t *)malloc(enc->video_outbuf_size);
+
+    return 0;
+}
+
 /* initialise video stream for DV encoding */
 int init_video_dv(internal_ffmpeg_encoder_t * enc, MaterialResolution::EnumType res, Ingex::VideoRaster::EnumType raster, int64_t start_tc)
 {
@@ -428,6 +670,7 @@ int init_video_dv(internal_ffmpeg_encoder_t * enc, MaterialResolution::EnumType 
     default:
         enc->inputFrame->interlaced_frame = 0;
         enc->inputFrame->top_field_first = 0;
+        break;
     }
 
 
@@ -715,6 +958,56 @@ int init_audio_mp3(audio_encoder_t * aenc)
     return 0;
 }
 
+/* initialise audio stream for AAC encoding */
+int init_audio_aac(audio_encoder_t * aenc)
+{
+    AVCodecContext * codec_context = aenc->audio_st->codec;
+
+    codec_context->codec_id = CODEC_ID_AAC;
+    codec_context->codec_type = CODEC_TYPE_AUDIO;
+    codec_context->profile = FF_PROFILE_AAC_LOW;
+    codec_context->codec_tag = MKTAG('m', 'p', '4', 'a');
+
+    const int kbit_rate = 96;
+
+    /* find the audio encoder */
+    AVCodec * codec = avcodec_find_encoder(codec_context->codec_id);
+    if (!codec)
+    {
+        fprintf(stderr, "audio codec id=%d not found\n",
+            codec_context->codec_id);
+        return -1;
+    }
+
+    /* coding parameters */
+    codec_context->bit_rate = kbit_rate * 1000;
+    codec_context->sample_rate = 48000;
+    codec_context->channels = 2;
+    //codec_context->flags |= CODEC_FLAG_GLOBAL_HEADER;
+    //codec_context->cutoff = 0.9;
+    //codec_context->flags |= CODEC_FLAG_QSCALE;
+    codec_context->sample_fmt = SAMPLE_FMT_S16;
+
+    /* open it */
+    if (avcodec_open(codec_context, codec) < 0)
+    {
+        fprintf(stderr, "could not open audio codec\n");
+        return -1;
+    }
+
+    /* Set up audio buffer parameters */
+    int nch = aenc->num_audio_channels;
+    /* We have to do some buffering of input, hence the * 2 on the end */
+    aenc->audio_inbuf_size = MAX_VIDEO_FRAME_AUDIO_SIZE * nch * sizeof(short) * 2;
+
+    /* samples per coded frame */
+    aenc->audio_samples_per_output_frame = AAC_FRAME_SIZE;
+    /* coded frame size */
+    aenc->audio_outbuf_size = 860; // enough for 320 kbit/s
+
+    return 0;
+}
+
 void cleanup (internal_ffmpeg_encoder_t * enc)
 {
     if (enc)
@@ -734,7 +1027,7 @@ void cleanup (internal_ffmpeg_encoder_t * enc)
         av_free(enc->inputBuffer);
         av_free(enc->tmpFrame);
 
-        for (int i = 0; i < enc->num_audio_streams; ++i)
+        for (unsigned int i = 0; i < enc->num_audio_streams; ++i)
         {
             audio_encoder_t * aenc = enc->audio_encoder[i];
             av_free(aenc->audio_outbuf);
@@ -912,7 +1205,7 @@ int write_audio_frame(internal_ffmpeg_encoder_t * enc, int stream_i, short * p_a
 extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename,
                                                         MaterialResolution::EnumType res, Ingex::VideoRaster::EnumType raster,
                                                         int64_t start_tc, int num_threads,
-                                                        int num_audio_streams, int num_audio_channels_per_stream)
+                                                        unsigned int num_audio_streams, unsigned int num_audio_channels_per_stream)
 {
     /* check number of audio streams */
     //fprintf(stderr, "ffmpeg_encoder_av_init(): %d audio streams requested\n", num_audio_streams);
@@ -929,6 +1222,10 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename,
     case MaterialResolution::MPEG4_MP3_MOV:
     case MaterialResolution::MPEG4_PCM_MOV:
         fmt_name = "mov";
+        break;
+    case MaterialResolution::MPEG4BP_AAC_MP4:
+    case MaterialResolution::MPEG4MP_AAC_MP4:
+        fmt_name = "mp4";
         break;
     case MaterialResolution::DV25_MOV:
     case MaterialResolution::DV50_MOV:
@@ -975,7 +1272,7 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename,
     }
 
     /* Allocate audio encoder objects and set all members to zero */
-    for (int i = 0; i < num_audio_streams; ++i)
+    for (unsigned int i = 0; i < num_audio_streams; ++i)
     {
         enc->audio_encoder[i] = (audio_encoder_t *)av_mallocz (sizeof(audio_encoder_t));
     }
@@ -1084,29 +1381,36 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename,
     //fprintf(stderr, "vcodec_context->thread_count = %d\n", enc->video_st->codec->thread_count);
 
     /* Initialise video codec */
+    int init_video_result;
     switch (res)
     {
     case MaterialResolution::DVD:
-        init_video_dvd(enc, raster);
+        init_video_result = init_video_dvd(enc, raster);
         break;
     case MaterialResolution::MPEG4_MP3_MOV:
     case MaterialResolution::MPEG4_PCM_MOV:
-        init_video_mpeg4(enc, raster, start_tc);
+        init_video_result = init_video_mpeg4(enc, raster, start_tc);
         break;
+    case MaterialResolution::MPEG4BP_AAC_MP4:
+    case MaterialResolution::MPEG4MP_AAC_MP4:
+        init_video_result = init_video_h264(enc, res, raster, start_tc);
+        break;
+
     case MaterialResolution::DV25_MOV:
     case MaterialResolution::DV50_MOV:
     case MaterialResolution::DV100_MOV:
-        init_video_dv(enc, res, raster, start_tc);
+        init_video_result = init_video_dv(enc, res, raster, start_tc);
         break;
     case MaterialResolution::XDCAMHD422_MOV:
-        init_video_xdcam(enc, raster, start_tc);
+        init_video_result = init_video_xdcam(enc, raster, start_tc);
         break;
     default:
+        init_video_result = -1;
         break;
     }
 
     /* Add the audio streams */
-    for (int i = 0; i < enc->num_audio_streams; ++i)
+    for (unsigned int i = 0; i < enc->num_audio_streams; ++i)
     {
         audio_encoder_t * aenc = enc->audio_encoder[i];
 
@@ -1120,7 +1424,7 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename,
     }
 
     /* Initialise audio codecs */
-    for (int i = 0; i < enc->num_audio_streams; ++i)
+    for (unsigned int i = 0; i < enc->num_audio_streams; ++i)
     {
         audio_encoder_t * aenc = enc->audio_encoder[i];
         aenc->num_audio_channels = num_audio_channels_per_stream;
@@ -1131,6 +1435,10 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename,
             break;
         case MaterialResolution::MPEG4_MP3_MOV:
             init_audio_mp3(aenc);
+            break;
+        case MaterialResolution::MPEG4BP_AAC_MP4:
+        case MaterialResolution::MPEG4MP_AAC_MP4:
+            init_audio_aac(aenc);
             break;
         case MaterialResolution::DV25_MOV:
         case MaterialResolution::DV50_MOV:
@@ -1156,7 +1464,7 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename,
         || !strcmp(enc->oc->oformat->name, "3gp"))
     {
         enc->video_st->codec->flags |= CODEC_FLAG_GLOBAL_HEADER;
-        for (int i = 0; i < enc->num_audio_streams; ++i)
+        for (unsigned int i = 0; i < enc->num_audio_streams; ++i)
         {
             audio_encoder_t * aenc = enc->audio_encoder[i];
             aenc->audio_st->codec->flags |= CODEC_FLAG_GLOBAL_HEADER;
@@ -1191,8 +1499,16 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename,
     /* check number of audio streams */
     //fprintf(stderr, "ffmpeg_encoder_av_init(): %d streams total\n", enc->oc->nb_streams);
 
-    /* Write stream header if any */
-    av_write_header(enc->oc);
+    if (-1 != init_video_result)
+    {
+        /* Write stream header if any */
+        av_write_header(enc->oc);
+    }
+    else
+    {
+        ffmpeg_encoder_av_close(enc);
+        enc = 0;
+    }
 
     return (ffmpeg_encoder_av_t *)enc;
 }
@@ -1272,7 +1588,7 @@ extern int ffmpeg_encoder_av_close (ffmpeg_encoder_av_t * in_enc)
         avcodec_close(enc->video_st->codec);
         enc->video_st = NULL;
     }
-    for (int i = 0; i < enc->num_audio_streams; ++i)
+    for (unsigned int i = 0; i < enc->num_audio_streams; ++i)
     {
         audio_encoder_t * aenc = enc->audio_encoder[i];
         if (aenc->audio_st)
