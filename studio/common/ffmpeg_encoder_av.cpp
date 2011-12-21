@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder_av.cpp,v 1.18 2011/12/19 16:20:54 john_f Exp $
+ * $Id: ffmpeg_encoder_av.cpp,v 1.19 2011/12/21 15:30:15 john_f Exp $
  *
  * Encode AV and write to file.
  *
@@ -92,16 +92,18 @@ typedef struct
     uint8_t * video_outbuf;
     int video_outbuf_size;
     int64_t video_pts;
+    int input_width;
+    int input_height;
+    int output_width;
+    int output_height;
 
     // audio
     unsigned int num_audio_streams;
     audio_encoder_t * audio_encoder[MAX_AUDIO_STREAMS];
 
-    // following needed for video scaling
+    // following needed for video cropping/scaling
     AVPicture * tmpFrame;
-    uint8_t * inputBuffer;
-    int input_width;
-    int input_height;
+    uint8_t * tmpBuffer;
     struct SwsContext * scale_context;
     int scale_image;
     int crop_480_ntsc_dv;
@@ -207,6 +209,7 @@ int init_video_xdcam(internal_ffmpeg_encoder_t * enc, Ingex::VideoRaster::EnumTy
     }
 
     /* open the codec */
+    avcodec_set_dimensions(codec_context, enc->output_width, enc->output_height);
     if (avcodec_open(codec_context, codec) < 0)
     {
         fprintf(stderr, "could not open video codec\n");
@@ -260,10 +263,9 @@ int init_video_dvd(internal_ffmpeg_encoder_t * enc, Ingex::VideoRaster::EnumType
     case Ingex::VideoRaster::NTSC_4x3:
     case Ingex::VideoRaster::NTSC_16x9:
         top_field_first = 0;
-        enc->input_width = 720;
-        enc->input_height = 486;
-        avcodec_set_dimensions(codec_context, 720, 480);
         enc->crop_480_ntsc_mpeg = 1;
+        enc->output_width = 720;
+        enc->output_height = 480;
         break;
     default:
         top_field_first = 1;
@@ -280,6 +282,7 @@ int init_video_dvd(internal_ffmpeg_encoder_t * enc, Ingex::VideoRaster::EnumType
     }
 
     /* open the codec */
+    avcodec_set_dimensions(codec_context, enc->output_width, enc->output_height);
     if (avcodec_open(codec_context, codec) < 0)
     {
         fprintf(stderr, "could not open video codec\n");
@@ -344,10 +347,9 @@ int init_video_mpeg4(internal_ffmpeg_encoder_t * enc, Ingex::VideoRaster::EnumTy
     case Ingex::VideoRaster::NTSC_4x3:
     case Ingex::VideoRaster::NTSC_16x9:
         top_field_first = 0;
-        enc->input_width = 720;
-        enc->input_height = 486;
-        avcodec_set_dimensions(codec_context, 720, 480);
         enc->crop_480_ntsc_mpeg = 1;
+        enc->output_width = 720;
+        enc->output_height = 480;
         break;
     default:
         top_field_first = 1;
@@ -364,6 +366,7 @@ int init_video_mpeg4(internal_ffmpeg_encoder_t * enc, Ingex::VideoRaster::EnumTy
     }
 
     /* open the codec */
+    avcodec_set_dimensions(codec_context, enc->output_width, enc->output_height);
     if (avcodec_open(codec_context, codec) < 0)
     {
         fprintf(stderr, "could not open video codec\n");
@@ -486,27 +489,20 @@ int init_video_h264(internal_ffmpeg_encoder_t * enc, MaterialResolution::EnumTyp
             if (H264_IMAGE_SCALE)
             {
                 enc->scale_image = 1;
-                enc->input_width = 720;
-                enc->input_height = 576;
-                int width = 320;
-                int height = 184;
-                enc->inputBuffer = (uint8_t *)av_mallocz(width * height * 2);
-                avcodec_set_dimensions(codec_context, width, height);
-                enc->tmpFrame = (AVPicture *)av_mallocz(sizeof(AVPicture));
+                enc->output_width = 320;
+                enc->output_height = 184;
             }
             break;
         case Ingex::VideoRaster::NTSC_4x3:
         case Ingex::VideoRaster::NTSC_16x9:
-            enc->input_width = 720;
-            enc->input_height = 486;
-            avcodec_set_dimensions(codec_context, 720, 480);
             enc->crop_480_ntsc_mpeg = 1;
+            enc->output_width = 720;
+            enc->output_height = 480;
             if (H264_IMAGE_SCALE)
             {
-                int width = 320;
-                int height = 184;
-                enc->inputBuffer = (uint8_t *)av_mallocz(width * height * 2);
-                avcodec_set_dimensions(codec_context, width, height);
+                enc->scale_image = 1;
+                enc->output_width = 320;
+                enc->output_height = 184;
             }
             break;
         default:
@@ -552,28 +548,20 @@ int init_video_h264(internal_ffmpeg_encoder_t * enc, MaterialResolution::EnumTyp
             if (H264_IMAGE_SCALE)
             {
                 enc->scale_image = 1;
-                enc->input_width = 720;
-                enc->input_height = 576;
-                int width = 640;
-                int height = 480;
-                enc->inputBuffer = (uint8_t *)av_mallocz(width * height * 2);
-                avcodec_set_dimensions(codec_context, width, height);
-                enc->tmpFrame = (AVPicture *)av_mallocz(sizeof(AVPicture));
+                enc->output_width = 640;
+                enc->output_height = 480;
             }
             break;
         case Ingex::VideoRaster::NTSC_4x3:
         case Ingex::VideoRaster::NTSC_16x9:
-            enc->input_width = 720;
-            enc->input_height = 486;
-            avcodec_set_dimensions(codec_context, 720, 480);
             enc->crop_480_ntsc_mpeg = 1;
+            enc->output_width = 720;
+            enc->output_height = 480;
             if (H264_IMAGE_SCALE)
             {
-                int width = 640;
-                int height = 480;
-                enc->inputBuffer = (uint8_t *)av_mallocz(width * height * 2);
-                avcodec_set_dimensions(codec_context, width, height);
-                enc->tmpFrame = (AVPicture *)av_mallocz(sizeof(AVPicture));
+                enc->scale_image = 1;
+                enc->output_width = 640;
+                enc->output_height = 480;
             }
             break;
         default:
@@ -583,26 +571,6 @@ int init_video_h264(internal_ffmpeg_encoder_t * enc, MaterialResolution::EnumTyp
     default:
         break;
     }
-
-#if 0
-    /* set coding parameters which depend on video raster */
-    // int top_field_first;
-    switch (raster)
-    {
-    case Ingex::VideoRaster::PAL_4x3:
-    case Ingex::VideoRaster::PAL_16x9:
-        break;
-    case Ingex::VideoRaster::NTSC_4x3:
-    case Ingex::VideoRaster::NTSC_16x9:
-        enc->input_width = 720;
-        enc->input_height = 486;
-        avcodec_set_dimensions(codec_context, 720, 480);
-        enc->crop_480_ntsc_mpeg = 1;
-        break;
-    default:
-        break;
-    }
-#endif
 
     /* find the video encoder */
     AVCodec * codec = avcodec_find_encoder(codec_context->codec_id);
@@ -614,6 +582,7 @@ int init_video_h264(internal_ffmpeg_encoder_t * enc, MaterialResolution::EnumTyp
     }
 
     /* open the codec */
+    avcodec_set_dimensions(codec_context, enc->output_width, enc->output_height);
     if (avcodec_open(codec_context, codec) < 0)
     {
         fprintf(stderr, "could not open video codec\n");
@@ -691,10 +660,9 @@ int init_video_dv(internal_ffmpeg_encoder_t * enc, MaterialResolution::EnumType 
         case Ingex::VideoRaster::NTSC_16x9:
             codec_context->pix_fmt = PIX_FMT_YUV411P;
             encoded_frame_size = 120000;
-            enc->input_width = 720;
-            enc->input_height = 486;
-            avcodec_set_dimensions(codec_context, 720, 480);
             enc->crop_480_ntsc_dv = 1;
+            enc->output_width = 720;
+            enc->output_height = 480;
             break;
         default:
             break;
@@ -712,10 +680,9 @@ int init_video_dv(internal_ffmpeg_encoder_t * enc, MaterialResolution::EnumType 
         case Ingex::VideoRaster::NTSC_16x9:
             codec_context->pix_fmt = PIX_FMT_YUV422P;
             encoded_frame_size = 240000;
-            enc->input_width = 720;
-            enc->input_height = 486;
-            avcodec_set_dimensions(codec_context, 720, 480);
             enc->crop_480_ntsc_dv = 1;
+            enc->output_width = 720;
+            enc->output_height = 480;
             break;
         default:
             break;
@@ -728,57 +695,29 @@ int init_video_dv(internal_ffmpeg_encoder_t * enc, MaterialResolution::EnumType 
         case Ingex::VideoRaster::SMPTE274_25PSF:
         case Ingex::VideoRaster::SMPTE274_25P:
             enc->scale_image = 1;
-            enc->input_width = 1920;
-            enc->input_height = 1080;
-            {
-                int width = 1440;
-                int height = 1080;
-                enc->inputBuffer = (uint8_t *)av_mallocz(width * height * 2);
-                avcodec_set_dimensions(codec_context, width, height);
-            }
-            enc->tmpFrame = (AVPicture *)av_mallocz(sizeof(AVPicture));
+            enc->output_width = 1440;
+            enc->output_height = 1080;
             encoded_frame_size = 576000;
             break;
         case Ingex::VideoRaster::SMPTE274_29I:
         case Ingex::VideoRaster::SMPTE274_29PSF:
         case Ingex::VideoRaster::SMPTE274_29P:
             enc->scale_image = 1;
-            enc->input_width = 1920;
-            enc->input_height = 1080;
-            {
-                int width = 1280;
-                int height = 1080;
-                enc->inputBuffer = (uint8_t *)av_mallocz(width * height * 2);
-                avcodec_set_dimensions(codec_context, width, height);
-            }
-            enc->tmpFrame = (AVPicture *)av_mallocz(sizeof(AVPicture));
+            enc->output_width = 1280;
+            enc->output_height = 1080;
             encoded_frame_size = 480000;
             break;
         // 720p formats not tested
         case Ingex::VideoRaster::SMPTE296_50P:
             enc->scale_image = 1;
-            enc->input_width = 1280;
-            enc->input_height = 720;
-            {
-                int width = 960;
-                int height = 720;
-                enc->inputBuffer = (uint8_t *)av_mallocz(width * height * 2);
-                avcodec_set_dimensions(codec_context, width, height);
-            }
-            enc->tmpFrame = (AVPicture *)av_mallocz(sizeof(AVPicture));
+            enc->output_width = 960;
+            enc->output_height = 720;
             encoded_frame_size = 288000;
             break;
         case Ingex::VideoRaster::SMPTE296_59P:
             enc->scale_image = 1;
-            enc->input_width = 1280;
-            enc->input_height = 720;
-            {
-                int width = 960;
-                int height = 720;
-                enc->inputBuffer = (uint8_t *)av_mallocz(width * height * 2);
-                avcodec_set_dimensions(codec_context, width, height);
-            }
-            enc->tmpFrame = (AVPicture *)av_mallocz(sizeof(AVPicture));
+            enc->output_width = 960;
+            enc->output_height = 720;
             encoded_frame_size = 240000;
             break;
         default:
@@ -812,6 +751,7 @@ int init_video_dv(internal_ffmpeg_encoder_t * enc, MaterialResolution::EnumType 
     }
 
     /* open the codec */
+    avcodec_set_dimensions(codec_context, enc->output_width, enc->output_height);
     if (avcodec_open(codec_context, codec) < 0)
     {
         fprintf(stderr, "could not open video codec\n");
@@ -1024,7 +964,7 @@ void cleanup (internal_ffmpeg_encoder_t * enc)
 
         av_free(enc->inputFrame);
         av_free(enc->video_outbuf);
-        av_free(enc->inputBuffer);
+        av_free(enc->tmpBuffer);
         av_free(enc->tmpFrame);
 
         for (unsigned int i = 0; i < enc->num_audio_streams; ++i)
@@ -1046,71 +986,75 @@ int write_video_frame(internal_ffmpeg_encoder_t * enc, uint8_t * p_video)
     AVStream * st = enc->video_st;
     AVCodecContext * c = enc->video_st->codec;
     
-    if (enc->scale_image)
+    // Use avpicture_fill to set pointers and linesizes in inputFrame
+    AVPicture * picture = (AVPicture *) enc->inputFrame;
+    avpicture_fill(picture, (uint8_t*)p_video,
+        c->pix_fmt,
+        enc->input_width, enc->input_height);
+    int width = enc->input_width;
+    int height = enc->input_height;
+
+    // Cropping options
+    if (enc->crop_480_ntsc_dv)
     {
-        // Set up parameters for scale
-        enc->scale_context = sws_getCachedContext(enc->scale_context,
-                    enc->input_width, enc->input_height,                   // input WxH
-                    c->pix_fmt,
-                    c->width, c->height, // output WxH
-                    c->pix_fmt,
-                    SWS_FAST_BILINEAR,
-                    NULL, NULL, NULL);
-
-        // Input image goes into tmpFrame
-        avpicture_fill((AVPicture*)enc->tmpFrame, p_video,
-            c->pix_fmt,
-            enc->input_width, enc->input_height);
-
-        // Output of scale operation goes into inputFrame
-        avpicture_fill((AVPicture*)enc->inputFrame, enc->inputBuffer,
-            c->pix_fmt,
-            c->width, c->height);
-
-        // Perform the scale
-        sws_scale(enc->scale_context,
-            enc->tmpFrame->data, enc->tmpFrame->linesize,
-            0, enc->input_height,
-            enc->inputFrame->data, enc->inputFrame->linesize);
-    }
-    else if (enc->crop_480_ntsc_dv)
-    {
-        AVPicture * picture = (AVPicture *) enc->inputFrame;
-
-        // Use avpicture_fill to set pointers and linesizes
-        avpicture_fill(picture, (uint8_t*)p_video,
-            c->pix_fmt,
-            enc->input_width, enc->input_height);
-
         // Skip top 4 lines.
         // See SMPTE 314M-2005
         picture->data[0] += 4 * picture->linesize[0];
         picture->data[1] += 4 * picture->linesize[1];
         picture->data[2] += 4 * picture->linesize[2];
+
+        // Bottom 2 lines will also be skipped.
+        width = 720;
+        height = 480;
     }
     else if (enc->crop_480_ntsc_mpeg)
     {
-        AVPicture * picture = (AVPicture *) enc->inputFrame;
-
-        // Use avpicture_fill to set pointers and linesizes
-        avpicture_fill(picture, (uint8_t*)p_video,
-            c->pix_fmt,
-            enc->input_width, enc->input_height);
-
-        // Should skip top 4 lines (same as for DV)
+        // Skip top 4 lines.
         // See SMPTE RP 202-2008
-        // Numbers a bit wierd because it's 4:2:0
+        // Numbers appear a bit wierd because it's 4:2:0
         picture->data[0] += 4 * picture->linesize[0];
         picture->data[1] += 2 * picture->linesize[1];
         picture->data[2] += 2 * picture->linesize[2];
-        //fprintf(stderr, "NTSC MPEG linesizes: %d %d %d\n", picture->linesize[0], picture->linesize[1], picture->linesize[2]);
+
+        // Bottom 2 lines will also be skipped.
+        width = 720;
+        height = 480;
     }
-    else
+
+    // Scaling options
+    if (enc->scale_image)
     {
-        /* set pointers in inputFrame to point to planes in p_video */
-        avpicture_fill((AVPicture *)enc->inputFrame, p_video,
+        // Set up parameters for scale
+        enc->scale_context = sws_getCachedContext(enc->scale_context,
+                    width, height, // input WxH
+                    c->pix_fmt,
+                    enc->output_width, enc->output_height, // output WxH
+                    c->pix_fmt,
+                    SWS_FAST_BILINEAR,
+                    NULL, NULL, NULL);
+
+        // Input image is in picture/inputFrame
+
+        // Output of scale operation goes into tmpFrame
+        enc->tmpFrame = (AVPicture *)av_mallocz(sizeof(AVPicture));
+        enc->tmpBuffer = (uint8_t *)av_mallocz(enc->output_width * enc->output_height * 2);
+        avpicture_fill(enc->tmpFrame, enc->tmpBuffer,
             c->pix_fmt,
             c->width, c->height);
+
+        // Perform the scale
+        sws_scale(enc->scale_context,
+            picture->data, picture->linesize,
+            0, enc->input_height,
+            enc->tmpFrame->data, enc->tmpFrame->linesize);
+
+        width =  enc->output_width;
+        height =  enc->output_height;
+
+        // Set picture/inputFrame to the scaled image
+        avpicture_fill(picture, enc->tmpBuffer,
+            c->pix_fmt,
+            width, height);
     }
 
     /* encode the image */
@@ -1332,8 +1276,13 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename,
     enc->video_st->codec->sample_aspect_ratio.num = sar.numerator;
     enc->video_st->codec->sample_aspect_ratio.den = sar.denominator;
 
-    /* Set size for video codec */
-    avcodec_set_dimensions(enc->video_st->codec, width, height);
+    // Set size
+    // output width/height may be changed during codec initialisation
+    //avcodec_set_dimensions(enc->video_st->codec, width, height);
+    enc->input_width = width;
+    enc->input_height = height;
+    enc->output_width = width;
+    enc->output_height = height;
 
     /* Set frame rate */
     enc->video_st->r_frame_rate.num = fps_num;
