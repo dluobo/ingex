@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder_av.cpp,v 1.19 2011/12/21 15:30:15 john_f Exp $
+ * $Id: ffmpeg_encoder_av.cpp,v 1.20 2011/12/30 16:41:37 john_f Exp $
  *
  * Encode AV and write to file.
  *
@@ -1036,8 +1036,6 @@ int write_video_frame(internal_ffmpeg_encoder_t * enc, uint8_t * p_video)
         // Input image is in picture/inputFrame
 
         // Output of scale operation goes into tmpFrame
-        enc->tmpFrame = (AVPicture *)av_mallocz(sizeof(AVPicture));
-        enc->tmpBuffer = (uint8_t *)av_mallocz(enc->output_width * enc->output_height * 2);
         avpicture_fill(enc->tmpFrame, enc->tmpBuffer,
             c->pix_fmt,
             c->width, c->height);
@@ -1356,6 +1354,13 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename,
     default:
         init_video_result = -1;
         break;
+    }
+
+    // Allocate tmp buffer if needed
+    if (enc->scale_image)
+    {
+        enc->tmpFrame = (AVPicture *)av_mallocz(sizeof(AVPicture));
+        enc->tmpBuffer = (uint8_t *)av_mallocz(enc->output_width * enc->output_height * 2);
     }
 
     /* Add the audio streams */
