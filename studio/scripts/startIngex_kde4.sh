@@ -279,8 +279,8 @@ if [ $CAPTURE -ge 1 ] ; then
     WriteCommand "sudo nice --10 ./dvs_sdi -c $CAPTURE_CHANNELS -mode $CAPTURE_MODE -f $CAPTURE_PRIMARY_BUFFER -s $CAPTURE_SECONDARY_BUFFER -mc 0 -tt $CAPTURE_TIMECODE $CAPTURE_OPTIONS"
   elif [ $CAPTURE_PROGRAM = "DVS_DUMMY" ] ; then 
     WriteCommand "sudo nice --10 ./dvs_dummy -c $CAPTURE_CHANNELS -mode $CAPTURE_MODE -f $CAPTURE_PRIMARY_BUFFER -s $CAPTURE_SECONDARY_BUFFER -mc 0 -tt $CAPTURE_TIMECODE $CAPTURE_OPTIONS"
-  elif [ $CAPTURE_PROGRAM = "BMD_ANASDI" ] ; then 
-    WriteCommand "sudo nice --10 ./bmd_anasdi -c $CAPTURE_CHANNELS -mode $CAPTURE_MODE -f $CAPTURE_PRIMARY_BUFFER -s $CAPTURE_SECONDARY_BUFFER -mc 0 -tt $CAPTURE_TIMECODE $CAPTURE_OPTIONS"
+  elif [ $CAPTURE_PROGRAM = "BMD_SDI" ] ; then 
+    WriteCommand "sudo nice --10 ./bmd_sdi -c $CAPTURE_CHANNELS -mode $CAPTURE_MODE -f $CAPTURE_PRIMARY_BUFFER -s $CAPTURE_SECONDARY_BUFFER -mc 0 -tt $CAPTURE_TIMECODE $CAPTURE_OPTIONS"
   elif [ $CAPTURE_PROGRAM = "TESTGEN" ] ; then
     WriteCommand "sudo nice --10 ./testgen -c $CAPTURE_CHANNELS"
   else
