@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.20 2011/10/26 17:18:20 john_f Exp $
+# $Id: Makefile,v 1.21 2012/01/24 15:17:05 john_f Exp $
 #
 # Makefile for building ingex server and utilities.
 #
@@ -26,19 +26,23 @@
 # search is overridden by setting DVSSDK
 include ../../common/dvs_sdk_paths.mk
 
-ifdef DVS_HARDWARE_INCLUDE
-  SDI_PROGS=dvs_sdi dvs_dummy testgen
-else
-  $(warning dvs_sdi will not be built)
-  SDI_PROGS=dvs_dummy testgen
-endif
-
 # Set environment variable BMD_HARDWARE_INCLUDE if building bmd_sdi
 # e.g. export BMD_HARDWARE_INCLUDE='/home/ingex/DeckLink/Blackmagic DeckLink SDK 8.6/Linux/include'
 
+SDI_PROGS = dvs_dummy testgen
+ifdef DVS_HARDWARE_INCLUDE
+  SDI_PROGS += dvs_sdi
+else
+  $(warning dvs_sdi will not be built)
+endif
+ifdef BMD_HARDWARE_INCLUDE
+  SDI_PROGS += bmd_sdi
+endif
+#$(warning Building $(SDI_PROGS))
+
+CC = gcc
 CPPFLAGS = -DDEBUG -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE -DUSE_FFMPEG -I../../common -I../common -I../database/src
-CXXFLAGS = -Wall -g -O3
-TARGET_ARCH = -mmmx -msse2
+CXXFLAGS = -Wall -Wextra -g -O3 -mmmx -msse2
 
 LIBS = -lstudiocommon -lcommon -lYUVlib
 LIBPATHS = -L../common -L../../common
@@ -54,40 +58,40 @@ PROGS = $(SDI_PROGS) nexus_save nexus_xv nexus_stats nexus_web system_info_web n
 all: $(PROGS)
 
 dvs_sdi: dvs_sdi.cpp
-	$(CXX) $(CXXFLAGS) $(CPPFLAGS) $(TARGET_ARCH) $(DVS_HARDWARE_INCLUDE) $< $(DVS_HARDWARE_LIB) $(LIBS) $(LIBPATHS) -lpthread $(FFMPEG_LIBS) -o $@
+	$(LINK.cpp) $(DVS_HARDWARE_INCLUDE) $< $(DVS_HARDWARE_LIB) $(LIBS) $(LIBPATHS) -lpthread $(FFMPEG_LIBS) -o $@
 
 dvs_dummy.o: dvs_sdi.cpp
 	$(COMPILE.cpp) $(DVS_DUMMY_INCLUDE) $< -o $@
 
 dvs_dummy: dvs_dummy.o $(DVS_DUMMY_LIB)
-	$(CXX) $(LDFLAGS) $(TARGET_ARCH) $^ $(LIBPATHS) $(LIBS) -lpthread  $(FFMPEG_LIBS) -o $@
+	$(LINK.o) $^ -lstdc++ $(LIBPATHS) $(LIBS) -lpthread $(FFMPEG_LIBS) -o $@
 
 bmd_sdi: bmd_sdi.cpp
-	$(LINK.cpp) -I "$(BMD_HARDWARE_INCLUDE)" $<  $(LIBS) $(LIBPATHS) -lpthread $(FFMPEG_LIBS) -lDeckLinkAPI -o bmd_sdi
+	$(LINK.cpp) -I "$(BMD_HARDWARE_INCLUDE)" $< $(LIBS) $(LIBPATHS) -lpthread $(FFMPEG_LIBS) -lDeckLinkAPI -o $@
 
 testgen: testgen.o
-	$(CXX) $(LDFLAGS) $(TARGET_ARCH) $< $(LIBPATHS) $(LIBS) -lpthread -o $@
+	$(LINK.o) $< -lstdc++ $(LIBPATHS) $(LIBS) -lpthread -o $@
 
 nexus_stats: nexus_stats.o
-	$(CXX) $(LDFLAGS) $(TARGET_ARCH) $< $(LIBPATHS) $(LIBS) -lpthread -o $@
+	$(LINK.o) $< -lstdc++ $(LIBPATHS) $(LIBS) -lpthread -o $@
 
 nexus_web: nexus_web.cpp
 	@if [ -r /usr/include/shttpd.h -o -r /usr/local/include/shttpd.h ] ; then set -x ; g++ $(CPPFLAGS) nexus_web.cpp $(LIBS) $(LIBPATHS) -lpthread -o nexus_web -lshttpd -ldl ; else echo "shttpd.h not found - nexus_web will not be built"; echo ; fi
 
 system_info_web: system_info_web.cpp
-	@if [ -r /usr/include/shttpd.h -o -r /usr/local/include/shttpd.h ] ; then set -x ; g++ $(CPPFLAGS) system_info_web.cpp -o system_info_web -lshttpd -ldl -lpthread ; else echo "shttpd.h not found - system_info_web will not be built"; echo ; fi
+	@if [ -r /usr/include/shttpd.h -o -r /usr/local/include/shttpd.h ] ; then set -x ; $(LINK.cpp) system_info_web.cpp -o system_info_web -lshttpd -ldl -lpthread ; else echo "shttpd.h not found - system_info_web will not be built"; echo ; fi
 
 nexus_set_source: nexus_set_source.o
-	$(CXX) $(TARGET_ARCH) $< $(LIBPATHS) $(LIBS) -lpthread -o $@
+	$(LINK.o) $< -lstdc++ $(LIBPATHS) $(LIBS) -lpthread -o $@
 
 nexus_save: nexus_save.o
-	$(CXX) $(TARGET_ARCH) $< $(LIBPATHS) $(LIBS) $(FFMPEG_LIBS) -lpthread -o $@
+	$(LINK.o) $< -lstdc++ $(LIBPATHS) $(LIBS) $(FFMPEG_LIBS) -lpthread -o $@
 
 nexus_multicast: nexus_multicast.o multicast_compressed.o
-	$(CXX) $(TARGET_ARCH) nexus_multicast.o multicast_compressed.o -o $@ $(LIBPATHS) $(LIBS) $(FFMPEG_LIBS)
+	$(LINK.o) $^ -lstdc++ $(LIBPATHS) $(LIBS) $(FFMPEG_LIBS) -o $@
 
 nexus_xv: nexus_xv.o
-	$(CXX) $(TARGET_ARCH) $< -o nexus_xv $(LIBPATHS) $(LIBS) -L/usr/X11R6/lib -L/usr/X11R6/lib64 -lXv
+	$(LINK.o) $< -o nexus_xv -lstdc++ $(LIBPATHS) $(LIBS) -L/usr/X11R6/lib -L/usr/X11R6/lib64 -lXv
 
 clean:
 	rm -f core *.o $(PROGS)
