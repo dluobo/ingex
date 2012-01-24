@@ -1,5 +1,5 @@
 /*
- * $Id: system_info_web.cpp,v 1.2 2010/08/27 18:13:32 john_f Exp $
+ * $Id: system_info_web.cpp,v 1.3 2012/01/24 15:15:58 john_f Exp $
  *
  * Web server to get info on CPU, memory and disk statistics
  *
@@ -41,7 +41,7 @@ typedef struct {
     double steal;
 } CpuInfo;
 
-static CpuInfo cpu = {0};
+static CpuInfo cpu = {0, 0, 0, 0, 0, 0, 0, 0};
 
 #define CPU_POLL_INTERVAL 2     // in seconds
 
@@ -218,6 +218,10 @@ static void availability(struct shttpd_arg* arg)
 
 int main(int argc, char *argv[])
 {
+    // Avoid unused parameter warnings
+    (void) argc;
+    (void) argv;
+
     FILE *fp;
     if ((fp = fopen("/proc/stat", "r")) == NULL) {
         printf("Could not open /proc/stat\n");

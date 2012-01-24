@@ -493,6 +493,8 @@ static void fill_yuv_image (const uint8_t *p_video, AVFrame *pict, int width, in
 
 static int write_video_frame(internal_mpegts_encoder_t *ts, const uint8_t *p_video, int32_t frame_num)
 {
+    (void) frame_num; /* avoid unused parameter warning */
+
 	AVFormatContext *oc = ts->oc;
 	AVStream *st = ts->video_st;
     int out_size, ret;
@@ -672,3 +674,4 @@ extern int main (int argc, char **argv)
 	return 0;
 }
 #endif
+

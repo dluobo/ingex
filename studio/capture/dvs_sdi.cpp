@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.cpp,v 1.30 2011/11/24 15:47:02 john_f Exp $
+ * $Id: dvs_sdi.cpp,v 1.31 2012/01/24 15:15:58 john_f Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -164,8 +164,6 @@ int last_dvitc_bits[MAX_CHANNELS];
 // Use a function pointer to switch between two audio reformatting functions
 // depending on -audint option
 // NB. the interleaved option is disabled at present
-//void dvs_paired_audio_to_mono_audio(uint8_t *src, uint8_t *dst32, uint8_t *dst16, int num_samples, int audio8);
-//void dvs_interleaved_audio_to_mono_audio(uint8_t *src, uint8_t *dst32, uint8_t *dst16, int num_samples, int audio8);
 void dvs_paired_audio_to_mono_audio(uint8_t *src, sv_fifo_buffer * pbuffer, uint8_t *dst32, uint8_t *dst16, int num_samples, int audio8);
 void dvs_interleaved_audio_to_mono_audio(uint8_t *src, sv_fifo_buffer * pbuffer, uint8_t *dst32, uint8_t *dst16, int num_samples, int audio8);
 void (*reformat_dvs_audio_to_mono_audio)(uint8_t *, sv_fifo_buffer *, uint8_t *, uint8_t *, int, int) = dvs_paired_audio_to_mono_audio;
@@ -189,7 +187,7 @@ uint8_t *no_video_secondary_frame = NULL;    // captioned black frame saying "NO
 
 }
 
-#define SV_CHECK(x) {int res = x; if (res != SV_OK) { fprintf(stderr, "sv call failed=%d  %s line %d\n", res, __FILE__, __LINE__); sv_errorprint(sv,res); cleanup_exit(1, sv); } }
+#define SV_CHECK(x) {int res = x; if (res != SV_OK) { fprintf(stderr, "sv call failed=%d  %s line %d\n", res, __FILE__, __LINE__); sv_errorprint(sv,res); cleanup_exit(1); } }
 
 // Define missing macros for older SDKs
 #ifndef SV_OPTION_MULTICHANNEL
@@ -365,7 +363,7 @@ void cleanup_shared_mem(void)
     }
 }
 
-void cleanup_exit(int res, sv_handle *sv)
+void cleanup_exit(int res)
 {
     printf("cleaning up\n");
 
@@ -871,13 +869,15 @@ void set_sync_option(int channel, int sync_type, int width)
 
 void catch_sigusr1(int sig_number)
 {
+    (void) sig_number; /* avoid unused parameter warning */
+
     // toggle a flag
 }
 
 void catch_sigint(int sig_number)
 {
     printf("\nReceived signal %d - ", sig_number);
-    cleanup_exit(0, NULL);
+    cleanup_exit(0);
 }
 
 void log_avsync_analysis(int chan, int lastframe, const uint8_t *addr, unsigned long audio12_offset, unsigned long audio34_offset)
@@ -1239,6 +1239,8 @@ void dvs_interleaved16_to_4_mono_tracks(uint8_t *src, uint8_t *dst32, uint8_t *d
 
 void dvs_interleaved_audio_to_mono_audio(uint8_t *src, sv_fifo_buffer * pbuffer, uint8_t *dst32, uint8_t *dst16, int num_samples, int audio8)
 {
+    (void) pbuffer; /* avoid unused parameter warning */
+
     // TODO: This function needs updating. Interleaved mode is disabled at present
 
     // For historical reasons, format of audio buffer in shared mem is:

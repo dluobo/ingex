@@ -1,5 +1,5 @@
 /*
- * $Id: testgen.cpp,v 1.2 2010/08/13 09:32:46 philipn Exp $
+ * $Id: testgen.cpp,v 1.3 2012/01/24 15:15:58 john_f Exp $
  *
  * Dummy SDI input for testing shared memory video & audio interface.
  *
@@ -104,6 +104,7 @@ static void cleanup_exit(int res)
 
 static void catch_sigusr1(int sig_number)
 {
+    (void) sig_number; // avoid unused parameter warning
     // toggle a flag
 }
 
