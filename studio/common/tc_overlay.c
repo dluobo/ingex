@@ -1,5 +1,5 @@
 /*
- * $Id: tc_overlay.c,v 1.5 2010/06/02 13:10:46 john_f Exp $
+ * $Id: tc_overlay.c,v 1.6 2012/01/24 15:22:23 john_f Exp $
  *
  * Create burnt-in timecode.
  *
@@ -465,6 +465,9 @@ extern void tc_overlay_apply(tc_overlay_t * in_tco, uint8_t * y_comp, uint8_t * 
                                 unsigned int width, unsigned int height, int tc_xoffset, unsigned int tc_yoffset,
                                 tc_pix_fmt_t pix_fmt)
 {
+    // Suppress unused parameter warning
+    (void) height;
+
     internal_tc_overlay_t * tco = (internal_tc_overlay_t *)in_tco;
 
     unsigned int i, j;
