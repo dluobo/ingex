@@ -1,5 +1,5 @@
 /*
- * $Id: bmd_sdi.cpp,v 1.1 2011/10/26 17:18:20 john_f Exp $
+ * $Id: bmd_sdi.cpp,v 1.2 2012/01/24 15:18:42 john_f Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -177,7 +177,7 @@ uint8_t *hd2sd_workspace[MAX_CHANNELS];
 
 //pthread_mutex_t m_log = PTHREAD_MUTEX_INITIALIZER;      // logging mutex to prevent intermixing logs
 
-NexusTimecode timecode_type = NexusTC_VITC;   // default timecode is VITC
+NexusTimecode timecode_type = NexusTC_DVITC;  // default timecode is DVITC - others don't seem to work
 int master_channel = -1;                      // default is no master timecode distribution
 
 // The mutex m_master_tc guards all access to master_tc and master_tod variables
@@ -414,6 +414,7 @@ VideoRaster::EnumType sd_raster(VideoRaster::EnumType raster)
 
 void catch_sigusr1(int sig_number)
 {
+    (void) sig_number;
     // toggle a flag
 }
 
@@ -494,7 +495,7 @@ int allocate_shared_buffers(int num_channels, long long max_memory)
     // calculate reasonable ring buffer length
     // reduce by small number 5 to leave a little room for other shared mem e.g. database servers
     ring_len = max_memory / num_channels / element_size - 5;
-    printf("buffer size %lld (%.3f MiB) calculated per channel ring_len %d\n", max_memory, max_memory / (1024*1024.0), ring_len);
+    printf("buffer size %lld (%.3f MiB), channels %d, calculated per channel ring_len %d\n", max_memory, max_memory / (1024*1024.0), num_channels, ring_len);
 
     printf("element_size=%d(0x%x) ring_len=%d (%.2f secs) (total=%lld)\n", element_size, element_size, ring_len, ring_len / 25.0, (long long)element_size * ring_len);
     if (ring_len < 10)
@@ -705,6 +706,25 @@ int FramesToBcd(int srcFrames, BMDTimeValue numerator, BMDTimeValue denominator)
     return Result;
 }
 
+void print_GetTimecode_result(HRESULT hr, const char * tc_name)
+{
+    switch (hr)
+    {
+    case S_OK:
+        fprintf(stderr,"Read %s OK\n", tc_name);
+        break;
+    case S_FALSE:
+        fprintf(stderr,"%s not present or valid\n", tc_name);
+        break;
+    case E_FAIL:
+        fprintf(stderr,"Failed to read %s\n", tc_name);
+        break;
+    case E_ACCESSDENIED:
+        fprintf(stderr,"%s invalid or unsupported\n", tc_name);
+        break;
+    }
+}
+
 //! /brief AutoLock handlers
 class CPThreadAutoLock
 {
@@ -752,6 +772,7 @@ public:
     //! /brief IUnknown::QueryInterface
     virtual HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid, LPVOID *ppv)
     {
+        (void) iid;
         *ppv = NULL;
         return E_NOINTERFACE;
     }
@@ -771,6 +792,7 @@ public:
     //! /brief IDeckLinkInputCallback::VideoInputFormatChanged
     virtual HRESULT STDMETHODCALLTYPE VideoInputFormatChanged(BMDVideoInputFormatChangedEvents events, IDeckLinkDisplayMode* newDisplayMode, BMDDetectedVideoInputFormatFlags formatFlags)
     {
+        (void) newDisplayMode;
         fprintf(stderr, "Info: Input format changed. Event:0x%x FormatFlag:0x%x", events, formatFlags); 
         return S_OK;
     }
@@ -1052,6 +1074,7 @@ public:
             FrameData->tc_vitc = timecode;
             FrameData->vitc = timecode.FramesSinceMidnight();
         }
+        //print_GetTimecode_result(hr, "VITC");
 
         // ANC VITC
         hr = videoFrame->GetTimecode(bmdTimecodeRP188VITC1, &BmdTimeCode);
@@ -1063,6 +1086,7 @@ public:
             FrameData->tc_dvitc = timecode;
             FrameData->dvitc = timecode.FramesSinceMidnight();
         }
+        //print_GetTimecode_result(hr, "ANC VITC");
 
         // ANC LTC
         hr = videoFrame->GetTimecode(bmdTimecodeRP188LTC, &BmdTimeCode);
@@ -1074,6 +1098,7 @@ public:
             FrameData->tc_dltc = timecode;
             FrameData->dltc = timecode.FramesSinceMidnight();
         }
+        //print_GetTimecode_result(hr, "ANC LTC");
 
         // SYS
         int frames = 0;
@@ -1537,7 +1562,7 @@ void usage_exit(void)
     fprintf(stderr, "                         E.g. -mode 1920x1080i29:AUDIO8\n");
     fprintf(stderr, "    -16x9                Video aspect ratio is 16x9 (default)\n");
     fprintf(stderr, "    -4x3                 Video aspect ratio is 4x3\n");
-    fprintf(stderr, "    -tt <tc type>        preferred type of timecode to use: VITC, LTC, DVITC, DLTC, SYS [default VITC]\n");
+    fprintf(stderr, "    -tt <tc type>        preferred type of timecode to use: VITC, LTC, DVITC, DLTC, SYS [default DVITC]\n");
     fprintf(stderr, "    -mc <master ch>      channel to use as timecode master: 0..7 [default -1 i.e. no master]\n");
     fprintf(stderr, "    -c <max channels>    maximum number of channels to use for capture\n");
     fprintf(stderr, "    -m <max memory MiB>  maximum memory to use for ring buffers in MiB [default use all available]\n");
@@ -1666,7 +1691,8 @@ int main (int argc, char ** argv)
         }
         else if (strcmp(argv[n], "-m") == 0)
         {
-            if (sscanf(argv[n+1], "%lld", &opt_max_memory) != 1) {
+            if (sscanf(argv[n+1], "%lld", &opt_max_memory) != 1)
+            {
                 fprintf(stderr, "-m requires integer maximum memory in MB\n");
                 return 1;
             }
@@ -1676,7 +1702,9 @@ int main (int argc, char ** argv)
         else if (strcmp(argv[n], "-c") == 0)
         {
             if (argc <= n+1)
+            {
                 usage_exit();
+            }
 
             if (sscanf(argv[n+1], "%d", &max_channels) != 1 ||
                 max_channels > MAX_CHANNELS || max_channels <= 0)
@@ -1962,15 +1990,21 @@ int main (int argc, char ** argv)
         fprintf(stderr, "Error: No installed boards. Exiting\n");
         return 1;
     }
+    else if (bmd_NumChannels > max_channels)
+    {
+        bmd_NumChannels = max_channels;
+    }
+
     if (BmdCheckAndUpdateVideoParameter(bmd_CaptureMode))
     {
         fprintf(stderr, "Error: Can not support this display mode. Exiting\n");
         return 1;
     }
 
+    // Set primary raster (should really read it back from card)
+    primary_video_raster = mode_video_raster;
 
-
-    // We now know primary_video_raster, width, height, frame_rate and interlace (from card).
+    // We now know primary_video_raster, width, height, frame_rate and interlace.
 
     // Set secondary_video_raster
     if (NONE != secondary_capture_format)
@@ -2367,7 +2401,7 @@ int main (int argc, char ** argv)
     // setup bmd boards. after buffer arrangement.
     if (BmdSetupBoards(bmd_NumChannels, bmd_CaptureMode) != 0)
     {
-        fprintf(stderr, "Error %i\n", max_channels);
+        fprintf(stderr, "Error in BmdSetupBoards()\n");
         return 1;
     }
 
