@@ -1,7 +1,7 @@
 /***************************************************************************
- *   $Id: recordergroup.h,v 1.19 2011/07/27 17:08:36 john_f Exp $         *
+ *   $Id: recordergroup.h,v 1.20 2012/02/10 15:12:55 john_f Exp $         *
  *                                                                         *
- *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
+ *   Copyright (C) 2006-2012 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
  *   Author: Matthew Marks                                                 *
  *                                                                         *
@@ -40,7 +40,7 @@ class RecorderGroupCtrl : public wxListView
         RecorderGroupCtrl(wxWindow *, wxWindowID id, const wxPoint &, const wxSize &, int&, char**);
         ~RecorderGroupCtrl();
         void Shutdown();
-        void SetTree(TickTreeCtrl * tree) {mTree = tree;};
+        void SetTree(TickTreeCtrl *);
         void SetSavedState(SavedState * savedState);
         void StartGettingRecorders();
         void SetPreroll(const ProdAuto::MxfDuration);

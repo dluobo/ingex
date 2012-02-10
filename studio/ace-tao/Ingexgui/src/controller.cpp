@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: controller.cpp,v 1.20 2011/11/23 13:47:34 john_f Exp $          *
+ *   $Id: controller.cpp,v 1.21 2012/02/10 15:12:55 john_f Exp $          *
  *                                                                         *
  *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -591,7 +591,7 @@ wxThread::ExitCode Controller::Entry()
                     ProdAuto::MxfDuration preroll = mPreroll;
                     CORBA::BooleanSeq rec_enable = mEnableList;
                     std::string project =  (const char *) mProject.mb_str(wxConvLibc);
-                    loggingEvent.SetString(wxT("Start() being called for ") + mName + wxT(" @ ") + Timepos::FormatTimecode(timecode));
+                    loggingEvent.SetString(wxT("Start() being called for \"") + mName + wxT("\" @ ") + Timepos::FormatTimecode(timecode));
                     mMutex.Unlock();
                     AddPendingEvent(loggingEvent);
                     try {
@@ -611,7 +611,7 @@ wxThread::ExitCode Controller::Entry()
                     ProdAuto::MxfDuration postroll = mPostroll;
                     char * description = CORBA::string_dup(mDescription.mb_str(wxConvLibc));
                     ProdAuto::LocatorSeq locators = mLocators; 
-                    loggingEvent.SetString(wxT("Stop() being called for ") + mName + wxT(" @ ") + Timepos::FormatTimecode(timecode));
+                    loggingEvent.SetString(wxT("Stop() being called for \"") + mName + wxT("\" @ ") + Timepos::FormatTimecode(timecode));
                     mMutex.Unlock();
                     AddPendingEvent(loggingEvent);
                     try {

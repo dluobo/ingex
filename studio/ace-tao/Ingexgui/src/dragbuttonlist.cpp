@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: dragbuttonlist.cpp,v 1.23 2011/11/23 13:47:34 john_f Exp $      *
+ *   $Id: dragbuttonlist.cpp,v 1.24 2012/02/10 15:12:55 john_f Exp $      *
  *                                                                         *
  *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -35,7 +35,7 @@ END_EVENT_TABLE()
 /// @param parent The parent window.
 /// @param buttonEvtHandler Where to send events for button pushes.
 DragButtonList::DragButtonList(wxWindow* parent, wxEvtHandler* buttonEvtHandler)
-: wxScrolledWindow(parent), mButtonEvtHandler(buttonEvtHandler)
+: wxScrolledWindow(parent), mSelected(0), mButtonEvtHandler(buttonEvtHandler)
 {
     SetSizer(new wxBoxSizer(wxVERTICAL));
     SetScrollRate(10, 10); //needed for scrollbars to appear
@@ -75,37 +75,36 @@ prodauto::PlayerInputType DragButtonList::SetTracks(EventList* eventList, std::v
     fileNames.clear();
     trackNames.clear();
     nVideoTracks = -1; //unknown
-    prodauto::PlayerInputType inputType = prodauto::MXF_INPUT;
+    prodauto::PlayerInputType inputType = prodauto::MXF_INPUT; //default
     if (!eventList->ListIsEmpty()) {
         ArrayOfTrackTypes types;
         wxArrayString labels;
         wxArrayString files = eventList->GetSelectedFiles(&types, &labels);
         nVideoTracks = 0;
         if (files.GetCount()) { //this chunk has files associated
-            wxRadioButton * split = new wxRadioButton(this, wxID_HIGHEST + 1, wxT("Split View")); //the split is always the first video track (id = 0)
-            split->SetToolTip(wxT("Up to the first nine successfully opened files"));
-            GetSizer()->Add(split, -1, wxEXPAND);
-            mEnableStates.Add(false); //enable later if any files successfully loaded
             std::vector<std::string> audioFileNames;
             wxArrayString uniqueNames;
             for (size_t i = 0; i < files.GetCount(); i++) {
-                bool duplicated = (wxNOT_FOUND != uniqueNames.Index(files[i]));
-                if (!duplicated) {
-                    uniqueNames.Add(files[i]);
-                }
-                if (ProdAuto::VIDEO == types[i] && !files[i].IsEmpty()) {
-                    if (!duplicated) {
+                if (!files[i].IsEmpty() && wxNOT_FOUND == uniqueNames.Index(files[i])) { //not a duplicated file name
+                    uniqueNames.Add(files[i]); //to check for duplicated files later
+                    if (ProdAuto::VIDEO == types[i]) {
                         fileNames.push_back((const char *) files[i].mb_str(wxConvLibc));
                         nVideoTracks++;
+                        if (1 == nVideoTracks) {
+                            wxRadioButton * split = new wxRadioButton(this, wxID_HIGHEST + 1, wxT("Split View")); //the split is always the first video track (id = 0)
+                            split->SetToolTip(wxT("Up to the first nine video files"));
+                            GetSizer()->Add(split, -1, wxEXPAND);
+                            mEnableStates.Add(false); //enable later if any files successfully loaded
+                        }
+                        wxRadioButton * rb = new wxRadioButton(this, fileNames.size() + wxID_HIGHEST + 1, labels[i]); //ID corresponds to file index
+                        rb->SetToolTip(files[i]);
+                        GetSizer()->Add(rb, -1, wxEXPAND);
+                        mEnableStates.Add(false); //we don't know whether the player can open this file yet
+                        trackNames.push_back((const char *) labels[i].mb_str(wxConvLibc));
                     }
-                    wxRadioButton * rb = new wxRadioButton(this, fileNames.size() + wxID_HIGHEST + 1, labels[i]); //ID corresponds to file index
-                    rb->SetToolTip(files[i]);
-                    GetSizer()->Add(rb, -1, wxEXPAND);
-                    mEnableStates.Add(false); //we don't know whether the player can open this file yet
-                    trackNames.push_back((const char *) labels[i].mb_str(wxConvLibc));
-                }
-                else if (ProdAuto::AUDIO == types[i] && !files[i].IsEmpty() && !duplicated) {
-                   audioFileNames.push_back((const char *) files[i].mb_str(wxConvLibc));
+                    else if (ProdAuto::AUDIO == types[i]) {
+                       audioFileNames.push_back((const char *) files[i].mb_str(wxConvLibc));
+                    }
                 }
             }
             if (fileNames.size()) {
@@ -115,6 +114,9 @@ prodauto::PlayerInputType DragButtonList::SetTracks(EventList* eventList, std::v
                 else if (!files[0].Right(3).CmpNoCase(wxT(".dv"))) {
                     inputType = prodauto::DV_INPUT;
                 }
+            }
+            if (!nVideoTracks && audioFileNames.size()) {
+                GetSizer()->Add(new wxStaticText(this, wxID_ANY, wxT("Audio only")));
             }
             Layout();
             //add audio files at the end
@@ -364,10 +366,10 @@ void DragButtonList::Select(unsigned int source)
 void DragButtonList::LimitSplitToQuad(bool limit)
 {
     if (limit) {
-        mSplitButtonToolTip = wxT("Up to the first four successfully opened files");
+        mSplitButtonToolTip = wxT("Up to the first four video files");
     }
     else {
-        mSplitButtonToolTip = wxT("Up to the first nine successfully opened files");
+        mSplitButtonToolTip = wxT("Up to the first nine video files");
     }
     wxWindow * split = FindWindow(wxID_HIGHEST + 1);
     if (split) split->SetToolTip(mSplitButtonToolTip);

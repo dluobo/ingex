@@ -1,7 +1,7 @@
 /***************************************************************************
- *   $Id: dialogues.cpp,v 1.30 2011/11/23 13:47:34 john_f Exp $           *
+ *   $Id: dialogues.cpp,v 1.31 2012/02/10 15:12:55 john_f Exp $           *
  *                                                                         *
- *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
+ *   Copyright (C) 2006-2012 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
  *   Author: Matthew Marks                                                 *
  *                                                                         *
@@ -1029,6 +1029,7 @@ JumpToTimecodeDlg::JumpToTimecodeDlg(wxWindow * parent) : wxDialog(parent, wxID_
 //  hours->SetInitialSize(size);
 //  hours->SetClientSize(size);
 //  hours->SetSize(size);
+    delete font;
     Fit();
 }
 
@@ -1170,9 +1171,11 @@ BEGIN_EVENT_TABLE(TestModeDlg, wxDialog)
     EVT_SPINCTRL(MAX_REC, TestModeDlg::OnChangeMaxRecTime)
     EVT_SPINCTRL(MIN_GAP, TestModeDlg::OnChangeMinGapTime)
     EVT_SPINCTRL(MAX_GAP, TestModeDlg::OnChangeMaxGapTime)
+    EVT_SPINCTRL(ERASE_THRESH, TestModeDlg::OnChangeEraseThreshold)
     EVT_TOGGLEBUTTON(RUN, TestModeDlg::OnRun)
+    EVT_RADIOBUTTON(wxID_ANY, TestModeDlg::OnModeChange)
     EVT_TIMER(wxID_ANY, TestModeDlg::OnTimer)
-    EVT_IDLE(TestModeDlg::OnIdle)
+    EVT_CHECKBOX(wxID_ANY, TestModeDlg::OnEraseEnable)
 END_EVENT_TABLE()
 
 #define COUNTDOWN_FORMAT wxT("%H:%M:%S")
@@ -1184,10 +1187,16 @@ END_EVENT_TABLE()
 TestModeDlg::TestModeDlg(wxWindow * parent, const int recordId, const int stopId) : wxDialog(parent, wxID_ANY, (const wxString &) wxT("Test Mode")), mRecording(false),
 mRecordId(recordId), mStopId(stopId)
 {
-    wxBoxSizer * mainSizer = new wxBoxSizer(wxVERTICAL);
+    wxBoxSizer * mainSizer = new wxBoxSizer(wxVERTICAL); //for border
     SetSizer(mainSizer);
-    wxFlexGridSizer * gridSizer = new wxFlexGridSizer(4, 5, CONTROL_BORDER, CONTROL_BORDER);
+    wxFlexGridSizer * gridSizer = new wxFlexGridSizer(5, 5, CONTROL_BORDER, CONTROL_BORDER);
     mainSizer->Add(gridSizer, 0, wxALL, CONTROL_BORDER);
+    //mode row
+    gridSizer->Add(new wxRadioButton(this, RANDOM, wxT("Random"), wxDefaultPosition, wxDefaultSize, wxRB_GROUP), 0, wxALL, CONTROL_BORDER);
+    gridSizer->Add(new wxRadioButton(this, wxID_ANY, wxT("Continuous")), 0, wxALL, CONTROL_BORDER);
+    gridSizer->Add(new wxStaticText(this, wxID_ANY, wxEmptyString)); //dummy
+    gridSizer->Add(new wxStaticText(this, wxID_ANY, wxEmptyString)); //dummy
+    gridSizer->Add(new wxStaticText(this, wxID_ANY, wxEmptyString)); //dummy
     //record time row
     gridSizer->Add(new wxStaticText(this, wxID_ANY, wxT("Record time minimum"), wxDefaultPosition, wxDefaultSize, wxALIGN_RIGHT), 0, wxALIGN_CENTRE);
 #define DEFAULT_MAX_REC_TIME 1
@@ -1207,13 +1216,14 @@ mRecordId(recordId), mStopId(stopId)
     gridSizer->Add(mMaxGapTime, 0, wxALIGN_CENTRE);
     gridSizer->Add(new wxStaticText(this, wxID_ANY, wxT("sec."), wxDefaultPosition, wxDefaultSize, wxALIGN_LEFT), 0, wxALIGN_CENTRE);
     //erase row
-    mEraseEnable = new wxCheckBox(this, wxID_ANY, wxT("Keep disk below"));
+    mEraseEnable = new wxCheckBox(this, wxID_ANY, wxT("Keep disks below"));
     gridSizer->Add(mEraseEnable, 0, wxALIGN_RIGHT);
-    mEraseThreshold = new wxSpinCtrl(this, MAX_GAP, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 1, 100, 50);
+    mEraseThreshold = new wxSpinCtrl(this, ERASE_THRESH, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 1, 100, 50);
     gridSizer->Add(mEraseThreshold, 0, wxALIGN_CENTRE);
-    gridSizer->Add(new wxStaticText(this, wxID_ANY, wxT("% full")), 0, wxALIGN_LEFT);
-    gridSizer->Add(new wxStaticText(this, wxID_ANY, wxEmptyString));
-    gridSizer->Add(new wxStaticText(this, wxID_ANY, wxEmptyString));
+    gridSizer->Add(new wxStaticText(this, wxID_ANY, wxT("% full")), 0, wxALIGN_LEFT | wxALIGN_CENTRE_VERTICAL);
+    mEraseMessage = new wxStaticText(this, wxID_ANY, wxEmptyString);
+    gridSizer->Add(mEraseMessage, 0, wxALIGN_CENTRE_VERTICAL);
+    gridSizer->Add(new wxStaticText(this, wxID_ANY, wxEmptyString)); //dummy
     //button row
     mRunButton = new wxToggleButton(this, RUN, wxT("Run"));
     gridSizer->Add(mRunButton);
@@ -1225,29 +1235,51 @@ mRecordId(recordId), mStopId(stopId)
     gridSizer->Add(mCancelButton);
 
     Fit();
-    mTimer = new wxTimer(this);
+    mCountdownTimer = new wxTimer(this);
+    mEraseTimer = new wxTimer(this);
     srand(wxDateTime::Now().GetMillisecond());
 }
 
-/// Stops timer when dialogue deleted - otherwise there's a segfault when the timer completes...
+/// Stops timers when dialogue deleted - otherwise there's a segfault when the timers complete...
 TestModeDlg::~TestModeDlg()
 {
-    mTimer->Stop();
+    mCountdownTimer->Stop();
+    mEraseTimer->Stop();
 }
 
-/// Stops testing when dialogue closed but leaves any recording happening
+/// Stops testing when dialogue closed but leaves any recording happening, amongst other things
 int TestModeDlg::ShowModal()
 {
-    mRunStopMessage->SetLabel(wxT("Stopped"));
+    //remove all info about files to erase, as the project name may have been changed since recordings were made and so different directories may be in use
+    HashOfDirContents::iterator dirIt = mDirInfo.begin();
+    while (dirIt != mDirInfo.end()) {
+        std::list<time_t>::iterator mtimeIt = mDirInfo[dirIt->first]->mtimes.begin();
+        while (mDirInfo[dirIt->first]->mtimes.end() != mtimeIt) {
+            delete mDirInfo[dirIt->first]->files[*mtimeIt++]; //the file arrays
+        }
+        delete dirIt++->second; //the DirContents structure
+    }
+    mDirInfo.clear(); //the hash elements pointing to the deleted DirContent structures
     int rc = wxDialog::ShowModal();
-    mTimer->Stop();
+    mCountdownTimer->Stop();
     mRunButton->SetValue(false);
     mRecording = false;
-    mRunStopCountdown->SetLabel(wxEmptyString);
+    UpdateCountdownDisplay();
+    mEraseMessage->SetLabel(wxEmptyString);
+    EnableModeButtons();
     return rc;
 }
 
-
+/// Changes between continuous and random modes.
+/// Should only be called when test mode not running.
+void TestModeDlg::OnModeChange(wxCommandEvent & WXUNUSED(event))
+{
+    bool random = ((wxRadioButton *) FindWindow(RANDOM))->GetValue();
+    wxSizer * gridSizer = GetSizer()->GetItem((size_t) 0)->GetSizer();
+    for (int i = 5; i < 15; i++) {
+        gridSizer->GetItem(i)->GetWindow()->Enable(random);
+    }
+}
 
 /// Responds to the minimum record time being changed.
 /// Adjusts the minimum value of the maximum record time to be the same as the minimum record time.
@@ -1277,6 +1309,13 @@ void TestModeDlg::OnChangeMaxGapTime(wxSpinEvent & WXUNUSED(event))
     mMinGapTime->SetRange(mMinGapTime->GetMin(), mMaxGapTime->GetValue());
 }
 
+/// Responds to the erase threshold being changed.
+/// Checks if disk is now above erase threshold.
+void TestModeDlg::OnChangeEraseThreshold(wxSpinEvent & WXUNUSED(event))
+{
+        Erase(); //will only do anything if recording, etc
+}
+
 /// Responds to the run button being pressed.
 void TestModeDlg::OnRun(wxCommandEvent & WXUNUSED(event))
 {
@@ -1287,34 +1326,46 @@ void TestModeDlg::OnRun(wxCommandEvent & WXUNUSED(event))
     else {
         //stop
         Record(false);
-        mTimer->Stop();
-        mRunStopMessage->SetLabel(wxT("Stopped"));
-        mRunStopCountdown->SetLabel(wxEmptyString);
+        mCountdownTimer->Stop();
     }
+    EnableModeButtons(!mRunButton->GetValue());
 }
 
-/// Responds to the timer.
-void TestModeDlg::OnTimer(wxTimerEvent & WXUNUSED(event))
+/// Switches on and off erasing of old files
+void TestModeDlg::OnEraseEnable(wxCommandEvent & WXUNUSED(event))
 {
-    mCountdown -= wxTimeSpan(0, 0, 1, 0); //one second
-    if (!mDirInfo.size()) mRunStopCountdown->SetLabel(mCountdown.Format(COUNTDOWN_FORMAT)); //otherwise label set after erasing files
-    if (mCountdown.IsEqualTo(wxTimeSpan())) { //empty
-        Record(!mRecording);
+    if (mEraseEnable->IsChecked()) {
+        Erase(); //will only do anything if recording, etc
     }
     else {
-        mTimer->Start(1000, wxTIMER_ONE_SHOT); //one second
+        //no need to stop erase timer as it will be ignored when it times out
+        mEraseMessage->SetLabel(wxEmptyString);
     }
 }
 
-/// Sets the path(s) to be scanned for erasing files to stop the disk(s) filling up.
-/// @param fullPaths The full path and filename of paths to be scanned; duplicates allowed;
-void TestModeDlg::SetRecordPaths(const wxArrayString & filenames)
+/// Enables or disables the mode buttons.
+void TestModeDlg::EnableModeButtons(bool enable)
 {
-    mRecordPaths.clear();
-    wxString path;
-    for (size_t i = 0; i < filenames.GetCount(); i++) {
-        wxFileName::SplitPath(filenames[i], &path, NULL, NULL);
-        if (!path.IsEmpty()) mRecordPaths.insert(path); //it's a set so avoids duplicates; no particular reason why the path should be empty I guess
+    wxSizer * gridSizer = GetSizer()->GetItem((size_t) 0)->GetSizer();
+    gridSizer->GetItem((size_t) 0)->GetWindow()->Enable(enable);
+    gridSizer->GetItem(1)->GetWindow()->Enable(enable);
+}
+
+/// Responds to the countdown timer by updating the countdown message and toggling the recording state if it reaches zero, and the erase timer by starting another erase cycle.
+void TestModeDlg::OnTimer(wxTimerEvent & event)
+{
+    if (mCountdownTimer == event.GetEventObject()) {
+        mCountdown -= wxTimeSpan(0, 0, 1, 0); //one second
+        if (mCountdown.IsEqualTo(wxTimeSpan())) { //empty
+            Record(!mRecording);
+        }
+        else {
+            mCountdownTimer->Start(1000, wxTIMER_ONE_SHOT); //one second
+        }
+        UpdateCountdownDisplay();
+    }
+    else {
+        Erase();
     }
 }
 
@@ -1327,40 +1378,78 @@ void TestModeDlg::Record(bool rec)
         mRecording = rec;
         wxCommandEvent menuEvent(wxEVT_COMMAND_MENU_SELECTED, mRecording ? mRecordId : mStopId);
         GetParent()->AddPendingEvent(menuEvent);
-        //disk cleanup
-        if (
-         mEraseEnable->IsChecked()
-         && mRecordPaths.size() //we know where the material is
-         && !mDirInfo.size() //not already erasing
-        ) {
-            //look at each directory to see if it needs clearing out
-            wxLongLong total, free;
-            wxDir dir;
-            wxString filePath;
-            SetOfStrings::iterator pathsIt = mRecordPaths.begin();
-            while (mRecordPaths.end() != pathsIt) {
+        //work out duration of next action and send comment
+        if (((wxRadioButton *) FindWindow(RANDOM))->GetValue()) {
+            int dur;
+            if (mRecording) {
+                int range = mMaxRecTime->GetValue() - mMinRecTime->GetValue() + 1;
+                while ((dur = rand()/(RAND_MAX/range)) > range) {}; //avoid occasional truncation to range
+                dur += mMinRecTime->GetValue();
+                mCountdown = wxTimeSpan::Minutes(dur);
+            }
+            else {
+                int range = mMaxGapTime->GetValue() - mMinGapTime->GetValue() + 1;
+                while ((dur = rand()/(RAND_MAX/range)) > range) {}; //avoid occasional truncation to range
+                dur += mMinGapTime->GetValue();
+                mCountdown = wxTimeSpan::Seconds(dur);
+            }
+            mCountdownTimer->Start(1000, wxTIMER_ONE_SHOT); //one second
+        }
+        UpdateCountdownDisplay();
+    }
+}
+
+/// Sets the run/stop message and countdown display according to the current state.
+void TestModeDlg::UpdateCountdownDisplay()
+{
+    if (!mRunButton->GetValue()) {
+        mRunStopMessage->SetLabel(wxT("Stopped"));
+        mRunStopCountdown->SetLabel(wxEmptyString);
+    }
+    else if (!((wxRadioButton *) FindWindow(RANDOM))->GetValue()) {
+        mRunStopMessage->SetLabel(wxT("Recording continuously"));
+        mRunStopCountdown->SetLabel(wxEmptyString);
+    }
+    else {
+        mRunStopMessage->SetLabel(mRecording ? wxT("Stopping in") : wxT("Recording in"));
+        mRunStopCountdown->SetLabel(mCountdown.Format(COUNTDOWN_FORMAT));
+    }
+}
+
+/// Adds paths to be scanned for erasing files to stop the disk(s) filling up.
+/// Scans each path and if not known about, inserts it into a hash pointing to a structure which contains a sorted list of file ages, and a hash mapping the ages to lists of filenames.  This only happens if the path is not known to avoid pointless re-scans as the files in known paths will be older than any more found in a re-scan.  As files are deleted in decreasing order of age, their corresponding records will then be removed from the structure, and the structure and hash entry removed when all files have been deleted, prompting a re-scan the next time this method is called with that path.  Starts the erasing procedure if the right criteria are met.
+/// @param fullNames The full path and filenames of paths to be scanned; filenames ignored; duplicate paths allowed; can be on more than one disk.
+void TestModeDlg::AddPaths(const wxArrayString & fullNames)
+{
+    if (IsModal()) { //no point in wasting memory otherwise
+        wxString dirName;
+        for (size_t i = 0; i < fullNames.GetCount(); i++) {
+            wxFileName::SplitPath(fullNames[i], &dirName, 0, 0);
+            if (!dirName.IsEmpty() && mDirInfo.find(dirName) == mDirInfo.end()) { //avoid pointless scan when we already have records of files at this location
+                //scan the directory
+                wxLongLong total, free;
+                wxDir dir;
+                wxString fileName, fullName;
                 if (
-                 wxGetDiskSpace(*pathsIt, &total, &free) //we know how full the disk is
-                 && ((int) (free * 100 / total).GetLo()) <= 100 - mEraseThreshold->GetValue() //the occupancy is over the erase threshold
-                 && dir.Open(*pathsIt) //we can open the material directory
-                 && dir.GetFirst(&filePath, wxEmptyString, wxDIR_FILES) //there is at least one file in it (ignore subdirectories)
+                 dir.Open(dirName) //we can open the material directory
+                 && dir.GetFirst(&fileName, wxEmptyString, wxDIR_FILES) //there is at least one file in it (ignore subdirectories)
                 ) {
-                    //Make a sorted list of file ages and a hash mapping those file ages to arrays of path names; erasing occurs in idle event handler
-                    DirContents* contents = new DirContents;
+                    //Make a sorted list of file ages and a hash mapping those file ages to arrays of filenames
+                    DirContents* contents = new DirContents; //deleted here or in Erase()
                     time_t mtime;
                     bool failed = false;
                     do {
-                        filePath = *pathsIt + wxFileName::GetPathSeparator() + filePath;
-                        if (-1 == (mtime = wxFileModificationTime(filePath))) { //couldn't get file modification time
+                        fullName = dirName + wxFileName::GetPathSeparator() + fileName;
+                        if (-1 == (mtime = wxFileModificationTime(fullName))) { //couldn't get file modification time
                             failed = true;
                             break; //don't continue or could end up deleting newer files than necessary
                         }
                         if (contents->files.find(mtime) == contents->files.end()) { //not got an array of files of this age
                             contents->mtimes.push_back(mtime);
-                            contents->files[mtime] = new wxArrayString;
+                            contents->files[mtime] = new wxArrayString; //deleted here or in Erase()
                         }
-                        contents->files[mtime]->Add(filePath);
-                    } while (dir.GetNext(&filePath));
+                        contents->files[mtime]->Add(fileName);
+                    } while (dir.GetNext(&fileName));
                     if (failed) {
                         while (contents->files.size()) {
                             delete contents->files.begin()->second; //the string arrays
@@ -1370,39 +1459,23 @@ void TestModeDlg::Record(bool rec)
                     }
                     else {
                         contents->mtimes.sort();
-                        mDirInfo[*pathsIt] = contents;
+                        mDirInfo[dirName] = contents;
                     }
                 }
-                pathsIt++;
             }
         }
-        //work out duration of next action and send comment
-        int dur;
-        if (mRecording) {
-            if (!mDirInfo.size()) mRunStopMessage->SetLabel(wxT("Stopping in")); //otherwise label set after erasing files
-            int range = mMaxRecTime->GetValue() - mMinRecTime->GetValue() + 1;
-            while ((dur = rand()/(RAND_MAX/range)) > range) {}; //avoid occasional truncation to range
-            dur += mMinRecTime->GetValue();
-            mCountdown = wxTimeSpan::Minutes(dur);
-        }
-        else {
-            if (!mDirInfo.size()) mRunStopMessage->SetLabel(wxT("Recording in")); //otherwise label set after erasing files
-            int range = mMaxGapTime->GetValue() - mMinGapTime->GetValue() + 1;
-            while ((dur = rand()/(RAND_MAX/range)) > range) {}; //avoid occasional truncation to range
-            dur += mMinGapTime->GetValue();
-            mCountdown = wxTimeSpan::Seconds(dur);
-        }
-        if (!mDirInfo.size()) mRunStopCountdown->SetLabel(mCountdown.Format(COUNTDOWN_FORMAT)); //otherwise label set after erasing files
-        mTimer->Start(1000, wxTIMER_ONE_SHOT); //one second
     }
+    Erase(); //makes sure files get erased during continuous chunking where otherwise Erase() wouldn't be called
 }
 
-///Erases files while idle, so that display can be updated
-void TestModeDlg::OnIdle(wxIdleEvent& event)
+///Attempts to erase the oldest set of files of the same age that reside in a directory that is on a disk more full than the erase threshold.
+///If files are found to erase, start a timer to call the method again after a pause, thus avoiding saturating disks with space checks and delete operations.
+///Otherwise, erasing will stop until the method is called again by other means, thus avoiding a continuous cycle of disk space checks when no disks are above the erase threshold.
+void TestModeDlg::Erase()
 {
-    if (mDirInfo.size()) {
-        //find and delete the oldest files overall: this caters for more than one record directory on the same disk, where otherwise they might be deleted unevenly from the directories
-        wxString dir;
+    if (mRecording && mEraseEnable->IsChecked() && mDirInfo.size() && !mEraseTimer->IsRunning()) { //don't do an out-of-sequence erase if already erasing
+        //find and delete the oldest files overall: this caters for more than one record directory on the same disk, where otherwise files might be deleted unevenly from the directories
+        wxString dirName;
         wxLongLong total, free;
         time_t mtime = 0; //dummy initialiser
         HashOfDirContents::iterator dirIt = mDirInfo.begin();
@@ -1411,67 +1484,36 @@ void TestModeDlg::OnIdle(wxIdleEvent& event)
             if (
              wxGetDiskSpace(dirIt->first, &total, &free) //we know how full the disk is
              && (int) (free * 100 / total).GetLo() <= 100 - mEraseThreshold->GetValue() //the occupancy is over the erase threshold
-             && (dir.IsEmpty() || *dirIt->second->mtimes.begin() < mtime) //the oldest files are the oldest we've come across
+             && (dirName.IsEmpty() || *dirIt->second->mtimes.begin() < mtime) //the oldest files are the oldest we've come across
+             && (dirName.IsEmpty() || *dirIt->second->mtimes.begin() < mtime) //the oldest files are the oldest we've come across
             ) {
-                dir = dirIt->first;
+                dirName = dirIt->first;
                 mtime = *dirIt->second->mtimes.begin();
             }
         } while (mDirInfo.end() != ++dirIt);
-        if (!dir.IsEmpty()) { //found something to delete
+        if (!dirName.IsEmpty()) { //found something to delete
             //erase all files of this age from this dir (because it's likely to correspond to a complete recording and it reduces number of disk space checks)
-            mRunStopMessage->SetLabel(wxT("Erasing..."));
-            mRunStopCountdown->SetLabel(wxEmptyString);
-            size_t index = 0;
-            while (
-             wxRemoveFile(mDirInfo[dir]->files[mtime]->Item(index))
-             && ++index < mDirInfo[dir]->files[mtime]->GetCount()
-            ) {
+            mEraseMessage->SetLabel(wxEmptyString == mEraseMessage->GetLabel() ? wxT("Erasing...") : wxEmptyString);
+            for (size_t i = 0; i < mDirInfo[dirName]->files[mtime]->GetCount(); i++) {
+                wxRemoveFile(dirName + wxFileName::GetPathSeparator() + mDirInfo[dirName]->files[mtime]->Item(i)); //can't do anything if can't erase the file, so ignore return value and the file will be abandoned until all more recent files in this directory are erased
             }
-            //clean up
-            if (mDirInfo[dir]->files[mtime]->GetCount() == index) { //successfully removed all files
-                //remove the array of files and the mtime entry corresponding to it
-                delete mDirInfo[dir]->files[mtime];
-                mDirInfo[dir]->mtimes.erase(mDirInfo[dir]->mtimes.begin());
+            //remove the array of files and the mtime entry corresponding to it
+            delete mDirInfo[dirName]->files[mtime];
+            mDirInfo[dirName]->mtimes.erase(mDirInfo[dirName]->mtimes.begin());
+            //remove the DirContents structure and hash entry pointing to it if an attempt has been made to remove all the files from this directory
+            if (!mDirInfo[dirName]->mtimes.size()) {
+                delete mDirInfo[dirName];
+                mDirInfo.erase(dirName);
+            }
+            //set up repeat call if more files known about
+            if (mDirInfo.size()) { //more to erase
+                //call ourselves again
+                mEraseTimer->Start(500, wxTIMER_ONE_SHOT);
             }
             else {
-                //don't try again with this directory or might just get stuck
-                DeleteFileArrays(dir);
-                mDirInfo[dir]->mtimes.clear();
-            }
-            if (!mDirInfo[dir]->mtimes.size()) { //all files done
-                //remove the directory info
-                delete mDirInfo[dir];
-                mDirInfo.erase(dir);
+                mEraseMessage->SetLabel(wxEmptyString);
             }
         }
-        else { //no files to delete
-            //remove all info
-            dirIt = mDirInfo.begin();
-            while (dirIt != mDirInfo.end()) {
-                DeleteFileArrays(dirIt->first);
-                delete dirIt++->second;
-            }
-            mDirInfo.clear();
-        }
-        if (mDirInfo.size()) { //more to erase
-            //call ourselves again
-            event.RequestMore();
-        }
-        else {
-            mRunStopMessage->SetLabel(mRecording ? wxT("Stopping in") : wxT("Recording in"));
-            mRunStopCountdown->SetLabel(mCountdown.Format(COUNTDOWN_FORMAT));
-        }
-    }
-}
-
-/// Deletes the arrays of file paths pointed to by an element of mDirInfo.
-/// Does not remove the mtimes or the files hash elements.
-/// @param dir The key of the element to delete the arrays from.
-void TestModeDlg::DeleteFileArrays(const wxString& dir)
-{
-    std::list<time_t>::iterator mtimeIt = mDirInfo[dir]->mtimes.begin();
-    while (mDirInfo[dir]->mtimes.end() != mtimeIt) {
-        delete mDirInfo[dir]->files[*mtimeIt++];
     }
 }
 
@@ -1896,12 +1938,12 @@ static const int Alignments[N_ALIGNMENTS] = {
 /// Automatic chunking is set up at the start of recording, when ChunkingDlg::RunFrom() is called, with the start timecode, and a chunking postroll value determined by the RecorderGroup object (about half a second if all recorders can manage this).  If automatic chunking is enabled in the dialogue, the stop timecode for the current chunk is worked out.
 /// This is either the start timecode plus the chunk length, or, if alignment is enabled in the dialogue and the function call, the next alignment point (or the one after that, if it's less than half a minute away).
 /// If an alignment was calculated, the "chunk now" button label is set to the time difference (otherwise it's already showing the chunk length, which is the correct value), and a repeating countdown tick timer of a second's duration is started, which decrements the countdown value on the button until it reaches zero.  (The button countdown mechanism is not used to calculate the stop timecode or to trigger the stop command, because it has neither the resolution nor the accuracy.)
-/// The postroll value is subtracted from the stop timecode to give the trigger timecode, which allows recorders to be contacted sufficiently in advance of the stop timecode, to avoid recording overruns.  It also ensures that the command will be sent in time despite it being generated asynchronously from a refresh timer.
+/// The postroll value is subtracted from the stop timecode to give the trigger timecode, which allows recorders to be contacted sufficiently in advance of the stop timecode to avoid recording overruns.  It also ensures that the command will be sent in time despite it being generated asynchronously from a refresh timer.
 /// Timepos::SetTrigger() is called with the trigger timecode, which is wrapped at midnight, but will always be assumed to be in the future.  The call includes an event handler pointer to send an event to (the main frame).
-/// At the first Timepos::OnRefreshTimer() call after the trigger point, the event is generated and is picked up by IngexguiFrame::OnTimeposEvent(), which calls RecorderGroupCtrl::Stop(true, ...), the trigger timecode, the current contents of the description field, and cue point data.  This sets variable RecorderGroupCtrl::mMode from (initially) RecorderGroupCtrl::RECORDING to CHUNK_STOP_WAIT and initiates a chunking cycle by sending an event to the frame for each recorder asking if tracks are enabled to record, just as if the stop button had been pressed.  This results in stop commands being sent to the appropriate recorders via Enables(), with the postroll set to the chunking postroll value, resulting in stopping happening exactly at the chunk end.
-/// The first recorder (or non-router recorder if they are present) that reports that it has successfully stopped causes the mode to be updated to CHUNK_WAIT, and generates a RecorderGroupCtrl::CHUNK_END event with the timecode of the next chunk start, which is the timecode returned by the recorder that has just stopped (as this is the first frame not recorded).  This event is picked up by the frame, which calls EventList::AddEvent() to append the chunk boundary entry to the recording list.  The CHUNK_WAIT mode prevents subsequent recorders sending more events, and also causes RecorderGroupCtrl::TRACK_STATUS events to have a flag set which prevents the recorder source tree briefly reporting an error due to a mismatch between the recorder mode (stopped) and the main frame mode (recording).
-/// The timecode returned by the stopped recorder has a safety margin (half the maximum preroll allowed, limited to half a second) added to it, to make sure that recorders can never be told to start in the future, and is sent to the frame in a SET_TRIGGER event.  This causes Timepos::SetTrigger to be called again, but this time the trigger mode is set to allow timecodes in the past (which is fine so long as it is within the recorders' preroll abilities), and these will cause an immediate trigger.  The event is targeted at the RecorderGroup.
-/// Timepos waits for the trigger point (unless it was in the past), ensuring that recorders are not asked to start recording in the future.  The event it generates is picked up by RecorderGroupCtrl::OnTimeposEvent() which checks that the mode is still RecorderGroupCtrl::CHUNK_WAIT (preventing race states due to user intervention while an event is in the queue).  If so, it sets the mode to CHUNK_RECORD_WAIT and starts recording again by calling Record() as if the user had pressed the record button, but at the chunk start timecode (stored in RecorderGroup::mTimecode since a recorder stop).  When the lists of record enables are requested from the frame, the recording flags are ignored (because these flags are still set at this point).  Also, each controller's record command will have a preroll of zero (which is safe to do as we know the start time is in the past), rather than the normal value.
+/// At the first Timepos::OnRefreshTimer() call after the trigger point, the event is generated and is picked up by IngexguiFrame::OnTimeposEvent(), which calls RecorderGroupCtrl::Stop(true, ...) with the trigger timecode, the current contents of the description field, and cue point data.  This sets variable RecorderGroupCtrl::mMode from (initially) RecorderGroupCtrl::RECORDING to CHUNK_STOP_WAIT and initiates a chunking cycle by sending an event to the frame for each recorder asking if tracks are enabled to record, just as if the stop button had been pressed.  This results in stop commands being sent to the appropriate recorders via Enables(), with the postroll set to the chunking postroll value, resulting in stopping happening exactly at the chunk end.
+/// The first recorder (or non-router recorder if they are present) that reports that it has successfully stopped causes the mode to be updated to CHUNK_WAIT, and generates a RecorderGroupCtrl::CHUNK_END event with the timecode of the next chunk start, which is the timecode returned by the recorder that has just stopped (as this is the first frame not recorded).  This event is picked up by the frame, which calls EventList::AddEvent() to append the chunk boundary entry to the recording list.  The CHUNK_WAIT mode prevents subsequent recorders generating more events, and also causes RecorderGroupCtrl::TRACK_STATUS events to have a flag set which prevents the recorder source tree briefly reporting an error due to a mismatch between the recorder mode (stopped) and the main frame mode (recording).
+/// The timecode returned by the stopped recorder has a safety margin added to it (half the maximum preroll allowed, limited to half a second), to make sure that recorders can never be told to start in the future, and is sent to the frame in a SET_TRIGGER event.  This causes Timepos::SetTrigger to be called again, but this time the trigger mode is set to allow timecodes in the past (which is fine so long as it is within the recorders' preroll abilities), and these will cause an immediate trigger.  The event is targeted at the RecorderGroup.
+/// Timepos waits for the trigger point (unless it was in the past), ensuring that recorders are not asked to start recording in the future (which will fail as the requested frame will not be in the capture buffer).  The event it generates is picked up by RecorderGroupCtrl::OnTimeposEvent() which checks that the mode is still RecorderGroupCtrl::CHUNK_WAIT (preventing race states due to user intervention while an event is in the queue).  If so, it sets the mode to CHUNK_RECORD_WAIT and starts recording again by calling Record() as if the user had pressed the record button, but at the chunk start timecode (stored in RecorderGroup::mTimecode since a recorder stop).  When the lists of record enables are requested from the frame, the recording flags are ignored (because these flags are still set at this point).  Also, each controller's record command will have a preroll of zero (which is safe to do as we know the start time is in the past), rather than the normal value.
 /// The first successful record command changes the mode from CHUNK_RECORD_WAIT to CHUNK_RECORDING and a RecorderGroupCtrl::CHUNK_START event is issued, with the recorder start timecode.  This causes the frame to call ChunkingDlg::RunFrom() with the timecode from the event and the align argument false, to start counting down exactly one chunk length to the next chunk point if automatic chunking is enabled, regardless of whether the chunk had been intiated manually or automatically.  The chunking button is also enabled in case it had been pressed by the user, which would have been disabled it.  The cycle thus begins again.
 /// The RecorderGroup mode is set back to STOPPED (via STOP_WAIT) when RecorderGroupCtrl::Stop(false, ...) is called as a result of the user pressing the stop button.  The STOP event sent to the frame when the first recorder successfully stops causes the frame status to be changed to STOPPED, which calls ChunkingDlg::RunFrom() with no arguments, to stop any pending automatic chunking trigger and reset the countdown display on the "chunk now" button.
 

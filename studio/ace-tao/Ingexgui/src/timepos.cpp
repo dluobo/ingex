@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: timepos.cpp,v 1.17 2011/07/19 07:27:50 john_f Exp $             *
+ *   $Id: timepos.cpp,v 1.18 2012/02/10 15:12:56 john_f Exp $             *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -147,7 +147,7 @@ void Timepos::Trigger()
 
 /// Sets the timecode for an event to be triggered or cancels a pending trigger.
 /// @param tc Timecode when trigger will happen.  If undefined flag is set, stops a pending trigger.
-/// @param handler Event handler where event will be sent to.  Only needed if tc is defined.
+/// @param handler Event handler where event will be sent to.  Only needed if tc is a defined timecode.
 /// @param alwaysInFuture True to indicate the timecode is always in the future (even if its sample value is less than the current timecode).  If false, trigger timecode will be considered to be in the past if it is up to a minute before the current timecode, whereupon a trigger will occur immediately
 /// @return True if trigger was set
 bool Timepos::SetTrigger(const ProdAuto::MxfTimecode * tc, wxEvtHandler * handler, bool alwaysInFuture)
@@ -164,7 +164,7 @@ bool Timepos::SetTrigger(const ProdAuto::MxfTimecode * tc, wxEvtHandler * handle
         mTriggerHandler = handler;
         //If it looks like the trigger timecode is earlier in the day or now, set the carry flag which will prevent a trigger until after the displayed timecode wraps at midnight
         mTriggerCarry = mRunningTimecode.samples >= mTriggerTimecode.samples;
-        loggingEvent.SetString(wxT("Timepos trigger set for ") + Timepos::FormatTimecode(*tc) + wxString::Format(wxT(" with alwaysInFuture %s; carry set to %s."), alwaysInFuture ? wxT("true") : wxT("false"), mTriggerCarry ? wxT("true") : wxT("false")));
+        loggingEvent.SetString(wxT("Timepos trigger set for ") + Timepos::FormatTimecode(*tc) + wxString::Format(wxT(" with alwaysInFuture %s; carry being set to %s.  Trigger samples %d; running samples %d."), alwaysInFuture ? wxT("true") : wxT("false"), mTriggerCarry ? wxT("true") : wxT("false"), mTriggerTimecode.samples, mRunningTimecode.samples));
         //If triggers in the past are allowed, trigger immediately if trigger timecode is up to a minute before the last displayed timecode
         if (!alwaysInFuture) {
             if (mRunningTimecode.samples > mTriggerTimecode.samples) {
@@ -262,7 +262,8 @@ const wxString Timepos::Record(const ProdAuto::MxfTimecode tc)
 
 /// If position is not running, does nothing.
 /// Otherwise, if given timecode is acceptable, works out the exact recording duration and the stop time in system clock time,
-/// and sets the postrolling flag.
+/// and sets the postrolling flag in preparation for stopping when the recording stops, taking account of postroll.
+/// If timecode is not acceptable, stops immediately and gives the unknown timecode indication.
 /// @param stopTimecode The timecode of the end of the recording (which can be in the future).  Must be compatible with the start timecode supplied to Record().
 void Timepos::Stop(const ProdAuto::MxfTimecode stopTimecode)
 {
@@ -374,14 +375,12 @@ void Timepos::SetPositionUnknown(bool noPosition)
     mPositionRunning = false;
 }
 
-// Stops the timecode display running and displays the given message.
 /// Stops the timecode display running and displays the given message.
 /// @param message The string to display.
 void Timepos::DisableTimecode(const wxString & message)
 {
     mTimecodeRunning = false;
     mTimecodeDisplay->SetLabel(message);
-//  mLastKnownTimecode.undefined = true;
 }
 
 /// Calculates given timecode's offset from the system clock and starts the timecode display running, or displays it as a stuck timecode.

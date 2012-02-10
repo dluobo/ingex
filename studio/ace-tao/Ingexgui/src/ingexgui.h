@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: ingexgui.h,v 1.28 2011/11/11 11:21:23 john_f Exp $              *
+ *   $Id: ingexgui.h,v 1.29 2012/02/10 15:12:55 john_f Exp $              *
  *                                                                         *
  *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -165,7 +165,7 @@ class IngexguiFrame : public wxFrame
         BUTTON_MENU_Record,
         BUTTON_MENU_Stop,
         BUTTON_Cue,
-        BUTTON_Chunk,
+        BUTTON_MENU_Chunk,
         TIMER_Refresh,
         BUTTON_RecorderListRefresh,
         BUTTON_TapeId,

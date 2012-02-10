@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: ingexgui.cpp,v 1.49 2011/11/11 11:21:23 john_f Exp $           *
+ *   $Id: ingexgui.cpp,v 1.50 2012/02/10 15:12:55 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -86,6 +86,7 @@ BEGIN_EVENT_TABLE( IngexguiFrame, wxFrame )
     EVT_MENU( MENU_About, IngexguiFrame::OnAbout )
     EVT_MENU( BUTTON_MENU_Record, IngexguiFrame::OnRecord )
     EVT_MENU( MENU_MarkCue, IngexguiFrame::OnCue )
+    EVT_MENU( BUTTON_MENU_Chunk, IngexguiFrame::OnChunkButton )
     EVT_MENU( BUTTON_MENU_Stop, IngexguiFrame::OnStop )
     EVT_MENU( MENU_PrevTrack, IngexguiFrame::OnShortcut )
     EVT_MENU( MENU_NextTrack, IngexguiFrame::OnShortcut )
@@ -139,7 +140,7 @@ BEGIN_EVENT_TABLE( IngexguiFrame, wxFrame )
     EVT_BUTTON( BUTTON_MENU_Record, IngexguiFrame::OnRecord )
     EVT_BUTTON( BUTTON_MENU_Stop, IngexguiFrame::OnStop )
     EVT_BUTTON( BUTTON_Cue, IngexguiFrame::OnCue )
-    EVT_BUTTON( BUTTON_Chunk, IngexguiFrame::OnChunkButton )
+    EVT_BUTTON( BUTTON_MENU_Chunk, IngexguiFrame::OnChunkButton )
     EVT_BUTTON( BUTTON_ClearDescription, IngexguiFrame::OnClearDescription )
     EVT_TEXT_ENTER( TEXTCTRL_Description, IngexguiFrame::OnDescriptionEnterKey )
     EVT_SET_FOCUS( IngexguiFrame::OnFocusGot )
@@ -373,6 +374,7 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
     mMenuShortcuts->Append(MENU_Help, wxT("Help\tCTRL-H"));
     mMenuShortcuts->Append(BUTTON_MENU_Record, wxT("Record\tF1"));
     mMenuShortcuts->Append(MENU_MarkCue, wxT("Mark Cue\tF2")); //NB this must correspond to the "insert blank cue" key in CuePointsDlg
+    mMenuShortcuts->Append(BUTTON_MENU_Chunk, wxT("Chunk\tF9"));
     mMenuShortcuts->Append(BUTTON_MENU_Stop, wxT("Stop\tShift+F5"));
     if (!parser.Found(wxT("p"))) mMenuShortcuts->Append(MENU_PrevTrack, wxT("Select previous playback track\tF7"));
     if (!parser.Found(wxT("p"))) mMenuShortcuts->Append(MENU_NextTrack, wxT("Select next playback track\tF8"));
@@ -440,12 +442,12 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
     //transport controls
     wxBoxSizer* sizer2cH = new wxBoxSizer(wxHORIZONTAL);
     sizer1V->Add(sizer2cH);
-    RecordButton* recordButton = new RecordButton(this, BUTTON_MENU_Record, wxT("Record (999 sources)")); //to set a minimum size
+    RecordButton* recordButton = new RecordButton(this, BUTTON_MENU_Record, wxT("Recording (999 tracks)")); //to set a minimum size
     recordButton->SetMinSize(recordButton->GetSize());
     sizer2cH->Add(recordButton, 0, wxALL, CONTROL_BORDER);
     sizer2cH->Add(new wxButton(this, BUTTON_MENU_Stop, wxT("Stop")), 0, wxALL, CONTROL_BORDER);
     sizer2cH->Add(new wxButton(this, BUTTON_Cue, wxT("Mark Cue")), 0, wxALL, CONTROL_BORDER);
-    wxButton* chunkButton = new wxButton(this, BUTTON_Chunk, wxT("Chunk ???:??")); //to set a minimum size
+    wxButton* chunkButton = new wxButton(this, BUTTON_MENU_Chunk, wxT("Chunk ???:??")); //to set a minimum size
     chunkButton->SetMinSize(chunkButton->GetSize());
     sizer2cH->Add(chunkButton, 0, wxALL, CONTROL_BORDER);
     //splitter window containing everything else
@@ -875,6 +877,9 @@ void IngexguiFrame::OnPlayerEvent(wxCommandEvent& event) {
                 case 65471: //F2
                     id = MENU_MarkCue;
                     break;
+                case 65478: //F9
+                    id = BUTTON_MENU_Chunk;
+                    break;
                 case 65474: //F5 (NB shift is detected below)
                     id = BUTTON_MENU_Stop;
                     break;
@@ -908,6 +913,7 @@ void IngexguiFrame::OnPlayerEvent(wxCommandEvent& event) {
             }
             if (
              wxID_ANY != id //recognised the key
+             && OperationAllowed(id)
              && (
               (BUTTON_MENU_Stop == id && event.GetExtraLong() == 1) //stop has been pressed with shift,
               || (BUTTON_MENU_Stop != id && event.GetExtraLong() == 0) //any other keypress doesn't have a modifier
@@ -1092,12 +1098,9 @@ void IngexguiFrame::OnTimeposEvent(wxCommandEvent& event)
 
 /// Responds to an event (cue point, start, chunk start or stop point) being selected by the user or by new recordings arriving
 /// Informs the player and supplies paths to the test mode dialogue so it knows where to erase files from.
-/// @param event The command event.  Do not use GetItem() to determine the selection as this may not be valid.
-void IngexguiFrame::OnEventSelection(wxListEvent& event)
+void IngexguiFrame::OnEventSelection(wxListEvent& WXUNUSED(event))
 {
     if (mPlayer) mPlayer->SelectCurrentRecording();
-    //Use GetEventObject() because this handler is called before mEventList is set
-    mTestModeDlg->SetRecordPaths(((EventList* ) event.GetEventObject())->GetSelectedFiles());
 }
 
 /// Responds to an event (cue point) being double-clicked.
@@ -1177,7 +1180,7 @@ void IngexguiFrame::TextFieldHasFocus(const bool hasFocus)
 ///     Event client data: Ptr to a ProdAuto::MxfTimecode object with the chunking timecode.  Deletes this.
 /// SET_TRIGGER: Sets a trigger for the next chunk start.
 ///     Event client data: Ptr to a ProdAuto::MxfTimecode object with the chunking timecode.  Deletes this.
-/// RECORDER_STOPPED: Log.  If successful and not a router recorder, add recording details to the event list.
+/// RECORDER_STOPPED: Log.  If successful and not a router recorder, add recording details to the event list and send paths to the test mode dialogue for disk space control.
 ///     Event string: The recorder name.
 ///     Event int: Non-zero for success.
 ///	Event extra-long: non-zero if a router recorder.
@@ -1277,8 +1280,8 @@ void IngexguiFrame::OnRecorderGroupEvent(wxCommandEvent& event) {
                 Log(wxT("STOPPED successfully on \"") + event.GetString() + wxT("\"") + (event.GetExtraLong() ? wxT(" (Router recorder)") : wxEmptyString));
                 if (!event.GetExtraLong()) { //not a router recorder
                     if (((RecorderData *) event.GetClientData())->GetTrackList().operator->()) {
-                        //Add the recorded files to the take info (assumes a STOPPED or CHUNK_END event has already been received, so mEventList knows if it's a chunk or not and therefore which ChunkInfo to add it to)
-                        mEventList->AddRecorderData((RecorderData *) event.GetClientData());
+                        //Add the recorded files to the take info (assumes a STOPPED or CHUNK_END event has already been received, so mEventList knows if it's a chunk or not and therefore which ChunkInfo to add it to) and send the paths to the test mode dialogue for disk usage control
+                        mTestModeDlg->AddPaths(mEventList->AddRecorderData((RecorderData *) event.GetClientData()));
                         //need to reload the player as more files have appeared
                         if (mPlayer) mPlayer->SelectCurrentRecording();
                     }
@@ -1374,7 +1377,10 @@ void IngexguiFrame::OnTreeEvent(wxCommandEvent& event)
             default:
                 break;
         }
-        if (0 == mTree->GetRecorderCount()) mTimepos->DisableTimecode();
+        if (0 == mTree->GetRecorderCount()) {
+            mTimepos->DisableTimecode();
+            mTimepos->Stop(); //in case we are disconnecting unresponsive recorders that were recording
+        }
     }
     else { //recorder name supplied - tape ID updates
         CORBA::StringSeq packageNames, tapeIds;
@@ -1871,12 +1877,8 @@ void IngexguiFrame::OnUpdateUI(wxUpdateUIEvent& event)
             break;
         case BUTTON_MENU_Record: {
             wxString legend;
-            if (mTree->GetRecorderCount()) {
-                legend = wxString::Format(wxT("Record (%d track%s)"), mTree->EnabledTracks(), mTree->EnabledTracks() == 1 ? wxEmptyString : wxT("s"));
-            }
-            else {
-                legend = wxT("Record");
-            }
+            legend = (RECORDING == mStatus ? wxT("Recording") : wxT("Record"));
+            if (mTree->GetRecorderCount()) legend += wxString::Format(wxT(" (%d track%s)"), mTree->EnabledTracks(), mTree->EnabledTracks() == 1 ? wxEmptyString : wxT("s"));
             if (event.GetEventObject()->IsKindOf(CLASSINFO(RecordButton))) {
                 event.SetText(legend);
                 switch (mStatus) {
@@ -1947,10 +1949,12 @@ void IngexguiFrame::OnUpdateUI(wxUpdateUIEvent& event)
                     break;
             }
             break;
-        case BUTTON_Chunk:
-            event.SetText(mChunkingDlg->GetChunkButtonLabel());
-            dynamic_cast<wxButton*>(event.GetEventObject())->SetToolTip(mChunkingDlg->GetChunkButtonToolTip());
-            dynamic_cast<wxButton*>(event.GetEventObject())->SetBackgroundColour(mChunkingDlg->GetChunkButtonColour());
+        case BUTTON_MENU_Chunk:
+            if (event.GetEventObject()->IsKindOf(CLASSINFO(wxButton))) {
+                event.SetText(mChunkingDlg->GetChunkButtonLabel());
+                dynamic_cast<wxButton*>(event.GetEventObject())->SetToolTip(mChunkingDlg->GetChunkButtonToolTip());
+                dynamic_cast<wxButton*>(event.GetEventObject())->SetBackgroundColour(mChunkingDlg->GetChunkButtonColour());
+            }
             break;
         case MENU_PlayerDisable:
             event.Check(!mPlayer || !mPlayer->IsEnabled());
@@ -2152,7 +2156,7 @@ bool IngexguiFrame::OperationAllowed(const int operation, bool* found)
         case BUTTON_Cue:
             enabled = RECORDING == mStatus || PLAYING == mStatus || PLAYING_BACKWARDS == mStatus || PAUSED == mStatus;
             break;
-        case BUTTON_Chunk:
+        case BUTTON_MENU_Chunk:
             enabled = mChunkingDlg->CanChunk();
             break;
         case BUTTON_TakeSnapshot:

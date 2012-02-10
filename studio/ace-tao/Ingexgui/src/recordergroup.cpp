@@ -1,7 +1,7 @@
 /***************************************************************************
- *   $Id: recordergroup.cpp,v 1.31 2011/11/23 13:47:34 john_f Exp $       *
+ *   $Id: recordergroup.cpp,v 1.32 2012/02/10 15:12:55 john_f Exp $       *
  *                                                                         *
- *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
+ *   Copyright (C) 2006-2012 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
  *   Author: Matthew Marks                                                 *
  *                                                                         *
@@ -47,7 +47,8 @@ END_EVENT_TABLE()
 /// @param size The control's size.
 /// @param argc Argument count, for ORB initialisation.
 /// @param argv Argument vector, for ORB initialisation.
-RecorderGroupCtrl::RecorderGroupCtrl(wxWindow * parent, wxWindowID id, const wxPoint & pos, const wxSize & size, int& argc, char** argv) : wxListView(parent, id, pos, size, wxLC_REPORT | wxLC_NO_HEADER), mEnabledForInput(true),  mMaxPreroll(InvalidMxfDuration), mMaxPostroll(InvalidMxfDuration), mPreroll(InvalidMxfDuration), mSavedState(0), mMode(STOPPED)
+RecorderGroupCtrl::RecorderGroupCtrl(wxWindow * parent, wxWindowID id, const wxPoint & pos, const wxSize & size, int& argc, char** argv) : wxListView(parent, id, pos, size, wxLC_REPORT | wxLC_NO_HEADER), mEnabledForInput(false), //Prevents access to mTree until SetTree has been called
+mMaxPreroll(InvalidMxfDuration), mMaxPostroll(InvalidMxfDuration), mPreroll(InvalidMxfDuration), mSavedState(0), mMode(STOPPED)
 {
     InsertColumn(0, wxEmptyString);
     InsertColumn(1, wxEmptyString);
@@ -57,6 +58,14 @@ RecorderGroupCtrl::RecorderGroupCtrl(wxWindow * parent, wxWindowID id, const wxP
 RecorderGroupCtrl::~RecorderGroupCtrl()
 {
     delete mComms;
+}
+
+/// Sets the pointer to the tree of recorders, allowing the object to access it.
+/// Also enables user input, as this is now safe.
+void RecorderGroupCtrl::SetTree(TickTreeCtrl * tree)
+{
+    mTree = tree;
+    mEnabledForInput = true;
 }
 
 /// Sets the pointer to the saved state, allowing the object to access it.
@@ -378,9 +387,17 @@ void RecorderGroupCtrl::OnControllerEvent(ControllerThreadEvent & event)
                     }
                     //populate the source tree and tell the frame
                     wxCommandEvent frameEvent(EVT_RECORDERGROUP_MESSAGE, NEW_RECORDER);
-                    frameEvent.SetString(event.GetName());
                     frameEvent.SetExtraLong(mTree->AddRecorder(event.GetName(), event.GetTrackList(), event.GetTrackStatusList(), controller->IsRouterRecorder())); //indicate if any tracks are recording
-                    AddPendingEvent(frameEvent);
+                    if (!frameEvent.GetExtraLong() || wxYES == wxMessageBox(wxT("Recorder \"") + event.GetName() + wxT("\" is already recording.  If you connect to it you will not be able to disconnect without stopping it.  Do you want to continue?"), wxT("Already recording"), wxYES_NO | wxICON_QUESTION, this)) { //not recording or user is happy that it is recording
+                        //keep this recorder
+                        frameEvent.SetString(event.GetName());
+                        AddPendingEvent(frameEvent);
+                    }
+                    else {
+                        //abandon this recorder
+                        mTree->RemoveRecorder(event.GetName());
+                        Disconnect(pos);
+                    }
                 }
                 else { //edit rate incompatibility
                     wxMessageDialog dlg(this, wxT("Recorder \"") + event.GetName() + wxString::Format(wxT("\" has an edit rate incompatible with the existing recorder%s.  Deselecting "), mTree->GetRecorderCount() == 2 ? wxEmptyString : wxT("s")) + event.GetName() + wxString::Format(wxT(".\n\nEdit rate numerator: %d ("), controller->GetMaxPreroll().edit_rate.numerator) + event.GetName() + wxString::Format(wxT("); %d (existing)\nEdit rate denominator: %d ("), mMaxPreroll.edit_rate.numerator, controller->GetMaxPreroll().edit_rate.denominator) + event.GetName() + wxString::Format(wxT("); %d (existing)"), mMaxPreroll.edit_rate.denominator), wxT("Edit rate incompatibility"), wxICON_EXCLAMATION | wxOK);
@@ -490,7 +507,7 @@ void RecorderGroupCtrl::OnControllerEvent(ControllerThreadEvent & event)
                     else {
                         mTree->SetRecorderStateProblem(event.GetName(), wxT("Failed to stop: retrying"));
                     }
-                    //recorder update event (send after any state change event so event list knows which chunk info object to add the recorder data to)
+                    //recorder update event (send after any state change event so event list knows which chunk to add the recorder data to)
                     wxCommandEvent frameEvent(EVT_RECORDERGROUP_MESSAGE, RECORDER_STOPPED);
                     frameEvent.SetString(event.GetName());
                     frameEvent.SetInt(Controller::SUCCESS == event.GetResult());

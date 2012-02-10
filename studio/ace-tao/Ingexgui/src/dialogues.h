@@ -1,7 +1,7 @@
 /***************************************************************************
- *   $Id: dialogues.h,v 1.19 2011/11/11 11:21:23 john_f Exp $             *
+ *   $Id: dialogues.h,v 1.20 2012/02/10 15:12:55 john_f Exp $             *
  *                                                                         *
- *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
+ *   Copyright (C) 2006-2012 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
  *   Author: Matthew Marks                                                 *
  *                                                                         *
@@ -206,7 +206,6 @@ class JumpToTimecodeDlg : public wxDialog
 #define TEST_MAX_GAP 900 //seconds
 
 WX_DECLARE_HASH_MAP(time_t, wxArrayString*, wxIntegerHash, wxIntegerEqual, HashOfArrayStrings);
-WX_DECLARE_HASH_SET(wxString, wxStringHash, wxStringEqual, SetOfStrings);
 
 struct DirContents {
     std::list<time_t> mtimes;
@@ -226,7 +225,7 @@ class TestModeDlg : public wxDialog
         TestModeDlg(wxWindow *, const int, const int);
         int ShowModal();
         ~TestModeDlg();
-        void SetRecordPaths(const wxArrayString &);
+        void AddPaths(const wxArrayString &);
         enum
         {
             RECORD,
@@ -240,18 +239,24 @@ class TestModeDlg : public wxDialog
             REC_RANDOM,
             MIN_GAP,
             MAX_GAP,
+            ERASE_THRESH,
             GAP_RANDOM,
-            RUN
+            RUN,
+            RANDOM
         };
+        void OnModeChange(wxCommandEvent &);
         void OnChangeMinRecTime(wxSpinEvent &);
         void OnChangeMaxRecTime(wxSpinEvent &);
         void OnChangeMinGapTime(wxSpinEvent &);
         void OnChangeMaxGapTime(wxSpinEvent &);
+        void OnChangeEraseThreshold(wxSpinEvent &);
         void OnRun(wxCommandEvent &);
         void OnTimer(wxTimerEvent &);
-        void OnIdle(wxIdleEvent&);
+        void OnEraseEnable(wxCommandEvent &);
         void Record(bool rec = true);
-        void DeleteFileArrays(const wxString&);
+        void EnableModeButtons(bool enable = true);
+        void UpdateCountdownDisplay();
+        void Erase();
         wxSpinCtrl * mMinRecTime;
         wxSpinCtrl * mMaxRecTime;
         wxSpinCtrl * mMinGapTime;
@@ -261,13 +266,14 @@ class TestModeDlg : public wxDialog
         wxToggleButton * mRunButton;
         wxStaticText * mRunStopMessage;
         wxStaticText * mRunStopCountdown;
+        wxStaticText * mEraseMessage;
         wxButton * mCancelButton;
-        wxTimer * mTimer;
+        wxTimer * mCountdownTimer;
+        wxTimer * mEraseTimer;
         wxTimeSpan mCountdown;
         bool mRecording;
         const int mRecordId;
         const int mStopId;
-        SetOfStrings mRecordPaths;
         HashOfDirContents mDirInfo;
     DECLARE_EVENT_TABLE()
 };

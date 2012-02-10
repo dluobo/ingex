@@ -1,7 +1,7 @@
 /***************************************************************************
- *   $Id: eventlist.h,v 1.17 2011/11/11 11:21:23 john_f Exp $             *
+ *   $Id: eventlist.h,v 1.18 2012/02/10 15:12:55 john_f Exp $             *
  *                                                                         *
- *   Copyright (C) 2009-2011 British Broadcasting Corporation              *
+ *   Copyright (C) 2009-2012 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
  *   Author: Matthew Marks                                                 *
  *                                                                         *
@@ -42,7 +42,7 @@ class EventList : public wxListView, wxThread //used wxListCtrl for a while beca
     public:
         EventList(wxWindow *, wxWindowID, const wxPoint & = wxDefaultPosition, const wxSize & = wxDefaultSize, bool = true, const wxString & = wxEmptyString);
         ~EventList();
-        enum EventType //NB order must match TypeLabels[] initialisation
+        enum EventType
         {
             NONE = 0,
             START,
@@ -51,8 +51,8 @@ class EventList : public wxListView, wxThread //used wxListCtrl for a while beca
             STOP,
             PROBLEM
         };
-        void AddEvent(EventType, ProdAuto::MxfTimecode *, const int64_t = 0, const wxString & = wxEmptyString, const size_t = 0, const bool = true, const wxString & = wxEmptyString);
-        void AddRecorderData(RecorderData * data, bool = true);
+        void AddEvent(EventType, ProdAuto::MxfTimecode *, const int64_t = 0, const wxString & = wxEmptyString, const size_t = 0, const bool = true, const wxString & = wxEmptyString, const unsigned int = 0);
+        wxArrayString AddRecorderData(RecorderData * data, bool = true);
         void DeleteCuePoint();
         void Select(const long, const bool = false);
         void SelectPrevTake(const bool);
@@ -96,7 +96,7 @@ class EventList : public wxListView, wxThread //used wxListCtrl for a while beca
         const wxString GetCdata(const wxXmlNode *);
         void SetItemAppearance(wxListItem &, const EventType, const size_t = 0);
         wxXmlNode * SetNextChild(wxXmlNode *, wxXmlNode *, wxXmlNode *);
-        wxXmlNode *  NewChunk(ProdAuto::MxfTimecode *, int64_t, const wxString & = wxEmptyString);
+        wxXmlNode * NewChunk(ProdAuto::MxfTimecode *, int64_t, const wxString & = wxEmptyString, const unsigned int = 0);
         void LimitListSize();
         ProdAuto::MxfTimecode GetStartTimecode();
         bool RecordingIsSelected();
@@ -118,6 +118,7 @@ class EventList : public wxListView, wxThread //used wxListCtrl for a while beca
         wxXmlNode * mSelectedChunkNode;
         bool mFilesHaveChanged;
         unsigned int mTotalChunks;
+        unsigned int mChunkNumber;
         SavedState * mSavedState;
     DECLARE_EVENT_TABLE()
 };

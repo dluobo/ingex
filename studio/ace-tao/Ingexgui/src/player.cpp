@@ -1,7 +1,7 @@
 /***************************************************************************
- *   $Id: player.cpp,v 1.37 2011/11/11 11:21:23 john_f Exp $              *
+ *   $Id: player.cpp,v 1.38 2012/02/10 15:12:55 john_f Exp $              *
  *                                                                         *
- *   Copyright (C) 2006-2011 British Broadcasting Corporation              *
+ *   Copyright (C) 2006-2012 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
  *   Author: Matthew Marks                                                 *
  *                                                                         *
@@ -77,6 +77,7 @@ mConnected(true), //built-in so always connected
 #endif
 mSpeed(0), mMuted(false), mOpeningSocket(false),
 mPrevTrafficControl(true), //so that it can be switched off
+mChunkLinking(STATE_CHANGE), //next recording loaded will be treated as isolated
 mMode(RECORDINGS), mPreviousMode(RECORDINGS),
 mEventList(eventList),
 mDivertKeyPresses(false),
@@ -584,7 +585,7 @@ bool Player::Enable(bool state)
     return mEnabled;
 }
 
-/// If player is enabled, tries to load the current filenames or re-load previously given filenames.  Starts polling if it can't open them all, unless in E to E mode.
+/// If player is enabled, calls Start() to load the current filenames or re-load previously given filenames.  Starts polling if it can't open them all, unless in E to E mode.
 void Player::Load()
 {
 //std::cerr << "Player Load" << std::endl;
@@ -634,8 +635,9 @@ void Player::Load()
     }
 }
 
-/// If player is enabled, and saved state exists and there are files to play, tries to load.
-/// Tries to select the file position previously selected by the user.  If this wasn't opened, selects the only file open or a split view otherwise.
+/// If player is enabled, saved state exists and there are files to play, tries to load the player with these files.
+/// Tries to select the track previously selected by the user.  If this wasn't opened, selects a split view or the only track available if there is only one.
+/// Jumps to previously used offset if appropriate.
 /// This method is the same as Load() except that it does not manipulate the polling timer or change the playing state.
 /// @return True if all files were opened.
 bool Player::Start()
@@ -681,6 +683,17 @@ bool Player::Start()
             mOK = start(inputs, mOpened, LOAD_FIRST_CHUNK != mChunkLinking && (PlayerState::PAUSED == mState || PlayerState::STOPPED == mState), frameOffset); //play forwards or paused
 #endif
             int trackToSelect = (1 == mFileNames.size() ? 1 : 0); //display split view by default unless only one file
+            unsigned int nFilesOpen = 0;
+            int aWorkingTrack = 0; //initialisation prevents compiler warning
+            if (mOK) { //initialised properly
+                for (size_t i = 0; i < mOpened.size(); i++) {
+                    if (mOpened[i]) {
+                        nFilesOpen++;
+                        aWorkingTrack = i + 1; // +1 because track 0 is split view
+                    }
+                }
+                mOK  = nFilesOpen;
+            }
             if (mOK) { //at least one source opened
                 mUsingDVSCard = (DVS_OUTPUT == OutputType) || (DUAL_DVS_AUTO_OUTPUT == OutputType) || (DUAL_DVS_X11_OUTPUT == OutputType) || (DUAL_DVS_X11_XV_OUTPUT == OutputType);
                 if (RECORDINGS == mMode) {
@@ -714,14 +727,6 @@ bool Player::Start()
                 SetOSDPosition();
                 mChunkLinking = STATE_CHANGE; //next recording loaded is not linked to this one
                 // work out which track to select
-                unsigned int nFilesOpen = 0;
-                int aWorkingTrack = 0; //initialisation prevents compiler warning
-                for (size_t i = 0; i < mOpened.size(); i++) {
-                    if (mOpened[i]) {
-                        nFilesOpen++;
-                        aWorkingTrack = i + 1; // +1 because track 0 is split view
-                    }
-                }
                 if (mDesiredTrackName.size()) { //want something other than split view
                     size_t i;
                     for (i = 0; i < mTrackNames.size(); i++) {
@@ -740,6 +745,7 @@ bool Player::Start()
                 muteAudio(mMuted);
             }
             else {
+                stop(); //or will be paused/playing blank sources
                 mUsingDVSCard = false;
                 SetWindowName(wxT("Ingex Player - no files"));
             }
@@ -938,6 +944,7 @@ void Player::Step(bool direction)
 /// Keeping the window stops it re-appearing in a different place.
 void Player::Reset()
 {
+    stop();
 //std::cerr << "Player Reset" << std::endl;
     mFilePollTimer->Stop();
 //    mConnectRetryTimer->Stop(); //suspend any current attempts to connect
@@ -1266,17 +1273,20 @@ void Player::SetWindowName(const wxString & name)
         if (mTrackSelector->GetSelectedSource()) { //individual track
             title = wxString(mTrackNames[mTrackSelector->GetSelectedSource() - 1].c_str(), *wxConvCurrent); //-1 to offset for split view
         }
-        else { //split view
-            unsigned int nTracks = 0;
+        else if (mTrackNames.size()) { //split view
             for (size_t i = 0; i < mTrackNames.size(); i++) { //only go through video files
-                if (i < mOpened.size() && mOpened[i]) { //taint check
-                    title += wxString(mTrackNames[i].c_str(), *wxConvCurrent) + wxT("; ");
-                    if ((mSavedState && mSavedState->GetBoolValue(wxT("LimitSplitToQuad"), false) ? 4 : 9) == ++nTracks) break; //split view displays up to the first four or nine successfully opened files
+                if (i >= mOpened.size()) break; //taint check
+                if (!mOpened[i]) title += wxT("[");
+                title += wxString(mTrackNames[i].c_str(), *wxConvCurrent);
+                if (!mOpened[i]) title += wxT("]");
+                if (mTrackNames.size() - 1 == i || (mSavedState && (mSavedState->GetBoolValue(wxT("LimitSplitToQuad"), false) ? 3 : 8) == i)) {
+                    break; //split view displays up to the first four or nine video files
                 }
+                title += wxT("; ");
             }
-            if (!title.IsEmpty()) { //trap for only audio files
-                title.resize(title.size() - 2); //remove trailing semicolon and space
-            }
+        }
+        else {
+            title = wxT("Audio only");
         }
     }
     if (X11_OUTPUT == getActualOutputType() || DUAL_DVS_X11_OUTPUT == getActualOutputType()) {

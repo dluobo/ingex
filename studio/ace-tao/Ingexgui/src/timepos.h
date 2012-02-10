@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: timepos.h,v 1.15 2011/04/19 07:04:02 john_f Exp $           *
+ *   $Id: timepos.h,v 1.16 2012/02/10 15:12:56 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2006-2010 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -27,6 +27,7 @@
 
 #include <wx/wx.h>
 #include "RecorderC.h"
+#include "ingexgui.h"
 
 #define NO_TIMECODE wxT("--:--:--:--")
 #define NO_POSITION wxT("   --:--")
@@ -47,7 +48,7 @@ class Timepos : public wxEvtHandler
         void SetDefaultEditRate(const ProdAuto::MxfTimecode);
         void SetPositionUnknown(bool = false);
         const wxString Record(const ProdAuto::MxfTimecode);
-        void Stop(const ProdAuto::MxfTimecode);
+        void Stop(const ProdAuto::MxfTimecode = InvalidMxfTimecode);
         void DisableTimecode(const wxString & = NO_TIMECODE);
         const wxString GetTimecode(ProdAuto::MxfTimecode * = 0);
         const wxString GetStartTimecode(ProdAuto::MxfTimecode * = 0);

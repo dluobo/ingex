@@ -1,7 +1,7 @@
 /***************************************************************************
- *   $Id: eventlist.cpp,v 1.26 2011/11/23 13:47:34 john_f Exp $           *
+ *   $Id: eventlist.cpp,v 1.27 2012/02/10 15:12:55 john_f Exp $           *
  *                                                                         *
- *   Copyright (C) 2009-2011 British Broadcasting Corporation              *
+ *   Copyright (C) 2009-2012 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
  *   Author: Matthew Marks                                                 *
  *                                                                         *
@@ -33,6 +33,7 @@
 #include "savedstate.h"
 
 #define ROOT_NODE_NAME wxT("IngexguiEvents")
+#define CUE_LABEL wxT("Cue")
 #define DEFAULT_MAX_CHUNKS 1000
 DEFINE_EVENT_TYPE (EVT_RESTORE_LIST_LABEL);
 
@@ -44,8 +45,6 @@ BEGIN_EVENT_TABLE( EventList, wxListView )
     EVT_COMMAND( wxID_ANY, EVT_RESTORE_LIST_LABEL, EventList::OnRestoreListLabel )
     EVT_SOCKET(wxID_ANY, EventList::OnSocketEvent)
 END_EVENT_TABLE()
-
-const wxString TypeLabels[] = {wxT(""), wxT("Start"), wxT("Cue"), wxT("Chunk Start"), wxT("Last Frame"), wxT("PROBLEM")}; //must match order of EventType enum
 
 EventList::EventList(wxWindow * parent, wxWindowID id, const wxPoint & pos, const wxSize & size, bool loadEventFile, const wxString & eventFilename) :
 wxListView(parent, id, pos, size, wxLC_REPORT|wxLC_SINGLE_SEL|wxSUNKEN_BORDER|wxLC_EDIT_LABELS/*|wxALWAYS_SHOW_SB*/), //ALWAYS_SHOW_SB results in a disabled scrollbar on GTK (wx 2.8))
@@ -347,7 +346,7 @@ void EventList::OnRestoreListLabel(wxCommandEvent& event)
     wxListItem item;
     item.SetId(event.GetExtraLong());
     item.SetColumn(0);
-    item.SetText(TypeLabels[CUE]);
+    item.SetText(CUE_LABEL);
     SetItem(item);
 }
 
@@ -547,12 +546,13 @@ bool EventList::FilesHaveChanged()
 /// Updates the other controls and the player.
 /// @param type The event type: START, CUE, CHUNK, STOP or [PROBLEM]-not implemented.
 /// @param timecode Timecode of the event, for START and optionally STOP and CHUNK events (for STOP and CHUNK events, assumed to be frame-accurate, unlike frameCount).
-/// @param frameCount The position in frames. (For STOP and CHUNK events, if timecode supplied, frameCount is just used to work out the number of days; otherwise, used as the frame-accurate length unless zero, which indicates unknown.  For START events. if non-zero, assumed to be an orphaned CHUNK event.)
+/// @param frameCount The position in frames. (For STOP and CHUNK events, if timecode supplied, frameCount is just used to work out the number of days; otherwise, used as the frame-accurate length unless zero, which indicates unknown.)
 /// @param description For CUE, CHUNK and STOP events.  For CHUNK and STOP events it is shown next to the previous CHUNK or START event, as it is a description added at the end of the corresponding chunk or recording.  For CUE events it is shown next to the event being added.
 /// @param colourIndex The colour of a CUE event.
 /// @param select If true, selects the start of the last take for a STOP event.
 /// @param projectName To display next to STOP events.
-void EventList::AddEvent(EventType type, ProdAuto::MxfTimecode * timecode, const int64_t frameCount, const wxString & description, const size_t colourIndex, const bool select, const wxString & projectName)
+/// @param chunksMissing For START events, indicates the number of chunks missing before this chunk.
+void EventList::AddEvent(EventType type, ProdAuto::MxfTimecode * timecode, const int64_t frameCount, const wxString & description, const size_t colourIndex, const bool select, const wxString & projectName, const unsigned int chunksMissing)
 {
     wxListItem item;
     item.SetId(GetItemCount()); //insert event at end unless a cue point, which can be out of order
@@ -562,8 +562,10 @@ void EventList::AddEvent(EventType type, ProdAuto::MxfTimecode * timecode, const
     wxFont font(EVENT_FONT_SIZE, wxFONTFAMILY_DEFAULT, wxFONTFLAG_UNDERLINED, wxFONTFLAG_UNDERLINED);
     switch (type) {
         case START :
+            mChunkNumber = chunksMissing;
+            item.SetData((void *) NewChunk(timecode, frameCount, description, chunksMissing));
+            timecode->samples += frameCount;
             SetItemAppearance(item, frameCount ? CHUNK : START);
-            item.SetData((void *) NewChunk(timecode, 0, description));
             break;
         case CUE :
             {
@@ -597,7 +599,6 @@ void EventList::AddEvent(EventType type, ProdAuto::MxfTimecode * timecode, const
             }
         case STOP :
         case CHUNK : {
-                SetItemAppearance(item, CHUNK == type ? CHUNK : STOP);
                 mMutex.Lock();
                 wxXmlNode * currentRecordingNode = GetRecordingNode(GetNode(GetItemCount() - 1));
                 if (!description.IsEmpty()) new wxXmlNode(new wxXmlNode(GetCreatingChunkNode(), wxXML_ELEMENT_NODE, wxT("Description")), wxXML_CDATA_SECTION_NODE, wxT(""), description);
@@ -639,6 +640,7 @@ void EventList::AddEvent(EventType type, ProdAuto::MxfTimecode * timecode, const
                     item.SetData((void *) currentRecordingNode);
                     if (!projectName.IsEmpty()) new wxXmlNode(new wxXmlNode(currentRecordingNode, wxXML_ELEMENT_NODE, wxT("ProjectName")), wxXML_CDATA_SECTION_NODE, wxT(""), projectName);
                 }
+                SetItemAppearance(item, CHUNK == type ? CHUNK : STOP);
                 //description: add to start event of this chunk
                 if (!description.IsEmpty()) { //stops desc column being squashed if all descriptions are empty
                     long index = GetItemCount() - 1;
@@ -658,7 +660,7 @@ void EventList::AddEvent(EventType type, ProdAuto::MxfTimecode * timecode, const
                 break;
             }
         default : //FIXME: not implemented
-            item.SetText(TypeLabels[PROBLEM]);
+            item.SetText(wxT("Problem"));
             item.SetTextColour(wxColour(wxT("RED")));
             item.SetBackgroundColour(wxColour(wxT("WHITE")));
             break;
@@ -737,23 +739,26 @@ void EventList::AddEvent(EventType type, ProdAuto::MxfTimecode * timecode, const
 /// @param colourIndex Used to set the item colour for CUE event types.
 void EventList::SetItemAppearance(wxListItem & item, const EventType type, const size_t colourIndex)
 {
-    item.SetText(TypeLabels[type]);
     switch (type) {
         case START:
+            item.SetText(wxT("Start"));
             item.SetTextColour(wxColour(0xFF, 0x20, 0x00));
             item.SetBackgroundColour(wxColour(wxT("WHITE")));
 //          font.SetWeight(wxFONTWEIGHT_BOLD); breaks auto col width
 //          font.SetStyle(wxFONTSTYLE_ITALIC); breaks auto col width
             break;
         case CUE:
+            item.SetText(CUE_LABEL);
             item.SetTextColour(CuePointsDlg::GetLabelColour(colourIndex));
             item.SetBackgroundColour(CuePointsDlg::GetColour(colourIndex));
             break;
         case CHUNK:
+            item.SetText(wxString::Format(wxT("Chunk %d"), mChunkNumber));
             item.SetTextColour(wxColour(wxT("GREY")));
             item.SetBackgroundColour(wxColour(wxT("WHITE")));
             break;
         case STOP:
+            item.SetText(wxT("Last Frame"));
             item.SetTextColour(wxColour(wxT("BLACK")));
             item.SetBackgroundColour(wxColour(wxT("WHITE")));
             break;
@@ -766,8 +771,9 @@ void EventList::SetItemAppearance(wxListItem & item, const EventType type, const
 /// @param timecode Start time
 /// @param position Start position relative to start of recording
 /// @param description If not the first chunk in a recording, this becomes the description of the previous chunk.
+/// @param chunksMissing When creating the first chunk, indicates the number of chunks missing before the first chunk.
 /// @return The new chunk.
-wxXmlNode * EventList::NewChunk(ProdAuto::MxfTimecode * timecode, int64_t position, const wxString & description)
+wxXmlNode * EventList::NewChunk(ProdAuto::MxfTimecode * timecode, int64_t position, const wxString & description, const unsigned int chunksMissing)
 {
     mEditRate = *timecode;
     //Add data to XML tree
@@ -778,7 +784,7 @@ wxXmlNode * EventList::NewChunk(ProdAuto::MxfTimecode * timecode, int64_t positi
         wxXmlNode * recordingNode = SetNextChild(mRootNode, 0, new wxXmlNode(0, wxXML_ELEMENT_NODE, wxT("Recording"), wxT(""), timecode->undefined ? 0 : new wxXmlProperty(wxT("StartTime"), wxString::Format(wxT("%d"), timecode->samples))));
         //new Chunks node
 //        newChunkNode->SetParent(new wxXmlNode(recordingNode, wxXML_ELEMENT_NODE, wxT("Chunks"))); This doesn't work!
-        (new wxXmlNode(recordingNode, wxXML_ELEMENT_NODE, wxT("Chunks")))->AddChild(newChunkNode);
+        (new wxXmlNode(recordingNode, wxXML_ELEMENT_NODE, wxT("Chunks"), wxEmptyString, new wxXmlProperty(wxT("Missing"), wxString::Format(wxT("%d"), chunksMissing))))->AddChild(newChunkNode);
     }
     else {
         //New Chunk node is sibling of previous Chunk node
@@ -788,6 +794,7 @@ wxXmlNode * EventList::NewChunk(ProdAuto::MxfTimecode * timecode, int64_t positi
         prevChunkNode->GetParent()->AddChild(newChunkNode);
     }
     mMutex.Unlock();
+    mChunkNumber++;
     mTotalChunks++;
     LimitListSize();
     return newChunkNode;
@@ -812,10 +819,12 @@ bool EventList::RecordingIsSelected()
 /// Assumes there is a completed chunk.
 /// @param data Track and file lists for a recorder.
 /// @param reload Reload the player (to update with new recording details) if it is showing the latest chunk.
-void EventList::AddRecorderData(RecorderData * data, bool reload)
+/// @return The file list.
+wxArrayString EventList::AddRecorderData(RecorderData * data, bool reload)
 {
     mMutex.Lock();
     wxXmlNode * chunkNode;
+    wxArrayString paths;
     if (wxT("Recording") == GetNode(GetItemCount() - 1)->GetName()) { //a stop event
         //previous list item points to a node in the latest completed chunk
         chunkNode = GetNode(GetItemCount() - 2);
@@ -833,7 +842,8 @@ void EventList::AddRecorderData(RecorderData * data, bool reload)
         if (data->GetTrackList()[i].has_source && strlen(data->GetStringSeq()[i].in())) { //tracks not enabled for record have blank filenames
             fileNode = SetNextChild(filesNode, fileNode, new wxXmlNode(0, wxXML_ELEMENT_NODE, wxT("File"), wxT(""), new wxXmlProperty(wxT("Type"), ProdAuto::VIDEO == (data->GetTrackList())[i].type ? wxT("video") : wxT("audio"))));
             new wxXmlNode(new wxXmlNode(fileNode, wxXML_ELEMENT_NODE, wxT("Label")), wxXML_CDATA_SECTION_NODE, wxT(""), wxString((data->GetTrackList())[i].src.package_name, wxConvLibc));
-            new wxXmlNode(new wxXmlNode(fileNode, wxXML_ELEMENT_NODE, wxT("Path")), wxXML_CDATA_SECTION_NODE, wxT(""), wxString((data->GetStringSeq())[i].in(), wxConvLibc));
+            paths.Insert(wxString((data->GetStringSeq())[i].in(), wxConvLibc), 0);
+            new wxXmlNode(new wxXmlNode(fileNode, wxXML_ELEMENT_NODE, wxT("Path")), wxXML_CDATA_SECTION_NODE, wxT(""), paths[0]);
         }
     }
     SaveDocument();
@@ -846,6 +856,7 @@ void EventList::AddRecorderData(RecorderData * data, bool reload)
         mFilesHaveChanged = true; //signals a forced reload
         GetParent()->AddPendingEvent(event);
     }
+    return paths;
 }
 
 /// Deletes the cue point corresponding to the currently selected event list item, if possible.
@@ -890,17 +901,14 @@ ProdAuto::LocatorSeq EventList::GetLocators()
     wxMutexLocker lock(mMutex);
     wxXmlNode * node = GetNode(GetItemCount() - 1);
     if (wxT("CuePoint") == node->GetName() && !mEditRate.undefined) { //there are cue points; sanity check
-        ProdAuto::MxfTimecode startTimecode = mEditRate;
-        node = node->GetParent(); //CuePoints node
-        startTimecode.samples = GetNumericalPropVal(node->GetParent()->GetParent()->GetParent(), wxT("startTime"), 0);
-        node = node->GetChildren(); //first cue point
+        node = node->GetParent()->GetChildren(); //first cue point
         while (node) {
             locators.length(locators.length() + 1);
             locators[locators.length() - 1].comment = GetCdata(node).mb_str(wxConvLibc);
             locators[locators.length() - 1].colour = CuePointsDlg::GetColourCode(GetNumericalPropVal(node, wxT("Colour"), 0));
-            locators[locators.length() - 1].timecode = startTimecode;
+            locators[locators.length() - 1].timecode = GetStartTimecode();
             locators[locators.length() - 1].timecode.samples += GetNumericalPropVal(node, wxT("Frame"), 0);
-            locators[locators.length() - 1].timecode.samples %= 24LL * mEditRate.edit_rate.numerator / mEditRate.edit_rate.denominator;
+            locators[locators.length() - 1].timecode.samples %= 24LL * 3600 * mEditRate.edit_rate.numerator / mEditRate.edit_rate.denominator;
             node = node->GetNext();
         }
     }
@@ -968,9 +976,9 @@ void EventList::LoadDocument()
         while (recordingNode) {
             if (wxT("Recording") == recordingNode->GetName()) {
                 //find first valid chunk node
-                wxXmlNode * chunkNode = FindChildNodeByName(recordingNode, wxT("Chunks"));
-                if (chunkNode) {
-                    chunkNode = chunkNode->GetChildren();
+                wxXmlNode * chunksNode = FindChildNodeByName(recordingNode, wxT("Chunks"));
+                if (chunksNode) {
+                    wxXmlNode * chunkNode = chunksNode->GetChildren();
                     while (chunkNode && wxT("Chunk") != chunkNode->GetName()) {
                         chunkNode = chunkNode->GetNext();
                     }
@@ -983,7 +991,8 @@ void EventList::LoadDocument()
                         else {
                             startTimecode.undefined = true;
                         }
-                        AddEvent(START, &startTimecode, GetNumericalPropVal(chunkNode, wxT("StartFrame"), 0)); //becomes a CHUNK event if StartFrame is not zero
+                        value = GetNumericalPropVal(chunksNode, wxT("Missing"), 0);
+                        AddEvent(START, &startTimecode, GetNumericalPropVal(chunkNode, wxT("StartFrame"), 0), wxEmptyString, 0, true, wxEmptyString, value < UINT_MAX ? (unsigned int) value : 0); //becomes a CHUNK event if Missing is not zero
                         //go through all chunks in this recording
                         do {
                             //add cue points
@@ -1277,6 +1286,9 @@ void EventList::LimitListSize()
                     //remove everything up to the next chunk start
                     while (GetItemCount() && GetNode(0) != deletedNode->GetNext()) DeleteItem(item); //sanity check
                     chunksNode->RemoveChild(deletedNode);
+                    unsigned long long missing = GetNumericalPropVal(chunksNode, wxT("Missing"), 0);
+                    chunksNode->DeleteProperty(wxT("Missing"));
+                    chunksNode->AddProperty(wxT("Missing"), wxString::Format(wxT("%d"), ++missing));
                 }
                 else {
                     deletedNode = mRootNode->GetChildren(); //whole recording
