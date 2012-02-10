@@ -1,9 +1,9 @@
 /*
- * $Id: YUV_deinterlace.h,v 1.2 2011/09/09 08:27:09 john_f Exp $
+ * $Id: YUV_deinterlace.h,v 1.3 2012/02/10 15:14:59 john_f Exp $
  *
  *
  *
- * Copyright (C) 2011 British Broadcasting Corporation, All Rights Reserved
+ * Copyright (C) 2011-12 British Broadcasting Corporation, All Rights Reserved
  * Author: Jim Easterbrook
  *
  * This program is free software; you can redistribute it and/or modify
@@ -40,18 +40,22 @@ extern "C" {
  * opposite field dominance, requiring the opposite values.
  * 'fil' selects the filter to be used. 0 == 'simple', 1 == 'more complex'.
  * 'work_space' is allocated by the caller and must be large enough to store
- * one line of output as int32_t, i.e. (w * 4) bytes.
+ * one line of output as int32_t, i.e. (out_frame.Y.w * 4) bytes.
+ * If compiled with openMP enabled, multiply the workspace size by the number
+ * of threads to use, e.g. the number of processor cores.
  */
 
 int deinterlace_component(const component* in_frame,
                           const component* adj_frame,
                           const component* out_frame,
-                          const int top, const int fil, void* work_space);
+                          const int top, const int fil,
+                          void* work_space, const size_t work_size);
 
 int deinterlace_pic(const YUV_frame* in_frame,
                     const YUV_frame* adj_frame,
                     const YUV_frame* out_frame,
-                    const int top, const int fil, void* work_space);
+                    const int top, const int fil,
+                    void* work_space, const size_t work_size);
 
 #ifdef __cplusplus
 }

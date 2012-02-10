@@ -1,5 +1,5 @@
 /*
- * $Id: YUV_frame.h,v 1.1 2010/09/29 09:01:13 john_f Exp $
+ * $Id: YUV_frame.h,v 1.2 2012/02/10 15:14:59 john_f Exp $
  *
  *
  *
@@ -62,6 +62,7 @@ typedef enum
     YUV_unknown_format =    -3,
     YUV_size_error     =    -4,
     YUV_format_error   =    -5,
+    YUV_workspace      =    -6,
     YUV_fontconfig     = -1001,
     YUV_freetype       = -1002,
 } YUV_error;

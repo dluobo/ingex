@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011 British Broadcasting Corporation, All Rights Reserved
+ * Copyright (C) 2011-12 British Broadcasting Corporation, All Rights Reserved
  * Author: Jim Easterbrook
  *
  * This program is free software; you can redistribute it and/or modify
@@ -20,6 +20,9 @@
 #include <string.h> // for memcpy, bzero
 #include <stdint.h> // for int32_t
 // #include <stdio.h>
+#ifdef _OPENMP
+  #include <omp.h>
+#endif
 
 #include "YUV_frame.h"
 #include "YUV_deinterlace.h"
@@ -82,81 +85,98 @@ static void acc_line(const BYTE* in_line, const int in_stride,
 int deinterlace_component(const component* in_frame,
                           const component* adj_frame,
                           const component* out_frame,
-                          const int top, const int fil, void* work_space)
+                          const int top, const int fil,
+                          void* work_space, const size_t work_size)
 {
-    BYTE*   in_line;
-    BYTE*   out_line;
-    int     w, h;
-    int     f, j, y_in, y_out;
+    BYTE*     in_line;
+    BYTE*     out_line;
+    int32_t*  work_line;
+    int       w, h;
+    int       f, j, y_in, y_out;
+    int       y_max[2];
+    int       tid, num_threads;
     // filter coefficients from PH-2071, scaled by 256*256
-    int     n_coef_lf[2] = {2, 4};
-    int32_t coef_lf[2][4] = {{32768, 32768, 0, 0},
-                             {-1704, 34472, 34472, -1704}};
-    int     n_coef_hf[2] = {3, 5};
-    int32_t coef_hf[2][5] = {{-4096, 8192, -4096, 0, 0},
-                             {2032, -7602, 11140, -7602, 2032}};
+    int       n_coef_lf[2] = {2, 4};
+    int32_t   coef_lf[2][4] = {{32768, 32768, 0, 0},
+                               {-1704, 34472, 34472, -1704}};
+    int       n_coef_hf[2] = {3, 5};
+    int32_t   coef_hf[2][5] = {{-4096, 8192, -4096, 0, 0},
+                               {2032, -7602, 11140, -7602, 2032}};
 
     w = min(in_frame->w, adj_frame->w);
     h = min(in_frame->h, adj_frame->h);
     w = min(w, out_frame->w);
     h = min(h, out_frame->h);
     f = min(max(fil, 0), 1);
-    // copy one field
-    if (top)
-        y_out = 0;
-    else
-        y_out = 1;
-    in_line = in_frame->buff + (y_out * in_frame->lineStride);
-    out_line = out_frame->buff + (y_out * out_frame->lineStride);
-    while (y_out < h)
+    // check work space size
+    if (work_size < sizeof(int32_t) * w)
+        return YUV_workspace;
+    // set upper limits for odd and even fields
+    if ((h & 1) == 0)
     {
-        copy_line(in_line, in_frame->pixelStride,
-                  out_line, out_frame->pixelStride, w);
-        y_out += 2;
-        in_line += in_frame->lineStride * 2;
-        out_line += out_frame->lineStride * 2;
+        y_max[0] = h - 2;
+        y_max[1] = h - 1;
     }
-    // interpolate other field
-    if (top)
-        y_out = 1;
     else
-        y_out = 0;
-    out_line = out_frame->buff + (y_out * out_frame->lineStride);
-    while (y_out < h)
     {
-        // clear workspace
-        bzero(work_space, sizeof(int32_t) * w);
-        // get low vertical frequencies from current field
-        for (j = 0; j < n_coef_lf[f]; j++)
+        y_max[0] = h - 1;
+        y_max[1] = h - 2;
+    }
+    // how many threads to create
+    #ifdef _OPENMP
+        num_threads = work_size / (sizeof(uint32_t) * w);
+        num_threads = min(num_threads, omp_get_max_threads());
+    #endif
+    #pragma omp parallel for \
+        default (shared) \
+        private(y_in,y_out,j,in_line,out_line,work_line) \
+        num_threads (num_threads)
+    for (y_out = 0; y_out < h; y_out++)
+    {
+        #ifdef _OPENMP
+            tid = omp_get_thread_num();
+        #else
+            tid = 0;
+        #endif
+        if (((y_out & 1) == 0) == top)
         {
-            y_in = (y_out + 1) + (j * 2) - n_coef_lf[f];
-            while (y_in < 0)
-                y_in += 2;
-            while (y_in >= h)
-                y_in -= 2;
-            in_line = in_frame->buff + (y_in * in_frame->lineStride);
-            acc_line(in_line, in_frame->pixelStride,
-                     work_space, coef_lf[f][j], w);
+            // copy line
+            in_line = &in_frame->buff[y_out * in_frame->lineStride];
+            out_line = &out_frame->buff[y_out * out_frame->lineStride];
+            copy_line(in_line, in_frame->pixelStride,
+                      out_line, out_frame->pixelStride, w);
         }
-        // get high vertical frequencies from adjacent fields
-        for (j = 0; j < n_coef_hf[f]; j++)
+        else
         {
-            y_in = (y_out + 1) + (j * 2) - n_coef_hf[f];
-            while (y_in < 0)
-                y_in += 2;
-            while (y_in >= h)
-                y_in -= 2;
-            in_line = in_frame->buff + (y_in * in_frame->lineStride);
-            acc_line(in_line, in_frame->pixelStride,
-                     work_space, coef_hf[f][j], w);
-            in_line = adj_frame->buff + (y_in * adj_frame->lineStride);
-            acc_line(in_line, adj_frame->pixelStride,
-                     work_space, coef_hf[f][j], w);
+            // interpolate line
+            // clear workspace
+            work_line = work_space + (sizeof(uint32_t) * tid * w);
+            bzero(work_line, w * 4);
+            // get low vertical frequencies from current field
+            for (j = 0; j < n_coef_lf[f]; j++)
+            {
+                y_in = (y_out + 1) + (j * 2) - n_coef_lf[f];
+                y_in = min(max(y_in, y_in & 1), y_max[y_in & 1]);
+                in_line = &in_frame->buff[y_in * in_frame->lineStride];
+                acc_line(in_line, in_frame->pixelStride,
+                         work_line, coef_lf[f][j], w);
+            }
+            // get high vertical frequencies from adjacent fields
+            for (j = 0; j < n_coef_hf[f]; j++)
+            {
+                y_in = (y_out + 1) + (j * 2) - n_coef_hf[f];
+                y_in = min(max(y_in, y_in & 1), y_max[y_in & 1]);
+                in_line = &in_frame->buff[y_in * in_frame->lineStride];
+                acc_line(in_line, in_frame->pixelStride,
+                         work_line, coef_hf[f][j], w);
+                in_line = &adj_frame->buff[y_in * adj_frame->lineStride];
+                acc_line(in_line, adj_frame->pixelStride,
+                         work_line, coef_hf[f][j], w);
+            }
+            // save scaled result
+            out_line = &out_frame->buff[y_out * out_frame->lineStride];
+            scale_copy_line(work_line, out_line, out_frame->pixelStride, w);
         }
-        // save scaled result
-        scale_copy_line(work_space, out_line, out_frame->pixelStride, w);
-        y_out += 2;
-        out_line += out_frame->lineStride * 2;
     }
     return YUV_OK;
 }
@@ -164,19 +184,23 @@ int deinterlace_component(const component* in_frame,
 int deinterlace_pic(const YUV_frame* in_frame,
                     const YUV_frame* adj_frame,
                     const YUV_frame* out_frame,
-                    const int top, const int fil, void* work_space)
+                    const int top, const int fil,
+                    void* work_space, const size_t work_size)
 {
     int     result;
 
     result = deinterlace_component(&in_frame->Y, &adj_frame->Y,
-                                   &out_frame->Y, top, fil, work_space);
+                                   &out_frame->Y, top, fil,
+                                   work_space, work_size);
     if (result != YUV_OK)
         return result;
     result = deinterlace_component(&in_frame->U, &adj_frame->U,
-                                   &out_frame->U, top, fil, work_space);
+                                   &out_frame->U, top, fil,
+                                   work_space, work_size);
     if (result != YUV_OK)
         return result;
     result = deinterlace_component(&in_frame->V, &adj_frame->V,
-                                   &out_frame->V, top, fil, work_space);
+                                   &out_frame->V, top, fil,
+                                   work_space, work_size);
     return result;
 }

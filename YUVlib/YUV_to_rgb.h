@@ -1,5 +1,5 @@
 /*
- * $Id: YUV_to_rgb.h,v 1.3 2011/10/14 09:57:48 john_f Exp $
+ * $Id: YUV_to_rgb.h,v 1.4 2012/02/10 15:14:59 john_f Exp $
  *
  *
  * Copyright (C) 2009 British Broadcasting Corporation, All Rights Reserved
@@ -39,14 +39,12 @@ extern "C" {
  * or B value to the R, G or B value immediately below. It is probably the
  * image width multiplied by RGBpixelStride, but might be rounded up to get
  * a particular alignment in some systems.
- * The minimum size of workSpace is in_frame->Y.w * 2.
  * This routine uses Rec.601 matrix coefficients and signal ranges of
  * 16..235 for R,G,B,Y and -112..112 for U,V
  */
 int to_RGB(const YUV_frame* in_frame,
            BYTE* out_R, BYTE* out_G, BYTE* out_B,
-           const int RGBpixelStride, const int RGBlineStride,
-           void* workSpace);
+           const int RGBpixelStride, const int RGBlineStride);
 
 // recognised colour matrices
 typedef enum
@@ -63,7 +61,7 @@ typedef enum
 int to_RGBex(const YUV_frame* in_frame,
              BYTE* out_R, BYTE* out_G, BYTE* out_B,
              const int RGBpixelStride, const int RGBlineStride,
-             const matrices matrix, const int fil, void* workSpace);
+             const matrices matrix, const int fil);
 
 #ifdef __cplusplus
 }

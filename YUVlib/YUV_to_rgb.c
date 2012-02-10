@@ -1,5 +1,5 @@
 /*
- * $Id: YUV_to_rgb.c,v 1.3 2011/10/14 09:57:48 john_f Exp $
+ * $Id: YUV_to_rgb.c,v 1.4 2012/02/10 15:14:59 john_f Exp $
  *
  *
  *
@@ -38,28 +38,30 @@ static inline int min(int a, int b)
 
 // Super sample a line with (1,2,1)/4 filtering
 static void h_up_2_121(BYTE* srcLine, BYTE* dstLine,
-                       const int inStride, const int w)
+                       const int inStride, const int outStride, const int w)
 {
     int     acc;
     int     i;
-    BYTE    in_0;
-    BYTE    in_1;
+    int     x_max;
 
-    in_0 = *srcLine;
-    srcLine += inStride;
-    for (i = (w/2) - 1; i != 0; i--)
+    x_max = (w/2) - 1;
+    for (i = 0; i < x_max; i++)
     {
-        *dstLine++ = in_0;
-        in_1 = *srcLine;
+        // copy even sample
+        *dstLine = *srcLine;
+        dstLine += outStride;
+        // interpolate odd sample
+        acc = *srcLine;
         srcLine += inStride;
-        acc = in_0;
-        acc += in_1;
-        *dstLine++ = (acc + 1) / 2;
-        in_0 = in_1;
+        acc += *srcLine;
+        *dstLine = (acc + 1) / 2;
+        dstLine += outStride;
     }
-    *dstLine++ = in_0;
-    // repeat last edge sample
-    *dstLine = in_0;
+    // right hand edge padding
+    *dstLine = *srcLine;
+    dstLine += outStride;
+    *dstLine = *srcLine;
+    dstLine += outStride;
 }
 
 // Super sample a line with high quality filtering
@@ -67,66 +69,79 @@ static void h_up_2_121(BYTE* srcLine, BYTE* dstLine,
 static int coefs[] = {-382, 1331, -2930, 5889, -12303, 41163,
                       41163, -12303, 5889, -2930, 1331, -382};
 static void h_up_2_HQ(BYTE* srcLine, BYTE* dstLine,
-                      const int inStride, const int w)
+                      const int inStride, const int outStride, const int w)
 {
     int     acc;
     int     i, j, k;
     int     x_max;
-    BYTE*   copy_ptr;
-    int     in_buff[12];
 
     x_max = (w/2) - 1;
-    copy_ptr = srcLine;
-    // preload input buffer with edge value
-    for (k = 0; k < 6; k++)
-        in_buff[k] = *srcLine;
-    // load rest of input buffer
-    for (k = 6; k < 12; k++)
-    {
-        srcLine += inStride;
-        in_buff[k] = *srcLine;
-    }
-    k = 0;
-    // main interpolation loop
-    for (i = 0; i <= x_max; i++)
+    // left hand edge padding
+    for (i = 0; i <= min(4, x_max); i++)
     {
         // copy even sample
-        *dstLine++ = in_buff[(k + 5) % 12];
+        *dstLine = srcLine[i*inStride];
+        dstLine += outStride;
         // interpolate odd sample
         acc = 0;
         for (j = 0; j < 12; j++)
         {
-            acc += in_buff[(j + k) % 12] * coefs[j];
+            k = min(max(i + j - 5, 0), x_max);
+            acc += srcLine[k*inStride] * coefs[j];
         }
-        *dstLine++ = min(max(acc / 65536, 0), 255);
-        // read next input sample
-        if (i < x_max - 6)
-            srcLine += inStride;
-        in_buff[k] = *srcLine;
-        k = (k + 1) % 12;
+        *dstLine = min(max(acc / 65536, 0), 255);
+        dstLine += outStride;
+    }
+    // main interpolation loop
+    for (i = 5; i < x_max - 5; i++)
+    {
+        // copy even sample
+        *dstLine = srcLine[i*inStride];
+        dstLine += outStride;
+        // interpolate odd sample
+        acc = 0;
+        for (j = 0; j < 12; j++)
+        {
+            k = i + j - 5;
+            acc += srcLine[k*inStride] * coefs[j];
+        }
+        *dstLine = min(max(acc / 65536, 0), 255);
+        dstLine += outStride;
+    }
+    // right hand edge padding
+    for (i = max(x_max - 5, 5); i <= x_max; i++)
+    {
+        // copy even sample
+        *dstLine = srcLine[i*inStride];
+        dstLine += outStride;
+        // interpolate odd sample
+        acc = 0;
+        for (j = 0; j < 12; j++)
+        {
+            k = min(i + j - 5, x_max);
+            acc += srcLine[k*inStride] * coefs[j];
+        }
+        *dstLine = min(max(acc / 65536, 0), 255);
+        dstLine += outStride;
     }
 }
 
-typedef void up_2_proc(BYTE*, BYTE*, const int, const int);
+typedef void up_2_proc(BYTE*, BYTE*, const int, const int, const int);
 
 int to_RGBex(const YUV_frame* in_frame,
              BYTE* out_R, BYTE* out_G, BYTE* out_B,
              const int RGBpixelStride, const int RGBlineStride,
-             const matrices matrix, const int fil, void* workSpace)
+             const matrices matrix, const int fil)
 {
     int         ssx, ssy;
     BYTE*       Y_line;
     BYTE*       U_line;
     BYTE*       V_line;
-    BYTE*       Y_p;
     BYTE*       U_p;
     BYTE*       V_p;
     BYTE*       R_line;
     BYTE*       G_line;
     BYTE*       B_line;
-    BYTE*       R_p;
-    BYTE*       G_p;
-    BYTE*       B_p;
     int         i, j;
     int         U_inc, V_inc;
     int         Y, U, V, R, G, B;
@@ -141,8 +156,8 @@ int to_RGBex(const YUV_frame* in_frame,
     // set up intermediate arrays
     if (ssx == 2)
     {
-        U_inc = 1;
-        V_inc = 1;
+        U_inc = RGBpixelStride;
+        V_inc = RGBpixelStride;
     }
     else
     {
@@ -174,63 +189,59 @@ int to_RGBex(const YUV_frame* in_frame,
         up_conv = &h_up_2_121;
     }
     // do it
-    Y_line = in_frame->Y.buff;
-    U_line = in_frame->U.buff;
-    V_line = in_frame->V.buff;
-    R_line = out_R;
-    G_line = out_G;
-    B_line = out_B;
-    for (j = in_frame->Y.h; j != 0; j--)
+    #pragma omp parallel for \
+        default (shared) \
+	private (i,j,Y_line,U_line,V_line,R_line,G_line,B_line, \
+	    U_p,V_p,Y,U,V,R,G,B)
+    for (j = 0; j < in_frame->Y.h; j++)
     {
-        Y_p = Y_line;
+        Y_line = in_frame->Y.buff + (j * in_frame->Y.lineStride);
+        U_line = in_frame->U.buff + (j * in_frame->U.lineStride);
+        V_line = in_frame->V.buff + (j * in_frame->V.lineStride);
+        R_line = out_R + (j * RGBlineStride);
+        G_line = out_G + (j * RGBlineStride);
+        B_line = out_B + (j * RGBlineStride);
         if (ssx == 2)
         {
-            U_p = workSpace;
-            V_p = U_p + in_frame->Y.w;
+            U_p = R_line;
+            V_p = B_line;
             // up convert chrominance
-            up_conv(U_line, U_p, in_frame->U.pixelStride, in_frame->Y.w);
-            up_conv(V_line, V_p, in_frame->V.pixelStride, in_frame->Y.w);
+            up_conv(U_line, U_p, in_frame->U.pixelStride, U_inc, in_frame->Y.w);
+            up_conv(V_line, V_p, in_frame->V.pixelStride, V_inc, in_frame->Y.w);
         }
         else
         {
             U_p = U_line;
             V_p = V_line;
         }
-        R_p = R_line;
-        G_p = G_line;
-        B_p = B_line;
-        for (i = in_frame->Y.w; i != 0; i--)
+        for (i = 0; i < in_frame->Y.w; i++)
         {
-            Y = *Y_p;   Y_p += in_frame->Y.pixelStride;
-            U = *U_p;   U_p += U_inc;
-            V = *V_p;   V_p += V_inc;
+            Y = *Y_line;
+            U = *U_p;
+            V = *V_p;
+            Y_line += in_frame->Y.pixelStride;
+            U_p += U_inc;
+            V_p += V_inc;
             U = U - 128;
             V = V - 128;
             R = Y + (V * VtoR / 65536);
             G = Y - (((V * VtoG) + (U * UtoG)) / 65536);
             B = Y + (U * UtoB / 65536);
-            *R_p = min(max(R, 0), 255);
-            *G_p = min(max(G, 0), 255);
-            *B_p = min(max(B, 0), 255);
-            R_p += RGBpixelStride;
-            G_p += RGBpixelStride;
-            B_p += RGBpixelStride;
+            *R_line = min(max(R, 0), 255);
+            *G_line = min(max(G, 0), 255);
+            *B_line = min(max(B, 0), 255);
+            R_line += RGBpixelStride;
+            G_line += RGBpixelStride;
+            B_line += RGBpixelStride;
         }
-        Y_line += in_frame->Y.lineStride;
-        U_line += in_frame->U.lineStride;
-        V_line += in_frame->V.lineStride;
-        R_line += RGBlineStride;
-        G_line += RGBlineStride;
-        B_line += RGBlineStride;
     }
     return YUV_OK;
 }
 
 int to_RGB(const YUV_frame* in_frame,
            BYTE* out_R, BYTE* out_G, BYTE* out_B,
-           const int RGBpixelStride, const int RGBlineStride,
-           void* workSpace)
+           const int RGBpixelStride, const int RGBlineStride)
 {
     return to_RGBex(in_frame, out_R, out_G, out_B,
-                    RGBpixelStride, RGBlineStride, Rec601, 0, workSpace);
+                    RGBpixelStride, RGBlineStride, Rec601, 0);
 }

@@ -20,6 +20,9 @@
 #include <string.h> // for memset
 #include <stdint.h> // for uint32_t
 #include <stdio.h>
+#ifdef _OPENMP
+  #include <omp.h>
+#endif
 
 #include "YUV_frame.h"
 #include "YUV_scale_pic.h"
@@ -405,43 +408,26 @@ static void scale_line(uint32_t* acc, uint32_t* inp, const int w,
 
 static void interp_line(uint32_t* inpA, uint32_t* inpB, BYTE* dstLine,
                         const int outStride, const int w,
-                        const uint32_t alpha, const uint32_t beta,
-                        const uint32_t gain)
+                        const uint32_t alpha, const uint32_t beta)
 {
     int     i;
 
     for (i = 0; i < w; i++)
     {
-        *dstLine = ((alpha * *inpA++) +
-                     (beta * *inpB++)) / gain;
+        *dstLine = ((alpha * *inpA++) + (beta * *inpB++)) / (256 * 256);
         dstLine += outStride;
     }
 }
 
-static void split_line(uint32_t* acc, uint32_t* inp, BYTE* dstLine,
-                       const int outStride, const int w,
-                       const uint32_t alpha, const uint32_t beta,
-                       const uint32_t gain)
+static void divide_line(uint32_t* acc, BYTE* dstLine,
+                        const int outStride, const int w)
 {
     int     i;
-    uint32_t    whole;
 
-    if (beta == 0)
-    {
-        for (i = 0; i < w; i++)
-        {
-            *dstLine = (*acc + (*inp++ * alpha)) / gain;
-            dstLine += outStride;
-            *acc++ = 0;
-        }
-        return;
-    }
     for (i = 0; i < w; i++)
     {
-        whole = *inp++;
-        *dstLine = (*acc + (whole * alpha)) / gain;
+        *dstLine = *acc++ / (256 * 256);
         dstLine += outStride;
-        *acc++ = whole * beta; // residue of input sample
     }
 }
 
@@ -449,13 +435,18 @@ typedef void sub_line_proc1(const BYTE*, uint32_t*, const int, int, int, const i
 
 static void v_sub_interp(const component* inFrame, component* outFrame,
                          const int hfil, int xup, int xdown,
-                         int yup, int ydown, int yoff, uint32_t** work)
+                         int yup, int ydown, int yoff,
+                         void* work, size_t workSize)
 {
-    const BYTE* inBuff = inFrame->buff;
-    BYTE*       outBuff = outFrame->buff;
-    int     j;
-    int     err;
-    int     A, B;
+    const BYTE*     inBuff = inFrame->buff;
+    BYTE*           outBuff = outFrame->buff;
+    int             y_in, y_in_sup;
+    int             y_off;
+    int             y_out;
+    int             err;
+    uint32_t*       line0;
+    uint32_t*       line1;
+    int             tid, num_threads;
     sub_line_proc1* h_sub;
 
     // select horizontal subsampling routine
@@ -465,45 +456,58 @@ static void v_sub_interp(const component* inFrame, component* outFrame,
         h_sub = &h_sub_scale_interp;
     else
         h_sub = &h_sub_scale_ave;
-    // first input and output samples are cosited
-    err = yup;
     // adjust for offset (percentage of output sample)
-    err += ((ydown - yup) * yoff) / 100;
-    // get first line of input
-    B = 0;
-    h_sub(inBuff, work[B],
-          inFrame->pixelStride, xup, xdown, outFrame->w);
-    inBuff += inFrame->lineStride;
-    A = B;
-    for (j = 0; j < outFrame->h; j++)
+    y_off = ((ydown - yup) * 256 * yoff) / (yup * 100);
+    // how many threads to create
+    #ifdef _OPENMP
+      num_threads = workSize / (sizeof(uint32_t) * 2 * outFrame->w);
+      num_threads = min(num_threads, omp_get_max_threads());
+    #endif
+    #pragma omp parallel for \
+        default (shared) \
+        private(y_out,y_in,y_in_sup,err,line0,line1,tid) \
+        num_threads (num_threads)
+    for (y_out = 0; y_out < outFrame->h; y_out++)
     {
-        if (err > yup)
+        #ifdef _OPENMP
+          tid = omp_get_thread_num();
+        #else
+          tid = 0;
+        #endif
+        line0 = work + (sizeof(uint32_t) * tid * 2 * outFrame->w);
+        line1 = line0 + outFrame->w;
+        y_in_sup = (y_out * ydown * 256 / yup) + y_off;
+        y_in = y_in_sup / 256;
+        err = y_in_sup - (y_in * 256);
+        h_sub(&inBuff[max(y_in, 0) * inFrame->lineStride], line0,
+              inFrame->pixelStride, xup, xdown, outFrame->w);
+        if (err > 0)
         {
-            // get next line of input
-            A = B;
-            B = 1 - A;
-            h_sub(inBuff, work[B],
+            y_in = min(y_in + 1, inFrame->h - 1);
+            h_sub(&inBuff[y_in * inFrame->lineStride], line1,
                   inFrame->pixelStride, xup, xdown, outFrame->w);
-            inBuff += inFrame->lineStride;
-            err -= yup;
         }
-        interp_line(work[A], work[B], outBuff,
-                    outFrame->pixelStride, outFrame->w,
-                    yup - err, err, 256 * yup);
-        outBuff += outFrame->lineStride;
-        err += ydown;
+        interp_line(line0, line1, &outBuff[y_out * outFrame->lineStride],
+                    outFrame->pixelStride, outFrame->w, 256 - err, err);
     }
 }
 
 static void v_sub_ave(const component* inFrame, component* outFrame,
                       const int hfil, int xup, int xdown,
-                      int yup, int ydown, int yoff, uint32_t** work)
+                      int yup, int ydown, int yoff,
+                      void* work, size_t workSize)
 {
-    const BYTE* inBuff = inFrame->buff;
-    BYTE*       outBuff = outFrame->buff;
-    int     j;
-    int     err;
-    uint32_t    scale;
+    const BYTE*     inBuff = inFrame->buff;
+    BYTE*           outBuff = outFrame->buff;
+    int             y_off;
+    int             y_out;
+    int             y_idx;
+    int             y_in, y_in0, y_in1;
+    int             err;
+    uint32_t        scale, residue;
+    uint32_t*       acc;
+    uint32_t*       line;
+    int             tid, num_threads;
     sub_line_proc1* h_sub;
 
     // select horizontal subsampling routine
@@ -513,63 +517,91 @@ static void v_sub_ave(const component* inFrame, component* outFrame,
         h_sub = &h_sub_scale_interp;
     else
         h_sub = &h_sub_scale_ave;
-    // start at centre of first input sample group
-    err = (ydown - yup) / 2;
+    // offset to edge of input block
+    y_off = (yup - ydown) / 2;
     // adjust for offset (percentage of output sample)
-    err += ((ydown - yup) * yoff) / 100;
-    // get first input line
-    h_sub(inBuff, work[1],
-          inFrame->pixelStride, xup, xdown, outFrame->w);
-    inBuff += inFrame->lineStride;
-    // edge padding of first input line
-    scale_line(work[0], work[1], outFrame->w, ydown - err);
-    for (j = 0; j < outFrame->h; j++)
+    y_off += ((ydown - yup) * yoff) / 100;
+    // how many threads to create
+    #ifdef _OPENMP
+      num_threads = workSize / (sizeof(uint32_t) * 2 * outFrame->w);
+      num_threads = min(num_threads, omp_get_max_threads());
+    #endif
+    #pragma omp parallel for \
+        default (shared) \
+        private(y_out,y_in,y_in0,y_in1,err,y_idx,scale,residue,acc,line,tid) \
+        num_threads (num_threads)
+    for (y_out = 0; y_out < outFrame->h; y_out++)
     {
+        #ifdef _OPENMP
+          tid = omp_get_thread_num();
+        #else
+          tid = 0;
+        #endif
+        acc = work + (sizeof(uint32_t) * tid * 2 * outFrame->w);
+        line = acc + outFrame->w;
+        y_in0 = (y_out * ydown) + y_off;
+        y_in1 = y_in0 + ydown;
+        if (y_in0 < 0)
+            y_in = (y_in0 + 1 - yup) / yup;
+        else
+            y_in = y_in0 / yup;
+        // get partial contribution from first line of block
+        err = yup + ((y_in * yup) - y_in0);
+        y_idx = max(y_in, 0);
+        h_sub(&inBuff[y_idx * inFrame->lineStride], line,
+              inFrame->pixelStride, xup, xdown, outFrame->w);
+        scale = err * 256 / ydown;
+        residue = (err * 256) - (scale * ydown);
+        scale_line(acc, line, outFrame->w, scale);
+        y_in += 1;
+        // add whole contributions from middle lines of block
+        err = y_in1 - (y_in * yup);
         while (err > yup)
         {
-            h_sub(inBuff, work[1],
+            y_idx = min(max(y_in, 0), inFrame->h - 1);
+            h_sub(&inBuff[y_idx * inFrame->lineStride], line,
                   inFrame->pixelStride, xup, xdown, outFrame->w);
-            inBuff += inFrame->lineStride;
+            scale = ((yup * 256) + residue) / ydown;
+            residue += (yup * 256) - (scale * ydown);
+            add_line(acc, line, outFrame->w, scale);
+            y_in += 1;
             err -= yup;
-            // add input to this output
-            add_line(work[0], work[1], outFrame->w, yup);
         }
-        scale = err;
-        h_sub(inBuff, work[1],
+        // add partial contribution from last line of block
+        y_idx = min(y_in, inFrame->h - 1);
+        h_sub(&inBuff[y_idx * inFrame->lineStride], line,
               inFrame->pixelStride, xup, xdown, outFrame->w);
-        inBuff += inFrame->lineStride;
-        err -= yup;
-        // divide last line of input between this and next output line
-        split_line(work[0], work[1], outBuff,
-                   outFrame->pixelStride, outFrame->w,
-                   scale, yup - scale, 256 * ydown);
-        outBuff += outFrame->lineStride;
-        err += ydown;
+        scale = ((err * 256) + residue) / ydown;
+        add_line(acc, line, outFrame->w, scale);
+        // scale result
+        divide_line(acc, &outBuff[y_out * outFrame->lineStride],
+                    outFrame->pixelStride, outFrame->w);
     }
 }
 
 static void scale_comp(const component* inFrame, component* outFrame,
                        const int hfil, const int vfil,
                        int xup, int xdown, int yup, int ydown,
-                       int yoff, uint32_t** work)
+                       int yoff, uint32_t** work, size_t workSize)
 {
     if (vfil <= 0 || yup == ydown)
         v_sub_alias(inFrame, outFrame, hfil, xup, xdown,
                     yup, ydown, yoff, work);
     else if (yup > ydown)
         v_sub_interp(inFrame, outFrame, hfil, xup, xdown,
-                     yup, ydown, yoff, work);
+                     yup, ydown, yoff, work[0], workSize);
     else
         v_sub_ave(inFrame, outFrame, hfil, xup, xdown,
-                  yup, ydown, yoff, work);
+                  yup, ydown, yoff, work[0], workSize);
 }
 
 int resize_component(const component* in_frame, component* out_frame,
-               int x, int y, int xup, int xdown, int yup, int ydown,
-               int intlc, int hfil, int vfil, void* workSpace)
+                     int x, int y, int xup, int xdown, int yup, int ydown,
+                     int intlc, int hfil, int vfil,
+                     void* workSpace, size_t workSize)
 {
     component   sub_frame;
-    uint32_t*   work[3];
+    uint32_t*   work[2];
 
     // adjust position, if required
     if (intlc)
@@ -580,9 +612,11 @@ int resize_component(const component* in_frame, component* out_frame,
                       (x * sub_frame.pixelStride);
     sub_frame.w = min(in_frame->w * xup / xdown, out_frame->w - x);
     sub_frame.h = min(in_frame->h * yup / ydown, out_frame->h - y);
+    // check work space size
+    if (workSize < sizeof(uint32_t) * 2 * sub_frame.w)
+        return YUV_workspace;
     work[0] = workSpace;
     work[1] = work[0] + sub_frame.w;
-    work[2] = work[1] + sub_frame.w;
     if (intlc)
     {
         component   in_field;
@@ -593,25 +627,26 @@ int resize_component(const component* in_frame, component* out_frame,
             extract_field(in_frame, &in_field, f);
             extract_field(&sub_frame, &out_field, f);
             scale_comp(&in_field, &out_field, hfil, vfil,
-                       xup, xdown, yup, ydown, f * 50, work);
+                       xup, xdown, yup, ydown, f * 50, work, workSize);
         }
     }
     else // not interlaced
     {
         scale_comp(in_frame, &sub_frame, hfil, vfil,
-                   xup, xdown, yup, ydown, 0, work);
+                   xup, xdown, yup, ydown, 0, work, workSize);
     }
     return YUV_OK;
 }
 
 int resize_pic(const YUV_frame* in_frame, YUV_frame* out_frame,
                int x, int y, int xup, int xdown, int yup, int ydown,
-               int intlc, int hfil, int vfil, void* workSpace)
+               int intlc, int hfil, int vfil,
+               void* workSpace, size_t workSize)
 {
     int     ssx_in, ssx_out;
     int     ssy_in, ssy_out;
     YUV_frame   sub_frame;
-    uint32_t*   work[3];
+    uint32_t*   work[2];
 
     // make up and down numbers even, for later convenience
     xup = xup * 2;
@@ -648,9 +683,11 @@ int resize_pic(const YUV_frame* in_frame, YUV_frame* out_frame,
                         out_frame->V.w - (x/ssx_out));
     sub_frame.V.h = min(in_frame->V.h * ssy_in * yup / (ydown * ssy_out),
                         out_frame->V.h - (y/ssy_out));
+    // check work space size
+    if (workSize < sizeof(uint32_t) * 2 * sub_frame.Y.w)
+        return YUV_workspace;
     work[0] = workSpace;
     work[1] = work[0] + sub_frame.Y.w;
-    work[2] = work[1] + sub_frame.Y.w;
     if (intlc)
     {
         component   in_field;
@@ -661,47 +698,49 @@ int resize_pic(const YUV_frame* in_frame, YUV_frame* out_frame,
             extract_field(&in_frame->Y, &in_field, f);
             extract_field(&sub_frame.Y, &out_field, f);
             scale_comp(&in_field, &out_field, hfil, vfil,
-                       xup, xdown, yup, ydown, f * 50, work);
+                       xup, xdown, yup, ydown, f * 50, work, workSize);
             extract_field(&in_frame->U, &in_field, f);
             extract_field(&sub_frame.U, &out_field, f);
             scale_comp(&in_field, &out_field, hfil, vfil,
                        ssx_in * xup, xdown * ssx_out,
-                       ssy_in * yup, ydown * ssy_out, f * 50, work);
+                       ssy_in * yup, ydown * ssy_out, f * 50, work, workSize);
             extract_field(&in_frame->V, &in_field, f);
             extract_field(&sub_frame.V, &out_field, f);
             scale_comp(&in_field, &out_field, hfil, vfil,
                        ssx_in * xup, xdown * ssx_out,
-                       ssy_in * yup, ydown * ssy_out, f * 50, work);
+                       ssy_in * yup, ydown * ssy_out, f * 50, work, workSize);
         }
     }
     else // not interlaced
     {
         scale_comp(&in_frame->Y, &sub_frame.Y, hfil, vfil,
-                   xup, xdown, yup, ydown, 0, work);
+                   xup, xdown, yup, ydown, 0, work, workSize);
         scale_comp(&in_frame->U, &sub_frame.U, hfil, vfil,
                    ssx_in * xup, xdown * ssx_out,
-                   ssy_in * yup, ydown * ssy_out, 0, work);
+                   ssy_in * yup, ydown * ssy_out, 0, work, workSize);
         scale_comp(&in_frame->V, &sub_frame.V, hfil, vfil,
                    ssx_in * xup, xdown * ssx_out,
-                   ssy_in * yup, ydown * ssy_out, 0, work);
+                   ssy_in * yup, ydown * ssy_out, 0, work, workSize);
     }
     return YUV_OK;
 }
 
 int scale_component(const component* in_frame, component* out_frame,
-              int x, int y, int w, int h,
-              int intlc, int hfil, int vfil, void* workSpace)
+                    int x, int y, int w, int h,
+                    int intlc, int hfil, int vfil,
+                    void* workSpace, size_t workSize)
 {
     return resize_component(in_frame, out_frame, x, y,
                             w, in_frame->w, h, in_frame->h,
-                            intlc, hfil, vfil, workSpace);
+                            intlc, hfil, vfil, workSpace, workSize);
 }
 
 int scale_pic(const YUV_frame* in_frame, YUV_frame* out_frame,
               int x, int y, int w, int h,
-              int intlc, int hfil, int vfil, void* workSpace)
+              int intlc, int hfil, int vfil,
+              void* workSpace, size_t workSize)
 {
     return resize_pic(in_frame, out_frame, x, y,
                       w, in_frame->Y.w, h, in_frame->Y.h,
-                      intlc, hfil, vfil, workSpace);
+                      intlc, hfil, vfil, workSpace, workSize);
 }

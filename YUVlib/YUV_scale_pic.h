@@ -1,5 +1,5 @@
 /*
- * $Id: YUV_scale_pic.h,v 1.2 2010/12/03 14:29:53 john_f Exp $
+ * $Id: YUV_scale_pic.h,v 1.3 2012/02/10 15:14:59 john_f Exp $
  *
  *
  *
@@ -37,16 +37,19 @@ extern "C" {
  * If the video is interlaced, setting intlc to 1 will have each field
  * processed separately.
  * workSpace is allocated by the caller and must be large enough to store
- * 2 lines of output as uint32_t, i.e.
- * (2 * (in_frame->w * yup / ydown) * 4) bytes.
+ * 2 lines of output as uint32_t, i.e. (2*(in_frame->w*xup/xdown)*4) bytes.
+ * If compiled with openMP enabled the workSpace size should be multiplied
+ * by the number of threads to be used, e.g. the number of processor cores.
  * Return value is 0 for success, <0 for failure.
  */
 int resize_component(const component* in_frame, component* out_frame,
                      int x, int y, int xup, int xdown, int yup, int ydown,
-                     int intlc, int hfil, int vfil, void* workSpace);
+                     int intlc, int hfil, int vfil,
+                     void* workSpace, size_t workSize);
 int resize_pic(const YUV_frame* in_frame, YUV_frame* out_frame,
                int x, int y, int xup, int xdown, int yup, int ydown,
-               int intlc, int hfil, int vfil, void* workSpace);
+               int intlc, int hfil, int vfil,
+               void* workSpace, size_t workSize);
 
 /* Make a different size copy of in_frame in out_frame at position x,y and
  * size w x h.
@@ -57,14 +60,18 @@ int resize_pic(const YUV_frame* in_frame, YUV_frame* out_frame,
  * processed separately.
  * workSpace is allocated by the caller and must be large enough to store
  * 2 lines of output as uint32_t, i.e. (2 * w * 4) bytes.
+ * If compiled with openMP enabled the workSpace size should be multiplied
+ * by the number of threads to be used, e.g. the number of processor cores.
  * Return value is 0 for success, <0 for failure.
  */
 int scale_component(const component* in_frame, component* out_frame,
                     int x, int y, int w, int h,
-                    int intlc, int hfil, int vfil, void* workSpace);
+                    int intlc, int hfil, int vfil,
+                    void* workSpace, size_t workSize);
 int scale_pic(const YUV_frame* in_frame, YUV_frame* out_frame,
               int x, int y, int w, int h,
-              int intlc, int hfil, int vfil, void* workSpace);
+              int intlc, int hfil, int vfil,
+              void* workSpace, size_t workSize);
 
 #ifdef __cplusplus
 }
