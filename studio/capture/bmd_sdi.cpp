@@ -1,5 +1,5 @@
 /*
- * $Id: bmd_sdi.cpp,v 1.2 2012/01/24 15:18:42 john_f Exp $
+ * $Id: bmd_sdi.cpp,v 1.3 2012/02/10 15:20:53 john_f Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -174,6 +174,7 @@ int use_yuvlib_filter = 0;
 uint8_t *hd2sd_interm[MAX_CHANNELS];
 uint8_t *hd2sd_interm2[MAX_CHANNELS];
 uint8_t *hd2sd_workspace[MAX_CHANNELS];
+size_t hd2sd_workspace_size;
 
 //pthread_mutex_t m_log = PTHREAD_MUTEX_INITIALIZER;      // logging mutex to prevent intermixing logs
 
@@ -943,7 +944,7 @@ public:
                               0, 0, sec_width, sec_height,
                               interlace,
                               use_yuvlib_filter, use_yuvlib_filter,
-                              hd2sd_workspace[chan]);
+                              hd2sd_workspace[chan], hd2sd_workspace_size);
     #else
     // More efficient if we first scale by a factor of 2 horizontally
                     YUV_frame yuv_int_frame;
@@ -953,13 +954,13 @@ public:
                               0, 0, width/2, sec_height,
                               interlace,
                               use_yuvlib_filter, use_yuvlib_filter,
-                              hd2sd_workspace[m_Index]);
+                              hd2sd_workspace[m_Index], hd2sd_workspace_size);
 
                     scale_pic(&yuv_int_frame, &yuv_sd_frame,
                               0, 0, sec_width, sec_height,
                               interlace,
                               use_yuvlib_filter, use_yuvlib_filter,
-                              hd2sd_workspace[m_Index]);
+                              hd2sd_workspace[m_Index], hd2sd_workspace_size);
     #endif
                 }
 
@@ -2375,7 +2376,8 @@ int main (int argc, char ** argv)
                 return 1;
             }
 
-            hd2sd_workspace[chan] = (uint8_t *)malloc(2*width*4);
+            hd2sd_workspace_size = 2 * width * 4;
+            hd2sd_workspace[chan] = (uint8_t *)malloc(hd2sd_workspace_size);
             if (!hd2sd_workspace[chan])
             {
                 fprintf(stderr, "Failed to allocate HD-to-SD work buffer.\n");

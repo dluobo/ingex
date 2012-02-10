@@ -1,5 +1,5 @@
 /*
- * $Id: player.c,v 1.39 2011/11/30 13:27:41 philipn Exp $
+ * $Id: player.c,v 1.40 2012/02/10 15:16:53 john_f Exp $
  *
  *
  *
@@ -936,6 +936,7 @@ static void usage(const char* cmd)
     fprintf(stderr, "                           Note: for both pload options, only component depth of final video track in MXF file is considered\n");
     fprintf(stderr, "  --osd-pos <pos>          Set the position of the player state OSD. Valid values are 'top', 'middle' and 'bottom'. Default is 'bottom'\n");
     fprintf(stderr, "  --show-src-names         Show the source names in the OSD\n");
+    fprintf(stderr, "  --start-video <index>    Start playing the video <index> (0 = split view) when using the quad/nona split.\n");
     fprintf(stderr, "\n");
     fprintf(stderr, "Inputs:\n");
     fprintf(stderr, "  -m, --mxf  <file>        MXF file input\n");
@@ -1111,6 +1112,7 @@ int main(int argc, const char **argv)
     const char *windowTitle = DEFAULT_WINDOW_TITLE;
     int multipleMXFInputs = 0;
     int showSourceNames = 0;
+    int startVideoIndex = -1;
 
     memset(inputs, 0, sizeof(inputs));
     memset(&markConfigs, 0, sizeof(markConfigs));
@@ -2142,6 +2144,22 @@ int main(int argc, const char **argv)
         {
             showSourceNames = 1;
             cmdlnIndex++;
+        }
+        else if (strcmp(argv[cmdlnIndex], "--start-video") == 0)
+        {
+            if (cmdlnIndex + 1 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            if (sscanf(argv[cmdlnIndex + 1], "%d", &startVideoIndex) != 1 || startVideoIndex < 0)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Invalid argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            cmdlnIndex += 2;
         }
         else if (strcmp(argv[cmdlnIndex], "-m") == 0 ||
             strcmp(argv[cmdlnIndex], "--mxf") == 0)
@@ -3465,6 +3483,15 @@ int main(int argc, const char **argv)
 
     /* show the source names in the OSD */
     mc_show_source_name(ply_get_media_control(g_player.mediaPlayer), showSourceNames);
+
+
+    /* starting video index */
+
+    if (startVideoIndex >= 0)
+    {
+        mc_switch_video(ply_get_media_control(g_player.mediaPlayer), startVideoIndex);
+    }
+
 
 
     /* start playing... */

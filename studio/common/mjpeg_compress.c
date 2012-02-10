@@ -1,5 +1,5 @@
 /*
- * $Id: mjpeg_compress.c,v 1.8 2011/04/18 09:39:59 john_f Exp $
+ * $Id: mjpeg_compress.c,v 1.9 2012/02/10 15:22:25 john_f Exp $
  *
  * MJPEG encoder.
  *
@@ -269,7 +269,8 @@ extern int mjpeg_compress_init(MJPEGResolutionID id, int width, int height, mjpe
         memset(p->half_v, 0x80, c_size);
 
         // Also allocate a temp workspace for YUV scale_pic
-        p->workspace = (unsigned char *)malloc(width * 4);
+        p->workspace_size = 2 * jpeg_width * 4;
+        p->workspace = (unsigned char *)malloc(p->workspace_size);
     }
 
     p->cinfo.image_width = jpeg_width;
@@ -437,7 +438,7 @@ static unsigned mjpeg_compress_field_yuv(
         scale_pic(&input_field, &output_frame,
             0, 0, output_frame.Y.w, output_frame.Y.h,
             0, 1, 1,				// intlc, hfil, vfil
-            p->workspace);
+            p->workspace, p->workspace_size);
 
         while (cinfo->next_scanline < cinfo->image_height) {
             for (i = 0; i < DCTSIZE; i++) {

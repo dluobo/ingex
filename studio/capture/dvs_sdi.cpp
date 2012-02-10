@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.cpp,v 1.31 2012/01/24 15:15:58 john_f Exp $
+ * $Id: dvs_sdi.cpp,v 1.32 2012/02/10 15:20:53 john_f Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -155,6 +155,7 @@ int use_yuvlib_filter = 0;
 uint8_t *hd2sd_interm[MAX_CHANNELS];
 uint8_t *hd2sd_interm2[MAX_CHANNELS];
 uint8_t *hd2sd_workspace[MAX_CHANNELS];
+size_t hd2sd_workspace_size;
 
 int last_ltc_bits[MAX_CHANNELS];
 int last_vitc_bits[MAX_CHANNELS];
@@ -1636,7 +1637,7 @@ int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_from_vi
                           0, 0, sec_width, sec_height,
                           interlace,
                           use_yuvlib_filter, use_yuvlib_filter,
-                          hd2sd_workspace[chan]);
+                          hd2sd_workspace[chan], hd2sd_workspace_size);
 #else
 // More efficient if we first scale by a factor of 2 horizontally
                 YUV_frame yuv_int_frame;
@@ -1646,13 +1647,13 @@ int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_from_vi
                           0, 0, width/2, sec_height,
                           interlace,
                           use_yuvlib_filter, use_yuvlib_filter,
-                          hd2sd_workspace[chan]);
+                          hd2sd_workspace[chan], hd2sd_workspace_size);
 
                 scale_pic(&yuv_int_frame, &yuv_sd_frame,
                           0, 0, sec_width, sec_height,
                           interlace,
                           use_yuvlib_filter, use_yuvlib_filter,
-                          hd2sd_workspace[chan]);
+                          hd2sd_workspace[chan], hd2sd_workspace_size);
 #endif
             }
 
@@ -3631,7 +3632,8 @@ int main (int argc, char ** argv)
                 return 1;
             }
 
-            hd2sd_workspace[chan] = (uint8_t *)malloc(2*width*4);
+            hd2sd_workspace_size = 2 * width * 4;
+            hd2sd_workspace[chan] = (uint8_t *)malloc(hd2sd_workspace_size);
             if (!hd2sd_workspace[chan])
             {
                 fprintf(stderr, "Failed to allocate HD-to-SD work buffer.\n");

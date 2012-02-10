@@ -1,5 +1,5 @@
 /*
- * $Id: media_player.c,v 1.19 2011/09/27 10:14:29 philipn Exp $
+ * $Id: media_player.c,v 1.20 2012/02/10 15:16:53 john_f Exp $
  *
  *
  *
@@ -430,7 +430,7 @@ static void _ply_seek(MediaPlayer* player, int64_t offset, int whence, PlayUnit 
     {
         if (player->sourceLength > 0)
         {
-            player->state.nextPosition = player->sourceLength - 1 - offset;
+            player->state.nextPosition = player->sourceLength - 1 + offset;
         }
     }
 

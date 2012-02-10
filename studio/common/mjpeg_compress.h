@@ -1,5 +1,5 @@
 /*
- * $Id: mjpeg_compress.h,v 1.2 2009/02/26 19:28:07 john_f Exp $
+ * $Id: mjpeg_compress.h,v 1.3 2012/02/10 15:22:25 john_f Exp $
  *
  * MJPEG encoder.
  *
@@ -51,6 +51,7 @@ typedef struct mjpeg_compress_t {
     unsigned char *half_u;
     unsigned char *half_v;
     unsigned char *workspace;
+    size_t workspace_size;
     JSAMPROW black_y[DCTSIZE];
     JSAMPROW black_u[DCTSIZE];
     JSAMPROW black_v[DCTSIZE];

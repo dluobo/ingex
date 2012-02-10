@@ -1,5 +1,5 @@
 /*
- * $Id: picture_scale_sink.c,v 1.6 2011/11/10 10:53:35 philipn Exp $
+ * $Id: picture_scale_sink.c,v 1.7 2012/02/10 15:16:53 john_f Exp $
  *
  * Copyright (C) 2010 British Broadcasting Corporation, All Rights Reserved
  *
@@ -64,6 +64,7 @@ typedef struct ScaledStream
     unsigned int output_data_size;
 
     unsigned char *workspace;
+    size_t workspace_size;
 } ScaledStream;
 
 typedef struct ScaledStreamGroup
@@ -493,7 +494,9 @@ static int init_scale_stream(ScaledStream *scaled_stream, SplitType split_type, 
         default:
             assert(0);
     }
-    MALLOC_ORET(scaled_stream->workspace, unsigned char, 2 * output_stream_info->width * 4);
+
+    scaled_stream->workspace_size = 2 * output_stream_info->width * 4;
+    MALLOC_ORET(scaled_stream->workspace, unsigned char, scaled_stream->workspace_size);
 
     return 1;
 }
@@ -816,7 +819,7 @@ static int scale_picture(PictureScaleSink *sink, ScaledStreamGroup *group, Scale
                            scaled_stream->output_stream_info.width, scaled_stream->output_stream_info.height,
                            1,                   /* assume interlaced */
                            sink->apply_scale_filter, sink->apply_scale_filter,  /* horizontal, vertical filter */
-                           scaled_stream->workspace) == 0);
+                           scaled_stream->workspace, scaled_stream->workspace_size) == 0);
     }
 
     scaled_stream->output_data_size = scaled_stream->output_buffer_size;

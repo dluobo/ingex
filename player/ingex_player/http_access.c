@@ -1,5 +1,5 @@
 /*
- * $Id: http_access.c,v 1.10 2011/09/27 10:14:29 philipn Exp $
+ * $Id: http_access.c,v 1.11 2012/02/10 15:16:53 john_f Exp $
  *
  *
  *
@@ -237,6 +237,7 @@ static void http_player_control(struct shttpd_arg* arg)
     int selection = 0;
     int enableAudioSnap = 0;
     int audioGroupIndex = 0;
+    int videoIndex = 0;
 
 
 	requestURI = shttpd_get_env(arg, "REQUEST_URI");
@@ -662,6 +663,27 @@ static void http_player_control(struct shttpd_arg* arg)
         if (queryOk && queryValueCount == 1)
         {
             mc_snap_audio_to_video(access->control, enableAudioSnap);
+        }
+    }
+    else if (strcmp("/player/control/prev-video", requestURI) == 0)
+    {
+        mc_switch_prev_video(access->control);
+    }
+    else if (strcmp("/player/control/next-video", requestURI) == 0)
+    {
+        mc_switch_next_video(access->control);
+    }
+    else if (strcmp("/player/control/set-video", requestURI) == 0)
+    {
+        if (get_query_value(arg, "index", queryValue, sizeof(queryValue)) &&
+            parse_int(queryValue, &videoIndex))
+        {
+            mc_switch_video(access->control, videoIndex);
+            queryOk = 1;
+        }
+        else
+        {
+            queryOk = 0;
         }
     }
 
