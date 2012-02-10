@@ -1,5 +1,5 @@
 /*
- * $Id: LocalIngexPlayer.cpp,v 1.31 2011/11/10 10:56:18 philipn Exp $
+ * $Id: LocalIngexPlayer.cpp,v 1.32 2012/02/10 15:18:08 john_f Exp $
  *
  * Copyright (C) 2008-2010 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
@@ -1786,11 +1786,11 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
     // seek to the start position
     if (startPosition > 0)
     {
-        seek(startPosition, SEEK_SET, FRAME_PLAY_UNIT);
+        mc_seek(ply_get_media_control(_playState->mediaPlayer), startPosition, SEEK_SET, FRAME_PLAY_UNIT);
     }
     else if (startPosition < 0)
     {
-        seek(-startPosition + 1, SEEK_END, FRAME_PLAY_UNIT);
+        mc_seek(ply_get_media_control(_playState->mediaPlayer), startPosition + 1, SEEK_END, FRAME_PLAY_UNIT);
     }
 
     start(startPaused);
