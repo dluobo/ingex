@@ -1,5 +1,5 @@
 /*
- * $Id: bmd_sdi.cpp,v 1.3 2012/02/10 15:20:53 john_f Exp $
+ * $Id: bmd_sdi.cpp,v 1.4 2012/02/15 16:18:43 john_f Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -1322,7 +1322,8 @@ void BmdCleanupObjects()
         if (bmd_Handlers[i] != NULL)
         {
             // wait process is complete.
-            while(bmd_Handlers[i]->IsProcessing());
+            while (bmd_Handlers[i]->IsProcessing())
+            {}
             bmd_Handlers[i]->~CBmdInputHandler();
             bmd_Handlers[i] = NULL;
         }
