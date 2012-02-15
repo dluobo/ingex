@@ -940,7 +940,7 @@ extern void scale_video420_for_multicast(int in_width, int in_height, int out_wi
 #endif
     YUV_frame input_frame;
     YUV_frame output_frame;
-    uint8_t workspace[2*in_width*4];
+    uint8_t workspace[2*out_width*4];
 
     input_frame.Y.w = in_width;
     input_frame.Y.h = in_height;
@@ -978,7 +978,7 @@ extern void scale_video420_for_multicast(int in_width, int in_height, int out_wi
                 0, 0, output_frame.Y.w, output_frame.Y.h,
                 0,              // turn off interlace since this is for monitoring
                 1, 1,           // hfil, vfil
-                workspace);
+                workspace, sizeof(workspace));
 }
 
 extern void scale_video422_for_multicast(int in_width, int in_height, int out_width, int out_height, const uint8_t *video_frame, uint8_t *scaled_frame)
@@ -988,7 +988,7 @@ extern void scale_video422_for_multicast(int in_width, int in_height, int out_wi
 #endif
     YUV_frame input_frame;
     YUV_frame output_frame;
-    uint8_t workspace[2*in_width*4];
+    uint8_t workspace[2*out_width*4];
 
     input_frame.Y.w = in_width;
     input_frame.Y.h = in_height;
@@ -1026,5 +1026,5 @@ extern void scale_video422_for_multicast(int in_width, int in_height, int out_wi
                 0, 0, output_frame.Y.w, output_frame.Y.h,
                 0,              // turn off interlace since this is for monitoring
                 1, 1,           // hfil, vfil
-                workspace);
+                workspace, sizeof(workspace));
 }
