@@ -94,7 +94,7 @@ int deinterlace_component(const component* in_frame,
     int       w, h;
     int       f, j, y_in, y_out;
     int       y_max[2];
-    int       tid, num_threads;
+    int       tid;
     // filter coefficients from PH-2071, scaled by 256*256
     int       n_coef_lf[2] = {2, 4};
     int32_t   coef_lf[2][4] = {{32768, 32768, 0, 0},
@@ -124,6 +124,7 @@ int deinterlace_component(const component* in_frame,
     }
     // how many threads to create
     #ifdef _OPENMP
+        int num_threads;
         num_threads = work_size / (sizeof(uint32_t) * w);
         num_threads = min(num_threads, omp_get_max_threads());
     #endif

@@ -446,7 +446,7 @@ static void v_sub_interp(const component* inFrame, component* outFrame,
     int             err;
     uint32_t*       line0;
     uint32_t*       line1;
-    int             tid, num_threads;
+    int             tid;
     sub_line_proc1* h_sub;
 
     // select horizontal subsampling routine
@@ -460,6 +460,7 @@ static void v_sub_interp(const component* inFrame, component* outFrame,
     y_off = ((ydown - yup) * 256 * yoff) / (yup * 100);
     // how many threads to create
     #ifdef _OPENMP
+      int num_threads;
       num_threads = workSize / (sizeof(uint32_t) * 2 * outFrame->w);
       num_threads = min(num_threads, omp_get_max_threads());
     #endif
@@ -507,7 +508,7 @@ static void v_sub_ave(const component* inFrame, component* outFrame,
     uint32_t        scale, residue;
     uint32_t*       acc;
     uint32_t*       line;
-    int             tid, num_threads;
+    int             tid;
     sub_line_proc1* h_sub;
 
     // select horizontal subsampling routine
@@ -523,6 +524,7 @@ static void v_sub_ave(const component* inFrame, component* outFrame,
     y_off += ((ydown - yup) * yoff) / 100;
     // how many threads to create
     #ifdef _OPENMP
+      int num_threads;
       num_threads = workSize / (sizeof(uint32_t) * 2 * outFrame->w);
       num_threads = min(num_threads, omp_get_max_threads());
     #endif
