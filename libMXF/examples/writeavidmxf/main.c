@@ -1,5 +1,5 @@
 /*
- * $Id: main.c,v 1.29 2011/11/10 10:27:37 philipn Exp $
+ * $Id: main.c,v 1.30 2012/02/20 10:23:24 philipn Exp $
  *
  * Test writing video and audio to MXF files supported by Avid editing software
  *
@@ -565,6 +565,17 @@ static int prepare_wave_file(const char* filename, WAVInput* input)
                 return 0;
             }
         }
+    }
+
+    if (!haveFormatData)
+    {
+        fprintf(stderr, "Missing 'fmt ' chunk in wav file\n");
+        return 0;
+    }
+    if (!haveWAVEData)
+    {
+        fprintf(stderr, "Missing 'data' chunk in wav file\n");
+        return 0;
     }
 
     /* position at wave data */
